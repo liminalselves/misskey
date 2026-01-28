@@ -58,10 +58,35 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		private queryService: QueryService,
 	) {
 		super(meta, paramDef, async (ps, me) => {
-			// 如果是频道内的帖子，使用原有逻辑（频道帖子没有全局分数）
+			// 如果是频道内的帖子，使用与全局相同的加权随机采样逻辑
 			if (ps.channelId) {
-				const channelNoteIds = await this.featuredService.getInChannelNotesRanking(ps.channelId, 50);
-				if (channelNoteIds.length === 0) {
+				// 获取频道帖子排名及分数
+				const channelNotesWithScores = await this.featuredService.getInChannelNotesRankingWithScores(ps.channelId, 200);
+
+				if (channelNotesWithScores.length === 0) {
+					return [];
+				}
+
+				// 排除前端传递的已展示帖子 ID
+				const excludeSet = new Set(ps.excludeIds);
+				const availableNotes = channelNotesWithScores.filter(item => !excludeSet.has(item.id));
+
+				if (availableNotes.length === 0) {
+					return [];
+				}
+
+				// 使用加权随机采样
+				const selectedNotes = this.weightedRandomSample(availableNotes, ps.limit);
+
+				// 创建分数映射
+				const scoreMap = new Map<string, number>();
+				for (const item of selectedNotes) {
+					scoreMap.set(item.id, item.score);
+				}
+
+				const noteIds = selectedNotes.map(item => item.id);
+
+				if (noteIds.length === 0) {
 					return [];
 				}
 
@@ -74,7 +99,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				]) : [new Set<string>(), new Set<string>()];
 
 				const query = this.notesRepository.createQueryBuilder('note')
-					.where('note.id IN (:...noteIds)', { noteIds: channelNoteIds })
+					.where('note.id IN (:...noteIds)', { noteIds: noteIds })
 					.innerJoinAndSelect('note.user', 'user')
 					.leftJoinAndSelect('note.reply', 'reply')
 					.leftJoinAndSelect('note.renote', 'renote')
@@ -91,7 +116,19 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					return true;
 				});
 
-				return await this.noteEntityService.packMany(notes, me);
+				// 按采样顺序排序，并添加分数
+				const sortedNotes = noteIds
+					.map(id => notes.find(n => n.id === id))
+					.filter((n): n is typeof notes[0] => n != null);
+
+				const packed = await this.noteEntityService.packMany(sortedNotes, me);
+
+				// 添加分数到返回结果
+				for (const note of packed) {
+					(note as typeof note & { _featuredScore_?: number })._featuredScore_ = scoreMap.get(note.id) ?? 0;
+				}
+
+				return packed;
 			}
 
 			// 全局发现页：获取帖子分数数据（30秒缓存）

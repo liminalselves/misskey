@@ -146,6 +146,40 @@ export class FeaturedService {
 		return this.getRankingOf(`featuredInChannelNotesRanking:${channelId}`, GLOBAL_NOTES_RANKING_WINDOW, threshold);
 	}
 
+	/**
+	 * 获取频道内帖子排名及其分数（用于加权随机采样）
+	 */
+	@bindThis
+	public async getInChannelNotesRankingWithScores(channelId: MiNote['channelId'], threshold: number): Promise<{ id: MiNote['id']; score: number }[]> {
+		const currentWindow = this.getCurrentWindow(GLOBAL_NOTES_RANKING_WINDOW);
+		const previousWindow = currentWindow - 1;
+		const name = `featuredInChannelNotesRanking:${channelId}`;
+
+		const redisPipeline = this.redisClient.pipeline();
+		redisPipeline.zrange(`${name}:${currentWindow}`, 0, threshold, 'REV', 'WITHSCORES');
+		redisPipeline.zrange(`${name}:${previousWindow}`, 0, threshold, 'REV', 'WITHSCORES');
+		const [currentRankingResult, previousRankingResult] = await redisPipeline.exec().then(result => result ? result.map(r => (r[1] ?? []) as string[]) : [[], []]);
+
+		const ranking = new Map<string, number>();
+		for (let i = 0; i < currentRankingResult.length; i += 2) {
+			const noteId = currentRankingResult[i];
+			const score = parseFloat(currentRankingResult[i + 1]);
+			ranking.set(noteId, score);
+		}
+		for (let i = 0; i < previousRankingResult.length; i += 2) {
+			const noteId = previousRankingResult[i];
+			const score = parseFloat(previousRankingResult[i + 1]);
+			const exist = ranking.get(noteId);
+			if (exist != null) {
+				ranking.set(noteId, (exist + score) / 2);
+			} else {
+				ranking.set(noteId, score);
+			}
+		}
+
+		return Array.from(ranking.entries()).map(([id, score]) => ({ id, score }));
+	}
+
 	@bindThis
 	public getPerUserNotesRanking(userId: MiUser['id'], threshold: number): Promise<MiNote['id'][]> {
 		return this.getRankingOf(`featuredPerUserNotesRanking:${userId}`, PER_USER_NOTES_RANKING_WINDOW, threshold);

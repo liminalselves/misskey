@@ -40,8 +40,14 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 			<MkStreamingNotesTimeline :key="channelId" src="channel" :channel="channelId"/>
 		</div>
-		<div v-else-if="tab === 'featured'">
-			<MkNotesTimeline :paginator="featuredPaginator"/>
+		<div v-else-if="tab === 'featured'" class="_gaps">
+			<div :class="$style.featuredHeader">
+				<div>{{ i18n.ts.featured }}</div>
+				<MkButton v-tooltip="i18n.ts.reload" iconOnly transparent rounded @click="reloadFeatured">
+					<i class="ti ti-refresh"></i>
+				</MkButton>
+			</div>
+			<MkFeaturedTimeline :key="'channel-featured-' + channelId" :paginator="featuredPaginator"/>
 		</div>
 		<div v-else-if="tab === 'search'">
 			<div v-if="notesSearchAvailable" class="_gaps">
@@ -71,7 +77,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { computed, watch, ref, markRaw, shallowRef } from 'vue';
+import { computed, watch, ref, markRaw, shallowRef, onUnmounted } from 'vue';
 import * as Misskey from 'misskey-js';
 import { url } from '@@/js/config.js';
 import { useInterval } from '@@/js/use-interval.js';
@@ -86,6 +92,7 @@ import { i18n } from '@/i18n.js';
 import { definePage } from '@/page.js';
 import { deviceKind } from '@/utility/device-kind.js';
 import MkNotesTimeline from '@/components/MkNotesTimeline.vue';
+import MkFeaturedTimeline from '@/components/MkFeaturedTimeline.vue';
 import { favoritedChannelsCache } from '@/cache.js';
 import MkButton from '@/components/MkButton.vue';
 import MkInput from '@/components/MkInput.vue';
@@ -113,12 +120,44 @@ const favorited = ref(false);
 const searchQuery = ref('');
 const searchPaginator = shallowRef();
 const searchKey = ref('');
+// 频道发现板块的已展示帖子 ID（用于去重）
+const displayedNoteIds = ref<string[]>([]);
+
 const featuredPaginator = markRaw(new Paginator('notes/featured', {
 	limit: 10,
-	computedParams: computed(() => ({
+	params: () => ({
 		channelId: props.channelId,
-	})),
+		excludeIds: displayedNoteIds.value,
+	} as any),
 }));
+
+// 定期更新已展示帖子 ID
+const intervalId = window.setInterval(() => {
+	if (featuredPaginator.items.value.length > 0) {
+		displayedNoteIds.value = featuredPaginator.items.value.map(note => note.id);
+	}
+}, 100);
+
+onUnmounted(() => {
+	window.clearInterval(intervalId);
+});
+
+// 切换频道时重置已展示帖子
+watch(() => props.channelId, () => {
+	displayedNoteIds.value = [];
+});
+
+// 监听 tab 切换，切回 featured 时清空 excludeIds，防止显示分页内容
+watch(tab, (newTab) => {
+	if (newTab === 'featured') {
+		displayedNoteIds.value = [];
+	}
+});
+
+function reloadFeatured() {
+	displayedNoteIds.value = [];
+	featuredPaginator.reload();
+}
 
 useInterval(() => {
 	if (channel.value == null) return;
@@ -416,5 +455,12 @@ definePage(() => ({
 	font-weight: bold;
 	font-size: 1em;
 	padding: 4px 7px;
+}
+
+.featuredHeader {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	margin-bottom: var(--MI-margin);
 }
 </style>

@@ -704,14 +704,18 @@ export class NoteCreateService implements OnApplicationShutdown {
 		this.incNotesCountOfUser(user);
 
 		// 新帖子获得初始分数（用于发现页曝光）
+		// 频道帖子也参与全局排名，同时添加到频道内排名
 		if (
 			note.visibility === 'public' &&
 			note.userHost == null &&
-			note.replyId == null &&
-			note.channelId == null
+			note.replyId == null
 		) {
 			this.featuredService.updateGlobalNotesRanking(note.id, 3);
 			this.featuredService.updatePerUserNotesRanking(user.id, note.id, 3);
+			// 如果是频道帖子，同时添加到频道内排名
+			if (note.channelId != null) {
+				this.featuredService.updateInChannelNotesRanking(note.channelId, note.id, 3);
+			}
 		}
 
 		this.pushToTl(note, user);
@@ -724,9 +728,13 @@ export class NoteCreateService implements OnApplicationShutdown {
 		if (data.reply) {
 			this.saveReply(data.reply, note);
 			// 回复时给被回复的原帖增加分数（原帖获得曝光）
+			// 频道帖子也参与全局排名
 			if (data.reply.visibility === 'public' && data.reply.userHost == null && data.reply.replyId == null) {
 				this.featuredService.updateGlobalNotesRanking(data.reply.id, 2);
 				this.featuredService.updatePerUserNotesRanking(data.reply.userId, data.reply.id, 2);
+				if (data.reply.channelId != null) {
+					this.featuredService.updateInChannelNotesRanking(data.reply.channelId, data.reply.id, 2);
+				}
 			}
 		}
 
@@ -915,15 +923,12 @@ export class NoteCreateService implements OnApplicationShutdown {
 			.where('id = :id', { id: renote.id })
 			.execute();
 
-		// 转发时更新排名（移除概率限制，每次都增加分数）
-		if (renote.channelId != null) {
-			if (renote.replyId == null) {
+		// 转发时更新排名（频道帖子同时参与全局和频道内排名）
+		if (renote.visibility === 'public' && renote.userHost == null && renote.replyId == null) {
+			this.featuredService.updateGlobalNotesRanking(renote.id, 5);
+			this.featuredService.updatePerUserNotesRanking(renote.userId, renote.id, 5);
+			if (renote.channelId != null) {
 				this.featuredService.updateInChannelNotesRanking(renote.channelId, renote.id, 5);
-			}
-		} else {
-			if (renote.visibility === 'public' && renote.userHost == null && renote.replyId == null) {
-				this.featuredService.updateGlobalNotesRanking(renote.id, 5);
-				this.featuredService.updatePerUserNotesRanking(renote.userId, renote.id, 5);
 			}
 		}
 	}
