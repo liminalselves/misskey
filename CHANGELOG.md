@@ -1,5 +1,13 @@
 ## 2026.1.0
 
+### General
+- Enhance: 发现模块（Discovery/Featured）推流机制改造
+  - 实现全局热度榜 + 重力衰减算法，打破原有 3 天时间窗口限制
+  - 新增加权随机采样（70% 高分 + 30% 低分），提升内容多样性
+  - 实现伪无限滚动，通过 `excludeIds` 参数去重已展示内容
+  - 发现页和投票板块现在支持无限滚动并显示热度分数
+  - 新增定时任务每小时执行热度衰减，防止老旧内容霸榜
+
 ### Note
 - `users/following` の `birthday` プロパティは非推奨になりました。代わりに `users/get-following-birthday-users` をご利用ください。
 

@@ -42,6 +42,7 @@ import { ResyncChartsProcessorService } from './processors/ResyncChartsProcessor
 import { TickChartsProcessorService } from './processors/TickChartsProcessorService.js';
 import { AggregateRetentionProcessorService } from './processors/AggregateRetentionProcessorService.js';
 import { ExportFavoritesProcessorService } from './processors/ExportFavoritesProcessorService.js';
+import { DecayFeaturedNotesRankingProcessorService } from './processors/DecayFeaturedNotesRankingProcessorService.js';
 import { RelationshipProcessorService } from './processors/RelationshipProcessorService.js';
 
 @Module({
@@ -62,6 +63,7 @@ import { RelationshipProcessorService } from './processors/RelationshipProcessor
 		ExportNotesProcessorService,
 		ExportClipsProcessorService,
 		ExportFavoritesProcessorService,
+		DecayFeaturedNotesRankingProcessorService,
 		ExportFollowingProcessorService,
 		ExportMutingProcessorService,
 		ExportBlockingProcessorService,

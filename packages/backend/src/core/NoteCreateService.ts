@@ -703,6 +703,17 @@ export class NoteCreateService implements OnApplicationShutdown {
 		// Increment notes count (user)
 		this.incNotesCountOfUser(user);
 
+		// 新帖子获得初始分数（用于发现页曝光）
+		if (
+			note.visibility === 'public' &&
+			note.userHost == null &&
+			note.replyId == null &&
+			note.channelId == null
+		) {
+			this.featuredService.updateGlobalNotesRanking(note.id, 3);
+			this.featuredService.updatePerUserNotesRanking(user.id, note.id, 3);
+		}
+
 		this.pushToTl(note, user);
 
 		this.antennaService.addNoteToAntennas({
@@ -712,6 +723,11 @@ export class NoteCreateService implements OnApplicationShutdown {
 
 		if (data.reply) {
 			this.saveReply(data.reply, note);
+			// 回复时给被回复的原帖增加分数（原帖获得曝光）
+			if (data.reply.visibility === 'public' && data.reply.userHost == null && data.reply.replyId == null) {
+				this.featuredService.updateGlobalNotesRanking(data.reply.id, 2);
+				this.featuredService.updatePerUserNotesRanking(data.reply.userId, data.reply.id, 2);
+			}
 		}
 
 		if (data.reply == null) {
@@ -899,17 +915,15 @@ export class NoteCreateService implements OnApplicationShutdown {
 			.where('id = :id', { id: renote.id })
 			.execute();
 
-		// 30%の確率、3日以内に投稿されたノートの場合ハイライト用ランキング更新
-		if (Math.random() < 0.3 && (Date.now() - this.idService.parse(renote.id).date.getTime()) < 1000 * 60 * 60 * 24 * 3) {
-			if (renote.channelId != null) {
-				if (renote.replyId == null) {
-					this.featuredService.updateInChannelNotesRanking(renote.channelId, renote.id, 5);
-				}
-			} else {
-				if (renote.visibility === 'public' && renote.userHost == null && renote.replyId == null) {
-					this.featuredService.updateGlobalNotesRanking(renote.id, 5);
-					this.featuredService.updatePerUserNotesRanking(renote.userId, renote.id, 5);
-				}
+		// 转发时更新排名（移除概率限制，每次都增加分数）
+		if (renote.channelId != null) {
+			if (renote.replyId == null) {
+				this.featuredService.updateInChannelNotesRanking(renote.channelId, renote.id, 5);
+			}
+		} else {
+			if (renote.visibility === 'public' && renote.userHost == null && renote.replyId == null) {
+				this.featuredService.updateGlobalNotesRanking(renote.id, 5);
+				this.featuredService.updatePerUserNotesRanking(renote.userId, renote.id, 5);
 			}
 		}
 	}

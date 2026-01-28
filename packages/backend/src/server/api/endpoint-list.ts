@@ -63,6 +63,7 @@ export * as 'admin/get-user-ips' from './endpoints/admin/get-user-ips.js';
 export * as 'admin/invite/create' from './endpoints/admin/invite/create.js';
 export * as 'admin/invite/list' from './endpoints/admin/invite/list.js';
 export * as 'admin/meta' from './endpoints/admin/meta.js';
+export * as 'admin/migrate-featured-ranking' from './endpoints/admin/migrate-featured-ranking.js';
 export * as 'admin/promo/create' from './endpoints/admin/promo/create.js';
 export * as 'admin/queue/clear' from './endpoints/admin/queue/clear.js';
 export * as 'admin/queue/deliver-delayed' from './endpoints/admin/queue/deliver-delayed.js';

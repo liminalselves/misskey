@@ -90,7 +90,8 @@ export class FeaturedService {
 
 	@bindThis
 	public updateGlobalNotesRanking(noteId: MiNote['id'], score = 1): Promise<void> {
-		return this.updateRankingOf('featuredGlobalNotesRanking', GLOBAL_NOTES_RANKING_WINDOW, noteId, score);
+		// Use a global key instead of windowed keys
+		return this.redisClient.zincrby('featuredGlobalNotesRanking:global', score, noteId).then(() => {});
 	}
 
 	@bindThis
@@ -115,7 +116,24 @@ export class FeaturedService {
 
 	@bindThis
 	public getGlobalNotesRanking(threshold: number): Promise<MiNote['id'][]> {
-		return this.getRankingOf('featuredGlobalNotesRanking', GLOBAL_NOTES_RANKING_WINDOW, threshold);
+		return this.redisClient.zrange('featuredGlobalNotesRanking:global', 0, threshold, 'REV');
+	}
+
+	/**
+	 * 获取全局帖子排名及其分数
+	 * 返回 [noteId1, score1, noteId2, score2, ...] 格式的数组
+	 */
+	@bindThis
+	public async getGlobalNotesRankingWithScores(threshold: number): Promise<{ id: MiNote['id']; score: number }[]> {
+		const data = await this.redisClient.zrange('featuredGlobalNotesRanking:global', 0, threshold, 'REV', 'WITHSCORES');
+		const result: { id: MiNote['id']; score: number }[] = [];
+		for (let i = 0; i < data.length; i += 2) {
+			result.push({
+				id: data[i],
+				score: parseFloat(data[i + 1]),
+			});
+		}
+		return result;
 	}
 
 	@bindThis
@@ -141,5 +159,51 @@ export class FeaturedService {
 	@bindThis
 	public removeHashtagsFromRanking(hashtag: string): Promise<void> {
 		return this.removeFromRanking('featuredHashtagsRanking', HASHTAG_RANKING_WINDOW, hashtag);
+	}
+
+	@bindThis
+	public async decayGlobalNotesRanking(): Promise<void> {
+		const key = 'featuredGlobalNotesRanking:global';
+		// 衰减速度降低：每小时衰减 0.5%（原 2%），让帖子存活更久
+		await this.redisClient.zinterstore(key, 1, key, 'WEIGHTS', 0.995);
+		// 清理阈值降低：分数低于 0.01 才清理，让冷门帖子有更多机会
+		await this.redisClient.zremrangebyscore(key, '-inf', 0.01);
+	}
+
+	/**
+	 * 将旧的时间窗口数据迁移到全局 key
+	 * 用于从旧版本升级时的一次性迁移
+	 */
+	@bindThis
+	public async migrateFromWindowedKeys(): Promise<number> {
+		const globalKey = 'featuredGlobalNotesRanking:global';
+		const currentWindow = this.getCurrentWindow(GLOBAL_NOTES_RANKING_WINDOW);
+		const previousWindow = currentWindow - 1;
+
+		const oldKeys = [
+			`featuredGlobalNotesRanking:${currentWindow}`,
+			`featuredGlobalNotesRanking:${previousWindow}`,
+		];
+
+		let migratedCount = 0;
+
+		for (const oldKey of oldKeys) {
+			// 获取旧 key 中的所有数据
+			const data = await this.redisClient.zrange(oldKey, 0, -1, 'WITHSCORES');
+
+			if (data.length === 0) continue;
+
+			// 批量添加到全局 key
+			const pipeline = this.redisClient.pipeline();
+			for (let i = 0; i < data.length; i += 2) {
+				const noteId = data[i];
+				const score = parseFloat(data[i + 1]);
+				pipeline.zincrby(globalKey, score, noteId);
+				migratedCount++;
+			}
+			await pipeline.exec();
+		}
+
+		return migratedCount;
 	}
 }
