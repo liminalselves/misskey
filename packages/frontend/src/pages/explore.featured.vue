@@ -55,6 +55,22 @@ const paginatorForPolls = markRaw(new Paginator('notes/polls/recommendation', {
 	} as any),
 }));
 
+// Hack: 拦截 reload 方法以在重新加载前重置状态，并防止重复请求
+const originalReloadNotes = paginatorForNotes.reload;
+paginatorForNotes.reload = async () => {
+	if (paginatorForNotes.fetching.value) return;
+	displayedNoteIds.value = [];
+	return await originalReloadNotes.call(paginatorForNotes);
+};
+
+// Hack: 拦截 reload 方法 (投票)
+const originalReloadPolls = paginatorForPolls.reload;
+paginatorForPolls.reload = async () => {
+	if (paginatorForPolls.fetching.value) return;
+	displayedPollIds.value = [];
+	return await originalReloadPolls.call(paginatorForPolls);
+};
+
 // 监听 items 变化更新已展示 ID（通过定期同步）
 const intervalId = window.setInterval(() => {
 	// 使用 non-reactive 的方式获取 items，避免触发不必要的依赖更新（虽然这里是在 setInterval 里，本身没问题）
@@ -82,10 +98,8 @@ watch(tab, (newTab) => {
 
 function reload() {
 	if (tab.value === 'notes') {
-		displayedNoteIds.value = [];
 		paginatorForNotes.reload();
 	} else {
-		displayedPollIds.value = [];
 		paginatorForPolls.reload();
 	}
 }

@@ -131,6 +131,14 @@ const featuredPaginator = markRaw(new Paginator('notes/featured', {
 	} as any),
 }));
 
+// Hack: 拦截 reload 方法以在重新加载前重置状态，并防止重复请求
+const originalReload = featuredPaginator.reload;
+featuredPaginator.reload = async () => {
+	if (featuredPaginator.fetching.value) return;
+	displayedNoteIds.value = [];
+	return await originalReload.call(featuredPaginator);
+};
+
 // 定期更新已展示帖子 ID
 const intervalId = window.setInterval(() => {
 	if (featuredPaginator.items.value.length > 0) {
@@ -155,7 +163,6 @@ watch(tab, (newTab) => {
 });
 
 function reloadFeatured() {
-	displayedNoteIds.value = [];
 	featuredPaginator.reload();
 }
 

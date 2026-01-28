@@ -48,6 +48,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 						</div>
 					</template>
 				</TransitionGroup>
+
+				<div v-if="canFetchNewer">
+					<MkButton :class="$style.more" :wait="fetchingNewer" primary rounded @click="fetchNewer">{{ i18n.ts.loadMore }}</MkButton>
+				</div>
 			</div>
 
 			<div v-if="user && (!user.canChat || user.host !== null)">
@@ -131,8 +135,10 @@ export type NormalizedChatMessage = Omit<Misskey.entities.ChatMessageLite, 'from
 const initializing = ref(false);
 const initialized = ref(false);
 const moreFetching = ref(false);
+const fetchingNewer = ref(false);
 const messages = ref<NormalizedChatMessage[]>([]);
 const canFetchMore = ref(false);
+const canFetchNewer = ref(false);
 const user = ref<Misskey.entities.UserDetailed | null>(null);
 const room = ref<Misskey.entities.ChatRoom | null>(null);
 const connection = ref<Misskey.IChannelConnection<Misskey.Channels['chatUser']> | Misskey.IChannelConnection<Misskey.Channels['chatRoom']> | null>(null);
@@ -145,11 +151,15 @@ const SCROLL_HEAD_THRESHOLD = 200;
 
 // column-reverseなので本来はスクロール位置の最下部への追従は不要なはずだが、おそらくブラウザのバグにより、最下部にスクロールした状態でも追従されない場合がある(スクロール位置が少数になることがあるのが関わっていそう)
 // そのため補助としてMutationObserverを使って追従を行う
+// そのため補助としてMutationObserverを使って追従を行う
 useMutationObserver(timelineEl, {
 	subtree: true,
 	childList: true,
 	attributes: false,
 }, () => {
+	// 只有在没有加载更多新消息时才自动滚动到底部
+	if (canFetchNewer.value) return;
+
 	const scrollContainer = getScrollContainer(timelineEl.value)!;
 	// column-reverseなのでscrollTopは負になる
 	if (-scrollContainer.scrollTop < SCROLL_HEAD_THRESHOLD) {
@@ -171,13 +181,84 @@ function normalizeMessage(message: Misskey.entities.ChatMessageLite | Misskey.en
 	};
 }
 
+// 加载特定消息及其上下文
+async function loadContext(targetId: string, limit = 20) {
+	initializing.value = true;
+	messages.value = [];
+
+	try {
+		const targetParam = { messageId: targetId };
+		const target = await misskeyApi('chat/messages/show', targetParam);
+
+		let older: Misskey.entities.ChatMessageLite[] = [];
+		let newer: Misskey.entities.ChatMessageLite[] = [];
+
+		if (props.userId) {
+			[older, newer] = await Promise.all([
+				misskeyApi('chat/messages/user-timeline', { userId: props.userId, limit, untilId: targetId }),
+				misskeyApi('chat/messages/user-timeline', { userId: props.userId, limit, sinceId: targetId }),
+			]);
+		} else {
+			[older, newer] = await Promise.all([
+				misskeyApi('chat/messages/room-timeline', { roomId: props.roomId!, limit, untilId: targetId }),
+				misskeyApi('chat/messages/room-timeline', { roomId: props.roomId!, limit, sinceId: targetId }),
+			]);
+		}
+
+		const normalizedTarget = normalizeMessage(target);
+		const normalizedOlder = older.map(x => normalizeMessage(x));
+		// sinceId 返回的是 ASC (旧->新)，我们需要 DESC (新->旧) 以便与 messages 列表（Column Reverse）匹配
+		const normalizedNewer = newer.map(x => normalizeMessage(x)).reverse();
+
+		// messages 顺序: [Newer... (Newest First), Target, Older... (Newest First)]
+		messages.value = [...normalizedNewer, normalizedTarget, ...normalizedOlder];
+
+		canFetchMore.value = older.length === limit;
+		canFetchNewer.value = newer.length === limit;
+	} catch (err) {
+		console.error(err);
+		os.alert({ type: 'error', text: i18n.ts.somethingHappened });
+	} finally {
+		initializing.value = false;
+	}
+}
+
 async function initialize() {
 	const LIMIT = 20;
 
 	if (initializing.value) return;
 
+	// 如果有 props.messageId，直接进入上下文加载模式
+	if (props.messageId) {
+		// 先获取 Room/User 信息以便建立连接
+		if (props.userId) {
+			user.value = await misskeyApi('users/show', { userId: props.userId });
+			connection.value = useStream().useChannel('chatUser', { otherId: user.value!.id });
+		} else if (props.roomId) {
+			const r = await misskeyApi('chat/rooms/show', { roomId: props.roomId });
+			room.value = r;
+			connection.value = useStream().useChannel('chatRoom', { roomId: room.value.id });
+		}
+
+		if (connection.value) {
+			connection.value.on('message', onMessage);
+			connection.value.on('deleted', onDeleted);
+			connection.value.on('react', onReact);
+			connection.value.on('unreact', onUnreact);
+		}
+
+		await loadContext(props.messageId);
+		initialized.value = true;
+
+		// 滚动到该消息
+		await new Promise(resolve => window.setTimeout(resolve, 300));
+		await scrollToMessage(props.messageId);
+		return;
+	}
+
 	initializing.value = true;
 	initialized.value = false;
+	canFetchNewer.value = false;
 
 	if (props.userId) {
 		const [u, m] = await Promise.all([
@@ -256,11 +337,6 @@ async function initialize() {
 
 	initialized.value = true;
 	initializing.value = false;
-
-	// 如果有 messageId 参数，定位到该消息
-	if (props.messageId) {
-		await scrollToMessage(props.messageId);
-	}
 }
 
 let isActivated = true;
@@ -294,55 +370,104 @@ async function fetchMore() {
 	moreFetching.value = false;
 }
 
-// 滚动到指定消息
-async function scrollToMessage(targetMessageId: string) {
-	// 首先检查目标消息是否已在当前加载的消息列表中
-	let messageExists = messages.value.some(m => m.id === targetMessageId);
+// 加载更新的消息
+async function fetchNewer() {
+	const LIMIT = 30;
+	if (fetchingNewer.value) return;
+	fetchingNewer.value = true;
 
-	// 如果消息不在列表中，继续加载更多直到找到
-	let attempts = 0;
-	const maxAttempts = 10; // 最多尝试10次加载
-
-	while (!messageExists && canFetchMore.value && attempts < maxAttempts) {
-		await fetchMore();
-		messageExists = messages.value.some(m => m.id === targetMessageId);
-		attempts++;
-	}
-
-	if (!messageExists) {
-		console.warn('Target message not found:', targetMessageId);
+	// 获取当前列表最新消息 ID
+	const sinceId = messages.value[0]?.id;
+	if (!sinceId) {
+		fetchingNewer.value = false;
 		return;
 	}
 
-	// 等待 DOM 更新
-	await new Promise(resolve => window.setTimeout(resolve, 100));
+	let newMessages: Misskey.entities.ChatMessageLite[] = [];
 
-	// 查找目标消息元素并滚动
+	if (props.userId) {
+		newMessages = await misskeyApi('chat/messages/user-timeline', {
+			userId: user.value!.id,
+			limit: LIMIT,
+			sinceId: sinceId,
+		});
+	} else {
+		newMessages = await misskeyApi('chat/messages/room-timeline', {
+			roomId: room.value!.id,
+			limit: LIMIT,
+			sinceId: sinceId,
+		});
+	}
+
+	if (newMessages.length > 0) {
+		// NewMessages 是 Newest First.
+		// Messages 列表也是 Newest First.
+		// 所以直接 unshift 进去
+		// NewMessages 是 ASC (旧->新)，我们需要反转为 DESC (新->旧)
+		const reversed = newMessages.map(x => normalizeMessage(x)).reverse();
+		messages.value.unshift(...reversed);
+	}
+
+	// 如果返回数量少于 Limit，说明已经到达最顶端（最新），没有更多 gap 了
+	if (newMessages.length < LIMIT) {
+		canFetchNewer.value = false;
+		showIndicator.value = false;
+	} else {
+		canFetchNewer.value = true;
+	}
+
+	fetchingNewer.value = false;
+}
+
+// 滚动到指定消息
+async function scrollToMessage(targetMessageId: string) {
+	// 查找目标消息元素
 	const targetEl = window.document.querySelector(`[data-message-id="${targetMessageId}"]`) as HTMLElement | null;
 	if (targetEl) {
 		targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-
-		// 高亮显示目标消息
 		highlightedMessageId.value = targetMessageId;
-
-		// 3秒后取消高亮
 		window.setTimeout(() => {
 			highlightedMessageId.value = null;
 		}, 3000);
+		return;
+	}
+
+	// 如果没有找到元素，且没有 context 加载过，则尝试加载
+	// 这里通过简单的检查 messages 列表判断
+	const exists = messages.value.some(m => m.id === targetMessageId);
+	if (!exists) {
+		// 重新加载上下文
+		await loadContext(targetMessageId);
+		await new Promise(resolve => window.setTimeout(resolve, 300));
+		// 递归调用一次（应该能找到了）
+		const retryEl = window.document.querySelector(`[data-message-id="${targetMessageId}"]`) as HTMLElement | null;
+		if (retryEl) {
+			retryEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+			highlightedMessageId.value = targetMessageId;
+			window.setTimeout(() => {
+				highlightedMessageId.value = null;
+			}, 3000);
+		}
 	}
 }
 
 // 处理从搜索结果点击定位的事件
 async function handleScrollToMessage(messageId: string) {
-	// 切换到聊天标签
 	tab.value = 'chat';
-	// 等待 DOM 更新后滚动
-	await new Promise(resolve => window.setTimeout(resolve, 50));
+	// 这里不使用等待 DOM，而是直接加载上下文
+	await loadContext(messageId);
+	await new Promise(resolve => window.setTimeout(resolve, 300));
 	await scrollToMessage(messageId);
 }
 
 function onMessage(message: Misskey.entities.ChatMessageLite) {
 	sound.playMisskeySfx('chatMessage');
+
+	// 如果我们处于历史模式（canFetchNewer=true），不直接把新消息加进去，而是显示提示
+	if (canFetchNewer.value) {
+		showIndicator.value = true;
+		return;
+	}
 
 	messages.value.unshift(normalizeMessage(message));
 
@@ -393,11 +518,32 @@ function onUnreact(ctx: Parameters<Misskey.Channels['chatUser']['events']['unrea
 }
 
 function onIndicatorClick() {
-	showIndicator.value = false;
-}
-
-function notifyNewMessage() {
-	showIndicator.value = true;
+	if (canFetchNewer.value) {
+		showIndicator.value = false;
+		// 重新初始化以加载最新消息
+		initializing.value = true;
+		(async () => {
+			try {
+				const LIMIT = 20;
+				let m: Misskey.entities.ChatMessageLite[] = [];
+				if (props.userId) {
+					m = await misskeyApi('chat/messages/user-timeline', { userId: props.userId, limit: LIMIT });
+				} else {
+					m = await misskeyApi('chat/messages/room-timeline', { roomId: props.roomId!, limit: LIMIT });
+				}
+				messages.value = m.map(x => normalizeMessage(x));
+				canFetchMore.value = messages.value.length === LIMIT;
+				canFetchNewer.value = false;
+			} finally {
+				initializing.value = false;
+			}
+		})();
+	} else {
+		showIndicator.value = false;
+		// 滚动到底部（顶部）
+		const scrollContainer = getScrollContainer(timelineEl.value!);
+		scrollContainer?.scrollTo({ top: 0, behavior: 'smooth' });
+	}
 }
 
 function onVisibilitychange() {
