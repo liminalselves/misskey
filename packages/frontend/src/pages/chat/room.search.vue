@@ -21,7 +21,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 		<div v-if="searchResults.length > 0" class="_gaps_s">
 			<div v-for="message in searchResults" :key="message.id" :class="$style.searchResultItem">
-				<XMessage :message="message" :user="message.fromUser" :isSearchResult="true"/>
+				<XMessage :message="message" :user="message.fromUser" :isSearchResult="true" @navigate="onNavigate"/>
 			</div>
 		</div>
 		<MkResult v-else type="notFound"/>
@@ -44,6 +44,10 @@ const props = defineProps<{
 	roomId?: string;
 }>();
 
+const emit = defineEmits<{
+	(ev: 'scrollToMessage', messageId: string): void;
+}>();
+
 const searchQuery = ref('');
 const searched = ref(false);
 const searchResults = ref<Misskey.entities.ChatMessage[]>([]);
@@ -57,6 +61,11 @@ async function search() {
 
 	searchResults.value = res;
 	searched.value = true;
+}
+
+// 处理消息点击导航
+function onNavigate(messageId: string) {
+	emit('scrollToMessage', messageId);
 }
 </script>
 

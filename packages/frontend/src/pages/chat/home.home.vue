@@ -26,7 +26,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 		<div class="_gaps_s">
 			<div v-for="message in searchResults" :key="message.id" :class="$style.searchResultItem">
-				<XMessage :message="message" :isSearchResult="true"/>
+				<XMessage :message="message" :isSearchResult="true" @navigate="navigateToMessage(message, $event)"/>
 			</div>
 		</div>
 	</MkFoldableSection>
@@ -119,6 +119,19 @@ async function search() {
 
 	searchResults.value = res;
 	searched.value = true;
+}
+
+// 点击搜索结果跳转到对应消息
+function navigateToMessage(message: Misskey.entities.ChatMessage, messageId: string) {
+	// 判断是群聊还是 1v1
+	if ('toRoomId' in message && message.toRoomId != null) {
+		router.pushByPath(`/chat/room/${message.toRoomId}?messageId=${messageId}`);
+	} else if ('toUserId' in message && message.toUserId != null) {
+		router.pushByPath(`/chat/user/${message.toUserId}?messageId=${messageId}`);
+	} else if ('fromUserId' in message && message.fromUserId !== $i.id) {
+		// 如果是对方发的消息，跳转到对方的聊天
+		router.pushByPath(`/chat/user/${message.fromUserId}?messageId=${messageId}`);
+	}
 }
 
 onMounted(() => {

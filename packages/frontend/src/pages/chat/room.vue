@@ -40,7 +40,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 					tag="div" class="_gaps"
 				>
 					<template v-for="item in timeline.toReversed()" :key="item.id">
-						<XMessage v-if="item.type === 'item'" :message="item.data"/>
+						<XMessage v-if="item.type === 'item'" :message="item.data" :highlighted="highlightedMessageId === item.data.id" :data-message-id="item.data.id"/>
 						<div v-else-if="item.type === 'date'" :class="$style.dateDivider">
 							<span><i class="ti ti-chevron-up"></i> {{ item.nextText }}</span>
 							<span style="height: 1em; width: 1px; background: var(--MI_THEME-divider);"></span>
@@ -59,7 +59,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 	</div>
 
 	<div v-else-if="tab === 'search'" class="_spacer" style="--MI_SPACER-w: 700px;">
-		<XSearch :userId="userId" :roomId="roomId"/>
+		<XSearch :userId="userId" :roomId="roomId" @scrollToMessage="handleScrollToMessage"/>
 	</div>
 
 	<div v-else-if="tab === 'members'" class="_spacer" style="--MI_SPACER-w: 700px;">
@@ -118,6 +118,7 @@ const router = useRouter();
 const props = defineProps<{
 	userId?: string;
 	roomId?: string;
+	messageId?: string; // 用于定位到特定消息
 }>();
 
 export type NormalizedChatMessage = Omit<Misskey.entities.ChatMessageLite, 'fromUser' | 'reactions'> & {
@@ -138,6 +139,7 @@ const connection = ref<Misskey.IChannelConnection<Misskey.Channels['chatUser']> 
 const showIndicator = ref(false);
 const timelineEl = useTemplateRef('timelineEl');
 const timeline = makeDateSeparatedTimelineComputedRef(messages);
+const highlightedMessageId = ref<string | null>(null);
 
 const SCROLL_HEAD_THRESHOLD = 200;
 
@@ -254,6 +256,11 @@ async function initialize() {
 
 	initialized.value = true;
 	initializing.value = false;
+
+	// 如果有 messageId 参数，定位到该消息
+	if (props.messageId) {
+		await scrollToMessage(props.messageId);
+	}
 }
 
 let isActivated = true;
@@ -285,6 +292,53 @@ async function fetchMore() {
 
 	canFetchMore.value = newMessages.length === LIMIT;
 	moreFetching.value = false;
+}
+
+// 滚动到指定消息
+async function scrollToMessage(targetMessageId: string) {
+	// 首先检查目标消息是否已在当前加载的消息列表中
+	let messageExists = messages.value.some(m => m.id === targetMessageId);
+
+	// 如果消息不在列表中，继续加载更多直到找到
+	let attempts = 0;
+	const maxAttempts = 10; // 最多尝试10次加载
+
+	while (!messageExists && canFetchMore.value && attempts < maxAttempts) {
+		await fetchMore();
+		messageExists = messages.value.some(m => m.id === targetMessageId);
+		attempts++;
+	}
+
+	if (!messageExists) {
+		console.warn('Target message not found:', targetMessageId);
+		return;
+	}
+
+	// 等待 DOM 更新
+	await new Promise(resolve => window.setTimeout(resolve, 100));
+
+	// 查找目标消息元素并滚动
+	const targetEl = window.document.querySelector(`[data-message-id="${targetMessageId}"]`) as HTMLElement | null;
+	if (targetEl) {
+		targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+		// 高亮显示目标消息
+		highlightedMessageId.value = targetMessageId;
+
+		// 3秒后取消高亮
+		window.setTimeout(() => {
+			highlightedMessageId.value = null;
+		}, 3000);
+	}
+}
+
+// 处理从搜索结果点击定位的事件
+async function handleScrollToMessage(messageId: string) {
+	// 切换到聊天标签
+	tab.value = 'chat';
+	// 等待 DOM 更新后滚动
+	await new Promise(resolve => window.setTimeout(resolve, 50));
+	await scrollToMessage(messageId);
 }
 
 function onMessage(message: Misskey.entities.ChatMessageLite) {

@@ -4,7 +4,11 @@ SPDX-License-Identifier: AGPL-3.0-only
 -->
 
 <template>
-<div :class="[$style.root, { [$style.isMe]: isMe }]">
+<div
+	:class="[$style.root, { [$style.isMe]: isMe, [$style.highlighted]: highlighted, [$style.clickable]: isSearchResult }]"
+	:data-message-id="message.id"
+	@click="onMessageClick"
+>
 	<MkAvatar :class="[$style.avatar, prefer.s.useStickyIcons ? $style.useSticky : null]" :user="message.fromUser!" :link="!isMe" :preview="false"/>
 	<div :class="[$style.body, message.file != null ? $style.fullWidth : null]" @contextmenu.stop="onContextmenu">
 		<div :class="$style.header"><MkUserName v-if="!isMe && prefer.s['chat.showSenderName'] && message.fromUser != null" :user="message.fromUser"/></div>
@@ -79,10 +83,28 @@ const $i = ensureSignin();
 const props = defineProps<{
 	message: NormalizedChatMessage | Misskey.entities.ChatMessage;
 	isSearchResult?: boolean;
+	highlighted?: boolean;
+}>();
+
+const emit = defineEmits<{
+	(e: 'navigate', messageId: string): void;
 }>();
 
 const isMe = computed(() => props.message.fromUserId === $i.id);
 const urls = computed(() => props.message.text ? extractUrlFromMfm(mfm.parse(props.message.text)) : []);
+
+// 点击搜索结果时触发导航
+function onMessageClick(ev: MouseEvent) {
+	// 如果不是搜索结果模式，不处理点击
+	if (!props.isSearchResult) return;
+
+	// 如果点击的是链接或按钮，不处理
+	const target = ev.target as HTMLElement;
+	if (target.closest('a, button')) return;
+
+	// 触发导航事件
+	emit('navigate', props.message.id);
+}
 
 provide(DI.mfmEmojiReactCallback, (reaction) => {
 	if ($i.policies.chatAvailability !== 'available') return;
@@ -227,6 +249,30 @@ function showMenu(ev: PointerEvent, contextmenu = false) {
 		.footer {
 			flex-direction: row-reverse;
 		}
+	}
+
+	&.clickable {
+		cursor: pointer;
+		transition: background-color 0.2s;
+
+		&:hover {
+			background-color: var(--MI_THEME-panelHighlight);
+			border-radius: 12px;
+		}
+	}
+
+	&.highlighted {
+		animation: highlightFade 3s ease-out;
+	}
+}
+
+@keyframes highlightFade {
+	0% {
+		background-color: var(--MI_THEME-accentedBg);
+		border-radius: 12px;
+	}
+	100% {
+		background-color: transparent;
 	}
 }
 
