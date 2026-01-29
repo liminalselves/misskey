@@ -26,7 +26,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { markRaw, ref, onUnmounted, watch } from 'vue';
+import { markRaw, ref, watch } from 'vue';
 import MkFeaturedTimeline from '@/components/MkFeaturedTimeline.vue';
 import MkTab from '@/components/MkTab.vue';
 import MkButton from '@/components/MkButton.vue';
@@ -71,20 +71,18 @@ paginatorForPolls.reload = async () => {
 	return await originalReloadPolls.call(paginatorForPolls);
 };
 
-// 监听 items 变化更新已展示 ID（通过定期同步）
-const intervalId = window.setInterval(() => {
-	// 使用 non-reactive 的方式获取 items，避免触发不必要的依赖更新（虽然这里是在 setInterval 里，本身没问题）
-	if (paginatorForNotes.items.value.length > 0) {
-		displayedNoteIds.value = paginatorForNotes.items.value.map(note => note.id);
+// 监听 items 变化实时更新已展示 ID
+watch(() => paginatorForNotes.items.value, (items) => {
+	if (items.length > 0) {
+		displayedNoteIds.value = items.map(note => note.id);
 	}
-	if (paginatorForPolls.items.value.length > 0) {
-		displayedPollIds.value = paginatorForPolls.items.value.map(note => note.id);
-	}
-}, 100);
+}, { deep: true });
 
-onUnmounted(() => {
-	window.clearInterval(intervalId);
-});
+watch(() => paginatorForPolls.items.value, (items) => {
+	if (items.length > 0) {
+		displayedPollIds.value = items.map(note => note.id);
+	}
+}, { deep: true });
 
 const tab = ref<'notes' | 'polls'>('notes');
 

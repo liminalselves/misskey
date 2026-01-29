@@ -19,6 +19,7 @@
   - 优化上下文加载策略，支持双向分页与精准定位
   - 修复加载历史消息时的排序错误及虚假新消息提示
 - Fix: 发现流（Discovery/Featured）快速刷新导致内容重复或空白的问题
+- Fix: 修复频道发现板块热度算法与全局不一致的问题
 
 ### Note
 - `users/following` の `birthday` プロパティは非推奨になりました。代わりに `users/get-following-birthday-users` をご利用ください。

@@ -100,8 +100,16 @@ export class FeaturedService {
 	}
 
 	@bindThis
-	public updateInChannelNotesRanking(channelId: MiNote['channelId'], noteId: MiNote['id'], score = 1): Promise<void> {
-		return this.updateRankingOf(`featuredInChannelNotesRanking:${channelId}`, GLOBAL_NOTES_RANKING_WINDOW, noteId, score);
+	public async updateInChannelNotesRanking(channelId: MiNote['channelId'], noteId: MiNote['id'], score = 1): Promise<void> {
+		if (!channelId) return;
+
+		// 确保全局热度也更新，从而通过 Intersect 让频道热度增加
+		await this.updateGlobalNotesRanking(noteId, score);
+
+		const key = `featuredInChannelNotesRanking:${channelId}`;
+		// 仅确保存储在频道列表中，分数设为 0。使用 NX 避免重复写入
+		await this.redisClient.zadd(key, 'NX', 0, noteId);
+		await this.redisClient.sadd('featuredChannelsIndex', channelId);
 	}
 
 	@bindThis
@@ -112,6 +120,25 @@ export class FeaturedService {
 	@bindThis
 	public updateHashtagsRanking(hashtag: string, score = 1): Promise<void> {
 		return this.updateRankingOf('featuredHashtagsRanking', HASHTAG_RANKING_WINDOW, hashtag, score);
+	}
+
+	@bindThis
+	public async cleanupChannelNotesRanking(): Promise<void> {
+		const channels = await this.redisClient.smembers('featuredChannelsIndex');
+		const globalKey = 'featuredGlobalNotesRanking:global';
+
+		for (const channelId of channels) {
+			const key = `featuredInChannelNotesRanking:${channelId}`;
+
+			// 通过与全局热度求交集来清理已衰减（不存在于全局）的帖子
+			// 这能保持频道列表的大小可控，提高读取时的 Intersect 性能
+			await this.redisClient.zinterstore(key, 2, globalKey, key, 'WEIGHTS', 1, 0);
+
+			const count = await this.redisClient.zcard(key);
+			if (count === 0) {
+				await this.redisClient.srem('featuredChannelsIndex', channelId);
+			}
+		}
 	}
 
 	@bindThis
@@ -142,8 +169,21 @@ export class FeaturedService {
 	}
 
 	@bindThis
-	public getInChannelNotesRanking(channelId: MiNote['channelId'], threshold: number): Promise<MiNote['id'][]> {
-		return this.getRankingOf(`featuredInChannelNotesRanking:${channelId}`, GLOBAL_NOTES_RANKING_WINDOW, threshold);
+	public async getInChannelNotesRanking(channelId: MiNote['channelId'], threshold: number): Promise<MiNote['id'][]> {
+		if (!channelId) return [];
+
+		const channelKey = `featuredInChannelNotesRanking:${channelId}`;
+		const globalKey = 'featuredGlobalNotesRanking:global';
+		const tempKey = `featured:temp:${channelId}:${Date.now()}:${Math.random()}`;
+
+		try {
+			// 计算交集：取 Global 和 Channel 的交集，并使用 Global 的分数（权重 1:0）
+			// 这样可以确保频道内的热度排序与全局完全一致，且无需单独通过定时任务衰减
+			await this.redisClient.zinterstore(tempKey, 2, globalKey, channelKey, 'WEIGHTS', 1, 0);
+			return await this.redisClient.zrange(tempKey, 0, threshold, 'REV');
+		} finally {
+			this.redisClient.del(tempKey);
+		}
 	}
 
 	/**
@@ -151,33 +191,27 @@ export class FeaturedService {
 	 */
 	@bindThis
 	public async getInChannelNotesRankingWithScores(channelId: MiNote['channelId'], threshold: number): Promise<{ id: MiNote['id']; score: number }[]> {
-		const currentWindow = this.getCurrentWindow(GLOBAL_NOTES_RANKING_WINDOW);
-		const previousWindow = currentWindow - 1;
-		const name = `featuredInChannelNotesRanking:${channelId}`;
+		if (!channelId) return [];
 
-		const redisPipeline = this.redisClient.pipeline();
-		redisPipeline.zrange(`${name}:${currentWindow}`, 0, threshold, 'REV', 'WITHSCORES');
-		redisPipeline.zrange(`${name}:${previousWindow}`, 0, threshold, 'REV', 'WITHSCORES');
-		const [currentRankingResult, previousRankingResult] = await redisPipeline.exec().then(result => result ? result.map(r => (r[1] ?? []) as string[]) : [[], []]);
+		const channelKey = `featuredInChannelNotesRanking:${channelId}`;
+		const globalKey = 'featuredGlobalNotesRanking:global';
+		const tempKey = `featured:temp:${channelId}:${Date.now()}:${Math.random()}`;
 
-		const ranking = new Map<string, number>();
-		for (let i = 0; i < currentRankingResult.length; i += 2) {
-			const noteId = currentRankingResult[i];
-			const score = parseFloat(currentRankingResult[i + 1]);
-			ranking.set(noteId, score);
-		}
-		for (let i = 0; i < previousRankingResult.length; i += 2) {
-			const noteId = previousRankingResult[i];
-			const score = parseFloat(previousRankingResult[i + 1]);
-			const exist = ranking.get(noteId);
-			if (exist != null) {
-				ranking.set(noteId, (exist + score) / 2);
-			} else {
-				ranking.set(noteId, score);
+		try {
+			await this.redisClient.zinterstore(tempKey, 2, globalKey, channelKey, 'WEIGHTS', 1, 0);
+			const data = await this.redisClient.zrange(tempKey, 0, threshold, 'REV', 'WITHSCORES');
+
+			const result: { id: MiNote['id']; score: number }[] = [];
+			for (let i = 0; i < data.length; i += 2) {
+				result.push({
+					id: data[i],
+					score: parseFloat(data[i + 1]),
+				});
 			}
+			return result;
+		} finally {
+			this.redisClient.del(tempKey);
 		}
-
-		return Array.from(ranking.entries()).map(([id, score]) => ({ id, score }));
 	}
 
 	@bindThis
@@ -202,6 +236,24 @@ export class FeaturedService {
 		await this.redisClient.zinterstore(key, 1, key, 'WEIGHTS', 0.995);
 		// 清理阈值降低：分数低于 0.01 才清理，让冷门帖子有更多机会
 		await this.redisClient.zremrangebyscore(key, '-inf', 0.01);
+	}
+
+	@bindThis
+	public async decayInChannelNotesRanking(): Promise<void> {
+		const channels = await this.redisClient.smembers('featuredChannelsIndex');
+		for (const channelId of channels) {
+			const key = `featuredInChannelNotesRanking:${channelId}`;
+			// 衰减速度降低：每小时衰减 0.5%
+			await this.redisClient.zinterstore(key, 1, key, 'WEIGHTS', 0.995);
+			// 清理阈值降低：分数低于 0.01 才清理
+			await this.redisClient.zremrangebyscore(key, '-inf', 0.01);
+
+			// 如果该频道已无热度内容，从索引中移除，避免空轮询
+			const count = await this.redisClient.zcard(key);
+			if (count === 0) {
+				await this.redisClient.srem('featuredChannelsIndex', channelId);
+			}
+		}
 	}
 
 	/**

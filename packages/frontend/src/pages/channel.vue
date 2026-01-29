@@ -77,7 +77,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { computed, watch, ref, markRaw, shallowRef, onUnmounted } from 'vue';
+import { computed, watch, ref, markRaw, shallowRef } from 'vue';
 import * as Misskey from 'misskey-js';
 import { url } from '@@/js/config.js';
 import { useInterval } from '@@/js/use-interval.js';
@@ -140,15 +140,11 @@ featuredPaginator.reload = async () => {
 };
 
 // 定期更新已展示帖子 ID
-const intervalId = window.setInterval(() => {
-	if (featuredPaginator.items.value.length > 0) {
-		displayedNoteIds.value = featuredPaginator.items.value.map(note => note.id);
+watch(() => featuredPaginator.items.value, (items) => {
+	if (items.length > 0) {
+		displayedNoteIds.value = items.map(note => note.id);
 	}
-}, 100);
-
-onUnmounted(() => {
-	window.clearInterval(intervalId);
-});
+}, { deep: true });
 
 // 切换频道时重置已展示帖子
 watch(() => props.channelId, () => {

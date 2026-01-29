@@ -1,3 +1,8 @@
+/*
+ * SPDX-FileCopyrightText: syuilo and misskey-project
+ * SPDX-License-Identifier: AGPL-3.0-only
+ */
+
 import { Injectable } from '@nestjs/common';
 import { Job } from 'bullmq';
 import { bindThis } from '@/decorators.js';
@@ -20,6 +25,7 @@ export class DecayFeaturedNotesRankingProcessorService {
 	public async process(_job: Job): Promise<void> {
 		this.logger.info('Decaying featured notes ranking...');
 		await this.featuredService.decayGlobalNotesRanking();
+		await this.featuredService.cleanupChannelNotesRanking();
 		this.logger.succ('Decayed featured notes ranking.');
 	}
 }
