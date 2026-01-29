@@ -6033,6 +6033,52 @@ export interface Locale extends ILocale {
              */
             "none": string;
         };
+        /**
+         * キック
+         */
+        "kick": string;
+        /**
+         * {name}をルームからキックしますか？
+         */
+        "kickConfirm": ParameterizedString<"name">;
+        /**
+         * 発言禁止
+         */
+        "suspend": string;
+        /**
+         * 発言禁止を解除
+         */
+        "unsuspend": string;
+        /**
+         * 発言禁止期間
+         */
+        "suspendDuration": string;
+        "_suspendDuration": {
+            /**
+             * 1時間
+             */
+            "1hour": string;
+            /**
+             * 12時間
+             */
+            "12hours": string;
+            /**
+             * 24時間
+             */
+            "24hours": string;
+            /**
+             * 1週間
+             */
+            "1week": string;
+            /**
+             * 永久
+             */
+            "permanent": string;
+        };
+        /**
+         * ルームを検索
+         */
+        "searchRoom": string;
     };
     "_emojiPalette": {
         /**

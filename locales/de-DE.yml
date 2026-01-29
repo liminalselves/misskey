@@ -1479,6 +1479,18 @@ _chat:
     following: "Nur Benutzer, denen du folgst"
     mutual: "Nur Benutzer, die sich gegenseitig folgen"
     none: "Niemand"
+  kick: "Kicken"
+  kickConfirm: "Möchtest du {name} wirklich aus diesem Raum kicken?"
+  suspend: "Stummschalten"
+  unsuspend: "Stummschaltung aufheben"
+  suspendDuration: "Stummschaltungsdauer"
+  _suspendDuration:
+    "1hour": "1 Stunde"
+    "12hours": "12 Stunden"
+    "24hours": "24 Stunden"
+    "1week": "1 Woche"
+    "permanent": "Permanent"
+  searchRoom: "Räume suchen"
 _emojiPalette:
   palettes: "Palette"
   enableSyncBetweenDevicesForPalettes: "Synchronisierung der Paletten zwischen Geräten aktivieren"

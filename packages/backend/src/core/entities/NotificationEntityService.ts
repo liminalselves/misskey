@@ -163,6 +163,13 @@ export class NotificationEntityService implements OnModuleInit {
 			return null;
 		}
 
+		const needsChatRoom = notification.type === 'chatRoomMemberJoined' || notification.type === 'chatRoomKicked' || notification.type === 'chatRoomSuspended' || notification.type === 'chatRoomUnsuspended';
+		const chatRoom = needsChatRoom ? await this.chatEntityService.packRoom(notification.chatRoomId, { id: meId }).catch(() => null) : undefined;
+		// if the chat room has been deleted, don't show this notification
+		if (needsChatRoom && !chatRoom) {
+			return null;
+		}
+
 		return await awaitAll({
 			id: notification.id,
 			createdAt: new Date(notification.createdAt).toISOString(),
@@ -178,6 +185,9 @@ export class NotificationEntityService implements OnModuleInit {
 			} : {}),
 			...(notification.type === 'chatRoomInvitationReceived' ? {
 				invitation: chatRoomInvitation,
+			} : {}),
+			...((notification.type === 'chatRoomMemberJoined' || notification.type === 'chatRoomKicked' || notification.type === 'chatRoomSuspended' || notification.type === 'chatRoomUnsuspended') ? {
+				chatRoom: chatRoom,
 			} : {}),
 			...(notification.type === 'followRequestAccepted' ? {
 				message: notification.message,

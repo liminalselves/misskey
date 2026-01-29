@@ -213,6 +213,37 @@ function send() {
 			clear();
 		}).catch(err => {
 			console.error(err);
+
+			if (err?.code === 'ROOM_SUSPENDED') {
+				const remainingMs = err.info?.remainingMs as number | null | undefined;
+				const isPermanent = err.info?.isPermanent as boolean | undefined;
+
+				let message = '你已被该群聊禁言。';
+				if (isPermanent) {
+					message += ' 禁言为永久。';
+				} else if (typeof remainingMs === 'number' && remainingMs > 0) {
+					const totalSeconds = Math.floor(remainingMs / 1000);
+					const d = Math.floor(totalSeconds / 86400);
+					const h = Math.floor((totalSeconds % 86400) / 3600);
+					const m = Math.floor((totalSeconds % 3600) / 60);
+					const s = totalSeconds % 60;
+
+					let parts: string[] = [];
+					if (d > 0) parts.push(`${d}天`);
+					if (h > 0) parts.push(`${h}小时`);
+					if (m > 0) parts.push(`${m}分钟`);
+					if (s > 0 && parts.length === 0) parts.push(`${s}秒`);
+
+					if (parts.length > 0) {
+						message += ` 剩余时间：${parts.join(' ')}。`;
+					}
+				}
+
+				os.alert({
+					type: 'error',
+					text: message,
+				});
+			}
 		}).then(() => {
 			sending.value = false;
 		});

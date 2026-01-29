@@ -79,6 +79,10 @@ function start(ev: PointerEvent) {
 			text: i18n.ts._chat.createRoom,
 			icon: 'ti ti-plus',
 			action: () => { createRoom(); },
+		}, {
+			text: i18n.ts.search,
+			icon: 'ti ti-search',
+			action: () => { router.push('/chat/search'); },
 		}],
 	}], ev.currentTarget ?? ev.target);
 }
@@ -95,14 +99,23 @@ async function startUser() {
 }
 
 async function createRoom() {
-	const { canceled, result } = await os.inputText({
-		title: i18n.ts.name,
-		minLength: 1,
+	const { canceled, result } = await os.form(i18n.ts._chat.createRoom, {
+		name: {
+			type: 'string',
+			label: i18n.ts.name,
+			minLength: 1,
+		},
+		isPublic: {
+			type: 'boolean',
+			label: i18n.ts.public,
+			default: false,
+		},
 	});
 	if (canceled) return;
 
 	const room = await misskeyApi('chat/rooms/create', {
-		name: result,
+		name: result.name,
+		isPublic: result.isPublic,
 	});
 
 	router.push('/chat/room/:roomId', {

@@ -1514,6 +1514,18 @@ _chat:
     following: "自分がフォローしているユーザーのみ"
     mutual: "相互フォローのユーザーのみ"
     none: "誰も許可しない"
+  kick: "キック"
+  kickConfirm: "{name}をルームからキックしますか？"
+  suspend: "発言禁止"
+  unsuspend: "発言禁止を解除"
+  suspendDuration: "発言禁止期間"
+  _suspendDuration:
+    "1hour": "1時間"
+    "12hours": "12時間"
+    "24hours": "24時間"
+    "1week": "1週間"
+    "permanent": "永久"
+  searchRoom: "ルームを検索"
 
 _emojiPalette:
   palettes: "パレット"

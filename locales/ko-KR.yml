@@ -1508,6 +1508,18 @@ _chat:
     following: "자신이 팔로우한 유저만"
     mutual: "상호 팔로우한 유저만"
     none: "아무도 허락하지 않기"
+  kick: "추방"
+  kickConfirm: "정말로 {name}를 추방하시겠습니까?"
+  suspend: "금지"
+  unsuspend: "금지 해제"
+  suspendDuration: "금지 기간"
+  _suspendDuration:
+    "1hour": "1시간"
+    "12hours": "12시간"
+    "24hours": "24시간"
+    "1week": "1주일"
+    "permanent": "영구"
+  searchRoom: "룸 검색"
 _emojiPalette:
   palettes: "팔레트"
   enableSyncBetweenDevicesForPalettes: "팔레트의 디바이스 간 동기화를 활성화"

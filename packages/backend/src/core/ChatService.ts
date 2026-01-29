@@ -245,16 +245,33 @@ export class ChatService {
 		file?: MiDriveFile | null;
 		uri?: string | null;
 	}): Promise<Packed<'ChatMessageLiteForRoom'>> {
-		const memberships = (await this.chatRoomMembershipsRepository.findBy({ roomId: toRoom.id })).map(m => ({
-			userId: m.userId,
-			isMuted: m.isMuted,
-		})).concat({ // ownerはmembershipレコードを作らないため
-			userId: toRoom.ownerId,
-			isMuted: false,
-		});
+		const memberships = (await this.chatRoomMembershipsRepository.findBy({ roomId: toRoom.id }))
+			.map(m => ({
+				userId: m.userId,
+				isMuted: m.isMuted,
+				suspendedUntil: m.suspendedUntil,
+			}))
+			.concat({ // ownerはmembershipレコードを作らないため
+				userId: toRoom.ownerId,
+				isMuted: false,
+				suspendedUntil: null,
+			});
 
-		if (!memberships.some(member => member.userId === fromUser.id)) {
+		const me = memberships.find(member => member.userId === fromUser.id);
+		if (!me) {
 			throw new Error('you are not a member of the room');
+		}
+
+		if (me.suspendedUntil && new Date() < me.suspendedUntil) {
+			const remainingMs = me.suspendedUntil.getTime() - Date.now();
+			const isPermanent = !Number.isFinite(remainingMs) || remainingMs <= 0;
+
+			const error: any = new Error('user has been suspended from this room');
+			error.info = {
+				remainingMs: isPermanent ? null : remainingMs,
+				isPermanent,
+			};
+			throw error;
 		}
 
 		const membershipsOtherThanMe = memberships.filter(member => member.userId !== fromUser.id);
@@ -559,12 +576,14 @@ export class ChatService {
 	public async createRoom(owner: MiUser, params: Partial<{
 		name: string;
 		description: string;
+		isPublic: boolean;
 	}>) {
 		const room = {
 			id: this.idService.gen(),
 			name: params.name,
 			description: params.description,
 			ownerId: owner.id,
+			isPublic: params.isPublic,
 		} satisfies Partial<MiChatRoom>;
 
 		const created = await this.chatRoomsRepository.insertOne(room);
@@ -634,6 +653,28 @@ export class ChatService {
 	}
 
 	@bindThis
+	public async canAccessRoom(userId: MiUser['id'], room: MiChatRoom): Promise<boolean> {
+		// 群主可以访问
+		if (room.ownerId === userId) return true;
+
+		// 成员可以访问
+		if (await this.isRoomMember(room, userId)) return true;
+
+		// 公开群组可以访问（查看信息，但需要加入才能发消息）
+		if (room.isPublic) return true;
+
+		// 有未忽略的邀请可以访问
+		const invitation = await this.chatRoomInvitationsRepository.findOneBy({
+			roomId: room.id,
+			userId: userId,
+			ignored: false,
+		});
+		if (invitation != null) return true;
+
+		return false;
+	}
+
+	@bindThis
 	public async createRoomInvitation(inviterId: MiUser['id'], roomId: MiChatRoom['id'], inviteeId: MiUser['id']) {
 		if (inviterId === inviteeId) {
 			throw new Error('yourself');
@@ -647,7 +688,12 @@ export class ChatService {
 
 		const existingInvitation = await this.chatRoomInvitationsRepository.findOneBy({ roomId, userId: inviteeId });
 		if (existingInvitation) {
-			throw new Error('already invited');
+			if (existingInvitation.ignored) {
+				// 如果之前的邀请被忽略了，删除旧邀请，允许重新邀请
+				await this.chatRoomInvitationsRepository.delete(existingInvitation.id);
+			} else {
+				throw new Error('already invited');
+			}
 		}
 
 		const membershipsCount = await this.chatRoomMembershipsRepository.countBy({ roomId });
@@ -705,7 +751,25 @@ export class ChatService {
 
 	@bindThis
 	public async joinToRoom(userId: MiUser['id'], roomId: MiChatRoom['id']) {
-		const invitation = await this.chatRoomInvitationsRepository.findOneByOrFail({ roomId, userId });
+		const room = await this.chatRoomsRepository.findOne({ where: { id: roomId } });
+		if (room == null) {
+			throw new Error('no such room');
+		}
+
+		// 无论公开还是私有群组，都要先检查是否已经是成员
+		if (await this.isRoomMember(room, userId)) {
+			throw new Error('already member');
+		}
+
+		// 检查是否有邀请
+		const invitation = await this.chatRoomInvitationsRepository.findOne({ where: { roomId, userId } });
+
+		if (!room.isPublic) {
+			// 私有群组需要邀请
+			if (invitation == null) {
+				throw new Error('no invitation');
+			}
+		}
 
 		const membershipsCount = await this.chatRoomMembershipsRepository.countBy({ roomId });
 		if (membershipsCount >= MAX_ROOM_MEMBERS) {
@@ -720,7 +784,18 @@ export class ChatService {
 
 		// TODO: transaction
 		await this.chatRoomMembershipsRepository.insertOne(membership);
-		await this.chatRoomInvitationsRepository.delete(invitation.id);
+
+		// 如果有邀请，无论公开还是私有群组都删除邀请
+		if (invitation != null) {
+			await this.chatRoomInvitationsRepository.delete(invitation.id);
+		}
+
+		// 通知群主有新成员加入
+		if (room.ownerId !== userId) {
+			this.notificationService.createNotification(room.ownerId, 'chatRoomMemberJoined', {
+				chatRoomId: roomId,
+			}, userId);
+		}
 	}
 
 	@bindThis
@@ -748,9 +823,77 @@ export class ChatService {
 	}
 
 	@bindThis
+	public async kick(initiator: MiUser, roomId: MiChatRoom['id'], userId: MiUser['id']) {
+		const room = await this.chatRoomsRepository.findOneByOrFail({ id: roomId });
+
+		if (room.ownerId !== initiator.id) {
+			const iAmModerator = await this.roleService.isModerator(initiator);
+			if (!iAmModerator) throw new Error('permission denied');
+		}
+
+		if (room.ownerId === userId) {
+			throw new Error('cannot kick owner');
+		}
+
+		const membership = await this.chatRoomMembershipsRepository.findOneByOrFail({ roomId, userId });
+		await this.chatRoomMembershipsRepository.delete(membership.id);
+
+		const redisPipeline = this.redisClient.pipeline();
+		redisPipeline.del(`newRoomChatMessageExists:${userId}:${roomId}`);
+		redisPipeline.srem(`newChatMessagesExists:${userId}`, `room:${roomId}`);
+		await redisPipeline.exec();
+
+		// 通知被踢出的用户
+		this.notificationService.createNotification(userId, 'chatRoomKicked', {
+			chatRoomId: roomId,
+		}, initiator.id);
+	}
+
+	@bindThis
+	public async suspend(initiator: MiUser, roomId: MiChatRoom['id'], userId: MiUser['id'], expiredAt: Date) {
+		const room = await this.chatRoomsRepository.findOneByOrFail({ id: roomId });
+
+		if (room.ownerId !== initiator.id) {
+			const iAmModerator = await this.roleService.isModerator(initiator);
+			if (!iAmModerator) throw new Error('permission denied');
+		}
+
+		if (room.ownerId === userId) {
+			throw new Error('cannot suspend owner');
+		}
+
+		const membership = await this.chatRoomMembershipsRepository.findOneByOrFail({ roomId, userId });
+		await this.chatRoomMembershipsRepository.update(membership.id, { suspendedUntil: expiredAt });
+
+		// 通知被禁言的用户
+		this.notificationService.createNotification(userId, 'chatRoomSuspended', {
+			chatRoomId: roomId,
+		}, initiator.id);
+	}
+
+	@bindThis
+	public async unsuspend(initiator: MiUser, roomId: MiChatRoom['id'], userId: MiUser['id']) {
+		const room = await this.chatRoomsRepository.findOneByOrFail({ id: roomId });
+
+		if (room.ownerId !== initiator.id) {
+			const iAmModerator = await this.roleService.isModerator(initiator);
+			if (!iAmModerator) throw new Error('permission denied');
+		}
+
+		const membership = await this.chatRoomMembershipsRepository.findOneByOrFail({ roomId, userId });
+		await this.chatRoomMembershipsRepository.update(membership.id, { suspendedUntil: null });
+
+		// 通知被解除禁言的用户
+		this.notificationService.createNotification(userId, 'chatRoomUnsuspended', {
+			chatRoomId: roomId,
+		}, initiator.id);
+	}
+
+	@bindThis
 	public async updateRoom(room: MiChatRoom, params: {
 		name?: string;
 		description?: string;
+		isPublic?: boolean;
 	}): Promise<MiChatRoom> {
 		return this.chatRoomsRepository.createQueryBuilder().update()
 			.set(params)
@@ -770,6 +913,21 @@ export class ChatService {
 		const memberships = await query.take(limit).getMany();
 
 		return memberships;
+	}
+
+	@bindThis
+	public async searchRooms(query: string, limit: number, sinceId?: MiChatRoom['id'] | null, untilId?: MiChatRoom['id'] | null) {
+		const q = this.queryService.makePaginationQuery(this.chatRoomsRepository.createQueryBuilder('room'), sinceId, untilId)
+			.andWhere(new Brackets(qb => {
+				qb.where('room.name ILIKE :query', { query: `%${sqlLikeEscape(query)}%` })
+					.orWhere('room.description ILIKE :query', { query: `%${sqlLikeEscape(query)}%` });
+			}))
+			.andWhere('room.isPublic = TRUE')
+			.leftJoinAndSelect('room.owner', 'owner');
+
+		const rooms = await q.take(limit).getMany();
+
+		return rooms;
 	}
 
 	@bindThis

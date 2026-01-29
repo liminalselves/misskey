@@ -1508,6 +1508,18 @@ _chat:
     following: "只有您追隨的使用者"
     mutual: "互相追隨"
     none: "無"
+  kick: "踢出"
+  kickConfirm: "確定要將 {name} 踢出群組嗎？"
+  suspend: "禁言"
+  unsuspend: "取消禁言"
+  suspendDuration: "禁言時長"
+  _suspendDuration:
+    "1hour": "1 小時"
+    "12hours": "12 小時"
+    "24hours": "24 小時"
+    "1week": "1 週"
+    "permanent": "永久"
+  searchRoom: "搜尋群組"
 _emojiPalette:
   palettes: "調色盤"
   enableSyncBetweenDevicesForPalettes: "啟用裝置與裝置之間的調色盤同步化"

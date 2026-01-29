@@ -38,6 +38,7 @@ export const paramDef = {
 		roomId: { type: 'string', format: 'misskey:id' },
 		name: { type: 'string', maxLength: 256 },
 		description: { type: 'string', maxLength: 1024 },
+		isPublic: { type: 'boolean' },
 	},
 	required: ['roomId'],
 } as const;
@@ -59,6 +60,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			const updated = await this.chatService.updateRoom(room, {
 				name: ps.name,
 				description: ps.description,
+				isPublic: ps.isPublic,
 			});
 
 			return this.chatEntityService.packRoom(updated, me);

@@ -50,6 +50,12 @@ export const meta = {
 			code: 'CONTENT_REQUIRED',
 			id: '340517b7-6d04-42c0-bac1-37ee804e3594',
 		},
+
+		roomSuspended: {
+			message: 'You have been suspended from this room.',
+			code: 'ROOM_SUSPENDED',
+			id: '5b4c6a6a-6f1e-4b6f-b0e7-4f7d4a9e3c21',
+		},
 	},
 } as const;
 
@@ -97,10 +103,19 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				throw new ApiError(meta.errors.contentRequired);
 			}
 
-			return await this.chatService.createMessageToRoom(me, room, {
-				text: ps.text,
-				file: file,
-			});
+			try {
+				return await this.chatService.createMessageToRoom(me, room, {
+					text: ps.text,
+					file: file,
+				});
+			} catch (e: any) {
+				// When the user is suspended in this room, convert to a typed API error
+				if (e?.message === 'user has been suspended from this room') {
+					// Remaining time information is attached from ChatService via e.info when available
+					throw new ApiError(meta.errors.roomSuspended, e?.info);
+				}
+				throw e;
+			}
 		});
 	}
 }

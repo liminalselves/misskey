@@ -287,11 +287,25 @@ async function initialize() {
 		]);
 
 		if (rResult.status === 'rejected') {
-			os.alert({
-				type: 'error',
-				text: i18n.ts.somethingHappened,
-			});
+			const error = rResult.reason as any;
+			if (error?.code === 'ACCESS_DENIED') {
+				os.alert({
+					type: 'error',
+					text: i18n.ts.permissionDeniedError as string,
+				});
+			} else if (error?.code === 'NO_SUCH_ROOM') {
+				os.alert({
+					type: 'error',
+					text: i18n.ts.noSuchRoom as string ?? 'No such room',
+				});
+			} else {
+				os.alert({
+					type: 'error',
+					text: i18n.ts.somethingHappened,
+				});
+			}
 			initializing.value = false;
+			router.push('/chat');
 			return;
 		}
 

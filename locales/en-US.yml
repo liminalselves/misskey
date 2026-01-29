@@ -1508,6 +1508,18 @@ _chat:
     following: "Only users you are following"
     mutual: "Mutual followers only"
     none: "Nobody"
+  kick: "Kick"
+  kickConfirm: "Are you sure you want to kick {name} from this room?"
+  suspend: "Suspend"
+  unsuspend: "Unsuspend"
+  suspendDuration: "Suspend duration"
+  _suspendDuration:
+    "1hour": "1 hour"
+    "12hours": "12 hours"
+    "24hours": "24 hours"
+    "1week": "1 week"
+    "permanent": "Permanent"
+  searchRoom: "Search rooms"
 _emojiPalette:
   palettes: "Palette"
   enableSyncBetweenDevicesForPalettes: "Enable palette sync between devices"

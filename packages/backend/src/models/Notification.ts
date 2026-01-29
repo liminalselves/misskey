@@ -94,6 +94,30 @@ export type MiNotification = {
 	notifierId: MiUser['id'];
 	invitationId: string;
 } | {
+	type: 'chatRoomMemberJoined';
+	id: string;
+	createdAt: string;
+	notifierId: MiUser['id'];
+	chatRoomId: string;
+} | {
+	type: 'chatRoomKicked';
+	id: string;
+	createdAt: string;
+	notifierId: MiUser['id'];
+	chatRoomId: string;
+} | {
+	type: 'chatRoomSuspended';
+	id: string;
+	createdAt: string;
+	notifierId: MiUser['id'];
+	chatRoomId: string;
+} | {
+	type: 'chatRoomUnsuspended';
+	id: string;
+	createdAt: string;
+	notifierId: MiUser['id'];
+	chatRoomId: string;
+} | {
 	type: 'achievementEarned';
 	id: string;
 	createdAt: string;

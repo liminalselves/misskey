@@ -249,7 +249,10 @@ export class ChatEntityService {
 		const room = typeof src === 'object' ? src : await this.chatRoomsRepository.findOneByOrFail({ id: src });
 
 		const membership = me && me.id !== room.ownerId ? (options?._hint_?.myMemberships?.get(room.id) ?? await this.chatRoomMembershipsRepository.findOneBy({ roomId: room.id, userId: me.id })) : null;
-		const invitation = me && me.id !== room.ownerId ? (options?._hint_?.myInvitations?.get(room.id) ?? await this.chatRoomInvitationsRepository.findOneBy({ roomId: room.id, userId: me.id })) : null;
+		const invitation = me && me.id !== room.ownerId ? (options?._hint_?.myInvitations?.get(room.id) ?? await this.chatRoomInvitationsRepository.findOneBy({ roomId: room.id, userId: me.id, ignored: false })) : null;
+
+		// 如果用户已经是成员，不显示邀请存在
+		const isMember = me && (me.id === room.ownerId || membership != null);
 
 		return {
 			id: room.id,
@@ -258,8 +261,9 @@ export class ChatEntityService {
 			description: room.description,
 			ownerId: room.ownerId,
 			owner: options?._hint_?.packedOwners.get(room.ownerId) ?? await this.userEntityService.pack(room.owner ?? room.ownerId, me),
+			isPublic: room.isPublic,
 			isMuted: membership != null ? membership.isMuted : false,
-			invitationExists: invitation != null,
+			invitationExists: !isMember && invitation != null,
 		};
 	}
 
@@ -359,6 +363,7 @@ export class ChatEntityService {
 			user: options?.populateUser ? (options._hint_?.packedUsers.get(membership.userId) ?? await this.userEntityService.pack(membership.user ?? membership.userId, me)) : undefined,
 			roomId: membership.roomId,
 			room: options?.populateRoom ? (options._hint_?.packedRooms.get(membership.roomId) ?? await this.packRoom(membership.room ?? membership.roomId, me)) : undefined,
+			suspendedUntil: membership.suspendedUntil ? membership.suspendedUntil.toISOString() : null,
 		};
 	}
 

@@ -41,7 +41,17 @@ export function applyWithLocale(
 				if (typeof accessed === 'string') {
 					replacement = formatFunction(accessed);
 				} else if (typeof accessed === 'object' && accessed !== null) {
-					replacement = `({${Object.entries(accessed).map(([key, value]) => `${JSON.stringify(key)}:${formatFunction(value)}`).join(',')}})`;
+					replacement = `({${Object.entries(accessed).map(([key, value]) => {
+						if (typeof value === 'string') {
+							return `${JSON.stringify(key)}:${formatFunction(value)}`;
+						} else {
+							fileLogger.warn(
+								`Invalid parameterized localization value at ${modification.localizationKey.concat(key).join('.')} (expected string, got ${typeof value})`,
+							);
+							// Fallback to an empty function to avoid build-time crashes
+							return `${JSON.stringify(key)}:(()=> "")`;
+						}
+					}).join(',')}})`;
 				} else {
 					fileLogger.warn(`Cannot find localization key ${modification.localizationKey.join('.')}`);
 					replacement = '(() => "")'; // placeholder for missing locale

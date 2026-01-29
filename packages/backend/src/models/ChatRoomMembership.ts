@@ -42,4 +42,9 @@ export class MiChatRoomMembership {
 		default: false,
 	})
 	public isMuted: boolean;
+
+	@Column('timestamp with time zone', {
+		nullable: true,
+	})
+	public suspendedUntil: Date | null;
 }

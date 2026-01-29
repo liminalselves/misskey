@@ -1025,6 +1025,18 @@ _chat:
   members: "الأعضاء"
   home: "الرئيسي"
   send: "أرسل"
+  kick: "طرد"
+  kickConfirm: "هل تريد طرد {name} من هذه الغرفة؟"
+  suspend: "تعليق"
+  unsuspend: "إلغاء التعليق"
+  suspendDuration: "مدة التعليق"
+  _suspendDuration:
+    "1hour": "ساعة واحدة"
+    "12hours": "12 ساعة"
+    "24hours": "24 ساعة"
+    "1week": "أسبوع واحد"
+    "permanent": "دائم"
+  searchRoom: "بحث عن غرف"
 _delivery:
   stop: "مُعلّق"
 _initialAccountSetting:

@@ -33,5 +33,10 @@ export const packedChatRoomMembershipSchema = {
 			optional: true, nullable: false,
 			ref: 'ChatRoom',
 		},
+		suspendedUntil: {
+			type: 'string',
+			format: 'date-time',
+			optional: false, nullable: true,
+		},
 	},
 } as const;

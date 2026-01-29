@@ -30,6 +30,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 				[$style.t_login]: notification.type === 'login',
 				[$style.t_createToken]: notification.type === 'createToken',
 				[$style.t_chatRoomInvitationReceived]: notification.type === 'chatRoomInvitationReceived',
+				[$style.t_chatRoomMemberJoined]: (notification as any).type === 'chatRoomMemberJoined',
+				[$style.t_chatRoomKicked]: (notification as any).type === 'chatRoomKicked',
+				[$style.t_chatRoomSuspended]: (notification as any).type === 'chatRoomSuspended',
+				[$style.t_chatRoomUnsuspended]: (notification as any).type === 'chatRoomUnsuspended',
 				[$style.t_roleAssigned]: notification.type === 'roleAssigned' && notification.role.iconUrl == null,
 			}]"
 		>
@@ -48,6 +52,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<i v-else-if="notification.type === 'login'" class="ti ti-login-2"></i>
 			<i v-else-if="notification.type === 'createToken'" class="ti ti-key"></i>
 			<i v-else-if="notification.type === 'chatRoomInvitationReceived'" class="ti ti-messages"></i>
+			<i v-else-if="(notification as any).type === 'chatRoomMemberJoined'" class="ti ti-user-plus"></i>
+			<i v-else-if="(notification as any).type === 'chatRoomKicked'" class="ti ti-door-exit"></i>
+			<i v-else-if="(notification as any).type === 'chatRoomSuspended'" class="ti ti-ban"></i>
+			<i v-else-if="(notification as any).type === 'chatRoomUnsuspended'" class="ti ti-circle-check"></i>
 			<template v-else-if="notification.type === 'roleAssigned'">
 				<img v-if="notification.role.iconUrl" style="height: 1.3em; vertical-align: -22%;" :src="notification.role.iconUrl" alt=""/>
 				<i v-else class="ti ti-badges"></i>
@@ -69,6 +77,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<span v-else-if="notification.type === 'note'">{{ i18n.ts._notification.newNote }}: <MkUserName :user="notification.note.user"/></span>
 			<span v-else-if="notification.type === 'roleAssigned'">{{ i18n.ts._notification.roleAssigned }}</span>
 			<span v-else-if="notification.type === 'chatRoomInvitationReceived'">{{ i18n.ts._notification.chatRoomInvitationReceived }}</span>
+			<span v-else-if="(notification as any).type === 'chatRoomMemberJoined'">有新成员加入群组</span>
+			<span v-else-if="(notification as any).type === 'chatRoomKicked'">您已被踢出群组</span>
+			<span v-else-if="(notification as any).type === 'chatRoomSuspended'">您已被禁言</span>
+			<span v-else-if="(notification as any).type === 'chatRoomUnsuspended'">您的禁言已解除</span>
 			<span v-else-if="notification.type === 'achievementEarned'">{{ i18n.ts._notification.achievementEarned }}</span>
 			<span v-else-if="notification.type === 'login'">{{ i18n.ts._notification.login }}</span>
 			<span v-else-if="notification.type === 'createToken'">{{ i18n.ts._notification.createToken }}</span>
@@ -120,6 +132,18 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<div v-else-if="notification.type === 'chatRoomInvitationReceived'" :class="$style.text">
 				{{ notification.invitation.room.name }}
 			</div>
+			<MkA v-else-if="(notification as any).type === 'chatRoomMemberJoined'" :class="$style.text" :to="`/chat/room/${(notification as any).chatRoom.id}`">
+				{{ (notification as any).chatRoom.name }}
+			</MkA>
+			<MkA v-else-if="(notification as any).type === 'chatRoomKicked'" :class="$style.text" to="/chat">
+				{{ (notification as any).chatRoom.name }}
+			</MkA>
+			<MkA v-else-if="(notification as any).type === 'chatRoomSuspended'" :class="$style.text" :to="`/chat/room/${(notification as any).chatRoom.id}`">
+				{{ (notification as any).chatRoom.name }}
+			</MkA>
+			<MkA v-else-if="(notification as any).type === 'chatRoomUnsuspended'" :class="$style.text" :to="`/chat/room/${(notification as any).chatRoom.id}`">
+				{{ (notification as any).chatRoom.name }}
+			</MkA>
 			<MkA v-else-if="notification.type === 'achievementEarned'" :class="$style.text" to="/my/achievements">
 				{{ i18n.ts._achievements._types[`_${notification.achievement}`].title }}
 			</MkA>
@@ -386,6 +410,26 @@ function getActualReactedUsersCount(notification: Misskey.entities.Notification)
 
 .t_chatRoomInvitationReceived {
 	background: var(--eventOther);
+	pointer-events: none;
+}
+
+.t_chatRoomMemberJoined {
+	background: var(--eventFollow);
+	pointer-events: none;
+}
+
+.t_chatRoomKicked {
+	background: var(--MI_THEME-error);
+	pointer-events: none;
+}
+
+.t_chatRoomSuspended {
+	background: var(--MI_THEME-warn);
+	pointer-events: none;
+}
+
+.t_chatRoomUnsuspended {
+	background: var(--eventFollow);
 	pointer-events: none;
 }
 

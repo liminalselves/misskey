@@ -10,6 +10,9 @@
 - Enhance: 频道发现板块改造
   - 频道发现板块现在与总发现板块使用相同逻辑（加权随机采样 + 无限滚动 + 分数显示）
   - 频道帖子现在会出现在总发现板块中，帖子下方显示来源频道标记
+- Enhance: 群聊后端模型与 JSON Schema 扩展，支持房间公开状态、成员禁言截止时间等字段
+- Enhance: 更新多语言与 misskey-js 常量以覆盖新的群聊搜索、成员管理和通知类型
+- Fix: 修复前端本地化内联构建在遇到参数化多语言值为非字符串时抛出 `format.matchAll is not a function` 的问题，现在会记录警告并使用空函数占位，避免构建中断
 
 ### Client
 - Enhance: 私信搜索结果支持点击定位功能
@@ -20,6 +23,11 @@
   - 修复加载历史消息时的排序错误及虚假新消息提示
 - Fix: 发现流（Discovery/Featured）快速刷新导致内容重复或空白的问题
 - Fix: 修复频道发现板块热度算法与全局不一致的问题
+- Fix: 修复群聊关于页中非群主错误显示「删除群聊」按钮的问题，现在普通成员仅会看到「退出群聊」
+- Enhance: 当被禁言的用户在群聊中发送消息时，前端会弹出明确提示并显示剩余禁言时间（或永久禁言），而不再只看到 500 错误
+- Enhance: 群聊首页重构，区分「创建的群组」「加入的群组」「邀请」等区域，并提供入口快速创建或加入群聊
+- Enhance: 新增群组搜索页面，支持按名称搜索公开群聊并直接查看/加入，并已集成到聊天入口与路由
+- Enhance: 群聊成员管理界面优化，群主可以在成员列表与关于页中一键踢出、禁言/解禁成员，操作入口更集中
 
 ### Note
 - `users/following` の `birthday` プロパティは非推奨になりました。代わりに `users/get-following-birthday-users` をご利用ください。
@@ -50,6 +58,10 @@
   - JSONによるClient Information Discoveryを行うには、レスポンスの`Content-Type`ヘッダーが`application/json`である必要があります
   - 従来の実装（12 February 2022版・HTML Microformat形式）も引き続きサポートされます
 - Enhance: メモリ使用量を削減
+- Fix: 当被禁言的群成员发送消息时，`chat/messages/create-to-room` 现在返回结构化错误 `ROOM_SUSPENDED` 而非落入 `INTERNAL_ERROR`，并附带禁言剩余时间信息以便前端展示
+- Enhance: 新增群聊管理 API（如 `chat/rooms/kick`、`chat/rooms/suspend`、`chat/rooms/unsuspend`、`chat/rooms/search`），支持群主或具有权限的用户对成员进行踢出、禁言/解禁及搜索房间
+- Enhance: 扩展通知实体与打包逻辑，支持群聊邀请、被踢出、被禁言/解除禁言等新通知类型
+- Enhance: 为 misskey-js 与 endpoint 列表补充上述群聊管理与搜索接口常量，便于前后端类型安全调用
 
 ## 2025.12.2
 
