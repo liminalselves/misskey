@@ -40,9 +40,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { onActivated, onDeactivated, onMounted, ref } from 'vue';
+import { ref } from 'vue';
 import * as Misskey from 'misskey-js';
-import { useInterval } from '@@/js/use-interval.js';
 import XMessage from './XMessage.vue';
 import MkButton from '@/components/MkButton.vue';
 import { i18n } from '@/i18n.js';
@@ -50,7 +49,6 @@ import { misskeyApi } from '@/utility/misskey-api.js';
 import { ensureSignin } from '@/i.js';
 import { useRouter } from '@/router.js';
 import * as os from '@/os.js';
-import { updateCurrentAccountPartial } from '@/accounts.js';
 import MkInput from '@/components/MkInput.vue';
 import MkFoldableSection from '@/components/MkFoldableSection.vue';
 import MkInfo from '@/components/MkInfo.vue';
@@ -147,9 +145,7 @@ function navigateToMessage(message: Misskey.entities.ChatMessage, messageId: str
 	}
 }
 
-onMounted(() => {
-	updateCurrentAccountPartial({ hasUnreadChatMessages: false });
-});
+// 未读状态由 MkChatHistories 组件在 fetchHistory 时根据实际数据更新
 </script>
 
 <style lang="scss" module>

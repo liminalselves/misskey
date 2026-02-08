@@ -39,6 +39,8 @@ import { useInterval } from '@@/js/use-interval.js';
 import { misskeyApi } from '@/utility/misskey-api.js';
 import { i18n } from '@/i18n.js';
 import { ensureSignin } from '@/i.js';
+import { updateCurrentAccountPartial } from '@/accounts.js';
+import { useStream } from '@/stream.js';
 
 const $i = ensureSignin();
 
@@ -52,7 +54,7 @@ const history = ref<{
 const initializing = ref(true);
 const fetching = ref(false);
 
-async function fetchHistory() {
+async function fetchHistory(updateGlobalStatus = false) {
 	if (fetching.value) return;
 
 	fetching.value = true;
@@ -62,7 +64,9 @@ async function fetchHistory() {
 		misskeyApi('chat/history', { room: true }),
 	]);
 
-	history.value = [...userMessages, ...roomMessages]
+	const allMessages = [...userMessages, ...roomMessages];
+
+	history.value = allMessages
 		.toSorted((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
 		.map(m => ({
 			id: m.id,
@@ -70,6 +74,12 @@ async function fetchHistory() {
 			other: (!('room' in m) || m.room == null) ? (m.fromUserId === $i.id ? m.toUser : m.fromUser) : null,
 			isMe: m.fromUserId === $i.id,
 		}));
+
+	// 只在明确要求时才更新全局状态（例如用户进入 /chat 页面时）
+	if (updateGlobalStatus) {
+		const hasUnread = allMessages.some(m => m.fromUserId !== $i.id && !m.isRead);
+		updateCurrentAccountPartial({ hasUnreadChatMessages: hasUnread });
+	}
 
 	fetching.value = false;
 	initializing.value = false;
@@ -88,7 +98,7 @@ onDeactivated(() => {
 useInterval(() => {
 	// TODO: DOM的にバックグラウンドになっていないかどうかも考慮する
 	if (!window.document.hidden && isActivated) {
-		fetchHistory();
+		fetchHistory(false); // 定时刷新不更新全局状态
 	}
 }, 1000 * 10, {
 	immediate: false,
@@ -96,11 +106,36 @@ useInterval(() => {
 });
 
 onActivated(() => {
-	fetchHistory();
+	// 用户返回页面时延迟刷新列表
+	// 延迟是为了确保后端处理 read 信号完成后 API 能返回最新数据
+	// （用户可能刚从 room.vue 返回，read 信号可能还在处理中）
+	window.setTimeout(() => {
+		fetchHistory(false);
+	}, 200);
 });
 
 onMounted(() => {
-	fetchHistory();
+	fetchHistory(true); // 初次加载时更新全局状态
+
+	// 监听新消息事件，自动刷新列表
+	const stream = useStream();
+	const mainChannel = stream.useChannel('main');
+	mainChannel.on('newChatMessage', () => {
+		// 有新消息时刷新列表，但不更新全局状态（由 main-boot.ts 处理）
+		fetchHistory(false);
+	});
+
+	// 监听聊天已读事件
+	// 当用户在其他页面阅读消息后，后端发送此事件通知刷新列表
+	// 使用 as any 因为 chatRead 是新增的事件，前端类型定义还没有更新
+	(mainChannel as any).on('chatRead', (data: { hasUnreadChatMessages: boolean }) => {
+		// 首先立即更新全局未读状态（来自后端，绝对可靠）
+		updateCurrentAccountPartial({ hasUnreadChatMessages: data.hasUnreadChatMessages });
+		// 延迟刷新列表，确保后端 Redis 操作完成后 API 能返回最新数据
+		window.setTimeout(() => {
+			fetchHistory(false);
+		}, 150);
+	});
 });
 </script>
 

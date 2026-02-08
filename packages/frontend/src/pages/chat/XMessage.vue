@@ -12,6 +12,14 @@ SPDX-License-Identifier: AGPL-3.0-only
 	<MkAvatar :class="[$style.avatar, prefer.s.useStickyIcons ? $style.useSticky : null]" :user="message.fromUser!" :link="!isMe" :preview="false"/>
 	<div :class="[$style.body, message.file != null ? $style.fullWidth : null]" @contextmenu.stop="onContextmenu">
 		<div :class="$style.header"><MkUserName v-if="!isMe && prefer.s['chat.showSenderName'] && message.fromUser != null" :user="message.fromUser"/></div>
+		<!-- 引用消息预览 -->
+		<div v-if="'reply' in message && message.reply" :class="$style.replyPreview" @click.stop.prevent="scrollToReply">
+			<div :class="$style.replyBar"></div>
+			<div :class="$style.replyContent">
+				<span :class="$style.replyAuthor">{{ (message.reply as any).fromUser?.name || (message.reply as any).fromUser?.username }}</span>
+				<span :class="$style.replyText">{{ (message.reply as any).text || '[附件]' }}</span>
+			</div>
+		</div>
 		<MkFukidashi :class="$style.fukidashi" :tail="isMe ? 'right' : 'left'" :fullWidth="message.file != null" :accented="isMe">
 			<Mfm
 				v-if="message.text"
@@ -84,13 +92,17 @@ const props = defineProps<{
 	message: NormalizedChatMessage | Misskey.entities.ChatMessage;
 	isSearchResult?: boolean;
 	highlighted?: boolean;
+	roomOwnerId?: string; // 群主 ID，用于判断是否可以删除其他人的消息
 }>();
 
 const emit = defineEmits<{
 	(e: 'navigate', messageId: string): void;
+	(e: 'reply', message: NormalizedChatMessage | Misskey.entities.ChatMessage): void;
+	(e: 'scrollToMessage', messageId: string): void;
 }>();
 
 const isMe = computed(() => props.message.fromUserId === $i.id);
+const isRoomOwner = computed(() => props.roomOwnerId != null && props.roomOwnerId === $i.id);
 const urls = computed(() => props.message.text ? extractUrlFromMfm(mfm.parse(props.message.text)) : []);
 
 // 点击搜索结果时触发导航
@@ -104,6 +116,15 @@ function onMessageClick(ev: MouseEvent) {
 
 	// 触发导航事件
 	emit('navigate', props.message.id);
+}
+
+// 点击引用预览时滚动到被引用的消息
+function scrollToReply() {
+	if (!('reply' in props.message) || !props.message.reply) return;
+	const replyId = 'replyId' in props.message ? props.message.replyId : null;
+	if (!replyId) return;
+	// 统一使用 emit 让 room.vue 处理定位（支持翻页加载）
+	emit('scrollToMessage', replyId as string);
 }
 
 provide(DI.mfmEmojiReactCallback, (reaction) => {
@@ -160,33 +181,101 @@ function onContextmenu(ev: PointerEvent) {
 function showMenu(ev: PointerEvent, contextmenu = false) {
 	const menu: MenuItem[] = [];
 
-	if (!isMe.value && $i.policies.chatAvailability === 'available') {
+	if (!isMe.value) {
+		// === 他人消息 ===
+		// 回应
+		if ($i.policies.chatAvailability === 'available') {
+			menu.push({
+				text: i18n.ts.reaction,
+				icon: 'ti ti-mood-plus',
+				action: (ev) => {
+					react(ev);
+				},
+			});
+		}
+
+		// 引用
+		if ($i.policies.chatAvailability === 'available' && !props.isSearchResult) {
+			menu.push({
+				text: '引用',
+				icon: 'ti ti-quote',
+				action: () => {
+					emit('reply', props.message);
+				},
+			});
+		}
+
+		menu.push({ type: 'divider' });
+
+		// 复制内容
 		menu.push({
-			text: i18n.ts.reaction,
-			icon: 'ti ti-mood-plus',
-			action: (ev) => {
-				react(ev);
+			text: i18n.ts.copyContent,
+			icon: 'ti ti-copy',
+			action: () => {
+				copyToClipboard(props.message.text ?? '');
 			},
 		});
 
+		// 举报
+		if (props.message.fromUser != null) {
+			menu.push({
+				text: i18n.ts.reportAbuse,
+				icon: 'ti ti-exclamation-circle',
+				action: async () => {
+					const localUrl = `${url}/chat/messages/${props.message.id}`;
+					const { dispose } = await os.popupAsyncWithDialog(import('@/components/MkAbuseReportWindow.vue').then(x => x.default), {
+						user: props.message.fromUser!,
+						initialComment: `${localUrl}\n-----\n`,
+					}, {
+						closed: () => dispose(),
+					});
+				},
+			});
+		}
+	} else {
+		// === 自己的消息 ===
+		// 引用
+		if ($i.policies.chatAvailability === 'available' && !props.isSearchResult) {
+			menu.push({
+				text: '引用',
+				icon: 'ti ti-quote',
+				action: () => {
+					emit('reply', props.message);
+				},
+			});
+		}
+
+		menu.push({ type: 'divider' });
+
+		// 复制内容
 		menu.push({
-			type: 'divider',
+			text: i18n.ts.copyContent,
+			icon: 'ti ti-copy',
+			action: () => {
+				copyToClipboard(props.message.text ?? '');
+			},
 		});
+
+		menu.push({ type: 'divider' });
+
+		// 删除
+		if ($i.policies.chatAvailability === 'available') {
+			menu.push({
+				text: i18n.ts.delete,
+				icon: 'ti ti-trash',
+				danger: true,
+				action: () => {
+					misskeyApi('chat/messages/delete', {
+						messageId: props.message.id,
+					});
+				},
+			});
+		}
 	}
 
-	menu.push({
-		text: i18n.ts.copyContent,
-		icon: 'ti ti-copy',
-		action: () => {
-			copyToClipboard(props.message.text ?? '');
-		},
-	});
-
-	menu.push({
-		type: 'divider',
-	});
-
-	if (isMe.value && $i.policies.chatAvailability === 'available') {
+	// 群主可以删除其他人消息
+	if (!isMe.value && isRoomOwner.value && $i.policies.chatAvailability === 'available') {
+		menu.push({ type: 'divider' });
 		menu.push({
 			text: i18n.ts.delete,
 			icon: 'ti ti-trash',
@@ -194,22 +283,6 @@ function showMenu(ev: PointerEvent, contextmenu = false) {
 			action: () => {
 				misskeyApi('chat/messages/delete', {
 					messageId: props.message.id,
-				});
-			},
-		});
-	}
-
-	if (!isMe.value && props.message.fromUser != null) {
-		menu.push({
-			text: i18n.ts.reportAbuse,
-			icon: 'ti ti-exclamation-circle',
-			action: async () => {
-				const localUrl = `${url}/chat/messages/${props.message.id}`;
-				const { dispose } = await os.popupAsyncWithDialog(import('@/components/MkAbuseReportWindow.vue').then(x => x.default), {
-					user: props.message.fromUser!,
-					initialComment: `${localUrl}\n-----\n`,
-				}, {
-					closed: () => dispose(),
 				});
 			},
 		});
@@ -262,14 +335,21 @@ function showMenu(ev: PointerEvent, contextmenu = false) {
 	}
 
 	&.highlighted {
-		animation: highlightFade 3s ease-out;
+		animation: highlightBlink 1s ease-in-out 1;
+		border-radius: 12px;
 	}
 }
 
-@keyframes highlightFade {
+/* 高光闪烁动画：1秒一次循环，只执行1次 */
+@keyframes highlightBlink {
 	0% {
+		background-color: transparent;
+	}
+	5% {
 		background-color: var(--MI_THEME-accentedBg);
-		border-radius: 12px;
+	}
+	95% {
+		background-color: var(--MI_THEME-accentedBg);
 	}
 	100% {
 		background-color: transparent;
@@ -374,5 +454,53 @@ function showMenu(ev: PointerEvent, contextmenu = false) {
 .reactionIcon {
 	width: 24px;
 	height: 24px;
+}
+
+// 引用消息预览样式
+.replyPreview {
+	display: flex;
+	align-items: stretch;
+	gap: 8px;
+	margin-bottom: 8px;
+	padding: 6px 10px;
+	background: var(--MI_THEME-bg);
+	border-radius: 8px;
+	cursor: pointer;
+	opacity: 0.8;
+	transition: opacity 0.2s;
+
+	&:hover {
+		opacity: 1;
+	}
+}
+
+.replyBar {
+	width: 3px;
+	background: var(--MI_THEME-accent);
+	border-radius: 2px;
+	flex-shrink: 0;
+}
+
+.replyContent {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	min-width: 0;
+	overflow: hidden;
+}
+
+.replyAuthor {
+	font-size: 0.85em;
+	font-weight: bold;
+	color: var(--MI_THEME-accent);
+}
+
+.replyText {
+	font-size: 0.85em;
+	color: var(--MI_THEME-fg);
+	opacity: 0.8;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
 }
 </style>

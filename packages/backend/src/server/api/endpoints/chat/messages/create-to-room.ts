@@ -65,6 +65,7 @@ export const paramDef = {
 		text: { type: 'string', nullable: true, maxLength: 2000 },
 		fileId: { type: 'string', format: 'misskey:id' },
 		toRoomId: { type: 'string', format: 'misskey:id' },
+		replyId: { type: 'string', format: 'misskey:id' },
 	},
 	required: ['toRoomId'],
 } as const;
@@ -107,6 +108,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				return await this.chatService.createMessageToRoom(me, room, {
 					text: ps.text,
 					file: file,
+					replyId: ps.replyId,
 				});
 			} catch (e: any) {
 				// When the user is suspended in this room, convert to a typed API error

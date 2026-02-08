@@ -192,6 +192,33 @@ export const packedChatMessageLiteFor1on1Schema = {
 				},
 			},
 		},
+		replyId: {
+			type: 'string',
+			optional: true, nullable: true,
+		},
+		reply: {
+			type: 'object',
+			optional: true, nullable: true,
+			properties: {
+				id: {
+					type: 'string',
+					optional: false, nullable: false,
+				},
+				text: {
+					type: 'string',
+					optional: true, nullable: true,
+				},
+				fromUserId: {
+					type: 'string',
+					optional: false, nullable: false,
+				},
+				fromUser: {
+					type: 'object',
+					optional: false, nullable: false,
+					ref: 'UserLite',
+				},
+			},
+		},
 	},
 } as const;
 
@@ -249,6 +276,33 @@ export const packedChatMessageLiteForRoomSchema = {
 						optional: false, nullable: false,
 						ref: 'UserLite',
 					},
+				},
+			},
+		},
+		replyId: {
+			type: 'string',
+			optional: true, nullable: true,
+		},
+		reply: {
+			type: 'object',
+			optional: true, nullable: true,
+			properties: {
+				id: {
+					type: 'string',
+					optional: false, nullable: false,
+				},
+				text: {
+					type: 'string',
+					optional: true, nullable: true,
+				},
+				fromUserId: {
+					type: 'string',
+					optional: false, nullable: false,
+				},
+				fromUser: {
+					type: 'object',
+					optional: false, nullable: false,
+					ref: 'UserLite',
 				},
 			},
 		},

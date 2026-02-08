@@ -70,6 +70,10 @@ export interface MainEventTypes {
 	unreadNotification: Packed<'Notification'>;
 	unreadAntenna: MiAntenna;
 	newChatMessage: Packed<'ChatMessage'>;
+	// 聊天已读事件：通知前端某个用户/房间的消息已被阅读
+	chatRead: {
+		hasUnreadChatMessages: boolean; // 是否还有未读消息
+	};
 	readAllAnnouncements: undefined;
 	myTokenRegenerated: undefined;
 	signin: {

@@ -40,7 +40,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 					tag="div" class="_gaps"
 				>
 					<template v-for="item in timeline.toReversed()" :key="item.id">
-						<XMessage v-if="item.type === 'item'" :message="item.data" :highlighted="highlightedMessageId === item.data.id" :data-message-id="item.data.id"/>
+						<XMessage v-if="item.type === 'item'" :message="item.data" :highlighted="highlightedMessageId === item.data.id" :roomOwnerId="room?.ownerId" :data-message-id="item.data.id" @reply="handleReply" @scrollToMessage="handleScrollToMessage"/>
 						<div v-else-if="item.type === 'date'" :class="$style.dateDivider">
 							<span><i class="ti ti-chevron-up"></i> {{ item.nextText }}</span>
 							<span style="height: 1em; width: 1px; background: var(--MI_THEME-divider);"></span>
@@ -84,7 +84,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 						</button>
 					</div>
 				</Transition>
-				<XForm v-if="initialized" :user="user" :room="room" :class="$style.form"/>
+				<XForm v-if="initialized" :user="user" :room="room" :replyTo="replyingTo" :class="$style.form" @cancelReply="cancelReply" @sent="onMessageSent"/>
 			</div>
 		</div>
 	</template>
@@ -92,7 +92,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { ref, useTemplateRef, computed, onMounted, onBeforeUnmount, onDeactivated, onActivated } from 'vue';
+import { ref, useTemplateRef, computed, onMounted, onBeforeUnmount, onDeactivated, onActivated, nextTick } from 'vue';
 import * as Misskey from 'misskey-js';
 import { getScrollContainer } from '@@/js/scroll.js';
 import XMessage from './XMessage.vue';
@@ -146,6 +146,8 @@ const showIndicator = ref(false);
 const timelineEl = useTemplateRef('timelineEl');
 const timeline = makeDateSeparatedTimelineComputedRef(messages);
 const highlightedMessageId = ref<string | null>(null);
+let highlightTimeoutId: number | null = null; // 防抖用
+const replyingTo = ref<{ id: string; text?: string | null } | null>(null);
 
 const SCROLL_HEAD_THRESHOLD = 200;
 
@@ -179,6 +181,22 @@ function normalizeMessage(message: Misskey.entities.ChatMessageLite | Misskey.en
 			user: record.user ?? (message.fromUserId === $i.id ? user.value! : $i),
 		})),
 	};
+}
+
+// 引用回复处理
+function handleReply(message: NormalizedChatMessage | Misskey.entities.ChatMessage) {
+	replyingTo.value = {
+		id: message.id,
+		text: message.text,
+	};
+}
+
+function cancelReply() {
+	replyingTo.value = null;
+}
+
+function onMessageSent() {
+	replyingTo.value = null;
 }
 
 // 加载特定消息及其上下文
@@ -280,6 +298,12 @@ async function initialize() {
 		connection.value.on('deleted', onDeleted);
 		connection.value.on('react', onReact);
 		connection.value.on('unreact', onUnreact);
+
+		// 打开对话页面时立即发送 read 信号，标记该对话的消息为已读
+		// 这样后端会更新已读状态并发送 chatRead 事件
+		// 使用类型断言：后端实际上不需要 id 参数
+		(connection.value as any).send('read', {});
+		markAsRead(); // 调用 API 强制标记已读
 	} else if (props.roomId) {
 		const [rResult, mResult] = await Promise.allSettled([
 			misskeyApi('chat/rooms/show', { roomId: props.roomId }),
@@ -345,6 +369,12 @@ async function initialize() {
 		connection.value.on('deleted', onDeleted);
 		connection.value.on('react', onReact);
 		connection.value.on('unreact', onUnreact);
+
+		// 打开对话页面时立即发送 read 信号，标记该对话的消息为已读
+		// 这样后端会更新已读状态并发送 chatRead 事件
+		// 使用类型断言：后端实际上不需要 id 参数
+		(connection.value as any).send('read', {});
+		markAsRead(); // 调用 API 强制标记已读
 	}
 
 	window.document.addEventListener('visibilitychange', onVisibilitychange);
@@ -357,6 +387,10 @@ let isActivated = true;
 
 onActivated(() => {
 	isActivated = true;
+	// 用户从其他页面返回时，发送 read 信号标记该对话为已读
+	if (connection.value && !window.document.hidden) {
+		(connection.value as any).send('read', {});
+	}
 });
 
 onDeactivated(() => {
@@ -435,43 +469,88 @@ async function fetchNewer() {
 
 // 滚动到指定消息
 async function scrollToMessage(targetMessageId: string) {
-	// 查找目标消息元素
-	const targetEl = window.document.querySelector(`[data-message-id="${targetMessageId}"]`) as HTMLElement | null;
-	if (targetEl) {
+	// 清除旧的高光 timeout
+	if (highlightTimeoutId !== null) {
+		window.clearTimeout(highlightTimeoutId);
+		highlightTimeoutId = null;
+	}
+	highlightedMessageId.value = null;
+
+	// 辅助函数：执行滚动和高光
+	const performScrollAndHighlight = (targetEl: HTMLElement) => {
+		// 强制执行滚动（即使元素已在视口内也执行）
 		targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-		highlightedMessageId.value = targetMessageId;
-		window.setTimeout(() => {
-			highlightedMessageId.value = null;
-		}, 3000);
+
+		// 等待滚动动画完成后（约500ms）开始高光，持续1秒
+		highlightTimeoutId = window.setTimeout(() => {
+			highlightedMessageId.value = targetMessageId;
+			highlightTimeoutId = window.setTimeout(() => {
+				highlightedMessageId.value = null;
+				highlightTimeoutId = null;
+			}, 1000); // 高光持续1秒
+		}, 500); // 等待滚动完成
+	};
+
+	// 辅助函数：尝试查找元素并滚动
+	const tryScrollToElement = async (retryCount = 0): Promise<boolean> => {
+		const targetEl = window.document.querySelector(`[data-message-id="${targetMessageId}"]`) as HTMLElement | null;
+		if (targetEl) {
+			performScrollAndHighlight(targetEl);
+			return true;
+		}
+		// 最多重试3次，每次等待100ms
+		if (retryCount < 3) {
+			await new Promise(resolve => window.setTimeout(resolve, 100));
+			return tryScrollToElement(retryCount + 1);
+		}
+		return false;
+	};
+
+	// 第一步：尝试在当前DOM中查找
+	if (await tryScrollToElement()) {
 		return;
 	}
 
-	// 如果没有找到元素，且没有 context 加载过，则尝试加载
-	// 这里通过简单的检查 messages 列表判断
+	// 第二步：检查消息是否在列表中但DOM还没渲染
 	const exists = messages.value.some(m => m.id === targetMessageId);
-	if (!exists) {
-		// 重新加载上下文
-		await loadContext(targetMessageId);
-		await new Promise(resolve => window.setTimeout(resolve, 300));
-		// 递归调用一次（应该能找到了）
-		const retryEl = window.document.querySelector(`[data-message-id="${targetMessageId}"]`) as HTMLElement | null;
-		if (retryEl) {
-			retryEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-			highlightedMessageId.value = targetMessageId;
-			window.setTimeout(() => {
-				highlightedMessageId.value = null;
-			}, 3000);
+	if (exists) {
+		await nextTick();
+		if (await tryScrollToElement()) {
+			return;
 		}
 	}
+
+	// 第三步：消息不在当前列表，需要加载上下文
+	await loadContext(targetMessageId);
+	await nextTick();
+	await tryScrollToElement();
 }
 
-// 处理从搜索结果点击定位的事件
+// 处理从搜索结果或引用点击定位的事件
 async function handleScrollToMessage(messageId: string) {
 	tab.value = 'chat';
-	// 这里不使用等待 DOM，而是直接加载上下文
-	await loadContext(messageId);
-	await new Promise(resolve => window.setTimeout(resolve, 300));
+	// 等待 tab 切换完成
+	await nextTick();
+	// scrollToMessage 已处理消息是否在当前页的逻辑
 	await scrollToMessage(messageId);
+}
+
+// 标记为已读
+async function markAsRead() {
+	// 延迟 100ms 以确保后端已经写入了未读标记（双重保障）
+	await new Promise(resolve => window.setTimeout(resolve, 100));
+
+	if (!window.document.hidden && isActivated) {
+		try {
+			if (props.userId) {
+				await misskeyApi('chat/read' as any, { userId: props.userId });
+			} else if (props.roomId) {
+				await misskeyApi('chat/read' as any, { roomId: props.roomId });
+			}
+		} catch (err) {
+			console.error('Failed to mark as read:', err);
+		}
+	}
 }
 
 function onMessage(message: Misskey.entities.ChatMessageLite) {
@@ -490,6 +569,7 @@ function onMessage(message: Misskey.entities.ChatMessageLite) {
 		connection.value?.send('read', {
 			id: message.id,
 		});
+		markAsRead(); // 调用 API 强制标记已读
 	}
 
 	if (message.fromUserId !== $i.id) {

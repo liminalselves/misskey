@@ -713,8 +713,10 @@ export class NoteCreateService implements OnApplicationShutdown {
 			this.featuredService.updateGlobalNotesRanking(note.id, 3);
 			this.featuredService.updatePerUserNotesRanking(user.id, note.id, 3);
 			// 如果是频道帖子，同时添加到频道内排名
+			// 分数传0是因为updateInChannelNotesRanking内部会调用updateGlobalNotesRanking
+			// 全局分数已在上面第713行更新，这里只需要将帖子加入频道列表即可
 			if (note.channelId != null) {
-				this.featuredService.updateInChannelNotesRanking(note.channelId, note.id, 3);
+				this.featuredService.updateInChannelNotesRanking(note.channelId, note.id, 0);
 			}
 		}
 
@@ -732,8 +734,9 @@ export class NoteCreateService implements OnApplicationShutdown {
 			if (data.reply.visibility === 'public' && data.reply.userHost == null && data.reply.replyId == null) {
 				this.featuredService.updateGlobalNotesRanking(data.reply.id, 2);
 				this.featuredService.updatePerUserNotesRanking(data.reply.userId, data.reply.id, 2);
+				// 分数传0是因为updateInChannelNotesRanking内部会调用updateGlobalNotesRanking
 				if (data.reply.channelId != null) {
-					this.featuredService.updateInChannelNotesRanking(data.reply.channelId, data.reply.id, 2);
+					this.featuredService.updateInChannelNotesRanking(data.reply.channelId, data.reply.id, 0);
 				}
 			}
 		}
@@ -927,8 +930,9 @@ export class NoteCreateService implements OnApplicationShutdown {
 		if (renote.visibility === 'public' && renote.userHost == null && renote.replyId == null) {
 			this.featuredService.updateGlobalNotesRanking(renote.id, 5);
 			this.featuredService.updatePerUserNotesRanking(renote.userId, renote.id, 5);
+			// 分数传0是因为updateInChannelNotesRanking内部会调用updateGlobalNotesRanking
 			if (renote.channelId != null) {
-				this.featuredService.updateInChannelNotesRanking(renote.channelId, renote.id, 5);
+				this.featuredService.updateInChannelNotesRanking(renote.channelId, renote.id, 0);
 			}
 		}
 	}

@@ -9,6 +9,15 @@ SPDX-License-Identifier: AGPL-3.0-only
 	@dragover.stop="onDragover"
 	@drop.stop="onDrop"
 >
+	<!-- 引用预览条 -->
+	<div v-if="replyTo" :class="$style.replyPreview">
+		<div :class="$style.replyBar"></div>
+		<div :class="$style.replyInfo">
+			<span :class="$style.replyLabel">回复</span>
+			<span :class="$style.replyText">{{ replyTo.text || '[附件]' }}</span>
+		</div>
+		<button class="_button" :class="$style.replyCancelBtn" @click="cancelReply"><i class="ti ti-x"></i></button>
+	</div>
 	<textarea
 		ref="textareaEl"
 		v-model="text"
@@ -51,6 +60,12 @@ import { checkDragDataType, getDragData } from '@/drag-and-drop.js';
 const props = defineProps<{
 	user?: Misskey.entities.UserDetailed | null;
 	room?: Misskey.entities.ChatRoom | null;
+	replyTo?: { id: string; text?: string | null } | null;
+}>();
+
+const emit = defineEmits<{
+	(e: 'cancelReply'): void;
+	(e: 'sent'): void;
 }>();
 
 const textareaEl = shallowRef<HTMLTextAreaElement>();
@@ -63,6 +78,10 @@ const textareaReadOnly = ref(false);
 let autocompleteInstance: Autocomplete | null = null;
 
 const canSend = computed(() => (text.value != null && text.value !== '') || file.value != null);
+
+function cancelReply() {
+	emit('cancelReply');
+}
 
 function getDraftKey() {
 	return props.user ? 'user:' + props.user.id : 'room:' + props.room?.id;
@@ -197,8 +216,10 @@ function send() {
 			toUserId: props.user.id,
 			text: text.value ? text.value : undefined,
 			fileId: file.value ? file.value.id : undefined,
+			replyId: props.replyTo?.id,
 		}).then(message => {
 			clear();
+			emit('sent');
 		}).catch(err => {
 			console.error(err);
 		}).then(() => {
@@ -209,8 +230,10 @@ function send() {
 			toRoomId: props.room.id,
 			text: text.value ? text.value : undefined,
 			fileId: file.value ? file.value.id : undefined,
+			replyId: props.replyTo?.id,
 		}).then(message => {
 			clear();
+			emit('sent');
 		}).catch(err => {
 			console.error(err);
 
@@ -383,5 +406,55 @@ onBeforeUnmount(() => {
 .send {
 	margin-left: auto;
 	color: var(--MI_THEME-accent);
+}
+
+.replyPreview {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 8px 12px;
+	background: var(--MI_THEME-bg);
+	border-bottom: 1px solid var(--MI_THEME-divider);
+}
+
+.replyBar {
+	width: 3px;
+	height: 24px;
+	background: var(--MI_THEME-accent);
+	border-radius: 2px;
+	flex-shrink: 0;
+}
+
+.replyInfo {
+	flex: 1;
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.replyLabel {
+	font-size: 0.8em;
+	color: var(--MI_THEME-accent);
+	font-weight: bold;
+}
+
+.replyText {
+	font-size: 0.85em;
+	color: var(--MI_THEME-fg);
+	opacity: 0.8;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.replyCancelBtn {
+	padding: 4px;
+	color: var(--MI_THEME-fg);
+	opacity: 0.6;
+
+	&:hover {
+		opacity: 1;
+	}
 }
 </style>

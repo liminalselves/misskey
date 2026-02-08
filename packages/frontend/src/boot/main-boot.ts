@@ -358,9 +358,40 @@ export async function mainBoot() {
 				});
 			});
 
-			main.on('newChatMessage', () => {
-				updateCurrentAccountPartial({ hasUnreadChatMessages: true });
+			main.on('newChatMessage', (message: Misskey.entities.ChatMessage) => {
+				// 检查页面是否可见且正在查看该消息来源
+				const isPageVisible = !window.document.hidden;
+				const currentPath = window.location.pathname;
+				let isViewingSource = false;
+
+				// 检查是否在查看发送者的私信页面
+				if ('fromUserId' in message && message.fromUserId) {
+					if (currentPath === `/chat/user/${message.fromUserId}`) {
+						isViewingSource = true;
+					}
+				}
+
+				// 检查是否在查看群聊页面
+				if ('toRoomId' in message && message.toRoomId) {
+					if (currentPath === `/chat/room/${message.toRoomId}`) {
+						isViewingSource = true;
+					}
+				}
+
+				// 只有在"页面可见且正在查看消息来源"时才不设置未读状态
+				// 页面隐藏时即使在对应页面也应该设置未读状态
+				if (!(isPageVisible && isViewingSource)) {
+					updateCurrentAccountPartial({ hasUnreadChatMessages: true });
+				}
+
+				// 始终播放声音提示
 				sound.playMisskeySfx('chatMessage');
+			});
+
+			// 监听聊天已读事件（全局处理）
+			// 这确保无论 MkChatHistories 组件是否被渲染，全局未读状态都能正确更新
+			(main as any).on('chatRead', (data: { hasUnreadChatMessages: boolean }) => {
+				updateCurrentAccountPartial({ hasUnreadChatMessages: data.hasUnreadChatMessages });
 			});
 
 			main.on('readAllAnnouncements', () => {

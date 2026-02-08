@@ -38,6 +38,7 @@ export const paramDef = {
 		untilId: { type: 'string', format: 'misskey:id' },
 		channelId: { type: 'string', nullable: true, format: 'misskey:id' },
 		excludeIds: { type: 'array', items: { type: 'string', format: 'misskey:id' }, default: [] },
+		sort: { type: 'string', enum: ['recommended', 'latest'], default: 'recommended' },
 	},
 	required: [],
 } as const;
@@ -149,8 +150,17 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				return [];
 			}
 
-			// 每次请求都重新进行加权随机采样
-			const selectedNotes = this.weightedRandomSample(availableNotes, ps.limit);
+			// 根据排序模式选择帖子
+			let selectedNotes: { id: string; score: number }[];
+			if (ps.sort === 'latest') {
+				// 最新模式：按 ID 降序排列（Misskey 的 ID 包含时间戳，越新越大）
+				selectedNotes = [...availableNotes]
+					.sort((a, b) => b.id.localeCompare(a.id))
+					.slice(0, ps.limit);
+			} else {
+				// 推荐模式：加权随机采样
+				selectedNotes = this.weightedRandomSample(availableNotes, ps.limit);
+			}
 
 			// 创建分数映射
 			const scoreMap = new Map<string, number>();
@@ -196,11 +206,20 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				return true;
 			});
 
-			// 打乱顺序
-			this.shuffleArray(notes);
+			// 根据排序模式排序
+			let sortedNotes;
+			if (ps.sort === 'latest') {
+				// 最新模式：按选择顺序（已经是 ID 降序）
+				sortedNotes = noteIds
+					.map(id => notes.find(n => n.id === id))
+					.filter((n): n is typeof notes[0] => n != null);
+			} else {
+				// 推荐模式：打乱顺序
+				sortedNotes = this.shuffleArray([...notes]);
+			}
 
 			// 打包帖子并附加分数信息
-			const packedNotes = await this.noteEntityService.packMany(notes, me);
+			const packedNotes = await this.noteEntityService.packMany(sortedNotes, me);
 
 			// 为每个帖子添加 featuredScore 字段
 			return packedNotes.map(note => ({

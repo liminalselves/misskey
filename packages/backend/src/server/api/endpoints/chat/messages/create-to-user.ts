@@ -71,6 +71,7 @@ export const paramDef = {
 		text: { type: 'string', nullable: true, maxLength: 2000 },
 		fileId: { type: 'string', format: 'misskey:id' },
 		toUserId: { type: 'string', format: 'misskey:id' },
+		replyId: { type: 'string', format: 'misskey:id' },
 	},
 	required: ['toUserId'],
 } as const;
@@ -117,6 +118,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			return await this.chatService.createMessageToUser(me, toUser, {
 				text: ps.text,
 				file: file,
+				replyId: ps.replyId,
 			});
 		});
 	}

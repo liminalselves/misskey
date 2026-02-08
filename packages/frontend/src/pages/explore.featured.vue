@@ -15,12 +15,19 @@ SPDX-License-Identifier: AGPL-3.0-only
 			]"
 		>
 		</MkTab>
-		<MkButton v-tooltip="i18n.ts.reload" iconOnly transparent rounded @click="reload">
-			<i class="ti ti-refresh"></i>
-		</MkButton>
+		<div :class="$style.controls">
+			<!-- 帖子排序切换（仅在帖子 tab 时显示） -->
+			<MkButton v-if="tab === 'notes'" v-tooltip="sortMode === 'recommended' ? '切换为最新' : '切换为推荐'" rounded @click="toggleSort">
+				<i :class="sortMode === 'recommended' ? 'ti ti-flame' : 'ti ti-clock'"></i>
+				{{ sortMode === 'recommended' ? '推荐' : '最新' }}
+			</MkButton>
+			<MkButton v-tooltip="i18n.ts.reload" iconOnly transparent rounded @click="reload">
+				<i class="ti ti-refresh"></i>
+			</MkButton>
+		</div>
 	</div>
 	<!-- 都使用 MkFeaturedTimeline 显示带分数的帖子 -->
-	<MkFeaturedTimeline v-if="tab === 'notes'" :key="'notes'" :paginator="paginatorForNotes" :withControl="false"/>
+	<MkFeaturedTimeline v-if="tab === 'notes'" :key="'notes-' + sortMode" :paginator="paginatorForNotes" :withControl="false"/>
 	<MkFeaturedTimeline v-else-if="tab === 'polls'" :key="'polls'" :paginator="paginatorForPolls" :withControl="false"/>
 </div>
 </template>
@@ -37,11 +44,15 @@ import { Paginator } from '@/utility/paginator.js';
 const displayedNoteIds = ref<string[]>([]);
 const displayedPollIds = ref<string[]>([]);
 
+// 排序模式
+const sortMode = ref<'recommended' | 'latest'>('recommended');
+
 // 帖子分页器
 const paginatorForNotes = markRaw(new Paginator('notes/featured', {
 	limit: 10,
 	params: () => ({
 		excludeIds: displayedNoteIds.value,
+		sort: sortMode.value,
 	} as any),
 }));
 
@@ -94,6 +105,13 @@ watch(tab, (newTab) => {
 	}
 });
 
+// 切换排序模式
+function toggleSort() {
+	sortMode.value = sortMode.value === 'recommended' ? 'latest' : 'recommended';
+	displayedNoteIds.value = [];
+	paginatorForNotes.reload();
+}
+
 function reload() {
 	if (tab.value === 'notes') {
 		paginatorForNotes.reload();
@@ -110,5 +128,10 @@ function reload() {
 	justify-content: space-between;
 	margin-bottom: var(--MI-margin);
 }
-</style>
 
+.controls {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+</style>

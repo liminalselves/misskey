@@ -133,6 +133,7 @@ export class ChatService {
 		text?: string | null;
 		file?: MiDriveFile | null;
 		uri?: string | null;
+		replyId?: string | null;
 	}): Promise<Packed<'ChatMessageLiteFor1on1'>> {
 		if (fromUser.id === toUser.id) {
 			throw new Error('yourself');
@@ -191,6 +192,7 @@ export class ChatService {
 			fileId: params.file ? params.file.id : null,
 			reads: [],
 			uri: params.uri ?? null,
+			replyId: params.replyId ?? null,
 		} satisfies Partial<MiChatMessage>;
 
 		const inserted = await this.chatMessagesRepository.insertOne(message);
@@ -210,7 +212,7 @@ export class ChatService {
 			const redisPipeline = this.redisClient.pipeline();
 			redisPipeline.set(`newUserChatMessageExists:${toUser.id}:${fromUser.id}`, message.id);
 			redisPipeline.sadd(`newChatMessagesExists:${toUser.id}`, `user:${fromUser.id}`);
-			redisPipeline.exec();
+			await redisPipeline.exec();
 		}
 
 		if (this.userEntityService.isLocalUser(fromUser)) {
@@ -244,6 +246,7 @@ export class ChatService {
 		text?: string | null;
 		file?: MiDriveFile | null;
 		uri?: string | null;
+		replyId?: string | null;
 	}): Promise<Packed<'ChatMessageLiteForRoom'>> {
 		const memberships = (await this.chatRoomMembershipsRepository.findBy({ roomId: toRoom.id }))
 			.map(m => ({
@@ -284,13 +287,12 @@ export class ChatService {
 			fileId: params.file ? params.file.id : null,
 			reads: [],
 			uri: params.uri ?? null,
+			replyId: params.replyId ?? null,
 		} satisfies Partial<MiChatMessage>;
 
 		const inserted = await this.chatMessagesRepository.insertOne(message);
 
 		const packedMessage = await this.chatEntityService.packMessageLiteForRoom(inserted);
-
-		this.globalEventService.publishChatRoomStream(toRoom.id, 'message', packedMessage);
 
 		const redisPipeline = this.redisClient.pipeline();
 		for (const membership of membershipsOtherThanMe) {
@@ -299,7 +301,9 @@ export class ChatService {
 			redisPipeline.set(`newRoomChatMessageExists:${membership.userId}:${toRoom.id}`, message.id);
 			redisPipeline.sadd(`newChatMessagesExists:${membership.userId}`, `room:${toRoom.id}`);
 		}
-		redisPipeline.exec();
+		await redisPipeline.exec();
+
+		this.globalEventService.publishChatRoomStream(toRoom.id, 'message', packedMessage);
 
 		// 3秒経っても既読にならなかったらイベント発行
 		setTimeout(async () => {
@@ -366,6 +370,24 @@ export class ChatService {
 	@bindThis
 	public findMyMessageById(userId: MiUser['id'], messageId: MiChatMessage['id']) {
 		return this.chatMessagesRepository.findOneBy({ id: messageId, fromUserId: userId });
+	}
+
+	/**
+	 * 群主查找群组中的任意消息
+	 */
+	@bindThis
+	public async findRoomMessageByIdForOwner(userId: MiUser['id'], messageId: MiChatMessage['id']) {
+		const message = await this.chatMessagesRepository.findOne({
+			where: { id: messageId },
+		});
+
+		if (!message || !message.toRoomId) return null;
+
+		// 验证用户是否为该群组的群主
+		const room = await this.chatRoomsRepository.findOneBy({ id: message.toRoomId });
+		if (!room || room.ownerId !== userId) return null;
+
+		return message;
 	}
 
 	@bindThis

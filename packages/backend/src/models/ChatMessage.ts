@@ -82,4 +82,18 @@ export class MiChatMessage {
 		length: 1024, array: true, default: '{}',
 	})
 	public reactions: string[];
+
+	// 引用消息
+	@Index()
+	@Column({
+		...id(),
+		nullable: true,
+	})
+	public replyId: MiChatMessage['id'] | null;
+
+	@ManyToOne(() => MiChatMessage, {
+		onDelete: 'SET NULL',
+	})
+	@JoinColumn()
+	public reply: MiChatMessage | null;
 }

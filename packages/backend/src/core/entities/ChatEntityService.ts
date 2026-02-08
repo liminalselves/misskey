@@ -144,6 +144,23 @@ export class ChatEntityService {
 			});
 		}
 
+		// 获取被引用的消息摘要信息
+		let replyInfo = null;
+		if (message.replyId) {
+			const replyMessage = message.reply ?? await this.chatMessagesRepository.findOne({
+				where: { id: message.replyId },
+				relations: ['fromUser'],
+			});
+			if (replyMessage) {
+				replyInfo = {
+					id: replyMessage.id,
+					text: replyMessage.text ? (replyMessage.text.length > 50 ? replyMessage.text.slice(0, 50) + '...' : replyMessage.text) : null,
+					fromUserId: replyMessage.fromUserId,
+					fromUser: await this.userEntityService.pack(replyMessage.fromUser ?? replyMessage.fromUserId),
+				};
+			}
+		}
+
 		return {
 			id: message.id,
 			createdAt: this.idService.parse(message.id).date.toISOString(),
@@ -153,6 +170,8 @@ export class ChatEntityService {
 			fileId: message.fileId,
 			file: message.fileId ? (packedFiles?.get(message.fileId) ?? await this.driveFileEntityService.pack(message.file ?? message.fileId)) : null,
 			reactions,
+			replyId: message.replyId,
+			reply: replyInfo,
 		};
 	}
 
@@ -196,6 +215,23 @@ export class ChatEntityService {
 			});
 		}
 
+		// 获取被引用的消息摘要信息
+		let replyInfo = null;
+		if (message.replyId) {
+			const replyMessage = message.reply ?? await this.chatMessagesRepository.findOne({
+				where: { id: message.replyId },
+				relations: ['fromUser'],
+			});
+			if (replyMessage) {
+				replyInfo = {
+					id: replyMessage.id,
+					text: replyMessage.text ? (replyMessage.text.length > 50 ? replyMessage.text.slice(0, 50) + '...' : replyMessage.text) : null,
+					fromUserId: replyMessage.fromUserId,
+					fromUser: packedUsers?.get(replyMessage.fromUserId) ?? await this.userEntityService.pack(replyMessage.fromUser ?? replyMessage.fromUserId),
+				};
+			}
+		}
+
 		return {
 			id: message.id,
 			createdAt: this.idService.parse(message.id).date.toISOString(),
@@ -206,6 +242,8 @@ export class ChatEntityService {
 			fileId: message.fileId,
 			file: message.fileId ? (packedFiles?.get(message.fileId) ?? await this.driveFileEntityService.pack(message.file ?? message.fileId)) : null,
 			reactions: reactions.filter((r): r is { user: Packed<'UserLite'>; reaction: string; } => r.user != null),
+			replyId: message.replyId,
+			reply: replyInfo,
 		};
 	}
 
