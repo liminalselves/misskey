@@ -1,3 +1,13 @@
+/*
+ * SPDX-FileCopyrightText: syuilo and misskey-project
+ * SPDX-License-Identifier: AGPL-3.0-only
+ */
+
+/*
+ * SPDX-FileCopyrightText: syuilo and misskey-project
+ * SPDX-License-Identifier: AGPL-3.0-only
+ */
+
 export class AddChatSuspendField1769660055256 {
     name = 'AddChatSuspendField1769660055256';
     async up(queryRunner) {

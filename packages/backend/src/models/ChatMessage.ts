@@ -10,6 +10,7 @@ import { MiDriveFile } from './DriveFile.js';
 import { MiChatRoom } from './ChatRoom.js';
 
 @Entity('chat_message')
+@Index('IDX_chat_message_1on1_timeline', ['fromUserId', 'id', 'toUserId'])
 export class MiChatMessage {
 	@PrimaryColumn(id())
 	public id: string;
@@ -84,7 +85,7 @@ export class MiChatMessage {
 	public reactions: string[];
 
 	// 引用消息
-	@Index()
+	@Index('IDX_f747e8c550656a9389dd5e2f92')
 	@Column({
 		...id(),
 		nullable: true,
