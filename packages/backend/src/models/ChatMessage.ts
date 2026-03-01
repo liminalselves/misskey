@@ -10,7 +10,7 @@ import { MiDriveFile } from './DriveFile.js';
 import { MiChatRoom } from './ChatRoom.js';
 
 @Entity('chat_message')
-@Index('IDX_chat_message_1on1_timeline', ['fromUserId', 'id', 'toUserId'])
+@Index('IDX_chat_message_1on1_timeline', ['fromUserId', 'toUserId', 'id'])
 export class MiChatMessage {
 	@PrimaryColumn(id())
 	public id: string;

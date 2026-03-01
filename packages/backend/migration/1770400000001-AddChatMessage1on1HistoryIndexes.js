@@ -2,18 +2,16 @@
  * SPDX-FileCopyrightText: syuilo and misskey-project
  * SPDX-License-Identifier: AGPL-3.0-only
  *
- * Optimizes chat/messages/user-timeline and chat/history:
- * - Composite index (fromUserId, toUserId, id DESC) for 1-on-1 timeline
- * - Partial indexes for userHistory: (fromUserId = me OR toUserId = me) AND toRoomId IS NULL
+ * Fixes timeline index column order and adds partial indexes for userHistory.
+ * Run only if you already ran AddChatMessage1on1TimelineIndex with the old (fromUserId, id, toUserId) definition.
  */
 
-export class AddChatMessage1on1TimelineIndex1770400000000 {
-	name = 'AddChatMessage1on1TimelineIndex1770400000000';
+export class AddChatMessage1on1HistoryIndexes1770400000001 {
+	name = 'AddChatMessage1on1HistoryIndexes1770400000001';
 
 	async up(queryRunner) {
-		// 1-on-1 timeline: (fromUserId, toUserId) OR (otherId, meId), ORDER BY id DESC
-		await queryRunner.query(`CREATE INDEX IF NOT EXISTS "IDX_chat_message_1on1_timeline" ON "chat_message" ("fromUserId", "toUserId", "id" DESC)`);
-		// userHistory: messages where toRoomId IS NULL, filter by fromUserId or toUserId
+		await queryRunner.query(`DROP INDEX IF EXISTS "IDX_chat_message_1on1_timeline"`);
+		await queryRunner.query(`CREATE INDEX "IDX_chat_message_1on1_timeline" ON "chat_message" ("fromUserId", "toUserId", "id" DESC)`);
 		await queryRunner.query(`CREATE INDEX IF NOT EXISTS "IDX_chat_message_1on1_from" ON "chat_message" ("fromUserId", "id" DESC) WHERE "toRoomId" IS NULL`);
 		await queryRunner.query(`CREATE INDEX IF NOT EXISTS "IDX_chat_message_1on1_to" ON "chat_message" ("toUserId", "id" DESC) WHERE "toRoomId" IS NULL`);
 	}
