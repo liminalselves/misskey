@@ -428,26 +428,31 @@ export class ChatService {
 
 	@bindThis
 	public async userTimeline(meId: MiUser['id'], otherId: MiUser['id'], limit: number, sinceId?: MiChatMessage['id'] | null, untilId?: MiChatMessage['id'] | null) {
-		const query = this.queryService.makePaginationQuery(this.chatMessagesRepository.createQueryBuilder('message'), sinceId, untilId)
-			.andWhere(new Brackets(qb => {
-				qb
-					.where(new Brackets(qb => {
-						qb
-							.where('message.fromUserId = :meId')
-							.andWhere('message.toUserId = :otherId');
-					}))
-					.orWhere(new Brackets(qb => {
-						qb
-							.where('message.fromUserId = :otherId')
-							.andWhere('message.toUserId = :meId');
-					}));
-			}))
-			.setParameter('meId', meId)
-			.setParameter('otherId', otherId);
+		// Use two separate queries instead of OR - each uses index (fromUserId, toUserId, id DESC) directly.
+		// OR causes PostgreSQL to prefer PK scan on large tables (4M+ rows), leading to statement timeout.
+		const q1 = this.queryService.makePaginationQuery(
+			this.chatMessagesRepository.createQueryBuilder('message')
+				.where('message.fromUserId = :meId', { meId })
+				.andWhere('message.toUserId = :otherId', { otherId }),
+			sinceId, untilId,
+		);
+		const q2 = this.queryService.makePaginationQuery(
+			this.chatMessagesRepository.createQueryBuilder('message')
+				.where('message.fromUserId = :otherId', { otherId })
+				.andWhere('message.toUserId = :meId', { meId }),
+			sinceId, untilId,
+		);
 
-		const messages = await query.take(limit).getMany();
+		const [messages1, messages2] = await Promise.all([
+			q1.take(limit).getMany(),
+			q2.take(limit).getMany(),
+		]);
 
-		return messages;
+		const merged = [...messages1, ...messages2]
+			.sort((a, b) => (a.id > b.id ? -1 : a.id < b.id ? 1 : 0))
+			.slice(0, limit);
+
+		return merged;
 	}
 
 	@bindThis
