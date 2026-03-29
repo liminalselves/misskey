@@ -10,10 +10,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<button v-click-anime :class="[$style.item, $style.instance]" class="_button" @click="openInstanceMenu">
 				<img :class="$style.instanceIcon" :src="instance.iconUrl ?? '/favicon.ico'" draggable="false"/>
 			</button>
-			<MkA v-click-anime v-tooltip="i18n.ts.timeline" :class="$style.item" :activeClass="$style.active" to="/" exact>
-				<i :class="$style.itemIcon" class="ti ti-home ti-fw"></i>
+			<MkA v-click-anime v-tooltip="i18n.ts.explore" :class="$style.item" :activeClass="$style.active" to="/explore">
+				<i :class="$style.itemIcon" class="ti ti-hash ti-fw"></i>
 			</MkA>
-			<template v-for="item in menu">
+			<template v-for="item in sidebarMenuItems">
 				<div v-if="item === '-'" :class="$style.divider"></div>
 				<component :is="navbarItemDef[item].to ? 'MkA' : 'button'" v-else-if="navbarItemDef[item] && (navbarItemDef[item].show == null || navbarItemDef[item].show.value !== false)" v-click-anime v-tooltip="navbarItemDef[item].title" class="_button" :class="$style.item" :activeClass="$style.active" :to="navbarItemDef[item].to" v-on="navbarItemDef[item].action ? { click: navbarItemDef[item].action } : {}">
 					<i :class="[$style.itemIcon, navbarItemDef[item].icon]" class="ti-fw"></i>
@@ -66,11 +66,13 @@ const props = defineProps<{
 }>();
 
 const settingsWindowed = ref(window.innerWidth > WINDOW_THRESHOLD);
-const menu = ref(prefer.s.menu);
-// const menuDisplay = store.model('menuDisplay');
+
+const sidebarMenuItems = computed(() => prefer.s.menu.filter(x => x !== 'explore'));
+
 const otherNavItemIndicated = computed<boolean>(() => {
 	for (const def in navbarItemDef) {
-		if (menu.value.includes(def)) continue;
+		if (def === 'explore') continue;
+		if (prefer.s.menu.includes(def)) continue;
 		if (navbarItemDef[def].indicated) return true;
 	}
 	return false;

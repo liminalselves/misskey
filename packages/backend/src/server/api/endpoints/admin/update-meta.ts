@@ -117,6 +117,9 @@ export const paramDef = {
 		enableServiceWorker: { type: 'boolean' },
 		swPublicKey: { type: 'string', nullable: true },
 		swPrivateKey: { type: 'string', nullable: true },
+		aliyunMobilePushAccessKeyId: { type: 'string', nullable: true },
+		aliyunMobilePushAccessKeySecret: { type: 'string', nullable: true },
+		aliyunMobilePushAppKey: { type: 'string', nullable: true },
 		tosUrl: { type: 'string', nullable: true },
 		repositoryUrl: { type: 'string', nullable: true },
 		feedbackUrl: { type: 'string', nullable: true },
@@ -486,6 +489,18 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 
 			if (ps.swPrivateKey !== undefined) {
 				set.swPrivateKey = ps.swPrivateKey;
+			}
+
+			if (ps.aliyunMobilePushAccessKeyId !== undefined) {
+				set.aliyunMobilePushAccessKeyId = ps.aliyunMobilePushAccessKeyId;
+			}
+
+			if (ps.aliyunMobilePushAccessKeySecret !== undefined) {
+				set.aliyunMobilePushAccessKeySecret = ps.aliyunMobilePushAccessKeySecret;
+			}
+
+			if (ps.aliyunMobilePushAppKey !== undefined) {
+				set.aliyunMobilePushAppKey = ps.aliyunMobilePushAppKey;
 			}
 
 			if (ps.tosUrl !== undefined) {

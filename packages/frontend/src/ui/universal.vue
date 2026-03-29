@@ -19,7 +19,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 			</div>
 			<StackingRouterView v-if="prefer.s['experimental.stackingRouterView']" :class="$style.content"/>
 			<RouterView v-else :class="$style.content"/>
-			<XMobileFooterMenu v-if="isMobile" ref="navFooter" v-model:drawerMenuShowing="drawerMenuShowing" v-model:widgetsShowing="widgetsShowing"/>
+			<XMobileFooterMenu v-if="isMobile && !hideMobileFooter" ref="navFooter" v-model:drawerMenuShowing="drawerMenuShowing" v-model:widgetsShowing="widgetsShowing"/>
 		</div>
 
 		<div v-if="showWidgetsSide && !pageMetadata?.needWideArea" :class="$style.widgets">
@@ -73,6 +73,12 @@ window.addEventListener('resize', () => {
 
 const pageMetadata = ref<null | PageMetadata>(null);
 const widgetsShowing = ref(false);
+
+const hideMobileFooter = computed(() => {
+	const path = mainRouter.currentRoute.value.path;
+	if (path.startsWith('/chat/user/') || path.startsWith('/chat/room/')) return true;
+	return pageMetadata.value?.hideMobileFooter === true;
+});
 
 provide(DI.router, mainRouter);
 provideMetadataReceiver((metadataGetter) => {

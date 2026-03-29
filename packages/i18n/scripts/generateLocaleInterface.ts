@@ -146,8 +146,10 @@ export async function generateLocaleInterface(localesDir: string): Promise<void>
 	fs.renameSync(`${autogenDir}/_locale.ts`, `${autogenDir}/locale.ts`);
 }
 
-// スクリプトとして直接実行された場合
-const isMain = import.meta.url === `file://${process.argv[1]}`;
+// スクリプトとして直接実行された場合（Windows では argv と file URL の比較形式が一致しないため path で比較）
+const isMain =
+	process.argv[1] != null &&
+	fileURLToPath(import.meta.url) === resolve(process.argv[1]);
 if (isMain) {
 	await generateLocaleInterface(resolve(__dirname, '../../../locales'));
 }

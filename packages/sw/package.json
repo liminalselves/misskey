@@ -2,6 +2,7 @@
 	"name": "sw",
 	"private": true,
 	"scripts": {
+		"prebuild": "node ./scripts/ensure-misskey-js-built.mjs",
 		"watch": "nodemon -w ../../package.json -e json --exec \"node build.js watch\"",
 		"build": "node build.js",
 		"typecheck": "tsgo --noEmit",

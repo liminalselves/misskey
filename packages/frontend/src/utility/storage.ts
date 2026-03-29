@@ -8,9 +8,23 @@ import * as os from '@/os.js';
 import { store } from '@/store.js';
 import { i18n } from '@/i18n.js';
 
-export const storagePersisted = ref(await navigator.storage.persisted());
+async function getStoragePersisted(): Promise<boolean> {
+	if (typeof navigator === 'undefined' || navigator.storage == null) {
+		return false;
+	}
+	try {
+		return await navigator.storage.persisted();
+	} catch {
+		return false;
+	}
+}
+
+export const storagePersisted = ref(await getStoragePersisted());
 
 export async function enableStoragePersistence() {
+	if (typeof navigator === 'undefined' || navigator.storage == null) {
+		return;
+	}
 	try {
 		const persisted = await navigator.storage.persist();
 		if (persisted) {

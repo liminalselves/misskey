@@ -38,7 +38,7 @@ export const paramDef = {
 		untilId: { type: 'string', format: 'misskey:id' },
 		channelId: { type: 'string', nullable: true, format: 'misskey:id' },
 		excludeIds: { type: 'array', items: { type: 'string', format: 'misskey:id' }, default: [] },
-		sort: { type: 'string', enum: ['recommended', 'latest'], default: 'recommended' },
+		sort: { type: 'string', enum: ['recommended', 'latest', 'hot'], default: 'recommended' },
 	},
 	required: [],
 } as const;
@@ -76,8 +76,18 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					return [];
 				}
 
-				// 使用加权随机采样
-				const selectedNotes = this.weightedRandomSample(availableNotes, ps.limit);
+				let selectedNotes: { id: string; score: number }[];
+				if (ps.sort === 'latest') {
+					selectedNotes = [...availableNotes]
+						.sort((a, b) => b.id.localeCompare(a.id))
+						.slice(0, ps.limit);
+				} else if (ps.sort === 'hot') {
+					selectedNotes = [...availableNotes]
+						.sort((a, b) => b.score - a.score)
+						.slice(0, ps.limit);
+				} else {
+					selectedNotes = this.weightedRandomSample(availableNotes, ps.limit);
+				}
 
 				// 创建分数映射
 				const scoreMap = new Map<string, number>();
@@ -117,7 +127,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					return true;
 				});
 
-				// 按采样顺序排序，并添加分数
+				// 按 selectedNotes / noteIds 顺序排序，并添加分数（频道内推荐也不打乱，与原先挙動一致）
 				const sortedNotes = noteIds
 					.map(id => notes.find(n => n.id === id))
 					.filter((n): n is typeof notes[0] => n != null);
@@ -156,6 +166,11 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				// 最新模式：按 ID 降序排列（Misskey 的 ID 包含时间戳，越新越大）
 				selectedNotes = [...availableNotes]
 					.sort((a, b) => b.id.localeCompare(a.id))
+					.slice(0, ps.limit);
+			} else if (ps.sort === 'hot') {
+				// 热度模式：按热度系数（score）降序
+				selectedNotes = [...availableNotes]
+					.sort((a, b) => b.score - a.score)
 					.slice(0, ps.limit);
 			} else {
 				// 推荐模式：加权随机采样
@@ -208,8 +223,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 
 			// 根据排序模式排序
 			let sortedNotes;
-			if (ps.sort === 'latest') {
-				// 最新模式：按选择顺序（已经是 ID 降序）
+			if (ps.sort === 'latest' || ps.sort === 'hot') {
+				// 最新 / 热度：按选择顺序（分别为 ID 降序或分数降序）
 				sortedNotes = noteIds
 					.map(id => notes.find(n => n.id === id))
 					.filter((n): n is typeof notes[0] => n != null);

@@ -15,6 +15,8 @@ export type PageMetadata = {
 	avatar?: Misskey.entities.User | null;
 	userName?: Misskey.entities.User | null;
 	needWideArea?: boolean;
+	/** 子页面可设为 true，由布局（如 universal）用于隐藏移动端底栏 */
+	hideMobileFooter?: boolean;
 };
 
 type PageMetadataGetter = () => PageMetadata;

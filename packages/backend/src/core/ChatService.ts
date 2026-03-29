@@ -248,17 +248,23 @@ export class ChatService {
 		uri?: string | null;
 		replyId?: string | null;
 	}): Promise<Packed<'ChatMessageLiteForRoom'>> {
-		const memberships = (await this.chatRoomMembershipsRepository.findBy({ roomId: toRoom.id }))
-			.map(m => ({
+		const membershipByUserId = new Map<MiUser['id'], { userId: MiUser['id']; isMuted: boolean; suspendedUntil: Date | null }>();
+		for (const m of await this.chatRoomMembershipsRepository.findBy({ roomId: toRoom.id })) {
+			membershipByUserId.set(m.userId, {
 				userId: m.userId,
 				isMuted: m.isMuted,
 				suspendedUntil: m.suspendedUntil,
-			}))
-			.concat({ // ownerはmembershipレコードを作らないため
+			});
+		}
+		if (!membershipByUserId.has(toRoom.ownerId)) {
+			// ownerは通常 membership レコードを持たないが、ミュート等で作成された場合は上のループに含まれる
+			membershipByUserId.set(toRoom.ownerId, {
 				userId: toRoom.ownerId,
 				isMuted: false,
 				suspendedUntil: null,
 			});
+		}
+		const memberships = [...membershipByUserId.values()];
 
 		const me = memberships.find(member => member.userId === fromUser.id);
 		if (!me) {
@@ -634,11 +640,11 @@ export class ChatService {
 
 	@bindThis
 	public async deleteRoom(room: MiChatRoom, deleter?: MiUser) {
-		const memberships = (await this.chatRoomMembershipsRepository.findBy({ roomId: room.id })).map(m => ({
-			userId: m.userId,
-		})).concat({ // ownerはmembershipレコードを作らないため
-			userId: room.ownerId,
-		});
+		const membershipUserIds = new Set(
+			(await this.chatRoomMembershipsRepository.findBy({ roomId: room.id })).map(m => m.userId),
+		);
+		membershipUserIds.add(room.ownerId); // ownerは通常レコードがないが、ミュート等で作成された場合は Set で重複しない
+		const memberships = [...membershipUserIds].map(userId => ({ userId }));
 
 		// 未読フラグ削除
 		const redisPipeline = this.redisClient.pipeline();
@@ -845,7 +851,24 @@ export class ChatService {
 
 	@bindThis
 	public async muteRoom(userId: MiUser['id'], roomId: MiChatRoom['id'], mute: boolean) {
-		const membership = await this.chatRoomMembershipsRepository.findOneByOrFail({ roomId, userId });
+		let membership = await this.chatRoomMembershipsRepository.findOneBy({ roomId, userId });
+		if (membership == null) {
+			const room = await this.chatRoomsRepository.findOneBy({ id: roomId });
+			if (room == null) {
+				throw new Error('no such room');
+			}
+			if (room.ownerId !== userId) {
+				throw new Error('you are not a member of the room');
+			}
+			// 群主は従来 membership を持たないため、初回ミュート時に行を作成する
+			await this.chatRoomMembershipsRepository.insertOne({
+				id: this.idService.gen(),
+				roomId,
+				userId,
+				isMuted: mute,
+			});
+			return;
+		}
 		await this.chatRoomMembershipsRepository.update(membership.id, { isMuted: mute });
 	}
 

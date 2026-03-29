@@ -7,7 +7,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 <div ref="rootEl" :class="reversed ? '_pageScrollableReversed' : '_pageScrollable'">
 	<MkStickyContainer>
 		<template #header>
-			<MkPageHeader v-if="prefer.s.showPageTabBarBottom && (props.tabs?.length ?? 0) > 0" v-bind="pageHeaderPropsWithoutTabs"/>
+			<!-- チャット等 narrowMergedRow かつ狭い幅では頂部にタブを出す（底タブと二重にならないようにする） -->
+			<MkPageHeader v-if="useBottomTabsInFooter" v-bind="pageHeaderPropsWithoutTabs"/>
 			<MkPageHeader v-else v-model:tab="tab" v-bind="pageHeaderProps"/>
 		</template>
 		<div :class="$style.body">
@@ -18,7 +19,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		</div>
 		<template #footer>
 			<slot name="footer"></slot>
-			<div v-if="prefer.s.showPageTabBarBottom && (props.tabs?.length ?? 0) > 0" :class="$style.footerTabs">
+			<div v-if="useBottomTabsInFooter" :class="$style.footerTabs">
 				<MkTabs v-model:tab="tab" :tabs="props.tabs" :centered="true" :tabHighlightUpper="true"/>
 			</div>
 		</template>
@@ -27,7 +28,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { computed, useTemplateRef } from 'vue';
+import { computed, onMounted, onUnmounted, ref, useTemplateRef } from 'vue';
 import { scrollInContainer } from '@@/js/scroll.js';
 import type { PageHeaderProps } from './MkPageHeader.vue';
 import { useScrollPositionKeeper } from '@/composables/use-scroll-position-keeper.js';
@@ -44,13 +45,35 @@ const props = withDefaults(defineProps<PageHeaderProps & {
 	swipable: true,
 });
 
+/** MkPageHeader.narrow と同じ閾値：狭い画面ではチャット頂部タブを優先 */
+const isNarrowViewport = ref(typeof window !== 'undefined' && window.innerWidth < 500);
+
+function updateNarrowViewport() {
+	isNarrowViewport.value = window.innerWidth < 500;
+}
+
+onMounted(() => {
+	window.addEventListener('resize', updateNarrowViewport);
+});
+
+onUnmounted(() => {
+	window.removeEventListener('resize', updateNarrowViewport);
+});
+
+/** 設定「ページタブを下」かつ、チャット窄屏で頂部にタブを出すときは false */
+const useBottomTabsInFooter = computed(() =>
+	prefer.s.showPageTabBarBottom &&
+	(props.tabs?.length ?? 0) > 0 &&
+	!(props.narrowMergedRow && isNarrowViewport.value),
+);
+
 const pageHeaderProps = computed(() => {
-	const { reversed, tab, ...rest } = props;
+	const { reversed, tab, swipable, ...rest } = props;
 	return rest;
 });
 
 const pageHeaderPropsWithoutTabs = computed(() => {
-	const { reversed, tabs, ...rest } = props;
+	const { reversed, tabs, swipable, ...rest } = props;
 	return rest;
 });
 

@@ -16,11 +16,12 @@ SPDX-License-Identifier: AGPL-3.0-only
 		>
 		</MkTab>
 		<div :class="$style.controls">
-			<!-- 帖子排序切换（仅在帖子 tab 时显示） -->
-			<MkButton v-if="tab === 'notes'" v-tooltip="sortMode === 'recommended' ? '切换为最新' : '切换为推荐'" rounded @click="toggleSort">
-				<i :class="sortMode === 'recommended' ? 'ti ti-flame' : 'ti ti-clock'"></i>
-				{{ sortMode === 'recommended' ? '推荐' : '最新' }}
-			</MkButton>
+			<MkSelect
+				v-if="tab === 'notes'"
+				v-model="sortMode"
+				:items="noteSortItems"
+				:class="$style.sortSelect"
+			/>
 			<MkButton v-tooltip="i18n.ts.reload" iconOnly transparent rounded @click="reload">
 				<i class="ti ti-refresh"></i>
 			</MkButton>
@@ -33,10 +34,12 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { markRaw, ref, watch } from 'vue';
+import { computed, markRaw, ref, watch } from 'vue';
 import MkFeaturedTimeline from '@/components/MkFeaturedTimeline.vue';
 import MkTab from '@/components/MkTab.vue';
 import MkButton from '@/components/MkButton.vue';
+import MkSelect from '@/components/MkSelect.vue';
+import type { MkSelectItem } from '@/components/MkSelect.vue';
 import { i18n } from '@/i18n.js';
 import { Paginator } from '@/utility/paginator.js';
 
@@ -44,8 +47,14 @@ import { Paginator } from '@/utility/paginator.js';
 const displayedNoteIds = ref<string[]>([]);
 const displayedPollIds = ref<string[]>([]);
 
-// 排序模式
-const sortMode = ref<'recommended' | 'latest'>('recommended');
+// 排序模式（推荐 / 最新 / 热度＝热度系数降序）
+const sortMode = ref<'recommended' | 'latest' | 'hot'>('recommended');
+
+const noteSortItems = computed(() => [
+	{ value: 'recommended' as const, label: i18n.ts.recommended },
+	{ value: 'latest' as const, label: i18n.ts._order.newest },
+	{ value: 'hot' as const, label: i18n.ts.exploreFeaturedSortHeat },
+] satisfies MkSelectItem[]);
 
 // 帖子分页器
 const paginatorForNotes = markRaw(new Paginator('notes/featured', {
@@ -105,12 +114,10 @@ watch(tab, (newTab) => {
 	}
 });
 
-// 切换排序模式
-function toggleSort() {
-	sortMode.value = sortMode.value === 'recommended' ? 'latest' : 'recommended';
+watch(sortMode, () => {
 	displayedNoteIds.value = [];
 	paginatorForNotes.reload();
-}
+});
 
 function reload() {
 	if (tab.value === 'notes') {
@@ -133,5 +140,10 @@ function reload() {
 	display: flex;
 	align-items: center;
 	gap: 8px;
+}
+
+.sortSelect {
+	min-width: 11rem;
+	flex-shrink: 0;
 }
 </style>

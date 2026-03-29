@@ -30,6 +30,8 @@ type Source = {
 	socket?: string;
 	trustProxy?: FastifyServerOptions['trustProxy'];
 	chmodSocket?: string;
+	/** true のとき X-Frame-Options を付与せず、他サイト / Flutter Web iframe 等への埋め込みを許可（クリックジャッキング耐性は下がる） */
+	allowIframeEmbedding?: boolean;
 	enableIpRateLimit?: boolean;
 	disableHsts?: boolean;
 	db: {
@@ -123,6 +125,7 @@ export type Config = {
 	socket: string | undefined;
 	trustProxy: NonNullable<FastifyServerOptions['trustProxy']>;
 	chmodSocket: string | undefined;
+	allowIframeEmbedding: boolean;
 	enableIpRateLimit: boolean;
 	disableHsts: boolean | undefined;
 	db: {
@@ -292,6 +295,7 @@ export function loadConfig(): Config {
 			'fc00::/7',
 		],
 		chmodSocket: config.chmodSocket,
+		allowIframeEmbedding: config.allowIframeEmbedding ?? false,
 		disableHsts: config.disableHsts,
 		enableIpRateLimit: config.enableIpRateLimit ?? true,
 		host,

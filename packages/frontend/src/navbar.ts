@@ -59,6 +59,11 @@ export const navbarItemDef = reactive<{
 		icon: 'ti ti-hash',
 		to: '/explore',
 	},
+	timeline: {
+		title: i18n.ts.timeline,
+		icon: 'ti ti-home',
+		to: '/',
+	},
 	announcements: {
 		title: i18n.ts.announcements,
 		icon: 'ti ti-speakerphone',

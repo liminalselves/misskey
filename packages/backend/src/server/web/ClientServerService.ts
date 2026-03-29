@@ -215,9 +215,11 @@ export class ClientServerService {
 	public createServer(fastify: FastifyInstance, options: FastifyPluginOptions, done: (err?: Error) => void) {
 		const configUrl = new URL(this.config.url);
 
-		fastify.addHook('onRequest', (request, reply, done) => {
-			// クリックジャッキング防止のためiFrameの中に入れられないようにする
-			reply.header('X-Frame-Options', 'DENY');
+		fastify.addHook('onRequest', (_request, reply, done) => {
+			// クリックジャッキング防止のため既定では iFrame 埋め込みを禁止（.config で allowIframeEmbedding により解除可）
+			if (!this.config.allowIframeEmbedding) {
+				reply.header('X-Frame-Options', 'DENY');
+			}
 			done();
 		});
 
@@ -246,18 +248,47 @@ export class ClientServerService {
 			console.log('[ClientServerService] Proxying to Vite dev server.');
 			const urlOriginWithoutPort = configUrl.origin.replace(/:\d+$/, '');
 
+			const viteUpstream = (port: string): string => {
+				const fromEnv = process.env.MISSKEY_VITE_UPSTREAM_HOST;
+				if (fromEnv) {
+					return `http://${fromEnv}:${port}`;
+				}
+				// Windows: localhost と IPv4/IPv6 の組み合わせで undici 経由のプロキシが ECONNRESET になりやすい
+				if (process.platform === 'win32' && /\/\/localhost\b/i.test(urlOriginWithoutPort)) {
+					return urlOriginWithoutPort.replace(/\/\/localhost\b/i, '//127.0.0.1') + ':' + port;
+				}
+				return urlOriginWithoutPort + ':' + port;
+			};
+
+			// undici だと Windows 開発環境で Connection Reset が出やすい。@fastify/reply-from は buildRequest({ http: opts.http }) と
+			// プラグイン登録時のトップレベル opts.http のみを見る。replyOptions.http は無視され undici のままになるので必ずトップレベルに置く。
+			const viteDevProxyOpts = {
+				http2: false as const,
+				http: {
+					agentOptions: {
+						keepAlive: true,
+						keepAliveMsecs: 30_000,
+					},
+				},
+				replyOptions: {
+					retriesCount: 2,
+				},
+			};
+
 			const port = (process.env.VITE_PORT ?? '5173');
 			fastify.register(fastifyProxy, {
-				upstream: urlOriginWithoutPort + ':' + port,
+				upstream: viteUpstream(port),
 				prefix: '/vite',
 				rewritePrefix: '/vite',
+				...viteDevProxyOpts,
 			});
 
 			const embedPort = (process.env.EMBED_VITE_PORT ?? '5174');
 			fastify.register(fastifyProxy, {
-				upstream: urlOriginWithoutPort + ':' + embedPort,
+				upstream: viteUpstream(embedPort),
 				prefix: '/embed_vite',
 				rewritePrefix: '/embed_vite',
+				...viteDevProxyOpts,
 			});
 		}
 		//#endregion

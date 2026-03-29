@@ -271,6 +271,18 @@ export const meta = {
 				type: 'string',
 				optional: false, nullable: true,
 			},
+			aliyunMobilePushAccessKeyId: {
+				type: 'string',
+				optional: false, nullable: true,
+			},
+			aliyunMobilePushAccessKeySecret: {
+				type: 'string',
+				optional: false, nullable: true,
+			},
+			aliyunMobilePushAppKey: {
+				type: 'string',
+				optional: false, nullable: true,
+			},
 			useObjectStorage: {
 				type: 'boolean',
 				optional: false, nullable: false,
@@ -694,6 +706,9 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				smtpUser: instance.smtpUser,
 				smtpPass: instance.smtpPass,
 				swPrivateKey: instance.swPrivateKey,
+				aliyunMobilePushAccessKeyId: instance.aliyunMobilePushAccessKeyId,
+				aliyunMobilePushAccessKeySecret: instance.aliyunMobilePushAccessKeySecret,
+				aliyunMobilePushAppKey: instance.aliyunMobilePushAppKey,
 				useObjectStorage: instance.useObjectStorage,
 				objectStorageBaseUrl: instance.objectStorageBaseUrl,
 				objectStorageBucket: instance.objectStorageBucket,

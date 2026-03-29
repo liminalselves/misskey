@@ -4,6 +4,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 -->
 
 <template>
+<template v-if="!isEmbeddedAppShell()">
 <MkButton
 	v-if="supported && !pushRegistrationInServer"
 	type="button"
@@ -16,7 +17,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 	:full="full"
 	@click="subscribe"
 >
-	{{ i18n.ts.subscribePushNotification }}
+	{{ subscribeLabel }}
 </MkButton>
 <MkButton
 	v-else-if="!showOnlyToRegister && ($i ? pushRegistrationInServer : pushSubscription)"
@@ -30,7 +31,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 	:full="full"
 	@click="unsubscribe"
 >
-	{{ i18n.ts.unsubscribePushNotification }}
+	{{ unsubscribeLabel }}
 </MkButton>
 <MkButton v-else-if="$i && pushRegistrationInServer" disabled :rounded="rounded" :inline="inline" :wait="wait" :full="full">
 	{{ i18n.ts.pushNotificationAlreadySubscribed }}
@@ -39,10 +40,13 @@ SPDX-License-Identifier: AGPL-3.0-only
 	{{ i18n.ts.pushNotificationNotSupported }}
 </MkButton>
 </template>
+<p v-else :class="inline ? '_buttonInline' : ''" class="_text">{{ i18n.ts.nativePushUseApp }}</p>
+</template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { instanceName } from '@@/js/config.js';
+import { isEmbeddedAppShell } from '@/utility/is-embedded-app-shell.js';
 import { $i } from '@/i.js';
 import MkButton from '@/components/MkButton.vue';
 import { instance } from '@/instance.js';
@@ -72,6 +76,36 @@ const supported = ref(false);
 // If this browser has already subscribed to push notification
 const pushSubscription = ref<PushSubscription | null>(null);
 const pushRegistrationInServer = ref<{ state?: string; key?: string; userId: string; endpoint: string; sendReadMessage: boolean; } | undefined>();
+
+const subscribeLabel = computed(() =>
+	isEmbeddedAppShell() ? i18n.ts.subscribePushNotificationApp : i18n.ts.subscribePushNotificationBrowser,
+);
+const unsubscribeLabel = computed(() =>
+	isEmbeddedAppShell() ? i18n.ts.unsubscribePushNotificationApp : i18n.ts.unsubscribePushNotificationBrowser,
+);
+
+async function syncPushRegistrationState() {
+	if (!registration.value) return;
+
+	const canPush =
+		instance.swPublickey != null
+		&& instance.enableServiceWorker !== false
+		&& ('PushManager' in window)
+		&& $i != null
+		&& $i.token != null;
+
+	supported.value = canPush;
+
+	if (canPush && pushSubscription.value) {
+		const res = await misskeyApi('sw/show-registration', {
+			endpoint: pushSubscription.value.endpoint,
+		});
+
+		if (res) {
+			pushRegistrationInServer.value = res;
+		}
+	}
+}
 
 async function subscribe() {
 	if (!registration.value || !supported.value || !instance.swPublickey) return;
@@ -169,24 +203,20 @@ function urlBase64ToUint8Array(base64String: string): BufferSource {
 if (navigator.serviceWorker == null) {
 	// TODO: よしなに？
 } else {
-	navigator.serviceWorker.ready.then(async swr => {
+	void navigator.serviceWorker.ready.then(async swr => {
 		registration.value = swr;
 
 		pushSubscription.value = await registration.value.pushManager.getSubscription();
 
-		if (instance.swPublickey && ('PushManager' in window) && $i && $i.token) {
-			supported.value = true;
+		await syncPushRegistrationState();
 
-			if (pushSubscription.value) {
-				const res = await misskeyApi('sw/show-registration', {
-					endpoint: pushSubscription.value.endpoint,
-				});
-
-				if (res) {
-					pushRegistrationInServer.value = res;
-				}
-			}
-		}
+		// instance（swPublickey 等）は meta 取得後に埋まることがあるため、遅延更新に追従する
+		watch(
+			() => [instance.swPublickey, instance.enableServiceWorker] as const,
+			() => {
+				void syncPushRegistrationState();
+			},
+		);
 	});
 }
 

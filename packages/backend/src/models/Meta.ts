@@ -348,6 +348,26 @@ export class MiMeta {
 	})
 	public swPrivateKey: string | null;
 
+	/** 阿里云 OpenAPI（移动推送）AccessKey ID，管理员面板配置 */
+	@Column('varchar', {
+		length: 1024,
+		nullable: true,
+	})
+	public aliyunMobilePushAccessKeyId: string | null;
+
+	@Column('varchar', {
+		length: 1024,
+		nullable: true,
+	})
+	public aliyunMobilePushAccessKeySecret: string | null;
+
+	/** EMAS 应用 AppKey（与客户端 aliyun-emas-services.json 中 emas.appKey 一致） */
+	@Column('varchar', {
+		length: 64,
+		nullable: true,
+	})
+	public aliyunMobilePushAppKey: string | null;
+
 	@Column('varchar', {
 		length: 1024,
 		nullable: true,

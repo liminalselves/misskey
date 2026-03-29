@@ -19,10 +19,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 			</button>
 		</div>
 		<div :class="$style.middle">
-			<MkA v-tooltip.noDelay.right="i18n.ts.timeline" :class="$style.item" :activeClass="$style.active" to="/" exact>
-				<i :class="$style.itemIcon" class="ti ti-home ti-fw" style="viewTransitionName: navbar-homeIcon;"></i><span :class="$style.itemText">{{ i18n.ts.timeline }}</span>
+			<MkA v-tooltip.noDelay.right="i18n.ts.explore" :class="$style.item" :activeClass="$style.active" to="/explore">
+				<i :class="$style.itemIcon" class="ti ti-hash ti-fw" style="viewTransitionName: navbar-exploreIcon;"></i><span :class="$style.itemText">{{ i18n.ts.explore }}</span>
 			</MkA>
-			<template v-for="item in prefer.r.menu.value">
+			<template v-for="item in sidebarMenuItems">
 				<div v-if="item === '-'" :class="$style.divider"></div>
 				<component
 					:is="navbarItemDef[item].to ? 'MkA' : 'button'"
@@ -133,8 +133,11 @@ const iconOnly = computed(() => {
 	return !props.asDrawer && (forceIconOnly.value || (store.r.menuDisplay.value === 'sideIcon'));
 });
 
+const sidebarMenuItems = computed(() => prefer.r.menu.value.filter(x => x !== 'explore'));
+
 const otherMenuItemIndicated = computed(() => {
 	for (const def in navbarItemDef) {
+		if (def === 'explore') continue;
 		if (prefer.r.menu.value.includes(def)) continue;
 		if (navbarItemDef[def].indicated) return true;
 	}

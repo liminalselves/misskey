@@ -48,6 +48,7 @@ import { NoteDraftService } from './NoteDraftService.js';
 import { NotificationService } from './NotificationService.js';
 import { PollService } from './PollService.js';
 import { PushNotificationService } from './PushNotificationService.js';
+import { AliyunMobilePushService } from './AliyunMobilePushService.js';
 import { QueryService } from './QueryService.js';
 import { ReactionService } from './ReactionService.js';
 import { ReactionsBufferingService } from './ReactionsBufferingService.js';
@@ -191,6 +192,7 @@ const $NoteDraftService: Provider = { provide: 'NoteDraftService', useExisting: 
 const $NotificationService: Provider = { provide: 'NotificationService', useExisting: NotificationService };
 const $PollService: Provider = { provide: 'PollService', useExisting: PollService };
 const $SystemAccountService: Provider = { provide: 'SystemAccountService', useExisting: SystemAccountService };
+const $AliyunMobilePushService: Provider = { provide: 'AliyunMobilePushService', useExisting: AliyunMobilePushService };
 const $PushNotificationService: Provider = { provide: 'PushNotificationService', useExisting: PushNotificationService };
 const $QueryService: Provider = { provide: 'QueryService', useExisting: QueryService };
 const $ReactionService: Provider = { provide: 'ReactionService', useExisting: ReactionService };
@@ -344,6 +346,7 @@ const $ApQuestionService: Provider = { provide: 'ApQuestionService', useExisting
 		NotificationService,
 		PollService,
 		SystemAccountService,
+		AliyunMobilePushService,
 		PushNotificationService,
 		QueryService,
 		ReactionService,
@@ -494,6 +497,7 @@ const $ApQuestionService: Provider = { provide: 'ApQuestionService', useExisting
 		$NotificationService,
 		$PollService,
 		$SystemAccountService,
+		$AliyunMobilePushService,
 		$PushNotificationService,
 		$QueryService,
 		$ReactionService,
@@ -644,6 +648,7 @@ const $ApQuestionService: Provider = { provide: 'ApQuestionService', useExisting
 		NotificationService,
 		PollService,
 		SystemAccountService,
+		AliyunMobilePushService,
 		PushNotificationService,
 		QueryService,
 		ReactionService,
@@ -793,6 +798,7 @@ const $ApQuestionService: Provider = { provide: 'ApQuestionService', useExisting
 		$NotificationService,
 		$PollService,
 		$SystemAccountService,
+		$AliyunMobilePushService,
 		$PushNotificationService,
 		$QueryService,
 		$ReactionService,

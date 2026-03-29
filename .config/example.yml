@@ -101,6 +101,10 @@ url: https://example.tld/
 # The port that your Misskey server should listen on.
 port: 3000
 
+# Allow embedding the web UI in iframes (e.g. Flutter Web shell). When false (default),
+# X-Frame-Options: DENY is sent. Enabling weakens clickjacking protection; only use if needed.
+# allowIframeEmbedding: true
+
 # You can also use UNIX domain socket.
 # socket: /path/to/misskey.sock
 # chmodSocket: '777'

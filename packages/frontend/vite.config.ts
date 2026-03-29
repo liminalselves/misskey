@@ -100,15 +100,22 @@ export function getConfig(): UserConfig {
 			allowedHosts: host ? [host] : undefined,
 			port: 5173,
 			strictPort: true,
+			// Windows でファイル監視が不安定な場合: 環境変数 VITE_WATCH_POLLING=true（CPU 使用率は上がる）
+			...(process.env.VITE_WATCH_POLLING === 'true'
+				? { watch: { usePolling: true, interval: 1000 } }
+				: {}),
 			hmr: {
 				// バックエンド経由での起動時、Viteは5173経由でアセットを参照していると思い込んでいるが実際は3000から配信される
 				// そのため、バックエンドのWSサーバーにHMRのWSリクエストが吸収されてしまい、正しくHMRが機能しない
 				// クライアント側のWSポートをViteサーバーのポートに強制させることで、正しくHMRが機能するようになる
 				clientPort: 5173,
 			},
-			headers: { // なんか効かない
-				'X-Frame-Options': 'DENY',
-			},
+			headers:
+				process.env.MISSKEY_VITE_ALLOW_IFRAME === 'true'
+					? {}
+					: {
+						'X-Frame-Options': 'DENY',
+					},
 		},
 
 		plugins: [

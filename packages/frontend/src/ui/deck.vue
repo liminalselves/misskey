@@ -76,7 +76,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 			<XNavbarH v-if="!isMobile && prefer.r['deck.navbarPosition'].value === 'bottom'" :acrylic="withWallpaper"/>
 
-			<XMobileFooterMenu v-if="isMobile" v-model:drawerMenuShowing="drawerMenuShowing" v-model:widgetsShowing="widgetsShowing"/>
+			<XMobileFooterMenu v-if="isMobile && !hideMobileFooter" v-model:drawerMenuShowing="drawerMenuShowing" v-model:widgetsShowing="widgetsShowing"/>
 		</div>
 	</div>
 
@@ -85,7 +85,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { defineAsyncComponent, ref, useTemplateRef } from 'vue';
+import { computed, defineAsyncComponent, ref, useTemplateRef } from 'vue';
 import XCommon from './_common_/common.vue';
 import { genId } from '@/utility/id.js';
 import XSidebar from '@/ui/_common_/navbar.vue';
@@ -149,6 +149,11 @@ mainRouter.navHook = (path, flag): boolean => {
 const isMobile = ref(window.innerWidth <= 500);
 window.addEventListener('resize', () => {
 	isMobile.value = window.innerWidth <= 500;
+});
+
+const hideMobileFooter = computed(() => {
+	const path = mainRouter.currentRoute.value.path;
+	return path.startsWith('/chat/user/') || path.startsWith('/chat/room/');
 });
 
 // ポインターイベント非対応用に初期値はUAから出す

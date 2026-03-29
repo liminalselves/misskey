@@ -78,6 +78,9 @@ export function getConfig(): UserConfig {
 			allowedHosts: host ? [host] : undefined,
 			port: 5174,
 			strictPort: true,
+			...(process.env.VITE_WATCH_POLLING === 'true'
+				? { watch: { usePolling: true, interval: 1000 } }
+				: {}),
 			hmr: {
 				// バックエンド経由での起動時、Viteは5174経由でアセットを参照していると思い込んでいるが実際は3000から配信される
 				// そのため、バックエンドのWSサーバーにHMRのWSリクエストが吸収されてしまい、正しくHMRが機能しない

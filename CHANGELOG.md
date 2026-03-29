@@ -1,6 +1,7 @@
 ## 2026.1.0
 
 ### General
+- Fix: Windows 上执行 `pnpm --filter i18n generate` 时，`generateLocaleInterface.ts` 的 `isMain` 判断因路径格式与 `import.meta.url` 不一致导致脚本未实际更新 `packages/i18n/src/autogen/locale.ts`；已改为使用 `fileURLToPath` 与 `path.resolve` 比较，与 Unix 行为一致。
 - Enhance: 发现模块（Discovery/Featured）推流机制改造
   - 实现全局热度榜 + 重力衰减算法，打破原有 3 天时间窗口限制
   - 新增加权随机采样（70% 高分 + 30% 低分），提升内容多样性
@@ -61,6 +62,11 @@
 - Fix: `Mk:C:container` の `borderWidth` が正しく反映されない問題を修正
 
 ### Server
+- Enhance: 阿里云移动推送（原生 App）服务端配置改为**管理后台**维护，不再使用 `default.yml` / `.config` 中的 `aliyunMobilePush` 字段（已移除示例说明）。
+  - 路径：**控制面板 → 设置（常规）→「阿里云移动推送（原生 App）」**，填写 RAM 子账号 **AccessKey ID / Secret** 与 **EMAS AppKey**（须与客户端 `aliyun-emas-services.json` 中 `emas.appKey` 一致）。
+  - 部署须执行数据库迁移：`1770600000000-AddAliyunMobilePushMeta`（为 `meta` 表增加三列）。
+  - 推送发送仍通过 `AliyunMobilePushService` 读取内存中的 `MiMeta`（保存设置后随 `metaUpdated` 生效）。
+  - 详见仓库内文档：`docs/aliyun-mobile-push.md`。
 - Enhance: OAuthのクライアント情報取得（Client Information Discovery）において、IndieWeb Living Standard 11 July 2024で定義されているJSONドキュメント形式に対応しました
   - JSONによるClient Information Discoveryを行うには、レスポンスの`Content-Type`ヘッダーが`application/json`である必要があります
   - 従来の実装（12 February 2022版・HTML Microformat形式）も引き続きサポートされます

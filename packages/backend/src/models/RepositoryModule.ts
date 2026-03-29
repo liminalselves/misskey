@@ -63,6 +63,7 @@ import {
 	MiRoleAssignment,
 	MiSignin,
 	MiSwSubscription,
+	MiMobilePushDevice,
 	MiSystemAccount,
 	MiSystemWebhook,
 	MiUsedUsername,
@@ -289,6 +290,12 @@ const $blockingsRepository: Provider = {
 const $swSubscriptionsRepository: Provider = {
 	provide: DI.swSubscriptionsRepository,
 	useFactory: (db: DataSource) => db.getRepository(MiSwSubscription).extend(miRepository as MiRepository<MiSwSubscription>),
+	inject: [DI.db],
+};
+
+const $mobilePushDevicesRepository: Provider = {
+	provide: DI.mobilePushDevicesRepository,
+	useFactory: (db: DataSource) => db.getRepository(MiMobilePushDevice).extend(miRepository as MiRepository<MiMobilePushDevice>),
 	inject: [DI.db],
 };
 
@@ -581,6 +588,7 @@ const $reversiGamesRepository: Provider = {
 		$renoteMutingsRepository,
 		$blockingsRepository,
 		$swSubscriptionsRepository,
+		$mobilePushDevicesRepository,
 		$systemAccountsRepository,
 		$hashtagsRepository,
 		$abuseUserReportsRepository,
@@ -659,6 +667,7 @@ const $reversiGamesRepository: Provider = {
 		$renoteMutingsRepository,
 		$blockingsRepository,
 		$swSubscriptionsRepository,
+		$mobilePushDevicesRepository,
 		$systemAccountsRepository,
 		$hashtagsRepository,
 		$abuseUserReportsRepository,

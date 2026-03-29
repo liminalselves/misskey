@@ -379,6 +379,8 @@ export * as 'roles/show' from './endpoints/roles/show.js';
 export * as 'roles/users' from './endpoints/roles/users.js';
 export * as 'server-info' from './endpoints/server-info.js';
 export * as 'stats' from './endpoints/stats.js';
+export * as 'mobile-push/register' from './endpoints/mobile-push/register.js';
+export * as 'mobile-push/unregister' from './endpoints/mobile-push/unregister.js';
 export * as 'sw/register' from './endpoints/sw/register.js';
 export * as 'sw/show-registration' from './endpoints/sw/show-registration.js';
 export * as 'sw/unregister' from './endpoints/sw/unregister.js';

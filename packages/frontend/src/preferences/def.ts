@@ -186,13 +186,13 @@ export const PREF_DEF = definePreferences({
 	},
 	menu: {
 		default: [
+			'timeline',
 			'notifications',
 			'clips',
 			'drive',
 			'followRequests',
 			'chat',
 			'-',
-			'explore',
 			'announcements',
 			'channels',
 			'search',

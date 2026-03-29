@@ -2589,6 +2589,30 @@ export interface Locale extends ILocale {
      */
     "serviceworkerInfo": string;
     /**
+     * Aliyun モバイルプッシュ（ネイティブアプリ）
+     */
+    "aliyunMobilePush": string;
+    /**
+     * ネイティブクライアント向けに Aliyun OpenAPI でプッシュします。RAM サブアカウントの AccessKey と EMAS の AppKey が必要です。AppKey はアプリの aliyun-emas-services.json の appKey と一致させてください。
+     */
+    "aliyunMobilePushDescription": string;
+    /**
+     * AccessKey ID
+     */
+    "aliyunMobilePushAccessKeyId": string;
+    /**
+     * AccessKey Secret
+     */
+    "aliyunMobilePushAccessKeySecret": string;
+    /**
+     * EMAS AppKey
+     */
+    "aliyunMobilePushAppKey": string;
+    /**
+     * android/app/src/main/assets/aliyun-emas-services.json の emas.appKey と同じ値。
+     */
+    "aliyunMobilePushAppKeyCaption": string;
+    /**
      * 削除されたノート
      */
     "deletedNote": string;
@@ -3933,6 +3957,10 @@ export interface Locale extends ILocale {
      */
     "recommended": string;
     /**
+     * 熱度
+     */
+    "exploreFeaturedSortHeat": string;
+    /**
      * チェック
      */
     "check": string;
@@ -4101,6 +4129,22 @@ export interface Locale extends ILocale {
      */
     "unsubscribePushNotification": string;
     /**
+     * ブラウザのプッシュ通知を有効にする
+     */
+    "subscribePushNotificationBrowser": string;
+    /**
+     * ブラウザのプッシュ通知を停止する
+     */
+    "unsubscribePushNotificationBrowser": string;
+    /**
+     * アプリのプッシュ通知を有効にする
+     */
+    "subscribePushNotificationApp": string;
+    /**
+     * アプリのプッシュ通知を停止する
+     */
+    "unsubscribePushNotificationApp": string;
+    /**
      * プッシュ通知は有効です
      */
     "pushNotificationAlreadySubscribed": string;
@@ -4108,6 +4152,10 @@ export interface Locale extends ILocale {
      * ブラウザかサーバーがプッシュ通知に非対応
      */
     "pushNotificationNotSupported": string;
+    /**
+     * ネイティブ通知はアプリ側で登録されます。このページのブラウザ向けプッシュ設定は使いません。
+     */
+    "nativePushUseApp": string;
     /**
      * 通知が既読になったらプッシュ通知を削除する
      */

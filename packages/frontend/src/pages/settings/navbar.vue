@@ -9,6 +9,11 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<FormSlot>
 			<template #label>{{ i18n.ts.navbar }}</template>
 			<MkContainer :showHeader="false">
+				<div :class="$style.item">
+					<span :class="$style.itemHandlePlaceholder"></span>
+					<i class="ti-fw ti ti-hash" :class="$style.itemIcon"></i>
+					<span :class="$style.itemText">{{ navbarItemDef.explore.title }}</span>
+				</div>
 				<MkDraggable
 					v-model="items"
 					direction="vertical"
@@ -71,7 +76,7 @@ import { prefer } from '@/preferences.js';
 import { getInitialPrefValue } from '@/preferences/manager.js';
 import { genId } from '@/utility/id.js';
 
-const items = ref(prefer.s.menu.map(x => ({
+const items = ref(prefer.s.menu.filter(x => x !== 'explore').map(x => ({
 	id: genId(),
 	type: x,
 })));
@@ -81,7 +86,7 @@ const menuDisplay = store.model('menuDisplay');
 const showNavbarSubButtons = prefer.model('showNavbarSubButtons');
 
 async function addItem() {
-	const menu = Object.keys(navbarItemDef).filter(k => !itemTypeValues.value.includes(k));
+	const menu = Object.keys(navbarItemDef).filter(k => !itemTypeValues.value.includes(k) && k !== 'explore');
 	const { canceled, result: item } = await os.select({
 		title: i18n.ts.addItem,
 		items: [...menu.map(k => ({
@@ -161,5 +166,12 @@ definePage(() => ({
 	height: 32px;
 	margin: 0 8px;
 	opacity: 0.5;
+}
+
+.itemHandlePlaceholder {
+	display: inline-block;
+	width: 32px;
+	height: 32px;
+	margin: 0 8px;
 }
 </style>

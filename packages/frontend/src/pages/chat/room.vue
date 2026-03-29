@@ -4,7 +4,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 -->
 
 <template>
-<PageWithHeader v-model:tab="tab" :reversed="tab === 'chat'" :tabs="headerTabs" :actions="headerActions">
+<PageWithHeader v-model:tab="tab" :reversed="tab === 'chat'" :tabs="headerTabs" :actions="headerActions" narrow-merged-row show-back>
 	<div v-if="tab === 'chat'" class="_spacer" style="--MI_SPACER-w: 700px;">
 		<div class="_gaps">
 			<div v-if="initializing">
@@ -751,20 +751,24 @@ definePage(computed(() => {
 				userName: user.value,
 				title: user.value.name ?? user.value.username,
 				avatar: user.value,
+				hideMobileFooter: true,
 			};
 		} else if (room.value) {
 			return {
 				title: room.value.name,
 				icon: 'ti ti-users',
+				hideMobileFooter: true,
 			};
 		} else {
 			return {
 				title: i18n.ts.directMessage,
+				hideMobileFooter: true,
 			};
 		}
 	} else {
 		return {
 			title: i18n.ts.directMessage,
+			hideMobileFooter: true,
 		};
 	}
 }));

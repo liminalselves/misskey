@@ -5,7 +5,48 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <template>
 <div v-if="show" ref="el" :class="[$style.root]">
-	<div :class="[$style.upper, { [$style.slim]: narrow, [$style.thin]: thin_ }]">
+	<!-- 聊天页・狭い幅：左＝戻る＋名前、中央＝左右の間の余白内でタブを相対センター、右＝メニュー -->
+	<div v-if="narrowMergedRow && narrow" :class="[$style.upper, $style.chatMobileUpper, { [$style.slim]: narrow, [$style.thin]: thin_ }]">
+		<div :class="$style.chatMobileLeft">
+			<button
+				v-if="!thin_ && showBack"
+				v-tooltip.noDelay="i18n.ts.goBack"
+				type="button"
+				class="_button"
+				:class="$style.leadingBack"
+				@click="goBack"
+			>
+				<i class="ti ti-chevron-left ti-fw"></i>
+			</button>
+			<template v-if="pageMetadata">
+				<div v-if="!hideTitle" :class="[$style.titleContainer, $style.chatMobileTitle]" @click="top">
+					<div v-if="pageMetadata.avatar" :class="$style.titleAvatarContainer">
+						<MkAvatar :class="$style.titleAvatar" :user="pageMetadata.avatar" indicator/>
+					</div>
+					<i v-else-if="pageMetadata.icon" :class="[$style.titleIcon, pageMetadata.icon]"></i>
+
+					<div class="_nowrap" :class="$style.title">
+						<MkUserName v-if="pageMetadata.userName" :user="pageMetadata.userName" :nowrap="true"/>
+						<div v-else-if="pageMetadata.title" class="_nowrap">{{ pageMetadata.title }}</div>
+						<div v-if="pageMetadata.subtitle" :class="$style.subtitle">
+							{{ pageMetadata.subtitle }}
+						</div>
+					</div>
+				</div>
+			</template>
+		</div>
+		<div :class="$style.chatMobileTabsMid">
+			<XTabs v-if="hasTabs" :class="[$style.tabs, $style.chatMobileTabs]" :tab="tab" :tabs="tabs" :rootEl="el" @update:tab="key => emit('update:tab', key)" @tabClick="onTabClick"/>
+		</div>
+		<div v-if="actions && actions.length > 0" :class="$style.buttons">
+			<template v-for="action in actions">
+				<button v-tooltip.noDelay="action.text" class="_button" :class="[$style.button, { [$style.highlighted]: action.highlighted }]" @click.stop="action.handler" @touchstart="preventDrag"><i :class="action.icon"></i></button>
+			</template>
+		</div>
+	</div>
+
+	<!-- デスクトップおよび通常のモバイルヘッダー -->
+	<div v-else :class="[$style.upper, { [$style.slim]: narrow, [$style.thin]: thin_ }]">
 		<div v-if="!thin_ && narrow && props.displayMyAvatar && $i" class="_button" @click="openAccountMenu">
 			<MkAvatar :class="$style.avatar" :user="$i"/>
 		</div>
@@ -26,7 +67,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 					</div>
 				</div>
 			</div>
-			<XTabs v-if="!narrow || hideTitle" :class="$style.tabs" :tab="tab" :tabs="tabs" :rootEl="el" @update:tab="key => emit('update:tab', key)" @tabClick="onTabClick"/>
+			<XTabs v-if="(!narrow || hideTitle) && hasTabs" :class="$style.tabs" :tab="tab" :tabs="tabs" :rootEl="el" @update:tab="key => emit('update:tab', key)" @tabClick="onTabClick"/>
 		</template>
 		<div v-if="(!thin_ && narrow && !hideTitle) || (actions && actions.length > 0)" :class="$style.buttons">
 			<template v-for="action in actions">
@@ -34,7 +75,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 			</template>
 		</div>
 	</div>
-	<div v-if="(narrow && !hideTitle) && hasTabs" :class="[$style.lower, { [$style.slim]: narrow, [$style.thin]: thin_ }]">
+	<div v-if="showLowerTabs" :class="[$style.lower, { [$style.slim]: narrow, [$style.thin]: thin_ }]">
 		<XTabs :class="$style.tabs" :tab="tab" :tabs="tabs" :rootEl="el" @update:tab="key => emit('update:tab', key)" @tabClick="onTabClick"/>
 	</div>
 </div>
@@ -54,6 +95,10 @@ export type PageHeaderProps = {
 	hideTitle?: boolean;
 	canOmitTitle?: boolean;
 	displayMyAvatar?: boolean;
+	/** チャットルーム等：狭い幅では1行に戻る・タイトル・タブ・操作。デスクトップは通常ヘッダー */
+	narrowMergedRow?: boolean;
+	/** narrowMergedRow かつ狭い幅のとき先頭に戻る */
+	showBack?: boolean;
 };
 </script>
 
@@ -65,9 +110,13 @@ import { getAccountMenu } from '@/accounts.js';
 import { $i } from '@/i.js';
 import { DI } from '@/di.js';
 import * as os from '@/os.js';
+import { useRouter } from '@/router.js';
+import { i18n } from '@/i18n.js';
 
 const props = withDefaults(defineProps<PageHeaderProps>(), {
 	tabs: () => ([] as Tab[]),
+	narrowMergedRow: false,
+	showBack: false,
 });
 
 const emit = defineEmits<{
@@ -85,6 +134,20 @@ const el = useTemplateRef('el');
 const narrow = ref(false);
 const hasTabs = computed(() => props.tabs.length > 0);
 const hasActions = computed(() => props.actions && props.actions.length > 0);
+const showLowerTabs = computed(() =>
+	narrow.value && !hideTitle.value && hasTabs.value && !(props.narrowMergedRow && narrow.value),
+);
+
+const router = useRouter();
+
+function goBack() {
+	// Nirax の Router に .back() は無い。popstate で mainRouter と同期するため history を使う
+	if (window.history.length > 1) {
+		window.history.back();
+	} else {
+		router.push('/chat');
+	}
+}
 const show = computed(() => {
 	return !hideTitle.value || hasTabs.value || hasActions.value;
 });
@@ -186,6 +249,68 @@ onUnmounted(() => {
 			margin: 0 auto;
 			max-width: 100%;
 		}
+	}
+
+}
+
+/* flex 中央列が左右の固定幅の間の余白を埋め、その中でタブだけ justify-content:center（画面絶対中央ではない） */
+.chatMobileUpper {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	min-width: 0;
+	width: 100%;
+}
+
+.chatMobileLeft {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	flex: 0 1 auto;
+	min-width: 0;
+	overflow: hidden;
+}
+
+.chatMobileTabsMid {
+	flex: 1 1 0;
+	min-width: 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	overflow: hidden;
+
+	:deep(.tabsInner) {
+		margin-left: 0;
+		margin-right: 0;
+	}
+}
+
+.chatMobileUpper > .buttons {
+	flex: 0 0 auto;
+}
+
+.chatMobileTitle {
+	margin-left: 0 !important;
+	flex-shrink: 1;
+	min-width: 0;
+	max-width: 100%;
+}
+
+.chatMobileTabs {
+	font-size: 0.72em;
+}
+
+.leadingBack {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex-shrink: 0;
+	width: calc(var(--height) - 8px);
+	height: var(--height);
+	border-radius: 5px;
+
+	&:hover {
+		background: rgba(0, 0, 0, 0.05);
 	}
 }
 
