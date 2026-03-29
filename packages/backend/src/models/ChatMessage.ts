@@ -10,7 +10,11 @@ import { MiDriveFile } from './DriveFile.js';
 import { MiChatRoom } from './ChatRoom.js';
 
 @Entity('chat_message')
-@Index('IDX_chat_message_1on1_timeline', ['fromUserId', 'toUserId', 'id'])
+// 以下インデックスはマイグレーションで DEFINITION（部分条件・DESC）を持つため synchronize: false。
+// 実体は migration/1770400000000 / 1770400000001 に従う。
+@Index('IDX_chat_message_1on1_timeline', { synchronize: false })
+@Index('IDX_chat_message_1on1_from', { synchronize: false })
+@Index('IDX_chat_message_1on1_to', { synchronize: false })
 export class MiChatMessage {
 	@PrimaryColumn(id())
 	public id: string;

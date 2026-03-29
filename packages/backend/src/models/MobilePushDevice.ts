@@ -8,19 +8,22 @@ import { id } from './util/id.js';
 import { MiUser } from './User.js';
 
 @Entity('mobile_push_device')
-@Index(['userId', 'deviceId'], { unique: true })
+@Index('UQ_mobile_push_device_user_device', ['userId', 'deviceId'], { unique: true })
 export class MiMobilePushDevice {
 	@PrimaryColumn(id())
 	public id: string;
 
-	@Index()
+	@Index('IDX_mobile_push_device_userId')
 	@Column(id())
 	public userId: MiUser['id'];
 
 	@ManyToOne(() => MiUser, {
 		onDelete: 'CASCADE',
 	})
-	@JoinColumn()
+	@JoinColumn({
+		name: 'userId',
+		foreignKeyConstraintName: 'FK_mobile_push_device_user',
+	})
 	public user: MiUser | null;
 
 	@Column('varchar', {

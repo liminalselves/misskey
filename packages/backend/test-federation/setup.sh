@@ -33,3 +33,8 @@ function generate {
 
 generate a.test
 generate b.test
+
+# pnpm build 会在仓库根目录 built/ 下生成 ._config_.json；compose 又把整个 built 挂到 /misskey/built，
+# 再单独 bind 测试用 config 到 /misskey/built/._config_.json 时，若宿主机该路径已存在文件，runc 会报
+# "make mountpoint ... file exists"。启动容器前删掉宿主机上的该文件，由 compose 的挂载提供内容。
+rm -f "$(dirname "$0")/../../../built/._config_.json"
