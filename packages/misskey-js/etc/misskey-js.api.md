@@ -108,6 +108,36 @@ type AdminAdListResponse = operations['admin___ad___list']['responses']['200']['
 type AdminAdUpdateRequest = operations['admin___ad___update']['requestBody']['content']['application/json'];
 
 // @public (undocumented)
+type AdminAgentsMessagesListRequest = operations['admin___agents___messages___list']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AdminAgentsMessagesListResponse = operations['admin___agents___messages___list']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type AdminAgentsMessagesTimelineRequest = operations['admin___agents___messages___timeline']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AdminAgentsMessagesTimelineResponse = operations['admin___agents___messages___timeline']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type AdminAgentsReviewListPendingResponse = operations['admin___agents___review___list-pending']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type AdminAgentsReviewPendingExistsResponse = operations['admin___agents___review___pending-exists']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type AdminAgentsReviewResolveRequest = operations['admin___agents___review___resolve']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AdminAgentsReviewResolveResponse = operations['admin___agents___review___resolve']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type AdminAgentsSessionsListRequest = operations['admin___agents___sessions___list']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AdminAgentsSessionsListResponse = operations['admin___agents___sessions___list']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
 type AdminAnnouncementsCreateRequest = operations['admin___announcements___create']['requestBody']['content']['application/json'];
 
 // @public (undocumented)
@@ -259,6 +289,9 @@ type AdminInviteListResponse = operations['admin___invite___list']['responses'][
 
 // @public (undocumented)
 type AdminMetaResponse = operations['admin___meta']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type AdminMigrateFeaturedRankingResponse = operations['admin___migrate-featured-ranking']['responses']['200']['content']['application/json'];
 
 // @public (undocumented)
 type AdminPromoCreateRequest = operations['admin___promo___create']['requestBody']['content']['application/json'];
@@ -448,6 +481,192 @@ type AdminUpdateProxyAccountResponse = operations['admin___update-proxy-account'
 
 // @public (undocumented)
 type AdminUpdateUserNoteRequest = operations['admin___update-user-note']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AgentsCharactersCreateRequest = operations['agents___characters___create']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AgentsCharactersCreateResponse = operations['agents___characters___create']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type AgentsCharactersDeleteRequest = operations['agents___characters___delete']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AgentsCharactersDeleteResponse = operations['agents___characters___delete']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type AgentsCharactersListMineResponse = operations['agents___characters___list-mine']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type AgentsCharactersPublicListRequest = operations['agents___characters___public-list']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AgentsCharactersPublicListResponse = operations['agents___characters___public-list']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type AgentsCharactersPublishRequest = operations['agents___characters___publish']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AgentsCharactersPublishResponse = operations['agents___characters___publish']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type AgentsCharactersShowRequest = operations['agents___characters___show']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AgentsCharactersShowResponse = operations['agents___characters___show']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type AgentsCharactersUnpublishRequest = operations['agents___characters___unpublish']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AgentsCharactersUnpublishResponse = operations['agents___characters___unpublish']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type AgentsCharactersUpdateRequest = operations['agents___characters___update']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AgentsCharactersUpdateResponse = operations['agents___characters___update']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type AgentsMemoryAddRequest = operations['agents___memory___add']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AgentsMemoryAddResponse = operations['agents___memory___add']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type AgentsMemoryDeleteRequest = operations['agents___memory___delete']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AgentsMemoryDeleteResponse = operations['agents___memory___delete']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type AgentsMemoryListRequest = operations['agents___memory___list']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AgentsMemoryListResponse = operations['agents___memory___list']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type AgentsMemoryUpdateRequest = operations['agents___memory___update']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AgentsMemoryUpdateResponse = operations['agents___memory___update']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type AgentsMessagesDeleteRequest = operations['agents___messages___delete']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AgentsMessagesDeleteResponse = operations['agents___messages___delete']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type AgentsMessagesSearchRequest = operations['agents___messages___search']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AgentsMessagesSearchResponse = operations['agents___messages___search']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type AgentsMessagesSendRequest = operations['agents___messages___send']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AgentsMessagesSendResponse = operations['agents___messages___send']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type AgentsMessagesShowRequest = operations['agents___messages___show']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AgentsMessagesShowResponse = operations['agents___messages___show']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type AgentsMessagesTimelineRequest = operations['agents___messages___timeline']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AgentsMessagesTimelineResponse = operations['agents___messages___timeline']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type AgentsSessionsContextWindowRequest = operations['agents___sessions___context-window']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AgentsSessionsContextWindowResponse = operations['agents___sessions___context-window']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type AgentsSessionsCreateRequest = operations['agents___sessions___create']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AgentsSessionsCreateResponse = operations['agents___sessions___create']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type AgentsSessionsListMineResponse = operations['agents___sessions___list-mine']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type AgentsSessionsShowRequest = operations['agents___sessions___show']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AgentsSessionsShowResponse = operations['agents___sessions___show']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type AgentsSessionsUpdateRequest = operations['agents___sessions___update']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AgentsSessionsUpdateResponse = operations['agents___sessions___update']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type AgentsStylesCreateRequest = operations['agents___styles___create']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AgentsStylesCreateResponse = operations['agents___styles___create']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type AgentsStylesDeleteRequest = operations['agents___styles___delete']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AgentsStylesDeleteResponse = operations['agents___styles___delete']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type AgentsStylesListMineResponse = operations['agents___styles___list-mine']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type AgentsStylesListUsableResponse = operations['agents___styles___list-usable']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type AgentsStylesPublicListRequest = operations['agents___styles___public-list']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AgentsStylesPublicListResponse = operations['agents___styles___public-list']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type AgentsStylesPublishRequest = operations['agents___styles___publish']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AgentsStylesPublishResponse = operations['agents___styles___publish']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type AgentsStylesShowRequest = operations['agents___styles___show']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AgentsStylesShowResponse = operations['agents___styles___show']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type AgentsStylesSubscribeRequest = operations['agents___styles___subscribe']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AgentsStylesSubscribeResponse = operations['agents___styles___subscribe']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type AgentsStylesUnpublishRequest = operations['agents___styles___unpublish']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AgentsStylesUnpublishResponse = operations['agents___styles___unpublish']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type AgentsStylesUnsubscribeRequest = operations['agents___styles___unsubscribe']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AgentsStylesUnsubscribeResponse = operations['agents___styles___unsubscribe']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type AgentsStylesUpdateRequest = operations['agents___styles___update']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AgentsStylesUpdateResponse = operations['agents___styles___update']['responses']['200']['content']['application/json'];
 
 // @public (undocumented)
 type Announcement = components['schemas']['Announcement'];
@@ -1177,6 +1396,9 @@ type ChatRoomsJoiningResponse = operations['chat___rooms___joining']['responses'
 type ChatRoomsJoinRequest = operations['chat___rooms___join']['requestBody']['content']['application/json'];
 
 // @public (undocumented)
+type ChatRoomsKickRequest = operations['chat___rooms___kick']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
 type ChatRoomsLeaveRequest = operations['chat___rooms___leave']['requestBody']['content']['application/json'];
 
 // @public (undocumented)
@@ -1195,10 +1417,22 @@ type ChatRoomsOwnedRequest = operations['chat___rooms___owned']['requestBody']['
 type ChatRoomsOwnedResponse = operations['chat___rooms___owned']['responses']['200']['content']['application/json'];
 
 // @public (undocumented)
+type ChatRoomsSearchRequest = operations['chat___rooms___search']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type ChatRoomsSearchResponse = operations['chat___rooms___search']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
 type ChatRoomsShowRequest = operations['chat___rooms___show']['requestBody']['content']['application/json'];
 
 // @public (undocumented)
 type ChatRoomsShowResponse = operations['chat___rooms___show']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type ChatRoomsSuspendRequest = operations['chat___rooms___suspend']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type ChatRoomsUnsuspendRequest = operations['chat___rooms___unsuspend']['requestBody']['content']['application/json'];
 
 // @public (undocumented)
 type ChatRoomsUpdateRequest = operations['chat___rooms___update']['requestBody']['content']['application/json'];
@@ -1535,6 +1769,16 @@ declare namespace entities {
         AdminAdListRequest,
         AdminAdListResponse,
         AdminAdUpdateRequest,
+        AdminAgentsMessagesListRequest,
+        AdminAgentsMessagesListResponse,
+        AdminAgentsMessagesTimelineRequest,
+        AdminAgentsMessagesTimelineResponse,
+        AdminAgentsReviewListPendingResponse,
+        AdminAgentsReviewPendingExistsResponse,
+        AdminAgentsReviewResolveRequest,
+        AdminAgentsReviewResolveResponse,
+        AdminAgentsSessionsListRequest,
+        AdminAgentsSessionsListResponse,
         AdminAnnouncementsCreateRequest,
         AdminAnnouncementsCreateResponse,
         AdminAnnouncementsDeleteRequest,
@@ -1586,6 +1830,7 @@ declare namespace entities {
         AdminInviteListRequest,
         AdminInviteListResponse,
         AdminMetaResponse,
+        AdminMigrateFeaturedRankingResponse,
         AdminPromoCreateRequest,
         AdminQueueClearRequest,
         AdminQueueDeliverDelayedResponse,
@@ -1649,6 +1894,68 @@ declare namespace entities {
         AdminUpdateProxyAccountRequest,
         AdminUpdateProxyAccountResponse,
         AdminUpdateUserNoteRequest,
+        AgentsCharactersCreateRequest,
+        AgentsCharactersCreateResponse,
+        AgentsCharactersDeleteRequest,
+        AgentsCharactersDeleteResponse,
+        AgentsCharactersListMineResponse,
+        AgentsCharactersPublicListRequest,
+        AgentsCharactersPublicListResponse,
+        AgentsCharactersPublishRequest,
+        AgentsCharactersPublishResponse,
+        AgentsCharactersShowRequest,
+        AgentsCharactersShowResponse,
+        AgentsCharactersUnpublishRequest,
+        AgentsCharactersUnpublishResponse,
+        AgentsCharactersUpdateRequest,
+        AgentsCharactersUpdateResponse,
+        AgentsMemoryAddRequest,
+        AgentsMemoryAddResponse,
+        AgentsMemoryDeleteRequest,
+        AgentsMemoryDeleteResponse,
+        AgentsMemoryListRequest,
+        AgentsMemoryListResponse,
+        AgentsMemoryUpdateRequest,
+        AgentsMemoryUpdateResponse,
+        AgentsMessagesDeleteRequest,
+        AgentsMessagesDeleteResponse,
+        AgentsMessagesSearchRequest,
+        AgentsMessagesSearchResponse,
+        AgentsMessagesSendRequest,
+        AgentsMessagesSendResponse,
+        AgentsMessagesShowRequest,
+        AgentsMessagesShowResponse,
+        AgentsMessagesTimelineRequest,
+        AgentsMessagesTimelineResponse,
+        AgentsSessionsCreateRequest,
+        AgentsSessionsCreateResponse,
+        AgentsSessionsListMineResponse,
+        AgentsSessionsShowRequest,
+        AgentsSessionsShowResponse,
+        AgentsSessionsContextWindowRequest,
+        AgentsSessionsContextWindowResponse,
+        AgentsSessionsUpdateRequest,
+        AgentsSessionsUpdateResponse,
+        AgentsStylesCreateRequest,
+        AgentsStylesCreateResponse,
+        AgentsStylesDeleteRequest,
+        AgentsStylesDeleteResponse,
+        AgentsStylesListMineResponse,
+        AgentsStylesListUsableResponse,
+        AgentsStylesPublicListRequest,
+        AgentsStylesPublicListResponse,
+        AgentsStylesPublishRequest,
+        AgentsStylesPublishResponse,
+        AgentsStylesShowRequest,
+        AgentsStylesShowResponse,
+        AgentsStylesSubscribeRequest,
+        AgentsStylesSubscribeResponse,
+        AgentsStylesUnpublishRequest,
+        AgentsStylesUnpublishResponse,
+        AgentsStylesUnsubscribeRequest,
+        AgentsStylesUnsubscribeResponse,
+        AgentsStylesUpdateRequest,
+        AgentsStylesUpdateResponse,
         AnnouncementsRequest,
         AnnouncementsResponse,
         AnnouncementsShowRequest,
@@ -1764,14 +2071,19 @@ declare namespace entities {
         ChatRoomsJoinRequest,
         ChatRoomsJoiningRequest,
         ChatRoomsJoiningResponse,
+        ChatRoomsKickRequest,
         ChatRoomsLeaveRequest,
         ChatRoomsMembersRequest,
         ChatRoomsMembersResponse,
         ChatRoomsMuteRequest,
         ChatRoomsOwnedRequest,
         ChatRoomsOwnedResponse,
+        ChatRoomsSearchRequest,
+        ChatRoomsSearchResponse,
         ChatRoomsShowRequest,
         ChatRoomsShowResponse,
+        ChatRoomsSuspendRequest,
+        ChatRoomsUnsuspendRequest,
         ChatRoomsUpdateRequest,
         ChatRoomsUpdateResponse,
         ClipsAddNoteRequest,
@@ -1993,6 +2305,10 @@ declare namespace entities {
         MetaResponse,
         MiauthGenTokenRequest,
         MiauthGenTokenResponse,
+        MobilePushRegisterRequest,
+        MobilePushRegisterResponse,
+        MobilePushUnregisterRequest,
+        MobilePushUnregisterResponse,
         MuteCreateRequest,
         MuteDeleteRequest,
         MuteListRequest,
@@ -2846,6 +3162,18 @@ type MiauthGenTokenRequest = operations['miauth___gen-token']['requestBody']['co
 type MiauthGenTokenResponse = operations['miauth___gen-token']['responses']['200']['content']['application/json'];
 
 // @public (undocumented)
+type MobilePushRegisterRequest = operations['mobile-push___register']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type MobilePushRegisterResponse = operations['mobile-push___register']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type MobilePushUnregisterRequest = operations['mobile-push___unregister']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type MobilePushUnregisterResponse = operations['mobile-push___unregister']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
 type ModerationLog = {
     id: ID;
     createdAt: DateString;
@@ -3251,7 +3579,7 @@ type Notification_2 = components['schemas']['Notification'];
 type NotificationsCreateRequest = operations['notifications___create']['requestBody']['content']['application/json'];
 
 // @public (undocumented)
-export const notificationTypes: readonly ["note", "follow", "mention", "reply", "renote", "quote", "reaction", "pollEnded", "scheduledNotePosted", "scheduledNotePostFailed", "receiveFollowRequest", "followRequestAccepted", "app", "roleAssigned", "chatRoomInvitationReceived", "achievementEarned", "exportCompleted", "test", "login", "createToken"];
+export const notificationTypes: readonly ["note", "follow", "mention", "reply", "renote", "quote", "reaction", "pollEnded", "scheduledNotePosted", "scheduledNotePostFailed", "receiveFollowRequest", "followRequestAccepted", "app", "roleAssigned", "chatRoomInvitationReceived", "chatRoomMemberJoined", "chatRoomKicked", "chatRoomSuspended", "chatRoomUnsuspended", "achievementEarned", "exportCompleted", "test", "login", "createToken"];
 
 // @public (undocumented)
 export function nyaize(text: string): string;
