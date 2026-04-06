@@ -9,6 +9,18 @@ import { apiUrl } from '@@/js/config.js';
 import { $i } from '@/i.js';
 export const pendingApiRequestsCount = ref(0);
 
+/** Use in catch() when misskeyApi rejects with `{ message, code, id, info? }` — avoid String(err) → "[object Object]". */
+export function formatApiError(err: unknown): string {
+	if (err != null && typeof err === 'object' && 'message' in err) {
+		const o = err as { message?: unknown; code?: string; info?: unknown };
+		if (typeof o.message === 'string') {
+			const code = o.code ? ` (${o.code})` : '';
+			return o.message + code;
+		}
+	}
+	return String(err);
+}
+
 // Implements Misskey.api.ApiClient.request
 export function misskeyApi<
 	ResT = void,

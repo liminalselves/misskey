@@ -18,26 +18,28 @@ SPDX-License-Identifier: AGPL-3.0-only
 		</div>
 		<button class="_button" :class="$style.replyCancelBtn" @click="cancelReply"><i class="ti ti-x"></i></button>
 	</div>
-	<textarea
-		ref="textareaEl"
-		v-model="text"
-		:class="$style.textarea"
-		class="_acrylic"
-		:placeholder="i18n.ts.inputMessageHere"
-		:readonly="textareaReadOnly"
-		@keydown="onKeydown"
-		@paste="onPaste"
-	></textarea>
-	<footer :class="$style.footer">
-		<div v-if="file" :class="$style.file" @click="file = null">{{ file.name }}</div>
-		<div :class="$style.buttons">
-			<button class="_button" :class="$style.button" @click="chooseFile"><i class="ti ti-photo-plus"></i></button>
-			<button class="_button" :class="$style.button" @click="insertEmoji"><i class="ti ti-mood-happy"></i></button>
-			<button class="_button" :class="[$style.button, $style.send]" :disabled="!canSend || sending" :title="i18n.ts.send" @click="send">
-				<template v-if="!sending"><i class="ti ti-send"></i></template><template v-if="sending"><MkLoading :em="true"/></template>
-			</button>
-		</div>
-	</footer>
+	<div v-if="file" :class="$style.file" @click="file = null">{{ file.name }}</div>
+	<div :class="$style.compose">
+		<textarea
+			ref="textareaEl"
+			v-model="text"
+			:class="$style.textarea"
+			class="_acrylic"
+			:placeholder="i18n.ts.inputMessageHere"
+			:readonly="textareaReadOnly"
+			@keydown="onKeydown"
+			@paste="onPaste"
+		></textarea>
+		<footer :class="$style.footer">
+			<div :class="$style.buttons">
+				<button class="_button" :class="$style.button" @click="chooseFile"><i class="ti ti-photo-plus"></i></button>
+				<button class="_button" :class="$style.button" @click="insertEmoji"><i class="ti ti-mood-happy"></i></button>
+				<button class="_button" :class="[$style.button, $style.send]" :disabled="!canSend || sending" :title="i18n.ts.send" @click="send">
+					<template v-if="!sending"><i class="ti ti-send"></i></template><template v-if="sending"><MkLoading :em="true"/></template>
+				</button>
+			</div>
+		</footer>
+	</div>
 	<input ref="fileEl" style="display: none;" type="file" @change="onChangeFile"/>
 </div>
 </template>
@@ -359,6 +361,13 @@ onBeforeUnmount(() => {
 	overflow: clip;
 }
 
+.compose {
+	display: flex;
+	flex-direction: column;
+	width: 100%;
+	min-width: 0;
+}
+
 .textarea {
 	cursor: auto;
 	display: block;
@@ -389,15 +398,18 @@ onBeforeUnmount(() => {
 .file {
 	padding: 8px;
 	cursor: pointer;
+	background: var(--MI_THEME-panel);
 }
 
 .buttons {
 	display: flex;
+	align-items: center;
 }
 
 .button {
 	height: 50px;
 	aspect-ratio: 1;
+	flex-shrink: 0;
 
 	&:hover {
 		color: var(--MI_THEME-accent);
@@ -406,6 +418,91 @@ onBeforeUnmount(() => {
 .send {
 	margin-left: auto;
 	color: var(--MI_THEME-accent);
+}
+
+@media (max-width: 500px) {
+	.root {
+		border-radius: 10px 10px 0 0;
+	}
+
+	.compose {
+		flex-direction: row;
+		align-items: flex-end;
+		gap: 8px;
+		padding: 8px 12px;
+		padding-bottom: max(8px, env(safe-area-inset-bottom, 0px));
+		background: var(--MI_THEME-panel);
+	}
+
+	/* 覆盖全局 _acrylic，避免底栏里出现半透明模糊块 */
+	.textarea:global(._acrylic) {
+		min-height: 36px;
+		max-height: 76px;
+		min-width: 0;
+		flex: 1;
+		width: auto;
+		padding: 7px 12px;
+		border-radius: 18px;
+		border: none;
+		overflow-y: auto;
+		line-height: 1.4;
+		align-self: flex-end;
+		background: color-mix(in srgb, var(--MI_THEME-fg) 6%, var(--MI_THEME-panel));
+		box-shadow: inset 0 0 0 0.5px color-mix(in srgb, var(--MI_THEME-divider) 70%, transparent);
+		-webkit-backdrop-filter: none;
+		backdrop-filter: none;
+	}
+
+	.footer {
+		position: static;
+		background: transparent;
+		flex-shrink: 0;
+		padding-bottom: 1px;
+	}
+
+	.buttons {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 2px;
+	}
+
+	.button {
+		height: 36px;
+		width: 36px;
+		min-width: 36px;
+		aspect-ratio: 1;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		border-radius: 10px;
+		color: color-mix(in srgb, var(--MI_THEME-fg) 72%, transparent);
+
+		&:hover,
+		&:focus-visible {
+			color: var(--MI_THEME-accent);
+			background: color-mix(in srgb, var(--MI_THEME-fg) 6%, transparent);
+		}
+	}
+
+	.send {
+		margin-left: 0;
+		color: color-mix(in srgb, var(--MI_THEME-fg) 72%, transparent);
+
+		&:not(:disabled) {
+			color: var(--MI_THEME-accent);
+		}
+
+		&:disabled {
+			opacity: 0.38;
+			color: color-mix(in srgb, var(--MI_THEME-fg) 50%, transparent);
+		}
+	}
+
+	.file {
+		padding: 6px 12px;
+		font-size: 0.9em;
+	}
 }
 
 .replyPreview {

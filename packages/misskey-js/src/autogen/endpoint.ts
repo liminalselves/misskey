@@ -23,6 +23,16 @@ import type {
 	AdminAdListRequest,
 	AdminAdListResponse,
 	AdminAdUpdateRequest,
+	AdminAgentsMessagesListRequest,
+	AdminAgentsMessagesListResponse,
+	AdminAgentsMessagesTimelineRequest,
+	AdminAgentsMessagesTimelineResponse,
+	AdminAgentsReviewListPendingResponse,
+	AdminAgentsReviewPendingExistsResponse,
+	AdminAgentsReviewResolveRequest,
+	AdminAgentsReviewResolveResponse,
+	AdminAgentsSessionsListRequest,
+	AdminAgentsSessionsListResponse,
 	AdminAnnouncementsCreateRequest,
 	AdminAnnouncementsCreateResponse,
 	AdminAnnouncementsDeleteRequest,
@@ -74,6 +84,7 @@ import type {
 	AdminInviteListRequest,
 	AdminInviteListResponse,
 	AdminMetaResponse,
+	AdminMigrateFeaturedRankingResponse,
 	AdminPromoCreateRequest,
 	AdminQueueClearRequest,
 	AdminQueueDeliverDelayedResponse,
@@ -137,6 +148,68 @@ import type {
 	AdminUpdateProxyAccountRequest,
 	AdminUpdateProxyAccountResponse,
 	AdminUpdateUserNoteRequest,
+	AgentsCharactersCreateRequest,
+	AgentsCharactersCreateResponse,
+	AgentsCharactersDeleteRequest,
+	AgentsCharactersDeleteResponse,
+	AgentsCharactersListMineResponse,
+	AgentsCharactersPublicListRequest,
+	AgentsCharactersPublicListResponse,
+	AgentsCharactersPublishRequest,
+	AgentsCharactersPublishResponse,
+	AgentsCharactersShowRequest,
+	AgentsCharactersShowResponse,
+	AgentsCharactersUnpublishRequest,
+	AgentsCharactersUnpublishResponse,
+	AgentsCharactersUpdateRequest,
+	AgentsCharactersUpdateResponse,
+	AgentsMemoryAddRequest,
+	AgentsMemoryAddResponse,
+	AgentsMemoryDeleteRequest,
+	AgentsMemoryDeleteResponse,
+	AgentsMemoryListRequest,
+	AgentsMemoryListResponse,
+	AgentsMemoryUpdateRequest,
+	AgentsMemoryUpdateResponse,
+	AgentsMessagesDeleteRequest,
+	AgentsMessagesDeleteResponse,
+	AgentsMessagesSearchRequest,
+	AgentsMessagesSearchResponse,
+	AgentsMessagesSendRequest,
+	AgentsMessagesSendResponse,
+	AgentsMessagesShowRequest,
+	AgentsMessagesShowResponse,
+	AgentsMessagesTimelineRequest,
+	AgentsMessagesTimelineResponse,
+	AgentsSessionsCreateRequest,
+	AgentsSessionsCreateResponse,
+	AgentsSessionsListMineResponse,
+	AgentsSessionsShowRequest,
+	AgentsSessionsShowResponse,
+	AgentsSessionsContextWindowRequest,
+	AgentsSessionsContextWindowResponse,
+	AgentsSessionsUpdateRequest,
+	AgentsSessionsUpdateResponse,
+	AgentsStylesCreateRequest,
+	AgentsStylesCreateResponse,
+	AgentsStylesDeleteRequest,
+	AgentsStylesDeleteResponse,
+	AgentsStylesListMineResponse,
+	AgentsStylesListUsableResponse,
+	AgentsStylesPublicListRequest,
+	AgentsStylesPublicListResponse,
+	AgentsStylesPublishRequest,
+	AgentsStylesPublishResponse,
+	AgentsStylesShowRequest,
+	AgentsStylesShowResponse,
+	AgentsStylesSubscribeRequest,
+	AgentsStylesSubscribeResponse,
+	AgentsStylesUnpublishRequest,
+	AgentsStylesUnpublishResponse,
+	AgentsStylesUnsubscribeRequest,
+	AgentsStylesUnsubscribeResponse,
+	AgentsStylesUpdateRequest,
+	AgentsStylesUpdateResponse,
 	AnnouncementsRequest,
 	AnnouncementsResponse,
 	AnnouncementsShowRequest,
@@ -252,14 +325,19 @@ import type {
 	ChatRoomsJoinRequest,
 	ChatRoomsJoiningRequest,
 	ChatRoomsJoiningResponse,
+	ChatRoomsKickRequest,
 	ChatRoomsLeaveRequest,
 	ChatRoomsMembersRequest,
 	ChatRoomsMembersResponse,
 	ChatRoomsMuteRequest,
 	ChatRoomsOwnedRequest,
 	ChatRoomsOwnedResponse,
+	ChatRoomsSearchRequest,
+	ChatRoomsSearchResponse,
 	ChatRoomsShowRequest,
 	ChatRoomsShowResponse,
+	ChatRoomsSuspendRequest,
+	ChatRoomsUnsuspendRequest,
 	ChatRoomsUpdateRequest,
 	ChatRoomsUpdateResponse,
 	ClipsAddNoteRequest,
@@ -481,6 +559,10 @@ import type {
 	MetaResponse,
 	MiauthGenTokenRequest,
 	MiauthGenTokenResponse,
+	MobilePushRegisterRequest,
+	MobilePushRegisterResponse,
+	MobilePushUnregisterRequest,
+	MobilePushUnregisterResponse,
 	MuteCreateRequest,
 	MuteDeleteRequest,
 	MuteListRequest,
@@ -675,6 +757,12 @@ export type Endpoints = {
 	'admin/ad/delete': { req: AdminAdDeleteRequest; res: EmptyResponse };
 	'admin/ad/list': { req: AdminAdListRequest; res: AdminAdListResponse };
 	'admin/ad/update': { req: AdminAdUpdateRequest; res: EmptyResponse };
+	'admin/agents/messages/list': { req: AdminAgentsMessagesListRequest; res: AdminAgentsMessagesListResponse };
+	'admin/agents/messages/timeline': { req: AdminAgentsMessagesTimelineRequest; res: AdminAgentsMessagesTimelineResponse };
+	'admin/agents/review/list-pending': { req: EmptyRequest; res: AdminAgentsReviewListPendingResponse };
+	'admin/agents/review/pending-exists': { req: EmptyRequest; res: AdminAgentsReviewPendingExistsResponse };
+	'admin/agents/review/resolve': { req: AdminAgentsReviewResolveRequest; res: AdminAgentsReviewResolveResponse };
+	'admin/agents/sessions/list': { req: AdminAgentsSessionsListRequest; res: AdminAgentsSessionsListResponse };
 	'admin/announcements/create': { req: AdminAnnouncementsCreateRequest; res: AdminAnnouncementsCreateResponse };
 	'admin/announcements/delete': { req: AdminAnnouncementsDeleteRequest; res: EmptyResponse };
 	'admin/announcements/list': { req: AdminAnnouncementsListRequest; res: AdminAnnouncementsListResponse };
@@ -715,6 +803,7 @@ export type Endpoints = {
 	'admin/invite/create': { req: AdminInviteCreateRequest; res: AdminInviteCreateResponse };
 	'admin/invite/list': { req: AdminInviteListRequest; res: AdminInviteListResponse };
 	'admin/meta': { req: EmptyRequest; res: AdminMetaResponse };
+	'admin/migrate-featured-ranking': { req: EmptyRequest; res: AdminMigrateFeaturedRankingResponse };
 	'admin/promo/create': { req: AdminPromoCreateRequest; res: EmptyResponse };
 	'admin/queue/clear': { req: AdminQueueClearRequest; res: EmptyResponse };
 	'admin/queue/deliver-delayed': { req: EmptyRequest; res: AdminQueueDeliverDelayedResponse };
@@ -761,6 +850,39 @@ export type Endpoints = {
 	'admin/update-meta': { req: AdminUpdateMetaRequest; res: EmptyResponse };
 	'admin/update-proxy-account': { req: AdminUpdateProxyAccountRequest; res: AdminUpdateProxyAccountResponse };
 	'admin/update-user-note': { req: AdminUpdateUserNoteRequest; res: EmptyResponse };
+	'agents/characters/create': { req: AgentsCharactersCreateRequest; res: AgentsCharactersCreateResponse };
+	'agents/characters/delete': { req: AgentsCharactersDeleteRequest; res: AgentsCharactersDeleteResponse };
+	'agents/characters/list-mine': { req: EmptyRequest; res: AgentsCharactersListMineResponse };
+	'agents/characters/public-list': { req: AgentsCharactersPublicListRequest; res: AgentsCharactersPublicListResponse };
+	'agents/characters/publish': { req: AgentsCharactersPublishRequest; res: AgentsCharactersPublishResponse };
+	'agents/characters/show': { req: AgentsCharactersShowRequest; res: AgentsCharactersShowResponse };
+	'agents/characters/unpublish': { req: AgentsCharactersUnpublishRequest; res: AgentsCharactersUnpublishResponse };
+	'agents/characters/update': { req: AgentsCharactersUpdateRequest; res: AgentsCharactersUpdateResponse };
+	'agents/memory/add': { req: AgentsMemoryAddRequest; res: AgentsMemoryAddResponse };
+	'agents/memory/delete': { req: AgentsMemoryDeleteRequest; res: AgentsMemoryDeleteResponse };
+	'agents/memory/list': { req: AgentsMemoryListRequest; res: AgentsMemoryListResponse };
+	'agents/memory/update': { req: AgentsMemoryUpdateRequest; res: AgentsMemoryUpdateResponse };
+	'agents/messages/delete': { req: AgentsMessagesDeleteRequest; res: AgentsMessagesDeleteResponse };
+	'agents/messages/search': { req: AgentsMessagesSearchRequest; res: AgentsMessagesSearchResponse };
+	'agents/messages/send': { req: AgentsMessagesSendRequest; res: AgentsMessagesSendResponse };
+	'agents/messages/show': { req: AgentsMessagesShowRequest; res: AgentsMessagesShowResponse };
+	'agents/messages/timeline': { req: AgentsMessagesTimelineRequest; res: AgentsMessagesTimelineResponse };
+	'agents/sessions/create': { req: AgentsSessionsCreateRequest; res: AgentsSessionsCreateResponse };
+	'agents/sessions/list-mine': { req: EmptyRequest; res: AgentsSessionsListMineResponse };
+	'agents/sessions/show': { req: AgentsSessionsShowRequest; res: AgentsSessionsShowResponse };
+	'agents/sessions/context-window': { req: AgentsSessionsContextWindowRequest; res: AgentsSessionsContextWindowResponse };
+	'agents/sessions/update': { req: AgentsSessionsUpdateRequest; res: AgentsSessionsUpdateResponse };
+	'agents/styles/create': { req: AgentsStylesCreateRequest; res: AgentsStylesCreateResponse };
+	'agents/styles/delete': { req: AgentsStylesDeleteRequest; res: AgentsStylesDeleteResponse };
+	'agents/styles/list-mine': { req: EmptyRequest; res: AgentsStylesListMineResponse };
+	'agents/styles/list-usable': { req: EmptyRequest; res: AgentsStylesListUsableResponse };
+	'agents/styles/public-list': { req: AgentsStylesPublicListRequest; res: AgentsStylesPublicListResponse };
+	'agents/styles/publish': { req: AgentsStylesPublishRequest; res: AgentsStylesPublishResponse };
+	'agents/styles/show': { req: AgentsStylesShowRequest; res: AgentsStylesShowResponse };
+	'agents/styles/subscribe': { req: AgentsStylesSubscribeRequest; res: AgentsStylesSubscribeResponse };
+	'agents/styles/unpublish': { req: AgentsStylesUnpublishRequest; res: AgentsStylesUnpublishResponse };
+	'agents/styles/unsubscribe': { req: AgentsStylesUnsubscribeRequest; res: AgentsStylesUnsubscribeResponse };
+	'agents/styles/update': { req: AgentsStylesUpdateRequest; res: AgentsStylesUpdateResponse };
 	'announcements': { req: AnnouncementsRequest; res: AnnouncementsResponse };
 	'announcements/show': { req: AnnouncementsShowRequest; res: AnnouncementsShowResponse };
 	'antennas/create': { req: AntennasCreateRequest; res: AntennasCreateResponse };
@@ -829,11 +951,15 @@ export type Endpoints = {
 	'chat/rooms/invitations/outbox': { req: ChatRoomsInvitationsOutboxRequest; res: ChatRoomsInvitationsOutboxResponse };
 	'chat/rooms/join': { req: ChatRoomsJoinRequest; res: EmptyResponse };
 	'chat/rooms/joining': { req: ChatRoomsJoiningRequest; res: ChatRoomsJoiningResponse };
+	'chat/rooms/kick': { req: ChatRoomsKickRequest; res: EmptyResponse };
 	'chat/rooms/leave': { req: ChatRoomsLeaveRequest; res: EmptyResponse };
 	'chat/rooms/members': { req: ChatRoomsMembersRequest; res: ChatRoomsMembersResponse };
 	'chat/rooms/mute': { req: ChatRoomsMuteRequest; res: EmptyResponse };
 	'chat/rooms/owned': { req: ChatRoomsOwnedRequest; res: ChatRoomsOwnedResponse };
+	'chat/rooms/search': { req: ChatRoomsSearchRequest; res: ChatRoomsSearchResponse };
 	'chat/rooms/show': { req: ChatRoomsShowRequest; res: ChatRoomsShowResponse };
+	'chat/rooms/suspend': { req: ChatRoomsSuspendRequest; res: EmptyResponse };
+	'chat/rooms/unsuspend': { req: ChatRoomsUnsuspendRequest; res: EmptyResponse };
 	'chat/rooms/update': { req: ChatRoomsUpdateRequest; res: ChatRoomsUpdateResponse };
 	'clips/add-note': { req: ClipsAddNoteRequest; res: EmptyResponse };
 	'clips/create': { req: ClipsCreateRequest; res: ClipsCreateResponse };
@@ -980,6 +1106,8 @@ export type Endpoints = {
 	'invite/list': { req: InviteListRequest; res: InviteListResponse };
 	'meta': { req: MetaRequest; res: MetaResponse };
 	'miauth/gen-token': { req: MiauthGenTokenRequest; res: MiauthGenTokenResponse };
+	'mobile-push/register': { req: MobilePushRegisterRequest; res: MobilePushRegisterResponse };
+	'mobile-push/unregister': { req: MobilePushUnregisterRequest; res: MobilePushUnregisterResponse };
 	'mute/create': { req: MuteCreateRequest; res: EmptyResponse };
 	'mute/delete': { req: MuteDeleteRequest; res: EmptyResponse };
 	'mute/list': { req: MuteListRequest; res: MuteListResponse };

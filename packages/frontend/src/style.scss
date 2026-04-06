@@ -428,6 +428,24 @@ rt {
 	backdrop-filter: var(--MI-blur, blur(15px));
 }
 
+/* 智能体广场 / 创作卡片等：状态标签（已加入、我的 等） */
+._acrylicBadge {
+	display: inline-flex;
+	align-items: center;
+	box-sizing: border-box;
+	padding: 4px 10px;
+	font-size: 0.78em;
+	font-weight: 600;
+	line-height: 1.2;
+	letter-spacing: 0.02em;
+	color: var(--MI_THEME-fg);
+	background: color(from var(--MI_THEME-panel) srgb r g b / 0.55);
+	border: solid 1px var(--MI_THEME-divider);
+	border-radius: 999px;
+	-webkit-backdrop-filter: var(--MI-blur, blur(10px));
+	backdrop-filter: var(--MI-blur, blur(10px));
+}
+
 ._formLinksGrid {
 	display: grid;
 	grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));

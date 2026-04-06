@@ -145,7 +145,7 @@ async function suspend(membership: any) {
 			{ value: 0, label: chatI18n._suspendDuration.permanent },
 		],
 	});
-	if (canceled) return;
+	if (canceled || result == null) return;
 
 	let expiredAt: string;
 	if (result === 0) {

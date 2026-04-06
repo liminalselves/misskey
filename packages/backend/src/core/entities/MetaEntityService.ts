@@ -15,6 +15,7 @@ import { SystemAccountService } from '@/core/SystemAccountService.js';
 import type { Config } from '@/config.js';
 import { DI } from '@/di-symbols.js';
 import { DEFAULT_POLICIES } from '@/core/RoleService.js';
+import { getEffectiveLlmModels, isAgentLlmRunnable, packPublicAgentModels, packedAgentMaxContextTokens, packedAgentMaxOutputTokensPerCall } from '@/misc/agent-llm-models.js';
 
 @Injectable()
 export class MetaEntityService {
@@ -64,6 +65,10 @@ export class MetaEntityService {
 			} catch (_) {
 			}
 		}
+
+		const effAgentModels = getEffectiveLlmModels(instance);
+		const defAgentModelId = instance.agentDefaultModelId?.trim() || effAgentModels[0]?.id || null;
+		const defAgentModel = defAgentModelId ? effAgentModels.find(m => m.id === defAgentModelId) ?? effAgentModels[0] : effAgentModels[0];
 
 		const packed: Packed<'MetaLite'> = {
 			maintainerName: instance.maintainerName,
@@ -134,7 +139,37 @@ export class MetaEntityService {
 			enableUrlPreview: instance.urlPreviewEnabled,
 			noteSearchableScope: (this.config.meilisearch == null || this.config.meilisearch.scope !== 'local') ? 'global' : 'local',
 			maxFileSize: this.config.maxFileSize,
-			federation: this.meta.federation,
+			federation: instance.federation,
+			nativeClientAppInfo: (() => {
+				const n = instance.nativeClientAppInfo ?? {};
+				return {
+					latestAndroidVersion: n.latestAndroidVersion ?? null,
+					latestIosVersion: n.latestIosVersion ?? null,
+					androidDownloadUrl: n.androidDownloadUrl ?? null,
+					iosDownloadUrl: n.iosDownloadUrl ?? null,
+					releaseNotesUrl: n.releaseNotesUrl ?? null,
+					announcement: n.announcement ?? null,
+				};
+			})(),
+			agentFeatureEnabled: instance.agentFeatureEnabled,
+			agentModelDisplayName: defAgentModel?.name ?? null,
+			agentModelDescription: defAgentModel?.description ?? null,
+			agentMaxContextTokens: packedAgentMaxContextTokens(instance),
+			agentMaxOutputTokensPerCall: packedAgentMaxOutputTokensPerCall(instance),
+			agentModels: packPublicAgentModels(instance),
+			agentDefaultModelId: instance.agentDefaultModelId ?? effAgentModels[0]?.id ?? null,
+			agentLlmConfigured: isAgentLlmRunnable(instance),
+			agentLongMemoryConfigured: instance.agentMem0Enabled === true && (instance.agentMem0ApiKey?.trim().length ?? 0) > 0,
+			agentMem0AddMemoryMaxRounds: (() => {
+				const v = Math.trunc(Number(instance.agentMem0AddMemoryMaxRounds));
+				if (!Number.isFinite(v)) return 3;
+				return Math.max(1, Math.min(24, v));
+			})(),
+			agentMem0AddMemoryEveryNRounds: (() => {
+				const v = Math.trunc(Number(instance.agentMem0AddMemoryEveryNRounds));
+				if (!Number.isFinite(v)) return 1;
+				return Math.max(1, Math.min(48, v));
+			})(),
 		};
 
 		return packed;

@@ -146,39 +146,6 @@ SPDX-License-Identifier: AGPL-3.0-only
 					</MkFolder>
 				</SearchMarker>
 
-				<SearchMarker v-slot="slotProps" :keywords="['aliyun', 'push', 'mobile', 'EMAS', 'native']">
-					<MkFolder :defaultOpen="slotProps.isParentOfTarget">
-						<template #icon><SearchIcon><i class="ti ti-device-mobile"></i></SearchIcon></template>
-						<template #label><SearchLabel>{{ i18n.ts.aliyunMobilePush }}</SearchLabel></template>
-						<template v-if="aliyunMobilePushForm.modified.value" #footer>
-							<MkFormFooter :form="aliyunMobilePushForm"/>
-						</template>
-
-						<div class="_gaps">
-							<MkInfo>{{ i18n.ts.aliyunMobilePushDescription }}</MkInfo>
-							<SearchMarker>
-								<MkInput v-model="aliyunMobilePushForm.state.aliyunMobilePushAccessKeyId">
-									<template #label><SearchLabel>{{ i18n.ts.aliyunMobilePushAccessKeyId }}</SearchLabel><span v-if="aliyunMobilePushForm.modifiedStates.aliyunMobilePushAccessKeyId" class="_modified">{{ i18n.ts.modified }}</span></template>
-									<template #prefix><i class="ti ti-key"></i></template>
-								</MkInput>
-							</SearchMarker>
-							<SearchMarker>
-								<MkInput v-model="aliyunMobilePushForm.state.aliyunMobilePushAccessKeySecret" type="password">
-									<template #label><SearchLabel>{{ i18n.ts.aliyunMobilePushAccessKeySecret }}</SearchLabel><span v-if="aliyunMobilePushForm.modifiedStates.aliyunMobilePushAccessKeySecret" class="_modified">{{ i18n.ts.modified }}</span></template>
-									<template #prefix><i class="ti ti-key"></i></template>
-								</MkInput>
-							</SearchMarker>
-							<SearchMarker>
-								<MkInput v-model="aliyunMobilePushForm.state.aliyunMobilePushAppKey">
-									<template #label><SearchLabel>{{ i18n.ts.aliyunMobilePushAppKey }}</SearchLabel><span v-if="aliyunMobilePushForm.modifiedStates.aliyunMobilePushAppKey" class="_modified">{{ i18n.ts.modified }}</span></template>
-									<template #caption><SearchText>{{ i18n.ts.aliyunMobilePushAppKeyCaption }}</SearchText></template>
-									<template #prefix><i class="ti ti-apps"></i></template>
-								</MkInput>
-							</SearchMarker>
-						</div>
-					</MkFolder>
-				</SearchMarker>
-
 				<SearchMarker v-slot="slotProps" :keywords="['ads']">
 					<MkFolder :defaultOpen="slotProps.isParentOfTarget">
 						<template #icon><SearchIcon><i class="ti ti-ad"></i></SearchIcon></template>
@@ -477,19 +444,6 @@ const serviceWorkerForm = useForm({
 		enableServiceWorker: state.enableServiceWorker,
 		swPublicKey: state.swPublicKey,
 		swPrivateKey: state.swPrivateKey,
-	});
-	fetchInstance(true);
-});
-
-const aliyunMobilePushForm = useForm({
-	aliyunMobilePushAccessKeyId: meta.aliyunMobilePushAccessKeyId ?? '',
-	aliyunMobilePushAccessKeySecret: meta.aliyunMobilePushAccessKeySecret ?? '',
-	aliyunMobilePushAppKey: meta.aliyunMobilePushAppKey ?? '',
-}, async (state) => {
-	await os.apiWithDialog('admin/update-meta', {
-		aliyunMobilePushAccessKeyId: state.aliyunMobilePushAccessKeyId === '' ? null : state.aliyunMobilePushAccessKeyId,
-		aliyunMobilePushAccessKeySecret: state.aliyunMobilePushAccessKeySecret === '' ? null : state.aliyunMobilePushAccessKeySecret,
-		aliyunMobilePushAppKey: state.aliyunMobilePushAppKey === '' ? null : state.aliyunMobilePushAppKey,
 	});
 	fetchInstance(true);
 });

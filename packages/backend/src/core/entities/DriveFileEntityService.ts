@@ -88,12 +88,23 @@ export class DriveFileEntityService {
 		);
 	}
 
+	/** オブジェクトストレージの公開 URL を https に揃える（DB に http で残っている場合の表示用） */
+	@bindThis
+	private normalizeObjectStoragePublicUrl(url: string | null | undefined, file: MiDriveFile): string | null {
+		if (url == null || url === '') return url ?? null;
+		if (!this.meta.useObjectStorage || !this.meta.objectStorageForceHttps) return url;
+		if (file.userHost != null) return url;
+		if (!url.startsWith('http://')) return url;
+		return `https://${url.slice(7)}`;
+	}
+
 	@bindThis
 	public getThumbnailUrl(file: MiDriveFile): string | null {
 		if (file.type.startsWith('video')) {
-			if (file.thumbnailUrl) return file.thumbnailUrl;
+			if (file.thumbnailUrl) return this.normalizeObjectStoragePublicUrl(file.thumbnailUrl, file) ?? file.thumbnailUrl;
 
-			return this.videoProcessingService.getExternalVideoThumbnailUrl(file.webpublicUrl ?? file.url);
+			const src = file.webpublicUrl ?? file.url;
+			return this.videoProcessingService.getExternalVideoThumbnailUrl(this.normalizeObjectStoragePublicUrl(src, file) ?? src);
 		} else if (file.uri != null && file.userHost != null && this.config.externalMediaProxyEnabled) {
 			// 動画ではなくリモートかつメディアプロキシ
 			return this.getProxiedUrl(file.uri, 'static');
@@ -106,9 +117,11 @@ export class DriveFileEntityService {
 			return this.getProxiedUrl(file.uri, 'static');
 		}
 
-		const url = file.webpublicUrl ?? file.url;
-
-		return file.thumbnailUrl ?? (isMimeImage(file.type, 'sharp-convertible-image') ? url : null);
+		const baseUrl = this.normalizeObjectStoragePublicUrl(file.webpublicUrl ?? file.url, file) ?? (file.webpublicUrl ?? file.url);
+		if (file.thumbnailUrl) {
+			return this.normalizeObjectStoragePublicUrl(file.thumbnailUrl, file) ?? file.thumbnailUrl;
+		}
+		return isMimeImage(file.type, 'sharp-convertible-image') ? baseUrl : null;
 	}
 
 	@bindThis
@@ -129,7 +142,8 @@ export class DriveFileEntityService {
 			}
 		}
 
-		const url = file.webpublicUrl ?? file.url;
+		const raw = file.webpublicUrl ?? file.url;
+		const url = this.normalizeObjectStoragePublicUrl(raw, file) ?? raw;
 
 		if (mode === 'avatar') {
 			return this.getProxiedUrl(url, 'avatar');
@@ -209,7 +223,7 @@ export class DriveFileEntityService {
 			isSensitive: file.isSensitive,
 			blurhash: file.blurhash,
 			properties: opts.self ? file.properties : this.getPublicProperties(file),
-			url: opts.self ? file.url : this.getPublicUrl(file),
+			url: opts.self ? (this.normalizeObjectStoragePublicUrl(file.url, file) ?? file.url) : this.getPublicUrl(file),
 			thumbnailUrl: this.getThumbnailUrl(file),
 			comment: file.comment,
 			folderId: file.folderId,
@@ -248,7 +262,7 @@ export class DriveFileEntityService {
 			isSensitive: file.isSensitive,
 			blurhash: file.blurhash,
 			properties: opts.self ? file.properties : this.getPublicProperties(file),
-			url: opts.self ? file.url : this.getPublicUrl(file),
+			url: opts.self ? (this.normalizeObjectStoragePublicUrl(file.url, file) ?? file.url) : this.getPublicUrl(file),
 			thumbnailUrl: this.getThumbnailUrl(file),
 			comment: file.comment,
 			folderId: file.folderId,

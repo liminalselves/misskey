@@ -4,7 +4,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 -->
 
 <template>
-<PageWithHeader v-model:tab="src" :actions="headerActions" :tabs="$i ? headerTabs : headerTabsWhenNotLogin" :swipable="true" :displayMyAvatar="true" :canOmitTitle="true">
+<PageWithHeader v-model:tab="src" :actions="headerActions" :tabs="$i ? headerTabs : headerTabsWhenNotLogin" :swipable="true">
 	<div class="_spacer" style="--MI_SPACER-w: 800px;">
 		<MkTip v-if="isBasicTimeline(src)" :k="`tl.${src}`" style="margin-bottom: var(--MI-margin);">
 			{{ i18n.ts._timelineDescription[src] }}
@@ -264,43 +264,43 @@ const headerActions = computed<PageHeaderItem[]>(() => {
 	return items;
 });
 
+function timelineTabIcon(tl: BasicTimelineType): string {
+	return tl === 'home' ? 'ti ti-hash' : basicTimelineIconClass(tl);
+}
+
 const headerTabs = computed(() => [...(prefer.r.pinnedUserLists.value.map(l => ({
 	key: 'list:' + l.id,
 	title: l.name,
 	icon: 'ti ti-star',
-	iconOnly: true,
 }))), ...availableBasicTimelines().map(tl => ({
 	key: tl,
 	title: i18n.ts._timelines[tl],
-	icon: basicTimelineIconClass(tl),
-	iconOnly: true,
+	icon: timelineTabIcon(tl),
 })), {
 	icon: 'ti ti-list',
 	title: i18n.ts.lists,
-	iconOnly: true,
 	onClick: chooseList,
 }, {
 	icon: 'ti ti-antenna',
 	title: i18n.ts.antennas,
-	iconOnly: true,
 	onClick: chooseAntenna,
 }, {
 	icon: 'ti ti-device-tv',
 	title: i18n.ts.channel,
-	iconOnly: true,
 	onClick: chooseChannel,
 }] as Tab[]);
 
 const headerTabsWhenNotLogin = computed(() => [...availableBasicTimelines().map(tl => ({
 	key: tl,
 	title: i18n.ts._timelines[tl],
-	icon: basicTimelineIconClass(tl),
-	iconOnly: true,
+	icon: timelineTabIcon(tl),
 }))] as Tab[]);
 
 definePage(() => ({
 	title: i18n.ts.timeline,
-	icon: isBasicTimeline(src.value) ? basicTimelineIconClass(src.value) : 'ti ti-home',
+	icon: src.value === 'home'
+		? 'ti ti-hash'
+		: (isBasicTimeline(src.value) ? basicTimelineIconClass(src.value) : 'ti ti-hash'),
 }));
 </script>
 

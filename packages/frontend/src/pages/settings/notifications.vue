@@ -17,19 +17,19 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<template #label>{{ i18n.ts._notification._types[type] }}</template>
 					<template #suffix>
 						{{
-							$i.notificationRecieveConfig[type as (typeof configurableNotificationTypes)[number]]?.type === 'never' ? i18n.ts.none :
-							$i.notificationRecieveConfig[type as (typeof configurableNotificationTypes)[number]]?.type === 'following' ? i18n.ts.following :
-							$i.notificationRecieveConfig[type as (typeof configurableNotificationTypes)[number]]?.type === 'follower' ? i18n.ts.followers :
-							$i.notificationRecieveConfig[type as (typeof configurableNotificationTypes)[number]]?.type === 'mutualFollow' ? i18n.ts.mutualFollow :
-							$i.notificationRecieveConfig[type as (typeof configurableNotificationTypes)[number]]?.type === 'followingOrFollower' ? i18n.ts.followingOrFollower :
-							$i.notificationRecieveConfig[type as (typeof configurableNotificationTypes)[number]]?.type === 'list' ? i18n.ts.userList :
+							notificationReceiveFor(type)?.type === 'never' ? i18n.ts.none :
+							notificationReceiveFor(type)?.type === 'following' ? i18n.ts.following :
+							notificationReceiveFor(type)?.type === 'follower' ? i18n.ts.followers :
+							notificationReceiveFor(type)?.type === 'mutualFollow' ? i18n.ts.mutualFollow :
+							notificationReceiveFor(type)?.type === 'followingOrFollower' ? i18n.ts.followingOrFollower :
+							notificationReceiveFor(type)?.type === 'list' ? i18n.ts.userList :
 							i18n.ts.all
 						}}
 					</template>
 
 					<XNotificationConfig
 						:userLists="userLists"
-						:value="$i.notificationRecieveConfig[type] ?? { type: 'all' }"
+						:value="notificationReceiveFor(type) ?? { type: 'all' }"
 						:configurableTypes="(onlyOnOrOffNotificationTypes as string[]).includes(type) ? ['all', 'never'] : undefined"
 						@update="(res) => updateReceiveConfig(type, res)"
 					/>
@@ -53,7 +53,12 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 			<div class="_gaps_m">
 				<MkPushNotificationAllowButton ref="allowButton"/>
-				<MkSwitch :disabled="!pushRegistrationInServer" :modelValue="sendReadMessage" @update:modelValue="onChangeSendReadMessage">
+				<MkSwitch
+					v-if="!isEmbeddedAppShell()"
+					:disabled="!pushRegistrationInServer"
+					:modelValue="sendReadMessage"
+					@update:modelValue="onChangeSendReadMessage"
+				>
 					<template #label>{{ i18n.ts.sendPushNotificationReadMessage }}</template>
 					<template #caption>{{ i18n.ts.sendPushNotificationReadMessageCaption }}</template>
 				</MkSwitch>
@@ -65,6 +70,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <script lang="ts" setup>
 import { useTemplateRef, computed } from 'vue';
+import { isEmbeddedAppShell } from '@/utility/is-embedded-app-shell.js';
 import { notificationTypes } from 'misskey-js';
 import XNotificationConfig from './notifications.notification-config.vue';
 import type { NotificationConfig } from './notifications.notification-config.vue';
@@ -82,6 +88,10 @@ import MkPushNotificationAllowButton from '@/components/MkPushNotificationAllowB
 import MkFeatureBanner from '@/components/MkFeatureBanner.vue';
 
 const $i = ensureSignin();
+
+function notificationReceiveFor(type: typeof notificationTypes[number]): NotificationConfig | undefined {
+	return ($i.notificationRecieveConfig as Record<string, NotificationConfig | undefined>)[type];
+}
 
 const nonConfigurableNotificationTypes = ['note', 'roleAssigned', 'followRequestAccepted', 'test', 'exportCompleted'] as const satisfies (typeof notificationTypes[number])[];
 

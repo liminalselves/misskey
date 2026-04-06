@@ -283,6 +283,130 @@ export const meta = {
 				type: 'string',
 				optional: false, nullable: true,
 			},
+			nativeClientAppInfo: {
+				type: 'object',
+				optional: false, nullable: false,
+				properties: {
+					latestAndroidVersion: {
+						type: 'string',
+						optional: false, nullable: true,
+					},
+					latestIosVersion: {
+						type: 'string',
+						optional: false, nullable: true,
+					},
+					androidDownloadUrl: {
+						type: 'string',
+						optional: false, nullable: true,
+					},
+					iosDownloadUrl: {
+						type: 'string',
+						optional: false, nullable: true,
+					},
+					releaseNotesUrl: {
+						type: 'string',
+						optional: false, nullable: true,
+					},
+					announcement: {
+						type: 'string',
+						optional: false, nullable: true,
+					},
+				},
+			},
+			agentFeatureEnabled: {
+				type: 'boolean',
+				optional: false, nullable: false,
+			},
+			agentGlobalSystemPrompt: {
+				type: 'string',
+				optional: false, nullable: true,
+			},
+			agentOpenaiCompatibleBaseUrl: {
+				type: 'string',
+				optional: false, nullable: true,
+			},
+			agentOpenaiCompatibleApiKey: {
+				type: 'string',
+				optional: false, nullable: true,
+			},
+			agentModelDisplayName: {
+				type: 'string',
+				optional: false, nullable: true,
+			},
+			agentModelDescription: {
+				type: 'string',
+				optional: false, nullable: true,
+			},
+			agentModelApiName: {
+				type: 'string',
+				optional: false, nullable: true,
+			},
+			agentLlmModels: {
+				type: 'array',
+				optional: false, nullable: true,
+				items: {
+					type: 'object',
+					optional: false, nullable: false,
+					properties: {
+						id: { type: 'string' },
+						name: { type: 'string' },
+						description: { type: 'string', nullable: true },
+						apiModelName: { type: 'string' },
+						baseUrl: { type: 'string' },
+						apiKey: { type: 'string' },
+						maxContextTokens: { type: 'number' },
+						maxOutputTokensPerCall: { type: 'number' },
+					},
+				},
+			},
+			agentDefaultModelId: {
+				type: 'string',
+				optional: false, nullable: true,
+			},
+			agentMaxContextTokens: {
+				type: 'number',
+				optional: false, nullable: false,
+			},
+			agentMaxOutputTokensPerCall: {
+				type: 'number',
+				optional: false, nullable: false,
+			},
+			agentMem0Enabled: {
+				type: 'boolean',
+				optional: false, nullable: false,
+			},
+			agentMem0ApiKey: {
+				type: 'string',
+				optional: false, nullable: true,
+			},
+			agentMem0ApiBaseUrl: {
+				type: 'string',
+				optional: false, nullable: true,
+			},
+			agentMem0OrgId: {
+				type: 'string',
+				optional: false, nullable: true,
+			},
+			agentMem0ProjectId: {
+				type: 'string',
+				optional: false, nullable: true,
+			},
+			agentMem0TopK: {
+				type: 'number',
+				optional: false, nullable: false,
+			},
+			agentMem0InjectMaxChars: {
+				type: 'number',
+				optional: false, nullable: false,
+			},
+			agentMem0AddMemoryMaxRounds: {
+				type: 'number',
+				optional: false, nullable: false,
+			},
+			agentMem0AddMemoryEveryNRounds: {
+				type: 'number',
+				optional: false, nullable: false,
+			},
 			useObjectStorage: {
 				type: 'boolean',
 				optional: false, nullable: false,
@@ -471,6 +595,10 @@ export const meta = {
 				optional: false, nullable: true,
 			},
 			objectStorageS3ForcePathStyle: {
+				type: 'boolean',
+				optional: false, nullable: false,
+			},
+			objectStorageForceHttps: {
 				type: 'boolean',
 				optional: false, nullable: false,
 			},
@@ -709,6 +837,37 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				aliyunMobilePushAccessKeyId: instance.aliyunMobilePushAccessKeyId,
 				aliyunMobilePushAccessKeySecret: instance.aliyunMobilePushAccessKeySecret,
 				aliyunMobilePushAppKey: instance.aliyunMobilePushAppKey,
+				nativeClientAppInfo: (() => {
+					const n = instance.nativeClientAppInfo ?? {};
+					return {
+						latestAndroidVersion: n.latestAndroidVersion ?? null,
+						latestIosVersion: n.latestIosVersion ?? null,
+						androidDownloadUrl: n.androidDownloadUrl ?? null,
+						iosDownloadUrl: n.iosDownloadUrl ?? null,
+						releaseNotesUrl: n.releaseNotesUrl ?? null,
+						announcement: n.announcement ?? null,
+					};
+				})(),
+				agentFeatureEnabled: instance.agentFeatureEnabled,
+				agentGlobalSystemPrompt: instance.agentGlobalSystemPrompt,
+				agentOpenaiCompatibleBaseUrl: instance.agentOpenaiCompatibleBaseUrl,
+				agentOpenaiCompatibleApiKey: instance.agentOpenaiCompatibleApiKey,
+				agentModelDisplayName: instance.agentModelDisplayName,
+				agentModelDescription: instance.agentModelDescription,
+				agentModelApiName: instance.agentModelApiName,
+				agentLlmModels: instance.agentLlmModels,
+				agentDefaultModelId: instance.agentDefaultModelId,
+				agentMaxContextTokens: instance.agentMaxContextTokens,
+				agentMaxOutputTokensPerCall: instance.agentMaxOutputTokensPerCall,
+				agentMem0Enabled: instance.agentMem0Enabled,
+				agentMem0ApiKey: instance.agentMem0ApiKey,
+				agentMem0ApiBaseUrl: instance.agentMem0ApiBaseUrl,
+				agentMem0OrgId: instance.agentMem0OrgId,
+				agentMem0ProjectId: instance.agentMem0ProjectId,
+				agentMem0TopK: instance.agentMem0TopK,
+				agentMem0InjectMaxChars: instance.agentMem0InjectMaxChars,
+				agentMem0AddMemoryMaxRounds: instance.agentMem0AddMemoryMaxRounds,
+				agentMem0AddMemoryEveryNRounds: instance.agentMem0AddMemoryEveryNRounds,
 				useObjectStorage: instance.useObjectStorage,
 				objectStorageBaseUrl: instance.objectStorageBaseUrl,
 				objectStorageBucket: instance.objectStorageBucket,
@@ -722,6 +881,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				objectStorageUseProxy: instance.objectStorageUseProxy,
 				objectStorageSetPublicRead: instance.objectStorageSetPublicRead,
 				objectStorageS3ForcePathStyle: instance.objectStorageS3ForcePathStyle,
+				objectStorageForceHttps: instance.objectStorageForceHttps,
 				deeplAuthKey: instance.deeplAuthKey,
 				deeplIsPro: instance.deeplIsPro,
 				enableIpLogging: instance.enableIpLogging,

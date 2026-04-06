@@ -85,6 +85,11 @@ import {
 	MiChatRoomMembership,
 	MiChatRoomInvitation,
 	MiChatApproval,
+	MiAgentCharacter,
+	MiAgentDialogueStyle,
+	MiAgentSession,
+	MiAgentMessage,
+	MiAgentUserStyleSubscription,
 } from './_.js';
 import type { Provider } from '@nestjs/common';
 import type { DataSource } from 'typeorm';
@@ -539,6 +544,36 @@ const $chatApprovalsRepository: Provider = {
 	inject: [DI.db],
 };
 
+const $agentCharactersRepository: Provider = {
+	provide: DI.agentCharactersRepository,
+	useFactory: (db: DataSource) => db.getRepository(MiAgentCharacter).extend(miRepository as MiRepository<MiAgentCharacter>),
+	inject: [DI.db],
+};
+
+const $agentDialogueStylesRepository: Provider = {
+	provide: DI.agentDialogueStylesRepository,
+	useFactory: (db: DataSource) => db.getRepository(MiAgentDialogueStyle).extend(miRepository as MiRepository<MiAgentDialogueStyle>),
+	inject: [DI.db],
+};
+
+const $agentSessionsRepository: Provider = {
+	provide: DI.agentSessionsRepository,
+	useFactory: (db: DataSource) => db.getRepository(MiAgentSession).extend(miRepository as MiRepository<MiAgentSession>),
+	inject: [DI.db],
+};
+
+const $agentMessagesRepository: Provider = {
+	provide: DI.agentMessagesRepository,
+	useFactory: (db: DataSource) => db.getRepository(MiAgentMessage).extend(miRepository as MiRepository<MiAgentMessage>),
+	inject: [DI.db],
+};
+
+const $agentUserStyleSubscriptionsRepository: Provider = {
+	provide: DI.agentUserStyleSubscriptionsRepository,
+	useFactory: (db: DataSource) => db.getRepository(MiAgentUserStyleSubscription).extend(miRepository as MiRepository<MiAgentUserStyleSubscription>),
+	inject: [DI.db],
+};
+
 const $bubbleGameRecordsRepository: Provider = {
 	provide: DI.bubbleGameRecordsRepository,
 	useFactory: (db: DataSource) => db.getRepository(MiBubbleGameRecord).extend(miRepository as MiRepository<MiBubbleGameRecord>),
@@ -629,6 +664,11 @@ const $reversiGamesRepository: Provider = {
 		$chatRoomMembershipsRepository,
 		$chatRoomInvitationsRepository,
 		$chatApprovalsRepository,
+		$agentCharactersRepository,
+		$agentDialogueStylesRepository,
+		$agentSessionsRepository,
+		$agentMessagesRepository,
+		$agentUserStyleSubscriptionsRepository,
 		$bubbleGameRecordsRepository,
 		$reversiGamesRepository,
 	],
@@ -708,6 +748,11 @@ const $reversiGamesRepository: Provider = {
 		$chatRoomMembershipsRepository,
 		$chatRoomInvitationsRepository,
 		$chatApprovalsRepository,
+		$agentCharactersRepository,
+		$agentDialogueStylesRepository,
+		$agentSessionsRepository,
+		$agentMessagesRepository,
+		$agentUserStyleSubscriptionsRepository,
 		$bubbleGameRecordsRepository,
 		$reversiGamesRepository,
 	],

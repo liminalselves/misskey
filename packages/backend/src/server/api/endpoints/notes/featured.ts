@@ -5,6 +5,7 @@
 
 import { Inject, Injectable } from '@nestjs/common';
 import type { NotesRepository } from '@/models/_.js';
+import type { MiNote } from '@/models/Note.js';
 import { Endpoint } from '@/server/api/endpoint-base.js';
 import { NoteEntityService } from '@/core/entities/NoteEntityService.js';
 import { DI } from '@/di-symbols.js';
@@ -61,80 +62,31 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		super(meta, paramDef, async (ps, me) => {
 			// 如果是频道内的帖子，使用与全局相同的加权随机采样逻辑
 			if (ps.channelId) {
-				// 获取频道帖子排名及分数
 				const channelNotesWithScores = await this.featuredService.getInChannelNotesRankingWithScores(ps.channelId, 200);
 
 				if (channelNotesWithScores.length === 0) {
 					return [];
 				}
 
-				// 排除前端传递的已展示帖子 ID
 				const excludeSet = new Set(ps.excludeIds);
-				const availableNotes = channelNotesWithScores.filter(item => !excludeSet.has(item.id));
+				const ranking = channelNotesWithScores.filter(item => !excludeSet.has(item.id));
 
-				if (availableNotes.length === 0) {
+				if (ranking.length === 0) {
 					return [];
 				}
 
-				let selectedNotes: { id: string; score: number }[];
-				if (ps.sort === 'latest') {
-					selectedNotes = [...availableNotes]
-						.sort((a, b) => b.id.localeCompare(a.id))
-						.slice(0, ps.limit);
-				} else if (ps.sort === 'hot') {
-					selectedNotes = [...availableNotes]
-						.sort((a, b) => b.score - a.score)
-						.slice(0, ps.limit);
-				} else {
-					selectedNotes = this.weightedRandomSample(availableNotes, ps.limit);
-				}
+				const { entities, scoreMap } = await this.loadFeaturedNotesWithBackfill({
+					limit: ps.limit,
+					sort: ps.sort,
+					excludeIds: ps.excludeIds ?? [],
+				}, ranking, me, false);
 
-				// 创建分数映射
-				const scoreMap = new Map<string, number>();
-				for (const item of selectedNotes) {
-					scoreMap.set(item.id, item.score);
-				}
-
-				const noteIds = selectedNotes.map(item => item.id);
-
-				if (noteIds.length === 0) {
+				if (entities.length === 0) {
 					return [];
 				}
 
-				const [
-					userIdsWhoMeMuting,
-					userIdsWhoBlockingMe,
-				] = me ? await Promise.all([
-					this.cacheService.userMutingsCache.fetch(me.id),
-					this.cacheService.userBlockedCache.fetch(me.id),
-				]) : [new Set<string>(), new Set<string>()];
+				const packed = await this.noteEntityService.packMany(entities, me);
 
-				const query = this.notesRepository.createQueryBuilder('note')
-					.where('note.id IN (:...noteIds)', { noteIds: noteIds })
-					.innerJoinAndSelect('note.user', 'user')
-					.leftJoinAndSelect('note.reply', 'reply')
-					.leftJoinAndSelect('note.renote', 'renote')
-					.leftJoinAndSelect('reply.user', 'replyUser')
-					.leftJoinAndSelect('renote.user', 'renoteUser')
-					.leftJoinAndSelect('note.channel', 'channel');
-
-				this.queryService.generateBlockedHostQueryForNote(query);
-				this.queryService.generateSuspendedUserQueryForNote(query);
-
-				const notes = (await query.getMany()).filter(note => {
-					if (me && isUserRelated(note, userIdsWhoBlockingMe)) return false;
-					if (me && isUserRelated(note, userIdsWhoMeMuting)) return false;
-					return true;
-				});
-
-				// 按 selectedNotes / noteIds 顺序排序，并添加分数（频道内推荐也不打乱，与原先挙動一致）
-				const sortedNotes = noteIds
-					.map(id => notes.find(n => n.id === id))
-					.filter((n): n is typeof notes[0] => n != null);
-
-				const packed = await this.noteEntityService.packMany(sortedNotes, me);
-
-				// 添加分数到返回结果
 				for (const note of packed) {
 					(note as typeof note & { _featuredScore_?: number })._featuredScore_ = scoreMap.get(note.id) ?? 0;
 				}
@@ -152,53 +104,86 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				return [];
 			}
 
-			// 排除前端传递的已展示帖子 ID
 			const excludeSet = new Set(ps.excludeIds);
-			const availableNotes = this.rankingCache.filter(item => !excludeSet.has(item.id));
+			const ranking = this.rankingCache.filter(item => !excludeSet.has(item.id));
 
-			if (availableNotes.length === 0) {
+			if (ranking.length === 0) {
 				return [];
 			}
 
-			// 根据排序模式选择帖子
-			let selectedNotes: { id: string; score: number }[];
-			if (ps.sort === 'latest') {
-				// 最新模式：按 ID 降序排列（Misskey 的 ID 包含时间戳，越新越大）
-				selectedNotes = [...availableNotes]
-					.sort((a, b) => b.id.localeCompare(a.id))
-					.slice(0, ps.limit);
-			} else if (ps.sort === 'hot') {
-				// 热度模式：按热度系数（score）降序
-				selectedNotes = [...availableNotes]
-					.sort((a, b) => b.score - a.score)
-					.slice(0, ps.limit);
-			} else {
-				// 推荐模式：加权随机采样
-				selectedNotes = this.weightedRandomSample(availableNotes, ps.limit);
+			const { entities, scoreMap } = await this.loadFeaturedNotesWithBackfill({
+				limit: ps.limit,
+				sort: ps.sort,
+				excludeIds: ps.excludeIds ?? [],
+			}, ranking, me, true);
+
+			if (entities.length === 0) {
+				return [];
 			}
 
-			// 创建分数映射
-			const scoreMap = new Map<string, number>();
+			const sortedForPack = (ps.sort === 'latest' || ps.sort === 'hot')
+				? entities
+				: this.shuffleArray([...entities]);
+
+			const packedNotes = await this.noteEntityService.packMany(sortedForPack, me);
+
+			return packedNotes.map(note => ({
+				...note,
+				_featuredScore_: scoreMap.get(note.id) ?? 0,
+			}));
+		});
+	}
+
+	/**
+	 * 按 limit 取帖；若部分 ID 在 DB 加载后被静音/封锁/纯转发等规则过滤掉，则继续向后取，直到凑满或耗尽。
+	 * 避免「服务端已选中但未返回」的 ID 未进入前端 excludeIds，导致下一页重复出现。
+	 */
+	private async loadFeaturedNotesWithBackfill(
+		ps: { limit: number; sort: 'recommended' | 'latest' | 'hot'; excludeIds: string[] },
+		rankingList: { id: string; score: number }[],
+		me: { id: string } | null | undefined,
+		filterPureRenote: boolean,
+	): Promise<{ entities: MiNote[]; scoreMap: Map<string, number> }> {
+		const expandedExclude = new Set(ps.excludeIds);
+		const scoreMap = new Map<string, number>();
+		const accumulated: MiNote[] = [];
+
+		const [
+			userIdsWhoMeMuting,
+			userIdsWhoBlockingMe,
+		] = me ? await Promise.all([
+			this.cacheService.userMutingsCache.fetch(me.id),
+			this.cacheService.userBlockedCache.fetch(me.id),
+		]) : [new Set<string>(), new Set<string>()];
+
+		while (accumulated.length < ps.limit) {
+			const available = rankingList.filter(item => !expandedExclude.has(item.id));
+			if (available.length === 0) break;
+
+			const need = ps.limit - accumulated.length;
+			let selectedNotes: { id: string; score: number }[];
+			if (ps.sort === 'latest') {
+				selectedNotes = [...available]
+					.sort((a, b) => b.id.localeCompare(a.id))
+					.slice(0, need);
+			} else if (ps.sort === 'hot') {
+				selectedNotes = [...available]
+					.sort((a, b) => b.score - a.score)
+					.slice(0, need);
+			} else {
+				selectedNotes = this.weightedRandomSample(available, need);
+			}
+
 			for (const item of selectedNotes) {
+				expandedExclude.add(item.id);
 				scoreMap.set(item.id, item.score);
 			}
 
 			const noteIds = selectedNotes.map(item => item.id);
-
-			if (noteIds.length === 0) {
-				return [];
-			}
-
-			const [
-				userIdsWhoMeMuting,
-				userIdsWhoBlockingMe,
-			] = me ? await Promise.all([
-				this.cacheService.userMutingsCache.fetch(me.id),
-				this.cacheService.userBlockedCache.fetch(me.id),
-			]) : [new Set<string>(), new Set<string>()];
+			if (noteIds.length === 0) break;
 
 			const query = this.notesRepository.createQueryBuilder('note')
-				.where('note.id IN (:...noteIds)', { noteIds: noteIds })
+				.where('note.id IN (:...noteIds)', { noteIds })
 				.innerJoinAndSelect('note.user', 'user')
 				.leftJoinAndSelect('note.reply', 'reply')
 				.leftJoinAndSelect('note.renote', 'renote')
@@ -212,36 +197,23 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			const notes = (await query.getMany()).filter(note => {
 				if (me && isUserRelated(note, userIdsWhoBlockingMe)) return false;
 				if (me && isUserRelated(note, userIdsWhoMeMuting)) return false;
-
-				// 排除纯转发帖子（有 renoteId 但没有正文的帖子）
-				if (note.renoteId && !note.text && note.fileIds.length === 0 && !note.hasPoll) {
+				if (filterPureRenote && note.renoteId && !note.text && note.fileIds.length === 0 && !note.hasPoll) {
 					return false;
 				}
-
 				return true;
 			});
 
-			// 根据排序模式排序
-			let sortedNotes;
-			if (ps.sort === 'latest' || ps.sort === 'hot') {
-				// 最新 / 热度：按选择顺序（分别为 ID 降序或分数降序）
-				sortedNotes = noteIds
-					.map(id => notes.find(n => n.id === id))
-					.filter((n): n is typeof notes[0] => n != null);
-			} else {
-				// 推荐模式：打乱顺序
-				sortedNotes = this.shuffleArray([...notes]);
-			}
+			const sortedNotes = noteIds
+				.map(id => notes.find(n => n.id === id))
+				.filter((n): n is MiNote => n != null);
 
-			// 打包帖子并附加分数信息
-			const packedNotes = await this.noteEntityService.packMany(sortedNotes, me);
+			accumulated.push(...sortedNotes);
+		}
 
-			// 为每个帖子添加 featuredScore 字段
-			return packedNotes.map(note => ({
-				...note,
-				_featuredScore_: scoreMap.get(note.id) ?? 0,
-			}));
-		});
+		return {
+			entities: accumulated.slice(0, ps.limit),
+			scoreMap,
+		};
 	}
 
 	/**

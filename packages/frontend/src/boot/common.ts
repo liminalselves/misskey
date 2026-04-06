@@ -28,7 +28,7 @@ import { analytics, initAnalytics } from '@/analytics.js';
 import { miLocalStorage } from '@/local-storage.js';
 import { fetchCustomEmojis } from '@/custom-emojis.js';
 import { prefer } from '@/preferences.js';
-import { migrateNavbarMenuForPinnedExplore } from '@/utility/migrate-navbar-menu.js';
+import { migrateNavbarMenuAgentsAfterTimeline, migrateNavbarMenuForPinnedExplore } from '@/utility/migrate-navbar-menu.js';
 import { $i } from '@/i.js';
 import { launchPlugins } from '@/plugin.js';
 
@@ -119,6 +119,7 @@ export async function common(createVue: () => Promise<App<Element>>) {
 	await deckStore.ready;
 
 	migrateNavbarMenuForPinnedExplore();
+	migrateNavbarMenuAgentsAfterTimeline();
 
 	const fetchInstanceMetaPromise = fetchInstance();
 

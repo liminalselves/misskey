@@ -52,7 +52,7 @@ const sortMode = ref<'recommended' | 'latest' | 'hot'>('recommended');
 
 const noteSortItems = computed(() => [
 	{ value: 'recommended' as const, label: i18n.ts.recommended },
-	{ value: 'latest' as const, label: i18n.ts._order.newest },
+	{ value: 'latest' as const, label: i18n.ts.exploreFeaturedSortLatest },
 	{ value: 'hot' as const, label: i18n.ts.exploreFeaturedSortHeat },
 ] satisfies MkSelectItem[]);
 

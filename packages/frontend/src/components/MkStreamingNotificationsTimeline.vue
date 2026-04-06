@@ -66,14 +66,15 @@ const rootEl = useTemplateRef('rootEl');
 
 const paginator = prefer.s.useGroupedNotifications ? markRaw(new Paginator('i/notifications-grouped', {
 	limit: 20,
+	// excludeTypes 与 misskey-js 中 i/notifications 的 req 字面量可能不同步（新通知类型）
 	computedParams: computed(() => ({
 		excludeTypes: props.excludeTypes ?? undefined,
-	})),
+	})) as any,
 })) : markRaw(new Paginator('i/notifications', {
 	limit: 20,
 	computedParams: computed(() => ({
 		excludeTypes: props.excludeTypes ?? undefined,
-	})),
+	})) as any,
 }));
 
 const MIN_POLLING_INTERVAL = 1000 * 10;

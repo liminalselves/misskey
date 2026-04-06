@@ -24,6 +24,11 @@ import { MiChannel } from '@/models/Channel.js';
 import { MiChannelFavorite } from '@/models/ChannelFavorite.js';
 import { MiChannelFollowing } from '@/models/ChannelFollowing.js';
 import { MiChannelMuting } from "@/models/ChannelMuting.js";
+import { MiAgentCharacter } from '@/models/AgentCharacter.js';
+import { MiAgentDialogueStyle } from '@/models/AgentDialogueStyle.js';
+import { MiAgentMessage } from '@/models/AgentMessage.js';
+import { MiAgentUserStyleSubscription } from '@/models/AgentUserStyleSubscription.js';
+import { MiAgentSession } from '@/models/AgentSession.js';
 import { MiChatApproval } from '@/models/ChatApproval.js';
 import { MiChatMessage } from '@/models/ChatMessage.js';
 import { MiChatRoom } from '@/models/ChatRoom.js';
@@ -173,6 +178,11 @@ export {
 	MiChatRoomMembership,
 	MiChatRoomInvitation,
 	MiChatApproval,
+	MiAgentCharacter,
+	MiAgentDialogueStyle,
+	MiAgentSession,
+	MiAgentMessage,
+	MiAgentUserStyleSubscription,
 	MiBubbleGameRecord,
 	MiReversiGame,
 };
@@ -256,3 +266,8 @@ export type ChatRoomInvitationsRepository = Repository<MiChatRoomInvitation> & M
 export type ChatApprovalsRepository = Repository<MiChatApproval> & MiRepository<MiChatApproval>;
 export type BubbleGameRecordsRepository = Repository<MiBubbleGameRecord> & MiRepository<MiBubbleGameRecord>;
 export type ReversiGamesRepository = Repository<MiReversiGame> & MiRepository<MiReversiGame>;
+export type AgentCharactersRepository = Repository<MiAgentCharacter> & MiRepository<MiAgentCharacter>;
+export type AgentDialogueStylesRepository = Repository<MiAgentDialogueStyle> & MiRepository<MiAgentDialogueStyle>;
+export type AgentSessionsRepository = Repository<MiAgentSession> & MiRepository<MiAgentSession>;
+export type AgentMessagesRepository = Repository<MiAgentMessage> & MiRepository<MiAgentMessage>;
+export type AgentUserStyleSubscriptionsRepository = Repository<MiAgentUserStyleSubscription> & MiRepository<MiAgentUserStyleSubscription>;

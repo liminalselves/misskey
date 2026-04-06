@@ -1,0 +1,131 @@
+/*
+ * SPDX-FileCopyrightText: syuilo and misskey-project
+ * SPDX-License-Identifier: AGPL-3.0-only
+ */
+
+import ms from 'ms';
+import { Inject, Injectable } from '@nestjs/common';
+import type {
+	AgentCharactersRepository,
+	AgentDialogueStylesRepository,
+	AgentSessionsRepository,
+} from '@/models/_.js';
+import type { AgentSessionKind } from '@/models/AgentSession.js';
+import { getEffectiveLlmModels } from '@/misc/agent-llm-models.js';
+import { Endpoint } from '@/server/api/endpoint-base.js';
+import { DI } from '@/di-symbols.js';
+import { ApiError } from '@/server/api/error.js';
+import { AgentService } from '@/core/AgentService.js';
+import { MetaService } from '@/core/MetaService.js';
+
+export const meta = {
+	tags: ['agents'],
+	requireCredential: true,
+	prohibitMoved: true,
+	kind: 'write:chat',
+	limit: { duration: ms('1hour'), max: 60 },
+	res: {
+		type: 'object',
+		optional: false, nullable: false,
+		properties: {
+			id: { type: 'string', format: 'misskey:id' },
+			name: { type: 'string' },
+			characterId: { type: 'string', format: 'misskey:id' },
+			dialogueStyleId: { type: 'string', format: 'misskey:id' },
+			sessionKind: { type: 'string', enum: ['draft_test', 'community'] },
+			agentModelId: { type: 'string', nullable: true },
+			createdAt: { type: 'string', format: 'date-time' },
+		},
+	},
+} as const;
+
+export const paramDef = {
+	type: 'object',
+	properties: {
+		characterId: { type: 'string', format: 'misskey:id' },
+		dialogueStyleId: { type: 'string', format: 'misskey:id' },
+		sessionKind: { type: 'string', enum: ['draft_test', 'community'] },
+		name: { type: 'string', maxLength: 256, nullable: true },
+		agentModelId: { type: 'string', nullable: true, maxLength: 64 },
+	},
+	required: ['characterId', 'dialogueStyleId', 'sessionKind'],
+} as const;
+
+@Injectable()
+export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-disable-line import/no-default-export
+	constructor(
+		@Inject(DI.agentCharactersRepository)
+		private agentCharactersRepository: AgentCharactersRepository,
+
+		@Inject(DI.agentDialogueStylesRepository)
+		private agentDialogueStylesRepository: AgentDialogueStylesRepository,
+
+		@Inject(DI.agentSessionsRepository)
+		private agentSessionsRepository: AgentSessionsRepository,
+
+		private agentService: AgentService,
+		private metaService: MetaService,
+	) {
+		super(meta, paramDef, async (ps, me) => {
+			this.agentService.assertAgentsEnabled();
+
+			const character = await this.agentCharactersRepository.findOneBy({ id: ps.characterId });
+			if (!character) {
+				throw new ApiError({ message: 'No such character.', code: 'NO_SUCH_CHARACTER', id: 'a9b0c1d2-e3f4-5678-2345-789012345678' });
+			}
+
+			const style = await this.agentDialogueStylesRepository.findOneBy({ id: ps.dialogueStyleId });
+			if (!style) {
+				throw new ApiError({ message: 'No such style.', code: 'NO_SUCH_STYLE', id: 'b0c1d2e3-f4a5-6789-3456-890123456789' });
+			}
+
+			await this.agentService.assertCanUseDialogueStyle(me.id, style, { forNewSession: true });
+
+			const sessionKind = ps.sessionKind as AgentSessionKind;
+			if (sessionKind === 'draft_test') {
+				if (character.userId !== me.id) {
+					throw new ApiError({ message: 'Forbidden.', code: 'FORBIDDEN', id: 'c1d2e3f4-a5b6-7890-4567-901234567890' });
+				}
+			} else {
+				if (!this.agentService.isListedOnPlazaCharacter(character)) {
+					throw new ApiError({ message: 'Character is not published.', code: 'CHARACTER_NOT_PUBLISHED', id: 'd2e3f4a5-b6c7-8901-5678-012345678901' });
+				}
+				if (!this.agentService.isListedOnPlazaStyle(style)) {
+					throw new ApiError({ message: 'Style is not published.', code: 'STYLE_NOT_PUBLISHED', id: 'e3f4a5b6-c7d8-9012-6789-123456789012' });
+				}
+			}
+
+			const instanceMeta = await this.metaService.fetch(true);
+			const eff = getEffectiveLlmModels(instanceMeta);
+			const agentModelId = ps.agentModelId ?? instanceMeta.agentDefaultModelId ?? eff[0]?.id ?? null;
+			if (agentModelId) {
+				this.agentService.resolveModelApiName(instanceMeta, agentModelId);
+			}
+
+			const now = new Date();
+			const row = await this.agentSessionsRepository.insertOne({
+				id: this.agentService.newId(),
+				createdAt: now,
+				updatedAt: now,
+				userId: me.id,
+				name: (ps.name?.trim() || character.name).slice(0, 256),
+				characterId: character.id,
+				dialogueStyleId: style.id,
+				characterOwnerId: character.userId,
+				sessionKind,
+				agentModelId,
+				lastMessageAt: null,
+			});
+
+			return {
+				id: row.id,
+				name: row.name,
+				characterId: row.characterId,
+				dialogueStyleId: row.dialogueStyleId,
+				sessionKind: row.sessionKind,
+				agentModelId: row.agentModelId,
+				createdAt: row.createdAt.toISOString(),
+			};
+		});
+	}
+}

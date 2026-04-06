@@ -187,6 +187,7 @@ export const PREF_DEF = definePreferences({
 	menu: {
 		default: [
 			'timeline',
+			'agents',
 			'notifications',
 			'clips',
 			'drive',

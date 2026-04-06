@@ -5,10 +5,20 @@
 
 import { Injectable, Inject } from '@nestjs/common';
 import { DI } from '@/di-symbols.js';
-import type { MiMeta } from '@/models/Meta.js';
+import type { MiMeta, MiNativeClientAppInfo } from '@/models/Meta.js';
 import { ModerationLogService } from '@/core/ModerationLogService.js';
 import { Endpoint } from '@/server/api/endpoint-base.js';
 import { MetaService } from '@/core/MetaService.js';
+import { ApiError } from '@/server/api/error.js';
+import { assertSafeLlmHttpsUrl, describeUnsafeLlmUrlReason, hrefForStoredLlmBaseUrl, UnsafeLlmUrlError } from '@/misc/validate-llm-endpoint-url.js';
+import { normalizeAgentLlmModelsParam } from '@/misc/agent-llm-models.js';
+
+function coerceHttpObjectStorageUrlToHttps(url: string | null | undefined, force: boolean): string | null {
+	if (url == null || url === '') return url ?? null;
+	if (!force) return url;
+	if (url.startsWith('http://')) return `https://${url.slice(7)}`;
+	return url;
+}
 
 export const meta = {
 	tags: ['admin'],
@@ -120,6 +130,54 @@ export const paramDef = {
 		aliyunMobilePushAccessKeyId: { type: 'string', nullable: true },
 		aliyunMobilePushAccessKeySecret: { type: 'string', nullable: true },
 		aliyunMobilePushAppKey: { type: 'string', nullable: true },
+		agentFeatureEnabled: { type: 'boolean' },
+		agentGlobalSystemPrompt: { type: 'string', nullable: true },
+		agentOpenaiCompatibleBaseUrl: { type: 'string', nullable: true },
+		agentOpenaiCompatibleApiKey: { type: 'string', nullable: true },
+		agentModelDisplayName: { type: 'string', nullable: true },
+		agentModelDescription: { type: 'string', nullable: true },
+		agentModelApiName: { type: 'string', nullable: true },
+		agentLlmModels: {
+			type: 'array',
+			nullable: true,
+			items: {
+				type: 'object',
+				properties: {
+					id: { type: 'string', minLength: 1, maxLength: 64 },
+					name: { type: 'string', minLength: 1, maxLength: 256 },
+					description: { type: 'string', nullable: true, maxLength: 2048 },
+					apiModelName: { type: 'string', minLength: 1, maxLength: 256 },
+					baseUrl: { type: 'string', minLength: 1, maxLength: 512 },
+					apiKey: { type: 'string', minLength: 1, maxLength: 8192 },
+					maxContextTokens: { type: 'integer', minimum: 256, maximum: 2000000 },
+					maxOutputTokensPerCall: { type: 'integer', minimum: 1, maximum: 128000 },
+				},
+				required: ['id', 'name', 'apiModelName', 'baseUrl', 'apiKey', 'maxContextTokens', 'maxOutputTokensPerCall'],
+			},
+		},
+		agentDefaultModelId: { type: 'string', nullable: true, maxLength: 64 },
+		agentMaxContextTokens: { type: 'integer', minimum: 256, maximum: 2000000 },
+		agentMaxOutputTokensPerCall: { type: 'integer', minimum: 1, maximum: 128000 },
+		agentMem0Enabled: { type: 'boolean' },
+		agentMem0ApiKey: { type: 'string', nullable: true },
+		agentMem0ApiBaseUrl: { type: 'string', nullable: true, maxLength: 512 },
+		agentMem0OrgId: { type: 'string', nullable: true, maxLength: 128 },
+		agentMem0ProjectId: { type: 'string', nullable: true, maxLength: 128 },
+		agentMem0TopK: { type: 'integer', minimum: 1, maximum: 100 },
+		agentMem0InjectMaxChars: { type: 'integer', minimum: 200, maximum: 50000 },
+		agentMem0AddMemoryMaxRounds: { type: 'integer', minimum: 1, maximum: 24 },
+		agentMem0AddMemoryEveryNRounds: { type: 'integer', minimum: 1, maximum: 48 },
+		nativeClientAppInfo: {
+			type: 'object', nullable: false,
+			properties: {
+				latestAndroidVersion: { type: 'string', nullable: true },
+				latestIosVersion: { type: 'string', nullable: true },
+				androidDownloadUrl: { type: 'string', nullable: true },
+				iosDownloadUrl: { type: 'string', nullable: true },
+				releaseNotesUrl: { type: 'string', nullable: true },
+				announcement: { type: 'string', nullable: true },
+			},
+		},
 		tosUrl: { type: 'string', nullable: true },
 		repositoryUrl: { type: 'string', nullable: true },
 		feedbackUrl: { type: 'string', nullable: true },
@@ -139,6 +197,7 @@ export const paramDef = {
 		objectStorageUseProxy: { type: 'boolean' },
 		objectStorageSetPublicRead: { type: 'boolean' },
 		objectStorageS3ForcePathStyle: { type: 'boolean' },
+		objectStorageForceHttps: { type: 'boolean' },
 		enableIpLogging: { type: 'boolean' },
 		enableActiveEmailValidation: { type: 'boolean' },
 		enableVerifymailApi: { type: 'boolean' },
@@ -503,6 +562,155 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				set.aliyunMobilePushAppKey = ps.aliyunMobilePushAppKey;
 			}
 
+			if (ps.agentFeatureEnabled !== undefined) {
+				set.agentFeatureEnabled = ps.agentFeatureEnabled;
+			}
+
+			if (ps.agentGlobalSystemPrompt !== undefined) {
+				set.agentGlobalSystemPrompt = ps.agentGlobalSystemPrompt;
+			}
+
+			if (ps.agentOpenaiCompatibleBaseUrl !== undefined) {
+				const v = ps.agentOpenaiCompatibleBaseUrl === '' ? null : ps.agentOpenaiCompatibleBaseUrl;
+				if (v) {
+					try {
+						const safe = await assertSafeLlmHttpsUrl(v);
+						set.agentOpenaiCompatibleBaseUrl = hrefForStoredLlmBaseUrl(safe);
+					} catch (e) {
+						const detail = e instanceof UnsafeLlmUrlError
+							? describeUnsafeLlmUrlReason(e.reason)
+							: (e instanceof Error ? e.message : String(e));
+						throw new ApiError({
+							message: `LLM base URL: ${detail}`,
+							code: 'INVALID_PARAM',
+							id: 'a1c2e3f4-5061-7890-abcd-ef1234567890',
+						});
+					}
+				} else {
+					set.agentOpenaiCompatibleBaseUrl = null;
+				}
+			}
+
+			if (ps.agentOpenaiCompatibleApiKey !== undefined) {
+				set.agentOpenaiCompatibleApiKey = ps.agentOpenaiCompatibleApiKey === '' ? null : ps.agentOpenaiCompatibleApiKey;
+			}
+
+			if (ps.agentModelDisplayName !== undefined) {
+				set.agentModelDisplayName = ps.agentModelDisplayName === '' ? null : ps.agentModelDisplayName;
+			}
+
+			if (ps.agentModelDescription !== undefined) {
+				set.agentModelDescription = ps.agentModelDescription === '' ? null : ps.agentModelDescription;
+			}
+
+			if (ps.agentModelApiName !== undefined) {
+				set.agentModelApiName = ps.agentModelApiName === '' ? null : ps.agentModelApiName;
+			}
+
+			if (ps.agentLlmModels !== undefined) {
+				const r = normalizeAgentLlmModelsParam(ps.agentLlmModels);
+				if (!r.ok) {
+					throw new ApiError({
+						message: 'Invalid agent LLM models.',
+						code: 'INVALID_PARAM',
+						id: 'b1c2d3e4-f5a6-7890-bcde-f12345678901',
+					});
+				}
+				const nextDefaultId = ps.agentDefaultModelId !== undefined
+					? (typeof ps.agentDefaultModelId === 'string' && ps.agentDefaultModelId.trim() !== '' ? ps.agentDefaultModelId.trim() : null)
+					: serverSettings.agentDefaultModelId;
+
+				if (r.value != null && r.value.length > 0) {
+					for (let i = 0; i < r.value.length; i++) {
+						const m = r.value[i];
+						try {
+							const safe = await assertSafeLlmHttpsUrl(m.baseUrl);
+							r.value[i] = { ...m, baseUrl: hrefForStoredLlmBaseUrl(safe) };
+						} catch (e) {
+							const detail = e instanceof UnsafeLlmUrlError
+								? describeUnsafeLlmUrlReason(e.reason)
+								: (e instanceof Error ? e.message : String(e));
+							throw new ApiError({
+								message: `Model "${m.id}" base URL: ${detail}`,
+								code: 'INVALID_PARAM',
+								id: 'c2d3e4f5-a6b7-8901-cdef-123456789012',
+							});
+						}
+					}
+					set.agentLlmModels = r.value;
+					set.agentOpenaiCompatibleBaseUrl = null;
+					set.agentOpenaiCompatibleApiKey = null;
+					set.agentModelDisplayName = null;
+					set.agentModelDescription = null;
+					set.agentModelApiName = null;
+					const pick = (nextDefaultId ? r.value.find(x => x.id === nextDefaultId) : null) ?? r.value[0];
+					set.agentMaxContextTokens = pick.maxContextTokens;
+					set.agentMaxOutputTokensPerCall = pick.maxOutputTokensPerCall;
+				} else {
+					set.agentLlmModels = null;
+					set.agentOpenaiCompatibleBaseUrl = null;
+					set.agentOpenaiCompatibleApiKey = null;
+					set.agentModelDisplayName = null;
+					set.agentModelDescription = null;
+					set.agentModelApiName = null;
+					set.agentMaxContextTokens = 8192;
+					set.agentMaxOutputTokensPerCall = 2048;
+				}
+			}
+
+			if (ps.agentDefaultModelId !== undefined) {
+				set.agentDefaultModelId = ps.agentDefaultModelId === '' ? null : ps.agentDefaultModelId;
+			}
+
+			if (ps.agentMaxContextTokens !== undefined) {
+				set.agentMaxContextTokens = ps.agentMaxContextTokens;
+			}
+
+			if (ps.agentMaxOutputTokensPerCall !== undefined) {
+				set.agentMaxOutputTokensPerCall = ps.agentMaxOutputTokensPerCall;
+			}
+
+			if (ps.agentMem0Enabled !== undefined) {
+				set.agentMem0Enabled = ps.agentMem0Enabled;
+			}
+			if (ps.agentMem0ApiKey !== undefined) {
+				set.agentMem0ApiKey = ps.agentMem0ApiKey === '' ? null : ps.agentMem0ApiKey;
+			}
+			if (ps.agentMem0ApiBaseUrl !== undefined) {
+				set.agentMem0ApiBaseUrl = ps.agentMem0ApiBaseUrl === '' ? null : ps.agentMem0ApiBaseUrl;
+			}
+			if (ps.agentMem0OrgId !== undefined) {
+				set.agentMem0OrgId = ps.agentMem0OrgId === '' ? null : ps.agentMem0OrgId;
+			}
+			if (ps.agentMem0ProjectId !== undefined) {
+				set.agentMem0ProjectId = ps.agentMem0ProjectId === '' ? null : ps.agentMem0ProjectId;
+			}
+			if (ps.agentMem0TopK !== undefined) {
+				set.agentMem0TopK = ps.agentMem0TopK;
+			}
+			if (ps.agentMem0InjectMaxChars !== undefined) {
+				set.agentMem0InjectMaxChars = ps.agentMem0InjectMaxChars;
+			}
+			if (ps.agentMem0AddMemoryMaxRounds !== undefined) {
+				set.agentMem0AddMemoryMaxRounds = Math.max(1, Math.min(24, ps.agentMem0AddMemoryMaxRounds));
+			}
+			if (ps.agentMem0AddMemoryEveryNRounds !== undefined) {
+				set.agentMem0AddMemoryEveryNRounds = Math.max(1, Math.min(48, ps.agentMem0AddMemoryEveryNRounds));
+			}
+
+			if (ps.nativeClientAppInfo !== undefined) {
+				const cur: MiNativeClientAppInfo = { ...(serverSettings.nativeClientAppInfo ?? {}) };
+				const p = ps.nativeClientAppInfo;
+				const keys = ['latestAndroidVersion', 'latestIosVersion', 'androidDownloadUrl', 'iosDownloadUrl', 'releaseNotesUrl', 'announcement'] as const;
+				for (const key of keys) {
+					if (p[key] !== undefined) {
+						const v = p[key];
+						cur[key] = v === '' ? null : v;
+					}
+				}
+				set.nativeClientAppInfo = cur;
+			}
+
 			if (ps.tosUrl !== undefined) {
 				set.termsOfServiceUrl = ps.tosUrl;
 			}
@@ -531,8 +739,15 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				set.useObjectStorage = ps.useObjectStorage;
 			}
 
+			if (ps.objectStorageForceHttps !== undefined) {
+				set.objectStorageForceHttps = ps.objectStorageForceHttps;
+			}
+
 			if (ps.objectStorageBaseUrl !== undefined) {
-				set.objectStorageBaseUrl = ps.objectStorageBaseUrl;
+				const forceHttps = ps.objectStorageForceHttps ?? serverSettings.objectStorageForceHttps;
+				set.objectStorageBaseUrl = coerceHttpObjectStorageUrlToHttps(ps.objectStorageBaseUrl, forceHttps);
+			} else if (ps.objectStorageForceHttps === true && ps.objectStorageBaseUrl === undefined && serverSettings.objectStorageBaseUrl?.startsWith('http://')) {
+				set.objectStorageBaseUrl = coerceHttpObjectStorageUrlToHttps(serverSettings.objectStorageBaseUrl, true);
 			}
 
 			if (ps.objectStorageBucket !== undefined) {

@@ -41,7 +41,9 @@ export type Keys = (
 	'lastEmojisFetchedAt' | // DEPRECATED, stored in indexeddb (13.9.0~)
 	'emojis' | // DEPRECATED, stored in indexeddb (13.9.0~);
 	`channelLastReadedAt:${string}` |
-	`idbfallback::${string}`
+	`idbfallback::${string}` |
+	'menuExplorePinnedMigrated_v1' |
+	'menuAgentsAfterTimelineMigrated_v1'
 );
 
 // セッション毎に廃棄されるLocalStorage代替（セーフモードなどで使用できそう）

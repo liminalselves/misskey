@@ -10,8 +10,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<button v-click-anime :class="[$style.item, $style.instance]" class="_button" @click="openInstanceMenu">
 				<img :class="$style.instanceIcon" :src="instance.iconUrl ?? '/favicon.ico'" draggable="false"/>
 			</button>
-			<MkA v-click-anime v-tooltip="i18n.ts.explore" :class="$style.item" :activeClass="$style.active" to="/explore">
-				<i :class="$style.itemIcon" class="ti ti-hash ti-fw"></i>
+			<MkA v-click-anime v-tooltip="i18n.ts.explore" :class="$style.item" :activeClass="$style.active" to="/">
+				<i :class="$style.itemIcon" class="ti ti-home ti-fw"></i>
 			</MkA>
 			<template v-for="item in sidebarMenuItems">
 				<div v-if="item === '-'" :class="$style.divider"></div>

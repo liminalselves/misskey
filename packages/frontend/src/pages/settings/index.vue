@@ -52,6 +52,7 @@ import { store } from '@/store.js';
 import { signout } from '@/signout.js';
 import { genSearchIndexes } from '@/utility/inapp-search.js';
 import { enableStoragePersistence, storagePersisted, skipStoragePersistence } from '@/utility/storage.js';
+import { isEmbeddedAppShell } from '@/utility/is-embedded-app-shell.js';
 
 const searchIndex = await import('search-index:settings').then(({ searchIndexes }) => genSearchIndexes(searchIndexes));
 
@@ -80,7 +81,15 @@ function skipAutoBackup() {
 	store.set('showPreferencesAutoCloudBackupSuggestion', false);
 }
 
-const menuDef = computed<SuperMenuDef[]>(() => [{
+const menuDef = computed<SuperMenuDef[]>(() => {
+	const appClientMenuItem = isEmbeddedAppShell() ? [{
+		icon: 'ti ti-device-mobile',
+		text: i18n.ts.appClientSettings,
+		to: '/settings/app-client',
+		active: currentPage.value?.route.name === 'app-client',
+	}] : [];
+
+	return [{
 	items: [{
 		icon: 'ti ti-user',
 		text: i18n.ts.profile,
@@ -108,7 +117,9 @@ const menuDef = computed<SuperMenuDef[]>(() => [{
 		active: currentPage.value?.route.name === 'security',
 	}],
 }, {
-	items: [{
+	items: [
+		...appClientMenuItem,
+		{
 		icon: 'ti ti-adjustments',
 		text: i18n.ts.preferences,
 		to: '/settings/preferences',
@@ -191,7 +202,8 @@ const menuDef = computed<SuperMenuDef[]>(() => [{
 		},
 		danger: true,
 	}],
-}]);
+}];
+});
 
 onMounted(() => {
 	if (el.value == null) return; // TSを黙らすため

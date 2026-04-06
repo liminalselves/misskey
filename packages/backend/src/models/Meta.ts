@@ -7,6 +7,16 @@ import { Entity, Column, PrimaryColumn, ManyToOne } from 'typeorm';
 import { id } from './util/id.js';
 import { MiUser } from './User.js';
 
+/** 管理后台配置、公开 meta 下发给官方 App 壳使用（版本提示、下载链接等） */
+export type MiNativeClientAppInfo = {
+	latestAndroidVersion?: string | null;
+	latestIosVersion?: string | null;
+	androidDownloadUrl?: string | null;
+	iosDownloadUrl?: string | null;
+	releaseNotesUrl?: string | null;
+	announcement?: string | null;
+};
+
 @Entity('meta')
 export class MiMeta {
 	@PrimaryColumn({
@@ -504,6 +514,11 @@ export class MiMeta {
 	@Column('boolean', {
 		default: false,
 	})
+	public objectStorageForceHttps: boolean;
+
+	@Column('boolean', {
+		default: false,
+	})
 	public enableIpLogging: boolean;
 
 	@Column('boolean', {
@@ -750,6 +765,127 @@ export class MiMeta {
 		showTimelineForVisitor: boolean;
 		showActivitiesForVisitor: boolean;
 	};
+
+	@Column('jsonb', {
+		default: { },
+	})
+	public nativeClientAppInfo: MiNativeClientAppInfo;
+
+	@Column('boolean', {
+		default: false,
+	})
+	public agentFeatureEnabled: boolean;
+
+	@Column('text', {
+		nullable: true,
+	})
+	public agentGlobalSystemPrompt: string | null;
+
+	@Column('varchar', {
+		length: 512, nullable: true,
+	})
+	public agentOpenaiCompatibleBaseUrl: string | null;
+
+	@Column('text', {
+		nullable: true,
+	})
+	public agentOpenaiCompatibleApiKey: string | null;
+
+	@Column('varchar', {
+		length: 256, nullable: true,
+	})
+	public agentModelDisplayName: string | null;
+
+	@Column('varchar', {
+		length: 2048, nullable: true,
+	})
+	public agentModelDescription: string | null;
+
+	@Column('varchar', {
+		length: 256, nullable: true,
+	})
+	public agentModelApiName: string | null;
+
+	/** 多模型配置（JSON）；每条含独立 Base URL、Key、用量；无全局回退 */
+	@Column('jsonb', {
+		nullable: true,
+	})
+	public agentLlmModels: Array<{
+		id: string;
+		name: string;
+		description?: string | null;
+		apiModelName: string;
+		baseUrl: string;
+		apiKey: string;
+		maxContextTokens: number;
+		maxOutputTokensPerCall: number;
+	}> | null;
+
+	@Column('varchar', {
+		length: 64, nullable: true,
+	})
+	public agentDefaultModelId: string | null;
+
+	@Column('integer', {
+		default: 8192,
+	})
+	public agentMaxContextTokens: number;
+
+	@Column('integer', {
+		default: 2048,
+	})
+	public agentMaxOutputTokensPerCall: number;
+
+	/** 智能体长期记忆总开关（阿里云百炼 Memory API） */
+	@Column('boolean', {
+		default: false,
+	})
+	public agentMem0Enabled: boolean;
+
+	@Column('text', {
+		nullable: true,
+	})
+	public agentMem0ApiKey: string | null;
+
+	/** 可选；空则 https://dashscope.aliyuncs.com */
+	@Column('varchar', {
+		length: 512, nullable: true,
+	})
+	public agentMem0ApiBaseUrl: string | null;
+
+	/** 百炼记忆库 memory_library_id（控制台记忆库卡片） */
+	@Column('varchar', {
+		length: 128, nullable: true,
+	})
+	public agentMem0OrgId: string | null;
+
+	/** 预留（记忆片段规则等），当前可不填 */
+	@Column('varchar', {
+		length: 128, nullable: true,
+	})
+	public agentMem0ProjectId: string | null;
+
+	@Column('integer', {
+		default: 8,
+	})
+	public agentMem0TopK: number;
+
+	@Column('integer', {
+		default: 4000,
+	})
+	public agentMem0InjectMaxChars: number;
+
+	/** 调用百炼 add 记忆时上传最近若干轮「用户+助手」完整对话（至少 1，默认 3） */
+	@Column('integer', {
+		default: 3,
+	})
+	public agentMem0AddMemoryMaxRounds: number;
+
+	/** 每完成多少轮「用户+助手」对话才触发一次 add 记忆（至少 1，默认 1=每轮都写） */
+	@Column('integer', {
+		default: 1,
+	})
+	public agentMem0AddMemoryEveryNRounds: number;
 }
 
 export type SoftwareSuspension = {

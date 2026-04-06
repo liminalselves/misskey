@@ -27,3 +27,27 @@ export function migrateNavbarMenuForPinnedExplore(): void {
 	}
 	miLocalStorage.setItem(MIGRATION_KEY, '1');
 }
+
+const MIGRATION_KEY_AGENTS = 'menuAgentsAfterTimelineMigrated_v1';
+
+/**
+ * 默认导航栏在 preferences 里一旦写入就会持久化；仅改 def.ts 的 default 不会更新老用户。
+ * 在 timeline 后插入 agents（与当前默认顺序一致），且只对本机执行一次；若已有 agents 或未包含 timeline 则跳过。
+ */
+export function migrateNavbarMenuAgentsAfterTimeline(): void {
+	if (miLocalStorage.getItem(MIGRATION_KEY_AGENTS) === '1') return;
+
+	const raw = prefer.s.menu;
+	if (raw.includes('agents')) {
+		miLocalStorage.setItem(MIGRATION_KEY_AGENTS, '1');
+		return;
+	}
+	const idx = raw.indexOf('timeline');
+	if (idx === -1) {
+		miLocalStorage.setItem(MIGRATION_KEY_AGENTS, '1');
+		return;
+	}
+	const next = [...raw.slice(0, idx + 1), 'agents', ...raw.slice(idx + 1)];
+	prefer.commit('menu', next);
+	miLocalStorage.setItem(MIGRATION_KEY_AGENTS, '1');
+}

@@ -19,8 +19,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 			</button>
 		</div>
 		<div :class="$style.middle">
-			<MkA v-tooltip.noDelay.right="i18n.ts.explore" :class="$style.item" :activeClass="$style.active" to="/explore">
-				<i :class="$style.itemIcon" class="ti ti-hash ti-fw" style="viewTransitionName: navbar-exploreIcon;"></i><span :class="$style.itemText">{{ i18n.ts.explore }}</span>
+			<MkA v-tooltip.noDelay.right="i18n.ts.explore" :class="$style.item" :activeClass="$style.active" to="/">
+				<i :class="$style.itemIcon" class="ti ti-home ti-fw" style="viewTransitionName: navbar-exploreIcon;"></i><span :class="$style.itemText">{{ i18n.ts.explore }}</span>
 			</MkA>
 			<template v-for="item in sidebarMenuItems">
 				<div v-if="item === '-'" :class="$style.divider"></div>

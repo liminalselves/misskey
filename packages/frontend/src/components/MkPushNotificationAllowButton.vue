@@ -4,7 +4,6 @@ SPDX-License-Identifier: AGPL-3.0-only
 -->
 
 <template>
-<template v-if="!isEmbeddedAppShell()">
 <MkButton
 	v-if="supported && !pushRegistrationInServer"
 	type="button"
@@ -40,11 +39,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 	{{ i18n.ts.pushNotificationNotSupported }}
 </MkButton>
 </template>
-<p v-else :class="inline ? '_buttonInline' : ''" class="_text">{{ i18n.ts.nativePushUseApp }}</p>
-</template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { instanceName } from '@@/js/config.js';
 import { isEmbeddedAppShell } from '@/utility/is-embedded-app-shell.js';
 import { $i } from '@/i.js';
@@ -54,6 +51,10 @@ import { apiWithDialog, promiseDialog, alert } from '@/os.js';
 import { misskeyApi } from '@/utility/misskey-api.js';
 import { i18n } from '@/i18n.js';
 import { getAccounts } from '@/accounts.js';
+
+/** Flutter WebView：`addJavaScriptChannel('AppNativePush')`，与壳工程约定一致 */
+const LIMINAL_NATIVE_PUSH_EVENT = 'liminal-native-push';
+const LIMINAL_APP_NATIVE_PUSH_ENDPOINT = 'liminal:app-native-push';
 
 defineProps<{
 	primary?: boolean;
@@ -84,7 +85,56 @@ const unsubscribeLabel = computed(() =>
 	isEmbeddedAppShell() ? i18n.ts.unsubscribePushNotificationApp : i18n.ts.unsubscribePushNotificationBrowser,
 );
 
+function postAppNativePush(action: 'enable' | 'disable' | 'query') {
+	try {
+		const bridge = (window as unknown as { AppNativePush?: { postMessage: (msg: string) => void } }).AppNativePush;
+		bridge?.postMessage?.(action);
+	} catch {
+		// 非 App WebView
+	}
+}
+
+function onLiminalNativePush(ev: Event) {
+	const d = (ev as CustomEvent<{ registered?: boolean }>).detail;
+	if (d?.registered === true) {
+		pushRegistrationInServer.value = {
+			userId: $i?.id ?? '',
+			endpoint: LIMINAL_APP_NATIVE_PUSH_ENDPOINT,
+			sendReadMessage: false,
+		};
+	} else {
+		pushRegistrationInServer.value = undefined;
+	}
+}
+
+onMounted(() => {
+	if (isEmbeddedAppShell()) {
+		window.addEventListener(LIMINAL_NATIVE_PUSH_EVENT, onLiminalNativePush);
+		postAppNativePush('query');
+	}
+});
+
+onUnmounted(() => {
+	if (isEmbeddedAppShell()) {
+		window.removeEventListener(LIMINAL_NATIVE_PUSH_EVENT, onLiminalNativePush);
+	}
+});
+
+watch(
+	() => $i?.token,
+	() => {
+		if (isEmbeddedAppShell()) {
+			supported.value = $i != null && $i.token != null;
+		}
+	},
+	{ immediate: true },
+);
+
 async function syncPushRegistrationState() {
+	if (isEmbeddedAppShell()) {
+		supported.value = $i != null && $i.token != null;
+		return;
+	}
 	if (!registration.value) return;
 
 	const canPush =
@@ -108,6 +158,11 @@ async function syncPushRegistrationState() {
 }
 
 async function subscribe() {
+	if (isEmbeddedAppShell()) {
+		postAppNativePush('enable');
+		return;
+	}
+
 	if (!registration.value || !supported.value || !instance.swPublickey) return;
 
 	if ('Notification' in window) {
@@ -157,6 +212,11 @@ async function subscribe() {
 }
 
 async function unsubscribe() {
+	if (isEmbeddedAppShell()) {
+		postAppNativePush('disable');
+		return;
+	}
+
 	if (!pushSubscription.value) return;
 
 	const endpoint = pushSubscription.value.endpoint;
@@ -201,10 +261,18 @@ function urlBase64ToUint8Array(base64String: string): BufferSource {
 }
 
 if (navigator.serviceWorker == null) {
-	// TODO: よしなに？
+	// 埋め込みシェルなど SW が無い環境
+	if (isEmbeddedAppShell()) {
+		supported.value = $i != null && $i.token != null;
+	}
 } else {
 	void navigator.serviceWorker.ready.then(async swr => {
 		registration.value = swr;
+
+		if (isEmbeddedAppShell()) {
+			supported.value = $i != null && $i.token != null;
+			return;
+		}
 
 		pushSubscription.value = await registration.value.pushManager.getSubscription();
 

@@ -1,0 +1,685 @@
+/*
+ * SPDX-FileCopyrightText: syuilo and misskey-project
+ * SPDX-License-Identifier: AGPL-3.0-only
+ */
+
+import { Inject, Injectable } from '@nestjs/common';
+import { DI } from '@/di-symbols.js';
+import { bindThis } from '@/decorators.js';
+import type { MiMeta } from '@/models/Meta.js';
+import type { AgentMessagesRepository, AgentUserStyleSubscriptionsRepository } from '@/models/_.js';
+import { MiAgentCharacter } from '@/models/AgentCharacter.js';
+import { MiAgentDialogueStyle } from '@/models/AgentDialogueStyle.js';
+import { MiAgentMessage } from '@/models/AgentMessage.js';
+import { MiAgentSession, type AgentSessionKind } from '@/models/AgentSession.js';
+import { assertSafeLlmHttpsUrl, describeUnsafeLlmUrlReason, UnsafeLlmUrlError } from '@/misc/validate-llm-endpoint-url.js';
+import { getEffectiveLlmModels, isAgentLlmRunnable, type AgentLlmModelJson } from '@/misc/agent-llm-models.js';
+import { MetaService } from '@/core/MetaService.js';
+import { IdService } from '@/core/IdService.js';
+import { ApiError } from '@/server/api/error.js';
+
+/** 单字段最大长度（初始版本防滥用） */
+export const AGENT_TEXT_FIELD_MAX = 100_000;
+
+/** 示例对话（结构化存储于 character.exampleDialogue JSON） */
+export const AGENT_EXAMPLE_TURN_MAX = 24;
+export const AGENT_EXAMPLE_TURN_CONTENT_MAX = 8000;
+export const AGENT_EXAMPLE_TURNS_CHAR_TOTAL_MAX = 12000;
+
+export type AgentExampleTurn = { role: 'user' | 'assistant'; content: string };
+
+/** 审核状态：广场展示以 publishedVersion 为准；通过后 reviewStatus 为 published */
+export type AgentReviewStatus = 'draft' | 'pending' | 'published' | 'rejected';
+
+export type AgentCharacterPublishedSnapshot = {
+	name: string;
+	summary: string | null;
+	personality: string;
+	background: string;
+	speakingStyle: string;
+	greeting: string;
+	exampleDialogue: string;
+	forbiddenBehavior: string;
+	avatarFileId: string | null;
+};
+
+export type AgentDialogueStylePublishedSnapshot = {
+	name: string;
+	body: string;
+	summary: string | null;
+};
+
+const STORED_EXAMPLE_DIALOGUE_VERSION = 1 as const;
+
+/** 设为 `1` 或 `true` 时，每次智能体 LLM 请求在服务端控制台打印 OpenAI 风格请求体（含 system 与完整 messages）。临时调试用。 */
+function shouldLogAgentsLlmPayload(): boolean {
+	const v = process.env.MISSKEY_AGENTS_DEBUG_LLM?.trim().toLowerCase();
+	return v === '1' || v === 'true' || v === 'yes';
+}
+
+export const agentsErrors = {
+	featureDisabled: {
+		message: 'Agents feature is disabled.',
+		code: 'AGENTS_DISABLED',
+		id: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+	},
+	modelNotConfigured: {
+		message: 'LLM is not configured for this instance.',
+		code: 'AGENTS_MODEL_NOT_CONFIGURED',
+		id: 'b2c3d4e5-f6a7-8901-bcde-f12345678901',
+	},
+	llmRequestFailed: {
+		message: 'Upstream LLM request failed.',
+		code: 'AGENTS_LLM_FAILED',
+		id: 'c3d4e5f6-a7b8-9012-cdef-123456789012',
+	},
+	llmUnsafeUrl: {
+		message: 'LLM base URL failed security validation.',
+		code: 'AGENTS_LLM_UNSAFE_URL',
+		id: 'd4e5f6a7-b8c9-0123-def0-234567890123',
+	},
+} as const;
+
+@Injectable()
+export class AgentService {
+	constructor(
+		@Inject(DI.meta)
+		private meta: MiMeta,
+
+		@Inject(DI.agentMessagesRepository)
+		private agentMessagesRepository: AgentMessagesRepository,
+
+		@Inject(DI.agentUserStyleSubscriptionsRepository)
+		private agentUserStyleSubscriptionsRepository: AgentUserStyleSubscriptionsRepository,
+
+		private metaService: MetaService,
+		private idService: IdService,
+	) {}
+
+	@bindThis
+	public assertAgentsEnabled(): void {
+		if (!this.meta.agentFeatureEnabled) {
+			throw new ApiError(agentsErrors.featureDisabled);
+		}
+	}
+
+	@bindThis
+	public assertLlmConfigured(instance: MiMeta): void {
+		if (!isAgentLlmRunnable(instance)) {
+			throw new ApiError(agentsErrors.modelNotConfigured);
+		}
+	}
+
+	@bindThis
+	private pickModelOrThrow(instance: MiMeta, modelId: string | null): AgentLlmModelJson {
+		const models = getEffectiveLlmModels(instance);
+		if (models.length === 0) {
+			throw new ApiError(agentsErrors.modelNotConfigured);
+		}
+		const pick = modelId
+			? models.find(m => m.id === modelId)
+			: models.find(m => m.id === instance.agentDefaultModelId) ?? models[0];
+		if (!pick) {
+			throw new ApiError({
+				message: 'Invalid LLM model id.',
+				code: 'INVALID_PARAM',
+				id: 'e1f2a3b4-c5d6-7890-ef01-234567890abc',
+			});
+		}
+		return pick;
+	}
+
+	@bindThis
+	public resolveModelApiName(instance: MiMeta, modelId: string | null): string {
+		this.assertLlmConfigured(instance);
+		return this.pickModelOrThrow(instance, modelId).apiModelName;
+	}
+
+	@bindThis
+	public resolveModelConnection(instance: MiMeta, modelId: string | null): {
+		apiModelName: string;
+		baseUrlRaw: string;
+		apiKeyRaw: string;
+		maxContextTokens: number;
+		maxOutputTokensPerCall: number;
+	} {
+		this.assertLlmConfigured(instance);
+		const pick = this.pickModelOrThrow(instance, modelId);
+		const baseUrlRaw = pick.baseUrl.trim();
+		const apiKeyRaw = pick.apiKey.trim();
+		if (!baseUrlRaw || !apiKeyRaw) {
+			throw new ApiError(agentsErrors.modelNotConfigured);
+		}
+		return {
+			apiModelName: pick.apiModelName,
+			baseUrlRaw,
+			apiKeyRaw,
+			maxContextTokens: pick.maxContextTokens,
+			maxOutputTokensPerCall: pick.maxOutputTokensPerCall,
+		};
+	}
+
+	@bindThis
+	public async assertCanUseDialogueStyle(
+		meId: string,
+		style: MiAgentDialogueStyle,
+		opts: { forNewSession: boolean; sessionDialogueStyleId?: string | null },
+	): Promise<void> {
+		if (style.userId === meId) {
+			return;
+		}
+		if (!this.isListedOnPlazaStyle(style)) {
+			throw new ApiError({
+				message: 'This dialogue style is not available.',
+				code: 'STYLE_NOT_AVAILABLE',
+				id: 'f2a3b4c5-d6e7-8901-f012-345678901234',
+			});
+		}
+		const sub = await this.agentUserStyleSubscriptionsRepository.findOneBy({ userId: meId, styleId: style.id });
+		if (sub) {
+			return;
+		}
+		if (!opts.forNewSession && opts.sessionDialogueStyleId === style.id) {
+			return;
+		}
+		throw new ApiError({
+			message: 'Add this dialogue style from the plaza to your list first.',
+			code: 'STYLE_NOT_SUBSCRIBED',
+			id: 'a3b4c5d6-e7f8-9012-3456-789012345678',
+		});
+	}
+
+	@bindThis
+	public buildSystemPrompt(params: {
+		globalPrompt: string | null;
+		character: MiAgentCharacter;
+		style: MiAgentDialogueStyle;
+	}): string {
+		const parts: string[] = [];
+		parts.push('=== Platform rules ===');
+		parts.push((params.globalPrompt ?? '').trim() || '(none)');
+		parts.push('');
+		parts.push('=== Character ===');
+		parts.push(`Name: ${params.character.name}`);
+		// summary 仅用于前端列表/广场展示，不进入模型上下文
+		parts.push(`Personality:\n${params.character.personality}`);
+		parts.push(`Background:\n${params.character.background}`);
+		parts.push(`Speaking style:\n${params.character.speakingStyle}`);
+		const greet = params.character.greeting.trim();
+		if (greet.length > 0) {
+			parts.push(`Opening line (follow when starting the conversation or when it fits naturally):\n${greet}`);
+		}
+		// 示例对话见 exampleTurnsFromStored（DB 内 JSON），作为 user/assistant 消息插入 API
+		if (params.character.forbiddenBehavior.trim()) {
+			parts.push(`Forbidden:\n${params.character.forbiddenBehavior}`);
+		}
+		parts.push('');
+		parts.push('=== Dialogue style (this session) ===');
+		parts.push(params.style.body.trim() || '(default)');
+		return parts.join('\n');
+	}
+
+	@bindThis
+	public validateExampleTurnsOrThrow(input: unknown): AgentExampleTurn[] {
+		if (input == null) return [];
+		if (!Array.isArray(input)) {
+			throw new ApiError({
+				message: 'exampleTurns must be an array.',
+				code: 'INVALID_PARAM',
+				id: 'b2c3d4e5-f6a7-8901-bcde-f12345678902',
+			});
+		}
+		if (input.length > AGENT_EXAMPLE_TURN_MAX) {
+			throw new ApiError({
+				message: `At most ${AGENT_EXAMPLE_TURN_MAX} example dialogue turns.`,
+				code: 'INVALID_PARAM',
+				id: 'c3d4e5f6-a7b8-9012-cdef-123456789013',
+			});
+		}
+		const out: AgentExampleTurn[] = [];
+		let totalChars = 0;
+		for (const item of input) {
+			if (item == null || typeof item !== 'object') {
+				throw new ApiError({
+					message: 'Each example turn must be an object with role and content.',
+					code: 'INVALID_PARAM',
+					id: 'd4e5f6a7-b8c9-0123-def0-234567890124',
+				});
+			}
+			const role = (item as { role?: unknown }).role;
+			const content = (item as { content?: unknown }).content;
+			if (role !== 'user' && role !== 'assistant') {
+				throw new ApiError({
+					message: 'Each example turn role must be user or assistant.',
+					code: 'INVALID_PARAM',
+					id: 'e5f6a7b8-c9d0-1234-ef01-345678901235',
+				});
+			}
+			if (typeof content !== 'string') {
+				throw new ApiError({
+					message: 'Each example turn content must be a string.',
+					code: 'INVALID_PARAM',
+					id: 'f6a7b8c9-d0e1-2345-f012-456789012346',
+				});
+			}
+			const c = content.trim();
+			if (c.length === 0) continue;
+			if (c.length > AGENT_EXAMPLE_TURN_CONTENT_MAX) {
+				throw new ApiError({
+					message: `Example turn content exceeds ${AGENT_EXAMPLE_TURN_CONTENT_MAX} characters.`,
+					code: 'INVALID_PARAM',
+					id: 'a7b8c9d0-e1f2-3456-0123-567890123457',
+				});
+			}
+			totalChars += c.length;
+			if (totalChars > AGENT_EXAMPLE_TURNS_CHAR_TOTAL_MAX) {
+				throw new ApiError({
+					message: `Total example dialogue length exceeds ${AGENT_EXAMPLE_TURNS_CHAR_TOTAL_MAX} characters.`,
+					code: 'INVALID_PARAM',
+					id: 'b8c9d0e1-f2a3-4567-1234-678901234568',
+				});
+			}
+			out.push({ role, content: c });
+		}
+		return out;
+	}
+
+	@bindThis
+	public serializeExampleTurns(turns: AgentExampleTurn[]): string {
+		return JSON.stringify({ v: STORED_EXAMPLE_DIALOGUE_VERSION, turns });
+	}
+
+	/** 从 DB 文本列读取；仅识别本服务写入的 JSON，不做自然语言解析 */
+	@bindThis
+	public exampleTurnsFromStored(raw: string): AgentExampleTurn[] {
+		const t = raw.trim();
+		if (!t.startsWith('{')) return [];
+		try {
+			const o = JSON.parse(t) as { v?: number; turns?: unknown };
+			if (o.v !== STORED_EXAMPLE_DIALOGUE_VERSION || !Array.isArray(o.turns)) return [];
+			const out: AgentExampleTurn[] = [];
+			let totalChars = 0;
+			for (const item of o.turns) {
+				if (out.length >= AGENT_EXAMPLE_TURN_MAX) break;
+				if (item == null || typeof item !== 'object') continue;
+				const role = (item as { role?: string }).role;
+				const content = (item as { content?: string }).content;
+				if (role !== 'user' && role !== 'assistant') continue;
+				if (typeof content !== 'string') continue;
+				const c = content.trim();
+				if (c.length === 0) continue;
+				if (c.length > AGENT_EXAMPLE_TURN_CONTENT_MAX) continue;
+				if (totalChars + c.length > AGENT_EXAMPLE_TURNS_CHAR_TOTAL_MAX) break;
+				out.push({ role, content: c });
+				totalChars += c.length;
+			}
+			return out;
+		} catch {
+			return [];
+		}
+	}
+
+	/** 示例对话作为 API 前缀消息的粗略字符量（内容 + 少量 role 包装） */
+	@bindThis
+	public estimatePrefixMessagesChars(turns: AgentExampleTurn[]): number {
+		if (turns.length === 0) return 0;
+		const overheadPerMessage = 24;
+		return turns.reduce((sum, m) => sum + m.content.length + overheadPerMessage, 0);
+	}
+
+	/**
+	 * 从模型上下文上限中扣除 system（含长期记忆等已拼进 system 的部分）、示例对话、以及为本次回复预留的字符后，
+	 * 留给历史 user/assistant 轮文的预算。与 invoke 前拼装一致（按约 3 字符 ≈ 1 token 估算）。
+	 */
+	@bindThis
+	public computeChatHistoryCharBudget(params: {
+		maxContextTokens: number;
+		maxOutputTokensPerCall: number;
+		systemChars: number;
+		prefixMessages: AgentExampleTurn[];
+	}): number {
+		const maxContextChars = Math.max(4000, params.maxContextTokens * 3);
+		const prefixChars = this.estimatePrefixMessagesChars(params.prefixMessages);
+		const reserveReply = Math.max(256, Math.min(384_000, params.maxOutputTokensPerCall * 3));
+		return Math.max(0, maxContextChars - params.systemChars - prefixChars - reserveReply);
+	}
+
+	@bindThis
+	public async loadRecentMessagesForContextWithMeta(
+		sessionId: string,
+		maxContextChars: number,
+	): Promise<{
+		messages: Pick<MiAgentMessage, 'id' | 'role' | 'content'>[];
+		truncated: boolean;
+		oldestIncludedId: string | null;
+	}> {
+		const rows = await this.agentMessagesRepository.find({
+			where: { sessionId },
+			order: { createdAt: 'DESC' },
+			take: 500,
+			select: ['id', 'role', 'content', 'createdAt'],
+		});
+		const picked: Pick<MiAgentMessage, 'id' | 'role' | 'content'>[] = [];
+		let used = 0;
+		let truncated = false;
+		for (const m of rows) {
+			if (m.role === 'system') continue;
+			const len = m.content.length;
+			if (used + len > maxContextChars) {
+				truncated = true;
+				break;
+			}
+			picked.unshift({ id: m.id, role: m.role, content: m.content });
+			used += len;
+		}
+		if (!truncated && rows.length >= 500) {
+			truncated = true;
+		}
+		const oldestIncludedId = picked.length > 0 ? picked[0]!.id : null;
+		return { messages: picked, truncated, oldestIncludedId };
+	}
+
+	@bindThis
+	public async loadRecentMessagesForContext(sessionId: string, maxContextChars: number): Promise<Pick<MiAgentMessage, 'role' | 'content'>[]> {
+		const { messages } = await this.loadRecentMessagesForContextWithMeta(sessionId, maxContextChars);
+		return messages.map(({ role, content }) => ({ role, content }));
+	}
+
+	@bindThis
+	public normalizeChatCompletionsUrl(baseRaw: string): string {
+		const base = baseRaw.trim().replace(/\/$/, '');
+		const withV1 = base.endsWith('/v1') ? base : `${base}/v1`;
+		return `${withV1}/chat/completions`;
+	}
+
+	@bindThis
+	public async invokeChatCompletions(params: {
+		system: string;
+		/** 插在 system 之后、会话历史之前（如示例对话 few-shot） */
+		prefixMessages?: { role: 'user' | 'assistant'; content: string }[];
+		messages: { role: 'user' | 'assistant'; content: string }[];
+		userText: string;
+		sessionModelId: string | null;
+	}): Promise<string> {
+		const instance = await this.metaService.fetch(true);
+		this.assertLlmConfigured(instance);
+		const { apiModelName, baseUrlRaw, apiKeyRaw, maxOutputTokensPerCall } = this.resolveModelConnection(instance, params.sessionModelId);
+
+		let safeBase: URL;
+		try {
+			safeBase = await assertSafeLlmHttpsUrl(baseUrlRaw);
+		} catch (e) {
+			if (e instanceof UnsafeLlmUrlError) {
+				throw new ApiError({
+					...agentsErrors.llmUnsafeUrl,
+					message: `LLM base URL: ${describeUnsafeLlmUrlReason(e.reason)}`,
+				});
+			}
+			throw new ApiError(agentsErrors.llmUnsafeUrl);
+		}
+
+		const url = this.normalizeChatCompletionsUrl(safeBase.toString());
+		const maxOut = Math.max(1, Math.min(maxOutputTokensPerCall, 128000));
+		const prefix = (params.prefixMessages ?? []).map(m => ({ role: m.role, content: m.content }));
+		const body = {
+			model: apiModelName,
+			messages: [
+				{ role: 'system' as const, content: params.system },
+				...prefix,
+				...params.messages.map(m => ({ role: m.role, content: m.content })),
+				{ role: 'user' as const, content: params.userText },
+			],
+			max_tokens: maxOut,
+		};
+
+		if (shouldLogAgentsLlmPayload()) {
+			const openAiStylePayload = {
+				model: body.model,
+				messages: body.messages.map(m => ({ role: m.role, content: m.content })),
+				max_tokens: body.max_tokens,
+			};
+			// 服务端终端输出（非浏览器 F12）；与 Chat Completions 请求 JSON 字段一致
+			console.log('[MISSKEY_AGENTS_DEBUG_LLM] POST /v1/chat/completions payload:\n' + JSON.stringify(openAiStylePayload, null, 2));
+		}
+
+		const ac = new AbortController();
+		const t = setTimeout(() => ac.abort(), 120_000);
+		let res: Response;
+		try {
+			res = await fetch(url, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					'Authorization': `Bearer ${apiKeyRaw}`,
+				},
+				body: JSON.stringify(body),
+				signal: ac.signal,
+			});
+		} catch {
+			throw new ApiError(agentsErrors.llmRequestFailed);
+		} finally {
+			clearTimeout(t);
+		}
+
+		if (!res.ok) {
+			throw new ApiError(agentsErrors.llmRequestFailed);
+		}
+
+		let json: unknown;
+		try {
+			json = await res.json();
+		} catch {
+			throw new ApiError(agentsErrors.llmRequestFailed);
+		}
+
+		const choices = (json as { choices?: { message?: { content?: string } }[] }).choices;
+		const text = choices?.[0]?.message?.content;
+		if (typeof text !== 'string') {
+			throw new ApiError(agentsErrors.llmRequestFailed);
+		}
+		return text;
+	}
+
+	@bindThis
+	public isListedOnPlazaCharacter(character: MiAgentCharacter): boolean {
+		return character.publishedVersion != null;
+	}
+
+	@bindThis
+	public isListedOnPlazaStyle(style: MiAgentDialogueStyle): boolean {
+		return style.publishedVersion != null;
+	}
+
+	@bindThis
+	public buildCharacterSnapshotFromRow(row: MiAgentCharacter): AgentCharacterPublishedSnapshot {
+		return {
+			name: row.name,
+			summary: row.summary,
+			personality: row.personality,
+			background: row.background,
+			speakingStyle: row.speakingStyle,
+			greeting: row.greeting,
+			exampleDialogue: row.exampleDialogue,
+			forbiddenBehavior: row.forbiddenBehavior,
+			avatarFileId: row.avatarFileId,
+		};
+	}
+
+	@bindThis
+	public buildStyleSnapshotFromRow(row: MiAgentDialogueStyle): AgentDialogueStylePublishedSnapshot {
+		return {
+			name: row.name,
+			body: row.body,
+			summary: row.summary,
+		};
+	}
+
+	/** 已上线版本存在且当前编辑内容与已发布快照一致（无可审核的实质变更） */
+	@bindThis
+	public isCharacterContentUnchangedFromPublished(row: MiAgentCharacter): boolean {
+		if (row.publishedVersion == null || row.publishedSnapshot == null) return false;
+		const pub = this.parseCharacterSnapshot(row.publishedSnapshot);
+		if (!pub) return false;
+		const cur = this.buildCharacterSnapshotFromRow(row);
+		return cur.name === pub.name
+			&& cur.summary === pub.summary
+			&& cur.personality === pub.personality
+			&& cur.background === pub.background
+			&& cur.speakingStyle === pub.speakingStyle
+			&& cur.greeting === pub.greeting
+			&& cur.exampleDialogue === pub.exampleDialogue
+			&& cur.forbiddenBehavior === pub.forbiddenBehavior
+			&& cur.avatarFileId === pub.avatarFileId;
+	}
+
+	@bindThis
+	public isStyleContentUnchangedFromPublished(row: MiAgentDialogueStyle): boolean {
+		if (row.publishedVersion == null || row.publishedSnapshot == null) return false;
+		const pub = this.parseStyleSnapshot(row.publishedSnapshot);
+		if (!pub) return false;
+		const cur = this.buildStyleSnapshotFromRow(row);
+		return cur.name === pub.name && cur.body === pub.body && cur.summary === pub.summary;
+	}
+
+	@bindThis
+	public parseCharacterSnapshot(raw: unknown): AgentCharacterPublishedSnapshot | null {
+		if (!raw || typeof raw !== 'object') return null;
+		const o = raw as Record<string, unknown>;
+		if (typeof o.name !== 'string') return null;
+		return {
+			name: o.name,
+			summary: typeof o.summary === 'string' ? o.summary : null,
+			personality: typeof o.personality === 'string' ? o.personality : '',
+			background: typeof o.background === 'string' ? o.background : '',
+			speakingStyle: typeof o.speakingStyle === 'string' ? o.speakingStyle : '',
+			greeting: typeof o.greeting === 'string' ? o.greeting : '',
+			exampleDialogue: typeof o.exampleDialogue === 'string' ? o.exampleDialogue : '',
+			forbiddenBehavior: typeof o.forbiddenBehavior === 'string' ? o.forbiddenBehavior : '',
+			avatarFileId: typeof o.avatarFileId === 'string' ? o.avatarFileId : null,
+		};
+	}
+
+	@bindThis
+	public parseStyleSnapshot(raw: unknown): AgentDialogueStylePublishedSnapshot | null {
+		if (!raw || typeof raw !== 'object') return null;
+		const o = raw as Record<string, unknown>;
+		if (typeof o.name !== 'string' || typeof o.body !== 'string') return null;
+		return {
+			name: o.name,
+			body: o.body,
+			summary: typeof o.summary === 'string' ? o.summary : null,
+		};
+	}
+
+	@bindThis
+	public effectiveCharacterForLlm(row: MiAgentCharacter, usePublishedSnapshot: boolean): MiAgentCharacter {
+		if (!usePublishedSnapshot) {
+			return row;
+		}
+		if (row.publishedSnapshot == null) {
+			throw new ApiError({
+				message: 'Published character snapshot is missing.',
+				code: 'AGENT_PUBLISHED_UNAVAILABLE',
+				id: 'b1c2d3e4-f5a6-7890-bcde-f12345678901',
+			});
+		}
+		const snap = this.parseCharacterSnapshot(row.publishedSnapshot);
+		if (!snap) {
+			throw new ApiError({
+				message: 'Published character snapshot is invalid.',
+				code: 'AGENT_PUBLISHED_UNAVAILABLE',
+				id: 'c2d3e4f5-a6b7-8901-cdef-123456789012',
+			});
+		}
+		return Object.assign(new MiAgentCharacter(), row, {
+			name: snap.name,
+			summary: snap.summary,
+			personality: snap.personality,
+			background: snap.background,
+			speakingStyle: snap.speakingStyle,
+			greeting: snap.greeting,
+			exampleDialogue: snap.exampleDialogue,
+			forbiddenBehavior: snap.forbiddenBehavior,
+			avatarFileId: snap.avatarFileId,
+		});
+	}
+
+	@bindThis
+	public effectiveStyleForLlm(row: MiAgentDialogueStyle, usePublishedSnapshot: boolean): MiAgentDialogueStyle {
+		if (!usePublishedSnapshot) {
+			return row;
+		}
+		if (row.publishedSnapshot == null) {
+			throw new ApiError({
+				message: 'Published style snapshot is missing.',
+				code: 'AGENT_PUBLISHED_UNAVAILABLE',
+				id: 'd3e4f5a6-b7c8-9012-def0-234567890123',
+			});
+		}
+		const snap = this.parseStyleSnapshot(row.publishedSnapshot);
+		if (!snap) {
+			throw new ApiError({
+				message: 'Published style snapshot is invalid.',
+				code: 'AGENT_PUBLISHED_UNAVAILABLE',
+				id: 'e4f5a6b7-c8d9-0123-ef01-345678901234',
+			});
+		}
+		return Object.assign(new MiAgentDialogueStyle(), row, {
+			name: snap.name,
+			body: snap.body,
+			summary: snap.summary,
+		});
+	}
+
+	/** 同步 isPublished：与「曾在广场上线过」一致，供旧查询与索引使用 */
+	/** 广场卡片：始终用已上线快照，避免审核中的草稿泄漏到列表 */
+	@bindThis
+	public characterPlazaDisplayFields(row: MiAgentCharacter): { name: string; summary: string | null; avatarFileId: string | null } {
+		const snap = row.publishedSnapshot != null ? this.parseCharacterSnapshot(row.publishedSnapshot) : null;
+		if (snap) {
+			return { name: snap.name, summary: snap.summary, avatarFileId: snap.avatarFileId };
+		}
+		return { name: row.name, summary: row.summary, avatarFileId: row.avatarFileId };
+	}
+
+	@bindThis
+	public stylePlazaDisplayFields(row: MiAgentDialogueStyle): { name: string; body: string; summary: string | null } {
+		const snap = row.publishedSnapshot != null ? this.parseStyleSnapshot(row.publishedSnapshot) : null;
+		if (snap) {
+			return { name: snap.name, body: snap.body, summary: snap.summary };
+		}
+		return { name: row.name, body: row.body, summary: row.summary };
+	}
+
+	@bindThis
+	public syncCharacterListedFlag(row: MiAgentCharacter): void {
+		row.isPublished = row.publishedVersion != null;
+	}
+
+	@bindThis
+	public syncStyleListedFlag(row: MiAgentDialogueStyle): void {
+		row.isPublished = row.publishedVersion != null;
+	}
+
+	@bindThis
+	public assertSessionCharacterPolicy(params: {
+		sessionKind: AgentSessionKind;
+		character: MiAgentCharacter;
+		userId: string;
+	}): void {
+		if (params.sessionKind === 'draft_test') {
+			if (params.character.userId !== params.userId) {
+				throw new Error('FORBIDDEN');
+			}
+			return;
+		}
+		if (!this.isListedOnPlazaCharacter(params.character)) {
+			throw new Error('CHARACTER_NOT_PUBLISHED');
+		}
+	}
+
+	@bindThis
+	public newId(): string {
+		return this.idService.gen();
+	}
+}

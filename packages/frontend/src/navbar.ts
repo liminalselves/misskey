@@ -13,6 +13,7 @@ import { openInstanceMenu, openToolsMenu } from '@/ui/_common_/common.js';
 import { lookup } from '@/utility/lookup.js';
 import * as os from '@/os.js';
 import { i18n } from '@/i18n.js';
+import { instance } from '@/instance.js';
 import { unisonReload } from '@/utility/unison-reload.js';
 
 export const navbarItemDef = reactive<{
@@ -56,13 +57,19 @@ export const navbarItemDef = reactive<{
 	},
 	explore: {
 		title: i18n.ts.explore,
-		icon: 'ti ti-hash',
-		to: '/explore',
+		icon: 'ti ti-home',
+		to: '/',
+	},
+	agents: {
+		title: i18n.ts._agents.title,
+		icon: 'ti ti-robot',
+		to: '/agents',
+		show: computed(() => $i != null && (instance as Record<string, unknown>).agentFeatureEnabled === true),
 	},
 	timeline: {
 		title: i18n.ts.timeline,
-		icon: 'ti ti-home',
-		to: '/',
+		icon: 'ti ti-hash',
+		to: '/timeline',
 	},
 	announcements: {
 		title: i18n.ts.announcements,

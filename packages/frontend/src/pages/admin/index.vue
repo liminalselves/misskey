@@ -14,6 +14,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 				<div class="_gaps_s">
 					<MkInfo v-if="thereIsUnresolvedAbuseReport" warn>{{ i18n.ts.thereIsUnresolvedAbuseReportWarning }} <MkA to="/admin/abuses" class="_link">{{ i18n.ts.check }}</MkA></MkInfo>
+					<MkInfo v-if="thereArePendingAgentReviews" warn>{{ i18n.ts._agents.thereArePendingAgentReviewsAdminWarning }} <MkA to="/admin/agents-review" class="_link">{{ i18n.ts.check }}</MkA></MkInfo>
 					<MkInfo v-if="noMaintainerInformation" warn>{{ i18n.ts.noMaintainerInformationWarning }} <MkA to="/admin/settings" class="_link">{{ i18n.ts.configure }}</MkA></MkInfo>
 					<MkInfo v-if="noInquiryUrl" warn>{{ i18n.ts.noInquiryUrlWarning }} <MkA to="/admin/settings" class="_link">{{ i18n.ts.configure }}</MkA></MkInfo>
 					<MkInfo v-if="noBotProtection" warn>{{ i18n.ts.noBotProtectionWarning }} <MkA to="/admin/security" class="_link">{{ i18n.ts.configure }}</MkA></MkInfo>
@@ -71,14 +72,23 @@ const noBotProtection = computed(() => !instance.disableRegistration && !instanc
 const noEmailServer = computed(() => !instance.enableEmail);
 const noInquiryUrl = computed(() => isEmpty(instance.inquiryUrl));
 const thereIsUnresolvedAbuseReport = ref(false);
+const thereArePendingAgentReviews = ref(false);
 const currentPage = computed(() => router.currentRef.value.child);
 
-misskeyApi('admin/abuse-user-reports', {
-	state: 'unresolved',
-	limit: 1,
-}).then(reports => {
-	if (reports.length > 0) thereIsUnresolvedAbuseReport.value = true;
-});
+function refreshAdminPanelAlerts() {
+	misskeyApi('admin/abuse-user-reports', {
+		state: 'unresolved',
+		limit: 1,
+	}).then(reports => {
+		thereIsUnresolvedAbuseReport.value = reports.length > 0;
+	});
+
+	misskeyApi('admin/agents/review/pending-exists', {}).then(res => {
+		thereArePendingAgentReviews.value = res.pending;
+	}).catch(() => {
+		thereArePendingAgentReviews.value = false;
+	});
+}
 
 const NARROW_THRESHOLD = 600;
 const ro = new ResizeObserver((entries, observer) => {
@@ -176,6 +186,11 @@ const menuDef = computed<SuperMenuDef[]>(() => [{
 		text: i18n.ts.moderationLogs,
 		to: '/admin/modlog',
 		active: currentPage.value?.route.name === 'modlog',
+	}, {
+		icon: 'ti ti-checkbox',
+		text: i18n.ts._agents.adminAgentReview,
+		to: '/admin/agents-review',
+		active: currentPage.value?.route.name === 'agents-review',
 	}],
 }, {
 	title: i18n.ts.settings,
@@ -184,6 +199,21 @@ const menuDef = computed<SuperMenuDef[]>(() => [{
 		text: i18n.ts.general,
 		to: '/admin/settings',
 		active: currentPage.value?.route.name === 'settings',
+	}, {
+		icon: 'ti ti-device-mobile',
+		text: i18n.ts.adminAppSettings,
+		to: '/admin/app-settings',
+		active: currentPage.value?.route.name === 'app-settings',
+	}, {
+		icon: 'ti ti-robot',
+		text: i18n.ts._agents.adminSettings,
+		to: '/admin/agents-settings',
+		active: currentPage.value?.route.name === 'agents-settings',
+	}, {
+		icon: 'ti ti-messages',
+		text: i18n.ts._agents.adminAgentChatAudit,
+		to: '/admin/agents-chat-audit',
+		active: currentPage.value?.route.name === 'agents-chat-audit',
 	}, {
 		icon: 'ti ti-paint',
 		text: i18n.ts.branding,
@@ -248,6 +278,7 @@ onMounted(() => {
 	if (currentPage.value?.route.name == null && !narrow.value) {
 		router.replace('/admin/overview');
 	}
+	refreshAdminPanelAlerts();
 });
 
 onActivated(() => {
@@ -257,6 +288,7 @@ onActivated(() => {
 	if (currentPage.value?.route.name == null && !narrow.value) {
 		router.replace('/admin/overview');
 	}
+	refreshAdminPanelAlerts();
 });
 
 onUnmounted(() => {

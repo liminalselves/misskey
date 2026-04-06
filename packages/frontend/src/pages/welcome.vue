@@ -12,6 +12,11 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
+/** 未登录时 `/` 与发现页共用路由，忽略 hash 对应的 initialTab */
+defineProps<{
+	initialTab?: string;
+}>();
+
 import { computed, ref } from 'vue';
 import * as Misskey from 'misskey-js';
 import { instanceName } from '@@/js/config.js';

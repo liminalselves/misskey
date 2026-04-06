@@ -2309,6 +2309,14 @@ export interface Locale extends ILocale {
      */
     "objectStorageUseSSLDesc": string;
     /**
+     * 公開URLをHTTPSに統一
+     */
+    "objectStorageForceHttps": string;
+    /**
+     * 有効にすると、APIが返すオブジェクトストレージのURL（ファイルURL・サムネイルなど）がhttpで保存されていてもhttpsとして返します。S3 APIのSSL設定（「SSLを使用する」）とは別です。
+     */
+    "objectStorageForceHttpsDesc": string;
+    /**
      * Proxyを利用する
      */
     "objectStorageUseProxy": string;
@@ -2612,6 +2620,50 @@ export interface Locale extends ILocale {
      * android/app/src/main/assets/aliyun-emas-services.json の emas.appKey と同じ値。
      */
     "aliyunMobilePushAppKeyCaption": string;
+    /**
+     * アプリ
+     */
+    "adminAppSettings": string;
+    /**
+     * 公式ネイティブアプリ向けの設定です。Aliyun モバイルプッシュの認証情報、クライアントに公開するバージョンとダウンロードURL など。
+     */
+    "adminAppSettingsDescription": string;
+    /**
+     * 公式クライアント（ネイティブ）
+     */
+    "nativeClientAppInfo": string;
+    /**
+     * ここで入力した内容はインスタンスの meta に保存され、公式アプリの「設定 → アプリ」から参照されます。最新版との比較や、設定したダウンロードURL の表示に使われます。
+     */
+    "nativeClientAppInfoDescription": string;
+    /**
+     * Android の最新バージョン
+     */
+    "nativeClientAppInfoLatestAndroidVersion": string;
+    /**
+     * iOS の最新バージョン
+     */
+    "nativeClientAppInfoLatestIosVersion": string;
+    /**
+     * アプリ内のバージョンと比較しやすいよう、semver（例: 1.2.3）を推奨します。
+     */
+    "nativeClientAppInfoSemverHint": string;
+    /**
+     * Android 用パッケージ／ダウンロードページの URL
+     */
+    "nativeClientAppInfoAndroidDownloadUrl": string;
+    /**
+     * iOS 用パッケージ／TestFlight／App Store の URL
+     */
+    "nativeClientAppInfoIosDownloadUrl": string;
+    /**
+     * リリースノート URL（任意）
+     */
+    "nativeClientAppInfoReleaseNotesUrl": string;
+    /**
+     * アプリ利用者向けのお知らせ（プレーンテキスト・任意）
+     */
+    "nativeClientAppInfoAnnouncement": string;
     /**
      * 削除されたノート
      */
@@ -3957,6 +4009,10 @@ export interface Locale extends ILocale {
      */
     "recommended": string;
     /**
+     * 最新
+     */
+    "exploreFeaturedSortLatest": string;
+    /**
      * 熱度
      */
     "exploreFeaturedSortHeat": string;
@@ -4156,6 +4212,106 @@ export interface Locale extends ILocale {
      * ネイティブ通知はアプリ側で登録されます。このページのブラウザ向けプッシュ設定は使いません。
      */
     "nativePushUseApp": string;
+    /**
+     * アプリのプッシュ通知をオフにしました
+     */
+    "nativePushAutoDisabledByPermissionTitle": string;
+    /**
+     * 通知の許可が得られないため、アプリのプッシュ受信を停止し、設定をオフにしました。通知を再度利用する場合は、端末の設定で通知を許可したうえで、通知設定から「アプリのプッシュ通知を有効にする」を選んでください。
+     */
+    "nativePushAutoDisabledByPermissionDescription": string;
+    /**
+     * アプリ
+     */
+    "appClientSettings": string;
+    /**
+     * アプリについて
+     */
+    "appClientAboutSection": string;
+    /**
+     * アプリ名
+     */
+    "appClientAppName": string;
+    /**
+     * バージョン
+     */
+    "appClientVersion": string;
+    /**
+     * ビルド番号
+     */
+    "appClientBuildNumber": string;
+    /**
+     * パッケージ名
+     */
+    "appClientPackageName": string;
+    /**
+     * プラットフォーム
+     */
+    "appClientPlatform": string;
+    /**
+     * Android
+     */
+    "appClientPlatformAndroid": string;
+    /**
+     * iOS
+     */
+    "appClientPlatformIos": string;
+    /**
+     * 接続中のサーバー
+     */
+    "appClientConnectedInstance": string;
+    /**
+     * 更新
+     */
+    "appClientUpdatesSection": string;
+    /**
+     * このサーバーとバージョンを照合
+     */
+    "appClientCheckForUpdates": string;
+    /**
+     * コントロールパネル → 設定 → アプリで設定された最新版とアプリのバージョンを比較します。新しい版がある場合は、管理者が設定したダウンロードリンクを開けます。
+     */
+    "appClientCheckForUpdatesDescription": string;
+    /**
+     * アプリ情報を読み込めませんでした。しばらくしてから再度開いてください。
+     */
+    "appClientDataUnavailable": string;
+    /**
+     * このページは公式クライアントアプリから開いたときのみ利用できます。
+     */
+    "appClientPageOnlyInApp": string;
+    /**
+     * サーバーからのお知らせ
+     */
+    "appClientInstanceNoticeSection": string;
+    /**
+     * このサーバーでは、お使いのプラットフォーム向けの最新バージョンがまだ設定されていません。管理者に「コントロールパネル → 設定 → アプリ」での入力を依頼してください。
+     */
+    "appClientNoServerVersionConfigured": string;
+    /**
+     * すでに最新版です。
+     */
+    "appClientAlreadyLatest": string;
+    /**
+     * 新しいバージョンがあります
+     */
+    "appClientUpdateAvailableTitle": string;
+    /**
+     * サーバーの最新版:
+     */
+    "appClientUpdateAvailableLatestLabel": string;
+    /**
+     * お使いのバージョン:
+     */
+    "appClientUpdateAvailableYoursLabel": string;
+    /**
+     * ダウンロードリンクを開く
+     */
+    "appClientOpenDownload": string;
+    /**
+     * 詳細は、管理者が設定したリリースノートのリンクを参照してください（ある場合）。
+     */
+    "appClientReleaseNotesHint": string;
     /**
      * 通知が既読になったらプッシュ通知を削除する
      */
@@ -11052,6 +11208,22 @@ export interface Locale extends ILocale {
              */
             "chatRoomInvitationReceived": string;
             /**
+             * チャットルームにメンバーが参加した
+             */
+            "chatRoomMemberJoined": string;
+            /**
+             * チャットルームから削除された
+             */
+            "chatRoomKicked": string;
+            /**
+             * チャットルームで一時的に利用停止になった
+             */
+            "chatRoomSuspended": string;
+            /**
+             * チャットルームの利用停止が解除された
+             */
+            "chatRoomUnsuspended": string;
+            /**
              * 実績の獲得
              */
             "achievementEarned": string;
@@ -13359,5 +13531,879 @@ export interface Locale extends ILocale {
          * MFM
          */
         "mfm": string;
+    };
+    "_agents": {
+        /**
+         * エージェント
+         */
+        "title": string;
+        /**
+         * エージェント
+         */
+        "exploreTab": string;
+        /**
+         * 広場
+         */
+        "navSquare": string;
+        /**
+         * 創作
+         */
+        "navCreate": string;
+        /**
+         * キャラ設定
+         */
+        "charactersTab": string;
+        /**
+         * 会話スタイル
+         */
+        "stylesTab": string;
+        /**
+         * エージェント
+         */
+        "adminSettings": string;
+        /**
+         * エージェント審査
+         */
+        "adminAgentReview": string;
+        /**
+         * 審査待ちのキャラと会話スタイルを処理します。承認すると公開用スナップショットが更新され、バージョン（V0、V1…）が進みます。更新の却下では既存の公開版は変わりません。初回が却下の場合は広場に出ません。
+         */
+        "adminAgentReviewDescription": string;
+        /**
+         * エージェントチャット記録
+         */
+        "adminAgentChatAudit": string;
+        /**
+         * モデレーション用に、インスタンス内のエージェント会話メッセージを検索・閲覧します。ユーザー・セッション・キャラ・発話ロール・本文で絞り込めます。IDはコピーボタンで取得できます。
+         */
+        "adminAgentChatAuditDescription": string;
+        /**
+         * 絞り込み
+         */
+        "adminAgentChatAuditFilters": string;
+        /**
+         * 会話ユーザーID
+         */
+        "adminAgentChatAuditFilterUserId": string;
+        /**
+         * セッションID
+         */
+        "adminAgentChatAuditFilterSessionId": string;
+        /**
+         * キャラクターID
+         */
+        "adminAgentChatAuditFilterCharacterId": string;
+        /**
+         * 発話ロール
+         */
+        "adminAgentChatAuditFilterRole": string;
+        /**
+         * 本文に含む
+         */
+        "adminAgentChatAuditFilterQuery": string;
+        /**
+         * 検索
+         */
+        "adminAgentChatAuditSearch": string;
+        /**
+         * クリア
+         */
+        "adminAgentChatAuditClearFilters": string;
+        /**
+         * さらに古いメッセージ
+         */
+        "adminAgentChatAuditLoadMore": string;
+        /**
+         * 該当するメッセージがありません。
+         */
+        "adminAgentChatAuditNoResults": string;
+        /**
+         * まだエージェントのチャットメッセージがありません。
+         */
+        "adminAgentChatAuditNoMessagesYet": string;
+        /**
+         * インスタンス全体の直近メッセージを新しい順に表示しています。下の条件で絞り込めます。
+         */
+        "adminAgentChatAuditRecentHint": string;
+        /**
+         * 直近一覧
+         */
+        "adminAgentChatAuditQuickRecent": string;
+        /**
+         * 更新
+         */
+        "adminAgentChatAuditRefreshRecent": string;
+        /**
+         * IDをコピー
+         */
+        "adminAgentChatAuditCopy": string;
+        /**
+         * すべて
+         */
+        "adminAgentChatAuditRoleAll": string;
+        /**
+         * システム
+         */
+        "adminAgentChatAuditRoleSystem": string;
+        /**
+         * 下書き／テスト
+         */
+        "adminAgentChatAuditSessionKindDraft": string;
+        /**
+         * コミュニティ
+         */
+        "adminAgentChatAuditSessionKindCommunity": string;
+        /**
+         * ユーザー
+         */
+        "adminAgentChatAuditIndexUser": string;
+        /**
+         * セッション
+         */
+        "adminAgentChatAuditIndexSession": string;
+        /**
+         * キャラクター
+         */
+        "adminAgentChatAuditIndexCharacter": string;
+        /**
+         * 会話スタイル
+         */
+        "adminAgentChatAuditIndexStyle": string;
+        /**
+         * メッセージ
+         */
+        "adminAgentChatAuditIndexMessage": string;
+        /**
+         * 審査に出す
+         */
+        "submitForReview": string;
+        /**
+         * 更新
+         */
+        "submitUpdateForReview": string;
+        /**
+         * 編集中の内容は公開中の版と同一です。キャラクターカードまたはプリセットを変更してから更新を申請してください。
+         */
+        "publishNoContentChange": string;
+        /**
+         * 審査中
+         */
+        "pendingReviewBadge": string;
+        /**
+         * 却下
+         */
+        "rejectedReviewBadge": string;
+        /**
+         * 承認
+         */
+        "approveReview": string;
+        /**
+         * 却下
+         */
+        "rejectReview": string;
+        /**
+         * キャラ
+         */
+        "reviewKindCharacter": string;
+        /**
+         * 会話スタイル
+         */
+        "reviewKindStyle": string;
+        /**
+         * 審査待ちはありません
+         */
+        "noPendingAgentReviews": string;
+        /**
+         * 審査待ちのエージェント（キャラクターまたは会話スタイル）があります。
+         */
+        "thereArePendingAgentReviewsAdminWarning": string;
+        /**
+         * エージェントのオンオフ、システムプロンプト、モデル一覧を設定します。各モデルにAPIのURL・キー・上限を個別に設定します。ベースURLは https で、保存時にサーバーで検証されます（SSRF対策）。
+         */
+        "adminSettingsDescription": string;
+        /**
+         * 機能とプロンプト
+         */
+        "adminSectionFeature": string;
+        /**
+         * API接続
+         */
+        "adminSectionConnection": string;
+        /**
+         * モデルと上限
+         */
+        "adminSectionModels": string;
+        /**
+         * 旧単一モデル（フォールバック）
+         */
+        "adminSectionLegacy": string;
+        /**
+         * （廃止）
+         */
+        "adminGlobalApiFallbackHint": string;
+        /**
+         * 各モデルは独立設定です（表示名・説明・API Base URL・APIキー・プロバイダのmodel名・コンテキスト上限・1回の出力上限）。完全なモデルを1件以上残してください。
+         */
+        "adminModelListHint": string;
+        /**
+         * モデルがありません。「モデルを追加」し、すべての項目を入力してください。
+         */
+        "adminModelListEmpty": string;
+        /**
+         * モデルを追加
+         */
+        "addAgentModel": string;
+        /**
+         * モデル
+         */
+        "adminModelRowPrefix": string;
+        /**
+         * 内部ID
+         */
+        "fieldModelInternalId": string;
+        /**
+         * 自動付与の一意な識別子です。セッションやAPIで参照されます。利用者には表示名のみ見えます。
+         */
+        "fieldModelInternalIdCaption": string;
+        /**
+         * プロバイダAPIの model に送る値（例: gpt-4o）
+         */
+        "fieldApiModelNameCaption": string;
+        /**
+         * 空欄のときは論理IDと同じ表示名になります
+         */
+        "fieldModelDisplayNameCaption": string;
+        /**
+         * API Base URL
+         */
+        "modelBaseUrl": string;
+        /**
+         * APIキー（秘密）
+         */
+        "modelApiKey": string;
+        /**
+         * https:// は省略可。保存時に補完して検証します。
+         */
+        "fieldModelBaseUrlCaption": string;
+        /**
+         * このモデルへのリクエストにのみ使用
+         */
+        "fieldModelApiKeyCaption": string;
+        /**
+         * エージェント機能を有効にする
+         */
+        "featureEnabled": string;
+        /**
+         * グローバルシステムプロンプト
+         */
+        "globalPrompt": string;
+        /**
+         * APIベースURL（例: https://api.openai.com/v1）
+         */
+        "openaiBaseUrl": string;
+        /**
+         * https:// を省略できます（例: api.openai.com/v1）。保存時に補完して検証します。
+         */
+        "agentOpenaiBaseUrlCaption": string;
+        /**
+         * APIキー
+         */
+        "openaiApiKey": string;
+        /**
+         * モデル表示名
+         */
+        "modelDisplayName": string;
+        /**
+         * モデル説明（表示用）
+         */
+        "modelDescription": string;
+        /**
+         * モデルID（APIのmodel）
+         */
+        "modelApiName": string;
+        /**
+         * 最大コンテキストトークン
+         */
+        "maxContextTokens": string;
+        /**
+         * 1回の返答の最大出力トークン
+         */
+        "maxOutputTokens": string;
+        /**
+         * 自分のキャラ
+         */
+        "myCharacters": string;
+        /**
+         * 自分の会話スタイル
+         */
+        "myStyles": string;
+        /**
+         * 公開エージェント
+         */
+        "publicAgents": string;
+        /**
+         * キャラを作成
+         */
+        "newCharacter": string;
+        /**
+         * スタイルを作成
+         */
+        "newStyle": string;
+        /**
+         * 公開
+         */
+        "publish": string;
+        /**
+         * 公開停止
+         */
+        "unpublish": string;
+        /**
+         * チャット
+         */
+        "play": string;
+        /**
+         * 公開されたエージェントはまだありません
+         */
+        "noAgentsYet": string;
+        /**
+         * まだチャットがありません
+         */
+        "noSessionsYet": string;
+        /**
+         * 送信
+         */
+        "send": string;
+        /**
+         * エージェントチャット
+         */
+        "sessionChat": string;
+        /**
+         * エージェント
+         */
+        "chatTab": string;
+        /**
+         * 編集
+         */
+        "edit": string;
+        /**
+         * キャラを編集
+         */
+        "editCharacter": string;
+        /**
+         * 基本情報
+         */
+        "editCharacterBasic": string;
+        /**
+         * 人格と世界観
+         */
+        "editCharacterPersona": string;
+        /**
+         * 会話と例
+         */
+        "editCharacterDialogue": string;
+        /**
+         * 安全と境界
+         */
+        "editCharacterSafety": string;
+        /**
+         * 会話スタイルを編集
+         */
+        "editStyle": string;
+        /**
+         * 名前
+         */
+        "fieldName": string;
+        /**
+         * 概要（一覧表示）
+         */
+        "fieldSummary": string;
+        /**
+         * 一覧・広場表示のみ。モデルには送りません。
+         */
+        "fieldSummaryCaption": string;
+        /**
+         * 性格・振る舞い
+         */
+        "fieldPersonality": string;
+        /**
+         * 背景
+         */
+        "fieldBackground": string;
+        /**
+         * 話し方
+         */
+        "fieldSpeakingStyle": string;
+        /**
+         * 最初の一言
+         */
+        "fieldGreeting": string;
+        /**
+         * システムプロンプトに含め、冒頭の話し方の指針にします（最初の返信として自動挿入はしません）。
+         */
+        "fieldGreetingCaption": string;
+        /**
+         * 例となる会話
+         */
+        "fieldExampleDialogue": string;
+        /**
+         * 下にターンを追加し、話し手と本文を入力します。保存後、順に user/assistant メッセージとして送られます（システムプロンプトの直後・会話履歴の前）。空の本文は保存時に除外。最大 24 ターン。
+         */
+        "fieldExampleDialogueCaption": string;
+        /**
+         * 話し手
+         */
+        "exampleTurnRoleLabel": string;
+        /**
+         * このターンの本文
+         */
+        "exampleTurnContentLabel": string;
+        /**
+         * ユーザー
+         */
+        "exampleTurnRoleUser": string;
+        /**
+         * アシスタント
+         */
+        "exampleTurnRoleAssistant": string;
+        /**
+         * 例を1ターン追加
+         */
+        "addExampleTurn": string;
+        /**
+         * このターンを削除
+         */
+        "removeExampleTurn": string;
+        /**
+         * 禁止事項（モデル制約）
+         */
+        "fieldForbidden": string;
+        /**
+         * スタイル名
+         */
+        "fieldStyleName": string;
+        /**
+         * 概要（一覧表示）
+         */
+        "fieldStyleSummary": string;
+        /**
+         * 一覧・広場表示のみ。モデルのシステムプロンプトには含めません。
+         */
+        "fieldStyleSummaryCaption": string;
+        /**
+         * スタイル指示（システムプロンプト）
+         */
+        "fieldStyleBody": string;
+        /**
+         * 口調・視点・長さなど。セッションごとにキャラ設定と合成されます（上の概要は含みません）。
+         */
+        "styleBodyHint": string;
+        /**
+         * アイコンを選ぶ
+         */
+        "avatarPick": string;
+        /**
+         * アイコンを外す
+         */
+        "avatarClear": string;
+        /**
+         * キャラを削除
+         */
+        "deleteCharacter": string;
+        /**
+         * このキャラを削除しますか？既存セッションは残る場合があります。
+         */
+        "deleteCharacterConfirm": string;
+        /**
+         * スタイルを削除
+         */
+        "deleteStyle": string;
+        /**
+         * この会話スタイルを削除しますか？
+         */
+        "deleteStyleConfirm": string;
+        /**
+         * 削除しました
+         */
+        "deleteDone": string;
+        /**
+         * 公開中
+         */
+        "publishedBadge": string;
+        /**
+         * 下書き
+         */
+        "draftBadge": string;
+        /**
+         * 会話スタイルを作成し、公開してください。
+         */
+        "needPublishedStyle": string;
+        /**
+         * コミュニティプレイには公開済みの会話スタイルが少なくとも1つ必要です（自分のものか、広場から追加）。エージェントページを開きます。
+         */
+        "needPublishedStyleExplore": string;
+        /**
+         * 会話スタイルを作成するか、発見→エージェント→スタイル広場から公開済みを追加してください。
+         */
+        "needAnyUsableStyle": string;
+        /**
+         * キャラ
+         */
+        "exploreSubCharacters": string;
+        /**
+         * 作成者
+         */
+        "cardCreator": string;
+        /**
+         * 作成
+         */
+        "cardCreated": string;
+        /**
+         * 更新
+         */
+        "cardUpdated": string;
+        /**
+         * スタイル広場
+         */
+        "stylesPlazaTab": string;
+        /**
+         * 公開された会話スタイルはまだありません
+         */
+        "stylesPlazaEmpty": string;
+        /**
+         * 自分
+         */
+        "stylePlazaMine": string;
+        /**
+         * 追加済み
+         */
+        "subscribedBadge": string;
+        /**
+         * 広場
+         */
+        "subscribedFromPlazaBadge": string;
+        /**
+         * リストに追加
+         */
+        "addStyleToMine": string;
+        /**
+         * リストから外す
+         */
+        "removeStyleFromMine": string;
+        /**
+         * モデル
+         */
+        "sessionModel": string;
+        /**
+         * モデル
+         */
+        "sessionModelTab": string;
+        /**
+         * 管理者が利用可能なモデルをまだ設定していません。
+         */
+        "sessionModelNoModels": string;
+        /**
+         * デフォルト
+         */
+        "sessionModelDefault": string;
+        /**
+         * 未指定（一覧の先頭の利用可能モデルを使用）
+         */
+        "agentsMetaDefaultModelUnset": string;
+        /**
+         * アシスタント
+         */
+        "assistantShort": string;
+        /**
+         * 会話で表示
+         */
+        "agentChatJumpToMessage": string;
+        /**
+         * 検索するキーワードを入力してください
+         */
+        "agentSearchNeedKeyword": string;
+        /**
+         * 会話スタイル
+         */
+        "sessionDialogueStyle": string;
+        /**
+         * モデル一覧（JSON配列）
+         */
+        "agentLlmModelsJson": string;
+        /**
+         * 各要素に id（論理ID）と apiModelName（プロバイダ側のモデル名）が必要です。name は表示名で省略可（省略時は id）。description は任意です。
+         */
+        "agentLlmModelsJsonHint": string;
+        /**
+         * デフォルトのモデルid（一覧のidと一致）
+         */
+        "agentDefaultModelId": string;
+        /**
+         * （廃止）
+         */
+        "agentLlmModelsLegacyHint": string;
+        /**
+         * 未入力の項目があります。論理ID・表示名・API URL・キー・APIモデル名はすべて必須です。
+         */
+        "agentLlmModelsRowIncomplete": string;
+        /**
+         * 論理IDが重複しています。
+         */
+        "agentLlmModelsDuplicateId": string;
+        /**
+         * コンテキスト上限は 256～2000000 の範囲で指定してください。
+         */
+        "agentLlmModelsInvalidContext": string;
+        /**
+         * 1回の出力上限は 1～128000 の範囲で指定してください。
+         */
+        "agentLlmModelsInvalidOutput": string;
+        /**
+         * 完全なモデルを1件以上設定してください。
+         */
+        "agentLlmModelsNeedOne": string;
+        /**
+         * デフォルトのモデルIDは一覧に存在する必要があります。
+         */
+        "agentDefaultModelInvalid": string;
+        /**
+         * モデル一覧のJSONが不正です。各要素に非空の id と apiModelName（文字列）が必要です。description は文字列か省略してください。
+         */
+        "agentLlmModelsJsonInvalid": string;
+        /**
+         * テストに使う会話スタイル
+         */
+        "pickStyleForTest": string;
+        /**
+         * 会話スタイルを選ぶ（コミュニティ）
+         */
+        "pickStyleForCommunity": string;
+        /**
+         * 下書きテスト
+         */
+        "sessionKindDraft": string;
+        /**
+         * コミュニティ
+         */
+        "sessionKindCommunity": string;
+        /**
+         * メッセージを送って開始
+         */
+        "emptyThread": string;
+        /**
+         * セッション設定
+         */
+        "sessionSettings": string;
+        /**
+         * セッション名を変更
+         */
+        "renameSession": string;
+        /**
+         * 長期記憶（阿里云 DashScope）
+         */
+        "adminSectionLongMemory": string;
+        /**
+         * DashScope の長期記憶 API を利用します。コンソールで記憶ライブラリを作成し、API キーと任意のライブラリ ID を設定してください。各セッションでオンオフと検索パラメータを調整できます。
+         */
+        "adminLongMemoryHint": string;
+        /**
+         * 長期記憶を有効にする（インスタンス全体）
+         */
+        "longMemoryEnabled": string;
+        /**
+         * DashScope API キー
+         */
+        "dashscopeApiKey": string;
+        /**
+         * Model Studio の DASHSCOPE_API_KEY と同じ。サーバー側のみで使用します。
+         */
+        "dashscopeApiKeyCaption": string;
+        /**
+         * API オリジン（任意）
+         */
+        "dashscopeApiBaseUrl": string;
+        /**
+         * 空欄の場合は https://dashscope.aliyuncs.com
+         */
+        "dashscopeApiBaseUrlCaption": string;
+        /**
+         * 記憶ライブラリ ID（任意）
+         */
+        "memoryLibraryId": string;
+        /**
+         * 百練コンソールの記憶ライブラリカードの ID。空欄はデフォルトライブラリ。
+         */
+        "memoryLibraryIdCaption": string;
+        /**
+         * 既定の top_k
+         */
+        "defaultMemoryTopK": string;
+        /**
+         * 既定の注入最大文字数
+         */
+        "defaultMemoryInjectMaxChars": string;
+        /**
+         * 既定の top_k は 1～100 の範囲で指定してください。
+         */
+        "adminLongMemoryInvalidTopK": string;
+        /**
+         * 既定の注入文字数は 200～50000 の範囲で指定してください。
+         */
+        "adminLongMemoryInvalidInject": string;
+        /**
+         * 記憶追加時の会話ラウンド数（インスタンス既定）
+         */
+        "defaultMemoryAddMaxRounds": string;
+        /**
+         * 1 ラウンド = ユーザー 1 件 + アシスタント 1 件。百練の add に直近の完全なラウンドをまとめて送ります。
+         */
+        "defaultMemoryAddMaxRoundsCaption": string;
+        /**
+         * 記憶追加時のラウンド数は 1～24 で指定してください。
+         */
+        "adminLongMemoryInvalidAddRounds": string;
+        /**
+         * 記憶追加を何ラウンドごとに行うか（インスタンス既定）
+         */
+        "defaultMemoryAddEveryNRounds": string;
+        /**
+         * ユーザー+アシスタントが N ラウンド完了するたびに add を 1 回。1 は毎ラウンド。「直近何ラウンド送るか」と併用。
+         */
+        "defaultMemoryAddEveryNRoundsCaption": string;
+        /**
+         * 記憶追加の間隔ラウンド数は 1～48 で指定してください。
+         */
+        "adminLongMemoryInvalidAddEveryN": string;
+        /**
+         * 記憶
+         */
+        "sessionMemoryTab": string;
+        /**
+         * このセッションのみ：DashScope への記憶の追加・検索の有無と検索の強さ。
+         */
+        "sessionMemoryHint": string;
+        /**
+         * このセッションで長期記憶を使う
+         */
+        "sessionMemoryEnable": string;
+        /**
+         * 検索 top_k
+         */
+        "sessionMemoryTopK": string;
+        /**
+         * メッセージごとに取得する記憶ノードの最大数（1～100）。
+         */
+        "sessionMemoryTopKCaption": string;
+        /**
+         * コンテキスト注入の最大文字数
+         */
+        "sessionMemoryInjectMaxChars": string;
+        /**
+         * 記憶追加時の会話ラウンド数（任意）
+         */
+        "sessionMemoryAddMaxRounds": string;
+        /**
+         * 1 ラウンド = ユーザー 1 件 + アシスタント 1 件。空欄はインスタンス既定（現在 {n} ラウンド）。
+         */
+        "sessionMemoryAddMaxRoundsCaption": ParameterizedString<"n">;
+        /**
+         * ラウンド数は空欄、または 1～24 の整数にしてください。
+         */
+        "sessionMemoryAddMaxRoundsInvalid": string;
+        /**
+         * 記憶追加の間隔（ラウンド、任意）
+         */
+        "sessionMemoryAddEveryNRounds": string;
+        /**
+         * N ラウンド完了ごとに add を 1 回。空欄はインスタンス既定（現在 {n} ラウンド）。1 は毎ラウンド。
+         */
+        "sessionMemoryAddEveryNRoundsCaption": ParameterizedString<"n">;
+        /**
+         * 間隔は空欄、または 1～48 の整数にしてください。
+         */
+        "sessionMemoryAddEveryNRoundsInvalid": string;
+        /**
+         * 最小類似度（任意）
+         */
+        "sessionMemoryMinScore": string;
+        /**
+         * 0～1。空欄はプロバイダ既定。大きいほど厳しい一致のみ。
+         */
+        "sessionMemoryMinScoreCaption": string;
+        /**
+         * 最小類似度は空欄、または 0～1 の数値にしてください。
+         */
+        "sessionMemoryMinScoreInvalid": string;
+        /**
+         * top_k は 1～100 の範囲で指定してください。
+         */
+        "sessionMemoryTopKInvalid": string;
+        /**
+         * 注入の最大文字数は 200～50000 の範囲で指定してください。
+         */
+        "sessionMemoryInjectInvalid": string;
+        /**
+         * 記憶設定を保存しました
+         */
+        "sessionMemorySaved": string;
+        /**
+         * このセッションの記憶
+         */
+        "sessionMemoryNodesTitle": string;
+        /**
+         * 長期記憶サービスに紐づくこの会話の記憶です。変更すると以降の検索結果に影響します。
+         */
+        "sessionMemoryNodesHint": string;
+        /**
+         * 手動で記憶を追加
+         */
+        "sessionMemoryAddLabel": string;
+        /**
+         * 追加
+         */
+        "sessionMemoryAddSubmit": string;
+        /**
+         * 記憶はまだありません。
+         */
+        "sessionMemoryNodesEmpty": string;
+        /**
+         * 記憶を追加しました
+         */
+        "sessionMemoryAdded": string;
+        /**
+         * 記憶を更新しました
+         */
+        "sessionMemoryUpdated": string;
+        /**
+         * 記憶を削除しました
+         */
+        "sessionMemoryDeleted": string;
+        /**
+         * この記憶を削除しますか？取り消せません。
+         */
+        "sessionMemoryDeleteConfirm": string;
+        /**
+         * 前へ
+         */
+        "sessionMemoryPrevPage": string;
+        /**
+         * 次へ
+         */
+        "sessionMemoryNextPage": string;
+        /**
+         * 長期記憶の検索に失敗しました。今回の応答には記憶を注入していません
+         */
+        "longTermMemorySearchUnavailable": string;
+        /**
+         * 長期記憶に書き込み中…
+         */
+        "longTermMemoryAddScheduledHint": string;
+        /**
+         * ここより上の履歴はモデルに送られません
+         */
+        "contextWindowDivider": string;
+        /**
+         * 前の返信をまだ生成中です。しばらくお待ちください。
+         */
+        "replyStillGenerating": string;
     };
 }

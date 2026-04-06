@@ -309,6 +309,89 @@ export const packedMetaLiteSchema = {
 			enum: ['all', 'specified', 'none'],
 			optional: false, nullable: false,
 		},
+		nativeClientAppInfo: {
+			type: 'object',
+			optional: false, nullable: false,
+			properties: {
+				latestAndroidVersion: {
+					type: 'string',
+					optional: false, nullable: true,
+				},
+				latestIosVersion: {
+					type: 'string',
+					optional: false, nullable: true,
+				},
+				androidDownloadUrl: {
+					type: 'string',
+					optional: false, nullable: true,
+				},
+				iosDownloadUrl: {
+					type: 'string',
+					optional: false, nullable: true,
+				},
+				releaseNotesUrl: {
+					type: 'string',
+					optional: false, nullable: true,
+				},
+				announcement: {
+					type: 'string',
+					optional: false, nullable: true,
+				},
+			},
+		},
+		agentFeatureEnabled: {
+			type: 'boolean',
+			optional: false, nullable: false,
+		},
+		agentModelDisplayName: {
+			type: 'string',
+			optional: false, nullable: true,
+		},
+		agentModelDescription: {
+			type: 'string',
+			optional: false, nullable: true,
+		},
+		agentMaxContextTokens: {
+			type: 'number',
+			optional: false, nullable: false,
+		},
+		agentMaxOutputTokensPerCall: {
+			type: 'number',
+			optional: false, nullable: false,
+		},
+		agentLlmConfigured: {
+			type: 'boolean',
+			optional: false, nullable: false,
+		},
+		agentLongMemoryConfigured: {
+			type: 'boolean',
+			optional: false, nullable: false,
+		},
+		agentMem0AddMemoryMaxRounds: {
+			type: 'number',
+			optional: false, nullable: false,
+		},
+		agentMem0AddMemoryEveryNRounds: {
+			type: 'number',
+			optional: false, nullable: false,
+		},
+		agentModels: {
+			type: 'array',
+			optional: false, nullable: false,
+			items: {
+				type: 'object',
+				optional: false, nullable: false,
+				properties: {
+					id: { type: 'string', optional: false, nullable: false },
+					name: { type: 'string', optional: false, nullable: false },
+					description: { type: 'string', optional: false, nullable: true },
+				},
+			},
+		},
+		agentDefaultModelId: {
+			type: 'string',
+			optional: false, nullable: true,
+		},
 	},
 } as const;
 

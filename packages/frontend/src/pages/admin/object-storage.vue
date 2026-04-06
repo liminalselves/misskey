@@ -73,6 +73,13 @@ SPDX-License-Identifier: AGPL-3.0-only
 					</SearchMarker>
 
 					<SearchMarker>
+						<MkSwitch v-model="objectStorageForceHttps">
+							<template #label><SearchLabel>{{ i18n.ts.objectStorageForceHttps }}</SearchLabel></template>
+							<template #caption><SearchText>{{ i18n.ts.objectStorageForceHttpsDesc }}</SearchText></template>
+						</MkSwitch>
+					</SearchMarker>
+
+					<SearchMarker>
 						<MkSwitch v-model="objectStorageUseProxy">
 							<template #label><SearchLabel>{{ i18n.ts.objectStorageUseProxy }}</SearchLabel></template>
 							<template #caption><SearchText>{{ i18n.ts.objectStorageUseProxyDesc }}</SearchText></template>
@@ -129,6 +136,7 @@ const objectStoragePort = ref(meta.objectStoragePort);
 const objectStorageAccessKey = ref(meta.objectStorageAccessKey);
 const objectStorageSecretKey = ref(meta.objectStorageSecretKey);
 const objectStorageUseSSL = ref(meta.objectStorageUseSSL);
+const objectStorageForceHttps = ref(meta.objectStorageForceHttps ?? false);
 const objectStorageUseProxy = ref(meta.objectStorageUseProxy);
 const objectStorageSetPublicRead = ref(meta.objectStorageSetPublicRead);
 const objectStorageS3ForcePathStyle = ref(meta.objectStorageS3ForcePathStyle);
@@ -145,6 +153,7 @@ function save() {
 		objectStorageAccessKey: objectStorageAccessKey.value,
 		objectStorageSecretKey: objectStorageSecretKey.value,
 		objectStorageUseSSL: objectStorageUseSSL.value,
+		objectStorageForceHttps: objectStorageForceHttps.value,
 		objectStorageUseProxy: objectStorageUseProxy.value,
 		objectStorageSetPublicRead: objectStorageSetPublicRead.value,
 		objectStorageS3ForcePathStyle: objectStorageS3ForcePathStyle.value,

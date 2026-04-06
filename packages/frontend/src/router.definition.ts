@@ -24,8 +24,10 @@ function chatPage(...args: Parameters<typeof page>) {
 export const ROUTE_DEF = [{
 	name: 'index',
 	path: '/',
-	component: $i ? PageTimeline : page(() => import('@/pages/welcome.vue')),
+	component: $i ? page(() => import('@/pages/explore.vue')) : page(() => import('@/pages/welcome.vue')),
+	hash: 'initialTab',
 }, {
+	name: 'timeline',
 	path: '/timeline',
 	component: PageTimeline,
 }, {
@@ -78,6 +80,29 @@ export const ROUTE_DEF = [{
 	path: '/chat/messages/:messageId',
 	component: chatPage(() => import('@/pages/chat/message.vue')),
 	loginRequired: true,
+}, {
+	path: '/chat/agent/:sessionId',
+	component: chatPage(() => import('@/pages/chat/agent-session.vue')),
+	loginRequired: true,
+	query: {
+		messageId: 'messageId',
+	},
+}, {
+	path: '/agents/character/:characterId',
+	component: page(() => import('@/pages/agents/character-edit.vue')),
+	loginRequired: true,
+}, {
+	path: '/agents/style/:styleId',
+	component: page(() => import('@/pages/agents/style-edit.vue')),
+	loginRequired: true,
+}, {
+	path: '/agents',
+	component: page(() => import('@/pages/agents/index.vue')),
+	loginRequired: true,
+	query: {
+		view: 'view',
+		sub: 'sub',
+	},
 }, {
 	path: '/instance-info/:host',
 	component: page(() => import('@/pages/instance-info.vue')),
@@ -203,6 +228,10 @@ export const ROUTE_DEF = [{
 		name: 'other',
 		component: page(() => import('@/pages/settings/other.vue')),
 	}, {
+		path: '/app-client',
+		name: 'app-client',
+		component: page(() => import('@/pages/settings/app-client.vue')),
+	}, {
 		path: '/',
 		component: page(() => import('@/pages/_empty_.vue')),
 	}],
@@ -250,8 +279,7 @@ export const ROUTE_DEF = [{
 	component: page(() => import('@/pages/user-tag.vue')),
 }, {
 	path: '/explore',
-	component: page(() => import('@/pages/explore.vue')),
-	hash: 'initialTab',
+	redirect: '/',
 }, {
 	path: '/search',
 	component: page(() => import('@/pages/search.vue')),
@@ -472,6 +500,22 @@ export const ROUTE_DEF = [{
 		path: '/settings',
 		name: 'settings',
 		component: page(() => import('@/pages/admin/settings.vue')),
+	}, {
+		path: '/app-settings',
+		name: 'app-settings',
+		component: page(() => import('@/pages/admin/app-settings.vue')),
+	}, {
+		path: '/agents-settings',
+		name: 'agents-settings',
+		component: page(() => import('@/pages/admin/agents-settings.vue')),
+	}, {
+		path: '/agents-review',
+		name: 'agents-review',
+		component: page(() => import('@/pages/admin/agents-review.vue')),
+	}, {
+		path: '/agents-chat-audit',
+		name: 'agents-chat-audit',
+		component: page(() => import('@/pages/admin/agents-chat-audit.vue')),
 	}, {
 		path: '/branding',
 		name: 'branding',

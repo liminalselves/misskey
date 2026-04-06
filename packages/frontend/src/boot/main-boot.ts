@@ -30,6 +30,7 @@ import { updateCurrentAccountPartial } from '@/accounts.js';
 import { migrateOldSettings } from '@/pref-migrate.js';
 import { unisonReload } from '@/utility/unison-reload.js';
 import { isBirthday } from '@/utility/is-birthday.js';
+import { isEmbeddedAppShell } from '@/utility/is-embedded-app-shell.js';
 
 export async function mainBoot() {
 	const { isClientUpdated, lastVersion } = await common(async () => {
@@ -437,6 +438,17 @@ export async function mainBoot() {
 		},
 	} as const satisfies Keymap;
 	window.document.addEventListener('keydown', makeHotkey(keymap), { passive: false });
+
+	// Flutter 等埋め込みシェル：通知権限でプッシュを自動オフにしたとき、os.alert（MkDialog）で案内
+	if (isEmbeddedAppShell()) {
+		window.addEventListener('liminal-native-push-alert', () => {
+			void alert({
+				type: 'warning',
+				title: i18n.ts.nativePushAutoDisabledByPermissionTitle,
+				text: i18n.ts.nativePushAutoDisabledByPermissionDescription,
+			});
+		});
+	}
 
 	initializeSw();
 }
