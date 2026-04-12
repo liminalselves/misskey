@@ -55,11 +55,22 @@ export class MiAgentSession {
 
 	@Column({
 		...id(),
+		nullable: true,
 	})
-	public dialogueStyleId: MiAgentDialogueStyle['id'];
+	public dialogueStyleId: MiAgentDialogueStyle['id'] | null;
+
+	/**
+	 * 広場統計用：セッション作成時の会話スタイル。ユーザーが後から切り替えても更新しない。
+	 */
+	@Column({
+		...id(),
+		nullable: true,
+	})
+	public plazaStatsDialogueStyleId: MiAgentDialogueStyle['id'] | null;
 
 	@ManyToOne(() => MiAgentDialogueStyle, {
 		onDelete: 'CASCADE',
+		nullable: true,
 	})
 	@JoinColumn()
 	public dialogueStyle: MiAgentDialogueStyle | null;
@@ -124,4 +135,10 @@ export class MiAgentSession {
 		default: false,
 	})
 	public agentReplyPending: boolean;
+
+	/** 管理封禁：该会话下用户无法继续对话 */
+	@Column('boolean', {
+		default: false,
+	})
+	public moderationBanned: boolean;
 }

@@ -54,6 +54,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			if (!session || session.userId !== me.id) {
 				throw new ApiError({ message: 'No such session.', code: 'NO_SUCH_SESSION', id: 'a1b2c3d4-e5f6-7890-abcd-ef1234567891' });
 			}
+			const characterRow = await this.agentService.loadCharacterForAgentSessionOrThrow(session);
+			this.agentService.assertAgentUserSessionChatAllowed(characterRow, session);
 
 			const row = await this.agentMessagesRepository.findOneBy({
 				id: ps.messageId,

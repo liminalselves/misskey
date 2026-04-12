@@ -11,7 +11,30 @@ import type { Packed } from '@/misc/json-schema.js';
 import { awaitAll } from '@/misc/prelude/await-all.js';
 import type { MiUser } from '@/models/User.js';
 import type { MiNote } from '@/models/Note.js';
-import type { UsersRepository, NotesRepository, FollowingsRepository, PollsRepository, PollVotesRepository, NoteReactionsRepository, ChannelsRepository, MiMeta } from '@/models/_.js';
+import type {
+	UsersRepository,
+	NotesRepository,
+	FollowingsRepository,
+	PollsRepository,
+	PollVotesRepository,
+	NoteReactionsRepository,
+	ChannelsRepository,
+	MiMeta,
+	AgentPlazaReviewsRepository,
+	AgentCharactersRepository,
+	AgentDialogueStylesRepository,
+	AgentSessionsRepository,
+	AgentMessagesRepository,
+} from '@/models/_.js';
+import { AgentService } from '@/core/AgentService.js';
+import {
+	batchPlazaRatingsByCharacterIds,
+	batchPlazaRatingsByStyleIds,
+	batchCommunitySessionCountByCharacterIds,
+	batchCommunitySessionCountByStyleIds,
+	batchCommunityAssistantReplyCountByCharacterIds,
+	batchCommunityAssistantReplyCountByStyleIds,
+} from '@/core/agent-plaza-display-stats.js';
 import { bindThis } from '@/decorators.js';
 import { DebounceLoader } from '@/misc/loader.js';
 import { IdService } from '@/core/IdService.js';
@@ -58,6 +81,22 @@ async function nullIfEntityNotFound<T>(promise: Promise<T>): Promise<T | null> {
 	}
 }
 
+/** ノート pack 時に付与する智能体広場レビュー表示用メタ */
+export type AgentsPlazaReviewPacked = {
+	kind: 'character' | 'style';
+	id: string;
+	name: string;
+	stars: number;
+	avatar?: Packed<'DriveFile'> | null;
+	/** 広場レビュー星の平均（件数 0 のとき null） */
+	plazaRatingAverage: number | null;
+	plazaRatingCount: number;
+	/** community セッション数（キャラはキャラ別、スタイルは当該スタイル選択回数） */
+	conversationCount: number;
+	/** assistant メッセージ数（community セッション内・AI 返信回数） */
+	aiReplyCount: number;
+};
+
 @Injectable()
 export class NoteEntityService implements OnModuleInit {
 	private userEntityService: UserEntityService;
@@ -94,6 +133,23 @@ export class NoteEntityService implements OnModuleInit {
 
 		@Inject(DI.channelsRepository)
 		private channelsRepository: ChannelsRepository,
+
+		@Inject(DI.agentPlazaReviewsRepository)
+		private agentPlazaReviewsRepository: AgentPlazaReviewsRepository,
+
+		@Inject(DI.agentCharactersRepository)
+		private agentCharactersRepository: AgentCharactersRepository,
+
+		@Inject(DI.agentDialogueStylesRepository)
+		private agentDialogueStylesRepository: AgentDialogueStylesRepository,
+
+		@Inject(DI.agentSessionsRepository)
+		private agentSessionsRepository: AgentSessionsRepository,
+
+		@Inject(DI.agentMessagesRepository)
+		private agentMessagesRepository: AgentMessagesRepository,
+
+		private agentService: AgentService,
 
 		//private userEntityService: UserEntityService,
 		//private driveFileEntityService: DriveFileEntityService,
@@ -331,6 +387,92 @@ export class NoteEntityService implements OnModuleInit {
 	}
 
 	@bindThis
+	private async buildPlazaReviewMetaMapForNotes(noteIds: string[]): Promise<Map<string, AgentsPlazaReviewPacked>> {
+		const out = new Map<string, AgentsPlazaReviewPacked>();
+		if (noteIds.length === 0) return out;
+		const unique = [...new Set(noteIds)];
+		const rows = await this.agentPlazaReviewsRepository.findBy({ noteId: In(unique) });
+		if (rows.length === 0) return out;
+
+		const charIds = [...new Set(rows.map(r => r.characterId).filter((x): x is string => x != null))];
+		const styleIds = [...new Set(rows.map(r => r.styleId).filter((x): x is string => x != null))];
+		const chars = charIds.length > 0 ? await this.agentCharactersRepository.findBy({ id: In(charIds) }) : [];
+		const styles = styleIds.length > 0 ? await this.agentDialogueStylesRepository.findBy({ id: In(styleIds) }) : [];
+		const charMap = new Map(chars.map(c => [c.id, c]));
+		const styleMap = new Map(styles.map(s => [s.id, s]));
+
+		const avatarFileIds: string[] = [];
+		for (const r of rows) {
+			if (r.characterId == null) continue;
+			const c = charMap.get(r.characterId);
+			if (!c) continue;
+			const af = this.agentService.characterPlazaDisplayFields(c).avatarFileId;
+			if (af) avatarFileIds.push(af);
+		}
+		const packedAvatars = avatarFileIds.length > 0
+			? await this.driveFileEntityService.packManyByIdsMap(avatarFileIds)
+			: new Map<string, Packed<'DriveFile'> | null>();
+
+		const [
+			charRatings,
+			styleRatings,
+			charConvs,
+			styleConvs,
+			charAiReplies,
+			styleAiReplies,
+		] = await Promise.all([
+			batchPlazaRatingsByCharacterIds(this.agentPlazaReviewsRepository, charIds),
+			batchPlazaRatingsByStyleIds(this.agentPlazaReviewsRepository, styleIds),
+			batchCommunitySessionCountByCharacterIds(this.agentSessionsRepository, charIds),
+			batchCommunitySessionCountByStyleIds(this.agentSessionsRepository, styleIds),
+			batchCommunityAssistantReplyCountByCharacterIds(this.agentMessagesRepository, charIds),
+			batchCommunityAssistantReplyCountByStyleIds(this.agentMessagesRepository, styleIds),
+		]);
+
+		for (const r of rows) {
+			if (r.characterId != null) {
+				const c = charMap.get(r.characterId);
+				if (!c) continue;
+				const d = this.agentService.characterPlazaDisplayFields(c);
+				const avatar = d.avatarFileId ? packedAvatars.get(d.avatarFileId) ?? null : null;
+				const agg = charRatings.get(r.characterId) ?? { average: null, count: 0 };
+				const conv = charConvs.get(r.characterId) ?? 0;
+				const aiReplies = charAiReplies.get(r.characterId) ?? 0;
+				const meta: AgentsPlazaReviewPacked = {
+					kind: 'character',
+					id: r.characterId,
+					name: d.name,
+					stars: r.stars,
+					plazaRatingAverage: agg.average,
+					plazaRatingCount: agg.count,
+					conversationCount: conv,
+					aiReplyCount: aiReplies,
+				};
+				if (avatar != null) meta.avatar = avatar;
+				out.set(r.noteId, meta);
+			} else if (r.styleId != null) {
+				const s = styleMap.get(r.styleId);
+				if (!s) continue;
+				const d = this.agentService.stylePlazaDisplayFields(s);
+				const agg = styleRatings.get(r.styleId) ?? { average: null, count: 0 };
+				const conv = styleConvs.get(r.styleId) ?? 0;
+				const aiReplies = styleAiReplies.get(r.styleId) ?? 0;
+				out.set(r.noteId, {
+					kind: 'style',
+					id: r.styleId,
+					name: d.name,
+					stars: r.stars,
+					plazaRatingAverage: agg.average,
+					plazaRatingCount: agg.count,
+					conversationCount: conv,
+					aiReplyCount: aiReplies,
+				});
+			}
+		}
+		return out;
+	}
+
+	@bindThis
 	public async packAttachedFiles(fileIds: MiNote['fileIds'], packedFiles: Map<MiNote['fileIds'][number], Packed<'DriveFile'> | null>): Promise<Packed<'DriveFile'>[]> {
 		const missingIds = [];
 		for (const id of fileIds) {
@@ -357,7 +499,8 @@ export class NoteEntityService implements OnModuleInit {
 				bufferedReactions: Map<MiNote['id'], { deltas: Record<string, number>; pairs: ([MiUser['id'], string])[] }> | null;
 				myReactions: Map<MiNote['id'], string | null>;
 				packedFiles: Map<MiNote['fileIds'][number], Packed<'DriveFile'> | null>;
-				packedUsers: Map<MiUser['id'], Packed<'UserLite'>>
+				packedUsers: Map<MiUser['id'], Packed<'UserLite'>>;
+				plazaReviewMetaByNoteId?: Map<string, AgentsPlazaReviewPacked>;
 			};
 		},
 	): Promise<Packed<'Note'>> {
@@ -397,6 +540,14 @@ export class NoteEntityService implements OnModuleInit {
 			.map(x => this.reactionService.decodeReaction(x).reaction.replaceAll(':', ''));
 		const packedFiles = options?._hint_?.packedFiles;
 		const packedUsers = options?._hint_?.packedUsers;
+
+		let agentsPlazaReview: AgentsPlazaReviewPacked | undefined;
+		if (opts._hint_?.plazaReviewMetaByNoteId != null) {
+			agentsPlazaReview = opts._hint_.plazaReviewMetaByNoteId.get(note.id);
+		} else {
+			const m = await this.buildPlazaReviewMetaMapForNotes([note.id]);
+			agentsPlazaReview = m.get(note.id);
+		}
 
 		const packed: Packed<'Note'> = await awaitAll({
 			id: note.id,
@@ -464,6 +615,8 @@ export class NoteEntityService implements OnModuleInit {
 					}, meId, options?._hint_),
 				} : {}),
 			} : {}),
+
+			...(agentsPlazaReview != null ? { agentsPlazaReview } : {}),
 		});
 
 		this.treatVisibility(packed);
@@ -556,6 +709,8 @@ export class NoteEntityService implements OnModuleInit {
 		const packedUsers = await this.userEntityService.packMany(users, me)
 			.then(users => new Map(users.map(u => [u.id, u])));
 
+		const plazaReviewMetaByNoteId = await this.buildPlazaReviewMetaMapForNotes(notes.map(n => n.id));
+
 		return await Promise.all(notes.map(n => this.pack(n, me, {
 			...options,
 			_hint_: {
@@ -563,6 +718,7 @@ export class NoteEntityService implements OnModuleInit {
 				myReactions: myReactionsMap,
 				packedFiles,
 				packedUsers,
+				plazaReviewMetaByNoteId,
 			},
 		})));
 	}

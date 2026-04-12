@@ -23,7 +23,7 @@ export const meta = {
 			id: { type: 'string', format: 'misskey:id' },
 			name: { type: 'string' },
 			characterId: { type: 'string', format: 'misskey:id' },
-			dialogueStyleId: { type: 'string', format: 'misskey:id' },
+			dialogueStyleId: { type: 'string', format: 'misskey:id', nullable: true },
 			sessionKind: { type: 'string', enum: ['draft_test', 'community'] },
 			lastMessageAt: { type: 'string', format: 'date-time', nullable: true },
 			createdAt: { type: 'string', format: 'date-time' },
@@ -35,6 +35,8 @@ export const meta = {
 			agentLongMemoryAddMaxRounds: { type: 'integer', nullable: true },
 			agentLongMemoryAddEveryNRounds: { type: 'integer', nullable: true },
 			agentReplyPending: { type: 'boolean' },
+			sessionModerationBanned: { type: 'boolean' },
+			characterModerationBanned: { type: 'boolean' },
 		},
 	},
 } as const;
@@ -72,6 +74,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					await this.agentSessionsRepository.save(row);
 				}
 			}
+			const characterRow = await this.agentService.loadCharacterForAgentSessionOrThrow(row);
 			return {
 				id: row.id,
 				name: row.name,
@@ -88,6 +91,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				agentLongMemoryAddMaxRounds: row.agentLongMemoryAddMaxRounds,
 				agentLongMemoryAddEveryNRounds: row.agentLongMemoryAddEveryNRounds,
 				agentReplyPending: row.agentReplyPending,
+				sessionModerationBanned: row.moderationBanned,
+				characterModerationBanned: characterRow.moderationBanned,
 			};
 		});
 	}

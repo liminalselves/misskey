@@ -321,6 +321,10 @@ export const packedMetaLiteSchema = {
 					type: 'string',
 					optional: false, nullable: true,
 				},
+				minRequiredAppVersion: {
+					type: 'string',
+					optional: false, nullable: true,
+				},
 				androidDownloadUrl: {
 					type: 'string',
 					optional: false, nullable: true,
@@ -385,6 +389,8 @@ export const packedMetaLiteSchema = {
 					id: { type: 'string', optional: false, nullable: false },
 					name: { type: 'string', optional: false, nullable: false },
 					description: { type: 'string', optional: false, nullable: true },
+					maxContextTokens: { type: 'number', optional: false, nullable: false },
+					maxOutputTokensPerCall: { type: 'number', optional: false, nullable: false },
 				},
 			},
 		},

@@ -42,7 +42,9 @@ export const meta = {
 				user: { type: 'object', ref: 'UserLite', nullable: true },
 				characterId: { type: 'string', format: 'misskey:id' },
 				characterName: { type: 'string' },
-				dialogueStyleId: { type: 'string', format: 'misskey:id' },
+				dialogueStyleId: { type: 'string', format: 'misskey:id', nullable: true },
+				sessionModerationBanned: { type: 'boolean' },
+				characterModerationBanned: { type: 'boolean' },
 			},
 		},
 	},
@@ -124,6 +126,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					characterId: s.characterId,
 					characterName: ch?.name ?? '',
 					dialogueStyleId: s.dialogueStyleId,
+					sessionModerationBanned: s.moderationBanned,
+					characterModerationBanned: ch?.moderationBanned ?? false,
 				};
 			});
 

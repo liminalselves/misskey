@@ -129,6 +129,9 @@ onBeforeUnmount(() => {
 	border-bottom: none;
 	border-radius: 14px 14px 0 0;
 	overflow: clip;
+	box-sizing: border-box;
+	min-width: 0;
+	max-width: 100%;
 }
 
 .compose {
@@ -187,14 +190,20 @@ onBeforeUnmount(() => {
 @media (max-width: 500px) {
 	.root {
 		border-radius: 10px 10px 0 0;
+		/* 避免横向 flex 略超宽时把右侧发送按钮裁掉 */
+		overflow-x: hidden;
+		overflow-y: visible;
 	}
 
 	.compose {
 		flex-direction: row;
 		align-items: flex-end;
 		gap: 8px;
-		padding: 8px 12px;
-		padding-bottom: max(8px, env(safe-area-inset-bottom, 0px));
+		box-sizing: border-box;
+		width: 100%;
+		min-width: 0;
+		max-width: 100%;
+		padding: 8px max(12px, env(safe-area-inset-right, 0px)) max(8px, env(safe-area-inset-bottom, 0px)) max(12px, env(safe-area-inset-left, 0px));
 		background: var(--MI_THEME-panel);
 	}
 
@@ -202,12 +211,15 @@ onBeforeUnmount(() => {
 		min-height: 36px;
 		max-height: 76px;
 		min-width: 0;
-		flex: 1;
-		width: auto;
+		flex: 1 1 0;
+		width: 0;
+		max-width: 100%;
 		padding: 7px 12px;
 		border-radius: 18px;
 		border: none;
 		overflow-y: auto;
+		overflow-wrap: anywhere;
+		word-break: break-word;
 		line-height: 1.4;
 		align-self: flex-end;
 		background: color-mix(in srgb, var(--MI_THEME-fg) 6%, var(--MI_THEME-panel));
@@ -220,6 +232,7 @@ onBeforeUnmount(() => {
 		position: static;
 		background: transparent;
 		flex-shrink: 0;
+		min-width: 0;
 		padding-bottom: 1px;
 	}
 

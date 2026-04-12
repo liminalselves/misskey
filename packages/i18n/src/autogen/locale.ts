@@ -2645,6 +2645,14 @@ export interface Locale extends ILocale {
      */
     "nativeClientAppInfoLatestIosVersion": string;
     /**
+     * ネイティブシェルの最低必須バージョン
+     */
+    "nativeClientAppInfoMinRequiredAppVersion": string;
+    /**
+     * semver（例: 1.2.0）。設定した場合、App シェルのバージョンがこの値未満のとき起動を拒否します（同じかそれ以上は利用可）。空欄で無効。
+     */
+    "nativeClientAppInfoMinRequiredAppVersionCaption": string;
+    /**
      * アプリ内のバージョンと比較しやすいよう、semver（例: 1.2.3）を推奨します。
      */
     "nativeClientAppInfoSemverHint": string;
@@ -11814,6 +11822,18 @@ export interface Locale extends ILocale {
          * プロキシアカウントの説明を更新
          */
         "updateProxyAccountDescription": string;
+        /**
+         * エージェント（キャラクター／会話スタイル）の審査を処理
+         */
+        "resolveAgentReview": string;
+        /**
+         * エージェント会話セッションの利用停止
+         */
+        "setAgentSessionModerationBan": string;
+        /**
+         * エージェントキャラクターの利用停止
+         */
+        "setAgentCharacterModerationBan": string;
     };
     "_fileViewer": {
         /**
@@ -13674,6 +13694,78 @@ export interface Locale extends ILocale {
          */
         "adminAgentChatAuditIndexMessage": string;
         /**
+         * このセッションを停止
+         */
+        "adminAgentChatAuditBanSession": string;
+        /**
+         * セッション停止を解除
+         */
+        "adminAgentChatAuditUnbanSession": string;
+        /**
+         * このキャラを停止
+         */
+        "adminAgentChatAuditBanCharacter": string;
+        /**
+         * キャラ停止を解除
+         */
+        "adminAgentChatAuditUnbanCharacter": string;
+        /**
+         * この会話セッションを停止しますか？停止後は送信や設定変更ができません。
+         */
+        "adminAgentChatAuditBanSessionConfirm": string;
+        /**
+         * このセッションの停止を解除しますか？
+         */
+        "adminAgentChatAuditUnbanSessionConfirm": string;
+        /**
+         * このキャラクターを停止しますか？新規会話の開始と、既存セッションでの送信・設定変更ができなくなります。
+         */
+        "adminAgentChatAuditBanCharacterConfirm": string;
+        /**
+         * このキャラクターの停止を解除しますか？
+         */
+        "adminAgentChatAuditUnbanCharacterConfirm": string;
+        /**
+         * 利用停止の状態を更新しました
+         */
+        "adminAgentChatAuditBanUpdated": string;
+        /**
+         * セッション停止中
+         */
+        "adminAgentChatAuditSessionBannedBadge": string;
+        /**
+         * キャラ停止中
+         */
+        "adminAgentChatAuditCharacterBannedBadge": string;
+        /**
+         * このキャラクターはモデレーションにより停止されています。履歴の閲覧はできますが、送信や記憶・設定の変更はできません。
+         */
+        "chatModerationBlockedCharacter": string;
+        /**
+         * このセッションはモデレーションにより停止されています。履歴の閲覧はできますが、送信や設定の変更はできません。
+         */
+        "chatModerationBlockedSession": string;
+        /**
+         * 停止
+         */
+        "modlogAgentBanOn": string;
+        /**
+         * 解除
+         */
+        "modlogAgentBanOff": string;
+        /**
+         * 操作
+         */
+        "modlogAgentBanState": string;
+        /**
+         * セッション
+         */
+        "modlogAgentSessionBanTitle": string;
+        /**
+         * キャラクター
+         */
+        "modlogAgentCharacterBanTitle": string;
+        /**
          * 審査に出す
          */
         "submitForReview": string;
@@ -13862,6 +13954,98 @@ export interface Locale extends ILocale {
          */
         "play": string;
         /**
+         * 詳細
+         */
+        "plazaViewDetails": string;
+        /**
+         * 広場レビュー
+         */
+        "plazaReviewNoteBadge": string;
+        /**
+         * エージェント
+         */
+        "plazaReviewNoteKindCharacter": string;
+        /**
+         * 会話スタイル
+         */
+        "plazaReviewNoteKindStyle": string;
+        /**
+         * このノートの評価
+         */
+        "plazaReviewCardThisNote": string;
+        /**
+         * プロンプト規模（文字数）
+         */
+        "plazaPromptStatsTitle": string;
+        /**
+         * 合計
+         */
+        "plazaStatTotal": string;
+        /**
+         * 文字
+         */
+        "plazaStatChars": string;
+        /**
+         * ターン
+         */
+        "plazaStatExampleTurns": string;
+        /**
+         * 評価
+         */
+        "plazaRatingTitle": string;
+        /**
+         * まだ評価がありません
+         */
+        "plazaRatingNone": string;
+        /**
+         * 件のレビュー
+         */
+        "plazaRatingCountSuffix": string;
+        /**
+         * 評価
+         */
+        "plazaMetricRating": string;
+        /**
+         * セッション数
+         */
+        "plazaMetricConversations": string;
+        /**
+         * 対話回数
+         */
+        "plazaMetricAiReplies": string;
+        /**
+         * レビューを書く
+         */
+        "plazaReviewFormTitle": string;
+        /**
+         * 星（0〜5）
+         */
+        "plazaReviewStars": string;
+        /**
+         * コメント
+         */
+        "plazaReviewComment": string;
+        /**
+         * 他のノートと同じ公開範囲・タイムラインの挙動で、通常のMisskeyノートとして投稿されます。
+         */
+        "plazaReviewCommentHint": string;
+        /**
+         * レビューを投稿
+         */
+        "plazaReviewSubmit": string;
+        /**
+         * レビューを投稿しました
+         */
+        "plazaReviewSubmitted": string;
+        /**
+         * レビュー一覧
+         */
+        "plazaReviewsListTitle": string;
+        /**
+         * レビューはまだありません
+         */
+        "plazaReviewsEmpty": string;
+        /**
          * 公開されたエージェントはまだありません
          */
         "noAgentsYet": string;
@@ -14045,6 +14229,26 @@ export interface Locale extends ILocale {
          * 会話スタイルを作成するか、発見→エージェント→スタイル広場から公開済みを追加してください。
          */
         "needAnyUsableStyle": string;
+        /**
+         * メッセージを送る前に、会話スタイルを選んでください。
+         */
+        "needDialogueStyleBeforeSend": string;
+        /**
+         * メッセージを送信するには、あらかじめ会話スタイルを選択してください。ページ上部の「会話スタイル」タブを開き、一覧から1つを選んでください。
+         */
+        "chatComposeNeedStyleHint": string;
+        /**
+         * 利用できる会話スタイルがありません。作成ページで自分用を作成するか、スタイル広場から追加してください。
+         */
+        "sessionNoUsableStyles": string;
+        /**
+         * 未選択
+         */
+        "sessionStyleNotSelected": string;
+        /**
+         * 選択
+         */
+        "sessionPickButton": string;
         /**
          * キャラ
          */
@@ -14279,6 +14483,7 @@ export interface Locale extends ILocale {
         "sessionMemoryTab": string;
         /**
          * このセッションのみ：DashScope への記憶の追加・検索の有無と検索の強さ。
+         * 各設定の意味が分からない場合は変更しないでください。
          */
         "sessionMemoryHint": string;
         /**
@@ -14402,8 +14607,24 @@ export interface Locale extends ILocale {
          */
         "contextWindowDivider": string;
         /**
+         * チャットの文脈境界へ移動
+         */
+        "sessionMemoryLocateContextDivider": string;
+        /**
+         * 文脈境界へスクロールできませんでした。履歴を読み込んでからもう一度お試しください。
+         */
+        "sessionMemoryLocateContextDividerFailed": string;
+        /**
          * 前の返信をまだ生成中です。しばらくお待ちください。
          */
         "replyStillGenerating": string;
+        /**
+         * 送信できません：ユーザーまたはアシスタントのメッセージが連続しています。該当メッセージを削除または修正してから再度お試しください。
+         */
+        "invalidTurnOrderCannotSend": string;
+        /**
+         * 送信できません：直前があなたのメッセージです。アシスタントの返信を待ってから続けてください。
+         */
+        "awaitAssistantReplyCannotSend": string;
     };
 }

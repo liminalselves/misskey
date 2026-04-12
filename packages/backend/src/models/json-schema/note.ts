@@ -265,5 +265,54 @@ export const packedNoteSchema = {
 			type: 'string',
 			optional: true, nullable: true,
 		},
+		/** 智能体广场评价帖：用于客户端渲染可跳转卡片 */
+		agentsPlazaReview: {
+			type: 'object',
+			optional: true, nullable: false,
+			properties: {
+				kind: {
+					type: 'string',
+					optional: false, nullable: false,
+					enum: ['character', 'style'],
+				},
+				id: {
+					type: 'string',
+					optional: false, nullable: false,
+					format: 'id',
+				},
+				name: {
+					type: 'string',
+					optional: false, nullable: false,
+				},
+				stars: {
+					type: 'integer',
+					optional: false, nullable: false,
+					minimum: 0,
+					maximum: 5,
+				},
+				avatar: {
+					type: 'object',
+					optional: true, nullable: true,
+					ref: 'DriveFile',
+				},
+				plazaRatingAverage: {
+					type: 'number',
+					optional: false, nullable: true,
+				},
+				plazaRatingCount: {
+					type: 'number',
+					optional: false, nullable: false,
+				},
+				conversationCount: {
+					type: 'number',
+					optional: false, nullable: false,
+				},
+				aiReplyCount: {
+					type: 'number',
+					optional: false, nullable: false,
+				},
+			},
+			required: ['kind', 'id', 'name', 'stars', 'plazaRatingAverage', 'plazaRatingCount', 'conversationCount', 'aiReplyCount'],
+		},
 	},
 } as const;

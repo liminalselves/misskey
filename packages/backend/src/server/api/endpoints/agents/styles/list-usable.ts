@@ -5,13 +5,18 @@
 
 import ms from 'ms';
 import { Inject, Injectable } from '@nestjs/common';
-import type { AgentDialogueStylesRepository, AgentUserStyleSubscriptionsRepository, UsersRepository } from '@/models/_.js';
+import type { AgentDialogueStylesRepository, AgentUserStyleSubscriptionsRepository, UsersRepository, AgentPlazaReviewsRepository, AgentSessionsRepository, AgentMessagesRepository } from '@/models/_.js';
 import type { MiAgentDialogueStyle } from '@/models/AgentDialogueStyle.js';
 import { In } from 'typeorm';
 import { Endpoint } from '@/server/api/endpoint-base.js';
 import { DI } from '@/di-symbols.js';
 import { AgentService } from '@/core/AgentService.js';
 import { UserEntityService } from '@/core/entities/UserEntityService.js';
+import {
+	batchPlazaRatingsByStyleIds,
+	batchCommunitySessionCountByStyleIds,
+	batchCommunityAssistantReplyCountByStyleIds,
+} from '@/core/agent-plaza-display-stats.js';
 
 function previewBody(body: string, max = 200): string {
 	const t = body.replace(/\s+/g, ' ').trim();
@@ -45,6 +50,17 @@ export const meta = {
 				createdAt: { type: 'string', format: 'date-time' },
 				updatedAt: { type: 'string', format: 'date-time' },
 				user: { type: 'object', ref: 'UserLite' },
+				rating: {
+					type: 'object',
+					optional: false, nullable: false,
+					properties: {
+						average: { type: 'number', nullable: true },
+						count: { type: 'number' },
+					},
+					required: ['average', 'count'],
+				},
+				conversationCount: { type: 'number' },
+				aiReplyCount: { type: 'number' },
 			},
 		},
 	},
@@ -63,6 +79,15 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 
 		@Inject(DI.usersRepository)
 		private usersRepository: UsersRepository,
+
+		@Inject(DI.agentPlazaReviewsRepository)
+		private agentPlazaReviewsRepository: AgentPlazaReviewsRepository,
+
+		@Inject(DI.agentSessionsRepository)
+		private agentSessionsRepository: AgentSessionsRepository,
+
+		@Inject(DI.agentMessagesRepository)
+		private agentMessagesRepository: AgentMessagesRepository,
 
 		private agentService: AgentService,
 		private userEntityService: UserEntityService,
@@ -137,12 +162,27 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				}
 			}
 			const values = Array.from(byId.values());
+			const styleIds = values.map(v => v.id);
+			const [ratings, convs, aiReplies] = await Promise.all([
+				batchPlazaRatingsByStyleIds(this.agentPlazaReviewsRepository, styleIds),
+				batchCommunitySessionCountByStyleIds(this.agentSessionsRepository, styleIds),
+				batchCommunityAssistantReplyCountByStyleIds(this.agentMessagesRepository, styleIds),
+			]);
 			const userIds = [...new Set(values.map(v => v.userId))];
 			const users = await this.usersRepository.findBy({ id: In(userIds) });
 			const packedUsers = await this.userEntityService.packMany(users, me, { schema: 'UserLite' });
 			const userById = new Map(packedUsers.map(u => [u.id, u]));
 			return values
-				.map(v => ({ ...v, user: userById.get(v.userId)! }))
+				.map(v => {
+					const r = ratings.get(v.id) ?? { average: null, count: 0 };
+					return {
+						...v,
+						user: userById.get(v.userId)!,
+						rating: { average: r.average, count: r.count },
+						conversationCount: convs.get(v.id) ?? 0,
+						aiReplyCount: aiReplies.get(v.id) ?? 0,
+					};
+				})
 				.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 		});
 	}

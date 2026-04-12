@@ -53,9 +53,26 @@ SPDX-License-Identifier: AGPL-3.0-only
 								<MkTime :time="a.updatedAt" mode="relative"/>
 							</span>
 						</div>
+						<div :class="$style.plazaRow">
+							<span :class="$style.plazaLabel"><i class="ti ti-star"/> {{ i18n.ts._agents.plazaMetricRating }}</span>
+							<template v-if="a.rating.count === 0">
+								<span :class="$style.plazaMuted">{{ i18n.ts._agents.plazaRatingNone }}</span>
+							</template>
+							<template v-else>
+								<span :class="$style.plazaStars" aria-hidden="true">{{ plazaStarVisual(a.rating.average) }}</span>
+								<span :class="$style.plazaVal">{{ plazaAverageText(a.rating.average) }} · {{ a.rating.count }} {{ i18n.ts._agents.plazaRatingCountSuffix }}</span>
+							</template>
+							<span :class="$style.plazaSep">·</span>
+							<span :class="$style.plazaLabel"><i class="ti ti-messages"/> {{ i18n.ts._agents.plazaMetricConversations }}</span>
+							<span :class="$style.plazaVal">{{ a.conversationCount }}</span>
+							<span :class="$style.plazaSep">·</span>
+							<span :class="$style.plazaLabel"><i class="ti ti-robot"/> {{ i18n.ts._agents.plazaMetricAiReplies }}</span>
+							<span :class="$style.plazaVal">{{ a.aiReplyCount }}</span>
+						</div>
 					</div>
 				</div>
 				<div :class="$style.cardActions">
+					<MkButton rounded @click="goCharacterDetail(a.id)"><i class="ti ti-eye"></i> {{ i18n.ts._agents.plazaViewDetails }}</MkButton>
 					<MkButton primary rounded @click="startPlay(a)"><i class="ti ti-message"></i> {{ i18n.ts._agents.play }}</MkButton>
 				</div>
 			</div>
@@ -101,9 +118,26 @@ SPDX-License-Identifier: AGPL-3.0-only
 								<MkTime :time="s.updatedAt" mode="relative"/>
 							</span>
 						</div>
+						<div :class="$style.plazaRow">
+							<span :class="$style.plazaLabel"><i class="ti ti-star"/> {{ i18n.ts._agents.plazaMetricRating }}</span>
+							<template v-if="s.rating.count === 0">
+								<span :class="$style.plazaMuted">{{ i18n.ts._agents.plazaRatingNone }}</span>
+							</template>
+							<template v-else>
+								<span :class="$style.plazaStars" aria-hidden="true">{{ plazaStarVisual(s.rating.average) }}</span>
+								<span :class="$style.plazaVal">{{ plazaAverageText(s.rating.average) }} · {{ s.rating.count }} {{ i18n.ts._agents.plazaRatingCountSuffix }}</span>
+							</template>
+							<span :class="$style.plazaSep">·</span>
+							<span :class="$style.plazaLabel"><i class="ti ti-messages"/> {{ i18n.ts._agents.plazaMetricConversations }}</span>
+							<span :class="$style.plazaVal">{{ s.conversationCount }}</span>
+							<span :class="$style.plazaSep">·</span>
+							<span :class="$style.plazaLabel"><i class="ti ti-robot"/> {{ i18n.ts._agents.plazaMetricAiReplies }}</span>
+							<span :class="$style.plazaVal">{{ s.aiReplyCount }}</span>
+						</div>
 					</div>
 				</div>
 				<div :class="$style.cardActions">
+					<MkButton rounded @click="goStyleDetail(s.id)"><i class="ti ti-eye"></i> {{ i18n.ts._agents.plazaViewDetails }}</MkButton>
 					<MkButton v-if="plazaRowState(s) === 'other'" rounded @click="subscribe(s.id)"><i class="ti ti-plus"></i> {{ i18n.ts._agents.addStyleToMine }}</MkButton>
 					<MkButton v-if="plazaRowState(s) === 'subscribed'" rounded @click="unsubscribe(s.id)"><i class="ti ti-x"></i> {{ i18n.ts._agents.removeStyleFromMine }}</MkButton>
 					<MkButton v-if="plazaRowState(s) === 'mine'" rounded @click="router.push(('/agents/style/' + s.id) as '/agents/style/:styleId')"><i class="ti ti-pencil"></i> {{ i18n.ts._agents.edit }}</MkButton>
@@ -143,6 +177,17 @@ const loadingCh = ref(true);
 const plazaStyles = ref<AgentsStylesPublicListResponse>([]);
 const usableById = ref<Map<string, { isMine: boolean; subscribed: boolean }>>(new Map());
 const loadingPlaza = ref(true);
+
+function plazaStarVisual(avg: number | null | undefined): string {
+	if (avg == null || !Number.isFinite(avg)) return '—';
+	const full = Math.max(0, Math.min(5, Math.round(avg)));
+	return '★'.repeat(full) + '☆'.repeat(5 - full);
+}
+
+function plazaAverageText(avg: number | null | undefined): string {
+	if (avg == null || !Number.isFinite(avg)) return '—';
+	return avg.toFixed(2);
+}
 
 function plazaRowState(s: { id: string; userId: string }) {
 	if ($i && s.userId === $i.id) return 'mine';
@@ -210,37 +255,29 @@ async function unsubscribe(styleId: string) {
 	}
 }
 
-async function pickPublishedStyleId(): Promise<string | null> {
-	const usable = await misskeyApi('agents/styles/list-usable', {});
-	const published = usable.filter(s => s.isPublished);
-	if (published.length === 0) {
-		os.alert({
-			type: 'warning',
-			text: i18n.ts._agents.needPublishedStyleExplore,
-		});
-		await router.push({ path: '/agents', query: { view: 'create', sub: 'styles' } } as unknown as Parameters<typeof router.push>[0]);
-		return null;
-	}
-	if (published.length === 1) {
-		return published[0].id;
-	}
-	const picked = await os.select({
-		title: i18n.ts._agents.pickStyleForCommunity,
-		items: published.map(s => ({ value: s.id, text: s.name })) as unknown as Parameters<typeof os.select>[0]['items'],
-		default: published[0].id,
-	});
-	return (picked as unknown as string | null | undefined) ?? null;
+function goCharacterDetail(characterId: string) {
+	router.push(('/agents/square/character/' + characterId) as '/agents/square/character/:characterId');
+}
+
+function goStyleDetail(styleId: string) {
+	router.push(('/agents/square/style/' + styleId) as '/agents/square/style/:styleId');
 }
 
 async function startPlay(a: { id: string }) {
-	const styleId = await pickPublishedStyleId();
-	if (!styleId) return;
-	const session = await misskeyApi('agents/sessions/create', {
-		characterId: a.id,
-		dialogueStyleId: styleId,
-		sessionKind: 'community',
-	});
-	router.push(('/chat/agent/' + session.id) as '/chat/agent/:sessionId');
+	try {
+		const session = await misskeyApi('agents/sessions/create', {
+			characterId: a.id,
+			sessionKind: 'community',
+		});
+		router.push(('/chat/agent/' + session.id) as '/chat/agent/:sessionId');
+	} catch (e) {
+		if (e && typeof e === 'object' && (e as { code?: string }).code === 'AGENT_NEED_PUBLISHED_STYLE') {
+			os.alert({ type: 'info', text: i18n.ts._agents.needPublishedStyleExplore });
+			router.push('/agents' as '/agents');
+			return;
+		}
+		os.alert({ type: 'error', text: formatApiError(e) });
+	}
 }
 </script>
 
@@ -396,6 +433,48 @@ async function startPlay(a: { id: string }) {
 	white-space: nowrap;
 }
 
+.plazaRow {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	gap: 6px 8px;
+	font-size: 0.84em;
+	line-height: 1.45;
+	padding-top: 2px;
+}
+
+.plazaLabel {
+	font-weight: 700;
+	opacity: 0.65;
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	flex-shrink: 0;
+}
+
+.plazaVal {
+	font-weight: 700;
+	font-variant-numeric: tabular-nums;
+	opacity: 0.92;
+}
+
+.plazaMuted {
+	font-weight: 600;
+	opacity: 0.55;
+}
+
+.plazaStars {
+	color: var(--MI_THEME-warn);
+	letter-spacing: 0.04em;
+	font-weight: 700;
+}
+
+.plazaSep {
+	opacity: 0.45;
+	font-weight: 600;
+	flex-shrink: 0;
+}
+
 .cardActions {
 	display: flex;
 	flex-wrap: wrap;
@@ -420,7 +499,7 @@ async function startPlay(a: { id: string }) {
 		flex-direction: column;
 		justify-content: center;
 		align-items: stretch;
-		min-width: 140px;
+		min-width: 160px;
 	}
 }
 </style>

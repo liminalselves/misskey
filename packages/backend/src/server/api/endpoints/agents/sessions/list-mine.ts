@@ -36,7 +36,7 @@ export const meta = {
 				id: { type: 'string', format: 'misskey:id' },
 				name: { type: 'string' },
 				characterId: { type: 'string', format: 'misskey:id' },
-				dialogueStyleId: { type: 'string', format: 'misskey:id' },
+				dialogueStyleId: { type: 'string', format: 'misskey:id', nullable: true },
 				sessionKind: { type: 'string', enum: ['draft_test', 'community'] },
 				lastMessageAt: { type: 'string', format: 'date-time' },
 				characterName: { type: 'string' },
@@ -44,6 +44,8 @@ export const meta = {
 				characterAvatar: { type: 'object', ref: 'DriveFile', nullable: true },
 				lastMessagePreview: { type: 'string' },
 				lastMessageRole: { type: 'string', enum: ['user', 'assistant', 'system'] },
+				sessionModerationBanned: { type: 'boolean' },
+				characterModerationBanned: { type: 'boolean' },
 			},
 		},
 	},
@@ -74,7 +76,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					lastMessageAt: Not(IsNull()),
 				},
 				order: { lastMessageAt: 'DESC' },
-				select: ['id', 'name', 'characterId', 'dialogueStyleId', 'sessionKind', 'lastMessageAt'],
+				select: ['id', 'name', 'characterId', 'dialogueStyleId', 'sessionKind', 'lastMessageAt', 'moderationBanned'],
 				take: 100,
 			});
 			if (rows.length === 0) return [];
@@ -82,7 +84,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			const charIds = [...new Set(rows.map(r => r.characterId))];
 			const chars = await this.agentCharactersRepository.find({
 				where: { id: In(charIds) },
-				select: ['id', 'name', 'summary', 'avatarFileId', 'publishedSnapshot', 'publishedVersion'],
+				select: ['id', 'name', 'summary', 'avatarFileId', 'publishedSnapshot', 'publishedVersion', 'moderationBanned'],
 			});
 			const charMap = new Map(chars.map(c => [c.id, c]));
 
@@ -121,6 +123,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					characterAvatar: avatarFileId ? avatarPacked.get(avatarFileId) ?? null : null,
 					lastMessagePreview: last ? previewText(last.content) : '',
 					lastMessageRole: last?.role ?? 'assistant',
+					sessionModerationBanned: r.moderationBanned,
+					characterModerationBanned: ch?.moderationBanned ?? false,
 				};
 			});
 		});

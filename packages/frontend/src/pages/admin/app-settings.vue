@@ -63,6 +63,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 									<template #caption><SearchText>{{ i18n.ts.nativeClientAppInfoSemverHint }}</SearchText></template>
 								</MkInput>
 							</FormSplit>
+							<MkInput v-model="nativeClientAppInfoForm.state.minRequiredAppVersion">
+								<template #label><SearchLabel>{{ i18n.ts.nativeClientAppInfoMinRequiredAppVersion }}</SearchLabel><span v-if="nativeClientAppInfoForm.modifiedStates.minRequiredAppVersion" class="_modified">{{ i18n.ts.modified }}</span></template>
+								<template #caption><SearchText>{{ i18n.ts.nativeClientAppInfoMinRequiredAppVersionCaption }}</SearchText></template>
+							</MkInput>
 							<FormSplit :minWidth="280">
 								<MkInput v-model="nativeClientAppInfoForm.state.androidDownloadUrl" type="url">
 									<template #label><SearchLabel>{{ i18n.ts.nativeClientAppInfoAndroidDownloadUrl }}</SearchLabel><span v-if="nativeClientAppInfoForm.modifiedStates.androidDownloadUrl" class="_modified">{{ i18n.ts.modified }}</span></template>
@@ -125,6 +129,7 @@ const nativeClientAppInfoDefaults = (meta.nativeClientAppInfo && typeof meta.nat
 const nativeClientAppInfoForm = useForm({
 	latestAndroidVersion: nativeClientAppInfoDefaults.latestAndroidVersion ?? '',
 	latestIosVersion: nativeClientAppInfoDefaults.latestIosVersion ?? '',
+	minRequiredAppVersion: nativeClientAppInfoDefaults.minRequiredAppVersion ?? '',
 	androidDownloadUrl: nativeClientAppInfoDefaults.androidDownloadUrl ?? '',
 	iosDownloadUrl: nativeClientAppInfoDefaults.iosDownloadUrl ?? '',
 	releaseNotesUrl: nativeClientAppInfoDefaults.releaseNotesUrl ?? '',
@@ -134,6 +139,7 @@ const nativeClientAppInfoForm = useForm({
 		nativeClientAppInfo: {
 			latestAndroidVersion: state.latestAndroidVersion === '' ? null : state.latestAndroidVersion,
 			latestIosVersion: state.latestIosVersion === '' ? null : state.latestIosVersion,
+			minRequiredAppVersion: state.minRequiredAppVersion === '' ? null : state.minRequiredAppVersion,
 			androidDownloadUrl: state.androidDownloadUrl === '' ? null : state.androidDownloadUrl,
 			iosDownloadUrl: state.iosDownloadUrl === '' ? null : state.iosDownloadUrl,
 			releaseNotesUrl: state.releaseNotesUrl === '' ? null : state.releaseNotesUrl,

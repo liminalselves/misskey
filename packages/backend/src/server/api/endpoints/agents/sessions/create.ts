@@ -31,7 +31,7 @@ export const meta = {
 			id: { type: 'string', format: 'misskey:id' },
 			name: { type: 'string' },
 			characterId: { type: 'string', format: 'misskey:id' },
-			dialogueStyleId: { type: 'string', format: 'misskey:id' },
+			dialogueStyleId: { type: 'string', format: 'misskey:id', nullable: true },
 			sessionKind: { type: 'string', enum: ['draft_test', 'community'] },
 			agentModelId: { type: 'string', nullable: true },
 			createdAt: { type: 'string', format: 'date-time' },
@@ -43,12 +43,12 @@ export const paramDef = {
 	type: 'object',
 	properties: {
 		characterId: { type: 'string', format: 'misskey:id' },
-		dialogueStyleId: { type: 'string', format: 'misskey:id' },
+		dialogueStyleId: { type: 'string', format: 'misskey:id', nullable: true },
 		sessionKind: { type: 'string', enum: ['draft_test', 'community'] },
 		name: { type: 'string', maxLength: 256, nullable: true },
 		agentModelId: { type: 'string', nullable: true, maxLength: 64 },
 	},
-	required: ['characterId', 'dialogueStyleId', 'sessionKind'],
+	required: ['characterId', 'sessionKind'],
 } as const;
 
 @Injectable()
@@ -73,13 +73,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			if (!character) {
 				throw new ApiError({ message: 'No such character.', code: 'NO_SUCH_CHARACTER', id: 'a9b0c1d2-e3f4-5678-2345-789012345678' });
 			}
-
-			const style = await this.agentDialogueStylesRepository.findOneBy({ id: ps.dialogueStyleId });
-			if (!style) {
-				throw new ApiError({ message: 'No such style.', code: 'NO_SUCH_STYLE', id: 'b0c1d2e3-f4a5-6789-3456-890123456789' });
-			}
-
-			await this.agentService.assertCanUseDialogueStyle(me.id, style, { forNewSession: true });
+			this.agentService.assertAgentCharacterNotModerationBanned(character);
 
 			const sessionKind = ps.sessionKind as AgentSessionKind;
 			if (sessionKind === 'draft_test') {
@@ -90,9 +84,20 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				if (!this.agentService.isListedOnPlazaCharacter(character)) {
 					throw new ApiError({ message: 'Character is not published.', code: 'CHARACTER_NOT_PUBLISHED', id: 'd2e3f4a5-b6c7-8901-5678-012345678901' });
 				}
-				if (!this.agentService.isListedOnPlazaStyle(style)) {
+			}
+
+			let styleId: string | null = null;
+			const styleIdRaw = typeof ps.dialogueStyleId === 'string' ? ps.dialogueStyleId.trim() : '';
+			if (styleIdRaw !== '') {
+				const style = await this.agentDialogueStylesRepository.findOneBy({ id: styleIdRaw });
+				if (!style) {
+					throw new ApiError({ message: 'No such style.', code: 'NO_SUCH_STYLE', id: 'b0c1d2e3-f4a5-6789-3456-890123456789' });
+				}
+				await this.agentService.assertCanUseDialogueStyle(me.id, style, { forNewSession: true });
+				if (sessionKind === 'community' && !this.agentService.isListedOnPlazaStyle(style)) {
 					throw new ApiError({ message: 'Style is not published.', code: 'STYLE_NOT_PUBLISHED', id: 'e3f4a5b6-c7d8-9012-6789-123456789012' });
 				}
+				styleId = style.id;
 			}
 
 			const instanceMeta = await this.metaService.fetch(true);
@@ -110,7 +115,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				userId: me.id,
 				name: (ps.name?.trim() || character.name).slice(0, 256),
 				characterId: character.id,
-				dialogueStyleId: style.id,
+				dialogueStyleId: styleId,
+				plazaStatsDialogueStyleId: styleId,
 				characterOwnerId: character.userId,
 				sessionKind,
 				agentModelId,

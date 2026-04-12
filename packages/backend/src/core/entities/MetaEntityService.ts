@@ -145,6 +145,7 @@ export class MetaEntityService {
 				return {
 					latestAndroidVersion: n.latestAndroidVersion ?? null,
 					latestIosVersion: n.latestIosVersion ?? null,
+					minRequiredAppVersion: n.minRequiredAppVersion ?? null,
 					androidDownloadUrl: n.androidDownloadUrl ?? null,
 					iosDownloadUrl: n.iosDownloadUrl ?? null,
 					releaseNotesUrl: n.releaseNotesUrl ?? null,

@@ -24,7 +24,7 @@ export const meta = {
 		properties: {
 			id: { type: 'string', format: 'misskey:id' },
 			name: { type: 'string' },
-			dialogueStyleId: { type: 'string', format: 'misskey:id' },
+			dialogueStyleId: { type: 'string', format: 'misskey:id', nullable: true },
 			agentModelId: { type: 'string', nullable: true },
 			agentLongMemoryEnabled: { type: 'boolean' },
 			agentLongMemoryTopK: { type: 'number' },
@@ -72,18 +72,30 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			if (!row || row.userId !== me.id) {
 				throw new ApiError({ message: 'No such session.', code: 'NO_SUCH_SESSION', id: 'f4a5b6c7-d8e9-0123-7890-234567890123' });
 			}
+			const characterRow = await this.agentService.loadCharacterForAgentSessionOrThrow(row);
+			this.agentService.assertAgentUserSessionChatAllowed(characterRow, row);
 			const instanceMeta = await this.metaService.fetch(true);
 
 			if (ps.name !== undefined && ps.name !== null) {
 				row.name = ps.name.slice(0, 256);
 			}
-			if (ps.dialogueStyleId !== undefined && ps.dialogueStyleId !== null) {
-				const style = await this.agentDialogueStylesRepository.findOneBy({ id: ps.dialogueStyleId });
-				if (!style) {
-					throw new ApiError({ message: 'No such style.', code: 'NO_SUCH_STYLE', id: 'b4c5d6e7-f8a9-0123-4567-890123456789' });
+			if (ps.dialogueStyleId !== undefined) {
+				if (ps.dialogueStyleId === null) {
+					row.dialogueStyleId = null;
+				} else {
+					const style = await this.agentDialogueStylesRepository.findOneBy({ id: ps.dialogueStyleId });
+					if (!style) {
+						throw new ApiError({ message: 'No such style.', code: 'NO_SUCH_STYLE', id: 'b4c5d6e7-f8a9-0123-4567-890123456789' });
+					}
+					await this.agentService.assertCanUseDialogueStyle(me.id, style, { forNewSession: true });
+					if (row.sessionKind === 'community' && !this.agentService.isListedOnPlazaStyle(style)) {
+						throw new ApiError({ message: 'Style is not published.', code: 'STYLE_NOT_PUBLISHED', id: 'f5a6b7c8-d9e0-1234-8901-456789012345' });
+					}
+					row.dialogueStyleId = style.id;
+					if (row.plazaStatsDialogueStyleId == null) {
+						row.plazaStatsDialogueStyleId = style.id;
+					}
 				}
-				await this.agentService.assertCanUseDialogueStyle(me.id, style, { forNewSession: true });
-				row.dialogueStyleId = style.id;
 			}
 			if (ps.agentModelId !== undefined) {
 				const mid = ps.agentModelId === '' ? null : ps.agentModelId;

@@ -86,4 +86,10 @@ export class MiAgentCharacter {
 		nullable: true,
 	})
 	public avatarFileId: MiDriveFile['id'] | null;
+
+	/** 管理封禁：无法以此角色新建会话，且其下已有会话均不可用 */
+	@Column('boolean', {
+		default: false,
+	})
+	public moderationBanned: boolean;
 }

@@ -77,6 +77,7 @@ import { FeaturedService } from './FeaturedService.js';
 import { FanoutTimelineService } from './FanoutTimelineService.js';
 import { ChannelFollowingService } from './ChannelFollowingService.js';
 import { AgentService } from './AgentService.js';
+import { AgentPlazaReviewService } from './AgentPlazaReviewService.js';
 import { AgentDashscopeMemoryService } from './AgentDashscopeMemoryService.js';
 import { ChatService } from './ChatService.js';
 import { RegistryApiService } from './RegistryApiService.js';
@@ -230,6 +231,7 @@ const $FanoutTimelineEndpointService: Provider = { provide: 'FanoutTimelineEndpo
 const $ChannelFollowingService: Provider = { provide: 'ChannelFollowingService', useExisting: ChannelFollowingService };
 const $ChannelMutingService: Provider = { provide: 'ChannelMutingService', useExisting: ChannelMutingService };
 const $AgentService: Provider = { provide: 'AgentService', useExisting: AgentService };
+const $AgentPlazaReviewService: Provider = { provide: 'AgentPlazaReviewService', useExisting: AgentPlazaReviewService };
 const $AgentDashscopeMemoryService: Provider = { provide: 'AgentDashscopeMemoryService', useExisting: AgentDashscopeMemoryService };
 const $ChatService: Provider = { provide: 'ChatService', useExisting: ChatService };
 const $RegistryApiService: Provider = { provide: 'RegistryApiService', useExisting: RegistryApiService };
@@ -386,6 +388,7 @@ const $ApQuestionService: Provider = { provide: 'ApQuestionService', useExisting
 		ChannelFollowingService,
 		ChannelMutingService,
 		AgentService,
+		AgentPlazaReviewService,
 		AgentDashscopeMemoryService,
 		ChatService,
 		RegistryApiService,
@@ -539,6 +542,7 @@ const $ApQuestionService: Provider = { provide: 'ApQuestionService', useExisting
 		$ChannelFollowingService,
 		$ChannelMutingService,
 		$AgentService,
+		$AgentPlazaReviewService,
 		$AgentDashscopeMemoryService,
 		$ChatService,
 		$RegistryApiService,
@@ -692,6 +696,7 @@ const $ApQuestionService: Provider = { provide: 'ApQuestionService', useExisting
 		ChannelFollowingService,
 		ChannelMutingService,
 		AgentService,
+		AgentPlazaReviewService,
 		AgentDashscopeMemoryService,
 		ChatService,
 		RegistryApiService,
@@ -843,6 +848,7 @@ const $ApQuestionService: Provider = { provide: 'ApQuestionService', useExisting
 		$ChannelFollowingService,
 		$ChannelMutingService,
 		$AgentService,
+		$AgentPlazaReviewService,
 		$AgentDashscopeMemoryService,
 		$ChatService,
 		$RegistryApiService,

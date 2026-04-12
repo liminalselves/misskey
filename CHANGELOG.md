@@ -26,6 +26,14 @@
   - 智能体子页面导航调整为：消息、搜索、记忆、模型、对话风格
   - 「对话风格」改为类似广场的卡片式选择器，展示名称、简介/预览、作者、状态徽章与时间信息，不再只有下拉栏
   - 「模型」页面改为卡片式选择器，展示模型简介与关键参数（上下文长度、单次最大输出等），不再只有下拉栏
+- Enhance: 智能体广场与评价、治理与输入体验
+  - 广场角色/风格详情页、评价列表与路由；列表与详情展示评分、会话次数、对话次数等（与后端统计快照一致）
+  - 时间线笔记展示广场评价关联（`MkNoteAgentsPlazaReview` 等）
+  - 控制面板「智能体聊天记录」可对会话或角色执行封禁/解除，带确认与状态徽章；操作写入管理日志并在「管理ログ」中展示
+  - 会话页在角色或会话被管理封禁时禁用发送及设置/记忆写入，仍可浏览历史；`sessions/show` 返回封禁标记供提示
+  - 发送前校验：不允许连续两条同为用户或同为助手；上一条为用户时须等待助手回复后再发（错误码 `AGENT_THREAD_INVALID_TURNS`、`AGENT_AWAIT_ASSISTANT_REPLY`）
+  - 创建会话时可暂不选择对话风格，须在发送前选定；未选风格时输入区展示说明
+  - 智能体/私信输入区组合键与窄屏布局等优化（与 `chat.sendOnEnter` 等偏好一致）
 - Fix: 发现流（Discovery/Featured）快速刷新导致内容重复或空白的问题
 - Fix: 修复频道发现板块热度算法与全局不一致的问题
 - Fix: 发现页在「热度」「最新」等排序下无限滚动时，同一帖子偶发重复出现的问题（除上述服务端单次请求补足外，前端 `Paginator.pushItems` 向下合并时亦按帖子 `id` 去重，与 `unshiftItems` 一致）
@@ -45,6 +53,7 @@
   - 被引用的消息在聊天记录中会显示跳转链接，点击可定位到原消息位置
 
 ### Note
+- Enhance: 智能体广场评价笔记 — 打包后的帖子可含可选字段 `agentsPlazaReview`（评价目标、星级等），供时间线组件展示与广场数据关联
 - `users/following` の `birthday` プロパティは非推奨になりました。代わりに `users/get-following-birthday-users` をご利用ください。
 
 ### General
@@ -77,6 +86,16 @@
 - Fix: 修复智能体上下文窗口分割线与实际发送给模型的历史消息不一致的问题
   - 当长期记忆检索结果短于预留预算时，服务端此前会在发送前扩大历史预算并重载消息，导致分割线以上的旧消息也被带入模型上下文
   - 现在发送路径与 `agents/sessions/context-window` 使用一致的历史预算策略，确保 UI 分割线语义与模型实际上下文对齐
+- Enhance: 智能体广场评价与统计快照
+  - 新增 `agent_plaza_review` 表：评价与 Misskey 笔记绑定，指向角色或风格之一，星级 0–5，并按用户与目标去重
+  - 会话增加 `plazaStatsDialogueStyleId`、消息增加 `statsDialogueStyleId`，广场统计按「创建/发送时」风格快照聚合，避免用户中途切换对话风格后指标错位
+  - `agent-plaza-display-stats` 等与 `public-list`、`plaza-detail`、`list-mine`、`list-usable` 等接口对齐展示字段
+- Enhance: 智能体管理封禁与会话校验
+  - `agent_session`、`agent_character` 增加 `moderationBanned`；API `admin/agents/sessions/set-moderation-banned`、`admin/agents/characters/set-moderation-banned`（须管理员）
+  - 角色被封禁时不可新建会话；会话或角色被封禁时拒绝写入类操作（发消息、更新会话、删消息、记忆增删改等），只读时间线/搜索/上下文边界/记忆列表等仍可用
+  - 管理日志类型：`setAgentSessionModerationBan`、`setAgentCharacterModerationBan`
+  - `agents/messages/send` 在落库前校验 user/assistant 严格交替且末尾不得停留在未回复的用户消息上（与前端预检一致）
+- 部署须执行数据库迁移：`1771470000000-AgentSessionOptionalDialogueStyle`、`1771600000000-AgentPlazaReview`、`1771650000000-AgentPlazaStatsDialogueStyleSnapshot`、`1771700000000-AgentModerationBanned`
 - Enhance: OAuthのクライアント情報取得（Client Information Discovery）において、IndieWeb Living Standard 11 July 2024で定義されているJSONドキュメント形式に対応しました
   - JSONによるClient Information Discoveryを行うには、レスポンスの`Content-Type`ヘッダーが`application/json`である必要があります
   - 従来の実装（12 February 2022版・HTML Microformat形式）も引き続きサポートされます

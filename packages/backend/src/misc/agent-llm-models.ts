@@ -94,11 +94,13 @@ export function getEffectiveLlmModels(meta: MiMeta): AgentLlmModelJson[] {
 	return out;
 }
 
-export function packPublicAgentModels(meta: MiMeta): { id: string; name: string; description: string | null }[] {
+export function packPublicAgentModels(meta: MiMeta): { id: string; name: string; description: string | null; maxContextTokens: number; maxOutputTokensPerCall: number }[] {
 	return getEffectiveLlmModels(meta).map(m => ({
 		id: m.id,
 		name: m.name,
 		description: m.description,
+		maxContextTokens: m.maxContextTokens,
+		maxOutputTokensPerCall: m.maxOutputTokensPerCall,
 	}));
 }
 

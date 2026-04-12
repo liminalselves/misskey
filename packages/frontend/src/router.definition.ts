@@ -88,6 +88,14 @@ export const ROUTE_DEF = [{
 		messageId: 'messageId',
 	},
 }, {
+	path: '/agents/square/character/:characterId',
+	component: page(() => import('@/pages/agents/square-character-detail.vue')),
+	loginRequired: true,
+}, {
+	path: '/agents/square/style/:styleId',
+	component: page(() => import('@/pages/agents/square-style-detail.vue')),
+	loginRequired: true,
+}, {
 	path: '/agents/character/:characterId',
 	component: page(() => import('@/pages/agents/character-edit.vue')),
 	loginRequired: true,

@@ -206,6 +206,15 @@ export type ModerationLog = {
 } | {
 	type: 'updateProxyAccountDescription';
 	info: ModerationLogPayloads['updateProxyAccountDescription'];
+} | {
+	type: 'resolveAgentReview';
+	info: ModerationLogPayloads['resolveAgentReview'];
+} | {
+	type: 'setAgentSessionModerationBan';
+	info: ModerationLogPayloads['setAgentSessionModerationBan'];
+} | {
+	type: 'setAgentCharacterModerationBan';
+	info: ModerationLogPayloads['setAgentCharacterModerationBan'];
 });
 
 export type ServerStats = {

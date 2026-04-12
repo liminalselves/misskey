@@ -92,6 +92,7 @@ import { MiAgentDialogueStyle } from '@/models/AgentDialogueStyle.js';
 import { MiAgentSession } from '@/models/AgentSession.js';
 import { MiAgentMessage } from '@/models/AgentMessage.js';
 import { MiAgentUserStyleSubscription } from '@/models/AgentUserStyleSubscription.js';
+import { MiAgentPlazaReview } from '@/models/AgentPlazaReview.js';
 import { MiSystemAccount } from '@/models/SystemAccount.js';
 
 pg.types.setTypeParser(20, Number);
@@ -264,6 +265,7 @@ export const entities = [
 	MiAgentSession,
 	MiAgentMessage,
 	MiAgentUserStyleSubscription,
+	MiAgentPlazaReview,
 	MiBubbleGameRecord,
 	MiReversiGame,
 	...charts,

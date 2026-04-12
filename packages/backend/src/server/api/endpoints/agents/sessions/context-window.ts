@@ -13,7 +13,11 @@ import type {
 import { Endpoint } from '@/server/api/endpoint-base.js';
 import { DI } from '@/di-symbols.js';
 import { ApiError } from '@/server/api/error.js';
-import { AgentService } from '@/core/AgentService.js';
+import {
+	AgentService,
+	AGENT_LLM_MEMORY_XML_CLOSE,
+	AGENT_LLM_MEMORY_XML_OPEN,
+} from '@/core/AgentService.js';
 import { AgentDashscopeMemoryService } from '@/core/AgentDashscopeMemoryService.js';
 import { MetaService } from '@/core/MetaService.js';
 
@@ -64,6 +68,14 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			}
 
 			const characterRow = await this.agentCharactersRepository.findOneByOrFail({ id: session.characterId });
+			if (!session.dialogueStyleId) {
+				return {
+					maxContextTokens: 8192,
+					historyBudgetChars: 200_000,
+					truncated: false,
+					oldestIncludedMessageId: null,
+				};
+			}
 			const styleRow = await this.agentDialogueStylesRepository.findOneByOrFail({ id: session.dialogueStyleId });
 
 			await this.agentService.assertCanUseDialogueStyle(me.id, styleRow, {
@@ -100,18 +112,18 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				character,
 				style,
 			});
-			const exampleFewShot = this.agentService.exampleTurnsFromStored(character.exampleDialogue);
 
 			const memActive = this.agentDashscopeMemoryService.isRunnable(instanceMeta) && session.agentLongMemoryEnabled;
 			const maxMemChars = Math.max(200, Math.min(50_000, session.agentLongMemoryInjectMaxChars || instanceMeta.agentMem0InjectMaxChars));
-			const memHeader = '\n\n=== Long-term memory (retrieved) ===\n';
-			const memReserveChars = memActive ? memHeader.length + maxMemChars : 0;
+			const memReserveChars = memActive
+				? AGENT_LLM_MEMORY_XML_OPEN.length + maxMemChars + AGENT_LLM_MEMORY_XML_CLOSE.length
+				: 0;
 
 			const historyBudgetChars = this.agentService.computeChatHistoryCharBudget({
 				maxContextTokens,
 				maxOutputTokensPerCall,
 				systemChars: systemBase.length + memReserveChars,
-				prefixMessages: exampleFewShot,
+				prefixMessages: [],
 			});
 
 			const { truncated, oldestIncludedId } = await this.agentService.loadRecentMessagesForContextWithMeta(session.id, historyBudgetChars);

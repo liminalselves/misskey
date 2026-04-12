@@ -41,6 +41,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 					'deleteFlash',
 					'deleteGalleryPost',
 					'deleteChatRoom',
+					'setAgentSessionModerationBan',
+					'setAgentCharacterModerationBan',
 				].includes(log.type)
 			}"
 		>{{ i18n.ts._moderationLogTypes[log.type] }}</b>
@@ -82,6 +84,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<span v-else-if="log.type === 'deleteFlash'">: @{{ log.info.flashUserUsername }}</span>
 		<span v-else-if="log.type === 'deleteGalleryPost'">: @{{ log.info.postUserUsername }}</span>
 		<span v-else-if="log.type === 'deleteChatRoom'">: @{{ log.info.room.name }}</span>
+		<span v-else-if="log.type === 'resolveAgentReview'">: {{ log.info.kind === 'character' ? i18n.ts._agents.reviewKindCharacter : i18n.ts._agents.reviewKindStyle }} · {{ log.info.name }}</span>
+		<span v-else-if="log.type === 'setAgentSessionModerationBan'">: {{ log.info.sessionName }} <span class="_text">({{ log.info.sessionId }})</span> · {{ log.info.banned ? i18n.ts._agents.modlogAgentBanOn : i18n.ts._agents.modlogAgentBanOff }}</span>
+		<span v-else-if="log.type === 'setAgentCharacterModerationBan'">: {{ log.info.characterName }} <span class="_text">({{ log.info.characterId }})</span> · {{ log.info.banned ? i18n.ts._agents.modlogAgentBanOn : i18n.ts._agents.modlogAgentBanOff }}</span>
 	</template>
 	<template #icon>
 		<i v-if="log.type === 'updateServerSettings'" class="ti ti-settings"></i>
@@ -126,6 +131,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<i v-else-if="log.type === 'deleteFlash'" class="ti ti-trash"></i>
 		<i v-else-if="log.type === 'deleteGalleryPost'" class="ti ti-trash"></i>
 		<i v-else-if="log.type === 'deleteChatRoom'" class="ti ti-trash"></i>
+		<i v-else-if="log.type === 'resolveAgentReview'" class="ti ti-checkbox"></i>
+		<i v-else-if="log.type === 'setAgentSessionModerationBan'" class="ti ti-message-off"></i>
+		<i v-else-if="log.type === 'setAgentCharacterModerationBan'" class="ti ti-user-off"></i>
 	</template>
 	<template #suffix>
 		<MkTime :time="log.createdAt"/>
@@ -217,6 +225,22 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<div :class="$style.diff">
 				<CodeDiff :context="5" :hideHeader="true" :oldString="log.info.before ?? ''" :newString="log.info.after ?? ''" maxHeight="300px"/>
 			</div>
+		</template>
+		<template v-else-if="log.type === 'resolveAgentReview'">
+			<div>{{ log.info.kind === 'character' ? i18n.ts._agents.reviewKindCharacter : i18n.ts._agents.reviewKindStyle }} · {{ log.info.name }} <span class="_text">({{ log.info.id }})</span></div>
+			<div>{{ i18n.ts.user }}: <MkA :to="`/admin/user/${log.info.ownerUserId}`" class="_link">{{ log.info.ownerUserId }}</MkA></div>
+			<div>{{ log.info.decision === 'approve' ? i18n.ts._agents.approveReview : i18n.ts._agents.rejectReview }}</div>
+			<div class="_text">{{ log.info.reviewStatus }} · v{{ log.info.publishedVersion ?? '—' }} · isPublished: {{ log.info.isPublished }}</div>
+		</template>
+		<template v-else-if="log.type === 'setAgentSessionModerationBan'">
+			<div>{{ i18n.ts._agents.modlogAgentSessionBanTitle }}: {{ log.info.sessionName }} <span class="_text">[{{ log.info.sessionId }}]</span></div>
+			<div>{{ i18n.ts._agents.adminAgentChatAuditIndexUser }}: <MkA :to="`/admin/user/${log.info.userId}`" class="_link">{{ log.info.userId }}</MkA></div>
+			<div>{{ i18n.ts._agents.modlogAgentBanState }}: {{ log.info.banned ? i18n.ts._agents.modlogAgentBanOn : i18n.ts._agents.modlogAgentBanOff }} (before: {{ log.info.before ? i18n.ts._agents.modlogAgentBanOn : i18n.ts._agents.modlogAgentBanOff }})</div>
+		</template>
+		<template v-else-if="log.type === 'setAgentCharacterModerationBan'">
+			<div>{{ i18n.ts._agents.modlogAgentCharacterBanTitle }}: {{ log.info.characterName }} <span class="_text">[{{ log.info.characterId }}]</span></div>
+			<div>{{ i18n.ts.user }}: <MkA :to="`/admin/user/${log.info.ownerUserId}`" class="_link">{{ log.info.ownerUserId }}</MkA></div>
+			<div>{{ i18n.ts._agents.modlogAgentBanState }}: {{ log.info.banned ? i18n.ts._agents.modlogAgentBanOn : i18n.ts._agents.modlogAgentBanOff }} (before: {{ log.info.before ? i18n.ts._agents.modlogAgentBanOn : i18n.ts._agents.modlogAgentBanOff }})</div>
 		</template>
 
 		<details>

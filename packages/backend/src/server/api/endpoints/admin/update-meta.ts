@@ -20,6 +20,13 @@ function coerceHttpObjectStorageUrlToHttps(url: string | null | undefined, force
 	return url;
 }
 
+/** Avoid non-JSON-safe / relation fields when persisting meta snapshots to moderation_log. */
+function metaEntityForModerationLog(meta: MiMeta): Record<string, unknown> {
+	const plain = { ...meta } as Record<string, unknown>;
+	delete plain.rootUser;
+	return JSON.parse(JSON.stringify(plain)) as Record<string, unknown>;
+}
+
 export const meta = {
 	tags: ['admin'],
 
@@ -172,6 +179,7 @@ export const paramDef = {
 			properties: {
 				latestAndroidVersion: { type: 'string', nullable: true },
 				latestIosVersion: { type: 'string', nullable: true },
+				minRequiredAppVersion: { type: 'string', nullable: true },
 				androidDownloadUrl: { type: 'string', nullable: true },
 				iosDownloadUrl: { type: 'string', nullable: true },
 				releaseNotesUrl: { type: 'string', nullable: true },
@@ -701,7 +709,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			if (ps.nativeClientAppInfo !== undefined) {
 				const cur: MiNativeClientAppInfo = { ...(serverSettings.nativeClientAppInfo ?? {}) };
 				const p = ps.nativeClientAppInfo;
-				const keys = ['latestAndroidVersion', 'latestIosVersion', 'androidDownloadUrl', 'iosDownloadUrl', 'releaseNotesUrl', 'announcement'] as const;
+				const keys = ['latestAndroidVersion', 'latestIosVersion', 'minRequiredAppVersion', 'androidDownloadUrl', 'iosDownloadUrl', 'releaseNotesUrl', 'announcement'] as const;
 				for (const key of keys) {
 					if (p[key] !== undefined) {
 						const v = p[key];
@@ -992,13 +1000,13 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				set.showRoleBadgesOfRemoteUsers = ps.showRoleBadgesOfRemoteUsers;
 			}
 
-			const before = await this.metaService.fetch(true);
+			const before = metaEntityForModerationLog(await this.metaService.fetch(true));
 
 			await this.metaService.update(set);
 
-			const after = await this.metaService.fetch(true);
+			const after = metaEntityForModerationLog(await this.metaService.fetch(true));
 
-			this.moderationLogService.log(me, 'updateServerSettings', {
+			await this.moderationLogService.log(me, 'updateServerSettings', {
 				before,
 				after,
 			});

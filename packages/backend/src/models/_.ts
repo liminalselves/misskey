@@ -28,6 +28,7 @@ import { MiAgentCharacter } from '@/models/AgentCharacter.js';
 import { MiAgentDialogueStyle } from '@/models/AgentDialogueStyle.js';
 import { MiAgentMessage } from '@/models/AgentMessage.js';
 import { MiAgentUserStyleSubscription } from '@/models/AgentUserStyleSubscription.js';
+import { MiAgentPlazaReview } from '@/models/AgentPlazaReview.js';
 import { MiAgentSession } from '@/models/AgentSession.js';
 import { MiChatApproval } from '@/models/ChatApproval.js';
 import { MiChatMessage } from '@/models/ChatMessage.js';
@@ -183,6 +184,7 @@ export {
 	MiAgentSession,
 	MiAgentMessage,
 	MiAgentUserStyleSubscription,
+	MiAgentPlazaReview,
 	MiBubbleGameRecord,
 	MiReversiGame,
 };
@@ -271,3 +273,4 @@ export type AgentDialogueStylesRepository = Repository<MiAgentDialogueStyle> & M
 export type AgentSessionsRepository = Repository<MiAgentSession> & MiRepository<MiAgentSession>;
 export type AgentMessagesRepository = Repository<MiAgentMessage> & MiRepository<MiAgentMessage>;
 export type AgentUserStyleSubscriptionsRepository = Repository<MiAgentUserStyleSubscription> & MiRepository<MiAgentUserStyleSubscription>;
+export type AgentPlazaReviewsRepository = Repository<MiAgentPlazaReview> & MiRepository<MiAgentPlazaReview>;

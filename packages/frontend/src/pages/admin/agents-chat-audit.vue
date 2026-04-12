@@ -86,7 +86,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 							<span :class="$style.indexBlock">
 								<span :class="$style.indexKey">{{ i18n.ts._agents.adminAgentChatAuditIndexStyle }}</span>
 								<code :class="$style.mono">{{ row.dialogueStyleId }}</code>
-								<button type="button" class="_button" :class="$style.miniCopy" :title="i18n.ts._agents.adminAgentChatAuditCopy" @click="copyId(row.dialogueStyleId)"><i class="ti ti-copy"></i></button>
+								<button type="button" class="_button" :class="$style.miniCopy" :title="i18n.ts._agents.adminAgentChatAuditCopy" :disabled="row.dialogueStyleId == null" @click="row.dialogueStyleId != null && copyId(row.dialogueStyleId)"><i class="ti ti-copy"></i></button>
 							</span>
 						</div>
 						<div :class="$style.kindRow">
@@ -96,6 +96,17 @@ SPDX-License-Identifier: AGPL-3.0-only
 								<code :class="$style.mono">{{ row.id }}</code>
 								<button type="button" class="_button" :class="$style.miniCopy" :title="i18n.ts._agents.adminAgentChatAuditCopy" @click="copyId(row.id)"><i class="ti ti-copy"></i></button>
 							</span>
+						</div>
+
+						<div :class="$style.modActions" class="_buttons">
+							<span v-if="row.sessionModerationBanned === true" :class="$style.bannedTag">{{ i18n.ts._agents.adminAgentChatAuditSessionBannedBadge }}</span>
+							<span v-if="row.characterModerationBanned === true" :class="$style.bannedTag">{{ i18n.ts._agents.adminAgentChatAuditCharacterBannedBadge }}</span>
+							<MkButton small rounded :disabled="banBusy" @click="toggleSessionBan(row)">
+								{{ row.sessionModerationBanned === true ? i18n.ts._agents.adminAgentChatAuditUnbanSession : i18n.ts._agents.adminAgentChatAuditBanSession }}
+							</MkButton>
+							<MkButton small rounded :disabled="banBusy" @click="toggleCharacterBan(row)">
+								{{ row.characterModerationBanned === true ? i18n.ts._agents.adminAgentChatAuditUnbanCharacter : i18n.ts._agents.adminAgentChatAuditBanCharacter }}
+							</MkButton>
 						</div>
 
 						<pre :class="$style.pre">{{ row.content }}</pre>
@@ -132,11 +143,15 @@ import { i18n } from '@/i18n.js';
 import { definePage } from '@/page.js';
 import * as os from '@/os.js';
 
-type Row = AdminAgentsMessagesListResponse[number];
+type Row = AdminAgentsMessagesListResponse[number] & {
+	sessionModerationBanned?: boolean;
+	characterModerationBanned?: boolean;
+};
 
 const LIMIT = 40;
 
 const loading = ref(false);
+const banBusy = ref(false);
 const searched = ref(false);
 /** 未使用任何筛选条件时的「全站最近消息」视图 */
 const recentMode = ref(true);
@@ -213,6 +228,60 @@ function sessionKindLabel(kind: Row['sessionKind']): string {
 function copyId(id: string): void {
 	copyToClipboard(id);
 	os.toast(i18n.ts.copiedToClipboard);
+}
+
+function patchRowsSessionBan(sessionId: string, banned: boolean): void {
+	items.value = items.value.map(it =>
+		it.sessionId === sessionId ? { ...it, sessionModerationBanned: banned } : it,
+	);
+}
+
+function patchRowsCharacterBan(characterId: string, banned: boolean): void {
+	items.value = items.value.map(it =>
+		it.characterId === characterId ? { ...it, characterModerationBanned: banned } : it,
+	);
+}
+
+async function toggleSessionBan(row: Row): Promise<void> {
+	const next = row.sessionModerationBanned !== true;
+	const { canceled } = await os.confirm({
+		type: 'warning',
+		text: next
+			? i18n.ts._agents.adminAgentChatAuditBanSessionConfirm
+			: i18n.ts._agents.adminAgentChatAuditUnbanSessionConfirm,
+	});
+	if (canceled) return;
+	banBusy.value = true;
+	try {
+		await misskeyApi('admin/agents/sessions/set-moderation-banned', { sessionId: row.sessionId, banned: next });
+		patchRowsSessionBan(row.sessionId, next);
+		os.toast(i18n.ts._agents.adminAgentChatAuditBanUpdated);
+	} catch (e) {
+		os.alert({ type: 'error', text: formatApiError(e) });
+	} finally {
+		banBusy.value = false;
+	}
+}
+
+async function toggleCharacterBan(row: Row): Promise<void> {
+	const next = row.characterModerationBanned !== true;
+	const { canceled } = await os.confirm({
+		type: 'warning',
+		text: next
+			? i18n.ts._agents.adminAgentChatAuditBanCharacterConfirm
+			: i18n.ts._agents.adminAgentChatAuditUnbanCharacterConfirm,
+	});
+	if (canceled) return;
+	banBusy.value = true;
+	try {
+		await misskeyApi('admin/agents/characters/set-moderation-banned', { characterId: row.characterId, banned: next });
+		patchRowsCharacterBan(row.characterId, next);
+		os.toast(i18n.ts._agents.adminAgentChatAuditBanUpdated);
+	} catch (e) {
+		os.alert({ type: 'error', text: formatApiError(e) });
+	} finally {
+		banBusy.value = false;
+	}
 }
 
 async function runSearch(reset: boolean): Promise<void> {
@@ -413,6 +482,21 @@ onMounted(() => {
 	flex-wrap: wrap;
 	align-items: baseline;
 	gap: 6px;
+}
+.modActions {
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px;
+	margin-bottom: 10px;
+}
+.bannedTag {
+	display: inline-block;
+	padding: 2px 8px;
+	border-radius: 6px;
+	font-size: 0.8em;
+	font-weight: 700;
+	background: color-mix(in srgb, var(--MI_THEME-error), transparent 82%);
+	color: var(--MI_THEME-error);
 }
 .pre {
 	margin: 0;

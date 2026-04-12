@@ -829,6 +829,8 @@ definePage(computed(() => {
 	margin: 0 auto;
 	width: 100%;
 	max-width: 700px;
+	box-sizing: border-box;
+	min-width: 0;
 }
 
 .fade-enter-active, .fade-leave-active {

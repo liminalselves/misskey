@@ -77,6 +77,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</div>
 			</header>
 			<div :class="$style.noteContent">
+				<MkNoteAgentsPlazaReview v-if="agentsPlazaReviewMeta" :meta="agentsPlazaReviewMeta"/>
 				<p v-if="appearNote.cw != null" :class="$style.cw">
 					<Mfm
 						v-if="appearNote.cw != ''"
@@ -249,6 +250,8 @@ import MkPoll from '@/components/MkPoll.vue';
 import MkUsersTooltip from '@/components/MkUsersTooltip.vue';
 import MkUrlPreview from '@/components/MkUrlPreview.vue';
 import MkInstanceTicker from '@/components/MkInstanceTicker.vue';
+import MkNoteAgentsPlazaReview from '@/components/MkNoteAgentsPlazaReview.vue';
+import { getAgentsPlazaReviewMeta } from '@/utility/get-agents-plaza-review-meta.js';
 import { pleaseLogin } from '@/utility/please-login.js';
 import { checkWordMute } from '@/utility/check-word-mute.js';
 import { userPage } from '@/filters/user.js';
@@ -312,6 +315,7 @@ if (noteViewInterruptors.length > 0) {
 
 const isRenote = Misskey.note.isPureRenote(note);
 const appearNote = getAppearNote(note) ?? note;
+const agentsPlazaReviewMeta = computed(() => getAgentsPlazaReviewMeta(appearNote));
 const { $note: $appearNote, subscribe: subscribeManuallyToNoteCapture } = useNoteCapture({
 	note: appearNote,
 	parentNote: note,

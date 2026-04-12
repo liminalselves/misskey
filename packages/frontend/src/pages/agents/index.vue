@@ -85,7 +85,6 @@ SPDX-License-Identifier: AGPL-3.0-only
 										<span v-else class="_acrylicBadge">{{ i18n.ts._agents.draftBadge }}</span>
 										<span v-if="s.publishedVersion != null" class="_acrylicBadge">V{{ s.publishedVersion }}</span>
 									</template>
-									<span v-if="!s.isMine && s.subscribed" class="_acrylicBadge">{{ i18n.ts._agents.subscribedFromPlazaBadge }}</span>
 								</div>
 							</div>
 							<p v-if="s.summary" :class="$style.cardSummary">{{ s.summary }}</p>
@@ -115,7 +114,6 @@ SPDX-License-Identifier: AGPL-3.0-only
 						<MkButton v-if="s.isMine" rounded @click="goEditStyle(s.id)"><i class="ti ti-pencil"></i> {{ i18n.ts._agents.edit }}</MkButton>
 						<MkButton v-if="s.isMine && s.reviewStatus !== 'pending'" rounded @click="publishStyle(s.id)">{{ s.publishedVersion != null ? i18n.ts._agents.submitUpdateForReview : i18n.ts._agents.submitForReview }}</MkButton>
 						<MkButton v-if="s.isMine && (s.reviewStatus === 'pending' || s.isPublished)" rounded @click="unpublishStyle(s.id)">{{ i18n.ts._agents.unpublish }}</MkButton>
-						<MkButton v-if="!s.isMine && s.subscribed" rounded @click="unsubStyle(s.id)">{{ i18n.ts._agents.removeStyleFromMine }}</MkButton>
 					</div>
 				</div>
 			</div>
@@ -126,7 +124,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <script lang="ts" setup>
 import { computed, onMounted, ref, watch } from 'vue';
-import type { AgentsCharactersListMineResponse, AgentsStylesListUsableResponse } from 'misskey-js/entities.js';
+import type { AgentsCharactersListMineResponse, AgentsStylesListMineResponse } from 'misskey-js/entities.js';
 import MkButton from '@/components/MkButton.vue';
 import MkLoading from '@/components/global/MkLoading.vue';
 import MkTab from '@/components/MkTab.vue';
@@ -154,7 +152,7 @@ const router = useRouter();
 const mainTab = ref<'square' | 'create'>('square');
 const createSub = ref<'characters' | 'styles'>('characters');
 const characters = ref<AgentsCharactersListMineResponse>([]);
-const styles = ref<AgentsStylesListUsableResponse>([]);
+const styles = ref<AgentsStylesListMineResponse>([]);
 const loadingCh = ref(true);
 const loadingSt = ref(true);
 
@@ -241,18 +239,9 @@ async function loadCharacters() {
 async function loadStyles() {
 	loadingSt.value = true;
 	try {
-		styles.value = await misskeyApi('agents/styles/list-usable', {});
+		styles.value = await misskeyApi('agents/styles/list-mine', {});
 	} finally {
 		loadingSt.value = false;
-	}
-}
-
-async function unsubStyle(styleId: string) {
-	try {
-		await misskeyApi('agents/styles/unsubscribe', { styleId });
-		loadStyles();
-	} catch (e) {
-		os.alert({ type: 'error', text: formatApiError(e) });
 	}
 }
 
@@ -312,35 +301,9 @@ async function unpublishStyle(id: string) {
 	loadStyles();
 }
 
-async function pickStyleIdForTest(): Promise<string | null> {
-	const usable = await misskeyApi('agents/styles/list-usable', {});
-	if (usable.length === 0) {
-		os.alert({
-			type: 'warning',
-			text: i18n.ts._agents.needAnyUsableStyle,
-		});
-		mainTab.value = 'create';
-		createSub.value = 'styles';
-		void router.replace({ path: '/agents', query: { view: 'create', sub: 'styles' } } as unknown as Parameters<typeof router.replace>[0]);
-		return null;
-	}
-	if (usable.length === 1) {
-		return usable[0].id;
-	}
-	const picked = await os.select({
-		title: i18n.ts._agents.pickStyleForTest,
-		items: usable.map(s => ({ value: s.id, text: s.name })) as unknown as Parameters<typeof os.select>[0]['items'],
-		default: usable[0].id,
-	});
-	return (picked as unknown as string | null | undefined) ?? null;
-}
-
 async function testChar(characterId: string) {
-	const styleId = await pickStyleIdForTest();
-	if (!styleId) return;
 	const session = await misskeyApi('agents/sessions/create', {
 		characterId,
-		dialogueStyleId: styleId,
 		sessionKind: 'draft_test',
 	});
 	router.push(('/chat/agent/' + session.id) as '/chat/agent/:sessionId');

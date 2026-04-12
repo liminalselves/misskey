@@ -13,6 +13,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<MkAvatar :class="$style.avatar" :user="note.user" link preview/>
 		<div :class="$style.body">
 			<MkNoteHeader :class="$style.header" :note="note" :mini="true"/>
+			<MkNoteAgentsPlazaReview v-if="agentsPlazaReviewMeta" :meta="agentsPlazaReviewMeta"/>
 			<div>
 				<p v-if="note.cw != null" :class="$style.cw">
 					<Mfm v-if="note.cw != ''" style="margin-right: 8px;" :text="note.cw" :author="note.user" :nyaize="'respect'"/>
@@ -43,9 +44,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import * as Misskey from 'misskey-js';
 import MkNoteHeader from '@/components/MkNoteHeader.vue';
+import MkNoteAgentsPlazaReview from '@/components/MkNoteAgentsPlazaReview.vue';
 import MkSubNoteContent from '@/components/MkSubNoteContent.vue';
 import MkCwButton from '@/components/MkCwButton.vue';
 import { notePage } from '@/filters/note.js';
@@ -54,6 +56,7 @@ import { i18n } from '@/i18n.js';
 import { $i } from '@/i.js';
 import { userPage } from '@/filters/user.js';
 import { checkWordMute } from '@/utility/check-word-mute.js';
+import { getAgentsPlazaReviewMeta } from '@/utility/get-agents-plaza-review-meta.js';
 
 const props = withDefaults(defineProps<{
 	note: Misskey.entities.Note | null;
@@ -66,6 +69,8 @@ const props = withDefaults(defineProps<{
 });
 
 const muted = ref(props.note && $i ? checkWordMute(props.note, $i, $i.mutedWords) : false);
+
+const agentsPlazaReviewMeta = computed(() => getAgentsPlazaReviewMeta(props.note));
 
 const showContent = ref(false);
 const replies = ref<Misskey.entities.Note[]>([]);

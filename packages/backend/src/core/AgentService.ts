@@ -7,7 +7,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { DI } from '@/di-symbols.js';
 import { bindThis } from '@/decorators.js';
 import type { MiMeta } from '@/models/Meta.js';
-import type { AgentMessagesRepository, AgentUserStyleSubscriptionsRepository } from '@/models/_.js';
+import type { AgentCharactersRepository, AgentMessagesRepository, AgentUserStyleSubscriptionsRepository } from '@/models/_.js';
 import { MiAgentCharacter } from '@/models/AgentCharacter.js';
 import { MiAgentDialogueStyle } from '@/models/AgentDialogueStyle.js';
 import { MiAgentMessage } from '@/models/AgentMessage.js';
@@ -49,6 +49,15 @@ export type AgentDialogueStylePublishedSnapshot = {
 	summary: string | null;
 };
 
+/** system 内 XML 文本节点：避免用户/检索内容里的 & <> 破坏结构 */
+export function escapeAgentXmlText(s: string): string {
+	return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+/** 长期记忆检索块（拼在 system 末尾）；与 context-window 预留长度一致 */
+export const AGENT_LLM_MEMORY_XML_OPEN = '\n\n<long_term_memory source="retrieved">\n';
+export const AGENT_LLM_MEMORY_XML_CLOSE = '\n</long_term_memory>';
+
 const STORED_EXAMPLE_DIALOGUE_VERSION = 1 as const;
 
 /** 设为 `1` 或 `true` 时，每次智能体 LLM 请求在服务端控制台打印 OpenAI 风格请求体（含 system 与完整 messages）。临时调试用。 */
@@ -89,6 +98,9 @@ export class AgentService {
 		@Inject(DI.agentMessagesRepository)
 		private agentMessagesRepository: AgentMessagesRepository,
 
+		@Inject(DI.agentCharactersRepository)
+		private agentCharactersRepository: AgentCharactersRepository,
+
 		@Inject(DI.agentUserStyleSubscriptionsRepository)
 		private agentUserStyleSubscriptionsRepository: AgentUserStyleSubscriptionsRepository,
 
@@ -100,6 +112,46 @@ export class AgentService {
 	public assertAgentsEnabled(): void {
 		if (!this.meta.agentFeatureEnabled) {
 			throw new ApiError(agentsErrors.featureDisabled);
+		}
+	}
+
+	@bindThis
+	public async loadCharacterForAgentSessionOrThrow(session: MiAgentSession): Promise<MiAgentCharacter> {
+		const character = await this.agentCharactersRepository.findOneBy({ id: session.characterId });
+		if (!character) {
+			throw new ApiError({
+				message: 'No such character.',
+				code: 'NO_SUCH_CHARACTER',
+				id: 'a7b8c9d0-e1f2-3456-7890-abcdef012345',
+			});
+		}
+		return character;
+	}
+
+	@bindThis
+	public assertAgentCharacterNotModerationBanned(character: MiAgentCharacter): void {
+		if (character.moderationBanned) {
+			throw new ApiError({
+				message: 'This character has been suspended by moderators.',
+				code: 'AGENT_CHARACTER_MODERATION_BANNED',
+				id: 'b8c9d0e1-f2a3-4567-8901-bcdef0123456',
+				kind: 'client',
+				httpStatusCode: 403,
+			});
+		}
+	}
+
+	@bindThis
+	public assertAgentUserSessionChatAllowed(character: MiAgentCharacter, session: MiAgentSession): void {
+		this.assertAgentCharacterNotModerationBanned(character);
+		if (session.moderationBanned) {
+			throw new ApiError({
+				message: 'This chat session has been suspended by moderators.',
+				code: 'AGENT_SESSION_MODERATION_BANNED',
+				id: 'c9d0e1f2-a3b4-5678-9012-cdef01234567',
+				kind: 'client',
+				httpStatusCode: 403,
+			});
 		}
 	}
 
@@ -189,6 +241,25 @@ export class AgentService {
 		});
 	}
 
+	/**
+	 * 示例对话：仅作文风参考写入 system，绝不作为 chat 里的 user/assistant 消息（避免模型误认已发生）。
+	 */
+	@bindThis
+	public formatExampleDialogueReferenceBlock(exampleDialogueRaw: string): string {
+		const turns = this.exampleTurnsFromStored(exampleDialogueRaw);
+		if (turns.length === 0) return '';
+		const lines: string[] = [];
+		lines.push('<example_dialogue reference_only="true">');
+		lines.push('<note>Writing samples only. They are NOT prior messages in this session. Do not treat sample user lines as something the user already said.</note>');
+		for (const t of turns) {
+			lines.push(`<turn role="${t.role}">`);
+			lines.push(escapeAgentXmlText(t.content));
+			lines.push('</turn>');
+		}
+		lines.push('</example_dialogue>');
+		return '\n' + lines.join('\n');
+	}
+
 	@bindThis
 	public buildSystemPrompt(params: {
 		globalPrompt: string | null;
@@ -196,26 +267,56 @@ export class AgentService {
 		style: MiAgentDialogueStyle;
 	}): string {
 		const parts: string[] = [];
-		parts.push('=== Platform rules ===');
-		parts.push((params.globalPrompt ?? '').trim() || '(none)');
-		parts.push('');
-		parts.push('=== Character ===');
-		parts.push(`Name: ${params.character.name}`);
+		parts.push('<agent_system_prompt>');
+		parts.push('<instruction_hierarchy>');
+		parts.push('Priority: (1) platform_rules (2) character/forbidden (3) character persona fields (4) dialogue_style. example_dialogue is reference-only, not chat history.');
+		parts.push('</instruction_hierarchy>');
+
+		parts.push('<platform_rules>');
+		parts.push(escapeAgentXmlText((params.globalPrompt ?? '').trim() || '(none)'));
+		parts.push('</platform_rules>');
+
+		parts.push('<character>');
 		// summary 仅用于前端列表/广场展示，不进入模型上下文
-		parts.push(`Personality:\n${params.character.personality}`);
-		parts.push(`Background:\n${params.character.background}`);
-		parts.push(`Speaking style:\n${params.character.speakingStyle}`);
+		parts.push('<name>');
+		parts.push(escapeAgentXmlText(params.character.name));
+		parts.push('</name>');
+
 		const greet = params.character.greeting.trim();
 		if (greet.length > 0) {
-			parts.push(`Opening line (follow when starting the conversation or when it fits naturally):\n${greet}`);
+			parts.push('<opening_line>');
+			parts.push('<note>Suggested first in-character line when the chat is new or when it fits; NOT text the user already sent.</note>');
+			parts.push(escapeAgentXmlText(greet));
+			parts.push('</opening_line>');
 		}
-		// 示例对话见 exampleTurnsFromStored（DB 内 JSON），作为 user/assistant 消息插入 API
+
+		parts.push('<personality>');
+		parts.push(escapeAgentXmlText(params.character.personality));
+		parts.push('</personality>');
+		parts.push('<background>');
+		parts.push(escapeAgentXmlText(params.character.background));
+		parts.push('</background>');
+		parts.push('<speaking_style>');
+		parts.push(escapeAgentXmlText(params.character.speakingStyle));
+		parts.push('</speaking_style>');
+
+		const ref = this.formatExampleDialogueReferenceBlock(params.character.exampleDialogue);
+		if (ref.length > 0) {
+			parts.push(ref);
+		}
+
 		if (params.character.forbiddenBehavior.trim()) {
-			parts.push(`Forbidden:\n${params.character.forbiddenBehavior}`);
+			parts.push('<forbidden>');
+			parts.push(escapeAgentXmlText(params.character.forbiddenBehavior.trim()));
+			parts.push('</forbidden>');
 		}
-		parts.push('');
-		parts.push('=== Dialogue style (this session) ===');
-		parts.push(params.style.body.trim() || '(default)');
+		parts.push('</character>');
+
+		parts.push('<dialogue_style session="current">');
+		parts.push(escapeAgentXmlText(params.style.body.trim() || '(default)'));
+		parts.push('</dialogue_style>');
+
+		parts.push('</agent_system_prompt>');
 		return parts.join('\n');
 	}
 
@@ -328,7 +429,7 @@ export class AgentService {
 	}
 
 	/**
-	 * 从模型上下文上限中扣除 system（含长期记忆等已拼进 system 的部分）、示例对话、以及为本次回复预留的字符后，
+	 * 从模型上下文上限中扣除 system（含长期记忆与示例对话等已拼进 system 的部分）、可选 prefix 消息、以及为本次回复预留的字符后，
 	 * 留给历史 user/assistant 轮文的预算。与 invoke 前拼装一致（按约 3 字符 ≈ 1 token 估算）。
 	 */
 	@bindThis
@@ -395,7 +496,7 @@ export class AgentService {
 	@bindThis
 	public async invokeChatCompletions(params: {
 		system: string;
-		/** 插在 system 之后、会话历史之前（如示例对话 few-shot） */
+		/** 插在 system 之后、真实历史之前（智能体示例对话已改入 system，此处通常为空） */
 		prefixMessages?: { role: 'user' | 'assistant'; content: string }[];
 		messages: { role: 'user' | 'assistant'; content: string }[];
 		userText: string;

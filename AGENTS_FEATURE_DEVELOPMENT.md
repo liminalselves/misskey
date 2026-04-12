@@ -251,6 +251,10 @@
 1. 执行数据库迁移（与现有 Misskey 迁移流程一致）。  
 2. 管理面板 → **智能体**：开启功能、填写 HTTPS Base URL、API Key、`model` 名、全局提示词与 token 上限。  
 
+### 11.4 增量能力（广场评价 · 统计快照 · 封禁 · 发言顺序）
+
+以下能力在 §11.1 初版交付之后迭代落地，**详细行为、API 与迁移编号**以仓库根目录 **`CHANGELOG.md`** 中 **`## 2026.1.0`** 的 *Client* / *Note* / *Server* 小节为准。涉及迁移示例：`1771470000000-AgentSessionOptionalDialogueStyle`、`1771600000000-AgentPlazaReview`、`1771650000000-AgentPlazaStatsDialogueStyleSnapshot`、`1771700000000-AgentModerationBanned`（路径：`packages/backend/migration/`）。
+
 ---
 
 *文档版本：修订稿（含实现进度 §11）*

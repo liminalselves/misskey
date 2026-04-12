@@ -6,6 +6,7 @@
 import { Entity, Index, JoinColumn, Column, PrimaryColumn, ManyToOne } from 'typeorm';
 import { id } from './util/id.js';
 import { MiAgentSession } from './AgentSession.js';
+import type { MiAgentDialogueStyle } from './AgentDialogueStyle.js';
 
 export const agentMessageRoles = ['user', 'assistant', 'system'] as const;
 export type AgentMessageRole = typeof agentMessageRoles[number];
@@ -38,6 +39,13 @@ export class MiAgentMessage {
 
 	@Column('text')
 	public content: string;
+
+	/** 送信時点の会話スタイル（広場のスタイル別統計用；セッション側の切り替え後も保持） */
+	@Column({
+		...id(),
+		nullable: true,
+	})
+	public statsDialogueStyleId: MiAgentDialogueStyle['id'] | null;
 
 	@Column('integer', {
 		nullable: true,

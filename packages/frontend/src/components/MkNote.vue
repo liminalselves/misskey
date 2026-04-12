@@ -51,6 +51,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<div :class="$style.main">
 			<MkNoteHeader :note="appearNote" :mini="true"/>
 			<MkInstanceTicker v-if="showTicker" :host="appearNote.user.host" :instance="appearNote.user.instance"/>
+			<MkNoteAgentsPlazaReview v-if="agentsPlazaReviewMeta" :meta="agentsPlazaReviewMeta"/>
 			<div style="container-type: inline-size;">
 				<p v-if="appearNote.cw != null" :class="$style.cw">
 					<Mfm
@@ -217,6 +218,8 @@ import MkPoll from '@/components/MkPoll.vue';
 import MkUsersTooltip from '@/components/MkUsersTooltip.vue';
 import MkUrlPreview from '@/components/MkUrlPreview.vue';
 import MkInstanceTicker from '@/components/MkInstanceTicker.vue';
+import MkNoteAgentsPlazaReview from '@/components/MkNoteAgentsPlazaReview.vue';
+import { getAgentsPlazaReviewMeta } from '@/utility/get-agents-plaza-review-meta.js';
 import { pleaseLogin } from '@/utility/please-login.js';
 import { checkWordMute } from '@/utility/check-word-mute.js';
 import { notePage } from '@/filters/note.js';
@@ -294,6 +297,9 @@ const { $note: $appearNote, subscribe: subscribeManuallyToNoteCapture } = useNot
 	parentNote: note,
 	mock: props.mock,
 });
+
+/** $appearNote はリアクション等の差分のみ。pack 由来の agentsPlazaReview は元の appearNote に載る */
+const agentsPlazaReviewMeta = computed(() => getAgentsPlazaReviewMeta(appearNote));
 
 const rootEl = useTemplateRef('rootEl');
 const menuButton = useTemplateRef('menuButton');

@@ -191,6 +191,11 @@ const menuDef = computed<SuperMenuDef[]>(() => [{
 		text: i18n.ts._agents.adminAgentReview,
 		to: '/admin/agents-review',
 		active: currentPage.value?.route.name === 'agents-review',
+	}, {
+		icon: 'ti ti-messages',
+		text: i18n.ts._agents.adminAgentChatAudit,
+		to: '/admin/agents-chat-audit',
+		active: currentPage.value?.route.name === 'agents-chat-audit',
 	}],
 }, {
 	title: i18n.ts.settings,
@@ -209,11 +214,6 @@ const menuDef = computed<SuperMenuDef[]>(() => [{
 		text: i18n.ts._agents.adminSettings,
 		to: '/admin/agents-settings',
 		active: currentPage.value?.route.name === 'agents-settings',
-	}, {
-		icon: 'ti ti-messages',
-		text: i18n.ts._agents.adminAgentChatAudit,
-		to: '/admin/agents-chat-audit',
-		active: currentPage.value?.route.name === 'agents-chat-audit',
 	}, {
 		icon: 'ti ti-paint',
 		text: i18n.ts.branding,

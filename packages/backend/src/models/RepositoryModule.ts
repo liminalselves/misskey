@@ -90,6 +90,7 @@ import {
 	MiAgentSession,
 	MiAgentMessage,
 	MiAgentUserStyleSubscription,
+	MiAgentPlazaReview,
 } from './_.js';
 import type { Provider } from '@nestjs/common';
 import type { DataSource } from 'typeorm';
@@ -574,6 +575,12 @@ const $agentUserStyleSubscriptionsRepository: Provider = {
 	inject: [DI.db],
 };
 
+const $agentPlazaReviewsRepository: Provider = {
+	provide: DI.agentPlazaReviewsRepository,
+	useFactory: (db: DataSource) => db.getRepository(MiAgentPlazaReview).extend(miRepository as MiRepository<MiAgentPlazaReview>),
+	inject: [DI.db],
+};
+
 const $bubbleGameRecordsRepository: Provider = {
 	provide: DI.bubbleGameRecordsRepository,
 	useFactory: (db: DataSource) => db.getRepository(MiBubbleGameRecord).extend(miRepository as MiRepository<MiBubbleGameRecord>),
@@ -669,6 +676,7 @@ const $reversiGamesRepository: Provider = {
 		$agentSessionsRepository,
 		$agentMessagesRepository,
 		$agentUserStyleSubscriptionsRepository,
+		$agentPlazaReviewsRepository,
 		$bubbleGameRecordsRepository,
 		$reversiGamesRepository,
 	],
@@ -753,6 +761,7 @@ const $reversiGamesRepository: Provider = {
 		$agentSessionsRepository,
 		$agentMessagesRepository,
 		$agentUserStyleSubscriptionsRepository,
+		$agentPlazaReviewsRepository,
 		$bubbleGameRecordsRepository,
 		$reversiGamesRepository,
 	],

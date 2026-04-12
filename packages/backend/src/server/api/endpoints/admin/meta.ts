@@ -295,6 +295,10 @@ export const meta = {
 						type: 'string',
 						optional: false, nullable: true,
 					},
+					minRequiredAppVersion: {
+						type: 'string',
+						optional: false, nullable: true,
+					},
 					androidDownloadUrl: {
 						type: 'string',
 						optional: false, nullable: true,
@@ -842,6 +846,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					return {
 						latestAndroidVersion: n.latestAndroidVersion ?? null,
 						latestIosVersion: n.latestIosVersion ?? null,
+						minRequiredAppVersion: n.minRequiredAppVersion ?? null,
 						androidDownloadUrl: n.androidDownloadUrl ?? null,
 						iosDownloadUrl: n.iosDownloadUrl ?? null,
 						releaseNotesUrl: n.releaseNotesUrl ?? null,

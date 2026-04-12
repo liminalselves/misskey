@@ -23,6 +23,8 @@ import type {
 	AdminAdListRequest,
 	AdminAdListResponse,
 	AdminAdUpdateRequest,
+	AdminAgentsCharactersSetModerationBannedRequest,
+	AdminAgentsCharactersSetModerationBannedResponse,
 	AdminAgentsMessagesListRequest,
 	AdminAgentsMessagesListResponse,
 	AdminAgentsMessagesTimelineRequest,
@@ -33,6 +35,8 @@ import type {
 	AdminAgentsReviewResolveResponse,
 	AdminAgentsSessionsListRequest,
 	AdminAgentsSessionsListResponse,
+	AdminAgentsSessionsSetModerationBannedRequest,
+	AdminAgentsSessionsSetModerationBannedResponse,
 	AdminAnnouncementsCreateRequest,
 	AdminAnnouncementsCreateResponse,
 	AdminAnnouncementsDeleteRequest,
@@ -153,6 +157,8 @@ import type {
 	AgentsCharactersDeleteRequest,
 	AgentsCharactersDeleteResponse,
 	AgentsCharactersListMineResponse,
+	AgentsCharactersPlazaDetailRequest,
+	AgentsCharactersPlazaDetailResponse,
 	AgentsCharactersPublicListRequest,
 	AgentsCharactersPublicListResponse,
 	AgentsCharactersPublishRequest,
@@ -181,13 +187,17 @@ import type {
 	AgentsMessagesShowResponse,
 	AgentsMessagesTimelineRequest,
 	AgentsMessagesTimelineResponse,
+	AgentsPlazaReviewsCreateRequest,
+	AgentsPlazaReviewsCreateResponse,
+	AgentsPlazaReviewsListRequest,
+	AgentsPlazaReviewsListResponse,
+	AgentsSessionsContextWindowRequest,
+	AgentsSessionsContextWindowResponse,
 	AgentsSessionsCreateRequest,
 	AgentsSessionsCreateResponse,
 	AgentsSessionsListMineResponse,
 	AgentsSessionsShowRequest,
 	AgentsSessionsShowResponse,
-	AgentsSessionsContextWindowRequest,
-	AgentsSessionsContextWindowResponse,
 	AgentsSessionsUpdateRequest,
 	AgentsSessionsUpdateResponse,
 	AgentsStylesCreateRequest,
@@ -196,6 +206,8 @@ import type {
 	AgentsStylesDeleteResponse,
 	AgentsStylesListMineResponse,
 	AgentsStylesListUsableResponse,
+	AgentsStylesPlazaDetailRequest,
+	AgentsStylesPlazaDetailResponse,
 	AgentsStylesPublicListRequest,
 	AgentsStylesPublicListResponse,
 	AgentsStylesPublishRequest,
@@ -757,12 +769,14 @@ export type Endpoints = {
 	'admin/ad/delete': { req: AdminAdDeleteRequest; res: EmptyResponse };
 	'admin/ad/list': { req: AdminAdListRequest; res: AdminAdListResponse };
 	'admin/ad/update': { req: AdminAdUpdateRequest; res: EmptyResponse };
+	'admin/agents/characters/set-moderation-banned': { req: AdminAgentsCharactersSetModerationBannedRequest; res: AdminAgentsCharactersSetModerationBannedResponse };
 	'admin/agents/messages/list': { req: AdminAgentsMessagesListRequest; res: AdminAgentsMessagesListResponse };
 	'admin/agents/messages/timeline': { req: AdminAgentsMessagesTimelineRequest; res: AdminAgentsMessagesTimelineResponse };
 	'admin/agents/review/list-pending': { req: EmptyRequest; res: AdminAgentsReviewListPendingResponse };
 	'admin/agents/review/pending-exists': { req: EmptyRequest; res: AdminAgentsReviewPendingExistsResponse };
 	'admin/agents/review/resolve': { req: AdminAgentsReviewResolveRequest; res: AdminAgentsReviewResolveResponse };
 	'admin/agents/sessions/list': { req: AdminAgentsSessionsListRequest; res: AdminAgentsSessionsListResponse };
+	'admin/agents/sessions/set-moderation-banned': { req: AdminAgentsSessionsSetModerationBannedRequest; res: AdminAgentsSessionsSetModerationBannedResponse };
 	'admin/announcements/create': { req: AdminAnnouncementsCreateRequest; res: AdminAnnouncementsCreateResponse };
 	'admin/announcements/delete': { req: AdminAnnouncementsDeleteRequest; res: EmptyResponse };
 	'admin/announcements/list': { req: AdminAnnouncementsListRequest; res: AdminAnnouncementsListResponse };
@@ -853,6 +867,7 @@ export type Endpoints = {
 	'agents/characters/create': { req: AgentsCharactersCreateRequest; res: AgentsCharactersCreateResponse };
 	'agents/characters/delete': { req: AgentsCharactersDeleteRequest; res: AgentsCharactersDeleteResponse };
 	'agents/characters/list-mine': { req: EmptyRequest; res: AgentsCharactersListMineResponse };
+	'agents/characters/plaza-detail': { req: AgentsCharactersPlazaDetailRequest; res: AgentsCharactersPlazaDetailResponse };
 	'agents/characters/public-list': { req: AgentsCharactersPublicListRequest; res: AgentsCharactersPublicListResponse };
 	'agents/characters/publish': { req: AgentsCharactersPublishRequest; res: AgentsCharactersPublishResponse };
 	'agents/characters/show': { req: AgentsCharactersShowRequest; res: AgentsCharactersShowResponse };
@@ -867,15 +882,18 @@ export type Endpoints = {
 	'agents/messages/send': { req: AgentsMessagesSendRequest; res: AgentsMessagesSendResponse };
 	'agents/messages/show': { req: AgentsMessagesShowRequest; res: AgentsMessagesShowResponse };
 	'agents/messages/timeline': { req: AgentsMessagesTimelineRequest; res: AgentsMessagesTimelineResponse };
+	'agents/plaza-reviews/create': { req: AgentsPlazaReviewsCreateRequest; res: AgentsPlazaReviewsCreateResponse };
+	'agents/plaza-reviews/list': { req: AgentsPlazaReviewsListRequest; res: AgentsPlazaReviewsListResponse };
+	'agents/sessions/context-window': { req: AgentsSessionsContextWindowRequest; res: AgentsSessionsContextWindowResponse };
 	'agents/sessions/create': { req: AgentsSessionsCreateRequest; res: AgentsSessionsCreateResponse };
 	'agents/sessions/list-mine': { req: EmptyRequest; res: AgentsSessionsListMineResponse };
 	'agents/sessions/show': { req: AgentsSessionsShowRequest; res: AgentsSessionsShowResponse };
-	'agents/sessions/context-window': { req: AgentsSessionsContextWindowRequest; res: AgentsSessionsContextWindowResponse };
 	'agents/sessions/update': { req: AgentsSessionsUpdateRequest; res: AgentsSessionsUpdateResponse };
 	'agents/styles/create': { req: AgentsStylesCreateRequest; res: AgentsStylesCreateResponse };
 	'agents/styles/delete': { req: AgentsStylesDeleteRequest; res: AgentsStylesDeleteResponse };
 	'agents/styles/list-mine': { req: EmptyRequest; res: AgentsStylesListMineResponse };
 	'agents/styles/list-usable': { req: EmptyRequest; res: AgentsStylesListUsableResponse };
+	'agents/styles/plaza-detail': { req: AgentsStylesPlazaDetailRequest; res: AgentsStylesPlazaDetailResponse };
 	'agents/styles/public-list': { req: AgentsStylesPublicListRequest; res: AgentsStylesPublicListResponse };
 	'agents/styles/publish': { req: AgentsStylesPublishRequest; res: AgentsStylesPublishResponse };
 	'agents/styles/show': { req: AgentsStylesShowRequest; res: AgentsStylesShowResponse };

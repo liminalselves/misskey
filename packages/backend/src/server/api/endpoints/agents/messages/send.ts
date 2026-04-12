@@ -14,7 +14,12 @@ import type {
 import { Endpoint } from '@/server/api/endpoint-base.js';
 import { DI } from '@/di-symbols.js';
 import { ApiError } from '@/server/api/error.js';
-import { AgentService } from '@/core/AgentService.js';
+import {
+	AgentService,
+	AGENT_LLM_MEMORY_XML_CLOSE,
+	AGENT_LLM_MEMORY_XML_OPEN,
+	escapeAgentXmlText,
+} from '@/core/AgentService.js';
 import { AgentDashscopeMemoryService } from '@/core/AgentDashscopeMemoryService.js';
 import { ChatService } from '@/core/ChatService.js';
 import { MetaService } from '@/core/MetaService.js';
@@ -62,6 +67,31 @@ function safeAgentMemAddMaxRounds(sessionVal: number | null | undefined, metaVal
 	return Math.max(1, Math.min(24, t));
 }
 
+/** 用户消息与助手消息须严格交替；末尾不能停留在「已发送的用户消息」上（须先有助手回复） */
+function assertAgentSessionTurnOrderAllowsUserSend(rows: { role: string }[]): void {
+	const seq = rows.filter(m => m.role === 'user' || m.role === 'assistant');
+	for (let i = 1; i < seq.length; i++) {
+		if (seq[i]!.role === seq[i - 1]!.role) {
+			throw new ApiError({
+				message: 'The conversation has consecutive user or assistant messages. Delete or fix messages before sending.',
+				code: 'AGENT_THREAD_INVALID_TURNS',
+				id: 'b2c3d4e5-f6a7-8901-bcde-f12345678901',
+				kind: 'client',
+				httpStatusCode: 400,
+			});
+		}
+	}
+	if (seq.length > 0 && seq[seq.length - 1]!.role === 'user') {
+		throw new ApiError({
+			message: 'Wait for the assistant reply before sending another message.',
+			code: 'AGENT_AWAIT_ASSISTANT_REPLY',
+			id: 'c3d4e5f6-a7b8-9012-cdef-123456789012',
+			kind: 'client',
+			httpStatusCode: 400,
+		});
+	}
+}
+
 @Injectable()
 export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-disable-line import/no-default-export
 	constructor(
@@ -92,6 +122,14 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			}
 
 			const characterRow = await this.agentCharactersRepository.findOneByOrFail({ id: session.characterId });
+			this.agentService.assertAgentUserSessionChatAllowed(characterRow, session);
+			if (!session.dialogueStyleId) {
+				throw new ApiError({
+					message: 'Pick a dialogue style before sending messages.',
+					code: 'AGENT_DIALOGUE_STYLE_REQUIRED',
+					id: 'a6b7c8d9-e0f1-2345-9012-567890123456',
+				});
+			}
 			const styleRow = await this.agentDialogueStylesRepository.findOneByOrFail({ id: session.dialogueStyleId });
 
 			await this.agentService.assertCanUseDialogueStyle(me.id, styleRow, {
@@ -127,6 +165,13 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				});
 			}
 
+			const turnOrderRows = await this.agentMessagesRepository.find({
+				where: { sessionId: session.id },
+				select: ['role', 'createdAt', 'id'],
+				order: { createdAt: 'ASC', id: 'ASC' },
+			});
+			assertAgentSessionTurnOrderAllowsUserSend(turnOrderRows);
+
 			const now = new Date();
 			const userMsg = await this.agentMessagesRepository.insertOne({
 				id: this.agentService.newId(),
@@ -134,6 +179,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				sessionId: session.id,
 				role: 'user',
 				content: ps.text,
+				statsDialogueStyleId: session.dialogueStyleId,
 				promptTokens: null,
 				completionTokens: null,
 			});
@@ -151,20 +197,20 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					character,
 					style,
 				});
-				const exampleFewShot = this.agentService.exampleTurnsFromStored(character.exampleDialogue);
 
 				let longTermMemorySearchUnavailable = false;
 				let longTermMemoryAddScheduled = false;
 				const memActive = this.agentDashscopeMemoryService.isRunnable(instanceMeta) && session.agentLongMemoryEnabled;
 				const maxMemChars = Math.max(200, Math.min(50_000, session.agentLongMemoryInjectMaxChars || instanceMeta.agentMem0InjectMaxChars));
-				const memHeader = '\n\n=== Long-term memory (retrieved) ===\n';
-				const memReserveChars = memActive ? memHeader.length + maxMemChars : 0;
+				const memReserveChars = memActive
+					? AGENT_LLM_MEMORY_XML_OPEN.length + maxMemChars + AGENT_LLM_MEMORY_XML_CLOSE.length
+					: 0;
 
 				const historyBudget = this.agentService.computeChatHistoryCharBudget({
 					maxContextTokens,
 					maxOutputTokensPerCall,
 					systemChars: systemBase.length + memReserveChars,
-					prefixMessages: exampleFewShot,
+					prefixMessages: [],
 				});
 				const history = await this.agentService.loadRecentMessagesForContext(session.id, historyBudget);
 				const historyForApi = history.filter(m => m.role === 'user' || m.role === 'assistant');
@@ -200,7 +246,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 
 				let system = systemBase;
 				if (memoryBlock.length > 0) {
-					system += memHeader + memoryBlock;
+					system += AGENT_LLM_MEMORY_XML_OPEN + escapeAgentXmlText(memoryBlock) + AGENT_LLM_MEMORY_XML_CLOSE;
 				}
 
 				// 历史条数必须与 agents/sessions/context-window 一致：首轮已按「长期记忆占满预留」计算
@@ -209,7 +255,6 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 
 				const assistantText = await this.agentService.invokeChatCompletions({
 					system,
-					prefixMessages: exampleFewShot,
 					messages: pairs,
 					userText: ps.text,
 					sessionModelId: session.agentModelId ?? null,
@@ -222,6 +267,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					sessionId: session.id,
 					role: 'assistant',
 					content: assistantText,
+					statsDialogueStyleId: session.dialogueStyleId,
 					promptTokens: null,
 					completionTokens: null,
 				});

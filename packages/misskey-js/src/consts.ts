@@ -192,6 +192,9 @@ export const moderationLogTypes = [
 	'deleteGalleryPost',
 	'deleteChatRoom',
 	'updateProxyAccountDescription',
+	'resolveAgentReview',
+	'setAgentSessionModerationBan',
+	'setAgentCharacterModerationBan',
 ] as const;
 
 export const rolePolicies = [
@@ -533,5 +536,30 @@ export type ModerationLogPayloads = {
 	updateProxyAccountDescription: {
 		before: string | null;
 		after: string | null;
-	}
+	};
+	resolveAgentReview: {
+		kind: 'character' | 'style';
+		id: string;
+		decision: 'approve' | 'reject';
+		name: string;
+		ownerUserId: string;
+		reviewStatus: string;
+		publishedVersion: number | null;
+		isPublished: boolean;
+	};
+	setAgentSessionModerationBan: {
+		sessionId: string;
+		sessionName: string;
+		userId: string;
+		characterId: string;
+		banned: boolean;
+		before: boolean;
+	};
+	setAgentCharacterModerationBan: {
+		characterId: string;
+		characterName: string;
+		ownerUserId: string;
+		banned: boolean;
+		before: boolean;
+	};
 };

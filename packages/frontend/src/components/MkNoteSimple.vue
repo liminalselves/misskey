@@ -8,6 +8,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 	<MkAvatar :class="[$style.avatar, prefer.s.useStickyIcons ? $style.useSticky : null]" :user="note.user" link preview/>
 	<div :class="$style.main">
 		<MkNoteHeader :class="$style.header" :note="note" :mini="true"/>
+		<MkNoteAgentsPlazaReview v-if="agentsPlazaReviewMeta" :meta="agentsPlazaReviewMeta"/>
 		<div>
 			<p v-if="note.cw != null" :class="$style.cw">
 				<Mfm v-if="note.cw != ''" style="margin-right: 8px;" :text="note.cw" :author="note.user" :nyaize="'respect'" :emojiUrls="note.emojis"/>
@@ -25,19 +26,22 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import * as Misskey from 'misskey-js';
 import MkNoteHeader from '@/components/MkNoteHeader.vue';
+import MkNoteAgentsPlazaReview from '@/components/MkNoteAgentsPlazaReview.vue';
 import MkSubNoteContent from '@/components/MkSubNoteContent.vue';
 import MkCwButton from '@/components/MkCwButton.vue';
 import { i18n } from '@/i18n.js';
 import { prefer } from '@/preferences.js';
+import { getAgentsPlazaReviewMeta } from '@/utility/get-agents-plaza-review-meta.js';
 
 const props = defineProps<{
 	note: Misskey.entities.Note | null;
 }>();
 
 const showContent = ref(false);
+const agentsPlazaReviewMeta = computed(() => getAgentsPlazaReviewMeta(props.note));
 </script>
 
 <style lang="scss" module>

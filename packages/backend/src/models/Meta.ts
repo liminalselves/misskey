@@ -11,6 +11,8 @@ import { MiUser } from './User.js';
 export type MiNativeClientAppInfo = {
 	latestAndroidVersion?: string | null;
 	latestIosVersion?: string | null;
+	/** semver。客户端版本 **低于** 此值时禁止使用壳（留空则不限制） */
+	minRequiredAppVersion?: string | null;
 	androidDownloadUrl?: string | null;
 	iosDownloadUrl?: string | null;
 	releaseNotesUrl?: string | null;

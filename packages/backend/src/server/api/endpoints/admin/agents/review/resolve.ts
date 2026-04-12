@@ -10,6 +10,7 @@ import { Endpoint } from '@/server/api/endpoint-base.js';
 import { DI } from '@/di-symbols.js';
 import { ApiError } from '@/server/api/error.js';
 import { AgentService } from '@/core/AgentService.js';
+import { ModerationLogService } from '@/core/ModerationLogService.js';
 
 export const meta = {
 	tags: ['admin'],
@@ -49,6 +50,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		private agentDialogueStylesRepository: AgentDialogueStylesRepository,
 
 		private agentService: AgentService,
+
+		private moderationLogService: ModerationLogService,
 	) {
 		super(meta, paramDef, async (ps, me) => {
 			this.agentService.assertAgentsEnabled();
@@ -72,6 +75,16 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				this.agentService.syncCharacterListedFlag(row);
 				row.updatedAt = new Date();
 				await this.agentCharactersRepository.save(row);
+				await this.moderationLogService.log(me, 'resolveAgentReview', {
+					kind: 'character',
+					id: row.id,
+					decision: ps.decision,
+					name: row.name,
+					ownerUserId: row.userId,
+					reviewStatus: row.reviewStatus,
+					publishedVersion: row.publishedVersion,
+					isPublished: row.isPublished,
+				});
 				return {
 					ok: true,
 					reviewStatus: row.reviewStatus,
@@ -98,6 +111,16 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				this.agentService.syncStyleListedFlag(row);
 				row.updatedAt = new Date();
 				await this.agentDialogueStylesRepository.save(row);
+				await this.moderationLogService.log(me, 'resolveAgentReview', {
+					kind: 'style',
+					id: row.id,
+					decision: ps.decision,
+					name: row.name,
+					ownerUserId: row.userId,
+					reviewStatus: row.reviewStatus,
+					publishedVersion: row.publishedVersion,
+					isPublished: row.isPublished,
+				});
 				return {
 					ok: true,
 					reviewStatus: row.reviewStatus,

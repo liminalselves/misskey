@@ -38,7 +38,12 @@ SPDX-License-Identifier: AGPL-3.0-only
 							:highlighted="highlightedMessageId === item.data.id"
 							@deleted="onAgentMessageDeleted"
 						/>
-						<div v-else-if="item.type === 'contextWindow'" :class="$style.contextWindowDivider" role="separator">
+						<div
+							v-else-if="item.type === 'contextWindow'"
+							:class="[$style.contextWindowDivider, { [$style.contextWindowDividerHighlight]: highlightedContextDivider }]"
+							role="separator"
+							:data-agent-context-window-divider="contextWindowBoundaryId ?? ''"
+						>
 							<span :class="$style.contextWindowLine"></span>
 							<span :class="$style.contextWindowLabel">{{ i18n.ts._agents.contextWindowDivider }}</span>
 							<span :class="$style.contextWindowLine"></span>
@@ -74,33 +79,42 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<div v-else class="_gaps">
 			<MkInfo v-if="session == null">{{ i18n.ts.somethingHappened }}</MkInfo>
 			<template v-else>
-				<MkInfo>{{ i18n.ts._agents.sessionMemoryHint }}</MkInfo>
-				<MkSwitch v-model="memLongMemoryEnabled" :disabled="memSaving">
+				<MkInfo>
+					<span :class="$style.sessionMemoryHint">{{ i18n.ts._agents.sessionMemoryHint }}</span>
+				</MkInfo>
+				<MkInfo v-if="moderationLocksSessionWrites" warn>{{ moderationBlockUserMessage }}</MkInfo>
+				<div v-if="contextWindowTruncated && contextWindowBoundaryId" :class="$style.memContextDividerRow">
+					<MkButton rounded primary @click="scrollToContextWindowDivider">
+						<i class="ti ti-messages"/>
+						{{ i18n.ts._agents.sessionMemoryLocateContextDivider }}
+					</MkButton>
+				</div>
+				<MkSwitch v-model="memLongMemoryEnabled" :disabled="memSaving || moderationLocksSessionWrites">
 					<template #label>{{ i18n.ts._agents.sessionMemoryEnable }}</template>
 				</MkSwitch>
 				<FormSplit :minWidth="260">
-					<MkInput v-model="memTopK" type="text" :disabled="memSaving">
+					<MkInput v-model="memTopK" type="text" :disabled="memSaving || moderationLocksSessionWrites">
 						<template #label>{{ i18n.ts._agents.sessionMemoryTopK }}</template>
 						<template #caption>{{ i18n.ts._agents.sessionMemoryTopKCaption }}</template>
 					</MkInput>
-					<MkInput v-model="memInject" type="text" :disabled="memSaving">
+					<MkInput v-model="memInject" type="text" :disabled="memSaving || moderationLocksSessionWrites">
 						<template #label>{{ i18n.ts._agents.sessionMemoryInjectMaxChars }}</template>
 					</MkInput>
 				</FormSplit>
-				<MkInput v-model="memAddMaxRounds" type="text" :disabled="memSaving">
+				<MkInput v-model="memAddMaxRounds" type="text" :disabled="memSaving || moderationLocksSessionWrites">
 					<template #label>{{ i18n.ts._agents.sessionMemoryAddMaxRounds }}</template>
 					<template #caption>{{ addMemRoundsCaption }}</template>
 				</MkInput>
-				<MkInput v-model="memAddEveryN" type="text" :disabled="memSaving">
+				<MkInput v-model="memAddEveryN" type="text" :disabled="memSaving || moderationLocksSessionWrites">
 					<template #label>{{ i18n.ts._agents.sessionMemoryAddEveryNRounds }}</template>
 					<template #caption>{{ addMemEveryNCaption }}</template>
 				</MkInput>
-				<MkInput v-model="memMinScore" type="text" :disabled="memSaving">
+				<MkInput v-model="memMinScore" type="text" :disabled="memSaving || moderationLocksSessionWrites">
 					<template #label>{{ i18n.ts._agents.sessionMemoryMinScore }}</template>
 					<template #caption>{{ i18n.ts._agents.sessionMemoryMinScoreCaption }}</template>
 				</MkInput>
 				<div>
-					<MkButton primary rounded :disabled="memSaving" @click="saveMemorySessionSettings">
+					<MkButton primary rounded :disabled="memSaving || moderationLocksSessionWrites" @click="saveMemorySessionSettings">
 						<template v-if="memSaving"><MkLoading :em="true"/></template>
 						<template v-else>{{ i18n.ts.save }}</template>
 					</MkButton>
@@ -125,10 +139,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</div>
 				<template v-else>
 					<div class="_gaps">
-						<MkTextarea v-model="newMemoryText" :disabled="memoryMutating" tall pre>
+						<MkTextarea v-model="newMemoryText" :disabled="memoryMutating || moderationLocksSessionWrites" tall pre>
 							<template #label>{{ i18n.ts._agents.sessionMemoryAddLabel }}</template>
 						</MkTextarea>
-						<MkButton primary rounded :disabled="memoryMutating || newMemoryText.trim() === ''" @click="submitNewMemory">
+						<MkButton primary rounded :disabled="memoryMutating || moderationLocksSessionWrites || newMemoryText.trim() === ''" @click="submitNewMemory">
 							<template v-if="memoryMutating"><MkLoading :em="true"/></template>
 							<template v-else>{{ i18n.ts._agents.sessionMemoryAddSubmit }}</template>
 						</MkButton>
@@ -142,10 +156,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 							:class="$style.memCard"
 						>
 							<div v-if="editingMemoryId === node.memoryNodeId" class="_gaps">
-								<MkTextarea v-model="editingMemoryText" :disabled="memoryMutating" tall pre/>
+								<MkTextarea v-model="editingMemoryText" :disabled="memoryMutating || moderationLocksSessionWrites" tall pre/>
 								<div :class="$style.memCardActions">
-									<MkButton rounded :disabled="memoryMutating" @click="cancelEditMemory">{{ i18n.ts.cancel }}</MkButton>
-									<MkButton primary rounded :disabled="memoryMutating || editingMemoryText.trim() === ''" @click="submitEditMemory(node.memoryNodeId)">
+									<MkButton rounded :disabled="memoryMutating || moderationLocksSessionWrites" @click="cancelEditMemory">{{ i18n.ts.cancel }}</MkButton>
+									<MkButton primary rounded :disabled="memoryMutating || moderationLocksSessionWrites || editingMemoryText.trim() === ''" @click="submitEditMemory(node.memoryNodeId)">
 										<template v-if="memoryMutating"><MkLoading :em="true"/></template>
 										<template v-else>{{ i18n.ts.save }}</template>
 									</MkButton>
@@ -158,10 +172,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 								</div>
 								<div :class="$style.memContent">{{ node.content }}</div>
 								<div :class="$style.memCardActions">
-									<MkButton rounded danger :disabled="memoryMutating" @click="confirmDeleteMemory(node.memoryNodeId)">
+									<MkButton rounded danger :disabled="memoryMutating || moderationLocksSessionWrites" @click="confirmDeleteMemory(node.memoryNodeId)">
 										{{ i18n.ts.delete }}
 									</MkButton>
-									<MkButton rounded :disabled="memoryMutating" @click="startEditMemory(node)">
+									<MkButton rounded :disabled="memoryMutating || moderationLocksSessionWrites" @click="startEditMemory(node)">
 										{{ i18n.ts.edit }}
 									</MkButton>
 								</div>
@@ -170,11 +184,11 @@ SPDX-License-Identifier: AGPL-3.0-only
 					</div>
 
 					<div v-if="memoryTotalPages > 1" :class="$style.memPager">
-						<MkButton rounded small :disabled="memoryMutating || memoryPage <= 1" @click="memoryPrevPage">
+						<MkButton rounded small :disabled="memoryMutating || moderationLocksSessionWrites || memoryPage <= 1" @click="memoryPrevPage">
 							{{ i18n.ts._agents.sessionMemoryPrevPage }}
 						</MkButton>
 						<span>{{ memoryPage }} / {{ memoryTotalPages }}</span>
-						<MkButton rounded small :disabled="memoryMutating || memoryPage >= memoryTotalPages" @click="memoryNextPage">
+						<MkButton rounded small :disabled="memoryMutating || moderationLocksSessionWrites || memoryPage >= memoryTotalPages" @click="memoryNextPage">
 							{{ i18n.ts._agents.sessionMemoryNextPage }}
 						</MkButton>
 					</div>
@@ -190,17 +204,19 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<div v-else class="_gaps">
 			<MkInfo v-if="session == null">{{ i18n.ts.somethingHappened }}</MkInfo>
 			<template v-else>
-				<div v-if="usableStyles.length > 0" class="_gaps_s">
+				<MkInfo v-if="moderationLocksSessionWrites" warn>{{ moderationBlockUserMessage }}</MkInfo>
+				<div class="_gaps_s">
 					<div :class="$style.settingTitleRow">
 						<span :class="$style.settingLabel">{{ i18n.ts._agents.sessionDialogueStyle }}</span>
-						<span :class="$style.settingValue">{{ selectedStyleMeta?.name ?? '-' }}</span>
+						<span :class="$style.settingValue">{{ selectedStyleMeta?.name ?? (session.dialogueStyleId ? '-' : i18n.ts._agents.sessionStyleNotSelected) }}</span>
 					</div>
-					<div :class="$style.selectCardList">
+					<MkInfo v-if="usableStyles.length === 0">{{ i18n.ts._agents.sessionNoUsableStyles }}</MkInfo>
+					<div v-else :class="$style.selectCardList">
 						<div
 							v-for="s in usableStyles"
 							:key="s.id"
 							v-panel
-							:class="[$style.selectCard, selectedStyleId === s.id ? $style.selectCardActive : '']"
+							:class="[$style.selectCard, styleCardSelectionId === s.id ? $style.selectCardActive : '']"
 						>
 							<div :class="$style.selectCardMain">
 								<div :class="$style.selectCardHead">
@@ -216,15 +232,31 @@ SPDX-License-Identifier: AGPL-3.0-only
 									</div>
 									<MkButton
 										rounded
-										:primary="selectedStyleId !== s.id"
-										:disabled="savingSettings || selectedStyleId === s.id"
+										:primary="styleCardSelectionId !== s.id"
+										:disabled="savingSettings || moderationLocksSessionWrites || styleCardSelectionId === s.id"
 										@click="chooseStyle(s.id)"
 									>
-										{{ selectedStyleId === s.id ? i18n.ts.enabled : i18n.ts.select }}
+										{{ styleCardSelectionId === s.id ? i18n.ts.enabled : i18n.ts._agents.sessionPickButton }}
 									</MkButton>
 								</div>
 								<p v-if="s.summary" :class="$style.selectCardDesc">{{ s.summary }}</p>
 								<p v-else-if="s.bodyPreview" :class="$style.selectCardDesc">{{ s.bodyPreview }}</p>
+								<div :class="$style.stylePlazaRow">
+									<span :class="$style.stylePlazaLabel"><i class="ti ti-star"/> {{ i18n.ts._agents.plazaMetricRating }}</span>
+									<template v-if="s.rating.count === 0">
+										<span :class="$style.stylePlazaMuted">{{ i18n.ts._agents.plazaRatingNone }}</span>
+									</template>
+									<template v-else>
+										<span :class="$style.stylePlazaStars" aria-hidden="true">{{ styleUsableStarVisual(s.rating.average) }}</span>
+										<span>{{ styleUsableAverageText(s.rating.average) }} · {{ s.rating.count }} {{ i18n.ts._agents.plazaRatingCountSuffix }}</span>
+									</template>
+									<span :class="$style.stylePlazaSep">·</span>
+									<span :class="$style.stylePlazaLabel"><i class="ti ti-messages"/> {{ i18n.ts._agents.plazaMetricConversations }}</span>
+									<span>{{ s.conversationCount }}</span>
+									<span :class="$style.stylePlazaSep">·</span>
+									<span :class="$style.stylePlazaLabel"><i class="ti ti-robot"/> {{ i18n.ts._agents.plazaMetricAiReplies }}</span>
+									<span>{{ s.aiReplyCount }}</span>
+								</div>
 								<div :class="$style.selectCardMeta">
 									<span :class="$style.metaLabel"><i class="ti ti-user-heart"></i> {{ i18n.ts._agents.cardCreator }}</span>
 									<div :class="$style.metaAuthor">
@@ -248,7 +280,6 @@ SPDX-License-Identifier: AGPL-3.0-only
 						</div>
 					</div>
 				</div>
-				<MkInfo v-else warn>{{ i18n.ts.somethingHappened }}</MkInfo>
 			</template>
 		</div>
 	</div>
@@ -260,6 +291,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<div v-else class="_gaps">
 			<MkInfo v-if="session == null">{{ i18n.ts.somethingHappened }}</MkInfo>
 			<template v-else>
+				<MkInfo v-if="moderationLocksSessionWrites" warn>{{ moderationBlockUserMessage }}</MkInfo>
 				<div v-if="agentModels.length > 0" class="_gaps_s">
 					<div :class="$style.settingTitleRow">
 						<span :class="$style.settingLabel">{{ i18n.ts._agents.sessionModel }}</span>
@@ -270,33 +302,30 @@ SPDX-License-Identifier: AGPL-3.0-only
 							v-for="m in agentModels"
 							:key="m.id"
 							v-panel
-							:class="[$style.selectCard, selectedModelId === m.id ? $style.selectCardActive : '']"
+							:class="[$style.selectCard, modelCardSelectionId === m.id ? $style.selectCardActive : '']"
 						>
 							<div :class="$style.selectCardMain">
 								<div :class="$style.selectCardHead">
 									<div :class="$style.selectCardTitleWrap">
 										<div :class="$style.selectCardTitle">{{ m.name }}</div>
-										<div :class="$style.selectCardSub">
-											<span class="_acrylicBadge">{{ m.id }}</span>
-										</div>
 									</div>
 									<MkButton
 										rounded
-										:primary="selectedModelId !== m.id"
-										:disabled="savingSettings || selectedModelId === m.id"
+										:primary="modelCardSelectionId !== m.id"
+										:disabled="savingSettings || moderationLocksSessionWrites || modelCardSelectionId === m.id"
 										@click="chooseModel(m.id)"
 									>
-										{{ selectedModelId === m.id ? i18n.ts.enabled : i18n.ts.select }}
+										{{ modelCardSelectionId === m.id ? i18n.ts.enabled : i18n.ts._agents.sessionPickButton }}
 									</MkButton>
 								</div>
 								<p v-if="m.description" :class="$style.selectCardDesc">{{ m.description }}</p>
 								<div :class="$style.modelSpecGrid">
 									<div :class="$style.modelSpecItem">
-										<span :class="$style.modelSpecLabel">上下文长度</span>
+										<span :class="$style.modelSpecLabel">{{ i18n.ts._agents.maxContextTokens }}</span>
 										<span :class="$style.modelSpecValue">{{ formatTokenCount(m.maxContextTokens) }}</span>
 									</div>
 									<div :class="$style.modelSpecItem">
-										<span :class="$style.modelSpecLabel">单次最大输出</span>
+										<span :class="$style.modelSpecLabel">{{ i18n.ts._agents.maxOutputTokens }}</span>
 										<span :class="$style.modelSpecValue">{{ formatTokenCount(m.maxOutputTokensPerCall) }}</span>
 									</div>
 								</div>
@@ -311,11 +340,13 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 	<template #footer>
 		<div v-if="tab === 'chat' && !loading && session" :class="$style.footer">
+			<MkInfo v-if="moderationLocksSessionWrites" warn :class="$style.composeStyleHint">{{ moderationBlockUserMessage }}</MkInfo>
+			<MkInfo v-else-if="chatComposeBlockedNeedStyle" :class="$style.composeStyleHint">{{ i18n.ts._agents.chatComposeNeedStyleHint }}</MkInfo>
 			<div v-if="memoryAddHintVisible" :class="$style.memAddHint" role="status">
 				<i class="ti ti-loader-2" :class="$style.memAddHintIcon"></i>
 				<span>{{ i18n.ts._agents.longTermMemoryAddScheduledHint }}</span>
 			</div>
-			<XForm ref="formRef" :class="$style.form" :sending="sending" @submit="onFormSubmit"/>
+			<XForm ref="formRef" :class="$style.form" :disabled="chatComposeDisabled" :sending="sending" @submit="onFormSubmit"/>
 		</div>
 	</template>
 </PageWithHeader>
@@ -347,6 +378,7 @@ import { prefer } from '@/preferences.js';
 import XAgentMessage from './agent-session.message.vue';
 import XForm from './agent-session.form.vue';
 import XAgentSearch from './agent-session.search.vue';
+import type { AgentsStylesListUsableResponse } from 'misskey-js/entities.js';
 
 const props = defineProps<{
 	sessionId: string;
@@ -371,7 +403,7 @@ let highlightTimeoutId: number | null = null;
 const session = ref<{
 	name: string;
 	sessionKind: 'draft_test' | 'community';
-	dialogueStyleId: string;
+	dialogueStyleId: string | null;
 	agentModelId: string | null;
 	characterId: string;
 	agentLongMemoryEnabled?: boolean;
@@ -381,6 +413,8 @@ const session = ref<{
 	agentLongMemoryAddMaxRounds?: number | null;
 	agentLongMemoryAddEveryNRounds?: number | null;
 	agentReplyPending?: boolean;
+	sessionModerationBanned?: boolean;
+	characterModerationBanned?: boolean;
 } | null>(null);
 
 const character = ref<{ name: string; avatarFileId: string | null } | null>(null);
@@ -408,7 +442,12 @@ const timelineForChat = computed((): AgentChatTimelineItem[] => {
 });
 
 async function refreshContextWindow() {
-	if (!session.value || tab.value !== 'chat') return;
+	if (!session.value) return;
+	if (!session.value.dialogueStyleId) {
+		contextWindowTruncated.value = false;
+		contextWindowBoundaryId.value = null;
+		return;
+	}
 	try {
 		const res = await misskeyApi('agents/sessions/context-window', { sessionId });
 		contextWindowTruncated.value = res.truncated;
@@ -440,21 +479,17 @@ useMutationObserver(timelineEl, {
 });
 
 const savingSettings = ref(false);
-const usableStyles = ref<{
-	id: string;
-	name: string;
-	isPublished: boolean;
-	isMine: boolean;
-	subscribed: boolean;
-	userId: string;
-	bodyPreview: string;
-	summary?: string | null;
-	reviewStatus?: string;
-	publishedVersion?: number | null;
-	createdAt: string;
-	updatedAt: string;
-	user: Record<string, unknown>;
-}[]>([]);
+const usableStyles = ref<AgentsStylesListUsableResponse>([]);
+
+function styleUsableStarVisual(avg: number | null | undefined): string {
+	if (avg == null || !Number.isFinite(avg)) return '—';
+	const full = Math.max(0, Math.min(5, Math.round(avg)));
+	return '★'.repeat(full) + '☆'.repeat(5 - full);
+}
+function styleUsableAverageText(avg: number | null | undefined): string {
+	if (avg == null || !Number.isFinite(avg)) return '—';
+	return avg.toFixed(2);
+}
 const selectedModelId = ref('');
 const selectedStyleId = ref('');
 const tab = ref('chat');
@@ -491,11 +526,46 @@ const editingMemoryText = ref('');
 
 const showLongMemoryTab = computed(() => Boolean((instance as Record<string, unknown>).agentLongMemoryConfigured));
 
+const moderationLocksSessionWrites = computed(() => {
+	const s = session.value;
+	if (s == null) return false;
+	return s.characterModerationBanned === true || s.sessionModerationBanned === true;
+});
+
+/** 展示文案：角色封禁优先于会话封禁 */
+const moderationBlockKind = computed((): 'character' | 'session' | null => {
+	const s = session.value;
+	if (s == null) return null;
+	if (s.characterModerationBanned === true) return 'character';
+	if (s.sessionModerationBanned === true) return 'session';
+	return null;
+});
+
+const moderationBlockUserMessage = computed((): string => {
+	if (moderationBlockKind.value === 'character') return i18n.ts._agents.chatModerationBlockedCharacter;
+	if (moderationBlockKind.value === 'session') return i18n.ts._agents.chatModerationBlockedSession;
+	return '';
+});
+
+const chatComposeDisabled = computed(() => {
+	if (loading.value || chatInitializing.value || session.value == null) return true;
+	if (moderationLocksSessionWrites.value) return true;
+	return session.value.dialogueStyleId == null || session.value.dialogueStyleId === '';
+});
+
+/** 仅因未选对话风格而禁用输入时，在输入区上方展示说明（与加载中区分）。 */
+const chatComposeBlockedNeedStyle = computed(() => {
+	if (session.value == null || loading.value || chatInitializing.value) return false;
+	return session.value.dialogueStyleId == null || session.value.dialogueStyleId === '';
+});
+
 const memoryAddHintVisible = ref(false);
 let memoryAddHintTimer: number | null = null;
 
 const contextWindowTruncated = ref(false);
 const contextWindowBoundaryId = ref<string | null>(null);
+const highlightedContextDivider = ref(false);
+let contextDividerHighlightTimer: number | null = null;
 
 type AgentChatTimelineItem =
 	| DateSeparetedTimelineItem<AgentMsg>
@@ -587,11 +657,33 @@ function displayModelIdForSession(agentModelId: string | null | undefined): stri
 	return fallback;
 }
 
+/** 卡片高亮与「启用」按钮仅针对列表内存在的 id（与会话解析后的模型一致）。 */
+const modelCardSelectionId = computed(() => {
+	const id = selectedModelId.value;
+	if (!id || !agentModels.value.some(m => m.id === id)) {
+		return '';
+	}
+	return id;
+});
+
+/** 仅在可用列表内高亮，避免会话引用已不可用预设时误显示「启用」。 */
+const styleCardSelectionId = computed(() => {
+	const id = selectedStyleId.value;
+	if (!id || !usableStyles.value.some(s => s.id === id)) {
+		return '';
+	}
+	return id;
+});
+
 const selectedStyleMeta = computed(() => usableStyles.value.find(s => s.id === selectedStyleId.value) ?? null);
 const selectedModelMeta = computed(() => agentModels.value.find(m => m.id === selectedModelId.value) ?? null);
 
-function formatTokenCount(value: number): string {
-	return `${Math.max(0, Math.trunc(value)).toLocaleString()} tokens`;
+function formatTokenCount(value: unknown): string {
+	const n = typeof value === 'number' ? value : Number(value);
+	if (!Number.isFinite(n)) {
+		return '—';
+	}
+	return `${Math.max(0, Math.trunc(n)).toLocaleString()} tokens`;
 }
 
 const headerTabs = computed(() => {
@@ -653,6 +745,7 @@ watch(tab, (v) => {
 			}
 		});
 	} else if (v === 'memory' && session.value != null) {
+		void refreshContextWindow();
 		void loadMemoryNodes();
 	}
 });
@@ -662,6 +755,19 @@ watch(showLongMemoryTab, (v) => {
 		tab.value = 'chat';
 	}
 });
+
+/** Instance meta（含 agentModels）晚于会话加载时，或本地 id 已不在列表中时，与会话解析结果对齐。 */
+watch(
+	[agentModels, () => session.value?.agentModelId],
+	() => {
+		if (!session.value || settingsHydrating.value || savingSettings.value) return;
+		const resolved = displayModelIdForSession(session.value.agentModelId);
+		if (resolved === '') return;
+		if (selectedModelId.value === '' || !agentModels.value.some(m => m.id === selectedModelId.value)) {
+			selectedModelId.value = resolved;
+		}
+	},
+);
 
 async function renameSession() {
 	if (!session.value) return;
@@ -696,7 +802,7 @@ async function loadSession() {
 		session.value = await misskeyApi('agents/sessions/show', { sessionId });
 		if (session.value) {
 			selectedModelId.value = displayModelIdForSession(session.value.agentModelId);
-			selectedStyleId.value = session.value.dialogueStyleId;
+			selectedStyleId.value = session.value.dialogueStyleId ?? '';
 			memLongMemoryEnabled.value = session.value.agentLongMemoryEnabled ?? true;
 			memTopK.value = String(session.value.agentLongMemoryTopK ?? 8);
 			memMinScore.value = session.value.agentLongMemoryMinScore == null ? '' : String(session.value.agentLongMemoryMinScore);
@@ -745,12 +851,12 @@ async function loadUsableStyles() {
 }
 
 function onModelSelect() {
-	if (settingsHydrating.value || !session.value || savingSettings.value) return;
+	if (settingsHydrating.value || !session.value || savingSettings.value || moderationLocksSessionWrites.value) return;
 	void applyModel();
 }
 
 function onStyleSelect() {
-	if (settingsHydrating.value || !session.value || savingSettings.value) return;
+	if (settingsHydrating.value || !session.value || savingSettings.value || moderationLocksSessionWrites.value) return;
 	void applyStyle();
 }
 
@@ -765,7 +871,7 @@ function chooseModel(modelId: string) {
 }
 
 async function applyModel() {
-	if (!session.value || savingSettings.value) return;
+	if (!session.value || savingSettings.value || moderationLocksSessionWrites.value) return;
 	savingSettings.value = true;
 	try {
 		const defId = resolvedInstanceDefaultModelId.value;
@@ -782,10 +888,12 @@ async function applyModel() {
 }
 
 async function applyStyle() {
-	if (!session.value || savingSettings.value) return;
+	if (!session.value || savingSettings.value || moderationLocksSessionWrites.value) return;
+	const sid = selectedStyleId.value.trim();
+	if (!sid) return;
 	savingSettings.value = true;
 	try {
-		await misskeyApi('agents/sessions/update', { sessionId, dialogueStyleId: selectedStyleId.value });
+		await misskeyApi('agents/sessions/update', { sessionId, dialogueStyleId: sid });
 		await loadSession();
 	} catch (e) {
 		os.alert({ type: 'error', text: formatApiError(e) });
@@ -951,6 +1059,74 @@ async function handleScrollToMessageFromSearch(messageId: string) {
 	await scrollToMessage(messageId);
 }
 
+function clearContextDividerHighlight() {
+	if (contextDividerHighlightTimer != null) {
+		window.clearTimeout(contextDividerHighlightTimer);
+		contextDividerHighlightTimer = null;
+	}
+	highlightedContextDivider.value = false;
+}
+
+/** 记忆页等：切换到对话并滚动到「上下文边界」分割线（与搜索定位消息类似）。 */
+async function scrollToContextWindowDivider() {
+	const boundary = contextWindowBoundaryId.value;
+	if (!contextWindowTruncated.value || boundary == null || boundary === '') return;
+
+	clearContextDividerHighlight();
+
+	const queryDividerEl = (): HTMLElement | null => {
+		const root = timelineEl.value;
+		if (root == null) return null;
+		return root.querySelector(`[data-agent-context-window-divider="${CSS.escape(boundary)}"]`) as HTMLElement | null;
+	};
+
+	const performScroll = (targetEl: HTMLElement) => {
+		targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+		clearContextDividerHighlight();
+		contextDividerHighlightTimer = window.setTimeout(() => {
+			highlightedContextDivider.value = true;
+			contextDividerHighlightTimer = window.setTimeout(() => {
+				highlightedContextDivider.value = false;
+				contextDividerHighlightTimer = null;
+			}, 1200);
+		}, 500);
+	};
+
+	const tryScrollOnce = (): boolean => {
+		const el = queryDividerEl();
+		if (el) {
+			performScroll(el);
+			return true;
+		}
+		return false;
+	};
+
+	tab.value = 'chat';
+	await nextTick();
+	await nextTick();
+	await new Promise(r => window.setTimeout(r, 50));
+
+	if (tryScrollOnce()) return;
+
+	if (messages.value.some(m => m.id === boundary)) {
+		await nextTick();
+		await nextTick();
+		await new Promise(r => window.setTimeout(r, 100));
+		if (tryScrollOnce()) return;
+	}
+
+	await loadContextAround(boundary);
+	await refreshContextWindow();
+	await nextTick();
+	await nextTick();
+	await new Promise(r => window.setTimeout(r, 300));
+	if (tryScrollOnce()) return;
+	await new Promise(r => window.setTimeout(r, 200));
+	if (tryScrollOnce()) return;
+
+	os.alert({ type: 'error', text: i18n.ts._agents.sessionMemoryLocateContextDividerFailed });
+}
+
 onMounted(async () => {
 	try {
 		await fetchInstance(true);
@@ -979,6 +1155,7 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
 	stopReplyPendingPoll();
+	clearContextDividerHighlight();
 	if (memoryAddHintTimer != null) {
 		window.clearTimeout(memoryAddHintTimer);
 		memoryAddHintTimer = null;
@@ -1036,7 +1213,7 @@ function cancelEditMemory() {
 }
 
 async function submitNewMemory() {
-	if (!session.value || memoryMutating.value) return;
+	if (!session.value || memoryMutating.value || moderationLocksSessionWrites.value) return;
 	const content = newMemoryText.value.trim();
 	if (!content) return;
 	memoryMutating.value = true;
@@ -1054,7 +1231,7 @@ async function submitNewMemory() {
 }
 
 async function submitEditMemory(memoryNodeId: string) {
-	if (!session.value || memoryMutating.value) return;
+	if (!session.value || memoryMutating.value || moderationLocksSessionWrites.value) return;
 	const content = editingMemoryText.value.trim();
 	if (!content) return;
 	memoryMutating.value = true;
@@ -1076,7 +1253,7 @@ async function confirmDeleteMemory(memoryNodeId: string) {
 		text: i18n.ts._agents.sessionMemoryDeleteConfirm,
 	});
 	if (canceled) return;
-	if (!session.value || memoryMutating.value) return;
+	if (!session.value || memoryMutating.value || moderationLocksSessionWrites.value) return;
 	memoryMutating.value = true;
 	try {
 		await misskeyApi('agents/memory/delete', { sessionId, memoryNodeId });
@@ -1091,7 +1268,7 @@ async function confirmDeleteMemory(memoryNodeId: string) {
 }
 
 async function saveMemorySessionSettings() {
-	if (!session.value || memSaving.value) return;
+	if (!session.value || memSaving.value || moderationLocksSessionWrites.value) return;
 	const topK = Math.trunc(Number(memTopK.value));
 	const inj = Math.trunc(Number(memInject.value));
 	if (!Number.isFinite(topK) || topK < 1 || topK > 100) {
@@ -1159,6 +1336,23 @@ async function saveMemorySessionSettings() {
 
 const OPTIMISTIC_MESSAGE_ID_PREFIX = 'agent-opt:';
 
+/** 与 agents/messages/send 中 assertAgentSessionTurnOrderAllowsUserSend 一致 */
+function agentSendTurnOrderBlockReason(msgs: AgentMsg[]): 'invalidTurns' | 'awaitAssistant' | null {
+	const seq = msgs
+		.filter(m => m.role === 'user' || m.role === 'assistant')
+		.sort((a, b) => {
+			const ta = new Date(a.createdAt).getTime();
+			const tb = new Date(b.createdAt).getTime();
+			if (ta !== tb) return ta - tb;
+			return a.id.localeCompare(b.id);
+		});
+	for (let i = 1; i < seq.length; i++) {
+		if (seq[i]!.role === seq[i - 1]!.role) return 'invalidTurns';
+	}
+	if (seq.length > 0 && seq[seq.length - 1]!.role === 'user') return 'awaitAssistant';
+	return null;
+}
+
 /** 与后端 send 中 safeAgentMemEveryNRounds 一致，用于在缺少 API 字段时推断是否应显示写入提示 */
 function safeMemEveryNForHint(sessionVal: number | null | undefined, metaVal: unknown): number {
 	const raw = sessionVal ?? (typeof metaVal === 'number' && Number.isFinite(metaVal) ? metaVal : null) ?? 1;
@@ -1182,6 +1376,21 @@ async function onFormSubmit(text: string) {
 	if (sending.value) return;
 	const trimmed = text.trim();
 	if (!trimmed) return;
+	if (!session.value?.dialogueStyleId) {
+		os.alert({ type: 'info', text: i18n.ts._agents.needDialogueStyleBeforeSend });
+		tab.value = 'style';
+		return;
+	}
+
+	const turnBlock = agentSendTurnOrderBlockReason(messages.value);
+	if (turnBlock === 'invalidTurns') {
+		os.alert({ type: 'error', text: i18n.ts._agents.invalidTurnOrderCannotSend });
+		return;
+	}
+	if (turnBlock === 'awaitAssistant') {
+		os.alert({ type: 'error', text: i18n.ts._agents.awaitAssistantReplyCannotSend });
+		return;
+	}
 
 	sending.value = true;
 	let leaveSendingSpinner = false;
@@ -1247,7 +1456,16 @@ async function onFormSubmit(text: string) {
 			startReplyPendingPoll();
 		} else {
 			formRef.value?.restoreDraft(trimmed);
-			os.alert({ type: 'error', text: formatApiError(e) });
+			if (e != null && typeof e === 'object' && (e as { code?: string }).code === 'AGENT_DIALOGUE_STYLE_REQUIRED') {
+				os.alert({ type: 'info', text: i18n.ts._agents.needDialogueStyleBeforeSend });
+				tab.value = 'style';
+			} else if (e != null && typeof e === 'object' && (e as { code?: string }).code === 'AGENT_THREAD_INVALID_TURNS') {
+				os.alert({ type: 'error', text: i18n.ts._agents.invalidTurnOrderCannotSend });
+			} else if (e != null && typeof e === 'object' && (e as { code?: string }).code === 'AGENT_AWAIT_ASSISTANT_REPLY') {
+				os.alert({ type: 'error', text: i18n.ts._agents.awaitAssistantReplyCannotSend });
+			} else {
+				os.alert({ type: 'error', text: formatApiError(e) });
+			}
 		}
 	} finally {
 		if (!leaveSendingSpinner) {
@@ -1281,10 +1499,19 @@ async function onFormSubmit(text: string) {
 	gap: 0.5em;
 }
 
+.composeStyleHint {
+	margin: 0 auto;
+	width: 100%;
+	max-width: 700px;
+	font-size: 0.9em;
+}
+
 .form {
 	margin: 0 auto;
 	width: 100%;
 	max-width: 700px;
+	box-sizing: border-box;
+	min-width: 0;
 }
 
 .more {
@@ -1318,6 +1545,24 @@ async function onFormSubmit(text: string) {
 	letter-spacing: 0.02em;
 	color: var(--MI_THEME-fgTransparentWeak);
 	white-space: nowrap;
+}
+
+.contextWindowDividerHighlight {
+	animation: agentContextDividerHighlight 1.2s ease-in-out 1;
+}
+
+@keyframes agentContextDividerHighlight {
+	0%, 100% {
+		filter: none;
+	}
+	40%, 60% {
+		filter: drop-shadow(0 0 6px color-mix(in srgb, var(--MI_THEME-accent) 55%, transparent));
+	}
+}
+
+.memContextDividerRow {
+	display: flex;
+	justify-content: flex-start;
 }
 
 .dateDivider {
@@ -1410,6 +1655,40 @@ async function onFormSubmit(text: string) {
 	word-break: break-word;
 }
 
+.stylePlazaRow {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	gap: 0.35em 0.5em;
+	font-size: 0.86em;
+	margin-top: 0.35em;
+	line-height: 1.45;
+}
+
+.stylePlazaLabel {
+	font-weight: 700;
+	opacity: 0.72;
+	display: inline-flex;
+	align-items: center;
+	gap: 0.25em;
+}
+
+.stylePlazaStars {
+	color: var(--MI_THEME-warn);
+	letter-spacing: 0.03em;
+	font-weight: 700;
+}
+
+.stylePlazaMuted {
+	opacity: 0.58;
+	font-weight: 600;
+}
+
+.stylePlazaSep {
+	opacity: 0.45;
+	user-select: none;
+}
+
 .selectCardMeta {
 	display: flex;
 	flex-wrap: wrap;
@@ -1470,6 +1749,11 @@ async function onFormSubmit(text: string) {
 .modelSpecValue {
 	font-size: 0.95em;
 	font-weight: 700;
+}
+
+.sessionMemoryHint {
+	white-space: pre-line;
+	line-height: 1.55;
 }
 
 .memDivider {

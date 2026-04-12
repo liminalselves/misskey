@@ -67,6 +67,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			if (!session || session.userId !== me.id) {
 				throw new ApiError({ message: 'No such session.', code: 'NO_SUCH_SESSION', id: 'd4e5f6a7-b8c9-0123-def0-234567890123' });
 			}
+			const characterRow = await this.agentService.loadCharacterForAgentSessionOrThrow(session);
+			this.agentService.assertAgentUserSessionChatAllowed(characterRow, session);
 			const instanceMeta = await this.metaService.fetch(true);
 			if (!this.agentDashscopeMemoryService.isRunnable(instanceMeta)) {
 				throw new ApiError({ message: 'Long-term memory is not available.', code: 'MEMORY_NOT_AVAILABLE', id: 'e5f6a7b8-c9d0-1234-ef01-345678901234' });

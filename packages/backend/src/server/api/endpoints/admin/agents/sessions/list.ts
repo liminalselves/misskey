@@ -32,7 +32,7 @@ export const meta = {
 				userId: { type: 'string', format: 'misskey:id' },
 				name: { type: 'string' },
 				characterId: { type: 'string', format: 'misskey:id' },
-				dialogueStyleId: { type: 'string', format: 'misskey:id' },
+				dialogueStyleId: { type: 'string', format: 'misskey:id', nullable: true },
 				sessionKind: { type: 'string', enum: ['draft_test', 'community'] },
 				lastMessageAt: { type: 'string', format: 'date-time', nullable: true },
 				agentReplyPending: { type: 'boolean' },
