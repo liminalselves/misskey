@@ -118,6 +118,7 @@ export class NodeinfoServerService {
 					enableRecaptcha: meta.enableRecaptcha,
 					enableMcaptcha: meta.enableMcaptcha,
 					enableTurnstile: meta.enableTurnstile,
+					enableAliyunCaptcha: meta.enableAliyunCaptcha,
 					maxNoteTextLength: MAX_NOTE_TEXT_LENGTH,
 					enableEmail: meta.enableEmail,
 					enableServiceWorker: meta.enableServiceWorker,

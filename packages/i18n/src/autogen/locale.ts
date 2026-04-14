@@ -1697,6 +1697,34 @@ export interface Locale extends ILocale {
      */
     "turnstileSecretKey": string;
     /**
+     * Aliyun Captcha
+     */
+    "aliyunCaptcha": string;
+    /**
+     * Aliyun Captchaを有効にする
+     */
+    "enableAliyunCaptcha": string;
+    /**
+     * Prefix
+     */
+    "aliyunCaptchaPrefix": string;
+    /**
+     * Scene ID
+     */
+    "aliyunCaptchaSceneId": string;
+    /**
+     * Region（cn/sgp）
+     */
+    "aliyunCaptchaRegion": string;
+    /**
+     * AccessKey ID
+     */
+    "aliyunCaptchaAccessKeyId": string;
+    /**
+     * AccessKey Secret
+     */
+    "aliyunCaptchaAccessKeySecret": string;
+    /**
      * 複数のCaptchaを使用すると干渉を起こす可能性があります。他のCaptchaを無効にしますか？キャンセルして複数のCaptchaを有効化したままにすることも可能です。
      */
     "avoidMultiCaptchaConfirm": string;
@@ -2625,7 +2653,7 @@ export interface Locale extends ILocale {
      */
     "adminAppSettings": string;
     /**
-     * 公式ネイティブアプリ向けの設定です。Aliyun モバイルプッシュの認証情報、クライアントに公開するバージョンとダウンロードURL など。
+     * 公式ネイティブアプリ向けの設定です。Aliyun モバイルプッシュの認証情報、クライアントに公開するバージョン、ダウンロードURL、更新ログなど。
      */
     "adminAppSettingsDescription": string;
     /**
@@ -2633,7 +2661,7 @@ export interface Locale extends ILocale {
      */
     "nativeClientAppInfo": string;
     /**
-     * ここで入力した内容はインスタンスの meta に保存され、公式アプリの「設定 → アプリ」から参照されます。最新版との比較や、設定したダウンロードURL の表示に使われます。
+     * ここで入力した内容はインスタンスの meta に保存され、公式アプリの「設定 → アプリ」から参照されます。最新版との比較や、ここで管理する更新ログの表示に使われます。
      */
     "nativeClientAppInfoDescription": string;
     /**
@@ -2665,9 +2693,25 @@ export interface Locale extends ILocale {
      */
     "nativeClientAppInfoIosDownloadUrl": string;
     /**
-     * リリースノート URL（任意）
+     * 更新ログ一覧
      */
-    "nativeClientAppInfoReleaseNotesUrl": string;
+    "nativeClientAppInfoChangelog": string;
+    /**
+     * 各行にバージョン番号と更新内容を設定します。更新内容は複数行に対応します。
+     */
+    "nativeClientAppInfoChangelogDescription": string;
+    /**
+     * バージョン
+     */
+    "nativeClientAppInfoChangelogVersion": string;
+    /**
+     * 更新内容
+     */
+    "nativeClientAppInfoChangelogContent": string;
+    /**
+     * 複数行対応。アプリ側では現在バージョンより新しい項目をまとめて表示します。
+     */
+    "nativeClientAppInfoChangelogContentCaption": string;
     /**
      * アプリ利用者向けのお知らせ（プレーンテキスト・任意）
      */
@@ -4229,6 +4273,26 @@ export interface Locale extends ILocale {
      */
     "nativePushAutoDisabledByPermissionDescription": string;
     /**
+     * このプラットフォームではアプリプッシュに未対応です
+     */
+    "nativePushAndroidOnlyTitle": string;
+    /**
+     * ネイティブプッシュ（ベンダー SDK とサーバー登録）は現状 Android 版シェルでのみ実装されています。iOS やデスクトップ版シェルではこのボタンで登録できません。Android 版を使うか、今後のリリースをお待ちください。
+     */
+    "nativePushAndroidOnlyDescription": string;
+    /**
+     * アプリプッシュを有効にできませんでした
+     */
+    "nativePushEnableFailedTitle": string;
+    /**
+     * 通知の許可がありません。端末の設定でこのアプリの通知を許可してから、もう一度お試しください。
+     */
+    "nativePushEnableFailedPermission": string;
+    /**
+     * 通知の許可はありますが、プッシュサービスを開始できませんでした。Aliyun Mobile Push の設定（assets の aliyun-emas-services.json）を確認し、端末ログの AliyunPush 出力を参照してください。
+     */
+    "nativePushEnableFailedPushSetup": string;
+    /**
      * アプリ
      */
     "appClientSettings": string;
@@ -4277,7 +4341,7 @@ export interface Locale extends ILocale {
      */
     "appClientCheckForUpdates": string;
     /**
-     * コントロールパネル → 設定 → アプリで設定された最新版とアプリのバージョンを比較します。新しい版がある場合は、管理者が設定したダウンロードリンクを開けます。
+     * コントロールパネル → 設定 → アプリで設定された最新版とアプリのバージョンを比較します。新しい版がある場合は、管理者が設定したダウンロードリンクを開き、現在バージョンより新しい更新内容も確認できます。
      */
     "appClientCheckForUpdatesDescription": string;
     /**
@@ -4313,13 +4377,17 @@ export interface Locale extends ILocale {
      */
     "appClientUpdateAvailableYoursLabel": string;
     /**
+     * 更新内容:
+     */
+    "appClientUpdateContentTitle": string;
+    /**
      * ダウンロードリンクを開く
      */
     "appClientOpenDownload": string;
     /**
-     * 詳細は、管理者が設定したリリースノートのリンクを参照してください（ある場合）。
+     * 更新ログ
      */
-    "appClientReleaseNotesHint": string;
+    "appClientChangelog": string;
     /**
      * 通知が既読になったらプッシュ通知を削除する
      */

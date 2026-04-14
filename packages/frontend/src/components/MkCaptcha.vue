@@ -26,8 +26,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { ref, useTemplateRef, computed, onMounted, onBeforeUnmount, watch, onUnmounted } from 'vue';
+import { ref, useTemplateRef, computed, onMounted, onBeforeUnmount, watch, onUnmounted, useCssModule } from 'vue';
 import { store } from '@/store.js';
+import { i18n } from '@/i18n.js';
 
 // APIs provided by Captcha services
 // see: https://docs.hcaptcha.com/configuration/#javascript-api
@@ -43,7 +44,13 @@ export type Captcha = {
 	getResponse(id: string): string;
 };
 
-export type CaptchaProvider = 'hcaptcha' | 'recaptcha' | 'turnstile' | 'mcaptcha' | 'testcaptcha';
+type AliyunCaptcha = {
+	show?: () => void;
+	hide?: () => void;
+	startTracelessVerification?: () => void;
+};
+
+export type CaptchaProvider = 'hcaptcha' | 'recaptcha' | 'turnstile' | 'mcaptcha' | 'aliyuncaptcha' | 'testcaptcha';
 
 type CaptchaContainer = {
 	readonly [_ in CaptchaProvider]?: Captcha;
@@ -55,11 +62,29 @@ declare global {
 	interface Window extends CaptchaContainer { }
 }
 
+type AliyunCaptchaWindow = Window & {
+	AliyunCaptchaConfig?: {
+		region: string;
+		prefix: string;
+	};
+	initAliyunCaptcha?: (options: {
+		SceneId: string;
+		mode: 'popup';
+		element: string | HTMLElement;
+		button: string | HTMLElement;
+		success: (captchaVerifyParam: string) => void;
+		fail?: (result: unknown) => void;
+		getInstance: (instance: AliyunCaptcha) => void;
+	}) => void;
+};
+
 const props = defineProps<{
 	provider: CaptchaProvider;
 	sitekey: string | null; // null will show error on request
 	secretKey?: string | null;
 	instanceUrl?: string | null;
+	sceneId?: string | null;
+	region?: string | null;
 	modelValue?: string | null;
 }>();
 
@@ -71,8 +96,10 @@ const available = ref(false);
 
 const captchaEl = useTemplateRef('captchaEl');
 const captchaWidgetId = ref<string | undefined>(undefined);
+const aliyunCaptchaInstance = ref<AliyunCaptcha | undefined>(undefined);
 const testcaptchaInput = ref('');
 const testcaptchaPassed = ref(false);
+const styleModule = useCssModule();
 
 const variable = computed(() => {
 	switch (props.provider) {
@@ -80,6 +107,7 @@ const variable = computed(() => {
 		case 'recaptcha': return 'grecaptcha';
 		case 'turnstile': return 'turnstile';
 		case 'mcaptcha': return 'mcaptcha';
+		case 'aliyuncaptcha': return 'initAliyunCaptcha';
 		case 'testcaptcha': return 'testcaptcha';
 	}
 });
@@ -91,6 +119,7 @@ const src = computed(() => {
 		case 'hcaptcha': return 'https://js.hcaptcha.com/1/api.js?render=explicit&recaptchacompat=off';
 		case 'recaptcha': return 'https://www.recaptcha.net/recaptcha/api.js?render=explicit';
 		case 'turnstile': return 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+		case 'aliyuncaptcha': return 'https://o.alicdn.com/captcha-frontend/aliyunCaptcha/AliyunCaptcha.js';
 		case 'mcaptcha': return null;
 		case 'testcaptcha': return null;
 	}
@@ -100,7 +129,7 @@ const scriptId = computed(() => `script-${props.provider}`);
 
 const captcha = computed<Captcha>(() => (window as any)[variable.value] ?? {} as unknown as Captcha);
 
-watch(() => [props.instanceUrl, props.sitekey, props.secretKey], async () => {
+watch(() => [props.instanceUrl, props.sitekey, props.secretKey, props.sceneId, props.region], async () => {
 	// 変更があったときはリフレッシュと再レンダリングをしておかないと、変更後の値で再検証が出来ない
 	if (available.value) {
 		callback(undefined);
@@ -121,6 +150,11 @@ if (loaded || props.provider === 'mcaptcha' || props.provider === 'testcaptcha')
 }
 
 function reset() {
+	if (props.provider === 'aliyuncaptcha') {
+		callback(undefined);
+		return;
+	}
+
 	if (captcha.value.reset && captchaWidgetId.value !== undefined) {
 		try {
 			captcha.value.reset(captchaWidgetId.value);
@@ -146,6 +180,49 @@ function remove() {
 }
 
 async function requestRender() {
+	if (props.provider === 'aliyuncaptcha') {
+		if (captchaEl.value instanceof Element && props.sitekey && props.sceneId && (window as AliyunCaptchaWindow).initAliyunCaptcha) {
+			const root = window.document.createElement('div');
+			const trigger = window.document.createElement('button');
+			const uniq = Math.random().toString(36).slice(2);
+			root.id = `aliyun-captcha-element-${uniq}`;
+			trigger.id = `aliyun-captcha-button-${uniq}`;
+			trigger.type = 'button';
+			trigger.textContent = i18n.ts._captcha.verify ?? '验证';
+			trigger.className = styleModule.aliyunTrigger;
+			captchaEl.value.appendChild(root);
+			captchaEl.value.appendChild(trigger);
+
+			(window as AliyunCaptchaWindow).AliyunCaptchaConfig = {
+				region: props.region ?? 'cn',
+				prefix: props.sitekey,
+			};
+			(window as AliyunCaptchaWindow).initAliyunCaptcha?.({
+				SceneId: props.sceneId,
+				mode: 'popup',
+				element: root,
+				button: trigger,
+				success: (captchaVerifyParam: string) => callback(captchaVerifyParam),
+				fail: (result: unknown) => {
+					callback(undefined);
+					if (_DEV_) console.warn('aliyun captcha failed', result);
+				},
+				getInstance: (instance: AliyunCaptcha) => {
+					aliyunCaptchaInstance.value = instance;
+				},
+			});
+
+			// Fallback: some builds don't bind click properly; ensure click triggers popup.
+			trigger.addEventListener('click', () => {
+				aliyunCaptchaInstance.value?.startTracelessVerification?.();
+				aliyunCaptchaInstance.value?.show?.();
+			});
+			return;
+		}
+		window.setTimeout(requestRender, 1);
+		return;
+	}
+
 	if (captcha.value.render && captchaEl.value instanceof Element && props.sitekey) {
 		// reCAPTCHAのレンダリング重複判定を回避するため、captchaEl配下に仮のdivを用意する.
 		// （同じdivに対して複数回renderを呼び出すとreCAPTCHAはエラーを返すので）
@@ -179,6 +256,7 @@ function clearWidget() {
 			container.innerHTML = '';
 		}
 	} else {
+		aliyunCaptchaInstance.value = undefined;
 		reset();
 		remove();
 
@@ -229,3 +307,37 @@ defineExpose({
 });
 
 </script>
+
+<style lang="scss" module>
+.aliyunTrigger {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 100px;
+	height: 40px;
+	padding: 0 16px;
+	border-radius: 999px;
+	border: none;
+	background: var(--MI_THEME-accent);
+	color: var(--MI_THEME-fgOnAccent);
+	font-size: 100%;
+	font-weight: 700;
+	line-height: 1;
+	cursor: pointer;
+	transition: background 0.1s ease, transform 0.1s ease;
+	user-select: none;
+}
+
+.aliyunTrigger:hover {
+	background: hsl(from var(--MI_THEME-accent) h s calc(l + 5));
+}
+
+.aliyunTrigger:active {
+	background: hsl(from var(--MI_THEME-accent) h s calc(l + 5));
+}
+
+.aliyunTrigger:focus-visible {
+	outline: 2px solid color-mix(in srgb, var(--MI_THEME-accent) 45%, transparent);
+	outline-offset: 2px;
+}
+</style>

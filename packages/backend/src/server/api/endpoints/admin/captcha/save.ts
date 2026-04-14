@@ -76,6 +76,15 @@ export const paramDef = {
 		instanceUrl: {
 			type: 'string', nullable: true,
 		},
+		region: {
+			type: 'string', nullable: true,
+		},
+		sceneId: {
+			type: 'string', nullable: true,
+		},
+		accessKeyId: {
+			type: 'string', nullable: true,
+		},
 	},
 	required: ['provider'],
 } as const;
@@ -90,6 +99,9 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				sitekey: ps.sitekey,
 				secret: ps.secret,
 				instanceUrl: ps.instanceUrl,
+				region: ps.region,
+				sceneId: ps.sceneId,
+				accessKeyId: ps.accessKeyId,
 				captchaResult: ps.captchaResult,
 			});
 

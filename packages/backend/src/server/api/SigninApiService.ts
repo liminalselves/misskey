@@ -77,6 +77,7 @@ export class SigninApiService {
 				'g-recaptcha-response'?: string;
 				'turnstile-response'?: string;
 				'm-captcha-response'?: string;
+				'aliyun-captcha-response'?: string;
 				'testcaptcha-response'?: string;
 			};
 		}>,
@@ -202,6 +203,18 @@ export class SigninApiService {
 
 				if (this.meta.enableTurnstile && this.meta.turnstileSecretKey) {
 					await this.captchaService.verifyTurnstile(this.meta.turnstileSecretKey, body['turnstile-response']).catch(err => {
+						throw new FastifyReplyError(400, err);
+					});
+				}
+
+				if (this.meta.enableAliyunCaptcha && this.meta.aliyunCaptchaAccessKeyId && this.meta.aliyunCaptchaAccessKeySecret && this.meta.aliyunCaptchaSceneId) {
+					await this.captchaService.verifyAliyunCaptcha(
+						this.meta.aliyunCaptchaAccessKeyId,
+						this.meta.aliyunCaptchaAccessKeySecret,
+						this.meta.aliyunCaptchaRegion ?? 'cn',
+						this.meta.aliyunCaptchaSceneId,
+						body['aliyun-captcha-response'],
+					).catch(err => {
 						throw new FastifyReplyError(400, err);
 					});
 				}

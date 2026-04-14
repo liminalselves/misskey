@@ -193,6 +193,7 @@ async function onPasswordSubmitted(pw: PwResponse) {
 			'm-captcha-response': pw.captcha.mCaptchaResponse,
 			'g-recaptcha-response': pw.captcha.reCaptchaResponse,
 			'turnstile-response': pw.captcha.turnstileResponse,
+			'aliyun-captcha-response': pw.captcha.aliyunCaptchaResponse,
 			'testcaptcha-response': pw.captcha.testcaptchaResponse,
 		});
 	}

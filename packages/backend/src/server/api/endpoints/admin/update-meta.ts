@@ -109,6 +109,12 @@ export const paramDef = {
 		enableTurnstile: { type: 'boolean' },
 		turnstileSiteKey: { type: 'string', nullable: true },
 		turnstileSecretKey: { type: 'string', nullable: true },
+		enableAliyunCaptcha: { type: 'boolean' },
+		aliyunCaptchaPrefix: { type: 'string', nullable: true },
+		aliyunCaptchaSceneId: { type: 'string', nullable: true },
+		aliyunCaptchaRegion: { type: 'string', nullable: true },
+		aliyunCaptchaAccessKeyId: { type: 'string', nullable: true },
+		aliyunCaptchaAccessKeySecret: { type: 'string', nullable: true },
 		enableTestcaptcha: { type: 'boolean' },
 		googleAnalyticsMeasurementId: { type: 'string', nullable: true },
 		sensitiveMediaDetection: { type: 'string', enum: ['none', 'all', 'local', 'remote'] },
@@ -182,7 +188,18 @@ export const paramDef = {
 				minRequiredAppVersion: { type: 'string', nullable: true },
 				androidDownloadUrl: { type: 'string', nullable: true },
 				iosDownloadUrl: { type: 'string', nullable: true },
-				releaseNotesUrl: { type: 'string', nullable: true },
+				changelog: {
+					type: 'array',
+					nullable: true,
+					items: {
+						type: 'object',
+						properties: {
+							version: { type: 'string' },
+							content: { type: 'string' },
+						},
+						required: ['version', 'content'],
+					},
+				},
 				announcement: { type: 'string', nullable: true },
 			},
 		},
@@ -480,6 +497,30 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				set.turnstileSecretKey = ps.turnstileSecretKey;
 			}
 
+			if (ps.enableAliyunCaptcha !== undefined) {
+				set.enableAliyunCaptcha = ps.enableAliyunCaptcha;
+			}
+
+			if (ps.aliyunCaptchaPrefix !== undefined) {
+				set.aliyunCaptchaPrefix = ps.aliyunCaptchaPrefix;
+			}
+
+			if (ps.aliyunCaptchaSceneId !== undefined) {
+				set.aliyunCaptchaSceneId = ps.aliyunCaptchaSceneId;
+			}
+
+			if (ps.aliyunCaptchaRegion !== undefined) {
+				set.aliyunCaptchaRegion = ps.aliyunCaptchaRegion;
+			}
+
+			if (ps.aliyunCaptchaAccessKeyId !== undefined) {
+				set.aliyunCaptchaAccessKeyId = ps.aliyunCaptchaAccessKeyId;
+			}
+
+			if (ps.aliyunCaptchaAccessKeySecret !== undefined) {
+				set.aliyunCaptchaAccessKeySecret = ps.aliyunCaptchaAccessKeySecret;
+			}
+
 			if (ps.enableTestcaptcha !== undefined) {
 				set.enableTestcaptcha = ps.enableTestcaptcha;
 			}
@@ -709,11 +750,23 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			if (ps.nativeClientAppInfo !== undefined) {
 				const cur: MiNativeClientAppInfo = { ...(serverSettings.nativeClientAppInfo ?? {}) };
 				const p = ps.nativeClientAppInfo;
-				const keys = ['latestAndroidVersion', 'latestIosVersion', 'minRequiredAppVersion', 'androidDownloadUrl', 'iosDownloadUrl', 'releaseNotesUrl', 'announcement'] as const;
+				const keys = ['latestAndroidVersion', 'latestIosVersion', 'minRequiredAppVersion', 'androidDownloadUrl', 'iosDownloadUrl', 'announcement'] as const;
 				for (const key of keys) {
 					if (p[key] !== undefined) {
 						const v = p[key];
 						cur[key] = v === '' ? null : v;
+					}
+				}
+				if (p.changelog !== undefined) {
+					if (!Array.isArray(p.changelog)) {
+						cur.changelog = [];
+					} else {
+						cur.changelog = p.changelog
+							.map((entry) => ({
+								version: (entry?.version ?? '').trim(),
+								content: (entry?.content ?? '').trim(),
+							}))
+							.filter((entry) => entry.version.length > 0 || entry.content.length > 0);
 					}
 				}
 				set.nativeClientAppInfo = cur;

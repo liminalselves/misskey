@@ -4,6 +4,7 @@
  */
 
 import { Injectable } from '@nestjs/common';
+import RPCClient from '@alicloud/pop-core';
 import { HttpRequestService } from '@/core/HttpRequestService.js';
 import { bindThis } from '@/decorators.js';
 import { MetaService } from '@/core/MetaService.js';
@@ -11,7 +12,7 @@ import { MiMeta } from '@/models/Meta.js';
 import Logger from '@/logger.js';
 import { LoggerService } from './LoggerService.js';
 
-export const supportedCaptchaProviders = ['none', 'hcaptcha', 'mcaptcha', 'recaptcha', 'turnstile', 'testcaptcha'] as const;
+export const supportedCaptchaProviders = ['none', 'hcaptcha', 'mcaptcha', 'recaptcha', 'turnstile', 'aliyuncaptcha', 'testcaptcha'] as const;
 export type CaptchaProvider = typeof supportedCaptchaProviders[number];
 
 export const captchaErrorCodes = {
@@ -42,6 +43,13 @@ export type CaptchaSetting = {
 	turnstile: {
 		siteKey: string | null;
 		secretKey: string | null;
+	}
+	aliyuncaptcha: {
+		prefix: string | null;
+		sceneId: string | null;
+		region: string | null;
+		accessKeyId: string | null;
+		accessKeySecret: string | null;
 	}
 };
 
@@ -185,6 +193,34 @@ export class CaptchaService {
 	}
 
 	@bindThis
+	public async verifyAliyunCaptcha(accessKeyId: string, accessKeySecret: string, region: string, sceneId: string, response: string | null | undefined): Promise<void> {
+		if (response == null) {
+			throw new CaptchaError(captchaErrorCodes.noResponseProvided, 'aliyuncaptcha-failed: no response provided');
+		}
+
+		const endpoint = region === 'sgp'
+			? 'https://captcha.ap-southeast-1.aliyuncs.com'
+			: 'https://captcha.cn-shanghai.aliyuncs.com';
+		const client = new RPCClient({
+			accessKeyId,
+			accessKeySecret,
+			endpoint,
+			apiVersion: '2023-03-05',
+		});
+
+		const result = await client.request('VerifyIntelligentCaptcha', {
+			CaptchaVerifyParam: response,
+			SceneId: sceneId,
+		}, { method: 'POST' }).catch(err => {
+			throw new CaptchaError(captchaErrorCodes.requestFailed, `aliyuncaptcha-request-failed: ${err}`);
+		}) as { Result?: { VerifyResult?: boolean } };
+
+		if (result?.Result?.VerifyResult !== true) {
+			throw new CaptchaError(captchaErrorCodes.verificationFailed, 'aliyuncaptcha-failed');
+		}
+	}
+
+	@bindThis
 	public async verifyTestcaptcha(response: string | null | undefined): Promise<void> {
 		if (response == null) {
 			throw new CaptchaError(captchaErrorCodes.noResponseProvided, 'testcaptcha-failed: no response provided');
@@ -219,6 +255,10 @@ export class CaptchaService {
 				provider = 'turnstile';
 				break;
 			}
+			case meta.enableAliyunCaptcha: {
+				provider = 'aliyuncaptcha';
+				break;
+			}
 			case meta.enableTestcaptcha: {
 				provider = 'testcaptcha';
 				break;
@@ -248,6 +288,13 @@ export class CaptchaService {
 				siteKey: meta.turnstileSiteKey,
 				secretKey: meta.turnstileSecretKey,
 			},
+			aliyuncaptcha: {
+				prefix: meta.aliyunCaptchaPrefix,
+				sceneId: meta.aliyunCaptchaSceneId,
+				region: meta.aliyunCaptchaRegion ?? 'cn',
+				accessKeyId: meta.aliyunCaptchaAccessKeyId,
+				accessKeySecret: meta.aliyunCaptchaAccessKeySecret,
+			},
 		};
 	}
 
@@ -274,6 +321,9 @@ export class CaptchaService {
 			sitekey?: string | null;
 			secret?: string | null;
 			instanceUrl?: string | null;
+			region?: string | null;
+			sceneId?: string | null;
+			accessKeyId?: string | null;
 			captchaResult?: string | null;
 		},
 	): Promise<CaptchaSaveResult> {
@@ -320,6 +370,20 @@ export class CaptchaService {
 				await this.verifyTurnstile(params.secret, params.captchaResult);
 				await this.updateMeta(provider, params);
 			},
+			aliyuncaptcha: async () => {
+				if (!params?.accessKeyId || !params?.secret || !params?.sitekey || !params?.sceneId || !params?.captchaResult) {
+					throw new CaptchaError(captchaErrorCodes.invalidParameters, 'aliyuncaptcha-failed: accessKeyId, secret, prefix, sceneId and captureResult are required');
+				}
+
+				await this.verifyAliyunCaptcha(
+					params.accessKeyId,
+					params.secret,
+					params.region ?? 'cn',
+					params.sceneId,
+					params.captchaResult,
+				);
+				await this.updateMeta(provider, params);
+			},
 			testcaptcha: async () => {
 				if (!params?.captchaResult) {
 					throw new CaptchaError(captchaErrorCodes.invalidParameters, 'turnstile-failed: captureResult are required');
@@ -351,6 +415,9 @@ export class CaptchaService {
 			sitekey?: string | null;
 			secret?: string | null;
 			instanceUrl?: string | null;
+			region?: string | null;
+			sceneId?: string | null;
+			accessKeyId?: string | null;
 		},
 	) {
 		const metaPartial: Partial<
@@ -360,6 +427,7 @@ export class CaptchaService {
 				('enableMcaptcha' | 'mcaptchaSitekey' | 'mcaptchaSecretKey' | 'mcaptchaInstanceUrl') |
 				('enableRecaptcha' | 'recaptchaSiteKey' | 'recaptchaSecretKey') |
 				('enableTurnstile' | 'turnstileSiteKey' | 'turnstileSecretKey') |
+				('enableAliyunCaptcha' | 'aliyunCaptchaPrefix' | 'aliyunCaptchaSceneId' | 'aliyunCaptchaRegion' | 'aliyunCaptchaAccessKeyId' | 'aliyunCaptchaAccessKeySecret') |
 				('enableTestcaptcha')
 			>
 		> = {
@@ -367,6 +435,7 @@ export class CaptchaService {
 			enableMcaptcha: provider === 'mcaptcha',
 			enableRecaptcha: provider === 'recaptcha',
 			enableTurnstile: provider === 'turnstile',
+			enableAliyunCaptcha: provider === 'aliyuncaptcha',
 			enableTestcaptcha: provider === 'testcaptcha',
 		};
 
@@ -395,6 +464,14 @@ export class CaptchaService {
 			case 'turnstile': {
 				updateIfNotUndefined('turnstileSiteKey', params?.sitekey);
 				updateIfNotUndefined('turnstileSecretKey', params?.secret);
+				break;
+			}
+			case 'aliyuncaptcha': {
+				updateIfNotUndefined('aliyunCaptchaPrefix', params?.sitekey);
+				updateIfNotUndefined('aliyunCaptchaSceneId', params?.sceneId);
+				updateIfNotUndefined('aliyunCaptchaRegion', params?.region);
+				updateIfNotUndefined('aliyunCaptchaAccessKeyId', params?.accessKeyId);
+				updateIfNotUndefined('aliyunCaptchaAccessKeySecret', params?.secret);
 				break;
 			}
 		}

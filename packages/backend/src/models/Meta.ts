@@ -15,7 +15,10 @@ export type MiNativeClientAppInfo = {
 	minRequiredAppVersion?: string | null;
 	androidDownloadUrl?: string | null;
 	iosDownloadUrl?: string | null;
-	releaseNotesUrl?: string | null;
+	changelog?: Array<{
+		version: string;
+		content: string;
+	}> | null;
 	announcement?: string | null;
 };
 
@@ -274,6 +277,41 @@ export class MiMeta {
 		nullable: true,
 	})
 	public turnstileSecretKey: string | null;
+
+	@Column('boolean', {
+		default: false,
+	})
+	public enableAliyunCaptcha: boolean;
+
+	@Column('varchar', {
+		length: 128,
+		nullable: true,
+	})
+	public aliyunCaptchaPrefix: string | null;
+
+	@Column('varchar', {
+		length: 128,
+		nullable: true,
+	})
+	public aliyunCaptchaSceneId: string | null;
+
+	@Column('varchar', {
+		length: 16,
+		nullable: true,
+	})
+	public aliyunCaptchaRegion: string | null;
+
+	@Column('varchar', {
+		length: 1024,
+		nullable: true,
+	})
+	public aliyunCaptchaAccessKeyId: string | null;
+
+	@Column('varchar', {
+		length: 1024,
+		nullable: true,
+	})
+	public aliyunCaptchaAccessKeySecret: string | null;
 
 	@Column('boolean', {
 		default: false,

@@ -28,6 +28,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<MkCaptcha v-if="instance.enableMcaptcha" ref="mcaptcha" v-model="mCaptchaResponse" provider="mcaptcha" :sitekey="instance.mcaptchaSiteKey" :instanceUrl="instance.mcaptchaInstanceUrl"/>
 				<MkCaptcha v-if="instance.enableRecaptcha" ref="recaptcha" v-model="reCaptchaResponse" provider="recaptcha" :sitekey="instance.recaptchaSiteKey"/>
 				<MkCaptcha v-if="instance.enableTurnstile" ref="turnstile" v-model="turnstileResponse" provider="turnstile" :sitekey="instance.turnstileSiteKey"/>
+				<MkCaptcha v-if="instance.enableAliyunCaptcha" ref="aliyuncaptcha" v-model="aliyunCaptchaResponse" provider="aliyuncaptcha" :sitekey="instance.aliyunCaptchaPrefix" :sceneId="instance.aliyunCaptchaSceneId" :region="instance.aliyunCaptchaRegion || 'cn'"/>
 				<MkCaptcha v-if="instance.enableTestcaptcha" ref="testcaptcha" v-model="testcaptchaResponse" provider="testcaptcha" :sitekey="null"/>
 			</div>
 
@@ -45,6 +46,7 @@ export type PwResponse = {
 		mCaptchaResponse: string | null;
 		reCaptchaResponse: string | null;
 		turnstileResponse: string | null;
+		aliyunCaptchaResponse: string | null;
 		testcaptchaResponse: string | null;
 	};
 };
@@ -77,12 +79,14 @@ const hCaptcha = useTemplateRef('hcaptcha');
 const mCaptcha = useTemplateRef('mcaptcha');
 const reCaptcha = useTemplateRef('recaptcha');
 const turnstile = useTemplateRef('turnstile');
+const aliyuncaptcha = useTemplateRef('aliyuncaptcha');
 const testcaptcha = useTemplateRef('testcaptcha');
 
 const hCaptchaResponse = ref<string | null>(null);
 const mCaptchaResponse = ref<string | null>(null);
 const reCaptchaResponse = ref<string | null>(null);
 const turnstileResponse = ref<string | null>(null);
+const aliyunCaptchaResponse = ref<string | null>(null);
 const testcaptchaResponse = ref<string | null>(null);
 
 const captchaFailed = computed((): boolean => {
@@ -91,6 +95,7 @@ const captchaFailed = computed((): boolean => {
 		(instance.enableMcaptcha && !mCaptchaResponse.value) ||
 		(instance.enableRecaptcha && !reCaptchaResponse.value) ||
 		(instance.enableTurnstile && !turnstileResponse.value) ||
+		(instance.enableAliyunCaptcha && !aliyunCaptchaResponse.value) ||
 		(instance.enableTestcaptcha && !testcaptchaResponse.value)
 	);
 });
@@ -109,6 +114,7 @@ function onSubmit() {
 			mCaptchaResponse: mCaptchaResponse.value,
 			reCaptchaResponse: reCaptchaResponse.value,
 			turnstileResponse: turnstileResponse.value,
+			aliyunCaptchaResponse: aliyunCaptchaResponse.value,
 			testcaptchaResponse: testcaptchaResponse.value,
 		},
 	});
@@ -119,6 +125,7 @@ function resetCaptcha() {
 	mCaptcha.value?.reset();
 	reCaptcha.value?.reset();
 	turnstile.value?.reset();
+	aliyuncaptcha.value?.reset();
 	testcaptcha.value?.reset();
 }
 

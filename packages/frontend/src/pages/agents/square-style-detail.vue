@@ -9,7 +9,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<MkLoading v-if="loading"/>
 		<MkInfo v-else-if="styleRow == null">{{ i18n.ts.somethingHappened }}</MkInfo>
 		<div v-else class="_gaps_m">
-			<div :class="$style.hero">
+			<div v-panel :class="$style.hero">
 				<div :class="$style.styleIconWrap">
 					<i class="ti ti-message-cog"></i>
 				</div>
@@ -54,18 +54,14 @@ SPDX-License-Identifier: AGPL-3.0-only
 							</div>
 						</div>
 						<div :class="$style.plazaMetric">
-							<span :class="$style.plazaMetricLabel"><i class="ti ti-messages"/> {{ i18n.ts._agents.plazaMetricConversations }}</span>
-							<span :class="$style.plazaMetricValue">{{ styleRow.conversationCount }}</span>
-						</div>
-						<div :class="$style.plazaMetric">
-							<span :class="$style.plazaMetricLabel"><i class="ti ti-robot"/> {{ i18n.ts._agents.plazaMetricAiReplies }}</span>
+							<span :class="$style.plazaMetricLabel"><i class="ti ti-message-cog"/> {{ i18n.ts._agents.plazaMetricAiReplies }}</span>
 							<span :class="$style.plazaMetricValue">{{ styleRow.aiReplyCount }}</span>
 						</div>
 					</div>
 				</div>
 			</div>
 
-			<MkFolder :defaultOpen="true">
+			<MkFolder :defaultOpen="true" :class="$style.folderCard">
 				<template #icon><i class="ti ti-ruler"></i></template>
 				<template #label>{{ i18n.ts._agents.plazaPromptStatsTitle }}</template>
 				<dl :class="$style.statGrid">
@@ -74,14 +70,16 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</dl>
 			</MkFolder>
 
-			<XSquarePlazaReviews
-				:style-id="styleRow.id"
-				:rating="styleRow.rating"
-				:show-rating-summary="false"
-				@updated="load"
-			/>
+			<div v-panel :class="$style.reviewsCard">
+				<XSquarePlazaReviews
+					:style-id="styleRow.id"
+					:rating="styleRow.rating"
+					:show-rating-summary="false"
+					@updated="load"
+				/>
+			</div>
 
-			<div :class="$style.footerActions">
+			<div v-panel :class="$style.footerActions">
 				<MkButton rounded @click="goPlaza"><i class="ti ti-layout-grid"></i> {{ i18n.ts._agents.navSquare }}</MkButton>
 				<MkButton v-if="rowState === 'other'" rounded @click="subscribe"><i class="ti ti-plus"></i> {{ i18n.ts._agents.addStyleToMine }}</MkButton>
 				<MkButton v-if="rowState === 'subscribed'" rounded @click="unsubscribe"><i class="ti ti-x"></i> {{ i18n.ts._agents.removeStyleFromMine }}</MkButton>
@@ -234,6 +232,11 @@ watch(() => props.styleId, () => { void load(); });
 	gap: 16px;
 	align-items: flex-start;
 	flex-wrap: wrap;
+	padding: 16px;
+	border-radius: var(--MI-radius);
+	background: linear-gradient(145deg, color-mix(in srgb, var(--MI_THEME-accent) 10%, var(--MI_THEME-panel)), var(--MI_THEME-panel));
+	border: solid 1px var(--MI_THEME-divider);
+	box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
 }
 
 .styleIconWrap {
@@ -270,6 +273,11 @@ watch(() => props.styleId, () => { void load(); });
 	font-size: 0.95em;
 	line-height: 1.55;
 	opacity: 0.9;
+	white-space: pre-line;
+	padding: 10px 12px;
+	border-radius: 10px;
+	background: color-mix(in srgb, var(--MI_THEME-bg) 35%, transparent);
+	border: solid 1px color-mix(in srgb, var(--MI_THEME-divider) 80%, transparent);
 }
 
 .badgeRow {
@@ -325,8 +333,8 @@ watch(() => props.styleId, () => { void load(); });
 	margin-top: 6px;
 	padding: 12px 14px;
 	border-radius: var(--MI-radius);
-	border: solid 1px var(--MI_THEME-divider);
-	background: color-mix(in srgb, var(--MI_THEME-accent) 6%, var(--MI_THEME-panel));
+	border: solid 1px color-mix(in srgb, var(--MI_THEME-accent) 16%, var(--MI_THEME-divider));
+	background: linear-gradient(150deg, color-mix(in srgb, var(--MI_THEME-accent) 12%, var(--MI_THEME-panel)), var(--MI_THEME-panel));
 }
 
 .plazaMetric {
@@ -334,6 +342,9 @@ watch(() => props.styleId, () => { void load(); });
 	flex-direction: column;
 	gap: 6px;
 	min-width: 0;
+	padding: 8px 10px;
+	border-radius: 10px;
+	background: color-mix(in srgb, var(--MI_THEME-bg) 24%, transparent);
 }
 
 .plazaMetricLabel {
@@ -395,7 +406,18 @@ watch(() => props.styleId, () => { void load(); });
 	display: flex;
 	flex-wrap: wrap;
 	gap: 8px;
-	padding-top: 8px;
-	border-top: solid 1px var(--MI_THEME-divider);
+	padding: 12px;
+	border-radius: var(--MI-radius);
+	border: solid 1px var(--MI_THEME-divider);
+	background: color-mix(in srgb, var(--MI_THEME-panel) 88%, transparent);
+}
+
+.folderCard {
+	border-radius: var(--MI-radius);
+}
+
+.reviewsCard {
+	border-radius: var(--MI-radius);
+	padding: 4px;
 }
 </style>

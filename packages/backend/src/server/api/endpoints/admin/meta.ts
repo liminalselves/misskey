@@ -70,6 +70,22 @@ export const meta = {
 				type: 'string',
 				optional: false, nullable: true,
 			},
+			enableAliyunCaptcha: {
+				type: 'boolean',
+				optional: false, nullable: false,
+			},
+			aliyunCaptchaPrefix: {
+				type: 'string',
+				optional: false, nullable: true,
+			},
+			aliyunCaptchaSceneId: {
+				type: 'string',
+				optional: false, nullable: true,
+			},
+			aliyunCaptchaRegion: {
+				type: 'string',
+				optional: false, nullable: true,
+			},
 			enableTestcaptcha: {
 				type: 'boolean',
 				optional: false, nullable: false,
@@ -220,6 +236,14 @@ export const meta = {
 				type: 'string',
 				optional: false, nullable: true,
 			},
+			aliyunCaptchaAccessKeyId: {
+				type: 'string',
+				optional: false, nullable: true,
+			},
+			aliyunCaptchaAccessKeySecret: {
+				type: 'string',
+				optional: false, nullable: true,
+			},
 			sensitiveMediaDetection: {
 				type: 'string',
 				optional: false, nullable: false,
@@ -307,9 +331,23 @@ export const meta = {
 						type: 'string',
 						optional: false, nullable: true,
 					},
-					releaseNotesUrl: {
-						type: 'string',
+					changelog: {
+						type: 'array',
 						optional: false, nullable: true,
+						items: {
+							type: 'object',
+							optional: false, nullable: false,
+							properties: {
+								version: {
+									type: 'string',
+									optional: false, nullable: false,
+								},
+								content: {
+									type: 'string',
+									optional: false, nullable: false,
+								},
+							},
+						},
 					},
 					announcement: {
 						type: 'string',
@@ -791,6 +829,10 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				recaptchaSiteKey: instance.recaptchaSiteKey,
 				enableTurnstile: instance.enableTurnstile,
 				turnstileSiteKey: instance.turnstileSiteKey,
+				enableAliyunCaptcha: instance.enableAliyunCaptcha,
+				aliyunCaptchaPrefix: instance.aliyunCaptchaPrefix,
+				aliyunCaptchaSceneId: instance.aliyunCaptchaSceneId,
+				aliyunCaptchaRegion: instance.aliyunCaptchaRegion,
 				enableTestcaptcha: instance.enableTestcaptcha,
 				googleAnalyticsMeasurementId: instance.googleAnalyticsMeasurementId,
 				swPublickey: instance.swPublicKey,
@@ -826,6 +868,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				mcaptchaSecretKey: instance.mcaptchaSecretKey,
 				recaptchaSecretKey: instance.recaptchaSecretKey,
 				turnstileSecretKey: instance.turnstileSecretKey,
+				aliyunCaptchaAccessKeyId: instance.aliyunCaptchaAccessKeyId,
+				aliyunCaptchaAccessKeySecret: instance.aliyunCaptchaAccessKeySecret,
 				sensitiveMediaDetection: instance.sensitiveMediaDetection,
 				sensitiveMediaDetectionSensitivity: instance.sensitiveMediaDetectionSensitivity,
 				setSensitiveFlagAutomatically: instance.setSensitiveFlagAutomatically,
@@ -849,7 +893,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 						minRequiredAppVersion: n.minRequiredAppVersion ?? null,
 						androidDownloadUrl: n.androidDownloadUrl ?? null,
 						iosDownloadUrl: n.iosDownloadUrl ?? null,
-						releaseNotesUrl: n.releaseNotesUrl ?? null,
+						changelog: Array.isArray(n.changelog) ? n.changelog : [],
 						announcement: n.announcement ?? null,
 					};
 				})(),

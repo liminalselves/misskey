@@ -118,6 +118,22 @@ export const packedMetaLiteSchema = {
 			type: 'string',
 			optional: false, nullable: true,
 		},
+		enableAliyunCaptcha: {
+			type: 'boolean',
+			optional: false, nullable: false,
+		},
+		aliyunCaptchaPrefix: {
+			type: 'string',
+			optional: false, nullable: true,
+		},
+		aliyunCaptchaSceneId: {
+			type: 'string',
+			optional: false, nullable: true,
+		},
+		aliyunCaptchaRegion: {
+			type: 'string',
+			optional: false, nullable: true,
+		},
 		enableTestcaptcha: {
 			type: 'boolean',
 			optional: false, nullable: false,
@@ -333,9 +349,23 @@ export const packedMetaLiteSchema = {
 					type: 'string',
 					optional: false, nullable: true,
 				},
-				releaseNotesUrl: {
-					type: 'string',
+				changelog: {
+					type: 'array',
 					optional: false, nullable: true,
+					items: {
+						type: 'object',
+						optional: false, nullable: false,
+						properties: {
+							version: {
+								type: 'string',
+								optional: false, nullable: false,
+							},
+							content: {
+								type: 'string',
+								optional: false, nullable: false,
+							},
+						},
+					},
 				},
 				announcement: {
 					type: 'string',
@@ -434,6 +464,10 @@ export const packedMetaDetailedOnlySchema = {
 					optional: false, nullable: false,
 				},
 				recaptcha: {
+					type: 'boolean',
+					optional: false, nullable: false,
+				},
+				aliyuncaptcha: {
 					type: 'boolean',
 					optional: false, nullable: false,
 				},

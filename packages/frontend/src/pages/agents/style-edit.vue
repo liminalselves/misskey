@@ -18,10 +18,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<MkInput v-model="form.state.name">
 						<template #label>{{ i18n.ts._agents.fieldStyleName }}</template>
 					</MkInput>
-					<MkInput v-model="form.state.summary">
+					<MkTextarea v-model="form.state.summary">
 						<template #label>{{ i18n.ts._agents.fieldStyleSummary }}</template>
 						<template #caption>{{ i18n.ts._agents.fieldStyleSummaryCaption }}</template>
-					</MkInput>
+					</MkTextarea>
 					<MkTextarea v-model="form.state.body" tall>
 						<template #label>{{ i18n.ts._agents.fieldStyleBody }}</template>
 					</MkTextarea>

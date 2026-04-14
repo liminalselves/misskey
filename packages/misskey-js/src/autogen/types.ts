@@ -5981,6 +5981,10 @@ export type components = {
             recaptchaSiteKey: string | null;
             enableTurnstile: boolean;
             turnstileSiteKey: string | null;
+            enableAliyunCaptcha: boolean;
+            aliyunCaptchaPrefix: string | null;
+            aliyunCaptchaSceneId: string | null;
+            aliyunCaptchaRegion: string | null;
             enableTestcaptcha: boolean;
             googleAnalyticsMeasurementId: string | null;
             swPublickey: string | null;
@@ -6052,7 +6056,10 @@ export type components = {
                 minRequiredAppVersion: string | null;
                 androidDownloadUrl: string | null;
                 iosDownloadUrl: string | null;
-                releaseNotesUrl: string | null;
+                changelog: {
+                    version: string;
+                    content: string;
+                }[] | null;
                 announcement: string | null;
             };
             agentFeatureEnabled: boolean;
@@ -8551,7 +8558,7 @@ export interface operations {
                 content: {
                     'application/json': {
                         /** @enum {string} */
-                        provider: 'none' | 'hcaptcha' | 'mcaptcha' | 'recaptcha' | 'turnstile' | 'testcaptcha';
+                        provider: 'none' | 'hcaptcha' | 'mcaptcha' | 'recaptcha' | 'turnstile' | 'aliyuncaptcha' | 'testcaptcha';
                         hcaptcha: {
                             siteKey: string | null;
                             secretKey: string | null;
@@ -8568,6 +8575,13 @@ export interface operations {
                         turnstile: {
                             siteKey: string | null;
                             secretKey: string | null;
+                        };
+                        aliyuncaptcha: {
+                            prefix: string | null;
+                            sceneId: string | null;
+                            region: string | null;
+                            accessKeyId: string | null;
+                            accessKeySecret: string | null;
                         };
                     };
                 };
@@ -8624,11 +8638,14 @@ export interface operations {
             content: {
                 'application/json': {
                     /** @enum {string} */
-                    provider: 'none' | 'hcaptcha' | 'mcaptcha' | 'recaptcha' | 'turnstile' | 'testcaptcha';
+                    provider: 'none' | 'hcaptcha' | 'mcaptcha' | 'recaptcha' | 'turnstile' | 'aliyuncaptcha' | 'testcaptcha';
                     captchaResult?: string | null;
                     sitekey?: string | null;
                     secret?: string | null;
                     instanceUrl?: string | null;
+                    region?: string | null;
+                    sceneId?: string | null;
+                    accessKeyId?: string | null;
                 };
             };
         };
@@ -10679,6 +10696,10 @@ export interface operations {
                         recaptchaSiteKey: string | null;
                         enableTurnstile: boolean;
                         turnstileSiteKey: string | null;
+                        enableAliyunCaptcha: boolean;
+                        aliyunCaptchaPrefix: string | null;
+                        aliyunCaptchaSceneId: string | null;
+                        aliyunCaptchaRegion: string | null;
                         enableTestcaptcha: boolean;
                         googleAnalyticsMeasurementId: string | null;
                         swPublickey: string | null;
@@ -10732,7 +10753,10 @@ export interface operations {
                             minRequiredAppVersion: string | null;
                             androidDownloadUrl: string | null;
                             iosDownloadUrl: string | null;
-                            releaseNotesUrl: string | null;
+                            changelog: {
+                                version: string;
+                                content: string;
+                            }[] | null;
                             announcement: string | null;
                         };
                         agentFeatureEnabled: boolean;
@@ -14142,6 +14166,12 @@ export interface operations {
                     enableTurnstile?: boolean;
                     turnstileSiteKey?: string | null;
                     turnstileSecretKey?: string | null;
+                    enableAliyunCaptcha?: boolean;
+                    aliyunCaptchaPrefix?: string | null;
+                    aliyunCaptchaSceneId?: string | null;
+                    aliyunCaptchaRegion?: string | null;
+                    aliyunCaptchaAccessKeyId?: string | null;
+                    aliyunCaptchaAccessKeySecret?: string | null;
                     enableTestcaptcha?: boolean;
                     googleAnalyticsMeasurementId?: string | null;
                     /** @enum {string} */
@@ -14203,7 +14233,10 @@ export interface operations {
                         minRequiredAppVersion?: string | null;
                         androidDownloadUrl?: string | null;
                         iosDownloadUrl?: string | null;
-                        releaseNotesUrl?: string | null;
+                        changelog?: {
+                            version: string;
+                            content: string;
+                        }[] | null;
                         announcement?: string | null;
                     };
                     tosUrl?: string | null;

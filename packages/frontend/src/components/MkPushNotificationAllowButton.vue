@@ -56,6 +56,11 @@ import { getAccounts } from '@/accounts.js';
 const LIMINAL_NATIVE_PUSH_EVENT = 'liminal-native-push';
 const LIMINAL_APP_NATIVE_PUSH_ENDPOINT = 'liminal:app-native-push';
 
+type LiminalNativePushDetail = {
+	registered?: boolean;
+	errorCode?: string;
+};
+
 defineProps<{
 	primary?: boolean;
 	gradate?: boolean;
@@ -77,6 +82,8 @@ const supported = ref(false);
 // If this browser has already subscribed to push notification
 const pushSubscription = ref<PushSubscription | null>(null);
 const pushRegistrationInServer = ref<{ state?: string; key?: string; userId: string; endpoint: string; sendReadMessage: boolean; } | undefined>();
+/** App 壳内：用户刚点了「启用」，用于仅在 enable 失败时弹出说明（query 同步不带 errorCode） */
+const shellPushEnablePending = ref(false);
 
 const subscribeLabel = computed(() =>
 	isEmbeddedAppShell() ? i18n.ts.subscribePushNotificationApp : i18n.ts.subscribePushNotificationBrowser,
@@ -94,16 +101,49 @@ function postAppNativePush(action: 'enable' | 'disable' | 'query') {
 	}
 }
 
+function alertShellPushError(code: string): void {
+	switch (code) {
+		case 'android_only':
+			void alert({
+				type: 'info',
+				title: i18n.ts.nativePushAndroidOnlyTitle,
+				text: i18n.ts.nativePushAndroidOnlyDescription,
+			});
+			break;
+		case 'permission_denied':
+			void alert({
+				type: 'error',
+				title: i18n.ts.nativePushEnableFailedTitle,
+				text: i18n.ts.nativePushEnableFailedPermission,
+			});
+			break;
+		case 'push_setup_failed':
+			void alert({
+				type: 'error',
+				title: i18n.ts.nativePushEnableFailedTitle,
+				text: i18n.ts.nativePushEnableFailedPushSetup,
+			});
+			break;
+		default:
+			break;
+	}
+}
+
 function onLiminalNativePush(ev: Event) {
-	const d = (ev as CustomEvent<{ registered?: boolean }>).detail;
+	const d = (ev as CustomEvent<LiminalNativePushDetail>).detail;
 	if (d?.registered === true) {
 		pushRegistrationInServer.value = {
 			userId: $i?.id ?? '',
 			endpoint: LIMINAL_APP_NATIVE_PUSH_ENDPOINT,
 			sendReadMessage: false,
 		};
+		shellPushEnablePending.value = false;
 	} else {
 		pushRegistrationInServer.value = undefined;
+		if (shellPushEnablePending.value && d?.errorCode) {
+			shellPushEnablePending.value = false;
+			alertShellPushError(d.errorCode);
+		}
 	}
 }
 
@@ -159,6 +199,7 @@ async function syncPushRegistrationState() {
 
 async function subscribe() {
 	if (isEmbeddedAppShell()) {
+		shellPushEnablePending.value = true;
 		postAppNativePush('enable');
 		return;
 	}
@@ -213,6 +254,7 @@ async function subscribe() {
 
 async function unsubscribe() {
 	if (isEmbeddedAppShell()) {
+		shellPushEnablePending.value = false;
 		postAppNativePush('disable');
 		return;
 	}

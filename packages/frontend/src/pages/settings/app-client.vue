@@ -51,6 +51,15 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<template #label>{{ i18n.ts.appClientUpdatesSection }}</template>
 					<div class="_gaps_m">
 						<FormInfo>{{ i18n.ts.appClientCheckForUpdatesDescription }}</FormInfo>
+						<template v-if="allChangelogEntries.length > 0">
+							<div class="_title">{{ i18n.ts.appClientChangelog }}</div>
+							<div class="_gaps_s">
+								<div v-for="(entry, idx) in allChangelogEntries" :key="`changelog-${entry.version}-${idx}`" class="_panel _gaps_s">
+									<div><b>{{ entry.version }}</b></div>
+									<div style="white-space: pre-wrap;">{{ entry.content }}</div>
+								</div>
+							</div>
+						</template>
 						<MkButton primary :disabled="checkingUpdate" @click="requestCheckUpdate">
 							<i class="ti ti-refresh"></i> {{ i18n.ts.appClientCheckForUpdates }}
 						</MkButton>
@@ -82,6 +91,11 @@ type LiminalAppInfo = {
 	buildNumber: string;
 	packageName: string;
 	platform: string;
+};
+
+type NativeClientChangelogItem = {
+	version: string;
+	content: string;
 };
 
 const appInfo = ref<LiminalAppInfo | null>(null);
@@ -122,6 +136,47 @@ function isNewerRemoteVersion(remote: string, local: string): boolean {
 	}
 }
 
+function parseChangelogItems(raw: unknown): NativeClientChangelogItem[] {
+	if (!Array.isArray(raw)) return [];
+	return raw
+		.map((entry) => ({
+			version: typeof entry?.version === 'string' ? entry.version.trim() : '',
+			content: typeof entry?.content === 'string' ? entry.content : '',
+		}))
+		.filter((entry) => entry.version.length > 0)
+		.sort((a, b) => {
+			try {
+				return compareVersions(b.version, a.version);
+			} catch {
+				return b.version.localeCompare(a.version);
+			}
+		});
+}
+
+function pickUpdatedEntries(all: NativeClientChangelogItem[], local: string, latest: string): NativeClientChangelogItem[] {
+	const localTrim = local.trim();
+	const latestTrim = latest.trim();
+	return all.filter((entry) => {
+		try {
+			if (localTrim && compareVersions(entry.version, localTrim) <= 0) return false;
+			if (latestTrim && compareVersions(entry.version, latestTrim) > 0) return false;
+			return true;
+		} catch {
+			return false;
+		}
+	});
+}
+
+type NativeClientAppInfoLike = {
+	changelog?: unknown;
+};
+
+function readNativeClientAppInfoLike(): NativeClientAppInfoLike {
+	return (instance.nativeClientAppInfo ?? {}) as unknown as NativeClientAppInfoLike;
+}
+
+const allChangelogEntries = computed(() => parseChangelogItems(readNativeClientAppInfoLike().changelog));
+
 async function requestCheckUpdate() {
 	if (checkingUpdate.value) return;
 	checkingUpdate.value = true;
@@ -136,7 +191,7 @@ async function requestCheckUpdate() {
 			? info?.iosDownloadUrl
 			: info?.androidDownloadUrl;
 		const downloadUrl = downloadUrlRaw?.trim() ?? '';
-		const releaseNotesUrl = info?.releaseNotesUrl?.trim() ?? '';
+		const changelog = parseChangelogItems((info as unknown as NativeClientAppInfoLike | undefined)?.changelog);
 
 		if (!latest) {
 			await os.alert({
@@ -159,8 +214,14 @@ async function requestCheckUpdate() {
 			i18n.ts.appClientUpdateAvailableLatestLabel + latest,
 			i18n.ts.appClientUpdateAvailableYoursLabel + (local || '—'),
 		];
-		if (releaseNotesUrl && URL.canParse(releaseNotesUrl)) {
-			lines.push('', i18n.ts.appClientReleaseNotesHint);
+		const updates = pickUpdatedEntries(changelog, local, latest);
+		if (updates.length > 0) {
+			lines.push('', String(i18n.ts.appClientUpdateContentTitle));
+			for (const item of updates) {
+				lines.push('');
+				lines.push(item.version);
+				lines.push(item.content);
+			}
 		}
 		const text = lines.join('\n');
 

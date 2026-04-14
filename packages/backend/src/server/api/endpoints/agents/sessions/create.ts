@@ -8,6 +8,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import type {
 	AgentCharactersRepository,
 	AgentDialogueStylesRepository,
+	AgentMessagesRepository,
 	AgentSessionsRepository,
 } from '@/models/_.js';
 import type { AgentSessionKind } from '@/models/AgentSession.js';
@@ -62,6 +63,9 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 
 		@Inject(DI.agentSessionsRepository)
 		private agentSessionsRepository: AgentSessionsRepository,
+
+		@Inject(DI.agentMessagesRepository)
+		private agentMessagesRepository: AgentMessagesRepository,
 
 		private agentService: AgentService,
 		private metaService: MetaService,
@@ -122,6 +126,26 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				agentModelId,
 				lastMessageAt: null,
 			});
+
+			const usePublishedFace = sessionKind === 'community';
+			const characterForGreeting = this.agentService.effectiveCharacterForLlm(character, usePublishedFace);
+			const greeting = characterForGreeting.greeting.trim();
+			if (greeting.length > 0) {
+				const greetAt = new Date();
+				await this.agentMessagesRepository.insertOne({
+					id: this.agentService.newId(),
+					createdAt: greetAt,
+					sessionId: row.id,
+					role: 'assistant',
+					content: greeting,
+					statsDialogueStyleId: styleId,
+					promptTokens: null,
+					completionTokens: null,
+				});
+				row.lastMessageAt = greetAt;
+				row.updatedAt = greetAt;
+				await this.agentSessionsRepository.save(row);
+			}
 
 			return {
 				id: row.id,

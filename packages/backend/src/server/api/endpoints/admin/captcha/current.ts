@@ -52,6 +52,16 @@ export const meta = {
 					secretKey: { type: 'string', nullable: true },
 				},
 			},
+			aliyuncaptcha: {
+				type: 'object',
+				properties: {
+					prefix: { type: 'string', nullable: true },
+					sceneId: { type: 'string', nullable: true },
+					region: { type: 'string', nullable: true },
+					accessKeyId: { type: 'string', nullable: true },
+					accessKeySecret: { type: 'string', nullable: true },
+				},
+			},
 		},
 	},
 } as const;

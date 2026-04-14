@@ -15,14 +15,23 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<div class="_gaps_m">
 				<MkInfo>{{ i18n.ts._agents.adminAgentChatAuditDescription }}</MkInfo>
 
-				<div v-if="items.length > 0 && recentMode" :class="$style.recentBanner">
-					<i class="ti ti-bolt"></i>
-					<span>{{ i18n.ts._agents.adminAgentChatAuditRecentHint }}</span>
-					<MkButton small rounded @click="loadRecentOnly"><i class="ti ti-refresh"></i> {{ i18n.ts._agents.adminAgentChatAuditRefreshRecent }}</MkButton>
-				</div>
+				<section :class="$style.toolbar">
+					<div :class="$style.stats">
+						<span :class="$style.stat">{{ i18n.ts._agents.adminAgentChatAuditLoadMore }}: <b>{{ items.length }}</b></span>
+						<span :class="$style.stat">{{ i18n.ts._agents.exampleTurnRoleUser }}: <b>{{ userCount }}</b></span>
+						<span :class="$style.stat">{{ i18n.ts._agents.exampleTurnRoleAssistant }}: <b>{{ assistantCount }}</b></span>
+						<span :class="$style.stat">{{ i18n.ts._agents.adminAgentChatAuditRoleSystem }}: <b>{{ systemCount }}</b></span>
+					</div>
+					<div class="_buttons">
+						<MkButton small rounded :disabled="loading" @click="loadRecentOnly"><i class="ti ti-refresh"></i> {{ i18n.ts._agents.adminAgentChatAuditQuickRecent }}</MkButton>
+					</div>
+				</section>
 
 				<section :class="$style.filterCard" class="_gaps">
-					<h2 :class="$style.filterTitle">{{ i18n.ts._agents.adminAgentChatAuditFilters }}</h2>
+					<div :class="$style.filterHead">
+						<h2 :class="$style.filterTitle">{{ i18n.ts._agents.adminAgentChatAuditFilters }}</h2>
+						<span :class="hasActiveFilters ? $style.filterState : $style.filterStateMuted">{{ hasActiveFilters ? i18n.ts._agents.adminAgentChatAuditSearch : i18n.ts._agents.adminAgentChatAuditQuickRecent }}</span>
+					</div>
 					<FormSplit :minWidth="260">
 						<MkInput v-model="filters.userId" type="text" autocomplete="off">
 							<template #label>{{ i18n.ts._agents.adminAgentChatAuditFilterUserId }}</template>
@@ -44,7 +53,6 @@ SPDX-License-Identifier: AGPL-3.0-only
 					</MkInput>
 					<div class="_buttons">
 						<MkButton primary rounded :disabled="loading" @click="runSearch(true)"><i class="ti ti-search"></i> {{ i18n.ts._agents.adminAgentChatAuditSearch }}</MkButton>
-						<MkButton rounded :disabled="loading" @click="loadRecentOnly"><i class="ti ti-clock"></i> {{ i18n.ts._agents.adminAgentChatAuditQuickRecent }}</MkButton>
 						<MkButton rounded :disabled="loading" @click="clearFilters"><i class="ti ti-filter-off"></i> {{ i18n.ts._agents.adminAgentChatAuditClearFilters }}</MkButton>
 					</div>
 				</section>
@@ -55,42 +63,42 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<div v-if="items.length > 0" :class="$style.list" class="_gaps">
 					<article v-for="row in items" :key="row.id" :class="$style.card">
 						<div :class="$style.cardHead">
-							<span :class="[$style.roleBadge, row.role === 'user' ? $style.roleUser : row.role === 'assistant' ? $style.roleAssistant : $style.roleSystem]">{{ roleLabel(row.role) }}</span>
-							<time :class="$style.time" :datetime="row.createdAt">{{ formatTime(row.createdAt) }}</time>
+							<div :class="$style.cardHeadLeft">
+								<span :class="[$style.roleBadge, row.role === 'user' ? $style.roleUser : row.role === 'assistant' ? $style.roleAssistant : $style.roleSystem]">{{ roleLabel(row.role) }}</span>
+								<span :class="$style.kindTag">{{ sessionKindLabel(row.sessionKind) }}</span>
+							</div>
+							<time :class="$style.time" :datetime="row.createdAt"><i class="ti ti-clock"></i> {{ formatTime(row.createdAt) }}</time>
 						</div>
 
-						<div :class="$style.indexRow">
-							<span :class="$style.indexBlock">
+						<div :class="$style.indexGrid">
+							<div :class="$style.indexCard">
 								<span :class="$style.indexKey">{{ i18n.ts._agents.adminAgentChatAuditIndexUser }}</span>
 								<template v-if="row.user">
 									<MkA :to="`/admin/user/${row.userId}`" class="_link"><MkUserName :user="row.user" class="_noSelect"/></MkA>
 									<MkAcct :user="row.user" :class="$style.acct"/>
 								</template>
 								<code v-else :class="$style.mono">{{ row.userId }}</code>
-								<button type="button" class="_button" :class="$style.miniCopy" :title="i18n.ts._agents.adminAgentChatAuditCopy" @click="copyId(row.userId)"><i class="ti ti-copy"></i></button>
-							</span>
-							<span :class="$style.indexBlock">
+								<button type="button" class="_button" :class="[$style.miniCopy, $style.indexCopy]" :title="i18n.ts._agents.adminAgentChatAuditCopy" @click="copyId(row.userId)"><i class="ti ti-copy"></i></button>
+							</div>
+							<div :class="$style.indexCard">
 								<span :class="$style.indexKey">{{ i18n.ts._agents.adminAgentChatAuditIndexSession }}</span>
 								<span :class="$style.indexVal">{{ row.sessionName }}</span>
 								<code :class="$style.mono">{{ row.sessionId }}</code>
-								<button type="button" class="_button" :class="$style.miniCopy" :title="i18n.ts._agents.adminAgentChatAuditCopy" @click="copyId(row.sessionId)"><i class="ti ti-copy"></i></button>
-							</span>
-						</div>
-						<div :class="$style.indexRow">
-							<span :class="$style.indexBlock">
+								<button type="button" class="_button" :class="[$style.miniCopy, $style.indexCopy]" :title="i18n.ts._agents.adminAgentChatAuditCopy" @click="copyId(row.sessionId)"><i class="ti ti-copy"></i></button>
+							</div>
+							<div :class="$style.indexCard">
 								<span :class="$style.indexKey">{{ i18n.ts._agents.adminAgentChatAuditIndexCharacter }}</span>
 								<span :class="$style.indexVal">{{ row.characterName || '—' }}</span>
 								<code :class="$style.mono">{{ row.characterId }}</code>
-								<button type="button" class="_button" :class="$style.miniCopy" :title="i18n.ts._agents.adminAgentChatAuditCopy" @click="copyId(row.characterId)"><i class="ti ti-copy"></i></button>
-							</span>
-							<span :class="$style.indexBlock">
+								<button type="button" class="_button" :class="[$style.miniCopy, $style.indexCopy]" :title="i18n.ts._agents.adminAgentChatAuditCopy" @click="copyId(row.characterId)"><i class="ti ti-copy"></i></button>
+							</div>
+							<div :class="$style.indexCard">
 								<span :class="$style.indexKey">{{ i18n.ts._agents.adminAgentChatAuditIndexStyle }}</span>
 								<code :class="$style.mono">{{ row.dialogueStyleId }}</code>
-								<button type="button" class="_button" :class="$style.miniCopy" :title="i18n.ts._agents.adminAgentChatAuditCopy" :disabled="row.dialogueStyleId == null" @click="row.dialogueStyleId != null && copyId(row.dialogueStyleId)"><i class="ti ti-copy"></i></button>
-							</span>
+								<button type="button" class="_button" :class="[$style.miniCopy, $style.indexCopy]" :title="i18n.ts._agents.adminAgentChatAuditCopy" :disabled="row.dialogueStyleId == null" @click="row.dialogueStyleId != null && copyId(row.dialogueStyleId)"><i class="ti ti-copy"></i></button>
+							</div>
 						</div>
-						<div :class="$style.kindRow">
-							<span :class="$style.kindTag">{{ sessionKindLabel(row.sessionKind) }}</span>
+						<div :class="$style.metaRow">
 							<span :class="$style.msgIdWrap">
 								<span :class="$style.indexKey">{{ i18n.ts._agents.adminAgentChatAuditIndexMessage }}</span>
 								<code :class="$style.mono">{{ row.id }}</code>
@@ -109,7 +117,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 							</MkButton>
 						</div>
 
-						<pre :class="$style.pre">{{ row.content }}</pre>
+						<div :class="$style.contentBox">
+							<div :class="$style.contentLabel">{{ i18n.ts._agents.adminAgentChatAuditFilterQuery }}</div>
+							<pre :class="$style.pre">{{ row.content }}</pre>
+						</div>
 					</article>
 
 					<div v-if="canLoadMore" class="_buttonsCenter">
@@ -125,12 +136,12 @@ SPDX-License-Identifier: AGPL-3.0-only
 <script lang="ts" setup>
 import { computed, onMounted, reactive, ref } from 'vue';
 import type { AdminAgentsMessagesListResponse } from 'misskey-js/entities.js';
+import type { MkSelectItem } from '@/components/MkSelect.vue';
 import MkButton from '@/components/MkButton.vue';
 import MkLoading from '@/components/global/MkLoading.vue';
 import MkInfo from '@/components/MkInfo.vue';
 import MkInput from '@/components/MkInput.vue';
 import MkSelect from '@/components/MkSelect.vue';
-import type { MkSelectItem } from '@/components/MkSelect.vue';
 import MkA from '@/components/global/MkA.vue';
 import MkUserName from '@/components/global/MkUserName.vue';
 import MkAcct from '@/components/global/MkAcct.vue';
@@ -154,7 +165,6 @@ const loading = ref(false);
 const banBusy = ref(false);
 const searched = ref(false);
 /** 未使用任何筛选条件时的「全站最近消息」视图 */
-const recentMode = ref(true);
 const items = ref<Row[]>([]);
 const untilId = ref<string | null>(null);
 const lastBatchSize = ref(0);
@@ -174,6 +184,9 @@ const roleItems = computed((): MkSelectItem[] => [
 ]);
 
 const canLoadMore = computed(() => lastBatchSize.value === LIMIT);
+const userCount = computed(() => items.value.filter(x => x.role === 'user').length);
+const assistantCount = computed(() => items.value.filter(x => x.role === 'assistant').length);
+const systemCount = computed(() => items.value.filter(x => x.role === 'system').length);
 
 const hasActiveFilters = computed(() =>
 	filters.userId.trim() !== '' ||
@@ -231,57 +244,59 @@ function copyId(id: string): void {
 }
 
 function patchRowsSessionBan(sessionId: string, banned: boolean): void {
-	items.value = items.value.map(it =>
-		it.sessionId === sessionId ? { ...it, sessionModerationBanned: banned } : it,
-	);
+	patchRowsBan('session', sessionId, banned);
 }
 
 function patchRowsCharacterBan(characterId: string, banned: boolean): void {
-	items.value = items.value.map(it =>
-		it.characterId === characterId ? { ...it, characterModerationBanned: banned } : it,
-	);
+	patchRowsBan('character', characterId, banned);
+}
+
+function patchRowsBan(kind: 'session' | 'character', id: string, banned: boolean): void {
+	items.value = items.value.map(it => {
+		if (kind === 'session' && it.sessionId === id) {
+			return { ...it, sessionModerationBanned: banned };
+		}
+		if (kind === 'character' && it.characterId === id) {
+			return { ...it, characterModerationBanned: banned };
+		}
+		return it;
+	});
+}
+
+async function toggleBan(kind: 'session' | 'character', row: Row): Promise<void> {
+	const isSession = kind === 'session';
+	const current = isSession ? row.sessionModerationBanned === true : row.characterModerationBanned === true;
+	const next = !current;
+	const { canceled } = await os.confirm({
+		type: 'warning',
+		text: isSession
+			? (next ? i18n.ts._agents.adminAgentChatAuditBanSessionConfirm : i18n.ts._agents.adminAgentChatAuditUnbanSessionConfirm)
+			: (next ? i18n.ts._agents.adminAgentChatAuditBanCharacterConfirm : i18n.ts._agents.adminAgentChatAuditUnbanCharacterConfirm),
+	});
+	if (canceled) return;
+	banBusy.value = true;
+	try {
+		if (isSession) {
+			await misskeyApi('admin/agents/sessions/set-moderation-banned', { sessionId: row.sessionId, banned: next });
+			patchRowsSessionBan(row.sessionId, next);
+		} else {
+			await misskeyApi('admin/agents/characters/set-moderation-banned', { characterId: row.characterId, banned: next });
+			patchRowsCharacterBan(row.characterId, next);
+		}
+		os.toast(i18n.ts._agents.adminAgentChatAuditBanUpdated);
+	} catch (err) {
+		os.alert({ type: 'error', text: formatApiError(err) });
+	} finally {
+		banBusy.value = false;
+	}
 }
 
 async function toggleSessionBan(row: Row): Promise<void> {
-	const next = row.sessionModerationBanned !== true;
-	const { canceled } = await os.confirm({
-		type: 'warning',
-		text: next
-			? i18n.ts._agents.adminAgentChatAuditBanSessionConfirm
-			: i18n.ts._agents.adminAgentChatAuditUnbanSessionConfirm,
-	});
-	if (canceled) return;
-	banBusy.value = true;
-	try {
-		await misskeyApi('admin/agents/sessions/set-moderation-banned', { sessionId: row.sessionId, banned: next });
-		patchRowsSessionBan(row.sessionId, next);
-		os.toast(i18n.ts._agents.adminAgentChatAuditBanUpdated);
-	} catch (e) {
-		os.alert({ type: 'error', text: formatApiError(e) });
-	} finally {
-		banBusy.value = false;
-	}
+	await toggleBan('session', row);
 }
 
 async function toggleCharacterBan(row: Row): Promise<void> {
-	const next = row.characterModerationBanned !== true;
-	const { canceled } = await os.confirm({
-		type: 'warning',
-		text: next
-			? i18n.ts._agents.adminAgentChatAuditBanCharacterConfirm
-			: i18n.ts._agents.adminAgentChatAuditUnbanCharacterConfirm,
-	});
-	if (canceled) return;
-	banBusy.value = true;
-	try {
-		await misskeyApi('admin/agents/characters/set-moderation-banned', { characterId: row.characterId, banned: next });
-		patchRowsCharacterBan(row.characterId, next);
-		os.toast(i18n.ts._agents.adminAgentChatAuditBanUpdated);
-	} catch (e) {
-		os.alert({ type: 'error', text: formatApiError(e) });
-	} finally {
-		banBusy.value = false;
-	}
+	await toggleBan('character', row);
 }
 
 async function runSearch(reset: boolean): Promise<void> {
@@ -294,15 +309,11 @@ async function runSearch(reset: boolean): Promise<void> {
 		const list = await misskeyApi('admin/agents/messages/list', buildParams(false)) as AdminAgentsMessagesListResponse;
 		items.value = list;
 		lastBatchSize.value = list.length;
-		if (list.length > 0) {
-			untilId.value = list[list.length - 1]!.id;
-		} else {
-			untilId.value = null;
-		}
+		const last = list.at(-1);
+		untilId.value = last ? last.id : null;
 		searched.value = true;
-		recentMode.value = !hasActiveFilters.value;
-	} catch (e) {
-		os.alert({ type: 'error', text: formatApiError(e) });
+	} catch (err) {
+		os.alert({ type: 'error', text: formatApiError(err) });
 	} finally {
 		loading.value = false;
 	}
@@ -328,11 +339,10 @@ async function loadMore(): Promise<void> {
 			if (!next.some(x => x.id === m.id)) next.push(m);
 		}
 		items.value = next;
-		if (list.length > 0) {
-			untilId.value = list[list.length - 1]!.id;
-		}
-	} catch (e) {
-		os.alert({ type: 'error', text: formatApiError(e) });
+		const last = list.at(-1);
+		if (last) untilId.value = last.id;
+	} catch (err) {
+		os.alert({ type: 'error', text: formatApiError(err) });
 	} finally {
 		loading.value = false;
 	}
@@ -348,19 +358,29 @@ onMounted(() => {
 </script>
 
 <style lang="scss" module>
-.recentBanner {
+.toolbar {
 	display: flex;
-	flex-wrap: wrap;
 	align-items: center;
-	gap: 10px 14px;
-	padding: 12px 14px;
+	justify-content: space-between;
+	gap: 10px;
+	flex-wrap: wrap;
+	padding: 10px 12px;
 	border-radius: var(--MI-radius);
 	border: solid 1px var(--MI_THEME-divider);
-	background: color-mix(in srgb, var(--MI_THEME-accent), transparent 92%);
-	font-size: 0.92em;
-	line-height: 1.4;
-	> i {
-		color: var(--MI_THEME-accent);
+	background: var(--MI_THEME-panel);
+}
+.stats {
+	display: flex;
+	align-items: center;
+	gap: 10px 14px;
+	flex-wrap: wrap;
+}
+.stat {
+	font-size: 0.84em;
+	color: var(--MI_THEME-fgTransparentWeak);
+	> b {
+		color: var(--MI_THEME-fg);
+		font-variant-numeric: tabular-nums;
 	}
 }
 .filterCard {
@@ -369,10 +389,32 @@ onMounted(() => {
 	border: solid 1px var(--MI_THEME-divider);
 	background: var(--MI_THEME-panel);
 }
+.filterHead {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 10px;
+}
 .filterTitle {
 	margin: 0 0 4px;
 	font-size: 1em;
 	font-weight: 600;
+}
+.filterState,
+.filterStateMuted {
+	font-size: 0.8em;
+	padding: 2px 8px;
+	border-radius: 999px;
+}
+.filterState {
+	color: var(--MI_THEME-accent);
+	background: color-mix(in srgb, var(--MI_THEME-accent) 13%, transparent);
+	border: solid 1px color-mix(in srgb, var(--MI_THEME-accent) 24%, var(--MI_THEME-divider));
+}
+.filterStateMuted {
+	opacity: 0.7;
+	background: var(--MI_THEME-bg);
+	border: solid 1px var(--MI_THEME-divider);
 }
 .list {
 	margin-top: 4px;
@@ -381,7 +423,7 @@ onMounted(() => {
 	padding: 14px 16px;
 	border-radius: var(--MI-radius);
 	border: solid 1px var(--MI_THEME-divider);
-	background: var(--MI_THEME-bg);
+	background: linear-gradient(160deg, color-mix(in srgb, var(--MI_THEME-panel) 86%, transparent), var(--MI_THEME-bg));
 }
 .cardHead {
 	display: flex;
@@ -389,6 +431,12 @@ onMounted(() => {
 	justify-content: space-between;
 	gap: 12px;
 	margin-bottom: 10px;
+	flex-wrap: wrap;
+}
+.cardHeadLeft {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
 	flex-wrap: wrap;
 }
 .roleBadge {
@@ -414,42 +462,51 @@ onMounted(() => {
 	font-size: 0.85em;
 	color: var(--MI_THEME-fgTransparentWeak);
 	font-variant-numeric: tabular-nums;
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
 }
-.indexRow {
+.indexGrid {
 	display: grid;
-	grid-template-columns: 1fr 1fr;
-	gap: 10px 16px;
-	margin-bottom: 8px;
-	font-size: 0.88em;
-	line-height: 1.4;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 8px 10px;
+	margin-bottom: 6px;
 	@media (max-width: 700px) {
 		grid-template-columns: 1fr;
 	}
 }
-.indexBlock {
+.indexCard {
+	position: relative;
 	display: flex;
+	flex-direction: column;
 	flex-wrap: wrap;
-	align-items: baseline;
-	gap: 6px 8px;
+	gap: 4px;
+	padding: 8px 10px;
+	border-radius: 8px;
+	background: color-mix(in srgb, var(--MI_THEME-bg) 12%, transparent);
+	border: solid 1px color-mix(in srgb, var(--MI_THEME-divider) 72%, transparent);
+	font-size: 0.83em;
+	line-height: 1.28;
 }
 .indexKey {
 	font-weight: 600;
 	color: var(--MI_THEME-fgTransparentWeak);
 	margin-right: 2px;
+	padding-right: 26px;
 }
 .indexVal {
 	font-weight: 500;
 }
 .mono {
-	font-size: 0.85em;
+	font-size: 0.82em;
 	word-break: break-all;
-	padding: 1px 6px;
+	padding: 1px 5px;
 	border-radius: 4px;
 	background: var(--MI_THEME-panel);
 	border: solid 1px var(--MI_THEME-divider);
 }
 .acct {
-	font-size: 0.9em;
+	font-size: 0.85em;
 	color: var(--MI_THEME-fgTransparentWeak);
 }
 .miniCopy {
@@ -461,7 +518,12 @@ onMounted(() => {
 		background: var(--MI_THEME-panel);
 	}
 }
-.kindRow {
+.indexCopy {
+	position: absolute;
+	top: 5px;
+	right: 5px;
+}
+.metaRow {
 	display: flex;
 	flex-wrap: wrap;
 	align-items: center;
@@ -488,6 +550,16 @@ onMounted(() => {
 	align-items: center;
 	gap: 8px;
 	margin-bottom: 10px;
+}
+.contentBox {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+.contentLabel {
+	font-size: 0.8em;
+	font-weight: 700;
+	opacity: 0.68;
 }
 .bannedTag {
 	display: inline-block;

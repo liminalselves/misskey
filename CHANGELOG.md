@@ -2,6 +2,7 @@
 
 ### General
 - Fix: Windows 上执行 `pnpm --filter i18n generate` 时，`generateLocaleInterface.ts` 的 `isMain` 判断因路径格式与 `import.meta.url` 不一致导致脚本未实际更新 `packages/i18n/src/autogen/locale.ts`；已改为使用 `fileURLToPath` 与 `path.resolve` 比较，与 Unix 行为一致。
+- Enhance: 更新多语言词条、`packages/i18n/src/autogen/locale.ts` 及 `packages/misskey-js` 自动生成类型，补充阿里云验证码与智能体相关新增字段，保证前后端类型与文案同步。
 - Enhance: 发现模块（Discovery/Featured）推流机制改造
   - 实现全局热度榜 + 重力衰减算法，打破原有 3 天时间窗口限制
   - 新增加权随机采样（70% 高分 + 30% 低分），提升内容多样性
@@ -16,6 +17,16 @@
 - Fix: 修复前端本地化内联构建在遇到参数化多语言值为非字符串时抛出 `format.matchAll is not a function` 的问题，现在会记录警告并使用空函数占位，避免构建中断
 
 ### Client
+- Enhance: 验证码体验统一
+  - 登录/注册页与管理后台「机器人防护」接入阿里云验证码配置项（Prefix、SceneId、Region）并统一与现有验证码流程联动
+  - 阿里云验证码触发按钮样式改为与 Misskey 主按钮风格一致，避免原生按钮突兀感
+- Enhance: 管理后台「智能体聊天记录」界面信息卡片视觉瘦身，缩减留白与层级厚重感，并优化复制按钮布局，提升高密度审计场景下的可读性
+- Enhance: 智能体前端 UI 与交互细节集中优化（覆盖多个页面与组件）
+  - 组件层：`MkCaptcha`、`MkSignin`、`MkSignin.password`、`MkSignupDialog.form`、`MkPushNotificationAllowButton`、`MkPageHeader`、`MkNoteAgentsPlazaReview` 等交互与样式统一
+  - 管理页：`admin/index`、`admin/app-settings`、`admin/bot-protection`、`admin/agents-chat-audit` 的信息结构与操作动线优化
+  - 智能体页：`agents/index`、`agents/square`、`agents/square-character-detail`、`agents/square-style-detail`、`agents/style-edit` 的列表/详情/编辑体验增强
+  - 聊天与设置页：`chat/agent-session`、`settings/app-client` 的输入区行为、按钮状态与说明反馈优化
+  - 视觉一致性：表单、按钮、卡片、复制动作与状态提示在管理端/登录注册/智能体页之间统一主题风格，减少混搭与突兀感
 - Enhance: 私信搜索结果支持点击定位功能
   - 点击搜索结果中的消息可直接跳转到对应聊天室并定位到该消息
   - 目标消息会短暂高亮显示以便识别
@@ -78,6 +89,11 @@
 - Fix: `Mk:C:container` の `borderWidth` が正しく反映されない問題を修正
 
 ### Server
+- Enhance: 验证码后端扩展支持阿里云验证码
+  - `meta`、JSON Schema、管理 API（`admin/meta`/`admin/update-meta`）与 `Nodeinfo` 同步新增阿里云验证码开关与配置字段
+  - `SigninApiService`、`SignupApiService` 与 `CaptchaService` 新增阿里云验证码校验分支，兼容现有验证码提供方
+- 部署须执行数据库迁移：`1771800000000-AddAliyunCaptchaMeta`
+- Enhance: 新增 `AgentSessionCleanupService` 守护任务，定期清理过期且无有效对话内容的空会话，减少无意义会话堆积
 - Enhance: 阿里云移动推送（原生 App）服务端配置改为**管理后台**维护，不再使用 `default.yml` / `.config` 中的 `aliyunMobilePush` 字段（已移除示例说明）。
   - 路径：**控制面板 → 设置（常规）→「阿里云移动推送（原生 App）」**，填写 RAM 子账号 **AccessKey ID / Secret** 与 **EMAS AppKey**（须与客户端 `aliyun-emas-services.json` 中 `emas.appKey` 一致）。
   - 部署须执行数据库迁移：`1770600000000-AddAliyunMobilePushMeta`（为 `meta` 表增加三列）。

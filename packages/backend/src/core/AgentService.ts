@@ -282,14 +282,6 @@ export class AgentService {
 		parts.push(escapeAgentXmlText(params.character.name));
 		parts.push('</name>');
 
-		const greet = params.character.greeting.trim();
-		if (greet.length > 0) {
-			parts.push('<opening_line>');
-			parts.push('<note>Suggested first in-character line when the chat is new or when it fits; NOT text the user already sent.</note>');
-			parts.push(escapeAgentXmlText(greet));
-			parts.push('</opening_line>');
-		}
-
 		parts.push('<personality>');
 		parts.push(escapeAgentXmlText(params.character.personality));
 		parts.push('</personality>');

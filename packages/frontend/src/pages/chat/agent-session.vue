@@ -206,9 +206,11 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<template v-else>
 				<MkInfo v-if="moderationLocksSessionWrites" warn>{{ moderationBlockUserMessage }}</MkInfo>
 				<div class="_gaps_s">
-					<div :class="$style.settingTitleRow">
-						<span :class="$style.settingLabel">{{ i18n.ts._agents.sessionDialogueStyle }}</span>
-						<span :class="$style.settingValue">{{ selectedStyleMeta?.name ?? (session.dialogueStyleId ? '-' : i18n.ts._agents.sessionStyleNotSelected) }}</span>
+					<div v-panel :class="$style.settingHero">
+						<div :class="$style.settingTitleRow">
+							<span :class="$style.settingLabel">{{ i18n.ts._agents.sessionDialogueStyle }}</span>
+							<span :class="$style.settingValue">{{ selectedStyleMeta?.name ?? (session.dialogueStyleId ? '-' : i18n.ts._agents.sessionStyleNotSelected) }}</span>
+						</div>
 					</div>
 					<MkInfo v-if="usableStyles.length === 0">{{ i18n.ts._agents.sessionNoUsableStyles }}</MkInfo>
 					<div v-else :class="$style.selectCardList">
@@ -251,10 +253,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 										<span>{{ styleUsableAverageText(s.rating.average) }} · {{ s.rating.count }} {{ i18n.ts._agents.plazaRatingCountSuffix }}</span>
 									</template>
 									<span :class="$style.stylePlazaSep">·</span>
-									<span :class="$style.stylePlazaLabel"><i class="ti ti-messages"/> {{ i18n.ts._agents.plazaMetricConversations }}</span>
-									<span>{{ s.conversationCount }}</span>
-									<span :class="$style.stylePlazaSep">·</span>
-									<span :class="$style.stylePlazaLabel"><i class="ti ti-robot"/> {{ i18n.ts._agents.plazaMetricAiReplies }}</span>
+									<span :class="$style.stylePlazaLabel"><i class="ti ti-message-cog"/> {{ i18n.ts._agents.plazaMetricAiReplies }}</span>
 									<span>{{ s.aiReplyCount }}</span>
 								</div>
 								<div :class="$style.selectCardMeta">
@@ -293,9 +292,11 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<template v-else>
 				<MkInfo v-if="moderationLocksSessionWrites" warn>{{ moderationBlockUserMessage }}</MkInfo>
 				<div v-if="agentModels.length > 0" class="_gaps_s">
-					<div :class="$style.settingTitleRow">
-						<span :class="$style.settingLabel">{{ i18n.ts._agents.sessionModel }}</span>
-						<span :class="$style.settingValue">{{ selectedModelMeta?.name ?? '-' }}</span>
+					<div v-panel :class="$style.settingHero">
+						<div :class="$style.settingTitleRow">
+							<span :class="$style.settingLabel">{{ i18n.ts._agents.sessionModel }}</span>
+							<span :class="$style.settingValue">{{ selectedModelMeta?.name ?? '-' }}</span>
+						</div>
 					</div>
 					<div :class="$style.selectCardList">
 						<div
@@ -1592,10 +1593,22 @@ async function onFormSubmit(text: string) {
 	gap: 0.75em;
 }
 
+.settingHero {
+	padding: 0.85em 1em;
+	border-radius: var(--MI-radius);
+	border: solid 1px color-mix(in srgb, var(--MI_THEME-accent) 16%, var(--MI_THEME-divider));
+	background: linear-gradient(145deg, color-mix(in srgb, var(--MI_THEME-accent) 11%, var(--MI_THEME-panel)), var(--MI_THEME-panel));
+}
+
 .settingValue {
 	font-size: 0.9em;
 	font-weight: 700;
 	color: var(--MI_THEME-accent);
+	max-width: 65%;
+	text-align: end;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
 }
 
 .selectCardList {
@@ -1606,20 +1619,21 @@ async function onFormSubmit(text: string) {
 .selectCard {
 	border: solid 1px var(--MI_THEME-divider);
 	border-radius: var(--MI-radius);
-	background: var(--MI_THEME-panel);
-	transition: border-color 0.15s ease, box-shadow 0.15s ease;
+	background: linear-gradient(155deg, color-mix(in srgb, var(--MI_THEME-panel) 88%, transparent), var(--MI_THEME-panel));
+	transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
 }
 
 .selectCardActive {
 	border-color: color-mix(in srgb, var(--MI_THEME-accent) 60%, var(--MI_THEME-divider));
-	box-shadow: 0 0 0 1px color-mix(in srgb, var(--MI_THEME-accent) 28%, transparent);
+	box-shadow: 0 0 0 1px color-mix(in srgb, var(--MI_THEME-accent) 28%, transparent), 0 10px 24px rgba(0, 0, 0, 0.08);
+	transform: translateY(-1px);
 }
 
 .selectCardMain {
 	padding: 0.9em 1em;
 	display: flex;
 	flex-direction: column;
-	gap: 0.65em;
+	gap: 0.75em;
 }
 
 .selectCardHead {
@@ -1653,6 +1667,10 @@ async function onFormSubmit(text: string) {
 	line-height: 1.5;
 	white-space: pre-wrap;
 	word-break: break-word;
+	padding: 0.55em 0.7em;
+	border-radius: calc(var(--MI-radius) * 0.75);
+	background: color-mix(in srgb, var(--MI_THEME-bg) 24%, transparent);
+	border: solid 1px color-mix(in srgb, var(--MI_THEME-divider) 75%, transparent);
 }
 
 .stylePlazaRow {
@@ -1661,8 +1679,12 @@ async function onFormSubmit(text: string) {
 	align-items: baseline;
 	gap: 0.35em 0.5em;
 	font-size: 0.86em;
-	margin-top: 0.35em;
+	margin-top: 0.15em;
 	line-height: 1.45;
+	padding: 0.55em 0.7em;
+	border-radius: calc(var(--MI-radius) * 0.75);
+	background: color-mix(in srgb, var(--MI_THEME-bg) 20%, transparent);
+	border: solid 1px color-mix(in srgb, var(--MI_THEME-divider) 72%, transparent);
 }
 
 .stylePlazaLabel {
@@ -1694,6 +1716,7 @@ async function onFormSubmit(text: string) {
 	flex-wrap: wrap;
 	align-items: center;
 	gap: 0.55em 0.8em;
+	padding-top: 0.1em;
 }
 
 .metaLabel {
@@ -1737,8 +1760,8 @@ async function onFormSubmit(text: string) {
 	gap: 0.18em;
 	padding: 0.55em 0.7em;
 	border-radius: calc(var(--MI-radius) * 0.7);
-	background: var(--MI_THEME-bg);
-	border: solid 1px var(--MI_THEME-divider);
+	background: color-mix(in srgb, var(--MI_THEME-bg) 24%, transparent);
+	border: solid 1px color-mix(in srgb, var(--MI_THEME-divider) 75%, transparent);
 }
 
 .modelSpecLabel {

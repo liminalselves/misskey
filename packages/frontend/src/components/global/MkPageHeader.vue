@@ -26,8 +26,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<i v-else-if="pageMetadata.icon" :class="[$style.titleIcon, pageMetadata.icon]"></i>
 
 					<div class="_nowrap" :class="$style.title">
-						<MkUserName v-if="pageMetadata.userName" :user="pageMetadata.userName" :nowrap="true"/>
-						<div v-else-if="pageMetadata.title" class="_nowrap">{{ pageMetadata.title }}</div>
+						<div :class="$style.chatMobileTitleMain">
+							<MkUserName v-if="pageMetadata.userName" :user="pageMetadata.userName" :nowrap="true"/>
+							<div v-else-if="pageMetadata.title" class="_nowrap">{{ pageMetadata.title }}</div>
+						</div>
 						<div v-if="pageMetadata.subtitle" :class="$style.subtitle">
 							{{ pageMetadata.subtitle }}
 						</div>
@@ -268,6 +270,7 @@ onUnmounted(() => {
 	gap: 4px;
 	flex: 0 1 auto;
 	min-width: 0;
+	max-width: 50%;
 	overflow: hidden;
 }
 
@@ -280,6 +283,7 @@ onUnmounted(() => {
 	overflow: hidden;
 
 	:deep(.tabsInner) {
+		width: auto;
 		margin-left: 0;
 		margin-right: 0;
 	}
@@ -291,13 +295,35 @@ onUnmounted(() => {
 
 .chatMobileTitle {
 	margin-left: 0 !important;
-	flex-shrink: 1;
+	flex: 1 1 auto;
 	min-width: 0;
-	max-width: 100%;
+	max-width: calc(100% - (var(--height) - 8px));
+}
+
+.chatMobileTitle :global(._nowrap) {
+	display: block;
+	min-width: 0;
+	overflow: visible;
+	text-overflow: clip;
 }
 
 .chatMobileTabs {
 	font-size: 0.72em;
+}
+
+.chatMobileTitleMain {
+	display: block;
+	min-width: 0;
+	max-width: 100%;
+	overflow-x: auto;
+	overflow-y: hidden;
+	white-space: nowrap;
+	-webkit-overflow-scrolling: touch;
+	scrollbar-width: none;
+
+	&::-webkit-scrollbar {
+		display: none;
+	}
 }
 
 .leadingBack {

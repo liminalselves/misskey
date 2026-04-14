@@ -34,11 +34,11 @@ SPDX-License-Identifier: AGPL-3.0-only
 							<div :class="$style.cardTitleRow">
 								<span :class="$style.cardTitle">{{ c.name }}</span>
 								<div :class="$style.badgeRow">
-									<span v-if="c.reviewStatus === 'pending'" class="_acrylicBadge">{{ i18n.ts._agents.pendingReviewBadge }}</span>
-									<span v-else-if="c.reviewStatus === 'rejected' && !c.isPublished" class="_acrylicBadge">{{ i18n.ts._agents.rejectedReviewBadge }}</span>
-									<span v-else-if="c.isPublished" class="_acrylicBadge">{{ i18n.ts._agents.publishedBadge }}</span>
-									<span v-else class="_acrylicBadge">{{ i18n.ts._agents.draftBadge }}</span>
-									<span v-if="c.publishedVersion != null" class="_acrylicBadge">V{{ c.publishedVersion }}</span>
+									<span v-if="c.reviewStatus === 'pending'" :class="$style.metaBadge">{{ i18n.ts._agents.pendingReviewBadge }}</span>
+									<span v-else-if="c.reviewStatus === 'rejected' && !c.isPublished" :class="$style.metaBadge">{{ i18n.ts._agents.rejectedReviewBadge }}</span>
+									<span v-else-if="c.isPublished" :class="$style.metaBadge">{{ i18n.ts._agents.publishedBadge }}</span>
+									<span v-else :class="$style.metaBadge">{{ i18n.ts._agents.draftBadge }}</span>
+									<span v-if="c.publishedVersion != null" :class="$style.metaBadge">V{{ c.publishedVersion }}</span>
 								</div>
 							</div>
 							<p v-if="c.summary" :class="$style.cardSummary">{{ c.summary }}</p>
@@ -79,11 +79,11 @@ SPDX-License-Identifier: AGPL-3.0-only
 								<span :class="$style.cardTitle">{{ s.name }}</span>
 								<div :class="$style.badgeRow">
 									<template v-if="s.isMine">
-										<span v-if="s.reviewStatus === 'pending'" class="_acrylicBadge">{{ i18n.ts._agents.pendingReviewBadge }}</span>
-										<span v-else-if="s.reviewStatus === 'rejected' && !s.isPublished" class="_acrylicBadge">{{ i18n.ts._agents.rejectedReviewBadge }}</span>
-										<span v-else-if="s.isPublished" class="_acrylicBadge">{{ i18n.ts._agents.publishedBadge }}</span>
-										<span v-else class="_acrylicBadge">{{ i18n.ts._agents.draftBadge }}</span>
-										<span v-if="s.publishedVersion != null" class="_acrylicBadge">V{{ s.publishedVersion }}</span>
+										<span v-if="s.reviewStatus === 'pending'" :class="$style.metaBadge">{{ i18n.ts._agents.pendingReviewBadge }}</span>
+										<span v-else-if="s.reviewStatus === 'rejected' && !s.isPublished" :class="$style.metaBadge">{{ i18n.ts._agents.rejectedReviewBadge }}</span>
+										<span v-else-if="s.isPublished" :class="$style.metaBadge">{{ i18n.ts._agents.publishedBadge }}</span>
+										<span v-else :class="$style.metaBadge">{{ i18n.ts._agents.draftBadge }}</span>
+										<span v-if="s.publishedVersion != null" :class="$style.metaBadge">V{{ s.publishedVersion }}</span>
 									</template>
 								</div>
 							</div>
@@ -398,12 +398,33 @@ async function testChar(characterId: string) {
 	font-weight: 700;
 	font-size: 1.05em;
 	line-height: 1.35;
+	flex: 1;
+	min-width: 0;
 }
 
 .badgeRow {
 	display: flex;
 	flex-wrap: wrap;
 	gap: 6px;
+	margin-left: auto;
+	justify-content: flex-end;
+	align-items: center;
+}
+
+.metaBadge {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	height: 26px;
+	padding: 0 11px;
+	border-radius: 999px;
+	font-size: 0.82em;
+	font-weight: 700;
+	line-height: 1;
+	white-space: nowrap;
+	border: solid 1px color-mix(in srgb, var(--MI_THEME-divider) 88%, transparent);
+	background: color-mix(in srgb, var(--MI_THEME-panel) 86%, transparent);
+	color: var(--MI_THEME-fg);
 }
 
 .cardSummary {
@@ -412,10 +433,10 @@ async function testChar(characterId: string) {
 	line-height: 1.5;
 	color: var(--MI_THEME-fg);
 	opacity: 0.88;
-	display: -webkit-box;
-	-webkit-line-clamp: 3;
-	-webkit-box-orient: vertical;
+	display: block;
+	white-space: nowrap;
 	overflow: hidden;
+	text-overflow: ellipsis;
 }
 
 .cardMeta {

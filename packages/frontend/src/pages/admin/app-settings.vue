@@ -77,10 +77,30 @@ SPDX-License-Identifier: AGPL-3.0-only
 									<template #prefix><i class="ti ti-link"></i></template>
 								</MkInput>
 							</FormSplit>
-							<MkInput v-model="nativeClientAppInfoForm.state.releaseNotesUrl" type="url">
-								<template #label><SearchLabel>{{ i18n.ts.nativeClientAppInfoReleaseNotesUrl }}</SearchLabel><span v-if="nativeClientAppInfoForm.modifiedStates.releaseNotesUrl" class="_modified">{{ i18n.ts.modified }}</span></template>
-								<template #prefix><i class="ti ti-link"></i></template>
-							</MkInput>
+							<div class="_gaps_s">
+								<div class="_title">{{ i18n.ts.nativeClientAppInfoChangelog }}</div>
+								<MkInfo>{{ i18n.ts.nativeClientAppInfoChangelogDescription }}</MkInfo>
+								<div v-for="(item, idx) in nativeClientAppInfoForm.state.changelog" :key="`cl-${idx}`" class="_gaps_s _panel">
+									<FormSplit :minWidth="220">
+										<MkInput v-model="item.version">
+											<template #label>{{ i18n.ts.nativeClientAppInfoChangelogVersion }}</template>
+											<template #caption><SearchText>{{ i18n.ts.nativeClientAppInfoSemverHint }}</SearchText></template>
+										</MkInput>
+										<div style="display: flex; align-items: end;">
+											<MkButton danger @click="removeChangelogRow(idx)">
+												<i class="ti ti-trash"></i> {{ i18n.ts.delete }}
+											</MkButton>
+										</div>
+									</FormSplit>
+									<MkTextarea v-model="item.content">
+										<template #label>{{ i18n.ts.nativeClientAppInfoChangelogContent }}</template>
+										<template #caption>{{ i18n.ts.nativeClientAppInfoChangelogContentCaption }}</template>
+									</MkTextarea>
+								</div>
+								<MkButton @click="appendChangelogRow">
+									<i class="ti ti-plus"></i> {{ i18n.ts.addItem }}
+								</MkButton>
+							</div>
 							<MkTextarea v-model="nativeClientAppInfoForm.state.announcement">
 								<template #label><SearchLabel>{{ i18n.ts.nativeClientAppInfoAnnouncement }}</SearchLabel><span v-if="nativeClientAppInfoForm.modifiedStates.announcement" class="_modified">{{ i18n.ts.modified }}</span></template>
 							</MkTextarea>
@@ -97,6 +117,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 import { computed } from 'vue';
 import MkInput from '@/components/MkInput.vue';
 import MkTextarea from '@/components/MkTextarea.vue';
+import MkButton from '@/components/MkButton.vue';
 import MkInfo from '@/components/MkInfo.vue';
 import FormSplit from '@/components/form/split.vue';
 import * as os from '@/os.js';
@@ -123,18 +144,52 @@ const aliyunMobilePushForm = useForm({
 	fetchInstance(true);
 });
 
+type NativeClientChangelogItem = {
+	version: string;
+	content: string;
+};
+
+type NativeClientAppInfoDefaults = {
+	latestAndroidVersion?: string | null;
+	latestIosVersion?: string | null;
+	minRequiredAppVersion?: string | null;
+	androidDownloadUrl?: string | null;
+	iosDownloadUrl?: string | null;
+	changelog?: unknown;
+	announcement?: string | null;
+};
+
 const nativeClientAppInfoDefaults = (meta.nativeClientAppInfo && typeof meta.nativeClientAppInfo === 'object'
 	? meta.nativeClientAppInfo
-	: {}) as Record<string, string | null | undefined>;
+	: {}) as NativeClientAppInfoDefaults;
+
+const initialChangelog = Array.isArray(nativeClientAppInfoDefaults.changelog)
+	? nativeClientAppInfoDefaults.changelog
+		.map((entry) => ({
+			version: typeof entry?.version === 'string' ? entry.version : '',
+			content: typeof entry?.content === 'string' ? entry.content : '',
+		}))
+	: [];
+
+function normalizeChangelog(items: NativeClientChangelogItem[]): NativeClientChangelogItem[] {
+	return items
+		.map((item) => ({
+			version: item.version.trim(),
+			content: item.content.trim(),
+		}))
+		.filter((item) => item.version.length > 0 || item.content.length > 0);
+}
+
 const nativeClientAppInfoForm = useForm({
 	latestAndroidVersion: nativeClientAppInfoDefaults.latestAndroidVersion ?? '',
 	latestIosVersion: nativeClientAppInfoDefaults.latestIosVersion ?? '',
 	minRequiredAppVersion: nativeClientAppInfoDefaults.minRequiredAppVersion ?? '',
 	androidDownloadUrl: nativeClientAppInfoDefaults.androidDownloadUrl ?? '',
 	iosDownloadUrl: nativeClientAppInfoDefaults.iosDownloadUrl ?? '',
-	releaseNotesUrl: nativeClientAppInfoDefaults.releaseNotesUrl ?? '',
+	changelog: initialChangelog as NativeClientChangelogItem[],
 	announcement: nativeClientAppInfoDefaults.announcement ?? '',
 }, async (state) => {
+	const changelog = normalizeChangelog(state.changelog);
 	await os.apiWithDialog('admin/update-meta', {
 		nativeClientAppInfo: {
 			latestAndroidVersion: state.latestAndroidVersion === '' ? null : state.latestAndroidVersion,
@@ -142,12 +197,24 @@ const nativeClientAppInfoForm = useForm({
 			minRequiredAppVersion: state.minRequiredAppVersion === '' ? null : state.minRequiredAppVersion,
 			androidDownloadUrl: state.androidDownloadUrl === '' ? null : state.androidDownloadUrl,
 			iosDownloadUrl: state.iosDownloadUrl === '' ? null : state.iosDownloadUrl,
-			releaseNotesUrl: state.releaseNotesUrl === '' ? null : state.releaseNotesUrl,
+			changelog,
 			announcement: state.announcement === '' ? null : state.announcement,
 		},
 	} as Record<string, unknown>);
 	fetchInstance(true);
 });
+
+function appendChangelogRow() {
+	nativeClientAppInfoForm.state.changelog = [
+		...nativeClientAppInfoForm.state.changelog,
+		{ version: '', content: '' },
+	];
+}
+
+function removeChangelogRow(index: number) {
+	nativeClientAppInfoForm.state.changelog = nativeClientAppInfoForm.state.changelog
+		.filter((_, i) => i !== index);
+}
 
 const headerTabs = computed(() => []);
 
