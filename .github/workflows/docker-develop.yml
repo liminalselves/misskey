@@ -8,6 +8,7 @@ on:
 
 env:
   REGISTRY_IMAGE: ghcr.io/${{ github.repository }}
+  TCR_REGISTRY_IMAGE: ccr.ccs.tencentyun.com/w573/yjrg
 
 jobs:
   # see https://docs.docker.com/build/ci/github-actions/multi-platform/#distribute-build-across-multiple-runners
@@ -30,6 +31,7 @@ jobs:
           echo "PLATFORM_PAIR=${platform//\//-}" >> $GITHUB_ENV
           # Lowercase registry image name
           echo "REGISTRY_IMAGE=${REGISTRY_IMAGE,,}" >> $GITHUB_ENV
+          echo "TCR_REGISTRY_IMAGE=${TCR_REGISTRY_IMAGE,,}" >> $GITHUB_ENV
       - name: Check out the repo
         uses: actions/checkout@v6.0.1
       - name: Set up Docker Buildx
@@ -77,6 +79,7 @@ jobs:
         run: |
           # Lowercase registry image name
           echo "REGISTRY_IMAGE=${REGISTRY_IMAGE,,}" >> $GITHUB_ENV
+          echo "TCR_REGISTRY_IMAGE=${TCR_REGISTRY_IMAGE,,}" >> $GITHUB_ENV
       - name: Download digests
         uses: actions/download-artifact@v7
         with:
@@ -91,10 +94,18 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Log in to Tencent Cloud TCR
+        uses: docker/login-action@v3
+        with:
+          registry: ccr.ccs.tencentyun.com
+          username: ${{ secrets.TCR_USERNAME }}
+          password: ${{ secrets.TCR_PASSWORD }}
       - name: Create manifest list and push
         working-directory: /tmp/digests
         run: |
-          docker buildx imagetools create --tag ${{ env.REGISTRY_IMAGE }}:develop \
+          docker buildx imagetools create \
+            --tag ${{ env.REGISTRY_IMAGE }}:develop \
+            --tag ${{ env.TCR_REGISTRY_IMAGE }}:develop \
             $(printf '${{ env.REGISTRY_IMAGE }}@sha256:%s ' *)
       - name: Inspect image
         run: |
