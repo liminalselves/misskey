@@ -64,4 +64,10 @@ export class MiAgentDialogueStyle {
 		nullable: true,
 	})
 	public publishedSnapshot: Record<string, unknown> | null;
+
+	/** 作者主动开源完整风格正文；为 true 时详情与广场详情返回完整 body */
+	@Column('boolean', {
+		default: false,
+	})
+	public promptOpenSourced: boolean;
 }

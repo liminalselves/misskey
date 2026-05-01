@@ -54,7 +54,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, onActivated, onMounted, ref, watch } from 'vue';
 import type { AgentsSessionsListMineResponse } from 'misskey-js/entities.js';
 import MkLoading from '@/components/global/MkLoading.vue';
 import MkInfo from '@/components/MkInfo.vue';
@@ -100,14 +100,23 @@ watch(searchQuery, (q) => {
 	if (!q.trim()) searched.value = false;
 });
 
-onMounted(async () => {
+async function loadSessions() {
 	try {
+		loading.value = true;
 		sessions.value = await misskeyApi('agents/sessions/list-mine', {});
 	} catch {
 		sessions.value = [];
 	} finally {
 		loading.value = false;
 	}
+}
+
+onMounted(() => {
+	void loadSessions();
+});
+
+onActivated(() => {
+	void loadSessions();
 });
 </script>
 

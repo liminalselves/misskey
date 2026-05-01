@@ -11,6 +11,7 @@ import { DI } from '@/di-symbols.js';
 import { ApiError } from '@/server/api/error.js';
 import { AgentService } from '@/core/AgentService.js';
 import { MetaService } from '@/core/MetaService.js';
+import { agentLongMemoryProviderIds } from '@/core/AgentCompressionMemoryService.js';
 
 export const meta = {
 	tags: ['agents'],
@@ -32,6 +33,9 @@ export const meta = {
 			agentLongMemoryInjectMaxChars: { type: 'number' },
 			agentLongMemoryAddMaxRounds: { type: 'integer', nullable: true },
 			agentLongMemoryAddEveryNRounds: { type: 'integer', nullable: true },
+			agentLongMemoryProvider: { type: 'string' },
+			agentCompressionModelId: { type: 'string', nullable: true },
+			compressionCacheInvalidated: { type: 'boolean' },
 			updatedAt: { type: 'string', format: 'date-time' },
 		},
 	},
@@ -50,6 +54,8 @@ export const paramDef = {
 		agentLongMemoryInjectMaxChars: { type: 'integer', minimum: 200, maximum: 50000, nullable: true },
 		agentLongMemoryAddMaxRounds: { type: 'integer', minimum: 1, maximum: 24, nullable: true },
 		agentLongMemoryAddEveryNRounds: { type: 'integer', minimum: 1, maximum: 48, nullable: true },
+		agentLongMemoryProvider: { type: 'string', enum: [...agentLongMemoryProviderIds] },
+		agentCompressionModelId: { type: 'string', nullable: true, maxLength: 64 },
 	},
 	required: ['sessionId'],
 } as const;
@@ -134,6 +140,17 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					row.agentLongMemoryAddEveryNRounds = Math.max(1, Math.min(48, ps.agentLongMemoryAddEveryNRounds));
 				}
 			}
+			if (ps.agentLongMemoryProvider !== undefined) {
+				row.agentLongMemoryProvider = ps.agentLongMemoryProvider;
+			}
+			if (ps.agentCompressionModelId !== undefined) {
+				if (ps.agentCompressionModelId === null || ps.agentCompressionModelId === '') {
+					row.agentCompressionModelId = null;
+				} else {
+					this.agentService.resolveModelApiName(instanceMeta, ps.agentCompressionModelId.trim());
+					row.agentCompressionModelId = ps.agentCompressionModelId.trim();
+				}
+			}
 
 			row.updatedAt = new Date();
 			await this.agentSessionsRepository.save(row);
@@ -148,6 +165,9 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				agentLongMemoryInjectMaxChars: row.agentLongMemoryInjectMaxChars,
 				agentLongMemoryAddMaxRounds: row.agentLongMemoryAddMaxRounds,
 				agentLongMemoryAddEveryNRounds: row.agentLongMemoryAddEveryNRounds,
+				agentLongMemoryProvider: row.agentLongMemoryProvider,
+				agentCompressionModelId: row.agentCompressionModelId,
+				compressionCacheInvalidated: false,
 				updatedAt: row.updatedAt.toISOString(),
 			};
 		});

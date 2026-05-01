@@ -13,6 +13,7 @@ import type { MiGroupedNotification, MiNotification } from '@/models/Notificatio
 import type { MiNote } from '@/models/Note.js';
 import type { Packed } from '@/misc/json-schema.js';
 import { bindThis } from '@/decorators.js';
+import { isUserEffectivelySuspended } from '@/misc/user-effective-suspension.js';
 import { FilterUnionByProperty, groupedNotificationTypes } from '@/types.js';
 import { CacheService } from '@/core/CacheService.js';
 import { RoleEntityService } from './RoleEntityService.js';
@@ -204,6 +205,21 @@ export class NotificationEntityService implements OnModuleInit {
 				header: notification.customHeader,
 				icon: notification.customIcon,
 			} : {}),
+			...((notification.type === 'agentReviewApproved' || notification.type === 'agentReviewRejected') ? {
+				agentKind: notification.agentKind,
+				resourceId: notification.resourceId,
+				resourceName: notification.resourceName,
+			} : {}),
+			...(notification.type === 'agentCharacterBanned' ? {
+				characterId: notification.characterId,
+				characterName: notification.characterName,
+				banned: notification.banned,
+			} : {}),
+			...(notification.type === 'agentSessionBanned' ? {
+				sessionId: notification.sessionId,
+				sessionName: notification.sessionName,
+				banned: notification.banned,
+			} : {}),
 		});
 	}
 
@@ -311,7 +327,7 @@ export class NotificationEntityService implements OnModuleInit {
 		if (notifier == null) return false;
 		if (notifier.host && userMutedInstances.has(notifier.host)) return false;
 
-		if (notifier.isSuspended) return false;
+		if (isUserEffectivelySuspended(notifier)) return false;
 
 		return true;
 	}

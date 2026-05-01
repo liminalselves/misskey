@@ -9,6 +9,7 @@ import { Endpoint } from '@/server/api/endpoint-base.js';
 import { QueryService } from '@/core/QueryService.js';
 import { UserEntityService } from '@/core/entities/UserEntityService.js';
 import { DI } from '@/di-symbols.js';
+import { sqlUserNotEffectivelySuspended } from '@/misc/user-effective-suspension.js';
 
 export const meta = {
 	tags: ['users'],
@@ -56,7 +57,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		super(meta, paramDef, async (ps, me) => {
 			const query = this.usersRepository.createQueryBuilder('user')
 				.where('user.isExplorable = TRUE')
-				.andWhere('user.isSuspended = FALSE');
+				.andWhere(sqlUserNotEffectivelySuspended('user'))
+				.setParameter('suspensionNow', new Date());
 
 			switch (ps.state) {
 				case 'alive': query.andWhere('user.updatedAt > :date', { date: new Date(Date.now() - 1000 * 60 * 60 * 24 * 5) }); break;

@@ -21,6 +21,7 @@ import { store } from '@/store.js';
 import { useChartTooltip } from '@/composables/use-chart-tooltip.js';
 import { chartVLine } from '@/utility/chart-vline.js';
 import { initChart } from '@/utility/init-chart.js';
+import { i18n } from '@/i18n.js';
 
 initChart();
 
@@ -68,7 +69,7 @@ async function renderChart() {
 		data: {
 			datasets: [{
 				parsing: false,
-				label: 'Read',
+				label: i18n.ts.adminOverviewRead,
 				data: format(raw.read).slice().reverse(),
 				pointRadius: 0,
 				borderWidth: 0,
@@ -80,7 +81,7 @@ async function renderChart() {
 				fill: true,
 			}, {
 				parsing: false,
-				label: 'Write',
+				label: i18n.ts.adminOverviewWrite,
 				data: format(raw.write).slice().reverse(),
 				pointRadius: 0,
 				borderWidth: 0,

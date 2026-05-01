@@ -6,6 +6,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { DI } from '@/di-symbols.js';
 import { bindThis } from '@/decorators.js';
+import { isUserEffectivelySuspended } from '@/misc/user-effective-suspension.js';
 import type { MiUser } from '@/models/User.js';
 import type { MiNote } from '@/models/Note.js';
 import type { MiMeta } from '@/models/Meta.js';
@@ -155,10 +156,10 @@ export class FanoutTimelineEndpointService {
 				const parentFilter = filter;
 				filter = (note) => {
 					if (!ps.ignoreAuthorFromUserSuspension) {
-						if (note.user!.isSuspended) return false;
+						if (isUserEffectivelySuspended(note.user!)) return false;
 					}
-					if (note.userId !== note.renoteUserId && note.renote?.user?.isSuspended) return false;
-					if (note.userId !== note.replyUserId && note.reply?.user?.isSuspended) return false;
+					if (note.userId !== note.renoteUserId && note.renote?.user && isUserEffectivelySuspended(note.renote.user)) return false;
+					if (note.userId !== note.replyUserId && note.reply?.user && isUserEffectivelySuspended(note.reply.user)) return false;
 
 					return parentFilter(note);
 				};

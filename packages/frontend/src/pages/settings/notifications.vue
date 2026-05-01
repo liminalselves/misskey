@@ -13,6 +13,19 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<FormSection first>
 			<template #label>{{ i18n.ts.notificationRecieveConfig }}</template>
 			<div class="_gaps_s">
+				<!-- App 壳内：私信通知单独控制项（newChatMessage 为 stream 事件，不在 notificationTypes 中） -->
+				<MkFolder v-if="isEmbeddedAppShell()">
+					<template #label>{{ (i18n.ts._notification._types as Record<string, string>)['newChatMessage'] }}</template>
+					<template #suffix>
+						{{ chatMessageNotifyConfig?.type === 'never' ? i18n.ts.none : i18n.ts.all }}
+					</template>
+					<XNotificationConfig
+						:userLists="userLists"
+						:value="chatMessageNotifyConfig ?? { type: 'all' }"
+						:configurableTypes="['all', 'never']"
+						@update="(res) => updateReceiveConfig('newChatMessage' as any, res)"
+					/>
+				</MkFolder>
 				<MkFolder v-for="type in configurableNotificationTypes" :key="type">
 					<template #label>{{ i18n.ts._notification._types[type] }}</template>
 					<template #suffix>
@@ -48,6 +61,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<MkButton @click="flushNotification">{{ i18n.ts._notification.flushNotification }}</MkButton>
 			</div>
 		</FormSection>
+
 		<FormSection>
 			<template #label>{{ i18n.ts.pushNotification }}</template>
 
@@ -93,6 +107,10 @@ function notificationReceiveFor(type: typeof notificationTypes[number]): Notific
 	return ($i.notificationRecieveConfig as Record<string, NotificationConfig | undefined>)[type];
 }
 
+const chatMessageNotifyConfig = computed(() =>
+	($i.notificationRecieveConfig as Record<string, NotificationConfig | undefined> | undefined)?.['newChatMessage'],
+);
+
 const nonConfigurableNotificationTypes = ['note', 'roleAssigned', 'followRequestAccepted', 'test', 'exportCompleted'] as const satisfies (typeof notificationTypes[number])[];
 
 const configurableNotificationTypes = notificationTypes.filter(type => !nonConfigurableNotificationTypes.includes(type as any)) as Exclude<typeof notificationTypes[number], typeof nonConfigurableNotificationTypes[number]>[];
@@ -115,7 +133,10 @@ async function updateReceiveConfig(type: typeof notificationTypes[number], value
 			[type]: value,
 		},
 	}).then(i => {
-		$i.notificationRecieveConfig = i.notificationRecieveConfig;
+		const updated = i as { notificationRecieveConfig?: typeof $i.notificationRecieveConfig } | null | undefined;
+		if (updated?.notificationRecieveConfig) {
+			$i.notificationRecieveConfig = updated.notificationRecieveConfig;
+		}
 	});
 }
 
@@ -127,7 +148,10 @@ function onChangeSendReadMessage(v: boolean) {
 		sendReadMessage: v,
 	}).then(res => {
 		if (!allowButton.value)	return;
-		allowButton.value.pushRegistrationInServer = res;
+		const updated = res as { state?: string; key?: string; userId: string; endpoint: string; sendReadMessage: boolean } | null | undefined;
+		if (updated) {
+			allowButton.value.pushRegistrationInServer = updated;
+		}
 	});
 }
 

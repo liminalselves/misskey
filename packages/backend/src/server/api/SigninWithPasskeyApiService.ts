@@ -17,6 +17,7 @@ import { getIpHash } from '@/misc/get-ip-hash.js';
 import type { MiLocalUser, MiUser } from '@/models/User.js';
 import { IdService } from '@/core/IdService.js';
 import { bindThis } from '@/decorators.js';
+import { isUserEffectivelySuspended } from '@/misc/user-effective-suspension.js';
 import { WebAuthnService } from '@/core/WebAuthnService.js';
 import Logger from '@/logger.js';
 import { LoggerService } from '@/core/LoggerService.js';
@@ -156,7 +157,7 @@ export class SigninWithPasskeyApiService {
 			});
 		}
 
-		if (user.isSuspended) {
+		if (isUserEffectivelySuspended(user)) {
 			return error(403, {
 				id: 'e03a5f46-d309-4865-9b69-56282d94e1eb',
 			});

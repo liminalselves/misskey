@@ -9,14 +9,14 @@ SPDX-License-Identifier: AGPL-3.0-only
 	<div v-show="!fetching" :class="$style.root">
 		<div v-if="topSubInstancesForPie && topPubInstancesForPie" class="pies">
 			<div class="pie deliver _panel">
-				<div class="title">Sub</div>
+				<div class="title">{{ i18n.ts.adminOverviewSub }}</div>
 				<XPie :data="topSubInstancesForPie" class="chart"/>
-				<div class="subTitle">Top 10</div>
+				<div class="subTitle">{{ i18n.ts.adminOverviewTop10 }}</div>
 			</div>
 			<div class="pie inbox _panel">
-				<div class="title">Pub</div>
+				<div class="title">{{ i18n.ts.adminOverviewPub }}</div>
 				<XPie :data="topPubInstancesForPie" class="chart"/>
-				<div class="subTitle">Top 10</div>
+				<div class="subTitle">{{ i18n.ts.adminOverviewTop10 }}</div>
 			</div>
 		</div>
 		<div v-if="!fetching" class="items">
@@ -27,7 +27,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 						{{ number(federationSubActive) }}
 						<MkNumberDiff v-if="federationSubActiveDiff != null" v-tooltip="i18n.ts.dayOverDayChanges" class="diff" :value="federationSubActiveDiff"></MkNumberDiff>
 					</div>
-					<div class="label">Sub</div>
+					<div class="label">{{ i18n.ts.adminOverviewSub }}</div>
 				</div>
 			</div>
 			<div class="item _panel pub">
@@ -37,7 +37,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 						{{ number(federationPubActive) }}
 						<MkNumberDiff v-if="federationPubActiveDiff != null" v-tooltip="i18n.ts.dayOverDayChanges" class="diff" :value="federationPubActiveDiff"></MkNumberDiff>
 					</div>
-					<div class="label">Pub</div>
+					<div class="label">{{ i18n.ts.adminOverviewPub }}</div>
 				</div>
 			</div>
 		</div>
@@ -83,7 +83,7 @@ onMounted(async () => {
 					os.pageWindow(`/instance-info/${x.host}`);
 				},
 			})),
-			{ name: '(other)', color: '#80808080', value: res.otherFollowersCount },
+			{ name: i18n.ts.other, color: '#80808080', value: res.otherFollowersCount },
 		];
 		topPubInstancesForPie.value = [
 			...res.topPubInstances.map(x => ({
@@ -94,7 +94,7 @@ onMounted(async () => {
 					os.pageWindow(`/instance-info/${x.host}`);
 				},
 			})),
-			{ name: '(other)', color: '#80808080', value: res.otherFollowingCount },
+			{ name: i18n.ts.other, color: '#80808080', value: res.otherFollowingCount },
 		];
 	});
 

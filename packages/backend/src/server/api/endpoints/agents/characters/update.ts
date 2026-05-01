@@ -55,6 +55,7 @@ export const paramDef = {
 		},
 		forbiddenBehavior: { type: 'string', maxLength: AGENT_TEXT_FIELD_MAX },
 		avatarFileId: { type: 'string', format: 'misskey:id', nullable: true },
+		promptOpenSourced: { type: 'boolean' },
 	},
 	required: ['characterId'],
 } as const;
@@ -97,6 +98,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			}
 			if (ps.forbiddenBehavior !== undefined) row.forbiddenBehavior = ps.forbiddenBehavior;
 			if (ps.avatarFileId !== undefined) row.avatarFileId = ps.avatarFileId;
+			if (ps.promptOpenSourced !== undefined) row.promptOpenSourced = ps.promptOpenSourced === true;
 			row.updatedAt = new Date();
 			await this.agentCharactersRepository.save(row);
 

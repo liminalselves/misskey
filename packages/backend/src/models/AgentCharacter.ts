@@ -92,4 +92,10 @@ export class MiAgentCharacter {
 		default: false,
 	})
 	public moderationBanned: boolean;
+
+	/** 作者主动开源完整提示词；为 true 时详情与广场详情返回完整正文 */
+	@Column('boolean', {
+		default: false,
+	})
+	public promptOpenSourced: boolean;
 }

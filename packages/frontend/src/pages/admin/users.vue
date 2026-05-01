@@ -34,9 +34,15 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 			<MkPagination v-slot="{items}" :paginator="paginator">
 				<div :class="$style.users">
-					<MkA v-for="user in items" :key="user.id" v-tooltip.mfm="`Last posted: ${user.updatedAt ? dateString(user.updatedAt) : 'Unknown'}`" :class="$style.user" :to="`/admin/user/${user.id}`">
-						<MkUserCardMini :user="user"/>
-					</MkA>
+					<div v-for="user in items" :key="user.id" :class="$style.userWrap">
+						<MkA v-tooltip.mfm="`Last posted: ${user.updatedAt ? dateString(user.updatedAt) : 'Unknown'}`" :class="$style.user" :to="`/admin/user/${user.id}`">
+							<MkUserCardMini :user="user"/>
+						</MkA>
+						<div v-if="agentSuccessRateMap.get(user.id) && agentSuccessRateMap.get(user.id)!.total > 0" :class="[$style.agentRate, agentRateClass(agentSuccessRateMap.get(user.id)!)]">
+							<i class="ti ti-robot" style="font-size: 0.85em;"></i>
+							{{ agentRatePct(agentSuccessRateMap.get(user.id)!) }}% ({{ agentSuccessRateMap.get(user.id)!.success }}/{{ agentSuccessRateMap.get(user.id)!.total }})
+						</div>
+					</div>
 				</div>
 			</MkPagination>
 		</div>
@@ -45,7 +51,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { computed, markRaw, ref, watchEffect } from 'vue';
+import { computed, markRaw, ref, useCssModule, watch, watchEffect } from 'vue';
 import * as Misskey from 'misskey-js';
 import { defaultMemoryStorage } from '@/memory-storage';
 import MkButton from '@/components/MkButton.vue';
@@ -60,6 +66,7 @@ import { useMkSelect } from '@/composables/use-mkselect.js';
 import MkUserCardMini from '@/components/MkUserCardMini.vue';
 import { dateString } from '@/filters/date.js';
 import { Paginator } from '@/utility/paginator.js';
+import { misskeyApi } from '@/utility/misskey-api.js';
 
 type SearchQuery = {
 	sort?: '-createdAt' | '+createdAt' | '-updatedAt' | '+updatedAt';
@@ -120,6 +127,44 @@ const paginator = markRaw(new Paginator('admin/show-users', {
 	})),
 	offsetMode: true,
 }));
+
+type AgentSuccessRateEntry = { userId: string; success: number; total: number };
+const agentSuccessRateMap = ref<Map<string, AgentSuccessRateEntry>>(new Map());
+const $style = useCssModule();
+
+async function fetchSuccessRates(userIds: string[]) {
+	if (userIds.length === 0) return;
+	try {
+		const result = await misskeyApi('admin/users/agent-success-rate' as any, { userIds }) as AgentSuccessRateEntry[];
+		const next = new Map(agentSuccessRateMap.value);
+		for (const entry of result) {
+			next.set(entry.userId, entry);
+		}
+		agentSuccessRateMap.value = next;
+	} catch {
+		// 接口不可用时静默失败
+	}
+}
+
+watch(
+	() => paginator.items.value.map((u: any) => u.id as string),
+	(ids) => {
+		const missing = ids.filter(id => !agentSuccessRateMap.value.has(id));
+		if (missing.length > 0) fetchSuccessRates(missing);
+	},
+	{ deep: false },
+);
+
+function agentRatePct(entry: AgentSuccessRateEntry): string {
+	return ((entry.success / entry.total) * 100).toFixed(0);
+}
+
+function agentRateClass(entry: AgentSuccessRateEntry): string {
+	const pct = (entry.success / entry.total) * 100;
+	if (pct >= 90) return $style.rateGood;
+	if (pct >= 60) return $style.rateWarn;
+	return $style.rateMuted;
+}
 
 function searchUser() {
 	os.selectUser({ includeSelf: true }).then(user => {
@@ -204,9 +249,47 @@ definePage(() => ({
 	display: grid;
 	grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
 	grid-gap: 12px;
+}
 
-	> .user:hover {
+.userWrap {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.user {
+	display: block;
+
+	&:hover {
 		text-decoration: none;
 	}
+}
+
+.agentRate {
+	font-size: 0.78em;
+	font-weight: 600;
+	padding: 2px 8px;
+	border-radius: 6px;
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	width: fit-content;
+	margin-left: 4px;
+}
+
+.rateGood {
+	color: var(--MI_THEME-success);
+	background: color-mix(in srgb, var(--MI_THEME-success) 12%, transparent);
+}
+
+.rateWarn {
+	color: var(--MI_THEME-warn);
+	background: color-mix(in srgb, var(--MI_THEME-warn) 12%, transparent);
+}
+
+.rateMuted {
+	color: var(--MI_THEME-fg);
+	opacity: 0.45;
+	background: color-mix(in srgb, var(--MI_THEME-fg) 8%, transparent);
 }
 </style>

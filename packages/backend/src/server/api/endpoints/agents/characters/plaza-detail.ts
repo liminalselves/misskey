@@ -28,6 +28,31 @@ export const meta = {
 			summary: { type: 'string', nullable: true },
 			avatarFileId: { type: 'string', format: 'misskey:id', nullable: true },
 			publishedVersion: { type: 'integer', nullable: true, optional: true },
+			promptOpenSourced: { type: 'boolean' },
+			openSourcePrompt: {
+				type: 'object',
+				nullable: true,
+				optional: true,
+				properties: {
+					personality: { type: 'string' },
+					background: { type: 'string' },
+					speakingStyle: { type: 'string' },
+					greeting: { type: 'string' },
+					forbiddenBehavior: { type: 'string' },
+					exampleTurns: {
+						type: 'array',
+						items: {
+							type: 'object',
+							properties: {
+								role: { type: 'string', enum: ['user', 'assistant'] },
+								content: { type: 'string' },
+							},
+							required: ['role', 'content'],
+						},
+					},
+				},
+				required: ['personality', 'background', 'speakingStyle', 'greeting', 'forbiddenBehavior', 'exampleTurns'],
+			},
 			createdAt: { type: 'string', format: 'date-time' },
 			updatedAt: { type: 'string', format: 'date-time' },
 			promptStats: {
@@ -111,6 +136,26 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				this.agentPlazaReviewService.findMyReview(me.id, { characterId: ps.characterId }),
 			]);
 			const aiReplyCount = aiReplyMap.get(row.id) ?? 0;
+			let openSourcePrompt: {
+				personality: string;
+				background: string;
+				speakingStyle: string;
+				greeting: string;
+				forbiddenBehavior: string;
+				exampleTurns: { role: 'user' | 'assistant'; content: string }[];
+			} | undefined;
+			if (row.promptOpenSourced === true) {
+				// 已开源：使用发布态字段供广场访客查看完整提示词
+				const effective = this.agentService.effectiveCharacterForLlm(row, true);
+				openSourcePrompt = {
+					personality: effective.personality,
+					background: effective.background,
+					speakingStyle: effective.speakingStyle,
+					greeting: effective.greeting,
+					forbiddenBehavior: effective.forbiddenBehavior,
+					exampleTurns: this.agentService.exampleTurnsFromStored(effective.exampleDialogue),
+				};
+			}
 			return {
 				id: row.id,
 				userId: row.userId,
@@ -118,6 +163,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				summary: d.summary,
 				avatarFileId: d.avatarFileId,
 				...(row.publishedVersion != null ? { publishedVersion: row.publishedVersion } : {}),
+				promptOpenSourced: row.promptOpenSourced === true,
+				...(openSourcePrompt ? { openSourcePrompt } : {}),
 				createdAt: row.createdAt.toISOString(),
 				updatedAt: row.updatedAt.toISOString(),
 				promptStats,

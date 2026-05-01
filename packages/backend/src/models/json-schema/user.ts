@@ -625,11 +625,14 @@ export const packedMeDetailedOnlySchema = {
 		},
 		emailNotificationTypes: {
 			type: 'array',
-			nullable: false, optional: false,
 			items: {
 				type: 'string',
-				nullable: false, optional: false,
 			},
+			nullable: false, optional: false,
+		},
+		enableAppPush: {
+			type: 'boolean',
+			nullable: false, optional: true,
 		},
 		achievements: {
 			type: 'array',

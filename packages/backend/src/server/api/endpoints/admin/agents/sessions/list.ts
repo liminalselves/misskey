@@ -16,7 +16,7 @@ import { UserEntityService } from '@/core/entities/UserEntityService.js';
 export const meta = {
 	tags: ['admin'],
 	requireCredential: true,
-	requireModerator: true,
+	requireAdmin: true,
 	kind: 'read:admin',
 	limit: { duration: ms('1hour'), max: 120 },
 	res: {
@@ -36,6 +36,7 @@ export const meta = {
 				sessionKind: { type: 'string', enum: ['draft_test', 'community'] },
 				lastMessageAt: { type: 'string', format: 'date-time', nullable: true },
 				agentReplyPending: { type: 'boolean' },
+				moderationBanned: { type: 'boolean' },
 				characterName: { type: 'string' },
 				user: { type: 'object', ref: 'UserLite' },
 			},
@@ -76,24 +77,25 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			const qbSelect = [
 				's.id', 's.createdAt', 's.updatedAt', 's.userId', 's.name',
 				's.characterId', 's.dialogueStyleId', 's.sessionKind',
-				's.lastMessageAt', 's.agentReplyPending',
+				's.lastMessageAt', 's.agentReplyPending', 's.moderationBanned',
 			] as const;
 
 			if (ps.sessionId) {
 				const row = await this.agentSessionsRepository.findOne({
 					where: { id: ps.sessionId },
-					select: {
-						id: true,
-						createdAt: true,
-						updatedAt: true,
-						userId: true,
-						name: true,
-						characterId: true,
-						dialogueStyleId: true,
-						sessionKind: true,
-						lastMessageAt: true,
-						agentReplyPending: true,
-					},
+				select: {
+					id: true,
+					createdAt: true,
+					updatedAt: true,
+					userId: true,
+					name: true,
+					characterId: true,
+					dialogueStyleId: true,
+					sessionKind: true,
+					lastMessageAt: true,
+					agentReplyPending: true,
+					moderationBanned: true,
+				},
 				});
 				if (!row) return [];
 				const users = await this.usersRepository.findBy({ id: row.userId });
@@ -117,6 +119,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					sessionKind: row.sessionKind,
 					lastMessageAt: row.lastMessageAt ? row.lastMessageAt.toISOString() : null,
 					agentReplyPending: row.agentReplyPending,
+					moderationBanned: row.moderationBanned,
 					characterName: ch?.name ?? '',
 					user,
 				}];
@@ -161,6 +164,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				sessionKind: r.sessionKind,
 				lastMessageAt: r.lastMessageAt ? r.lastMessageAt.toISOString() : null,
 				agentReplyPending: r.agentReplyPending,
+				moderationBanned: r.moderationBanned,
 				characterName: charMap.get(r.characterId) ?? '',
 				user: userById.get(r.userId)!,
 			}));

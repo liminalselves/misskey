@@ -13,6 +13,7 @@ import { DB_MAX_IMAGE_COMMENT_LENGTH } from '@/const.js';
 import { DriveService } from '@/core/DriveService.js';
 import type Logger from '@/logger.js';
 import { bindThis } from '@/decorators.js';
+import { isUserEffectivelySuspended } from '@/misc/user-effective-suspension.js';
 import { checkHttps } from '@/misc/check-https.js';
 import { ApResolverService } from '../ApResolverService.js';
 import { ApLoggerService } from '../ApLoggerService.js';
@@ -42,7 +43,7 @@ export class ApImageService {
 	@bindThis
 	public async createImage(actor: MiRemoteUser, value: string | IObject): Promise<MiDriveFile | null> {
 		// 投稿者が凍結されていたらスキップ
-		if (actor.isSuspended) {
+		if (isUserEffectivelySuspended(actor)) {
 			throw new Error('actor has been suspended');
 		}
 

@@ -7,6 +7,22 @@ SPDX-License-Identifier: AGPL-3.0-only
 <div
 	:class="$style.root"
 >
+	<!-- 编辑提示栏：复用输入框，但外观与功能切到「保存修改」 -->
+	<div v-if="editing" :class="$style.editHint">
+		<i :class="$style.editHintIcon" class="ti ti-pencil"></i>
+		<div :class="$style.editHintMain">
+			<span :class="$style.editHintLabel">{{ i18n.ts._agents.editingMessageHint }}</span>
+			<span v-if="editing.preview" :class="$style.editHintPreview">{{ editing.preview }}</span>
+		</div>
+		<button
+			class="_button"
+			:class="$style.editHintCancel"
+			type="button"
+			:title="i18n.ts._agents.editingCancel"
+			:aria-label="i18n.ts._agents.editingCancel"
+			@click="onCancelEdit"
+		><i class="ti ti-x"></i></button>
+	</div>
 	<div :class="$style.compose">
 		<textarea
 			ref="textareaEl"
@@ -20,10 +36,24 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<footer :class="$style.footer">
 			<div :class="$style.buttons">
 				<button class="_button" :class="$style.button" type="button" @click="insertEmoji"><i class="ti ti-mood-happy"></i></button>
-				<button class="_button" :class="[$style.button, $style.send]" type="button" :disabled="sendDisabled" :title="i18n.ts.send" @click="submit">
-					<template v-if="!sending"><i class="ti ti-send"></i></template>
-					<template v-else><MkLoading :em="true"/></template>
-				</button>
+				<button
+					v-if="sending"
+					class="_button"
+					:class="[$style.button, $style.abort]"
+					type="button"
+					:title="i18n.ts._agents.abortRequestTooltip"
+					:aria-label="i18n.ts._agents.abortRequestTooltip"
+					@click="onAbortClick"
+				><i class="ti ti-x"></i></button>
+				<button
+					v-else
+					class="_button"
+					:class="[$style.button, $style.send]"
+					type="button"
+					:disabled="sendDisabled"
+					:title="submitTitle"
+					@click="submit"
+				><i class="ti ti-send"></i></button>
 			</div>
 		</footer>
 	</div>
@@ -31,20 +61,22 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { onMounted, ref, shallowRef, computed, nextTick, onBeforeUnmount } from 'vue';
+import { onMounted, ref, shallowRef, computed, nextTick, onBeforeUnmount, watch } from 'vue';
 import { i18n } from '@/i18n.js';
 import { prefer } from '@/preferences.js';
 import { Autocomplete } from '@/utility/autocomplete.js';
 import { emojiPicker } from '@/utility/emoji-picker.js';
-import MkLoading from '@/components/global/MkLoading.vue';
 
 const props = defineProps<{
 	disabled?: boolean;
 	sending?: boolean;
+	editing?: { id: string; preview: string } | null;
 }>();
 
 const emit = defineEmits<{
 	(e: 'submit', text: string): void;
+	(e: 'cancelEdit'): void;
+	(e: 'abort'): void;
 }>();
 
 const textareaEl = shallowRef<HTMLTextAreaElement>();
@@ -53,6 +85,8 @@ const textareaReadOnly = ref(false);
 let autocompleteInstance: Autocomplete | null = null;
 
 const sendDisabled = computed(() => props.disabled || props.sending || text.value.trim().length === 0);
+
+const submitTitle = computed(() => props.editing ? i18n.ts.save : i18n.ts.send);
 
 function onKeydown(ev: KeyboardEvent) {
 	if (ev.key === 'Enter') {
@@ -67,6 +101,9 @@ function onKeydown(ev: KeyboardEvent) {
 				submit();
 			}
 		}
+	} else if (ev.key === 'Escape' && props.editing) {
+		ev.preventDefault();
+		onCancelEdit();
 	}
 }
 
@@ -74,16 +111,48 @@ function submit() {
 	const t = text.value.trim();
 	if (!t || props.sending || props.disabled) return;
 	emit('submit', t);
-	text.value = '';
+	if (!props.editing) {
+		text.value = '';
+	}
+}
+
+function onCancelEdit() {
+	emit('cancelEdit');
+}
+
+function onAbortClick() {
+	emit('abort');
 }
 
 function restoreDraft(t: string) {
 	text.value = t;
 }
 
+function setText(t: string) {
+	text.value = t;
+}
+
+function clearText() {
+	text.value = '';
+}
+
 defineExpose({
 	focus: () => textareaEl.value?.focus(),
 	restoreDraft,
+	setText,
+	clearText,
+});
+
+watch(() => props.editing?.id ?? null, async (id) => {
+	if (id != null) {
+		await nextTick();
+		const el = textareaEl.value;
+		if (el) {
+			el.focus();
+			const len = text.value.length;
+			try { el.setSelectionRange(len, len); } catch { /* ignore */ }
+		}
+	}
 });
 
 async function insertEmoji(ev: MouseEvent) {
@@ -187,6 +256,73 @@ onBeforeUnmount(() => {
 	color: var(--MI_THEME-accent);
 }
 
+.abort {
+	margin-left: auto;
+	color: var(--MI_THEME-error);
+
+	&:hover,
+	&:focus-visible {
+		background: color-mix(in srgb, var(--MI_THEME-error) 14%, transparent);
+		color: var(--MI_THEME-error);
+	}
+}
+
+.editHint {
+	display: flex;
+	align-items: center;
+	gap: 0.55em;
+	padding: 0.5em 0.75em;
+	background: color-mix(in srgb, var(--MI_THEME-accent) 14%, var(--MI_THEME-panel));
+	border-bottom: solid 1px color-mix(in srgb, var(--MI_THEME-accent) 28%, var(--MI_THEME-divider));
+	color: var(--MI_THEME-fg);
+	font-size: 0.88em;
+	min-width: 0;
+}
+
+.editHintIcon {
+	flex-shrink: 0;
+	color: var(--MI_THEME-accent);
+}
+
+.editHintMain {
+	flex: 1 1 auto;
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 0.15em;
+	overflow: hidden;
+}
+
+.editHintLabel {
+	font-weight: 600;
+	color: var(--MI_THEME-accent);
+}
+
+.editHintPreview {
+	font-size: 0.92em;
+	opacity: 0.72;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.editHintCancel {
+	flex-shrink: 0;
+	width: 28px;
+	height: 28px;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	border-radius: 999px;
+	color: color-mix(in srgb, var(--MI_THEME-fg) 78%, transparent);
+
+	&:hover,
+	&:focus-visible {
+		background: color-mix(in srgb, var(--MI_THEME-fg) 8%, transparent);
+		color: var(--MI_THEME-fg);
+	}
+}
+
 @media (max-width: 500px) {
 	.root {
 		border-radius: 10px 10px 0 0;
@@ -273,6 +409,16 @@ onBeforeUnmount(() => {
 			opacity: 0.38;
 			color: color-mix(in srgb, var(--MI_THEME-fg) 50%, transparent);
 		}
+	}
+
+	.abort {
+		margin-left: 0;
+		color: var(--MI_THEME-error);
+	}
+
+	.editHint {
+		padding: 0.45em 0.65em;
+		font-size: 0.82em;
 	}
 }
 </style>

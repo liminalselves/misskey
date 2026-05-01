@@ -11,6 +11,7 @@ import type { UserProfilesRepository, FollowingsRepository, ChannelFollowingsRep
 import { bindThis } from '@/decorators.js';
 import { IdService } from '@/core/IdService.js';
 import type { SelectQueryBuilder } from 'typeorm';
+import { sqlUserNotEffectivelySuspended } from '@/misc/user-effective-suspension.js';
 
 @Injectable()
 export class QueryService {
@@ -358,20 +359,22 @@ export class QueryService {
 	// Requirements: user replyUser renoteUser must be joined
 	@bindThis
 	public generateSuspendedUserQueryForNote(q: SelectQueryBuilder<any>, excludeAuthor?: boolean): void {
+		const notSusp = sqlUserNotEffectivelySuspended;
+		q.setParameter('suspensionNow', new Date());
 		if (excludeAuthor) {
 			const brakets = (user: string) => new Brackets(qb => qb
 				.where(`${user}.id IS NULL`) // そもそもreplyやrenoteではない、もしくはleftjoinなどでuserが存在しなかった場合を考慮
 				.orWhere(`user.id = ${user}.id`)
-				.orWhere(`${user}.isSuspended = FALSE`));
+				.orWhere(notSusp(user)));
 			q
 				.andWhere(brakets('replyUser'))
 				.andWhere(brakets('renoteUser'));
 		} else {
 			const brakets = (user: string) => new Brackets(qb => qb
 				.where(`${user}.id IS NULL`) // そもそもreplyやrenoteではない、もしくはleftjoinなどでuserが存在しなかった場合を考慮
-				.orWhere(`${user}.isSuspended = FALSE`));
+				.orWhere(notSusp(user)));
 			q
-				.andWhere('user.isSuspended = FALSE')
+				.andWhere(notSusp('user'))
 				.andWhere(brakets('replyUser'))
 				.andWhere(brakets('renoteUser'));
 		}

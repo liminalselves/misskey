@@ -1,5 +1,34 @@
 ## 2026.1.0
 
+### （2026.1.0-beta.1）
+
+#### General
+
+- Enhance: CI 工作流：`docker-develop`、TCR 自 GHCR 快速同步镜像流程（`sync-tcr-from-ghcr`）调整。
+- Enhance: `.gitignore`、`AGENTS_FEATURE_DEVELOPMENT.md` 与阿里云移动推送说明文档做小步修订。
+
+#### Client
+
+- Enhance: Web 嵌入式壳：`app.vue`、配套 `polyfills` 及通知载荷解析，与服务端原生推送桥接对齐；`MkNotification`、`settings/notifications` 与原生推送开关用词同步。
+- Enhance: Tooltip 与页首：`MkTooltip`、`v-tooltip` 指令、`use-tooltip` 与 `MkPageHeader`，改善提示定位与窄屏、安全区等场景。
+- Enhance: 「关于本站」、`admin/overview` 各图表与队列、活跃用户、联邦、热力图及用户管理等页的信息层次与留白收敛；`agents-chat-audit`、`agents-review`、`agents-settings` 高密度操作优化；新增管理页「兑换码」「报表」入口。
+- Enhance: 智能体会话：`agent-session` 与表单、消息气泡支持上下文压缩粘性段总览、模型切换预览、消息中止、回溯与上下文导入等配套交互。
+- Enhance: 「我的用量」页 `agents/my-stats`：`credit-balance`、账单日志、成功率与摘要类接口对齐展示。
+- Enhance: `agents/index`、广场角色与风格详情、角色与风格编辑器展示字段扩展；`chat/home`、`home.agents` 入口微调；路由与 `_common` 挂载位补充。
+
+#### Server
+
+- Enhance: **原生推送与用户开关**：`user_profile.enableAppPush`（迁移 `1771900000000-AddUserAppPush`）；推送服务与在线 WebSocket 状态（`UserWebSocketStatusService`）；`native-push-bridge-content` 统一原生壳侧载荷组装；移动端注册与 `notification`/`push`/`meta`/`user` 字段联动。
+- Enhance: **用户暂缓至指定时间**：`user.suspendedUntil` 及索引（`1772700000000-UserSuspendedUntil`）；暂缓期间搜索、信息流、联邦投递与用户信息展示等与 `user-effective-suspension` 一致；`admin/suspend-user` 录入到期时间；定时任务自动解除已到期的暂缓账号。
+- Enhance: **智能体计费与用量日志**：`user_profile.agentCreditBalance` 与表 `agent_model_usage_log`，记录模型、令牌、耗时、费用与状态，并区分 `usageKind`（迁移 `1772100000000-AgentModelUsageLog`、`1773000000000-AgentModelUsageLogUsageKind`）；`AgentModelUsageService`；端点 `agents/credit-balance`、`agents/billing-logs`、`agents/my-usage-summary`、`agents/models/success-rates`；管理侧 `admin/users/agent-success-rate`。
+- Enhance: **兑换码**：表 `agent_redeem_code`（`1772200000000-AgentRedeemCode`）；用户兑换 `agents/redeem-code`；管理生成、列出与作废 `admin/agents/redeem-codes/*`；报表入口 `admin/agents/reports/overview`。
+- Enhance: **长期记忆默认**：新建会话默认关闭语义记忆写入与检索链路（`1772300000000-AgentLongMemoryDefaultOff`）；长期记忆提供者列默认由 `none` 承担（配合 `1772400000000`、`1772600000000-AgentSessionLongMemoryProviderDefaultNone`，与下同批迁移）。
+- Enhance: **上下文压缩与粘性摘要**：`meta` 增加压缩用系统提示、输入字符上限、输出令牌上限（`1772500000000-AddAgentCompressionMeta`）；`AgentCompressionMemoryService`；表 `agent_session_compression_sticky` 与用户 API `agents/compression-sticky/*`；会话 `sessions/compression-overview`、`sessions/preview-model-change`；压缩带宽比例与允许的压缩模型清单（`1772800000000-AgentCompressionBandRatios`、`1772900000000-AgentCompressionModelIds`）。
+- Enhance: **提示词开源标记**：角色与对话风格表的 `promptOpenSourced`（`1772000000000-AgentPromptOpenSource`），与广场与个人展示接口对齐。
+- Enhance: 会话删除 `agents/sessions/delete`；消息 `agents/messages/update`、`abort`、`rollback`、`import-context`；`agents/messages/send` 等与计费、压缩、会话状态耦合的发送管线扩展；流媒体 API、全局 API 调用钩子、验证码登录路径等随会话与用户状态做小步适配。
+
+部署须依次执行迁移：`1771900000000-AddUserAppPush` 至 `1773000000000-AgentModelUsageLogUsageKind`（按文件名时间戳排序）。
+
 ### General
 - Fix: Windows 上执行 `pnpm --filter i18n generate` 时，`generateLocaleInterface.ts` 的 `isMain` 判断因路径格式与 `import.meta.url` 不一致导致脚本未实际更新 `packages/i18n/src/autogen/locale.ts`；已改为使用 `fileURLToPath` 与 `path.resolve` 比较，与 Unix 行为一致。
 - Enhance: 更新多语言词条、`packages/i18n/src/autogen/locale.ts` 及 `packages/misskey-js` 自动生成类型，补充阿里云验证码与智能体相关新增字段，保证前后端类型与文案同步。

@@ -34,6 +34,7 @@ export const paramDef = {
 	properties: {
 		name: { type: 'string', minLength: 1, maxLength: 256 },
 		body: { type: 'string', maxLength: AGENT_TEXT_FIELD_MAX },
+		promptOpenSourced: { type: 'boolean' },
 	},
 	required: ['name'],
 } as const;
@@ -61,6 +62,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				reviewStatus: 'draft',
 				publishedVersion: null,
 				publishedSnapshot: null,
+				promptOpenSourced: ps.promptOpenSourced === true,
 			});
 			return {
 				id: row.id,

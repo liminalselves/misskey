@@ -11,6 +11,7 @@ import { DI } from '@/di-symbols.js';
 import { ApiError } from '@/server/api/error.js';
 import { AgentService } from '@/core/AgentService.js';
 import { ModerationLogService } from '@/core/ModerationLogService.js';
+import { NotificationService } from '@/core/NotificationService.js';
 
 export const meta = {
 	tags: ['admin'],
@@ -52,6 +53,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		private agentService: AgentService,
 
 		private moderationLogService: ModerationLogService,
+
+		private notificationService: NotificationService,
 	) {
 		super(meta, paramDef, async (ps, me) => {
 			this.agentService.assertAgentsEnabled();
@@ -75,22 +78,27 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				this.agentService.syncCharacterListedFlag(row);
 				row.updatedAt = new Date();
 				await this.agentCharactersRepository.save(row);
-				await this.moderationLogService.log(me, 'resolveAgentReview', {
-					kind: 'character',
-					id: row.id,
-					decision: ps.decision,
-					name: row.name,
-					ownerUserId: row.userId,
-					reviewStatus: row.reviewStatus,
-					publishedVersion: row.publishedVersion,
-					isPublished: row.isPublished,
-				});
-				return {
-					ok: true,
-					reviewStatus: row.reviewStatus,
-					publishedVersion: row.publishedVersion,
-					isPublished: row.isPublished,
-				};
+			await this.moderationLogService.log(me, 'resolveAgentReview', {
+				kind: 'character',
+				id: row.id,
+				decision: ps.decision,
+				name: row.name,
+				ownerUserId: row.userId,
+				reviewStatus: row.reviewStatus,
+				publishedVersion: row.publishedVersion,
+				isPublished: row.isPublished,
+			});
+			this.notificationService.createNotification(
+				row.userId,
+				ps.decision === 'approve' ? 'agentReviewApproved' : 'agentReviewRejected',
+				{ agentKind: 'character', resourceId: row.id, resourceName: row.name },
+			);
+			return {
+				ok: true,
+				reviewStatus: row.reviewStatus,
+				publishedVersion: row.publishedVersion,
+				isPublished: row.isPublished,
+			};
 			} else {
 				const row = await this.agentDialogueStylesRepository.findOneBy({ id: ps.id });
 				if (!row || row.reviewStatus !== 'pending') {
@@ -111,22 +119,27 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				this.agentService.syncStyleListedFlag(row);
 				row.updatedAt = new Date();
 				await this.agentDialogueStylesRepository.save(row);
-				await this.moderationLogService.log(me, 'resolveAgentReview', {
-					kind: 'style',
-					id: row.id,
-					decision: ps.decision,
-					name: row.name,
-					ownerUserId: row.userId,
-					reviewStatus: row.reviewStatus,
-					publishedVersion: row.publishedVersion,
-					isPublished: row.isPublished,
-				});
-				return {
-					ok: true,
-					reviewStatus: row.reviewStatus,
-					publishedVersion: row.publishedVersion,
-					isPublished: row.isPublished,
-				};
+			await this.moderationLogService.log(me, 'resolveAgentReview', {
+				kind: 'style',
+				id: row.id,
+				decision: ps.decision,
+				name: row.name,
+				ownerUserId: row.userId,
+				reviewStatus: row.reviewStatus,
+				publishedVersion: row.publishedVersion,
+				isPublished: row.isPublished,
+			});
+			this.notificationService.createNotification(
+				row.userId,
+				ps.decision === 'approve' ? 'agentReviewApproved' : 'agentReviewRejected',
+				{ agentKind: 'style', resourceId: row.id, resourceName: row.name },
+			);
+			return {
+				ok: true,
+				reviewStatus: row.reviewStatus,
+				publishedVersion: row.publishedVersion,
+				isPublished: row.isPublished,
+			};
 			}
 		});
 	}

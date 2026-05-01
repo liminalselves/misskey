@@ -89,6 +89,8 @@ const props = defineProps<{
 const emit = defineEmits<{
 	(e: 'navigate', messageId: string): void;
 	(e: 'deleted', messageId: string): void;
+	(e: 'editRequested', payload: { id: string; role: string; content: string }): void;
+	(e: 'rollbackRequested', payload: { id: string; content: string }): void;
 }>();
 
 const isUser = computed(() => props.message.role === 'user');
@@ -107,16 +109,41 @@ function menuItems(): MenuItem[] {
 		action: () => {
 			copyToClipboard(props.message.content ?? '');
 		},
-	}, {
-		type: 'divider',
-	}, {
+	}];
+	if (!props.isSearchResult && (props.message.role === 'user' || props.message.role === 'assistant')) {
+		items.push({
+			text: i18n.ts.edit,
+			icon: 'ti ti-pencil',
+			action: () => {
+				emit('editRequested', {
+					id: props.message.id,
+					role: props.message.role,
+					content: props.message.content ?? '',
+				});
+			},
+		});
+	}
+	if (!props.isSearchResult && props.message.role === 'user') {
+		items.push({
+			text: i18n.ts._agents.rollback,
+			icon: 'ti ti-arrow-back-up',
+			action: () => {
+				emit('rollbackRequested', {
+					id: props.message.id,
+					content: props.message.content ?? '',
+				});
+			},
+		});
+	}
+	items.push({ type: 'divider' });
+	items.push({
 		text: i18n.ts.delete,
 		icon: 'ti ti-trash',
 		danger: true,
 		action: () => {
 			void confirmDelete();
 		},
-	}];
+	});
 	return items;
 }
 

@@ -24,6 +24,8 @@ export function useTooltip(
 
 	let autoHidingTimer: number | null = null;
 
+	let scrollOrResizeCleanup: (() => void) | null = null;
+
 	const open = () => {
 		close();
 		if (!isHovering) return;
@@ -35,6 +37,24 @@ export function useTooltip(
 		onShow(showing);
 		changeShowingState = () => {
 			showing.value = false;
+		};
+
+		const onScrollOrResize = () => {
+			if (changeShowingState == null) return;
+			isHovering = false;
+			window.clearTimeout(timeoutId);
+			if (autoHidingTimer != null) {
+				window.clearInterval(autoHidingTimer);
+				autoHidingTimer = null;
+			}
+			close();
+		};
+
+		window.addEventListener('scroll', onScrollOrResize, true);
+		window.addEventListener('resize', onScrollOrResize, true);
+		scrollOrResizeCleanup = () => {
+			window.removeEventListener('scroll', onScrollOrResize, true);
+			window.removeEventListener('resize', onScrollOrResize, true);
 		};
 
 		autoHidingTimer = window.setInterval(() => {
@@ -49,6 +69,10 @@ export function useTooltip(
 	};
 
 	const close = () => {
+		if (scrollOrResizeCleanup != null) {
+			scrollOrResizeCleanup();
+			scrollOrResizeCleanup = null;
+		}
 		if (changeShowingState != null) {
 			changeShowingState();
 			changeShowingState = null;
@@ -93,6 +117,8 @@ export function useTooltip(
 			el.addEventListener('mouseleave', onMouseleave, { passive: true });
 			el.addEventListener('touchstart', onTouchstart, { passive: true });
 			el.addEventListener('touchend', onTouchend, { passive: true });
+			el.addEventListener('touchcancel', onTouchend, { passive: true });
+			el.addEventListener('pointercancel', onTouchend, { passive: true });
 			el.addEventListener('click', close, { passive: true });
 		}
 	}, {

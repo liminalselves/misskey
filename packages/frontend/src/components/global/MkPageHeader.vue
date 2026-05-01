@@ -42,7 +42,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		</div>
 		<div v-if="actions && actions.length > 0" :class="$style.buttons">
 			<template v-for="action in actions">
-				<button v-tooltip.noDelay="action.text" class="_button" :class="[$style.button, { [$style.highlighted]: action.highlighted }]" @click.stop="action.handler" @touchstart="preventDrag"><i :class="action.icon"></i></button>
+				<button v-tooltip.noDelay="action.text" class="_button" :class="[$style.button, { [$style.highlighted]: action.highlighted }, { [$style.danger]: action.danger }]" @click.stop="action.handler" @touchstart="preventDrag"><i :class="action.icon"></i></button>
 			</template>
 		</div>
 	</div>
@@ -73,7 +73,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		</template>
 		<div v-if="(!thin_ && narrow && !hideTitle) || (actions && actions.length > 0)" :class="$style.buttons">
 			<template v-for="action in actions">
-				<button v-tooltip.noDelay="action.text" class="_button" :class="[$style.button, { [$style.highlighted]: action.highlighted }]" @click.stop="action.handler" @touchstart="preventDrag"><i :class="action.icon"></i></button>
+				<button v-tooltip.noDelay="action.text" class="_button" :class="[$style.button, { [$style.highlighted]: action.highlighted }, { [$style.danger]: action.danger }]" @click.stop="action.handler" @touchstart="preventDrag"><i :class="action.icon"></i></button>
 			</template>
 		</div>
 	</div>
@@ -381,6 +381,14 @@ onUnmounted(() => {
 
 	&.highlighted {
 		color: var(--MI_THEME-accent);
+	}
+
+	&.danger {
+		color: var(--MI_THEME-error);
+
+		&:hover {
+			background: color-mix(in srgb, var(--MI_THEME-error) 14%, transparent);
+		}
 	}
 }
 

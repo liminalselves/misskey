@@ -47,6 +47,7 @@ const props = withDefaults(defineProps<{
 
 const emit = defineEmits<{
 	(ev: 'closed'): void;
+	(ev: 'requestClose'): void;
 }>();
 
 // タイミングによっては最初から showing = false な場合があり、その場合に closed 扱いにしないと永久にDOMに残ることになる
@@ -55,8 +56,18 @@ if (!props.showing) emit('closed');
 const el = useTemplateRef('el');
 const zIndex = os.claimZIndex('high');
 
+/** アンカーがDOMから外れたあとも rAF が回り続け、座標が(0,0)付近に飛ぶのを防ぐ */
+let anchorGoneNotified = false;
+
 function setPosition() {
 	if (el.value == null) return;
+	if (props.anchorElement != null && !props.anchorElement.isConnected) {
+		if (!anchorGoneNotified) {
+			anchorGoneNotified = true;
+			emit('requestClose');
+		}
+		return;
+	}
 	const data = calcPopupPosition(el.value, {
 		anchorElement: props.anchorElement,
 		direction: props.direction,

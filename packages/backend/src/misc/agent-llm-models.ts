@@ -16,6 +16,10 @@ export type AgentLlmModelJson = {
 	apiModelName: string;
 	maxContextTokens: number;
 	maxOutputTokensPerCall: number;
+	/** 下架：管理员在控制面板可见但用户侧与新建会话均不可用 */
+	unlisted: boolean;
+	/** 每次成功或中断调用扣费金额；失败不扣费。0 表示免费 */
+	costPerCall: number;
 };
 
 const DEFAULT_CTX = 8192;
@@ -43,6 +47,10 @@ export function isAgentLlmRunnable(meta: MiMeta): boolean {
 	return getEffectiveLlmModels(meta).length > 0;
 }
 
+/**
+ * 返回所有通过基本校验的模型（包含 unlisted）。
+ * 管理端（控制面板、报表）使用此列表；用户侧请使用 {@link getActiveLlmModels}。
+ */
 export function getEffectiveLlmModels(meta: MiMeta): AgentLlmModelJson[] {
 	const raw = meta.agentLlmModels;
 	if (raw == null || !Array.isArray(raw) || raw.length === 0) {
@@ -80,6 +88,9 @@ export function getEffectiveLlmModels(meta: MiMeta): AgentLlmModelJson[] {
 			128_000,
 			DEFAULT_OUT,
 		);
+		const unlisted = o.unlisted === true;
+		const costRaw = typeof o.costPerCall === 'number' ? o.costPerCall : Number(o.costPerCall);
+		const costPerCall = Number.isFinite(costRaw) && costRaw >= 0 ? costRaw : 0;
 		out.push({
 			id,
 			name,
@@ -89,18 +100,29 @@ export function getEffectiveLlmModels(meta: MiMeta): AgentLlmModelJson[] {
 			apiModelName,
 			maxContextTokens,
 			maxOutputTokensPerCall,
+			unlisted,
+			costPerCall,
 		});
 	}
 	return out;
 }
 
-export function packPublicAgentModels(meta: MiMeta): { id: string; name: string; description: string | null; maxContextTokens: number; maxOutputTokensPerCall: number }[] {
-	return getEffectiveLlmModels(meta).map(m => ({
+/**
+ * 用户侧可见可用的模型（排除已下架项）。
+ * 用于 MetaLite、新会话选择模型等场景。
+ */
+export function getActiveLlmModels(meta: MiMeta): AgentLlmModelJson[] {
+	return getEffectiveLlmModels(meta).filter(m => !m.unlisted);
+}
+
+export function packPublicAgentModels(meta: MiMeta): { id: string; name: string; description: string | null; maxContextTokens: number; maxOutputTokensPerCall: number; costPerCall: number }[] {
+	return getActiveLlmModels(meta).map(m => ({
 		id: m.id,
 		name: m.name,
 		description: m.description,
 		maxContextTokens: m.maxContextTokens,
 		maxOutputTokensPerCall: m.maxOutputTokensPerCall,
+		costPerCall: m.costPerCall,
 	}));
 }
 
@@ -159,6 +181,21 @@ export function normalizeAgentLlmModelsParam(input: unknown): { ok: true; value:
 		if (!Number.isFinite(maxOutputTokensPerCall) || Math.trunc(maxOutputTokensPerCall) < 1 || Math.trunc(maxOutputTokensPerCall) > 128_000) {
 			return { ok: false };
 		}
+		let unlisted = false;
+		if (o.unlisted != null) {
+			if (typeof o.unlisted !== 'boolean') {
+				return { ok: false };
+			}
+			unlisted = o.unlisted;
+		}
+		let costPerCall = 0;
+		if (o.costPerCall != null) {
+			const c = typeof o.costPerCall === 'number' ? o.costPerCall : Number(o.costPerCall);
+			if (!Number.isFinite(c) || c < 0 || c > 1_000_000) {
+				return { ok: false };
+			}
+			costPerCall = c;
+		}
 		out.push({
 			id,
 			name,
@@ -168,6 +205,8 @@ export function normalizeAgentLlmModelsParam(input: unknown): { ok: true; value:
 			apiModelName,
 			maxContextTokens: Math.trunc(maxContextTokens),
 			maxOutputTokensPerCall: Math.trunc(maxOutputTokensPerCall),
+			unlisted,
+			costPerCall,
 		});
 	}
 	return { ok: true, value: out };
@@ -175,7 +214,7 @@ export function normalizeAgentLlmModelsParam(input: unknown): { ok: true; value:
 
 /** 公开 meta 上展示的「上下文上限」：与默认模型一致，兼容旧客户端字段 */
 export function packedAgentMaxContextTokens(meta: MiMeta): number {
-	const models = getEffectiveLlmModels(meta);
+	const models = getActiveLlmModels(meta);
 	if (models.length === 0) return meta.agentMaxContextTokens;
 	const defId = meta.agentDefaultModelId?.trim();
 	const pick = defId ? models.find(m => m.id === defId) ?? models[0] : models[0];
@@ -183,7 +222,7 @@ export function packedAgentMaxContextTokens(meta: MiMeta): number {
 }
 
 export function packedAgentMaxOutputTokensPerCall(meta: MiMeta): number {
-	const models = getEffectiveLlmModels(meta);
+	const models = getActiveLlmModels(meta);
 	if (models.length === 0) return meta.agentMaxOutputTokensPerCall;
 	const defId = meta.agentDefaultModelId?.trim();
 	const pick = defId ? models.find(m => m.id === defId) ?? models[0] : models[0];

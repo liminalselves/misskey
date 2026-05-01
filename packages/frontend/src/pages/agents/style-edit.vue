@@ -28,6 +28,16 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<MkInfo>{{ i18n.ts._agents.styleBodyHint }}</MkInfo>
 				</div>
 			</MkFolder>
+			<MkFolder>
+				<template #icon><i class="ti ti-license"></i></template>
+				<template #label>{{ i18n.ts._agents.editStyleOpenSource }}</template>
+				<div class="_gaps">
+					<MkSwitch v-model="form.state.promptOpenSourced">
+						<template #label>{{ i18n.ts._agents.openSourcePrompt }}</template>
+						<template #caption>{{ i18n.ts._agents.openSourcePromptStyleCaption }}</template>
+					</MkSwitch>
+				</div>
+			</MkFolder>
 			<div class="_buttons">
 				<MkButton danger rounded @click="remove"><i class="ti ti-trash"></i> {{ i18n.ts._agents.deleteStyle }}</MkButton>
 			</div>
@@ -41,6 +51,7 @@ import { computed, onMounted, ref } from 'vue';
 import MkInput from '@/components/MkInput.vue';
 import MkTextarea from '@/components/MkTextarea.vue';
 import MkButton from '@/components/MkButton.vue';
+import MkSwitch from '@/components/MkSwitch.vue';
 import MkLoading from '@/components/global/MkLoading.vue';
 import MkFolder from '@/components/MkFolder.vue';
 import MkFormFooter from '@/components/MkFormFooter.vue';
@@ -59,12 +70,13 @@ const props = defineProps<{
 const router = useRouter();
 const loading = ref(true);
 
-const form = useForm({ name: '', summary: '', body: '' }, async (state) => {
+const form = useForm({ name: '', summary: '', body: '', promptOpenSourced: false }, async (state) => {
 	await misskeyApi('agents/styles/update', {
 		styleId: props.styleId,
 		name: state.name,
 		summary: state.summary.trim() === '' ? null : state.summary,
 		body: state.body,
+		promptOpenSourced: state.promptOpenSourced,
 	});
 });
 
@@ -72,7 +84,12 @@ async function load() {
 	loading.value = true;
 	try {
 		const row = await misskeyApi('agents/styles/show', { styleId: props.styleId });
-		const next = { name: row.name, summary: row.summary ?? '', body: row.body ?? '' };
+		const next = {
+			name: row.name,
+			summary: row.summary ?? '',
+			body: row.body ?? '',
+			promptOpenSourced: row.promptOpenSourced === true,
+		};
 		Object.assign(form.state, next);
 		Object.assign(form.savedState, JSON.parse(JSON.stringify(next)));
 	} catch {

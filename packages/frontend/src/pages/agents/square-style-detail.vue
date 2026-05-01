@@ -70,6 +70,15 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</dl>
 			</MkFolder>
 
+			<MkFolder v-if="styleRow.promptOpenSourced && styleRow.openSourceBody" :defaultOpen="false" :class="$style.folderCard">
+				<template #icon><i class="ti ti-license"></i></template>
+				<template #label>{{ i18n.ts._agents.openSourcePromptDetail }}</template>
+				<div class="_gaps">
+					<MkInfo>{{ i18n.ts._agents.openSourcePromptNotice }}</MkInfo>
+					<p :class="$style.promptBody">{{ styleRow.openSourceBody }}</p>
+				</div>
+			</MkFolder>
+
 			<div v-panel :class="$style.reviewsCard">
 				<XSquarePlazaReviews
 					:style-id="styleRow.id"
@@ -128,6 +137,8 @@ type StylePlazaDetail = {
 	myReview?: { noteId: string; stars: number };
 	conversationCount: number;
 	aiReplyCount: number;
+	promptOpenSourced: boolean;
+	openSourceBody?: string;
 };
 
 const loading = ref(true);
@@ -419,5 +430,16 @@ watch(() => props.styleId, () => { void load(); });
 .reviewsCard {
 	border-radius: var(--MI-radius);
 	padding: 4px;
+}
+
+.promptBody {
+	margin: 0;
+	padding: 10px 12px;
+	white-space: pre-wrap;
+	line-height: 1.6;
+	font-size: 0.92em;
+	border-radius: 10px;
+	border: solid 1px var(--MI_THEME-divider);
+	background: color-mix(in srgb, var(--MI_THEME-bg) 30%, transparent);
 }
 </style>

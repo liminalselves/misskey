@@ -15,6 +15,7 @@ import { useChartTooltip } from '@/composables/use-chart-tooltip.js';
 import { chartVLine } from '@/utility/chart-vline.js';
 import { alpha } from '@/utility/color.js';
 import { initChart } from '@/utility/init-chart.js';
+import { i18n } from '@/i18n.js';
 
 initChart();
 
@@ -53,10 +54,10 @@ function pushData(value: number) {
 }
 
 const label =
-	props.type === 'process' ? 'Process' :
-	props.type === 'active' ? 'Active' :
-	props.type === 'delayed' ? 'Delayed' :
-	props.type === 'waiting' ? 'Waiting' :
+	props.type === 'process' ? i18n.ts.adminOverviewProcess :
+	props.type === 'active' ? i18n.ts.active :
+	props.type === 'delayed' ? i18n.ts.delayed :
+	props.type === 'waiting' ? i18n.ts.adminOverviewWaiting :
 	'?' as never;
 
 const color =

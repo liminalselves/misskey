@@ -86,6 +86,43 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</dl>
 			</MkFolder>
 
+			<MkFolder v-if="character.promptOpenSourced && character.openSourcePrompt" :defaultOpen="false" :class="$style.folderCard">
+				<template #icon><i class="ti ti-license"></i></template>
+				<template #label>{{ i18n.ts._agents.openSourcePromptDetail }}</template>
+				<div class="_gaps">
+					<MkInfo>{{ i18n.ts._agents.openSourcePromptNotice }}</MkInfo>
+					<section v-if="character.openSourcePrompt.personality.trim() !== ''" :class="$style.promptSection">
+						<h3 :class="$style.promptHeading">{{ i18n.ts._agents.fieldPersonality }}</h3>
+						<p :class="$style.promptBody">{{ character.openSourcePrompt.personality }}</p>
+					</section>
+					<section v-if="character.openSourcePrompt.background.trim() !== ''" :class="$style.promptSection">
+						<h3 :class="$style.promptHeading">{{ i18n.ts._agents.fieldBackground }}</h3>
+						<p :class="$style.promptBody">{{ character.openSourcePrompt.background }}</p>
+					</section>
+					<section v-if="character.openSourcePrompt.speakingStyle.trim() !== ''" :class="$style.promptSection">
+						<h3 :class="$style.promptHeading">{{ i18n.ts._agents.fieldSpeakingStyle }}</h3>
+						<p :class="$style.promptBody">{{ character.openSourcePrompt.speakingStyle }}</p>
+					</section>
+					<section v-if="character.openSourcePrompt.greeting.trim() !== ''" :class="$style.promptSection">
+						<h3 :class="$style.promptHeading">{{ i18n.ts._agents.fieldGreeting }}</h3>
+						<p :class="$style.promptBody">{{ character.openSourcePrompt.greeting }}</p>
+					</section>
+					<section v-if="character.openSourcePrompt.exampleTurns.length > 0" :class="$style.promptSection">
+						<h3 :class="$style.promptHeading">{{ i18n.ts._agents.fieldExampleDialogue }}</h3>
+						<div v-for="(t, i) in character.openSourcePrompt.exampleTurns" :key="i" :class="$style.exampleTurn">
+							<span :class="[$style.exampleTurnRole, t.role === 'user' ? $style.roleUser : $style.roleAssistant]">
+								{{ t.role === 'user' ? i18n.ts._agents.exampleTurnRoleUser : i18n.ts._agents.exampleTurnRoleAssistant }}
+							</span>
+							<p :class="$style.promptBody">{{ t.content }}</p>
+						</div>
+					</section>
+					<section v-if="character.openSourcePrompt.forbiddenBehavior.trim() !== ''" :class="$style.promptSection">
+						<h3 :class="$style.promptHeading">{{ i18n.ts._agents.fieldForbidden }}</h3>
+						<p :class="$style.promptBody">{{ character.openSourcePrompt.forbiddenBehavior }}</p>
+					</section>
+				</div>
+			</MkFolder>
+
 			<div v-panel :class="$style.reviewsCard">
 				<XSquarePlazaReviews
 					:character-id="character.id"
@@ -154,6 +191,15 @@ type CharacterPlazaDetail = {
 	conversationCount: number;
 	aiReplyCount: number;
 	myReview?: { noteId: string; stars: number };
+	promptOpenSourced: boolean;
+	openSourcePrompt?: {
+		personality: string;
+		background: string;
+		speakingStyle: string;
+		greeting: string;
+		forbiddenBehavior: string;
+		exampleTurns: { role: 'user' | 'assistant'; content: string }[];
+	};
 };
 
 const loading = ref(true);
@@ -454,5 +500,54 @@ watch(() => props.characterId, () => { void load(); });
 .reviewsCard {
 	border-radius: var(--MI-radius);
 	padding: 4px;
+}
+
+.promptSection {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.promptHeading {
+	margin: 0;
+	font-size: 0.9em;
+	font-weight: 700;
+	color: var(--MI_THEME-accent);
+}
+
+.promptBody {
+	margin: 0;
+	padding: 10px 12px;
+	white-space: pre-wrap;
+	line-height: 1.6;
+	font-size: 0.92em;
+	border-radius: 10px;
+	border: solid 1px var(--MI_THEME-divider);
+	background: color-mix(in srgb, var(--MI_THEME-bg) 30%, transparent);
+}
+
+.exampleTurn {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.exampleTurnRole {
+	align-self: flex-start;
+	padding: 2px 8px;
+	border-radius: 999px;
+	font-size: 0.75em;
+	font-weight: 700;
+	letter-spacing: 0.04em;
+}
+
+.roleUser {
+	background: color-mix(in srgb, var(--MI_THEME-accent) 15%, var(--MI_THEME-panel));
+	color: var(--MI_THEME-accent);
+}
+
+.roleAssistant {
+	background: color-mix(in srgb, var(--MI_THEME-success) 18%, var(--MI_THEME-panel));
+	color: var(--MI_THEME-success);
 }
 </style>

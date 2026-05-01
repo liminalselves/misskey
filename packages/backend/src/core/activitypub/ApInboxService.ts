@@ -15,6 +15,7 @@ import { NotePiningService } from '@/core/NotePiningService.js';
 import { UserBlockingService } from '@/core/UserBlockingService.js';
 import { NoteDeleteService } from '@/core/NoteDeleteService.js';
 import { NoteCreateService } from '@/core/NoteCreateService.js';
+import { isUserEffectivelySuspended } from '@/misc/user-effective-suspension.js';
 import { acquireApObjectLock } from '@/misc/distributed-lock.js';
 import { concat, toArray, toSingle, unique } from '@/misc/prelude/array.js';
 import type Logger from '@/logger.js';
@@ -141,7 +142,7 @@ export class ApInboxService {
 
 	@bindThis
 	public async performOneActivity(actor: MiRemoteUser, activity: IObject, resolver?: Resolver): Promise<string | void> {
-		if (actor.isSuspended) return;
+		if (isUserEffectivelySuspended(actor)) return;
 
 		if (isCreate(activity)) {
 			return await this.create(actor, activity, resolver);
@@ -304,7 +305,7 @@ export class ApInboxService {
 	private async announceNote(actor: MiRemoteUser, activity: IAnnounce, target: IPost, resolver?: Resolver): Promise<string | void> {
 		const uri = getApId(activity);
 
-		if (actor.isSuspended) {
+		if (isUserEffectivelySuspended(actor)) {
 			return;
 		}
 

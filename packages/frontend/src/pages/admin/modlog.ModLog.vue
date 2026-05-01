@@ -243,24 +243,134 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<div>{{ i18n.ts._agents.modlogAgentBanState }}: {{ log.info.banned ? i18n.ts._agents.modlogAgentBanOn : i18n.ts._agents.modlogAgentBanOff }} (before: {{ log.info.before ? i18n.ts._agents.modlogAgentBanOn : i18n.ts._agents.modlogAgentBanOff }})</div>
 		</template>
 
-		<details>
-			<summary>raw</summary>
-			<pre>{{ JSON5.stringify(log, null, '\t') }}</pre>
+		<div :class="$style.auditSummary">
+			<div :class="$style.auditTitle">{{ i18n.ts.details }}</div>
+			<div :class="$style.auditRows">
+				<div v-for="row in auditRows" :key="row.label" :class="$style.auditRow">
+					<div class="_text">{{ row.label }}</div>
+					<div :class="$style.auditRowValue">
+						<MkA v-if="row.href" :to="row.href" class="_link">{{ row.value }}</MkA>
+						<span v-else>{{ row.value }}</span>
+					</div>
+				</div>
+			</div>
+		</div>
+
+		<div v-if="parsedInfoEntries.length > 0" :class="$style.parsedInfo">
+			<div :class="$style.auditTitle">Parsed raw</div>
+			<div v-for="entry in parsedInfoEntries" :key="entry.key" :class="$style.parsedItem">
+				<div class="_text">{{ entry.label }}</div>
+				<div v-if="entry.kind === 'primitive'">{{ entry.value }}</div>
+				<div v-else :class="$style.objectViewWrap">
+					<MkObjectView :value="entry.value"/>
+				</div>
+			</div>
+		</div>
+
+		<details :class="$style.rawBlock">
+			<summary>Raw object</summary>
+			<div :class="$style.objectViewWrap">
+				<MkObjectView :value="log as unknown as Record<string, unknown>"/>
+			</div>
 		</details>
 	</div>
 </MkFolder>
 </template>
 
 <script lang="ts" setup>
+import { computed } from 'vue';
 import * as Misskey from 'misskey-js';
 import { CodeDiff } from 'v-code-diff';
 import JSON5 from 'json5';
 import { i18n } from '@/i18n.js';
 import MkFolder from '@/components/MkFolder.vue';
+import MkObjectView from '@/components/MkObjectView.vue';
 
 const props = defineProps<{
 	log: Misskey.entities.ModerationLog;
 }>();
+
+type ParsedInfoEntry = {
+	key: string;
+	label: string;
+	kind: 'primitive' | 'object';
+	value: unknown;
+};
+
+const keyLabelMap: Record<string, string> = {
+	userId: i18n.ts.user,
+	ownerUserId: i18n.ts.user,
+	roleId: i18n.ts.role,
+	roleName: i18n.ts.role,
+	sessionId: i18n.ts._agents.adminAgentChatAuditIndexSessionId,
+	sessionName: i18n.ts._agents.adminAgentChatAuditIndexSessionName,
+	characterId: i18n.ts._agents.adminAgentChatAuditCharacterId,
+	characterName: i18n.ts._agents.adminAgentChatAuditCharacterName,
+	decision: i18n.ts.action,
+	kind: i18n.ts.type,
+	reviewStatus: i18n.ts.status,
+	host: i18n.ts.instance,
+};
+
+function formatFieldLabel(key: string): string {
+	return keyLabelMap[key] ?? key;
+}
+
+function formatFieldValue(value: unknown): string {
+	if (value == null) return '—';
+	if (typeof value === 'boolean') return value ? 'true' : 'false';
+	if (typeof value === 'number') return String(value);
+	if (typeof value === 'string') return value;
+	return JSON5.stringify(value);
+}
+
+const auditRows = computed(() => {
+	const rows: Array<{ label: string; value: string; href?: string }> = [
+		{
+			label: i18n.ts.type,
+			value: i18n.ts._moderationLogTypes[props.log.type] ?? props.log.type,
+		},
+		{
+			label: i18n.ts.moderator,
+			value: props.log.user?.username ? `@${props.log.user.username}` : props.log.userId,
+			href: `/admin/user/${props.log.userId}`,
+		},
+		{
+			label: i18n.ts.dateAndTime,
+			value: new Date(props.log.createdAt).toLocaleString(),
+		},
+	];
+
+	const info = props.log.info as Record<string, unknown>;
+	const importantKeys = ['userId', 'ownerUserId', 'host', 'sessionId', 'characterId', 'roleId', 'reviewStatus', 'decision', 'kind', 'banned'];
+	for (const key of importantKeys) {
+		if (!(key in info)) continue;
+		const value = info[key];
+		rows.push({
+			label: formatFieldLabel(key),
+			value: formatFieldValue(value),
+			href: key === 'userId' || key === 'ownerUserId' ? `/admin/user/${String(value)}` : undefined,
+		});
+	}
+
+	return rows;
+});
+
+const parsedInfoEntries = computed<ParsedInfoEntry[]>(() => {
+	const info = (props.log.info ?? {}) as Record<string, unknown>;
+
+	return Object.entries(info)
+		.filter(([key]) => key !== 'before' && key !== 'after')
+		.map(([key, value]) => {
+			const isObjectValue = typeof value === 'object' && value !== null;
+			return {
+				key,
+				label: formatFieldLabel(key),
+				kind: isObjectValue ? 'object' : 'primitive',
+				value: isObjectValue ? value : formatFieldValue(value),
+			};
+		});
+});
 </script>
 
 <style lang="scss" module>
@@ -281,5 +391,57 @@ const props = defineProps<{
 
 .logGreen {
 	color: var(--MI_THEME-success);
+}
+
+.auditSummary {
+	margin-top: 12px;
+	padding: 12px;
+	border-radius: 8px;
+	background: color-mix(in srgb, var(--MI_THEME-panel) 85%, var(--MI_THEME-accentedBg) 15%);
+}
+
+.auditTitle {
+	font-weight: 700;
+	margin-bottom: 8px;
+}
+
+.auditRows {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+	gap: 8px 12px;
+}
+
+.auditRow {
+	padding: 8px 10px;
+	border-radius: 6px;
+	background: color-mix(in srgb, var(--MI_THEME-panel) 92%, var(--MI_THEME-fg) 8%);
+}
+
+.auditRowValue {
+	margin-top: 2px;
+	word-break: break-all;
+}
+
+.parsedInfo {
+	margin-top: 12px;
+}
+
+.parsedItem {
+	margin-top: 8px;
+	padding: 10px;
+	border-radius: 8px;
+	background: color-mix(in srgb, var(--MI_THEME-panel) 92%, var(--MI_THEME-fg) 8%);
+}
+
+.rawBlock {
+	margin-top: 12px;
+}
+
+.objectViewWrap {
+	margin-top: 6px;
+	padding: 8px;
+	border-radius: 6px;
+	background: color-mix(in srgb, var(--MI_THEME-panel) 85%, var(--MI_THEME-fg) 15%);
+	overflow: auto;
 }
 </style>

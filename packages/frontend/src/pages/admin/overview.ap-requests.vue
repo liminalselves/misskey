@@ -30,6 +30,7 @@ import { chartVLine } from '@/utility/chart-vline.js';
 import { store } from '@/store.js';
 import { alpha } from '@/utility/color.js';
 import { initChart } from '@/utility/init-chart.js';
+import { i18n } from '@/i18n.js';
 
 initChart();
 
@@ -83,7 +84,7 @@ onMounted(async () => {
 		data: {
 			datasets: [{
 				parsing: false,
-				label: 'Out: Succ',
+				label: i18n.ts.adminOverviewOutSuccess,
 				data: format(raw.deliverSucceeded).slice().reverse(),
 				tension: 0.3,
 				pointRadius: 0,
@@ -96,7 +97,7 @@ onMounted(async () => {
 				clip: 8,
 			}, {
 				parsing: false,
-				label: 'Out: Fail',
+				label: i18n.ts.adminOverviewOutFail,
 				data: formatMinus(raw.deliverFailed).slice().reverse(),
 				tension: 0.3,
 				pointRadius: 0,
@@ -188,7 +189,7 @@ onMounted(async () => {
 		data: {
 			datasets: [{
 				parsing: false,
-				label: 'In',
+				label: i18n.ts.adminOverviewIn,
 				data: format(raw.inboxReceived).slice().reverse(),
 				tension: 0.3,
 				pointRadius: 0,

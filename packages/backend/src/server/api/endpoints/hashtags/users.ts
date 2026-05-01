@@ -10,6 +10,7 @@ import { safeForSql } from "@/misc/safe-for-sql.js";
 import { normalizeForSearch } from '@/misc/normalize-for-search.js';
 import { UserEntityService } from '@/core/entities/UserEntityService.js';
 import { DI } from '@/di-symbols.js';
+import { sqlUserNotEffectivelySuspended } from '@/misc/user-effective-suspension.js';
 
 export const meta = {
 	requireCredential: false,
@@ -51,7 +52,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			if (!safeForSql(normalizeForSearch(ps.tag))) throw new Error('Injection');
 			const query = this.usersRepository.createQueryBuilder('user')
 				.where(':tag <@ user.tags', { tag: [normalizeForSearch(ps.tag)] })
-				.andWhere('user.isSuspended = FALSE');
+				.andWhere(sqlUserNotEffectivelySuspended('user'))
+				.setParameter('suspensionNow', new Date());
 
 			const recent = new Date(Date.now() - (1000 * 60 * 60 * 24 * 5));
 

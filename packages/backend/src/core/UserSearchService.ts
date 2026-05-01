@@ -9,6 +9,7 @@ import { DI } from '@/di-symbols.js';
 import { type FollowingsRepository, MiUser, type MutingsRepository, type UserProfilesRepository, type UsersRepository } from '@/models/_.js';
 import { bindThis } from '@/decorators.js';
 import { sqlLikeEscape } from '@/misc/sql-like-escape.js';
+import { sqlUserNotEffectivelySuspended } from '@/misc/user-effective-suspension.js';
 import type { Config } from '@/config.js';
 import { UserEntityService } from '@/core/entities/UserEntityService.js';
 import { Packed } from '@/misc/json-schema.js';
@@ -207,7 +208,8 @@ export class UserSearchService {
 			}
 		}
 
-		userQuery.andWhere('user.isSuspended = FALSE');
+		userQuery.andWhere(sqlUserNotEffectivelySuspended('user'));
+		userQuery.setParameter('suspensionNow', new Date());
 
 		return userQuery;
 	}
@@ -243,7 +245,8 @@ export class UserSearchService {
 					.where('user.updatedAt IS NULL')
 					.orWhere('user.updatedAt > :activeThreshold', { activeThreshold: activeThreshold });
 			}))
-			.andWhere('user.isSuspended = FALSE');
+			.andWhere(sqlUserNotEffectivelySuspended('user'))
+			.setParameter('suspensionNow', new Date());
 
 		if (mutingQuery) {
 			nameQuery.andWhere(`user.id NOT IN (${mutingQuery.getQuery()})`);
@@ -285,8 +288,9 @@ export class UserSearchService {
 						.where('user.updatedAt IS NULL')
 						.orWhere('user.updatedAt > :activeThreshold', { activeThreshold: activeThreshold });
 				}))
-				.andWhere('user.isSuspended = FALSE')
-				.setParameters(profQuery.getParameters());
+				.andWhere(sqlUserNotEffectivelySuspended('user'))
+				.setParameters(profQuery.getParameters())
+				.setParameter('suspensionNow', new Date());
 
 			users = users.concat(await userQuery
 				.orderBy('user.updatedAt', 'DESC', 'NULLS LAST')

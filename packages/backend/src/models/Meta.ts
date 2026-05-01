@@ -859,12 +859,22 @@ export class MiMeta {
 		apiKey: string;
 		maxContextTokens: number;
 		maxOutputTokensPerCall: number;
+		/** 下架后仅保留在控制面板；对用户侧与新会话不可见 */
+		unlisted?: boolean;
+		/** 每次成功或中断调用扣费金额，默认 0；失败不扣费 */
+		costPerCall?: number;
 	}> | null;
 
 	@Column('varchar', {
 		length: 64, nullable: true,
 	})
 	public agentDefaultModelId: string | null;
+
+	/** 压缩便签侧车调用的默认逻辑模型 id；空则与会话主模型或站点默认一致 */
+	@Column('varchar', {
+		length: 64, nullable: true,
+	})
+	public agentCompressionDefaultModelId: string | null;
 
 	@Column('integer', {
 		default: 8192,
@@ -926,6 +936,46 @@ export class MiMeta {
 		default: 1,
 	})
 	public agentMem0AddMemoryEveryNRounds: number;
+
+	/**
+	 * 侧车 LLM 压缩便签的 system 提示；空则使用内置默认
+	 */
+	@Column('text', {
+		nullable: true,
+	})
+	public agentCompressionSystemPrompt: string | null;
+
+	/**
+	 * 送入压缩模型的对话节录最大字符数（节录在服务端截断）
+	 */
+	@Column('integer', {
+		default: 12000,
+	})
+	public agentCompressionMaxInputChars: number;
+
+	/**
+	 * 压缩补全的 max_tokens 上限
+	 */
+	@Column('integer', {
+		default: 2048,
+	})
+	public agentCompressionMaxOutputTokens: number;
+
+	/**
+	 * 压缩区带：预备区上界 = t1Ratio × H（对对话历史滑窗预算 H）。空则 0.8
+	 */
+	@Column('double precision', {
+		nullable: true,
+	})
+	public agentCompressionBandT1Ratio: number | null;
+
+	/**
+	 * 压缩区带：预备区下界 = t2Ratio × H。空则 0.9；须 t1 < t2
+	 */
+	@Column('double precision', {
+		nullable: true,
+	})
+	public agentCompressionBandT2Ratio: number | null;
 }
 
 export type SoftwareSuspension = {

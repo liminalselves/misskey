@@ -11,11 +11,12 @@ import { DI } from '@/di-symbols.js';
 import { ApiError } from '@/server/api/error.js';
 import { AgentService } from '@/core/AgentService.js';
 import { ModerationLogService } from '@/core/ModerationLogService.js';
+import { NotificationService } from '@/core/NotificationService.js';
 
 export const meta = {
 	tags: ['admin'],
 	requireCredential: true,
-	requireModerator: true,
+	requireAdmin: true,
 	kind: 'write:admin',
 	limit: { duration: ms('1hour'), max: 120 },
 	res: {
@@ -45,6 +46,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 
 		private agentService: AgentService,
 		private moderationLogService: ModerationLogService,
+		private notificationService: NotificationService,
 	) {
 		super(meta, paramDef, async (ps, me) => {
 			this.agentService.assertAgentsEnabled();
@@ -64,6 +66,11 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				banned: ps.banned,
 				before,
 			});
+			this.notificationService.createNotification(
+				row.userId,
+				'agentSessionBanned',
+				{ sessionId: row.id, sessionName: row.name, banned: ps.banned },
+			);
 			return { ok: true, moderationBanned: row.moderationBanned };
 		});
 	}

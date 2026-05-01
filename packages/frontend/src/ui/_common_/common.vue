@@ -118,6 +118,8 @@ import { i18n } from '@/i18n.js';
 import { prefer } from '@/preferences.js';
 import { globalEvents } from '@/events.js';
 import { store } from '@/store.js';
+import { isEmbeddedAppShell } from '@/utility/is-embedded-app-shell.js';
+import { buildNotificationBridgeContent } from '@/utility/notification-bridge-content.js';
 import XNavbar from '@/ui/_common_/navbar.vue';
 
 const XStreamIndicator = defineAsyncComponent(() => import('./stream-indicator.vue'));
@@ -150,6 +152,22 @@ function onNotification(notification: Misskey.entities.Notification, isClient = 
 	}
 
 	sound.playMisskeySfx('notification');
+
+	// App 壳内：将通知内容转发给 Native 层，是否弹出系统通知由 Native 端的 PREF_NATIVE_PUSH_ENABLED 决定
+	if (!isClient && isEmbeddedAppShell()) {
+		try {
+			const { title, body, openPath } = buildNotificationBridgeContent(notification);
+			const bridge = (window as unknown as { AppNativePush?: { postMessage: (msg: string) => void } }).AppNativePush;
+			bridge?.postMessage?.(JSON.stringify({
+				action: 'notify',
+				title: title.slice(0, 100),
+				body: body.slice(0, 500),
+				openPath,
+			}));
+		} catch {
+			// ignore bridge failures
+		}
+	}
 }
 
 function exitSafeMode() {
@@ -160,7 +178,8 @@ function exitSafeMode() {
 }
 
 if ($i) {
-	if (store.s.realtimeMode) {
+	// App 壳内推送依赖主通道通知事件，不应被 realtimeMode 开关阻断
+	if (store.s.realtimeMode || isEmbeddedAppShell()) {
 		const connection = useStream().useChannel('main');
 		connection.on('notification', onNotification);
 	}

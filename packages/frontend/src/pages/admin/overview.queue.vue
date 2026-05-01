@@ -7,27 +7,27 @@ SPDX-License-Identifier: AGPL-3.0-only
 <div :class="$style.root">
 	<div class="_table status">
 		<div class="_row">
-			<div class="_cell" style="text-align: center;"><div class="_label">Process</div>{{ number(activeSincePrevTick) }}</div>
-			<div class="_cell" style="text-align: center;"><div class="_label">Active</div>{{ number(active) }}</div>
-			<div class="_cell" style="text-align: center;"><div class="_label">Waiting</div>{{ number(waiting) }}</div>
-			<div class="_cell" style="text-align: center;"><div class="_label">Delayed</div>{{ number(delayed) }}</div>
+			<div class="_cell" style="text-align: center;"><div class="_label">{{ i18n.ts.adminOverviewProcess }}</div>{{ number(activeSincePrevTick) }}</div>
+			<div class="_cell" style="text-align: center;"><div class="_label">{{ i18n.ts.active }}</div>{{ number(active) }}</div>
+			<div class="_cell" style="text-align: center;"><div class="_label">{{ i18n.ts.adminOverviewWaiting }}</div>{{ number(waiting) }}</div>
+			<div class="_cell" style="text-align: center;"><div class="_label">{{ i18n.ts.delayed }}</div>{{ number(delayed) }}</div>
 		</div>
 	</div>
 	<div class="charts">
 		<div class="chart">
-			<div class="title">Process</div>
+			<div class="title">{{ i18n.ts.adminOverviewProcess }}</div>
 			<XChart ref="chartProcess" type="process"/>
 		</div>
 		<div class="chart">
-			<div class="title">Active</div>
+			<div class="title">{{ i18n.ts.active }}</div>
 			<XChart ref="chartActive" type="active"/>
 		</div>
 		<div class="chart">
-			<div class="title">Delayed</div>
+			<div class="title">{{ i18n.ts.delayed }}</div>
 			<XChart ref="chartDelayed" type="delayed"/>
 		</div>
 		<div class="chart">
-			<div class="title">Waiting</div>
+			<div class="title">{{ i18n.ts.adminOverviewWaiting }}</div>
 			<XChart ref="chartWaiting" type="waiting"/>
 		</div>
 	</div>
@@ -42,6 +42,7 @@ import type { ApQueueDomain } from '@/pages/admin/federation-job-queue.vue';
 import number from '@/filters/number.js';
 import { useStream } from '@/stream.js';
 import { genId } from '@/utility/id.js';
+import { i18n } from '@/i18n.js';
 
 const connection = markRaw(useStream().useChannel('queueStats'));
 

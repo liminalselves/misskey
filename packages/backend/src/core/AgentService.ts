@@ -13,7 +13,7 @@ import { MiAgentDialogueStyle } from '@/models/AgentDialogueStyle.js';
 import { MiAgentMessage } from '@/models/AgentMessage.js';
 import { MiAgentSession, type AgentSessionKind } from '@/models/AgentSession.js';
 import { assertSafeLlmHttpsUrl, describeUnsafeLlmUrlReason, UnsafeLlmUrlError } from '@/misc/validate-llm-endpoint-url.js';
-import { getEffectiveLlmModels, isAgentLlmRunnable, type AgentLlmModelJson } from '@/misc/agent-llm-models.js';
+import { getActiveLlmModels, getEffectiveLlmModels, isAgentLlmRunnable, type AgentLlmModelJson } from '@/misc/agent-llm-models.js';
 import { MetaService } from '@/core/MetaService.js';
 import { IdService } from '@/core/IdService.js';
 import { ApiError } from '@/server/api/error.js';
@@ -58,6 +58,9 @@ export function escapeAgentXmlText(s: string): string {
 export const AGENT_LLM_MEMORY_XML_OPEN = '\n\n<long_term_memory source="retrieved">\n';
 export const AGENT_LLM_MEMORY_XML_CLOSE = '\n</long_term_memory>';
 
+/** 与 `computeChatHistoryCharBudget` 及对外 Token 展示同一比例：约 N 个 Latin 等效字符按 1 个 Token 粗算。 */
+export const AGENT_LLM_APPROX_CHARS_PER_TOKEN = 3;
+
 const STORED_EXAMPLE_DIALOGUE_VERSION = 1 as const;
 
 /** 设为 `1` 或 `true` 时，每次智能体 LLM 请求在服务端控制台打印 OpenAI 风格请求体（含 system 与完整 messages）。临时调试用。 */
@@ -86,6 +89,12 @@ export const agentsErrors = {
 		message: 'LLM base URL failed security validation.',
 		code: 'AGENTS_LLM_UNSAFE_URL',
 		id: 'd4e5f6a7-b8c9-0123-def0-234567890123',
+	},
+	llmAborted: {
+		message: 'LLM request was aborted by the client.',
+		code: 'AGENTS_LLM_ABORTED',
+		id: 'e5f6a7b8-c9d0-1234-ef01-345678901234',
+		httpStatusCode: 409,
 	},
 } as const;
 
@@ -164,7 +173,8 @@ export class AgentService {
 
 	@bindThis
 	private pickModelOrThrow(instance: MiMeta, modelId: string | null): AgentLlmModelJson {
-		const models = getEffectiveLlmModels(instance);
+		// 用户侧路径：始终使用未下架的模型，下架模型即视为不存在。
+		const models = getActiveLlmModels(instance);
 		if (models.length === 0) {
 			throw new ApiError(agentsErrors.modelNotConfigured);
 		}
@@ -179,6 +189,27 @@ export class AgentService {
 			});
 		}
 		return pick;
+	}
+
+	/**
+	 * 与会话选用模型（含站点默认）对应的单次扣费，与 {@link pickModelOrThrow} 一致。
+	 * 无可用模型或参数非法时返回 0，由后续 LLM 路径再抛出具体错误。
+	 */
+	@bindThis
+	public getUserFacingModelCostPerCall(instance: MiMeta, sessionModelId: string | null): number {
+		try {
+			this.assertLlmConfigured(instance);
+			return this.pickModelOrThrow(instance, sessionModelId).costPerCall;
+		} catch {
+			return 0;
+		}
+	}
+
+	/** 管理端或日志上下文：允许按 id 查询任意（含下架）模型元数据；不做可用性断言 */
+	@bindThis
+	public lookupAnyModelById(instance: MiMeta, modelId: string | null): AgentLlmModelJson | null {
+		if (!modelId) return null;
+		return getEffectiveLlmModels(instance).find(m => m.id === modelId) ?? null;
 	}
 
 	@bindThis
@@ -431,10 +462,20 @@ export class AgentService {
 		systemChars: number;
 		prefixMessages: AgentExampleTurn[];
 	}): number {
-		const maxContextChars = Math.max(4000, params.maxContextTokens * 3);
+		const c = AGENT_LLM_APPROX_CHARS_PER_TOKEN;
+		const maxContextChars = Math.max(4000, params.maxContextTokens * c);
 		const prefixChars = this.estimatePrefixMessagesChars(params.prefixMessages);
-		const reserveReply = Math.max(256, Math.min(384_000, params.maxOutputTokensPerCall * 3));
+		const reserveReply = Math.max(256, Math.min(384_000, params.maxOutputTokensPerCall * c));
 		return Math.max(0, maxContextChars - params.systemChars - prefixChars - reserveReply);
+	}
+
+	/**
+	 * 将 `computeChatHistoryCharBudget` 等路径上的「字符预算」换成为界面展示的 Token 约数（四舍五入，下限 0）。
+	 */
+	@bindThis
+	public approxLlmTokensFromCharEstimate(chars: number): number {
+		if (!Number.isFinite(chars) || chars <= 0) return 0;
+		return Math.max(0, Math.round(chars / AGENT_LLM_APPROX_CHARS_PER_TOKEN));
 	}
 
 	@bindThis
@@ -448,11 +489,12 @@ export class AgentService {
 	}> {
 		const rows = await this.agentMessagesRepository.find({
 			where: { sessionId },
-			order: { createdAt: 'DESC' },
+			// 与 `AgentCompressionMemoryService.dMapFromRowsNewestFirst` 一致：同刻多条时 id 大的视为更新（与发送顺序一致）
+			order: { createdAt: 'DESC', id: 'DESC' },
 			take: 500,
 			select: ['id', 'role', 'content', 'createdAt'],
 		});
-		const picked: Pick<MiAgentMessage, 'id' | 'role' | 'content'>[] = [];
+		const picked: Pick<MiAgentMessage, 'id' | 'role' | 'content' | 'createdAt'>[] = [];
 		let used = 0;
 		let truncated = false;
 		for (const m of rows) {
@@ -462,7 +504,7 @@ export class AgentService {
 				truncated = true;
 				break;
 			}
-			picked.unshift({ id: m.id, role: m.role, content: m.content });
+			picked.unshift({ id: m.id, role: m.role, content: m.content, createdAt: m.createdAt });
 			used += len;
 		}
 		if (!truncated && rows.length >= 500) {
@@ -493,6 +535,10 @@ export class AgentService {
 		messages: { role: 'user' | 'assistant'; content: string }[];
 		userText: string;
 		sessionModelId: string | null;
+		/** 由调用方（send endpoint）提供的取消信号；触发时视作用户主动中断 */
+		externalAbortSignal?: AbortSignal;
+		/** 覆盖本次调用的 max_tokens 上限（仍不超过模型与站点配置） */
+		maxTokens?: number;
 	}): Promise<string> {
 		const instance = await this.metaService.fetch(true);
 		this.assertLlmConfigured(instance);
@@ -512,7 +558,10 @@ export class AgentService {
 		}
 
 		const url = this.normalizeChatCompletionsUrl(safeBase.toString());
-		const maxOut = Math.max(1, Math.min(maxOutputTokensPerCall, 128000));
+		let maxOut = Math.max(1, Math.min(maxOutputTokensPerCall, 128000));
+		if (params.maxTokens != null && Number.isFinite(params.maxTokens)) {
+			maxOut = Math.max(1, Math.min(maxOut, Math.trunc(params.maxTokens)));
+		}
 		const prefix = (params.prefixMessages ?? []).map(m => ({ role: m.role, content: m.content }));
 		const body = {
 			model: apiModelName,
@@ -537,6 +586,12 @@ export class AgentService {
 
 		const ac = new AbortController();
 		const t = setTimeout(() => ac.abort(), 120_000);
+		const external = params.externalAbortSignal;
+		const onExternalAbort = () => ac.abort();
+		if (external) {
+			if (external.aborted) ac.abort();
+			else external.addEventListener('abort', onExternalAbort, { once: true });
+		}
 		let res: Response;
 		try {
 			res = await fetch(url, {
@@ -548,10 +603,14 @@ export class AgentService {
 				body: JSON.stringify(body),
 				signal: ac.signal,
 			});
-		} catch {
+		} catch (e) {
+			if (external && external.aborted) {
+				throw new ApiError(agentsErrors.llmAborted);
+			}
 			throw new ApiError(agentsErrors.llmRequestFailed);
 		} finally {
 			clearTimeout(t);
+			if (external) external.removeEventListener('abort', onExternalAbort);
 		}
 
 		if (!res.ok) {
@@ -571,6 +630,42 @@ export class AgentService {
 			throw new ApiError(agentsErrors.llmRequestFailed);
 		}
 		return text;
+	}
+
+	/**
+	 * 以 (sessionId, clientRequestId) 维度维护当前活跃的 AbortController。
+	 * 用户点击对话页的终止按钮后，`agents/messages/abort` 端点通过此表找到并触发 abort。
+	 */
+	private readonly pendingAbortControllers = new Map<string, AbortController>();
+
+	private makePendingKey(sessionId: string, clientRequestId: string): string {
+		return `${sessionId}::${clientRequestId}`;
+	}
+
+	@bindThis
+	public registerAbortable(sessionId: string, clientRequestId: string): AbortController {
+		const ac = new AbortController();
+		this.pendingAbortControllers.set(this.makePendingKey(sessionId, clientRequestId), ac);
+		return ac;
+	}
+
+	@bindThis
+	public unregisterAbortable(sessionId: string, clientRequestId: string, ac: AbortController): void {
+		const key = this.makePendingKey(sessionId, clientRequestId);
+		const current = this.pendingAbortControllers.get(key);
+		if (current === ac) {
+			this.pendingAbortControllers.delete(key);
+		}
+	}
+
+	@bindThis
+	public abortPending(sessionId: string, clientRequestId: string): boolean {
+		const key = this.makePendingKey(sessionId, clientRequestId);
+		const ac = this.pendingAbortControllers.get(key);
+		if (!ac) return false;
+		ac.abort();
+		this.pendingAbortControllers.delete(key);
+		return true;
 	}
 
 	@bindThis

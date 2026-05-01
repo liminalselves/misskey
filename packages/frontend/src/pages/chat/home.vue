@@ -66,7 +66,7 @@ const headerTabs = computed(() => {
 });
 
 definePage(() => ({
-	title: i18n.ts.directMessage,
+	title: i18n.ts.directMessage_short,
 	icon: 'ti ti-messages',
 }));
 </script>

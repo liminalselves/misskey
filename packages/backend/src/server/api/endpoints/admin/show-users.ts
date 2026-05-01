@@ -10,6 +10,7 @@ import { DI } from '@/di-symbols.js';
 import { UserEntityService } from '@/core/entities/UserEntityService.js';
 import { sqlLikeEscape } from '@/misc/sql-like-escape.js';
 import { RoleService } from '@/core/RoleService.js';
+import { sqlUserEffectivelySuspended, sqlUserNotEffectivelySuspended } from '@/misc/user-effective-suspension.js';
 
 export const meta = {
 	tags: ['admin'],
@@ -59,11 +60,12 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 	) {
 		super(meta, paramDef, async (ps, me) => {
 			const query = this.usersRepository.createQueryBuilder('user');
+			query.setParameter('suspensionNow', new Date());
 
 			switch (ps.state) {
-				case 'available': query.where('user.isSuspended = FALSE'); break;
+				case 'available': query.where(sqlUserNotEffectivelySuspended('user')); break;
 				case 'alive': query.where('user.updatedAt > :date', { date: new Date(Date.now() - 1000 * 60 * 60 * 24 * 5) }); break;
-				case 'suspended': query.where('user.isSuspended = TRUE'); break;
+				case 'suspended': query.where(sqlUserEffectivelySuspended('user')); break;
 				case 'admin': {
 					const adminIds = await this.roleService.getAdministratorIds();
 					if (adminIds.length === 0) return [];

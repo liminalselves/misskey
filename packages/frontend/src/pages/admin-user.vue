@@ -95,6 +95,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<FormSection v-if="!isSystem">
 				<div class="_gaps">
 					<MkSwitch v-model="suspended" @update:modelValue="toggleSuspend">{{ i18n.ts.suspend }}</MkSwitch>
+					<MkKeyValue v-if="info?.suspendedUntil" oneline>
+						<template #key>{{ i18n.ts.userSuspendAutoRelease }}</template>
+						<template #value><span class="_monospace"><MkTime :time="info.suspendedUntil" :mode="'detail'"/></span></template>
+					</MkKeyValue>
 
 					<div>
 						<MkButton v-if="user.host == null" inline style="margin-right: 8px;" @click="resetPassword"><i class="ti ti-key"></i> {{ i18n.ts.resetPassword }}</MkButton>
@@ -345,16 +349,58 @@ async function resetPassword() {
 }
 
 async function toggleSuspend(v: boolean) {
+	if (!v) {
+		const confirm = await os.confirm({
+			type: 'warning',
+			text: i18n.ts.unsuspendConfirm,
+		});
+		if (confirm.canceled) {
+			suspended.value = !v;
+			return;
+		}
+		await misskeyApi('admin/unsuspend-user', { userId: user.value.id });
+		await refreshUser();
+		return;
+	}
+
+	const { canceled, result: period } = await os.select({
+		title: `${i18n.ts.userSuspendPeriod}: ${i18n.ts.suspend}`,
+		items: [{
+			value: 'indefinitely', label: i18n.ts.indefinitely,
+		}, {
+			value: 'oneHour', label: i18n.ts.oneHour,
+		}, {
+			value: 'oneDay', label: i18n.ts.oneDay,
+		}, {
+			value: 'oneWeek', label: i18n.ts.oneWeek,
+		}, {
+			value: 'oneMonth', label: i18n.ts.oneMonth,
+		}],
+		default: 'indefinitely',
+	});
+	if (canceled) {
+		suspended.value = !v;
+		return;
+	}
+
 	const confirm = await os.confirm({
 		type: 'warning',
-		text: v ? i18n.ts.suspendConfirm : i18n.ts.unsuspendConfirm,
+		text: i18n.ts.suspendConfirm,
 	});
 	if (confirm.canceled) {
 		suspended.value = !v;
-	} else {
-		await misskeyApi(v ? 'admin/suspend-user' : 'admin/unsuspend-user', { userId: user.value.id });
-		await refreshUser();
+		return;
 	}
+
+	const expiresAt = period === 'indefinitely' ? null
+		: period === 'oneHour' ? Date.now() + (1000 * 60 * 60)
+		: period === 'oneDay' ? Date.now() + (1000 * 60 * 60 * 24)
+		: period === 'oneWeek' ? Date.now() + (1000 * 60 * 60 * 24 * 7)
+		: period === 'oneMonth' ? Date.now() + (1000 * 60 * 60 * 24 * 30)
+		: null;
+
+	await misskeyApi('admin/suspend-user', { userId: user.value.id, expiresAt: expiresAt ?? undefined });
+	await refreshUser();
 }
 
 async function unsetUserAvatar() {

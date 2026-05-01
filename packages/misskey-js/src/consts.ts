@@ -41,6 +41,10 @@ export const notificationTypes = [
 	'test',
 	'login',
 	'createToken',
+	'agentReviewApproved',
+	'agentReviewRejected',
+	'agentCharacterBanned',
+	'agentSessionBanned',
 ] as const;
 
 export const noteVisibilities = ['public', 'home', 'followers', 'specified'] as const;

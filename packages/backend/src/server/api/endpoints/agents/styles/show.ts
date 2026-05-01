@@ -28,6 +28,7 @@ export const meta = {
 			isPublished: { type: 'boolean' },
 			reviewStatus: { type: 'string', optional: true },
 			publishedVersion: { type: 'integer', nullable: true, optional: true },
+			promptOpenSourced: { type: 'boolean' },
 			createdAt: { type: 'string', format: 'date-time' },
 			updatedAt: { type: 'string', format: 'date-time' },
 		},
@@ -59,14 +60,16 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				throw new ApiError({ message: 'No such style.', code: 'NO_SUCH_STYLE', id: 'd6e7f8a9-b0c1-2345-9012-456789012345' });
 			}
 			const display = isOwner ? row : this.agentService.effectiveStyleForLlm(row, true);
+			const exposeBody = isOwner || row.promptOpenSourced === true;
 			return {
 				id: row.id,
 				userId: row.userId,
 				name: display.name,
 				summary: display.summary,
-				body: display.body,
+				body: exposeBody ? display.body : '',
 				isPublished: row.isPublished,
 				...(isOwner ? { reviewStatus: row.reviewStatus, publishedVersion: row.publishedVersion } : {}),
+				promptOpenSourced: row.promptOpenSourced === true,
 				createdAt: row.createdAt.toISOString(),
 				updatedAt: row.updatedAt.toISOString(),
 			};

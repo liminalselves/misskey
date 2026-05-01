@@ -16,6 +16,7 @@ import { RoleService } from '@/core/RoleService.js';
 import { ApiError } from '../../error.js';
 import { ApiLoggerService } from '../../ApiLoggerService.js';
 import type { FindOptionsWhere } from 'typeorm';
+import { isUserEffectivelySuspended, sqlUserNotEffectivelySuspended } from '@/misc/user-effective-suspension.js';
 
 export const meta = {
 	tags: ['users'],
@@ -133,12 +134,13 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					return [];
 				}
 
-				const users = await this.usersRepository.findBy(isModerator ? {
-					id: In(ps.userIds),
-				} : {
-					id: In(ps.userIds),
-					isSuspended: false,
-				});
+				const users = isModerator
+					? await this.usersRepository.findBy({ id: In(ps.userIds) })
+					: await this.usersRepository.createQueryBuilder('user')
+						.where('user.id IN (:...ids)', { ids: ps.userIds })
+						.andWhere(sqlUserNotEffectivelySuspended('user'))
+						.setParameter('suspensionNow', new Date())
+						.getMany();
 
 				// リクエストされた通りに並べ替え
 				// 順番は保持されるけど数は減ってる可能性がある
@@ -170,7 +172,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					user = await this.usersRepository.findOneBy(q);
 				}
 
-				if (user == null || (!isModerator && user.isSuspended)) {
+				if (user == null || (!isModerator && isUserEffectivelySuspended(user))) {
 					throw new ApiError(meta.errors.noSuchUser);
 				}
 

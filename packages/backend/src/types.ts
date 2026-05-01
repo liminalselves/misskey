@@ -46,6 +46,10 @@ export const notificationTypes = [
 	'createToken',
 	'app',
 	'test',
+	'agentReviewApproved',
+	'agentReviewRejected',
+	'agentCharacterBanned',
+	'agentSessionBanned',
 ] as const;
 
 export const groupedNotificationTypes = [
@@ -146,11 +150,13 @@ export type ModerationLogPayloads = {
 		userId: string;
 		userUsername: string;
 		userHost: string | null;
+		suspendedUntil?: string | null;
 	};
 	unsuspend: {
 		userId: string;
 		userUsername: string;
 		userHost: string | null;
+		scheduleExpired?: boolean;
 	};
 	updateUserNote: {
 		userId: string;

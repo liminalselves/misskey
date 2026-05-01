@@ -10,10 +10,12 @@ import { DI } from '@/di-symbols.js';
 import type { Config } from '@/config.js';
 import type { Packed } from '@/misc/json-schema.js';
 import { getNoteSummary } from '@/misc/get-note-summary.js';
-import type { MiMeta, MiSwSubscription, SwSubscriptionsRepository } from '@/models/_.js';
+import type { MiMeta, MiSwSubscription, SwSubscriptionsRepository, MobilePushDevicesRepository } from '@/models/_.js';
 import { bindThis } from '@/decorators.js';
 import { RedisKVCache } from '@/misc/cache.js';
 import { AliyunMobilePushService } from '@/core/AliyunMobilePushService.js';
+import { CacheService } from '@/core/CacheService.js';
+import { UserWebSocketStatusService } from '@/core/UserWebSocketStatusService.js';
 
 // Defined also packages/sw/types.ts#L13
 type PushNotificationsTypes = {
@@ -51,6 +53,24 @@ function truncateBody<T extends keyof PushNotificationsTypes>(type: T, body: Pus
 export class PushNotificationService implements OnApplicationShutdown {
 	private subscriptionsCache: RedisKVCache<MiSwSubscription[]>;
 
+	private getVapidSubject(): string {
+		try {
+			const url = new URL(this.config.url);
+			if (url.protocol === 'https:') {
+				return url.origin;
+			}
+		} catch {
+			// ignore and fallback to mailto
+		}
+
+		const mail = this.meta.maintainerEmail?.trim();
+		if (mail) {
+			return `mailto:${mail}`;
+		}
+
+		return 'mailto:admin@localhost';
+	}
+
 	constructor(
 		@Inject(DI.config)
 		private config: Config,
@@ -64,6 +84,11 @@ export class PushNotificationService implements OnApplicationShutdown {
 		@Inject(DI.swSubscriptionsRepository)
 		private swSubscriptionsRepository: SwSubscriptionsRepository,
 
+		@Inject(DI.mobilePushDevicesRepository)
+		private mobilePushDevicesRepository: MobilePushDevicesRepository,
+
+		private cacheService: CacheService,
+		private userWebSocketStatusService: UserWebSocketStatusService,
 		private aliyunMobilePushService: AliyunMobilePushService,
 	) {
 		this.subscriptionsCache = new RedisKVCache<MiSwSubscription[]>(this.redisClient, 'userSwSubscriptions', {
@@ -77,14 +102,32 @@ export class PushNotificationService implements OnApplicationShutdown {
 
 	@bindThis
 	public async pushNotification<T extends keyof PushNotificationsTypes>(userId: string, type: T, body: PushNotificationsTypes[T]) {
+		const profile = await this.cacheService.userProfileCache.fetch(userId);
+		const enableAppPush = profile.enableAppPush ?? false;
+		const hasNativeAppPushDevice = await this.mobilePushDevicesRepository.existsBy({ userId });
+		const useAppPushPolicy = hasNativeAppPushDevice || enableAppPush;
+		if (useAppPushPolicy) {
+			if (!enableAppPush) {
+				return;
+			}
+
+			// App 端：WebSocket 在线优先，离线才发送阿里云原生推送
+			const isWebSocketOnline = await this.userWebSocketStatusService.isUserOnline(userId);
+			if (!isWebSocketOnline) {
+				await this.aliyunMobilePushService.deliver(userId, type, body);
+			}
+			return;
+		}
 		await this.aliyunMobilePushService.deliver(userId, type, body);
 
 		if (!this.meta.enableServiceWorker || this.meta.swPublicKey == null || this.meta.swPrivateKey == null) return;
 
 		// アプリケーションの連絡先と、サーバーサイドの鍵ペアの情報を登録
-		push.setVapidDetails(this.config.url,
+		push.setVapidDetails(
+			this.getVapidSubject(),
 			this.meta.swPublicKey,
-			this.meta.swPrivateKey);
+			this.meta.swPrivateKey,
+		);
 
 		const subscriptions = await this.subscriptionsCache.fetch(userId);
 

@@ -36,6 +36,7 @@ export const paramDef = {
 			name: { type: 'string', minLength: 1, maxLength: 256, nullable: true },
 			summary: { type: 'string', nullable: true, maxLength: 512 },
 			body: { type: 'string', maxLength: AGENT_TEXT_FIELD_MAX, nullable: true },
+			promptOpenSourced: { type: 'boolean' },
 		},
 	required: ['styleId'],
 } as const;
@@ -57,6 +58,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			if (ps.name != null) row.name = ps.name;
 			if (ps.summary !== undefined) row.summary = ps.summary;
 			if (ps.body != null) row.body = ps.body;
+			if (ps.promptOpenSourced !== undefined) row.promptOpenSourced = ps.promptOpenSourced === true;
 			row.updatedAt = new Date();
 			await this.agentDialogueStylesRepository.save(row);
 			return {

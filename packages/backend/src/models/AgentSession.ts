@@ -91,12 +91,28 @@ export class MiAgentSession {
 	})
 	public agentModelId: string | null;
 
+	/** 压缩便签用模型；新建会话时写入当时的默认；空则解析时回退 meta 压缩默认与全站对话默认 */
+	@Column('varchar', {
+		length: 64, nullable: true,
+	})
+	public agentCompressionModelId: string | null;
+
 	@Column('timestamp with time zone', {
 		nullable: true,
 	})
 	public lastMessageAt: Date | null;
 
-	/** 本会话是否使用阿里云百炼长期记忆（Add/Search） */
+	/**
+	 * 长期记忆提供方：none / aliyun / compression
+	 * 新建会话默认 none；展示层可将「与实例能力不符」时解析为实际生效值。
+	 */
+	@Column('varchar', {
+		length: 32,
+		default: 'none',
+	})
+	public agentLongMemoryProvider: string;
+
+	/** 本会话是否使用阿里云百炼长期记忆（Add/Search）；仅 agentLongMemoryProvider=aliyun 时有效 */
 	@Column('boolean', {
 		default: true,
 	})

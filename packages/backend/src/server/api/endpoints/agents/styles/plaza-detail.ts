@@ -31,6 +31,8 @@ export const meta = {
 			summary: { type: 'string', nullable: true },
 			bodyChars: { type: 'number' },
 			publishedVersion: { type: 'integer', nullable: true, optional: true },
+			promptOpenSourced: { type: 'boolean' },
+			openSourceBody: { type: 'string', optional: true },
 			createdAt: { type: 'string', format: 'date-time' },
 			updatedAt: { type: 'string', format: 'date-time' },
 			rating: {
@@ -100,6 +102,9 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			]);
 			const conversationCount = convMap.get(row.id) ?? 0;
 			const aiReplyCount = aiReplyMap.get(row.id) ?? 0;
+			const openSourceBody = row.promptOpenSourced === true
+				? this.agentService.effectiveStyleForLlm(row, true).body
+				: undefined;
 			return {
 				id: row.id,
 				userId: row.userId,
@@ -107,6 +112,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				summary: d.summary,
 				bodyChars,
 				...(row.publishedVersion != null ? { publishedVersion: row.publishedVersion } : {}),
+				promptOpenSourced: row.promptOpenSourced === true,
+				...(openSourceBody != null ? { openSourceBody } : {}),
 				createdAt: row.createdAt.toISOString(),
 				updatedAt: row.updatedAt.toISOString(),
 				rating: { average: rating.average, count: rating.count },

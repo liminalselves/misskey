@@ -10,8 +10,10 @@ import * as WebSocket from 'ws';
 import { DI } from '@/di-symbols.js';
 import type { MiAccessToken } from '@/models/_.js';
 import { bindThis } from '@/decorators.js';
+import { isUserEffectivelySuspended } from '@/misc/user-effective-suspension.js';
 import { MiLocalUser } from '@/models/User.js';
 import { UserService } from '@/core/UserService.js';
+import { UserWebSocketStatusService } from '@/core/UserWebSocketStatusService.js';
 import { AuthenticateService, AuthenticationError } from './AuthenticateService.js';
 import MainStreamConnection, { ConnectionRequest } from './stream/Connection.js';
 import type * as http from 'node:http';
@@ -30,6 +32,7 @@ export class StreamingApiServerService {
 		private moduleRef: ModuleRef,
 		private authenticateService: AuthenticateService,
 		private usersService: UserService,
+		private userWebSocketStatusService: UserWebSocketStatusService,
 	) {
 	}
 
@@ -77,7 +80,7 @@ export class StreamingApiServerService {
 				return;
 			}
 
-			if (user?.isSuspended) {
+			if (user && isUserEffectivelySuspended(user)) {
 				socket.write('HTTP/1.1 403 Forbidden\r\n\r\n');
 				socket.destroy();
 				return;
@@ -125,9 +128,15 @@ export class StreamingApiServerService {
 
 			this.#connections.set(connection, Date.now());
 
+			// Mark user as online via WebSocket
+			if (user) {
+				this.userWebSocketStatusService.setUserOnline(user.id);
+			}
+
 			const userUpdateIntervalId = user ? setInterval(() => {
 				this.usersService.updateLastActiveDate(user);
-			}, 1000 * 60 * 5) : null;
+				this.userWebSocketStatusService.keepUserAlive(user.id);
+			}, 1000 * 30) : null;
 			if (user) {
 				this.usersService.updateLastActiveDate(user);
 			}
@@ -137,6 +146,10 @@ export class StreamingApiServerService {
 				stream.dispose();
 				globalEv.off('message', onRedisMessage);
 				this.#connections.delete(connection);
+				// Mark user as offline
+				if (user) {
+					this.userWebSocketStatusService.setUserOffline(user.id);
+				}
 				if (userUpdateIntervalId) clearInterval(userUpdateIntervalId);
 			});
 

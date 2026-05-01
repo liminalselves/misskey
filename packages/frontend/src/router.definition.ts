@@ -6,7 +6,7 @@
 import { defineAsyncComponent } from 'vue';
 import type { AsyncComponentLoader } from 'vue';
 import type { RouteDef } from '@/lib/nirax.js';
-import { $i, iAmModerator } from '@/i.js';
+import { $i, iAmAdmin, iAmModerator } from '@/i.js';
 import MkLoading from '@/pages/_loading_.vue';
 import MkError from '@/pages/_error_.vue';
 import PageTimeline from '@/pages/timeline.vue';
@@ -269,6 +269,9 @@ export const ROUTE_DEF = [{
 	path: '/about-misskey',
 	component: page(() => import('@/pages/about-misskey.vue')),
 }, {
+	path: '/app',
+	component: page(() => import('@/pages/app.vue')),
+}, {
 	path: '/invite',
 	name: 'invite',
 	component: page(() => import('@/pages/invite.vue')),
@@ -523,7 +526,15 @@ export const ROUTE_DEF = [{
 	}, {
 		path: '/agents-chat-audit',
 		name: 'agents-chat-audit',
-		component: page(() => import('@/pages/admin/agents-chat-audit.vue')),
+		component: iAmAdmin ? page(() => import('@/pages/admin/agents-chat-audit.vue')) : page(() => import('@/pages/not-found.vue')),
+	}, {
+		path: '/agents-redeem-codes',
+		name: 'agents-redeem-codes',
+		component: iAmAdmin ? page(() => import('@/pages/admin/agents-redeem-codes.vue')) : page(() => import('@/pages/not-found.vue')),
+	}, {
+		path: '/agents-reports',
+		name: 'agents-reports',
+		component: page(() => import('@/pages/admin/agents-reports.vue')),
 	}, {
 		path: '/branding',
 		name: 'branding',

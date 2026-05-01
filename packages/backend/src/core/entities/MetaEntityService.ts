@@ -15,7 +15,7 @@ import { SystemAccountService } from '@/core/SystemAccountService.js';
 import type { Config } from '@/config.js';
 import { DI } from '@/di-symbols.js';
 import { DEFAULT_POLICIES } from '@/core/RoleService.js';
-import { getEffectiveLlmModels, isAgentLlmRunnable, packPublicAgentModels, packedAgentMaxContextTokens, packedAgentMaxOutputTokensPerCall } from '@/misc/agent-llm-models.js';
+import { getActiveLlmModels, isAgentLlmRunnable, packPublicAgentModels, packedAgentMaxContextTokens, packedAgentMaxOutputTokensPerCall } from '@/misc/agent-llm-models.js';
 
 @Injectable()
 export class MetaEntityService {
@@ -66,7 +66,7 @@ export class MetaEntityService {
 			}
 		}
 
-		const effAgentModels = getEffectiveLlmModels(instance);
+		const effAgentModels = getActiveLlmModels(instance);
 		const defAgentModelId = instance.agentDefaultModelId?.trim() || effAgentModels[0]?.id || null;
 		const defAgentModel = defAgentModelId ? effAgentModels.find(m => m.id === defAgentModelId) ?? effAgentModels[0] : effAgentModels[0];
 
@@ -163,6 +163,14 @@ export class MetaEntityService {
 			agentMaxOutputTokensPerCall: packedAgentMaxOutputTokensPerCall(instance),
 			agentModels: packPublicAgentModels(instance),
 			agentDefaultModelId: instance.agentDefaultModelId ?? effAgentModels[0]?.id ?? null,
+			agentCompressionDefaultModelId: (() => {
+				const t = instance.agentCompressionDefaultModelId?.trim();
+				if (t) {
+					const hit = getActiveLlmModels(instance).find(m => m.id === t);
+					if (hit) return t;
+				}
+				return null;
+			})(),
 			agentLlmConfigured: isAgentLlmRunnable(instance),
 			agentLongMemoryConfigured: instance.agentMem0Enabled === true && (instance.agentMem0ApiKey?.trim().length ?? 0) > 0,
 			agentMem0AddMemoryMaxRounds: (() => {

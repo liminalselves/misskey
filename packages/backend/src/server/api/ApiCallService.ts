@@ -15,6 +15,7 @@ import type Logger from '@/logger.js';
 import type { MiMeta, UserIpsRepository } from '@/models/_.js';
 import { createTemp } from '@/misc/create-temp.js';
 import { bindThis } from '@/decorators.js';
+import { isUserEffectivelySuspended } from '@/misc/user-effective-suspension.js';
 import { RoleService } from '@/core/RoleService.js';
 import type { Config } from '@/config.js';
 import { ApiError } from './error.js';
@@ -355,7 +356,7 @@ export class ApiCallService implements OnApplicationShutdown {
 					id: '1384574d-a912-4b81-8601-c7b1c4085df1',
 					httpStatusCode: 401,
 				});
-			} else if (user!.isSuspended) {
+			} else if (isUserEffectivelySuspended(user!)) {
 				throw new ApiError({
 					message: 'Your account has been suspended.',
 					code: 'YOUR_ACCOUNT_SUSPENDED',

@@ -44,6 +44,7 @@ export const meta = {
 			reviewStatus: { type: 'string', optional: true },
 			publishedVersion: { type: 'integer', nullable: true, optional: true },
 			avatarFileId: { type: 'string', format: 'misskey:id', nullable: true },
+			promptOpenSourced: { type: 'boolean' },
 			createdAt: { type: 'string', format: 'date-time' },
 			updatedAt: { type: 'string', format: 'date-time' },
 		},
@@ -75,20 +76,23 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				throw new ApiError({ message: 'No such character.', code: 'NO_SUCH_CHARACTER', id: 'f2a3b4c5-d6e7-8901-5678-012345678901' });
 			}
 			const display = isOwner ? row : this.agentService.effectiveCharacterForLlm(row, true);
+			// 非作者访问：作者未勾选开源时屏蔽大字段，仅返回摘要性信息
+			const exposePrompt = isOwner || row.promptOpenSourced === true;
 			return {
 				id: row.id,
 				userId: row.userId,
 				name: display.name,
 				summary: display.summary,
-				personality: display.personality,
-				background: display.background,
-				speakingStyle: display.speakingStyle,
-				greeting: display.greeting,
-				exampleTurns: this.agentService.exampleTurnsFromStored(display.exampleDialogue),
-				forbiddenBehavior: display.forbiddenBehavior,
+				personality: exposePrompt ? display.personality : '',
+				background: exposePrompt ? display.background : '',
+				speakingStyle: exposePrompt ? display.speakingStyle : '',
+				greeting: exposePrompt ? display.greeting : '',
+				exampleTurns: exposePrompt ? this.agentService.exampleTurnsFromStored(display.exampleDialogue) : [],
+				forbiddenBehavior: exposePrompt ? display.forbiddenBehavior : '',
 				isPublished: row.isPublished,
 				...(isOwner ? { reviewStatus: row.reviewStatus, publishedVersion: row.publishedVersion } : {}),
 				avatarFileId: display.avatarFileId,
+				promptOpenSourced: row.promptOpenSourced === true,
 				createdAt: row.createdAt.toISOString(),
 				updatedAt: row.updatedAt.toISOString(),
 			};

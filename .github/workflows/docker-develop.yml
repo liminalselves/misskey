@@ -59,7 +59,7 @@ jobs:
           labels: develop
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          outputs: type=image,name=${{ env.REGISTRY_IMAGE }},${{ env.TCR_REGISTRY_IMAGE }},push-by-digest=true,name-canonical=true,push=true
+          outputs: type=image,name=${{ env.REGISTRY_IMAGE }},push-by-digest=true,name-canonical=true,push=true
       - name: Export digest
         run: |
           mkdir -p /tmp/digests
@@ -114,7 +114,7 @@ jobs:
             $(printf '${{ env.REGISTRY_IMAGE }}@sha256:%s ' *)
           docker buildx imagetools create \
             --tag ${{ env.TCR_REGISTRY_IMAGE }}:develop \
-            $(printf '${{ env.TCR_REGISTRY_IMAGE }}@sha256:%s ' *)
+            ${{ env.REGISTRY_IMAGE }}:develop
       - name: Inspect image
         run: |
           docker buildx imagetools inspect ${{ env.REGISTRY_IMAGE }}:develop

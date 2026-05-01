@@ -170,6 +170,12 @@ export class MiUser {
 	})
 	public isSuspended: boolean;
 
+	@Column('timestamp with time zone', {
+		nullable: true,
+		comment: 'When set with isSuspended, local suspension ends at this time (null means indefinite).',
+	})
+	public suspendedUntil: Date | null;
+
 	@Column('boolean', {
 		default: false,
 		comment: 'Whether the User is locked.',

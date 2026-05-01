@@ -50,9 +50,12 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<FormSection>
 					<template #label>{{ i18n.ts.appClientUpdatesSection }}</template>
 					<div class="_gaps_m">
+						<MkButton primary :disabled="checkingUpdate" @click="requestCheckUpdate">
+							<i class="ti ti-refresh"></i> {{ i18n.ts.appClientCheckForUpdates }}
+						</MkButton>
 						<FormInfo>{{ i18n.ts.appClientCheckForUpdatesDescription }}</FormInfo>
 						<template v-if="allChangelogEntries.length > 0">
-							<div class="_title">{{ i18n.ts.appClientChangelog }}</div>
+							<div class="_title"><b>{{ i18n.ts.appClientChangelog }}</b></div>
 							<div class="_gaps_s">
 								<div v-for="(entry, idx) in allChangelogEntries" :key="`changelog-${entry.version}-${idx}`" class="_panel _gaps_s">
 									<div><b>{{ entry.version }}</b></div>
@@ -60,9 +63,6 @@ SPDX-License-Identifier: AGPL-3.0-only
 								</div>
 							</div>
 						</template>
-						<MkButton primary :disabled="checkingUpdate" @click="requestCheckUpdate">
-							<i class="ti ti-refresh"></i> {{ i18n.ts.appClientCheckForUpdates }}
-						</MkButton>
 					</div>
 				</FormSection>
 			</template>

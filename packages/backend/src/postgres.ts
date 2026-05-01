@@ -90,9 +90,12 @@ import { MiChatApproval } from '@/models/ChatApproval.js';
 import { MiAgentCharacter } from '@/models/AgentCharacter.js';
 import { MiAgentDialogueStyle } from '@/models/AgentDialogueStyle.js';
 import { MiAgentSession } from '@/models/AgentSession.js';
+import { MiAgentSessionCompressionSticky } from '@/models/AgentSessionCompressionSticky.js';
 import { MiAgentMessage } from '@/models/AgentMessage.js';
 import { MiAgentUserStyleSubscription } from '@/models/AgentUserStyleSubscription.js';
 import { MiAgentPlazaReview } from '@/models/AgentPlazaReview.js';
+import { MiAgentModelUsageLog } from '@/models/AgentModelUsageLog.js';
+import { MiAgentRedeemCode } from '@/models/AgentRedeemCode.js';
 import { MiSystemAccount } from '@/models/SystemAccount.js';
 
 pg.types.setTypeParser(20, Number);
@@ -263,9 +266,12 @@ export const entities = [
 	MiAgentCharacter,
 	MiAgentDialogueStyle,
 	MiAgentSession,
+	MiAgentSessionCompressionSticky,
 	MiAgentMessage,
 	MiAgentUserStyleSubscription,
 	MiAgentPlazaReview,
+	MiAgentModelUsageLog,
+	MiAgentRedeemCode,
 	MiBubbleGameRecord,
 	MiReversiGame,
 	...charts,

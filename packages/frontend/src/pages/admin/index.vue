@@ -46,6 +46,7 @@ import { lookupUser, lookupUserByEmail, lookupFile } from '@/utility/admin-looku
 import { definePage, provideMetadataReceiver, provideReactiveMetadata } from '@/page.js';
 import { useRouter } from '@/router.js';
 import { genSearchIndexes } from '@/utility/inapp-search.js';
+import { iAmAdmin } from '@/i.js';
 
 const searchIndex = await import('search-index:admin').then(({ searchIndexes }) => genSearchIndexes(searchIndexes));
 
@@ -191,11 +192,6 @@ const menuDef = computed<SuperMenuDef[]>(() => [{
 		text: i18n.ts._agents.adminAgentReview,
 		to: '/admin/agents-review',
 		active: currentPage.value?.route.name === 'agents-review',
-	}, {
-		icon: 'ti ti-messages',
-		text: i18n.ts._agents.adminAgentChatAudit,
-		to: '/admin/agents-chat-audit',
-		active: currentPage.value?.route.name === 'agents-chat-audit',
 	}],
 }, {
 	title: i18n.ts.settings,
@@ -214,7 +210,17 @@ const menuDef = computed<SuperMenuDef[]>(() => [{
 		text: i18n.ts._agents.adminSettings,
 		to: '/admin/agents-settings',
 		active: currentPage.value?.route.name === 'agents-settings',
+	}, ...(iAmAdmin ? [{
+		icon: 'ti ti-messages',
+		text: i18n.ts._agents.adminChatManage,
+		to: '/admin/agents-chat-audit',
+		active: currentPage.value?.route.name === 'agents-chat-audit',
 	}, {
+		icon: 'ti ti-ticket',
+		text: i18n.ts._agents.redeemCodesManage,
+		to: '/admin/agents-redeem-codes',
+		active: currentPage.value?.route.name === 'agents-redeem-codes',
+	}] : []), {
 		icon: 'ti ti-paint',
 		text: i18n.ts.branding,
 		to: '/admin/branding',

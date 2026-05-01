@@ -4,7 +4,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 -->
 
 <template>
-<PageWithHeader :tabs="headerTabs">
+<PageWithHeader :actions="headerActions" :tabs="headerTabs">
 	<div class="_spacer" style="--MI_SPACER-w: 700px; --MI_SPACER-min: 16px; --MI_SPACER-max: 32px;">
 		<div class="_gaps_m">
 			<MkInfo>{{ i18n.ts._agents.adminSettingsDescription }}</MkInfo>
@@ -32,14 +32,22 @@ SPDX-License-Identifier: AGPL-3.0-only
 						{{ i18n.ts._agents.adminModelListEmpty }}
 					</div>
 
-					<div v-for="(row, i) in form.state.agentLlmModelRows" :key="i" :class="$style.modelCard" class="_gaps_s">
+					<div v-for="(row, i) in form.state.agentLlmModelRows" :key="i" :class="[$style.modelCard, row.unlisted ? $style.modelCardUnlisted : null]" class="_gaps_s">
 						<div :class="$style.modelCardHead">
-							<span :class="$style.modelCardTitle">{{ i18n.ts._agents.adminModelRowPrefix }} #{{ i + 1 }}</span>
-							<button type="button" class="_button" :class="$style.iconDanger" :title="i18n.ts.remove" @click="removeRow(i)">
-								<i class="ti ti-trash"></i>
-							</button>
+							<span :class="$style.modelCardTitle">
+								{{ i18n.ts._agents.adminModelRowPrefix }} #{{ i + 1 }}
+								<span v-if="row.unlisted" :class="$style.unlistedBadge">{{ i18n.ts._agents.adminModelUnlistedBadge }}</span>
+							</span>
+							<div :class="$style.modelCardActions">
+								<button v-if="row.unlisted" type="button" class="_button" :class="$style.iconMuted" :title="i18n.ts._agents.adminModelRelist" @click="toggleUnlist(i, false)">
+									<i class="ti ti-eye"></i>
+								</button>
+								<button v-else type="button" class="_button" :class="$style.iconWarn" :title="i18n.ts._agents.adminModelUnlist" @click="toggleUnlist(i, true)">
+									<i class="ti ti-archive"></i>
+								</button>
+							</div>
 						</div>
-						<MkInput v-model="row.name">
+						<MkInput v-model="row.name" :readonly="row.unlisted">
 							<template #label>{{ i18n.ts._agents.modelDisplayName }}</template>
 						</MkInput>
 						<div v-if="row.id.trim() !== ''" :class="$style.internalIdRow">
@@ -47,29 +55,34 @@ SPDX-License-Identifier: AGPL-3.0-only
 							<code :class="$style.internalIdValue">{{ row.id }}</code>
 							<p :class="$style.internalIdCaption">{{ i18n.ts._agents.fieldModelInternalIdCaption }}</p>
 						</div>
-						<MkTextarea v-model="row.description">
+						<MkTextarea v-model="row.description" :readonly="row.unlisted">
 							<template #label>{{ i18n.ts._agents.modelDescription }}</template>
 						</MkTextarea>
-						<MkInput v-model="row.baseUrl" type="text">
+						<MkInput v-model="row.baseUrl" type="text" :readonly="row.unlisted">
 							<template #label>{{ i18n.ts._agents.modelBaseUrl }}</template>
 							<template #caption>{{ i18n.ts._agents.fieldModelBaseUrlCaption }}</template>
 							<template #prefix><i class="ti ti-link"></i></template>
 						</MkInput>
-						<MkInput v-model="row.apiKey" type="password">
+						<MkInput v-model="row.apiKey" type="password" :readonly="row.unlisted">
 							<template #label>{{ i18n.ts._agents.modelApiKey }}</template>
 						</MkInput>
-						<MkInput v-model="row.apiModelName">
+						<MkInput v-model="row.apiModelName" :readonly="row.unlisted">
 							<template #label>{{ i18n.ts._agents.modelApiName }}</template>
 							<template #caption>{{ i18n.ts._agents.fieldApiModelNameCaption }}</template>
 						</MkInput>
 						<FormSplit :minWidth="260">
-							<MkInput v-model="row.maxContextTokens" type="text">
+							<MkInput v-model="row.maxContextTokens" type="text" :readonly="row.unlisted">
 								<template #label>{{ i18n.ts._agents.maxContextTokens }}</template>
 							</MkInput>
-							<MkInput v-model="row.maxOutputTokensPerCall" type="text">
+							<MkInput v-model="row.maxOutputTokensPerCall" type="text" :readonly="row.unlisted">
 								<template #label>{{ i18n.ts._agents.maxOutputTokens }}</template>
 							</MkInput>
 						</FormSplit>
+						<MkInput v-model="row.costPerCall" type="text" :readonly="row.unlisted">
+							<template #label>{{ i18n.ts._agents.modelCostPerCall }}</template>
+							<template #caption>{{ i18n.ts._agents.modelCostPerCallCaption }}</template>
+							<template #prefix><i class="ti ti-coin"></i></template>
+						</MkInput>
 					</div>
 
 					<div>
@@ -121,6 +134,43 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</div>
 			</MkFolder>
 
+			<MkFolder :defaultOpen="false">
+				<template #icon><i class="ti ti-file-zip"></i></template>
+				<template #label>{{ i18n.ts._agents.adminSectionCompression }}</template>
+				<div class="_gaps">
+					<MkInfo>{{ i18n.ts._agents.adminCompressionHint }}</MkInfo>
+					<MkTextarea v-model="form.state.agentCompressionSystemPrompt" tall>
+						<template #label>{{ i18n.ts._agents.agentCompressionSystemPrompt }}</template>
+						<template #caption>{{ i18n.ts._agents.agentCompressionSystemPromptCaption }}</template>
+					</MkTextarea>
+					<FormSplit :minWidth="260">
+						<MkInput v-model="form.state.agentCompressionMaxInputChars" type="text">
+							<template #label>{{ i18n.ts._agents.agentCompressionMaxInputChars }}</template>
+							<template #caption>{{ i18n.ts._agents.agentCompressionMaxInputCharsCaption }}</template>
+						</MkInput>
+						<MkInput v-model="form.state.agentCompressionMaxOutputTokens" type="text">
+							<template #label>{{ i18n.ts._agents.agentCompressionMaxOutputTokens }}</template>
+							<template #caption>{{ i18n.ts._agents.agentCompressionMaxOutputTokensCaption }}</template>
+						</MkInput>
+					</FormSplit>
+					<FormSplit :minWidth="200">
+						<MkInput v-model="form.state.agentCompressionBandT1Ratio" type="text">
+							<template #label>{{ i18n.ts._agents.agentCompressionBandT1Ratio }}</template>
+							<template #caption>{{ i18n.ts._agents.agentCompressionBandT1RatioCaption }}</template>
+						</MkInput>
+						<MkInput v-model="form.state.agentCompressionBandT2Ratio" type="text">
+							<template #label>{{ i18n.ts._agents.agentCompressionBandT2Ratio }}</template>
+							<template #caption>{{ i18n.ts._agents.agentCompressionBandT2RatioCaption }}</template>
+						</MkInput>
+					</FormSplit>
+					<MkSelect v-model="form.state.agentCompressionDefaultModelId" :items="compressionDefaultModelItems">
+						<template #label>{{ i18n.ts._agents.adminCompressionDefaultModel }}</template>
+						<template #caption>{{ i18n.ts._agents.adminCompressionDefaultModelCaption }}</template>
+					</MkSelect>
+					<MkInfo>{{ i18n.ts._agents.agentCompressionBandRatiosEmptyHint }}</MkInfo>
+				</div>
+			</MkFolder>
+
 			<div v-if="form.modified.value" :class="$style.saveBar">
 				<MkFormFooter :form="form"/>
 			</div>
@@ -148,6 +198,9 @@ import { i18n } from '@/i18n.js';
 import { definePage } from '@/page.js';
 import { useForm } from '@/composables/use-form.js';
 import { genId } from '@/utility/id.js';
+import { useRouter } from '@/router.js';
+
+const router = useRouter();
 
 const meta = await misskeyApi('admin/meta') as Record<string, unknown>;
 
@@ -160,12 +213,21 @@ type AgentLlmModelRow = {
 	apiModelName: string;
 	maxContextTokens: string;
 	maxOutputTokensPerCall: string;
+	unlisted: boolean;
+	costPerCall: string;
 };
 
 function numFromMeta(v: unknown, fallback: number): number {
 	if (typeof v === 'number' && Number.isFinite(v)) return Math.trunc(v);
 	const n = Number(v);
 	return Number.isFinite(n) ? Math.trunc(n) : fallback;
+}
+
+function ratioFromMeta(v: unknown, fallback: number): string {
+	if (v == null) return String(fallback);
+	if (typeof v === 'number' && Number.isFinite(v)) return String(v);
+	const n = Number(v);
+	return Number.isFinite(n) ? String(n) : String(fallback);
 }
 
 function initAgentLlmModelRows(): AgentLlmModelRow[] {
@@ -190,6 +252,8 @@ function initAgentLlmModelRows(): AgentLlmModelRow[] {
 			apiModelName,
 			maxContextTokens: String(numFromMeta(o.maxContextTokens, 8192)),
 			maxOutputTokensPerCall: String(numFromMeta(o.maxOutputTokensPerCall, 2048)),
+			unlisted: o.unlisted === true,
+			costPerCall: typeof o.costPerCall === 'number' && Number.isFinite(o.costPerCall) ? String(o.costPerCall) : '0',
 		});
 	}
 	return rows;
@@ -213,6 +277,14 @@ const form = useForm({
 	agentMem0InjectMaxChars: String(numFromMeta(meta.agentMem0InjectMaxChars, 4000)),
 	agentMem0AddMemoryMaxRounds: String(numFromMeta(meta.agentMem0AddMemoryMaxRounds, 3)),
 	agentMem0AddMemoryEveryNRounds: String(numFromMeta(meta.agentMem0AddMemoryEveryNRounds, 1)),
+	agentCompressionSystemPrompt: typeof meta.agentCompressionSystemPrompt === 'string' ? meta.agentCompressionSystemPrompt : '',
+	agentCompressionMaxInputChars: String(numFromMeta(meta.agentCompressionMaxInputChars, 12000)),
+	agentCompressionMaxOutputTokens: String(numFromMeta(meta.agentCompressionMaxOutputTokens, 2048)),
+	agentCompressionBandT1Ratio: ratioFromMeta((meta as Record<string, unknown>).agentCompressionBandT1Ratio, 0.8),
+	agentCompressionBandT2Ratio: ratioFromMeta((meta as Record<string, unknown>).agentCompressionBandT2Ratio, 0.9),
+	agentCompressionDefaultModelId: typeof (meta as Record<string, unknown>).agentCompressionDefaultModelId === 'string'
+		? String((meta as Record<string, unknown>).agentCompressionDefaultModelId)
+		: '',
 }, async (state) => {
 	type Normalized = {
 		id: string;
@@ -223,6 +295,8 @@ const form = useForm({
 		apiModelName: string;
 		maxContextTokens: number;
 		maxOutputTokensPerCall: number;
+		unlisted: boolean;
+		costPerCall: number;
 	};
 	const normalized: Normalized[] = [];
 	const seen = new Set<string>();
@@ -257,6 +331,12 @@ const form = useForm({
 			os.alert({ type: 'error', text: i18n.ts._agents.agentLlmModelsInvalidOutput });
 			throw new Error('invalid output');
 		}
+		const costRaw = row.costPerCall.trim();
+		const cost = costRaw === '' ? 0 : Number(costRaw);
+		if (!Number.isFinite(cost) || cost < 0 || cost > 1_000_000) {
+			os.alert({ type: 'error', text: i18n.ts._agents.agentLlmModelsInvalidCost });
+			throw new Error('invalid cost');
+		}
 		normalized.push({
 			id,
 			name,
@@ -266,6 +346,8 @@ const form = useForm({
 			apiModelName,
 			maxContextTokens: maxCtx,
 			maxOutputTokensPerCall: maxOut,
+			unlisted: row.unlisted === true,
+			costPerCall: cost,
 		});
 	}
 	if (normalized.length === 0) {
@@ -273,9 +355,15 @@ const form = useForm({
 		throw new Error('no models');
 	}
 	const defTrim = state.agentDefaultModelId.trim();
-	if (defTrim !== '' && !normalized.some(m => m.id === defTrim)) {
+	if (defTrim !== '' && !normalized.some(m => m.id === defTrim && !m.unlisted)) {
 		os.alert({ type: 'error', text: i18n.ts._agents.agentDefaultModelInvalid });
 		throw new Error('invalid default model');
+	}
+
+	const compDefTrim = state.agentCompressionDefaultModelId.trim();
+	if (compDefTrim !== '' && !normalized.some(m => m.id === compDefTrim && !m.unlisted)) {
+		os.alert({ type: 'error', text: i18n.ts._agents.agentDefaultModelInvalid });
+		throw new Error('invalid compression default model');
 	}
 
 	const memTopK = Math.trunc(Number(state.agentMem0TopK));
@@ -299,6 +387,37 @@ const form = useForm({
 		throw new Error('invalid add memory every n');
 	}
 
+	const compMaxIn = Math.trunc(Number(state.agentCompressionMaxInputChars));
+	const compMaxOut = Math.trunc(Number(state.agentCompressionMaxOutputTokens));
+	if (!Number.isFinite(compMaxIn) || compMaxIn < 500 || compMaxIn > 200000) {
+		os.alert({ type: 'error', text: i18n.ts._agents.adminCompressionInvalidInput });
+		throw new Error('invalid compression max input');
+	}
+	if (!Number.isFinite(compMaxOut) || compMaxOut < 1 || compMaxOut > 32000) {
+		os.alert({ type: 'error', text: i18n.ts._agents.adminCompressionInvalidOutput });
+		throw new Error('invalid compression max output');
+	}
+
+	const t1s = String(state.agentCompressionBandT1Ratio ?? '').trim();
+	const t2s = String(state.agentCompressionBandT2Ratio ?? '').trim();
+	let bandT1: number | null = null;
+	let bandT2: number | null = null;
+	if (t1s === '' && t2s === '') {
+		bandT1 = null;
+		bandT2 = null;
+	} else {
+		bandT1 = Number(t1s);
+		bandT2 = Number(t2s);
+		if (!Number.isFinite(bandT1) || !Number.isFinite(bandT2) || bandT1 < 0.01 || bandT1 > 0.99 || bandT2 < 0.01 || bandT2 > 0.99) {
+			os.alert({ type: 'error', text: i18n.ts._agents.adminCompressionInvalidBandRatio });
+			throw new Error('invalid band ratio');
+		}
+		if (bandT1 >= bandT2) {
+			os.alert({ type: 'error', text: i18n.ts._agents.adminCompressionInvalidBandT1T2 });
+			throw new Error('invalid t1 t2 order');
+		}
+	}
+
 	await os.apiWithDialog('admin/update-meta', {
 		agentFeatureEnabled: state.agentFeatureEnabled,
 		agentGlobalSystemPrompt: state.agentGlobalSystemPrompt === '' ? null : state.agentGlobalSystemPrompt,
@@ -317,6 +436,12 @@ const form = useForm({
 		agentMem0InjectMaxChars: memInj,
 		agentMem0AddMemoryMaxRounds: memAddRounds,
 		agentMem0AddMemoryEveryNRounds: memAddEveryN,
+		agentCompressionSystemPrompt: state.agentCompressionSystemPrompt.trim() === '' ? null : state.agentCompressionSystemPrompt,
+		agentCompressionMaxInputChars: compMaxIn,
+		agentCompressionMaxOutputTokens: compMaxOut,
+		agentCompressionBandT1Ratio: bandT1,
+		agentCompressionBandT2Ratio: bandT2,
+		agentCompressionDefaultModelId: compDefTrim === '' ? null : compDefTrim,
 	} as Record<string, unknown>);
 	fetchInstance(true);
 });
@@ -325,11 +450,25 @@ const defaultModelItems = computed((): MkSelectItem[] => {
 	const items: MkSelectItem[] = [{ value: '', label: i18n.ts._agents.agentsMetaDefaultModelUnset }];
 	const seen = new Set<string>();
 	for (const row of form.state.agentLlmModelRows) {
+		if (row.unlisted) continue;
 		const id = row.id.trim();
 		if (!id || seen.has(id)) continue;
 		seen.add(id);
 		const label = row.name.trim() || id;
 		items.push({ value: id, label });
+	}
+	return items;
+});
+
+const compressionDefaultModelItems = computed((): MkSelectItem[] => {
+	const items: MkSelectItem[] = [{ value: '', label: i18n.ts._agents.agentsMetaDefaultModelUnset }];
+	const seen = new Set<string>();
+	for (const row of form.state.agentLlmModelRows) {
+		if (row.unlisted) continue;
+		const id = row.id.trim();
+		if (!id || seen.has(id)) continue;
+		seen.add(id);
+		items.push({ value: id, label: row.name.trim() || id });
 	}
 	return items;
 });
@@ -344,14 +483,36 @@ function addRow() {
 		apiModelName: '',
 		maxContextTokens: '8192',
 		maxOutputTokensPerCall: '2048',
+		unlisted: false,
+		costPerCall: '0',
 	});
 }
 
-function removeRow(index: number) {
-	form.state.agentLlmModelRows.splice(index, 1);
+async function toggleUnlist(index: number, next: boolean) {
+	const row = form.state.agentLlmModelRows[index];
+	if (next === true) {
+		const ok = await os.confirm({
+			type: 'warning',
+			text: i18n.tsx._agents.adminModelUnlistConfirm({ name: row.name.trim() || row.id }),
+		});
+		if (ok.canceled) return;
+		if (form.state.agentDefaultModelId.trim() === row.id.trim()) {
+			form.state.agentDefaultModelId = '';
+		}
+		if (form.state.agentCompressionDefaultModelId.trim() === row.id.trim()) {
+			form.state.agentCompressionDefaultModelId = '';
+		}
+	}
+	row.unlisted = next;
 }
 
 const headerTabs = computed(() => []);
+
+const headerActions = computed(() => [{
+	icon: 'ti ti-report-analytics',
+	text: '请求报表',
+	handler: () => router.push('/admin/agents-reports' as any),
+}]);
 
 definePage(() => ({
 	title: i18n.ts._agents.adminSettings,
@@ -387,6 +548,44 @@ definePage(() => ({
 	&:hover {
 		opacity: 0.85;
 	}
+}
+
+.iconWarn {
+	color: var(--MI_THEME-warn);
+
+	&:hover {
+		opacity: 0.85;
+	}
+}
+
+.iconMuted {
+	color: var(--MI_THEME-fg);
+	opacity: 0.72;
+
+	&:hover {
+		opacity: 1;
+	}
+}
+
+.modelCardUnlisted {
+	opacity: 0.82;
+	background: color-mix(in srgb, var(--MI_THEME-panel) 85%, var(--MI_THEME-warn) 15%);
+}
+
+.modelCardActions {
+	display: flex;
+	gap: 4px;
+	align-items: center;
+}
+
+.unlistedBadge {
+	margin-left: 8px;
+	padding: 2px 8px;
+	border-radius: 999px;
+	font-size: 0.75em;
+	font-weight: 600;
+	background: var(--MI_THEME-warn);
+	color: var(--MI_THEME-fgOnWarn, #fff);
 }
 
 .emptyModels {

@@ -15,6 +15,7 @@ import { UserEntityService } from '@/core/entities/UserEntityService.js';
 import { bindThis } from '@/decorators.js';
 import { RelationshipJobData } from '@/queue/types.js';
 import { ModerationLogService } from '@/core/ModerationLogService.js';
+import { MetaService } from '@/core/MetaService.js';
 
 @Injectable()
 export class UserSuspendService {
@@ -33,19 +34,27 @@ export class UserSuspendService {
 		private globalEventService: GlobalEventService,
 		private apRendererService: ApRendererService,
 		private moderationLogService: ModerationLogService,
+		private metaService: MetaService,
 	) {
 	}
 
 	@bindThis
-	public async suspend(user: MiUser, moderator: MiUser): Promise<void> {
+	public async suspend(user: MiUser, moderator: MiUser, opts?: { expiresAt?: Date | null }): Promise<void> {
+		const expiresAt = opts?.expiresAt ?? null;
+		if (expiresAt != null && expiresAt.getTime() <= Date.now()) {
+			return;
+		}
+
 		await this.usersRepository.update(user.id, {
 			isSuspended: true,
+			suspendedUntil: expiresAt,
 		});
 
 		this.moderationLogService.log(moderator, 'suspend', {
 			userId: user.id,
 			userUsername: user.username,
 			userHost: user.host,
+			suspendedUntil: expiresAt ? expiresAt.toISOString() : null,
 		});
 
 		(async () => {
@@ -56,15 +65,63 @@ export class UserSuspendService {
 
 	@bindThis
 	public async unsuspend(user: MiUser, moderator: MiUser): Promise<void> {
+		await this.applyUnsuspend(user, { moderator, logKind: 'moderator' });
+	}
+
+	/**
+	 * 期限付き凍結の満了により凍結を解除する（定期ジョブから呼ばれる）。
+	 */
+	@bindThis
+	public async unsuspendDueToScheduledExpiry(user: MiUser): Promise<void> {
+		const meta = await this.metaService.fetch();
+		const rootId = meta.rootUserId;
+		if (rootId) {
+			const root = await this.usersRepository.findOneBy({ id: rootId });
+			if (root) {
+				await this.applyUnsuspend(user, { moderator: root, logKind: 'scheduleExpired' });
+				return;
+			}
+		}
+		await this.applyUnsuspend(user, { logKind: 'none' });
+	}
+
+	@bindThis
+	public async processExpiredScheduledSuspensions(): Promise<void> {
+		const users = await this.usersRepository.createQueryBuilder('user')
+			.where('user.isSuspended = true')
+			.andWhere('user.suspendedUntil IS NOT NULL')
+			.andWhere('user.suspendedUntil < :now', { now: new Date() })
+			.getMany();
+
+		for (const u of users) {
+			await this.unsuspendDueToScheduledExpiry(u).catch(_ => {});
+		}
+	}
+
+	@bindThis
+	private async applyUnsuspend(user: MiUser, opts: {
+		moderator?: MiUser;
+		logKind: 'moderator' | 'scheduleExpired' | 'none';
+	}): Promise<void> {
 		await this.usersRepository.update(user.id, {
 			isSuspended: false,
+			suspendedUntil: null,
 		});
 
-		this.moderationLogService.log(moderator, 'unsuspend', {
-			userId: user.id,
-			userUsername: user.username,
-			userHost: user.host,
-		});
+		if (opts.logKind === 'moderator' && opts.moderator) {
+			this.moderationLogService.log(opts.moderator, 'unsuspend', {
+				userId: user.id,
+				userUsername: user.username,
+				userHost: user.host,
+			});
+		} else if (opts.logKind === 'scheduleExpired' && opts.moderator) {
+			this.moderationLogService.log(opts.moderator, 'unsuspend', {
+				userId: user.id,
+				userUsername: user.username,
+				userHost: user.host,
+				scheduleExpired: true,
+			});
+		}
 
 		(async () => {
 			await this.postUnsuspend(user).catch(_ => {});

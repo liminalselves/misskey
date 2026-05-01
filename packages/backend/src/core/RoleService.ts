@@ -19,6 +19,7 @@ import { MemoryKVCache, MemorySingleCache } from '@/misc/cache.js';
 import type { MiUser } from '@/models/User.js';
 import { DI } from '@/di-symbols.js';
 import { bindThis } from '@/decorators.js';
+import { isUserEffectivelySuspended } from '@/misc/user-effective-suspension.js';
 import { CacheService } from '@/core/CacheService.js';
 import type { RoleCondFormulaValue } from '@/models/Role.js';
 import { UserEntityService } from '@/core/entities/UserEntityService.js';
@@ -261,7 +262,7 @@ export class RoleService implements OnApplicationShutdown, OnModuleInit {
 				}
 				// サスペンド済みユーザである
 				case 'isSuspended': {
-					return user.isSuspended;
+					return isUserEffectivelySuspended(user);
 				}
 				// 鍵アカウントユーザである
 				case 'isLocked': {

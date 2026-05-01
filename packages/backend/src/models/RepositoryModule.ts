@@ -88,8 +88,11 @@ import {
 	MiAgentCharacter,
 	MiAgentDialogueStyle,
 	MiAgentSession,
+	MiAgentSessionCompressionSticky,
 	MiAgentMessage,
 	MiAgentUserStyleSubscription,
+	MiAgentModelUsageLog,
+	MiAgentRedeemCode,
 	MiAgentPlazaReview,
 } from './_.js';
 import type { Provider } from '@nestjs/common';
@@ -581,6 +584,24 @@ const $agentPlazaReviewsRepository: Provider = {
 	inject: [DI.db],
 };
 
+const $agentModelUsageLogsRepository: Provider = {
+	provide: DI.agentModelUsageLogsRepository,
+	useFactory: (db: DataSource) => db.getRepository(MiAgentModelUsageLog).extend(miRepository as MiRepository<MiAgentModelUsageLog>),
+	inject: [DI.db],
+};
+
+const $agentRedeemCodesRepository: Provider = {
+	provide: DI.agentRedeemCodesRepository,
+	useFactory: (db: DataSource) => db.getRepository(MiAgentRedeemCode).extend(miRepository as MiRepository<MiAgentRedeemCode>),
+	inject: [DI.db],
+};
+
+const $agentSessionCompressionStickyRepository: Provider = {
+	provide: DI.agentSessionCompressionStickyRepository,
+	useFactory: (db: DataSource) => db.getRepository(MiAgentSessionCompressionSticky).extend(miRepository as MiRepository<MiAgentSessionCompressionSticky>),
+	inject: [DI.db],
+};
+
 const $bubbleGameRecordsRepository: Provider = {
 	provide: DI.bubbleGameRecordsRepository,
 	useFactory: (db: DataSource) => db.getRepository(MiBubbleGameRecord).extend(miRepository as MiRepository<MiBubbleGameRecord>),
@@ -677,6 +698,9 @@ const $reversiGamesRepository: Provider = {
 		$agentMessagesRepository,
 		$agentUserStyleSubscriptionsRepository,
 		$agentPlazaReviewsRepository,
+		$agentModelUsageLogsRepository,
+		$agentRedeemCodesRepository,
+		$agentSessionCompressionStickyRepository,
 		$bubbleGameRecordsRepository,
 		$reversiGamesRepository,
 	],
@@ -762,6 +786,9 @@ const $reversiGamesRepository: Provider = {
 		$agentMessagesRepository,
 		$agentUserStyleSubscriptionsRepository,
 		$agentPlazaReviewsRepository,
+		$agentModelUsageLogsRepository,
+		$agentRedeemCodesRepository,
+		$agentSessionCompressionStickyRepository,
 		$bubbleGameRecordsRepository,
 		$reversiGamesRepository,
 	],

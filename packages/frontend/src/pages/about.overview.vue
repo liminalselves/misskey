@@ -14,6 +14,11 @@ SPDX-License-Identifier: AGPL-3.0-only
 		</div>
 	</div>
 
+	<MkInfo :class="$style.identityNote">
+		<div :class="$style.identityTitle">阈界人格官方实例</div>
+		<div>该 Misskey 归属于阈界人格，并由阈界人格项目组持续维护与运营。</div>
+	</MkInfo>
+
 	<MkKeyValue>
 		<template #key>{{ i18n.ts.description }}</template>
 		<template #value><div v-html="instance.description"></div></template>
@@ -165,6 +170,15 @@ const initStats = () => misskeyApi('stats', {});
 	color: #fff;
 	text-shadow: 0 0 8px #000;
 	background: linear-gradient(transparent, rgba(0, 0, 0, 0.7));
+}
+
+.identityNote {
+	border: 1px solid color-mix(in srgb, var(--MI_THEME-accent), transparent 70%);
+}
+
+.identityTitle {
+	font-weight: 700;
+	margin-bottom: 4px;
 }
 
 .rules {

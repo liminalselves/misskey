@@ -21,7 +21,7 @@ function escapeIlikePattern(s: string): string {
 export const meta = {
 	tags: ['admin'],
 	requireCredential: true,
-	requireModerator: true,
+	requireAdmin: true,
 	kind: 'read:admin',
 	limit: { duration: ms('1hour'), max: 120 },
 	res: {

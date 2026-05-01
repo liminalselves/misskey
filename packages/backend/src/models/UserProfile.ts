@@ -270,6 +270,12 @@ export class MiUserProfile {
 	})
 	public loggedInDates: string[];
 
+	@Column('boolean', {
+		default: false,
+		comment: 'Enable in-app push notification via WebSocket',
+	})
+	public enableAppPush: boolean;
+
 	@Column('jsonb', {
 		default: [],
 	})
@@ -277,6 +283,12 @@ export class MiUserProfile {
 		name: typeof ACHIEVEMENT_TYPES[number];
 		unlockedAt: number;
 	}[];
+
+	/** 智能体模型调用扣费余额（成功/中断扣减；单位与模型 costPerCall 保持一致） */
+	@Column('double precision', {
+		default: 0,
+	})
+	public agentCreditBalance: number;
 
 	//#region Denormalized fields
 	@Index()

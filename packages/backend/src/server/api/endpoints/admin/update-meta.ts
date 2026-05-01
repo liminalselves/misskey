@@ -11,7 +11,8 @@ import { Endpoint } from '@/server/api/endpoint-base.js';
 import { MetaService } from '@/core/MetaService.js';
 import { ApiError } from '@/server/api/error.js';
 import { assertSafeLlmHttpsUrl, describeUnsafeLlmUrlReason, hrefForStoredLlmBaseUrl, UnsafeLlmUrlError } from '@/misc/validate-llm-endpoint-url.js';
-import { normalizeAgentLlmModelsParam } from '@/misc/agent-llm-models.js';
+import { getActiveLlmModels, normalizeAgentLlmModelsParam } from '@/misc/agent-llm-models.js';
+import { AgentCompressionMemoryService } from '@/core/AgentCompressionMemoryService.js';
 
 function coerceHttpObjectStorageUrlToHttps(url: string | null | undefined, force: boolean): string | null {
 	if (url == null || url === '') return url ?? null;
@@ -164,6 +165,8 @@ export const paramDef = {
 					apiKey: { type: 'string', minLength: 1, maxLength: 8192 },
 					maxContextTokens: { type: 'integer', minimum: 256, maximum: 2000000 },
 					maxOutputTokensPerCall: { type: 'integer', minimum: 1, maximum: 128000 },
+					unlisted: { type: 'boolean' },
+					costPerCall: { type: 'number', minimum: 0, maximum: 1000000 },
 				},
 				required: ['id', 'name', 'apiModelName', 'baseUrl', 'apiKey', 'maxContextTokens', 'maxOutputTokensPerCall'],
 			},
@@ -180,6 +183,13 @@ export const paramDef = {
 		agentMem0InjectMaxChars: { type: 'integer', minimum: 200, maximum: 50000 },
 		agentMem0AddMemoryMaxRounds: { type: 'integer', minimum: 1, maximum: 24 },
 		agentMem0AddMemoryEveryNRounds: { type: 'integer', minimum: 1, maximum: 48 },
+		agentCompressionSystemPrompt: { type: 'string', nullable: true, maxLength: 20000 },
+		agentCompressionMaxInputChars: { type: 'integer', minimum: 500, maximum: 200000 },
+		agentCompressionMaxOutputTokens: { type: 'integer', minimum: 1, maximum: 32000 },
+		/** 0.01–0.99 或 null 清空回默认 0.8/0.9 */
+		agentCompressionBandT1Ratio: { type: 'number', nullable: true, minimum: 0.01, maximum: 0.99 },
+		agentCompressionBandT2Ratio: { type: 'number', nullable: true, minimum: 0.01, maximum: 0.99 },
+		agentCompressionDefaultModelId: { type: 'string', nullable: true, maxLength: 64 },
 		nativeClientAppInfo: {
 			type: 'object', nullable: false,
 			properties: {
@@ -317,6 +327,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 
 		private metaService: MetaService,
 		private moderationLogService: ModerationLogService,
+		private agentCompressionMemoryService: AgentCompressionMemoryService,
 	) {
 		super(meta, paramDef, async (ps, me) => {
 			const set = {} as Partial<MiMeta>;
@@ -745,6 +756,54 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			}
 			if (ps.agentMem0AddMemoryEveryNRounds !== undefined) {
 				set.agentMem0AddMemoryEveryNRounds = Math.max(1, Math.min(48, ps.agentMem0AddMemoryEveryNRounds));
+			}
+
+			if (ps.agentCompressionSystemPrompt !== undefined) {
+				set.agentCompressionSystemPrompt = ps.agentCompressionSystemPrompt === null || String(ps.agentCompressionSystemPrompt).trim() === ''
+					? null
+					: String(ps.agentCompressionSystemPrompt).trim();
+			}
+			if (ps.agentCompressionMaxInputChars !== undefined) {
+				set.agentCompressionMaxInputChars = Math.max(500, Math.min(200000, ps.agentCompressionMaxInputChars));
+			}
+			if (ps.agentCompressionMaxOutputTokens !== undefined) {
+				set.agentCompressionMaxOutputTokens = Math.max(1, Math.min(32000, ps.agentCompressionMaxOutputTokens));
+			}
+
+			if (ps.agentCompressionBandT1Ratio !== undefined || ps.agentCompressionBandT2Ratio !== undefined) {
+				const t1m = ps.agentCompressionBandT1Ratio !== undefined ? ps.agentCompressionBandT1Ratio : serverSettings.agentCompressionBandT1Ratio;
+				const t2m = ps.agentCompressionBandT2Ratio !== undefined ? ps.agentCompressionBandT2Ratio : serverSettings.agentCompressionBandT2Ratio;
+				if (t1m === null && t2m === null) {
+					set.agentCompressionBandT1Ratio = null;
+					set.agentCompressionBandT2Ratio = null;
+				} else {
+					const o = this.agentCompressionMemoryService.resolveCompressionBandRatios(
+						{ ...serverSettings, agentCompressionBandT1Ratio: t1m, agentCompressionBandT2Ratio: t2m } as MiMeta,
+					);
+					set.agentCompressionBandT1Ratio = o.t1Ratio;
+					set.agentCompressionBandT2Ratio = o.t2Ratio;
+				}
+			}
+
+			if (ps.agentCompressionDefaultModelId !== undefined) {
+				const raw = ps.agentCompressionDefaultModelId;
+				const v = raw === null || (typeof raw === 'string' && raw.trim() === '')
+					? null
+					: String(raw).trim();
+				if (v) {
+					const nextLlm = set.agentLlmModels !== undefined
+						? set.agentLlmModels
+						: serverSettings.agentLlmModels;
+					const tentative = { ...serverSettings, ...set, agentLlmModels: nextLlm } as MiMeta;
+					if (!getActiveLlmModels(tentative).some(m => m.id === v)) {
+						throw new ApiError({
+							message: 'Invalid agent compression default model id.',
+							code: 'INVALID_PARAM',
+							id: 'f1e2d3c4-b5a6-7890-1234-567890abcdef',
+						});
+					}
+				}
+				set.agentCompressionDefaultModelId = v;
 			}
 
 			if (ps.nativeClientAppInfo !== undefined) {

@@ -429,4 +429,43 @@ export class AgentDashscopeMemoryService {
 			clearTimeout(t);
 		}
 	}
+
+	/**
+	 * 删除百炼上该 bailianUserId（Misskey 用户 + 会话）下的全部记忆节点；用于用户删除智能体会话时的远程清理。
+	 */
+	@bindThis
+	public async deleteAllMemoryNodesForBailianUser(params: {
+		meta: MiMeta;
+		bailianUserId: string;
+	}): Promise<{ deleted: number; providerFailed: boolean }> {
+		const key = params.meta.agentMem0ApiKey?.trim();
+		if (!key) return { deleted: 0, providerFailed: false };
+		let deleted = 0;
+		const pageSize = 50;
+		const maxRounds = 200;
+		for (let round = 0; round < maxRounds; round++) {
+			const list = await this.listMemoryNodes({
+				meta: params.meta,
+				bailianUserId: params.bailianUserId,
+				pageNum: 1,
+				pageSize,
+			});
+			if (list == null) {
+				return { deleted, providerFailed: true };
+			}
+			if (list.memoryNodes.length === 0) {
+				return { deleted, providerFailed: false };
+			}
+			for (const n of list.memoryNodes) {
+				const ok = await this.deleteMemoryNode({
+					meta: params.meta,
+					bailianUserId: params.bailianUserId,
+					memoryNodeId: n.memoryNodeId,
+				});
+				if (ok) deleted++;
+			}
+		}
+		this.logger.warn('Dashscope deleteAllMemoryNodesForBailianUser: max rounds reached');
+		return { deleted, providerFailed: true };
+	}
 }

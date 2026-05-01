@@ -8,12 +8,14 @@ SPDX-License-Identifier: AGPL-3.0-only
 	<div v-if="mainTab === 'square'" class="_spacer" style="--MI_SPACER-w: 700px;">
 		<XSquare/>
 	</div>
-	<div v-else class="_spacer" style="--MI_SPACER-w: 700px;">
-		<MkTab
-			v-model="createSub"
-			:tabs="createTabs"
-			style="margin-bottom: var(--MI-margin);"
-		/>
+	<div v-else-if="mainTab === 'create'" class="_spacer" style="--MI_SPACER-w: 700px;">
+		<div style="display: flex; align-items: center; gap: 10px; margin-bottom: var(--MI-margin);">
+			<MkTab
+				v-model="createSub"
+				:tabs="createTabs"
+				style="flex: 1;"
+			/>
+		</div>
 
 		<div v-if="createSub === 'characters'" class="_gaps">
 			<MkButton primary rounded @click="newCharacter"><i class="ti ti-plus"></i> {{ i18n.ts._agents.newCharacter }}</MkButton>
@@ -119,6 +121,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 			</div>
 		</div>
 	</div>
+	<div v-else-if="mainTab === 'my-stats'" class="_spacer" style="--MI_SPACER-w: 700px;">
+		<XMyStats/>
+	</div>
 </PageWithHeader>
 </template>
 
@@ -138,6 +143,7 @@ import { definePage } from '@/page.js';
 import * as os from '@/os.js';
 import { useRouter } from '@/router.js';
 import XSquare from './square.vue';
+import XMyStats from './my-stats.vue';
 
 const props = withDefaults(defineProps<{
 	view?: string;
@@ -149,7 +155,7 @@ const props = withDefaults(defineProps<{
 
 const router = useRouter();
 
-const mainTab = ref<'square' | 'create'>('square');
+const mainTab = ref<'square' | 'create' | 'my-stats'>('square');
 const createSub = ref<'characters' | 'styles'>('characters');
 const characters = ref<AgentsCharactersListMineResponse>([]);
 const styles = ref<AgentsStylesListMineResponse>([]);
@@ -159,6 +165,7 @@ const loadingSt = ref(true);
 const mainHeaderTabs = computed(() => [
 	{ key: 'square', icon: 'ti ti-layout-grid', title: i18n.ts._agents.navSquare },
 	{ key: 'create', icon: 'ti ti-pencil-plus', title: i18n.ts._agents.navCreate },
+	{ key: 'my-stats', icon: 'ti ti-chart-line', title: i18n.ts._agents.myStats },
 ]);
 
 const createTabs = computed(() => [
@@ -173,6 +180,7 @@ definePage(() => ({
 
 function applyRouteQuery() {
 	if (props.view === 'create') mainTab.value = 'create';
+	else if (props.view === 'my-stats') mainTab.value = 'my-stats';
 	else mainTab.value = 'square';
 	if (props.sub === 'styles') createSub.value = 'styles';
 	else createSub.value = 'characters';
@@ -193,13 +201,10 @@ watch(() => props.sub, () => {
 });
 
 watch(mainTab, (t) => {
-	void router.replace({
-		path: '/agents',
-		query: {
-			view: t,
-			sub: createSub.value,
-		},
-	} as unknown as Parameters<typeof router.replace>[0]);
+	const qs = new URLSearchParams();
+	qs.set('view', t);
+	if (t === 'create') qs.set('sub', createSub.value);
+	void router.replace(`/agents?${qs.toString()}`);
 	if (t === 'create') {
 		if (createSub.value === 'characters') void loadCharacters();
 		else void loadStyles();
@@ -208,13 +213,10 @@ watch(mainTab, (t) => {
 
 watch(createSub, (s) => {
 	if (mainTab.value !== 'create') return;
-	void router.replace({
-		path: '/agents',
-		query: {
-			view: 'create',
-			sub: s,
-		},
-	} as unknown as Parameters<typeof router.replace>[0]);
+	const qs = new URLSearchParams();
+	qs.set('view', 'create');
+	qs.set('sub', s);
+	void router.replace(`/agents?${qs.toString()}`);
 	if (s === 'characters') void loadCharacters();
 	else void loadStyles();
 });

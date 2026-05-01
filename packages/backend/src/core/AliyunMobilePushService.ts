@@ -6,13 +6,20 @@
 import { Inject, Injectable } from '@nestjs/common';
 import RPCClient from '@alicloud/pop-core';
 import { DI } from '@/di-symbols.js';
+import type { Config } from '@/config.js';
 import type { MiMeta } from '@/models/Meta.js';
 import type { Packed } from '@/misc/json-schema.js';
-import { getNoteSummary } from '@/misc/get-note-summary.js';
 import type { MobilePushDevicesRepository } from '@/models/_.js';
 import { bindThis } from '@/decorators.js';
 import { LoggerService } from '@/core/LoggerService.js';
 import type Logger from '@/logger.js';
+import { CacheService } from '@/core/CacheService.js';
+import {
+	buildNativePushFromAntennaNote,
+	buildNativePushFromChatMessage,
+	buildNativePushFromNotification,
+	joinInstanceUrl,
+} from '@/misc/native-push-bridge-content.js';
 
 /** 与 PushNotificationService / sw 侧类型对齐 */
 type PushNotificationsTypes = {
@@ -33,8 +40,13 @@ export class AliyunMobilePushService {
 		@Inject(DI.meta)
 		private meta: MiMeta,
 
+		@Inject(DI.config)
+		private config: Config,
+
 		@Inject(DI.mobilePushDevicesRepository)
 		private mobilePushDevicesRepository: MobilePushDevicesRepository,
+
+		private cacheService: CacheService,
 
 		loggerService: LoggerService,
 	) {
@@ -71,7 +83,7 @@ export class AliyunMobilePushService {
 			return;
 		}
 
-		const msg = this.composeMessage(type, body);
+		const msg = await this.composeMessage(userId, type, body);
 		if (msg == null) {
 			this.logger.info(`deliver skipped: no composed message for type=${String(type)} userId=${userId}`);
 			return;
@@ -91,7 +103,8 @@ export class AliyunMobilePushService {
 				`Push -> Aliyun API: userId=${userId} type=${String(type)} platform=${d.platform} deviceId=${d.deviceId} titleLen=${msg.title.length}`,
 			);
 			try {
-				await client.request('Push', {
+				const ext = JSON.stringify({ openUrl: msg.openUrl });
+				const common: Record<string, unknown> = {
 					AppKey: appKey,
 					Target: 'DEVICE',
 					TargetValue: d.deviceId,
@@ -99,7 +112,20 @@ export class AliyunMobilePushService {
 					PushType: 'NOTICE',
 					Title: msg.title.slice(0, 128),
 					Body: msg.body.slice(0, 500),
-				}, { method: 'POST' });
+				};
+				if (deviceType === 'ANDROID') {
+					Object.assign(common, {
+						AndroidOpenType: 'ACTIVITY',
+						AndroidActivity: 'top.liminalselves.app.NativeWebViewActivity',
+						AndroidExtParameters: ext,
+						AndroidNotificationChannel: 'misskey_push',
+					});
+				} else {
+					Object.assign(common, {
+						iOSExtParameters: ext,
+					});
+				}
+				await client.request('Push', common, { method: 'POST' });
 				this.logger.succ(`Push OK (Aliyun accepted): deviceId=${d.deviceId}`);
 			} catch (err) {
 				this.logger.error('Push failed (Aliyun API error)', {
@@ -110,32 +136,29 @@ export class AliyunMobilePushService {
 		}
 	}
 
-	private composeMessage<T extends keyof PushNotificationsTypes>(type: T, body: PushNotificationsTypes[T]): { title: string; body: string } | null {
+	private async composeMessage<T extends keyof PushNotificationsTypes>(userId: string, type: T, body: PushNotificationsTypes[T]): Promise<{ title: string; body: string; openUrl: string } | null> {
+		let lang: string | null | undefined;
+		try {
+			const profile = await this.cacheService.userProfileCache.fetch(userId);
+			lang = profile.lang;
+		} catch {
+			lang = null;
+		}
+		const origin = this.config.url;
+
 		switch (type) {
 			case 'notification': {
-				const n = body as Packed<'Notification'>;
-				let text = n.type;
-				if ('note' in n && n.note) {
-					text = getNoteSummary(('type' in n && n.type === 'renote') ? n.note.renote as Packed<'Note'> : n.note);
-				} else if ('user' in n && n.user) {
-					text = `${n.user.name ?? n.user.username}`;
-				}
-				return { title: 'Misskey', body: text };
+				const p = buildNativePushFromNotification(body as Packed<'Notification'>, lang);
+				return { title: p.title, body: p.body, openUrl: joinInstanceUrl(origin, p.openPath) };
 			}
 			case 'newChatMessage': {
-				const m = body as Packed<'ChatMessage'>;
-				return {
-					title: m.fromUser?.name ?? m.fromUser?.username ?? 'Chat',
-					body: m.text ?? '',
-				};
+				const p = buildNativePushFromChatMessage(body as Packed<'ChatMessage'>, lang);
+				return { title: p.title, body: p.body, openUrl: joinInstanceUrl(origin, p.openPath) };
 			}
 			case 'unreadAntennaNote': {
 				const u = body as PushNotificationsTypes['unreadAntennaNote'];
-				const bodyText = u.note ? getNoteSummary(u.note) : '';
-				return {
-					title: `Antenna: ${u.antenna.name}`,
-					body: bodyText,
-				};
+				const p = buildNativePushFromAntennaNote(u, lang);
+				return { title: p.title, body: p.body, openUrl: joinInstanceUrl(origin, p.openPath) };
 			}
 			default:
 				return null;

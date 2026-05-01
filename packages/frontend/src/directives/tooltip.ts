@@ -20,6 +20,7 @@ type TooltipDirectiveState = {
 	showTimer: number | null;
 	hideTimer: number | null;
 	checkTimer: number | null;
+	_scrollOrResizeCleanup: (() => void) | null;
 	show: () => void;
 	close: () => void;
 };
@@ -42,8 +43,13 @@ export const tooltipDirective = {
 		self.showTimer = null;
 		self.hideTimer = null;
 		self.checkTimer = null;
+		self._scrollOrResizeCleanup = null;
 
 		self.close = () => {
+			if (self._scrollOrResizeCleanup) {
+				self._scrollOrResizeCleanup();
+				self._scrollOrResizeCleanup = null;
+			}
 			if (self._close) {
 				if (self.checkTimer) window.clearInterval(self.checkTimer);
 				self._close();
@@ -70,6 +76,7 @@ export const tooltipDirective = {
 			if (self.text == null) return;
 
 			const showing = ref(true);
+
 			const { dispose } = popup(defineAsyncComponent(() => import('@/components/MkTooltip.vue')), {
 				showing,
 				text: self.text,
@@ -78,10 +85,21 @@ export const tooltipDirective = {
 				anchorElement: el,
 			}, {
 				closed: () => dispose(),
+				requestClose: () => self.close(),
 			});
 
 			self._close = () => {
 				showing.value = false;
+			};
+
+			const onScrollOrResize = () => {
+				self.close();
+			};
+			window.addEventListener('scroll', onScrollOrResize, true);
+			window.addEventListener('resize', onScrollOrResize, true);
+			self._scrollOrResizeCleanup = () => {
+				window.removeEventListener('scroll', onScrollOrResize, true);
+				window.removeEventListener('resize', onScrollOrResize, true);
 			};
 		};
 
@@ -89,7 +107,7 @@ export const tooltipDirective = {
 			ev.preventDefault();
 		});
 
-		el.addEventListener(start, (ev) => {
+		const onPressStart = () => {
 			if (self.showTimer) window.clearTimeout(self.showTimer);
 			if (self.hideTimer) window.clearTimeout(self.hideTimer);
 			if (delay === 0) {
@@ -97,9 +115,9 @@ export const tooltipDirective = {
 			} else {
 				self.showTimer = window.setTimeout(self.show, delay);
 			}
-		}, { passive: true });
+		};
 
-		el.addEventListener(end, () => {
+		const onPressEnd = () => {
 			if (self.showTimer) window.clearTimeout(self.showTimer);
 			if (self.hideTimer) window.clearTimeout(self.hideTimer);
 			if (delay === 0) {
@@ -107,7 +125,15 @@ export const tooltipDirective = {
 			} else {
 				self.hideTimer = window.setTimeout(self.close, delay);
 			}
-		}, { passive: true });
+		};
+
+		el.addEventListener(start, onPressStart, { passive: true });
+
+		el.addEventListener(end, onPressEnd, { passive: true });
+
+		// 縦スクロール開始時など、touchend が要素に届かず touchcancel のみになることがある
+		el.addEventListener('touchcancel', onPressEnd, { passive: true });
+		el.addEventListener('pointercancel', onPressEnd, { passive: true });
 
 		el.addEventListener('click', () => {
 			if (self.showTimer) window.clearTimeout(self.showTimer);

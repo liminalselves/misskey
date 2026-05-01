@@ -12,7 +12,7 @@ import type {
 	AgentSessionsRepository,
 } from '@/models/_.js';
 import type { AgentSessionKind } from '@/models/AgentSession.js';
-import { getEffectiveLlmModels } from '@/misc/agent-llm-models.js';
+import { getActiveLlmModels } from '@/misc/agent-llm-models.js';
 import { Endpoint } from '@/server/api/endpoint-base.js';
 import { DI } from '@/di-symbols.js';
 import { ApiError } from '@/server/api/error.js';
@@ -105,10 +105,28 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			}
 
 			const instanceMeta = await this.metaService.fetch(true);
-			const eff = getEffectiveLlmModels(instanceMeta);
+			const eff = getActiveLlmModels(instanceMeta);
 			const agentModelId = ps.agentModelId ?? instanceMeta.agentDefaultModelId ?? eff[0]?.id ?? null;
 			if (agentModelId) {
 				this.agentService.resolveModelApiName(instanceMeta, agentModelId);
+			}
+
+			/** 创建时快照：与当时 meta 的压缩默认、对话默认、主模型、可用列表顺序一致，写入会话列供后续独立变更 */
+			const compressionIdCandidates = [
+				instanceMeta.agentCompressionDefaultModelId,
+				instanceMeta.agentDefaultModelId,
+				agentModelId,
+				...eff.map(m => m.id),
+			].filter((x): x is string => typeof x === 'string' && x.trim() !== '').map(x => x.trim());
+			let agentCompressionModelId: string | null = null;
+			for (const id of [...new Set(compressionIdCandidates)]) {
+				try {
+					this.agentService.resolveModelApiName(instanceMeta, id);
+					agentCompressionModelId = id;
+					break;
+				} catch {
+					// try next candidate
+				}
 			}
 
 			const now = new Date();
@@ -124,6 +142,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				characterOwnerId: character.userId,
 				sessionKind,
 				agentModelId,
+				agentCompressionModelId,
 				lastMessageAt: null,
 			});
 

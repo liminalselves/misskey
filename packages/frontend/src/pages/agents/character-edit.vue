@@ -96,6 +96,16 @@ SPDX-License-Identifier: AGPL-3.0-only
 					</MkTextarea>
 				</div>
 			</MkFolder>
+			<MkFolder>
+				<template #icon><i class="ti ti-license"></i></template>
+				<template #label>{{ i18n.ts._agents.editCharacterOpenSource }}</template>
+				<div class="_gaps">
+					<MkSwitch v-model="form.state.promptOpenSourced">
+						<template #label>{{ i18n.ts._agents.openSourcePrompt }}</template>
+						<template #caption>{{ i18n.ts._agents.openSourcePromptCharacterCaption }}</template>
+					</MkSwitch>
+				</div>
+			</MkFolder>
 			<div class="_buttons">
 				<MkButton danger rounded @click="remove"><i class="ti ti-trash"></i> {{ i18n.ts._agents.deleteCharacter }}</MkButton>
 			</div>
@@ -109,6 +119,7 @@ import { computed, onMounted, ref, watch } from 'vue';
 import MkInput from '@/components/MkInput.vue';
 import MkTextarea from '@/components/MkTextarea.vue';
 import MkRadios from '@/components/MkRadios.vue';
+import MkSwitch from '@/components/MkSwitch.vue';
 import MkButton from '@/components/MkButton.vue';
 import MkLoading from '@/components/global/MkLoading.vue';
 import MkFolder from '@/components/MkFolder.vue';
@@ -145,6 +156,7 @@ const empty = () => ({
 	exampleTurns: [] as ExampleTurnForm[],
 	forbiddenBehavior: '',
 	avatarFileId: null as string | null,
+	promptOpenSourced: false,
 });
 
 const form = useForm(empty(), async (state) => {
@@ -162,6 +174,7 @@ const form = useForm(empty(), async (state) => {
 		exampleTurns,
 		forbiddenBehavior: state.forbiddenBehavior,
 		avatarFileId: state.avatarFileId,
+		promptOpenSourced: state.promptOpenSourced,
 	});
 });
 
@@ -209,6 +222,7 @@ async function load() {
 			exampleTurns: turns,
 			forbiddenBehavior: row.forbiddenBehavior ?? '',
 			avatarFileId: row.avatarFileId,
+			promptOpenSourced: row.promptOpenSourced === true,
 		};
 		Object.assign(form.state, next);
 		Object.assign(form.savedState, JSON.parse(JSON.stringify(next)));

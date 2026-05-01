@@ -6,6 +6,7 @@
 import { Injectable } from '@nestjs/common';
 import { MiAbuseUserReport, MiNote, MiUser, MiWebhook } from '@/models/_.js';
 import { bindThis } from '@/decorators.js';
+import { isUserEffectivelySuspended } from '@/misc/user-effective-suspension.js';
 import { MiSystemWebhook, type SystemWebhookEventType } from '@/models/SystemWebhook.js';
 import { type AbuseReportPayload, SystemWebhookPayload, SystemWebhookService } from '@/core/SystemWebhookService.js';
 import { type Packed } from '@/misc/json-schema.js';
@@ -445,7 +446,7 @@ export class WebhookTestService {
 			bannerBlurhash: user.bannerId == null ? null : user.bannerBlurhash,
 			isLocked: user.isLocked,
 			isSilenced: false,
-			isSuspended: user.isSuspended,
+			isSuspended: isUserEffectivelySuspended(user),
 			description: null,
 			location: null,
 			birthday: null,

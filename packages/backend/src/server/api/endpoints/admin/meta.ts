@@ -405,6 +405,10 @@ export const meta = {
 				type: 'string',
 				optional: false, nullable: true,
 			},
+			agentCompressionDefaultModelId: {
+				type: 'string',
+				optional: false, nullable: true,
+			},
 			agentMaxContextTokens: {
 				type: 'number',
 				optional: false, nullable: false,
@@ -448,6 +452,26 @@ export const meta = {
 			agentMem0AddMemoryEveryNRounds: {
 				type: 'number',
 				optional: false, nullable: false,
+			},
+			agentCompressionSystemPrompt: {
+				type: 'string',
+				optional: false, nullable: true,
+			},
+			agentCompressionMaxInputChars: {
+				type: 'number',
+				optional: false, nullable: false,
+			},
+			agentCompressionMaxOutputTokens: {
+				type: 'number',
+				optional: false, nullable: false,
+			},
+			agentCompressionBandT1Ratio: {
+				type: 'number',
+				optional: false, nullable: true,
+			},
+			agentCompressionBandT2Ratio: {
+				type: 'number',
+				optional: false, nullable: true,
 			},
 			useObjectStorage: {
 				type: 'boolean',
@@ -906,6 +930,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				agentModelApiName: instance.agentModelApiName,
 				agentLlmModels: instance.agentLlmModels,
 				agentDefaultModelId: instance.agentDefaultModelId,
+				agentCompressionDefaultModelId: instance.agentCompressionDefaultModelId,
 				agentMaxContextTokens: instance.agentMaxContextTokens,
 				agentMaxOutputTokensPerCall: instance.agentMaxOutputTokensPerCall,
 				agentMem0Enabled: instance.agentMem0Enabled,
@@ -917,6 +942,11 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				agentMem0InjectMaxChars: instance.agentMem0InjectMaxChars,
 				agentMem0AddMemoryMaxRounds: instance.agentMem0AddMemoryMaxRounds,
 				agentMem0AddMemoryEveryNRounds: instance.agentMem0AddMemoryEveryNRounds,
+				agentCompressionSystemPrompt: instance.agentCompressionSystemPrompt,
+				agentCompressionMaxInputChars: instance.agentCompressionMaxInputChars,
+				agentCompressionMaxOutputTokens: instance.agentCompressionMaxOutputTokens,
+				agentCompressionBandT1Ratio: instance.agentCompressionBandT1Ratio,
+				agentCompressionBandT2Ratio: instance.agentCompressionBandT2Ratio,
 				useObjectStorage: instance.useObjectStorage,
 				objectStorageBaseUrl: instance.objectStorageBaseUrl,
 				objectStorageBucket: instance.objectStorageBucket,

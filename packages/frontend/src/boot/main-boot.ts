@@ -387,6 +387,31 @@ export async function mainBoot() {
 
 				// 始终播放声音提示
 				sound.playMisskeySfx('chatMessage');
+
+				// App 壳内：私信系统通知（受 notificationRecieveConfig.newChatMessage 控制）
+				if (isEmbeddedAppShell() && !isViewingSource) {
+					const chatConfig = ($i?.notificationRecieveConfig as Record<string, { type: string } | undefined> | undefined)?.['newChatMessage'];
+					if (chatConfig?.type !== 'never') {
+						try {
+							const msg = message as Record<string, any>;
+							const senderName = msg.fromUser?.name ?? msg.fromUser?.username ?? i18n.ts.newMessage;
+							const body = msg.text ?? '';
+							const bridge = (window as unknown as { AppNativePush?: { postMessage: (m: string) => void } }).AppNativePush;
+							const openPath =
+								'fromUserId' in message && message.fromUserId
+									? `/chat/user/${message.fromUserId}`
+									: 'toRoomId' in message && message.toRoomId
+										? `/chat/room/${message.toRoomId}`
+										: '/chat';
+							bridge?.postMessage?.(JSON.stringify({
+								action: 'notify',
+								title: senderName,
+								body: String(body).slice(0, 500),
+								openPath,
+							}));
+						} catch { /* ignore */ }
+					}
+				}
 			});
 
 			// 监听聊天已读事件（全局处理）

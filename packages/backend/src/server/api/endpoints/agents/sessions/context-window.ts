@@ -13,12 +13,8 @@ import type {
 import { Endpoint } from '@/server/api/endpoint-base.js';
 import { DI } from '@/di-symbols.js';
 import { ApiError } from '@/server/api/error.js';
-import {
-	AgentService,
-	AGENT_LLM_MEMORY_XML_CLOSE,
-	AGENT_LLM_MEMORY_XML_OPEN,
-} from '@/core/AgentService.js';
-import { AgentDashscopeMemoryService } from '@/core/AgentDashscopeMemoryService.js';
+import { AgentService } from '@/core/AgentService.js';
+import { AgentCompressionMemoryService } from '@/core/AgentCompressionMemoryService.js';
 import { MetaService } from '@/core/MetaService.js';
 
 export const meta = {
@@ -31,7 +27,7 @@ export const meta = {
 		optional: false, nullable: false,
 		properties: {
 			maxContextTokens: { type: 'number' },
-			historyBudgetChars: { type: 'number' },
+			historyBudgetTokens: { type: 'number' },
 			truncated: { type: 'boolean' },
 			oldestIncludedMessageId: { type: 'string', format: 'misskey:id', nullable: true },
 		},
@@ -57,7 +53,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		private agentDialogueStylesRepository: AgentDialogueStylesRepository,
 
 		private agentService: AgentService,
-		private agentDashscopeMemoryService: AgentDashscopeMemoryService,
+		private agentCompressionMemoryService: AgentCompressionMemoryService,
 		private metaService: MetaService,
 	) {
 		super(meta, paramDef, async (ps, me) => {
@@ -71,7 +67,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			if (!session.dialogueStyleId) {
 				return {
 					maxContextTokens: 8192,
-					historyBudgetChars: 200_000,
+					historyBudgetTokens: this.agentService.approxLlmTokensFromCharEstimate(200_000),
 					truncated: false,
 					oldestIncludedMessageId: null,
 				};
@@ -101,36 +97,23 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 
 			const instanceMeta = await this.metaService.fetch(true);
 			this.agentService.assertLlmConfigured(instanceMeta);
-			const { maxContextTokens, maxOutputTokensPerCall } = this.agentService.resolveModelConnection(instanceMeta, session.agentModelId ?? null);
 
 			const usePublishedFace = session.sessionKind === 'community';
 			const character = this.agentService.effectiveCharacterForLlm(characterRow, usePublishedFace);
 			const style = this.agentService.effectiveStyleForLlm(styleRow, usePublishedFace);
 
-			const systemBase = this.agentService.buildSystemPrompt({
-				globalPrompt: instanceMeta.agentGlobalSystemPrompt,
+			const { maxContextTokens, historyBudgetChars } = this.agentCompressionMemoryService.buildContextDividerAlignedBudgets({
+				instanceMeta,
+				session,
 				character,
 				style,
-			});
-
-			const memActive = this.agentDashscopeMemoryService.isRunnable(instanceMeta) && session.agentLongMemoryEnabled;
-			const maxMemChars = Math.max(200, Math.min(50_000, session.agentLongMemoryInjectMaxChars || instanceMeta.agentMem0InjectMaxChars));
-			const memReserveChars = memActive
-				? AGENT_LLM_MEMORY_XML_OPEN.length + maxMemChars + AGENT_LLM_MEMORY_XML_CLOSE.length
-				: 0;
-
-			const historyBudgetChars = this.agentService.computeChatHistoryCharBudget({
-				maxContextTokens,
-				maxOutputTokensPerCall,
-				systemChars: systemBase.length + memReserveChars,
-				prefixMessages: [],
 			});
 
 			const { truncated, oldestIncludedId } = await this.agentService.loadRecentMessagesForContextWithMeta(session.id, historyBudgetChars);
 
 			return {
 				maxContextTokens,
-				historyBudgetChars,
+				historyBudgetTokens: this.agentService.approxLlmTokensFromCharEstimate(historyBudgetChars),
 				truncated,
 				oldestIncludedMessageId: oldestIncludedId,
 			};

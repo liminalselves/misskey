@@ -9,7 +9,7 @@ import { Inject, Injectable, OnApplicationShutdown } from '@nestjs/common';
 import { In } from 'typeorm';
 import { ReplyError } from 'ioredis';
 import { DI } from '@/di-symbols.js';
-import type { UsersRepository } from '@/models/_.js';
+import type { UsersRepository, MobilePushDevicesRepository } from '@/models/_.js';
 import type { MiUser } from '@/models/User.js';
 import type { MiNotification } from '@/models/Notification.js';
 import { bindThis } from '@/decorators.js';
@@ -18,6 +18,7 @@ import { PushNotificationService } from '@/core/PushNotificationService.js';
 import { NotificationEntityService } from '@/core/entities/NotificationEntityService.js';
 import { IdService } from '@/core/IdService.js';
 import { CacheService } from '@/core/CacheService.js';
+import { UserWebSocketStatusService } from '@/core/UserWebSocketStatusService.js';
 import type { Config } from '@/config.js';
 import { UserListService } from '@/core/UserListService.js';
 import { FilterUnionByProperty, groupedNotificationTypes, obsoleteNotificationTypes } from '@/types.js';
@@ -37,12 +38,16 @@ export class NotificationService implements OnApplicationShutdown {
 		@Inject(DI.usersRepository)
 		private usersRepository: UsersRepository,
 
+		@Inject(DI.mobilePushDevicesRepository)
+		private mobilePushDevicesRepository: MobilePushDevicesRepository,
+
 		private notificationEntityService: NotificationEntityService,
 		private idService: IdService,
 		private globalEventService: GlobalEventService,
 		private pushNotificationService: PushNotificationService,
 		private cacheService: CacheService,
 		private userListService: UserListService,
+		private userWebSocketStatusService: UserWebSocketStatusService,
 	) {
 	}
 
@@ -96,8 +101,11 @@ export class NotificationService implements OnApplicationShutdown {
 		const profile = await this.cacheService.userProfileCache.fetch(notifieeId);
 
 		// 古いMisskeyバージョンのキャッシュが残っている可能性がある
-		// eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-		const recieveConfig = (profile.notificationRecieveConfig ?? {})[type];
+		const notificationRecieveConfig = profile.notificationRecieveConfig as Record<string, {
+			type: 'all' | 'never' | 'following' | 'follower' | 'mutualFollow' | 'followingOrFollower' | 'list';
+			userListId?: string;
+		}> | null | undefined;
+		const recieveConfig = notificationRecieveConfig?.[type as string];
 		if (recieveConfig?.type === 'never') {
 			return null;
 		}
@@ -138,7 +146,7 @@ export class NotificationService implements OnApplicationShutdown {
 				if (!isFollowing && !isFollower) {
 					return null;
 				}
-			} else if (recieveConfig?.type === 'list') {
+			} else if (recieveConfig?.type === 'list' && recieveConfig.userListId) {
 				const isMember = await this.userListService.membersCache.fetch(recieveConfig.userListId).then(members => members.has(notifierId));
 				if (!isMember) {
 					return null;
@@ -181,7 +189,13 @@ export class NotificationService implements OnApplicationShutdown {
 
 		if (packed == null) return null;
 
-		// Publish notification event
+		const enableAppPush = profile.enableAppPush ?? false;
+		const hasNativeAppPushDevice = await this.mobilePushDevicesRepository.existsBy({
+			userId: notifieeId,
+		});
+		const useAppPushPolicy = hasNativeAppPushDevice || enableAppPush;
+
+		// 主连接始终下发（Web 端铃铛、未读圆点等依赖于此）；与下方原生/Web Push 分支无关
 		this.globalEventService.publishMainStream(notifieeId, 'notification', packed);
 
 		// 2秒経っても(今回作成した)通知が既読にならなかったら「未読の通知がありますよ」イベントを発行する
@@ -192,7 +206,16 @@ export class NotificationService implements OnApplicationShutdown {
 			if (latestReadNotificationId && (latestReadNotificationId >= redisId)) return;
 
 			this.globalEventService.publishMainStream(notifieeId, 'unreadNotification', packed);
-			this.pushNotificationService.pushNotification(notifieeId, 'notification', packed);
+
+			// 推送：沿用 App 策略；未启用 App 推送时使用原有 Web Push 路径
+			if (!useAppPushPolicy) {
+				this.pushNotificationService.pushNotification(notifieeId, 'notification', packed);
+			} else if (enableAppPush) {
+				const isWebSocketOnline = await this.userWebSocketStatusService.isUserOnline(notifieeId);
+				if (!isWebSocketOnline) {
+					this.pushNotificationService.pushNotification(notifieeId, 'notification', packed);
+				}
+			}
 
 			if (type === 'follow') this.emailNotificationFollow(notifieeId, await this.usersRepository.findOneByOrFail({ id: notifierId! }));
 			if (type === 'receiveFollowRequest') this.emailNotificationReceiveFollowRequest(notifieeId, await this.usersRepository.findOneByOrFail({ id: notifierId! }));

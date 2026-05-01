@@ -10,6 +10,7 @@ import type {
 	AgentDialogueStylesRepository,
 	AgentMessagesRepository,
 	AgentSessionsRepository,
+	UserProfilesRepository,
 } from '@/models/_.js';
 import { Endpoint } from '@/server/api/endpoint-base.js';
 import { DI } from '@/di-symbols.js';
@@ -21,8 +22,10 @@ import {
 	escapeAgentXmlText,
 } from '@/core/AgentService.js';
 import { AgentDashscopeMemoryService } from '@/core/AgentDashscopeMemoryService.js';
+import { AgentModelUsageService } from '@/core/AgentModelUsageService.js';
 import { ChatService } from '@/core/ChatService.js';
 import { MetaService } from '@/core/MetaService.js';
+import { AgentCompressionMemoryService } from '@/core/AgentCompressionMemoryService.js';
 
 export const meta = {
 	tags: ['agents'],
@@ -34,11 +37,22 @@ export const meta = {
 		type: 'object',
 		optional: false, nullable: false,
 		properties: {
-			userMessageId: { type: 'string', format: 'misskey:id' },
-			assistantMessageId: { type: 'string', format: 'misskey:id' },
+			userMessageId: { type: 'string', format: 'misskey:id', nullable: true },
+			assistantMessageId: { type: 'string', format: 'misskey:id', nullable: true },
 			assistantText: { type: 'string' },
 			longTermMemorySearchUnavailable: { type: 'boolean' },
 			longTermMemoryAddScheduled: { type: 'boolean' },
+			compressionLlmPending: { type: 'boolean' },
+			compressionStickiesBaselineCount: { type: 'number' },
+			aborted: { type: 'boolean' },
+		},
+	},
+	errors: {
+		agentsLlmAborted: {
+			message: 'LLM request was aborted by the client.',
+			code: 'AGENTS_LLM_ABORTED',
+			id: 'e5f6a7b8-c9d0-1234-ef01-345678901234',
+			httpStatusCode: 409,
 		},
 	},
 } as const;
@@ -48,6 +62,8 @@ export const paramDef = {
 	properties: {
 		sessionId: { type: 'string', format: 'misskey:id' },
 		text: { type: 'string', minLength: 1, maxLength: 16000 },
+		/** 前端生成的客户端请求 ID；用于通过 agents/messages/abort 取消本次请求 */
+		clientRequestId: { type: 'string', minLength: 1, maxLength: 64 },
 	},
 	required: ['sessionId', 'text'],
 } as const;
@@ -107,10 +123,15 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		@Inject(DI.agentMessagesRepository)
 		private agentMessagesRepository: AgentMessagesRepository,
 
+		@Inject(DI.userProfilesRepository)
+		private userProfilesRepository: UserProfilesRepository,
+
 		private agentService: AgentService,
 		private agentDashscopeMemoryService: AgentDashscopeMemoryService,
+		private agentModelUsageService: AgentModelUsageService,
 		private chatService: ChatService,
 		private metaService: MetaService,
+		private agentCompressionMemoryService: AgentCompressionMemoryService,
 	) {
 		super(meta, paramDef, async (ps, me) => {
 			this.agentService.assertAgentsEnabled();
@@ -172,6 +193,21 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			});
 			assertAgentSessionTurnOrderAllowsUserSend(turnOrderRows);
 
+			const instanceMeta = await this.metaService.fetch(true);
+			const callCost = this.agentService.getUserFacingModelCostPerCall(instanceMeta, session.agentModelId);
+			if (callCost > 0) {
+				const profile = await this.userProfilesRepository.findOneBy({ userId: me.id });
+				if ((profile?.agentCreditBalance ?? 0) < callCost) {
+					throw new ApiError({
+						message: 'Insufficient agent model credit for this call.',
+						code: 'AGENT_INSUFFICIENT_CREDIT',
+						id: 'd7e8f9a0-b1c2-4567-8901-123456789abc',
+						kind: 'client',
+						httpStatusCode: 402,
+					});
+				}
+			}
+
 			const now = new Date();
 			const userMsg = await this.agentMessagesRepository.insertOne({
 				id: this.agentService.newId(),
@@ -188,10 +224,39 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			session.updatedAt = now;
 			await this.agentSessionsRepository.save(session);
 
-			try {
-				const instanceMeta = await this.metaService.fetch(true);
-				const { maxContextTokens, maxOutputTokensPerCall } = this.agentService.resolveModelConnection(instanceMeta, session.agentModelId ?? null);
+			const clientRequestId = ps.clientRequestId ?? this.agentService.newId();
+			const abortController = this.agentService.registerAbortable(session.id, clientRequestId);
+			const modelApiName = (() => {
+				try {
+					return this.agentService.resolveModelApiName(instanceMeta, session.agentModelId ?? null);
+				} catch {
+					return null;
+				}
+			})();
+			const usageLog = await this.agentModelUsageService.startLog({
+				userId: me.id,
+				sessionId: session.id,
+				characterId: session.characterId,
+				dialogueStyleId: session.dialogueStyleId,
+				modelId: session.agentModelId ?? null,
+				modelApiName,
+				usageKind: 'chat',
+			});
 
+			let assistantPersisted = false;
+			try {
+				const longMemProvider = this.agentCompressionMemoryService.resolveEffectiveProvider(
+					session.agentLongMemoryProvider,
+					instanceMeta,
+				);
+				const budgets = this.agentCompressionMemoryService.buildSendPathBudgets({
+					instanceMeta,
+					session,
+					character,
+					style,
+					provider: longMemProvider,
+				});
+				const { maxContextTokens, maxOutputTokensPerCall, historyBudget } = budgets;
 				const systemBase = this.agentService.buildSystemPrompt({
 					globalPrompt: instanceMeta.agentGlobalSystemPrompt,
 					character,
@@ -200,24 +265,29 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 
 				let longTermMemorySearchUnavailable = false;
 				let longTermMemoryAddScheduled = false;
-				const memActive = this.agentDashscopeMemoryService.isRunnable(instanceMeta) && session.agentLongMemoryEnabled;
+				const memActive = this.agentCompressionMemoryService.isAliyunPathActive(longMemProvider, session, instanceMeta);
 				const maxMemChars = Math.max(200, Math.min(50_000, session.agentLongMemoryInjectMaxChars || instanceMeta.agentMem0InjectMaxChars));
-				const memReserveChars = memActive
-					? AGENT_LLM_MEMORY_XML_OPEN.length + maxMemChars + AGENT_LLM_MEMORY_XML_CLOSE.length
-					: 0;
 
-				const historyBudget = this.agentService.computeChatHistoryCharBudget({
-					maxContextTokens,
-					maxOutputTokensPerCall,
-					systemChars: systemBase.length + memReserveChars,
-					prefixMessages: [],
-				});
-				const history = await this.agentService.loadRecentMessagesForContext(session.id, historyBudget);
+				const { messages: history } = await this.agentService.loadRecentMessagesForContextWithMeta(session.id, historyBudget);
 				const historyForApi = history.filter(m => m.role === 'user' || m.role === 'assistant');
-				const pairs: { role: 'user' | 'assistant'; content: string }[] = [];
-				for (const m of historyForApi) {
-					if (m.role === 'user' || m.role === 'assistant') {
-						pairs.push({ role: m.role, content: m.content });
+				const cStickies = longMemProvider === 'compression'
+					? await this.agentCompressionMemoryService.listStickies(session.id)
+					: [];
+				let pairs: { role: 'user' | 'assistant'; content: string }[] = [];
+				if (longMemProvider === 'compression') {
+					const actives = cStickies.filter(s => s.state === 'active');
+					const bIds = actives.flatMap(s => [s.fromMessageId, s.toMessageId]);
+					const boundaries = await this.agentCompressionMemoryService.loadBoundaryMap(session.id, bIds);
+					pairs = this.agentCompressionMemoryService.buildPairsExcludingActiveCompression(
+						historyForApi,
+						actives,
+						boundaries,
+					);
+				} else {
+					for (const m of historyForApi) {
+						if (m.role === 'user' || m.role === 'assistant') {
+							pairs.push({ role: m.role, content: m.content });
+						}
 					}
 				}
 				if (pairs.length > 0 && pairs[pairs.length - 1].role === 'user' && pairs[pairs.length - 1].content === ps.text) {
@@ -248,16 +318,27 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				if (memoryBlock.length > 0) {
 					system += AGENT_LLM_MEMORY_XML_OPEN + escapeAgentXmlText(memoryBlock) + AGENT_LLM_MEMORY_XML_CLOSE;
 				}
+				if (longMemProvider === 'compression' && cStickies.length > 0) {
+					const cIds = cStickies
+						.filter(s => s.state === 'active')
+						.flatMap(s => [s.fromMessageId, s.toMessageId]);
+					const cBound = await this.agentCompressionMemoryService.loadBoundaryMap(session.id, cIds);
+					const comp = this.agentCompressionMemoryService.buildCompressionSystemBlock(cStickies, cBound);
+					if (comp.length > 0) {
+						system += comp;
+					}
+				}
 
-				// 历史条数必须与 agents/sessions/context-window 一致：首轮已按「长期记忆占满预留」计算
-				// historyBudget。若此处因实际检索内容较短而加大预算并 reload，会把分割线以上的旧消息
-				// 再度塞进模型，与 UI 分割线语义不一致。
+				// 首轮 `pairs` 用 `buildSendPathBudgets` 的 H（阿里云路径预扣 memory、压缩路径另预扣 comp 占位）。
+				// 《context-window》分割线用 `buildContextDividerAlignedBudgets`（不预扣 comp）；《compression-overview》
+				// 在压缩模式下与发信共用同一 H。勿在检索等之后无约束重载历史。
 
 				const assistantText = await this.agentService.invokeChatCompletions({
 					system,
 					messages: pairs,
 					userText: ps.text,
 					sessionModelId: session.agentModelId ?? null,
+					externalAbortSignal: abortController.signal,
 				});
 
 				const asstNow = new Date();
@@ -271,6 +352,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					promptTokens: null,
 					completionTokens: null,
 				});
+				assistantPersisted = true;
 
 				if (memActive) {
 					const everyN = safeAgentMemEveryNRounds(
@@ -311,18 +393,66 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				session.agentReplyPending = false;
 				await this.agentSessionsRepository.save(session);
 
+				const compressionProviderOn =
+					this.agentCompressionMemoryService.resolveEffectiveProvider(session.agentLongMemoryProvider, instanceMeta) === 'compression';
+				let compressionLlmPending = false;
+				let compressionStickiesBaselineCount = 0;
+				if (compressionProviderOn) {
+					compressionStickiesBaselineCount = await this.agentCompressionMemoryService.countStickies(session.id);
+					compressionLlmPending = await this.agentCompressionMemoryService.peekWillInvokeCompressionLlm(
+						session, character, style, instanceMeta, me.id,
+					);
+					void this.agentCompressionMemoryService.afterAssistantForCompression(session, character, style, instanceMeta, me.id)
+						.catch(() => { /* 压缩为侧车，不阻断主回复 */ });
+				}
+
+				await this.agentModelUsageService.finishLog(usageLog, instanceMeta, { status: 'success' });
+
 				return {
 					userMessageId: userMsg.id,
 					assistantMessageId: assistantMsg.id,
 					assistantText,
 					longTermMemorySearchUnavailable,
 					longTermMemoryAddScheduled,
+					compressionLlmPending,
+					compressionStickiesBaselineCount,
+					aborted: false,
 				};
 			} catch (err) {
+				const aborted = abortController.signal.aborted
+					|| (err instanceof ApiError && err.code === 'AGENTS_LLM_ABORTED');
+				// 助手消息未落库时（主动取消或 LLM 等失败）移除已插入的用户消息；若助手已写入则不得删 user，以免破坏轮次
+				if (!assistantPersisted) {
+					await this.agentMessagesRepository.delete({ id: userMsg.id });
+				}
 				session.agentReplyPending = false;
 				session.updatedAt = new Date();
 				await this.agentSessionsRepository.save(session);
+
+				try {
+					await this.agentModelUsageService.finishLog(usageLog, instanceMeta, {
+						status: aborted ? 'aborted' : 'failed',
+						errorCode: err instanceof ApiError ? err.code : null,
+					});
+				} catch {
+					// 日志结算失败不应淹没原始错误
+				}
+
+				if (aborted) {
+					return {
+						userMessageId: null,
+						assistantMessageId: null,
+						assistantText: '',
+						longTermMemorySearchUnavailable: false,
+						longTermMemoryAddScheduled: false,
+						compressionLlmPending: false,
+						compressionStickiesBaselineCount: 0,
+						aborted: true,
+					};
+				}
 				throw err;
+			} finally {
+				this.agentService.unregisterAbortable(session.id, clientRequestId, abortController);
 			}
 		});
 	}

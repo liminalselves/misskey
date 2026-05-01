@@ -641,6 +641,14 @@ export interface Locale extends ILocale {
      */
     "unsuspendConfirm": string;
     /**
+     * 凍結期間
+     */
+    "userSuspendPeriod": string;
+    /**
+     * 自動解凍予定
+     */
+    "userSuspendAutoRelease": string;
+    /**
      * リストを選択
      */
     "selectList": string;
@@ -3392,6 +3400,110 @@ export interface Locale extends ILocale {
      * 背景
      */
     "backgroundColor": string;
+    /**
+     * 統計
+     */
+    "adminOverviewStats": string;
+    /**
+     * アクティブユーザー
+     */
+    "adminOverviewActiveUsers": string;
+    /**
+     * ヒートマップ
+     */
+    "adminOverviewHeatmap": string;
+    /**
+     * 継続率
+     */
+    "adminOverviewRetentionRate": string;
+    /**
+     * モデレーター
+     */
+    "adminOverviewModerators": string;
+    /**
+     * APリクエスト
+     */
+    "adminOverviewApRequests": string;
+    /**
+     * 新規ユーザー
+     */
+    "adminOverviewNewUsers": string;
+    /**
+     * Deliverキュー
+     */
+    "adminOverviewDeliverQueue": string;
+    /**
+     * Inboxキュー
+     */
+    "adminOverviewInboxQueue": string;
+    /**
+     * ユーザー
+     */
+    "adminOverviewUsers": string;
+    /**
+     * ノート
+     */
+    "adminOverviewNotes": string;
+    /**
+     * サーバー
+     */
+    "adminOverviewInstances": string;
+    /**
+     * カスタム絵文字
+     */
+    "adminOverviewCustomEmojis": string;
+    /**
+     * オンライン
+     */
+    "adminOverviewOnline": string;
+    /**
+     * 処理
+     */
+    "adminOverviewProcess": string;
+    /**
+     * 受信
+     */
+    "adminOverviewSub": string;
+    /**
+     * 送信
+     */
+    "adminOverviewPub": string;
+    /**
+     * 上位10
+     */
+    "adminOverviewTop10": string;
+    /**
+     * 閲覧
+     */
+    "adminOverviewRead": string;
+    /**
+     * 投稿
+     */
+    "adminOverviewWrite": string;
+    /**
+     * 受信
+     */
+    "adminOverviewIn": string;
+    /**
+     * 送信: 成功
+     */
+    "adminOverviewOutSuccess": string;
+    /**
+     * 送信: 失敗
+     */
+    "adminOverviewOutFail": string;
+    /**
+     * APリクエスト: 受信
+     */
+    "adminOverviewApRequestsInboxReceived": string;
+    /**
+     * APリクエスト: 配信成功
+     */
+    "adminOverviewApRequestsDeliverSucceeded": string;
+    /**
+     * APリクエスト: 配信失敗
+     */
+    "adminOverviewApRequestsDeliverFailed": string;
     /**
      * アクセント
      */
@@ -11171,6 +11283,38 @@ export interface Locale extends ILocale {
          */
         "achievementEarned": string;
         /**
+         * キャラクター「{name}」が審査を通過し、広場に掲載されました
+         */
+        "agentCharacterReviewApproved": ParameterizedString<"name">;
+        /**
+         * キャラクター「{name}」は審査を通過しませんでした
+         */
+        "agentCharacterReviewRejected": ParameterizedString<"name">;
+        /**
+         * 対話スタイル「{name}」が審査を通過し、広場に掲載されました
+         */
+        "agentStyleReviewApproved": ParameterizedString<"name">;
+        /**
+         * 対話スタイル「{name}」は審査を通過しませんでした
+         */
+        "agentStyleReviewRejected": ParameterizedString<"name">;
+        /**
+         * キャラクター「{name}」がモデレーターにより禁止されました
+         */
+        "agentCharacterBanned": ParameterizedString<"name">;
+        /**
+         * キャラクター「{name}」の禁止が解除されました
+         */
+        "agentCharacterUnbanned": ParameterizedString<"name">;
+        /**
+         * セッション「{name}」がモデレーターにより禁止されました
+         */
+        "agentSessionBanned": ParameterizedString<"name">;
+        /**
+         * セッション「{name}」の禁止が解除されました
+         */
+        "agentSessionUnbanned": ParameterizedString<"name">;
+        /**
          * 通知テスト
          */
         "testNotification": string;
@@ -11299,6 +11443,22 @@ export interface Locale extends ILocale {
              * チャットルームの利用停止が解除された
              */
             "chatRoomUnsuspended": string;
+            /**
+             * エージェント審査通過
+             */
+            "agentReviewApproved": string;
+            /**
+             * エージェント審査不通過
+             */
+            "agentReviewRejected": string;
+            /**
+             * エージェントキャラクター禁止変更
+             */
+            "agentCharacterBanned": string;
+            /**
+             * エージェントセッション禁止変更
+             */
+            "agentSessionBanned": string;
             /**
              * 実績の獲得
              */
@@ -13990,6 +14150,14 @@ export interface Locale extends ILocale {
          */
         "maxOutputTokens": string;
         /**
+         * Success rate
+         */
+        "successRate": string;
+        /**
+         * Success rate (1h)
+         */
+        "successRate1h": string;
+        /**
          * 自分のキャラ
          */
         "myCharacters": string;
@@ -14378,6 +14546,34 @@ export interface Locale extends ILocale {
          */
         "sessionModelDefault": string;
         /**
+         * 1回の送信の目安
+         */
+        "sessionModelExpectedCost": string;
+        /**
+         * 無料
+         */
+        "modelCostPerCallValueFree": string;
+        /**
+         * 文脈
+         */
+        "modelRowLabelContext": string;
+        /**
+         * 出力量
+         */
+        "modelRowLabelOutput": string;
+        /**
+         * 料金
+         */
+        "modelRowLabelCost": string;
+        /**
+         * 成功率(1h)
+         */
+        "modelRowLabelSuccess1h": string;
+        /**
+         * エージェント用の残高が不足しています。「利用状況」でチャージやコード交換が使える場合は、そちらをご利用ください。
+         */
+        "insufficientAgentCredit": string;
+        /**
          * 未指定（一覧の先頭の利用可能モデルを使用）
          */
         "agentsMetaDefaultModelUnset": string;
@@ -14470,6 +14666,30 @@ export interface Locale extends ILocale {
          */
         "renameSession": string;
         /**
+         * セッションを削除
+         */
+        "deleteSession": string;
+        /**
+         * このセッションを削除しますか？
+         */
+        "deleteSessionConfirmTitle": string;
+        /**
+         * このセッションのメッセージと圧縮便箋を削除し、紐づく DashScope の記憶も削除します。モデル利用ログは残ります。元に戻せません。
+         */
+        "deleteSessionConfirmText": string;
+        /**
+         * 削除する
+         */
+        "deleteSessionConfirmOk": string;
+        /**
+         * セッションを削除しました
+         */
+        "deleteSessionDone": string;
+        /**
+         * サイト上のセッションは削除済みです。DashScope 側に記憶が残っている場合は百練コンソールで確認してください。
+         */
+        "deleteSessionAliyunWarn": string;
+        /**
          * 長期記憶（阿里云 DashScope）
          */
         "adminSectionLongMemory": string;
@@ -14546,18 +14766,330 @@ export interface Locale extends ILocale {
          */
         "adminLongMemoryInvalidAddEveryN": string;
         /**
+         * セッション圧縮（スティッキー）
+         */
+        "adminSectionCompression": string;
+        /**
+         * 各アシスタント返信の後、予備帯内の未覆いメッセージを会話モデルで要約しスティッキー化します。全インスタンス既定です。空欄のときは内蔵の system 文を使います。
+         */
+        "adminCompressionHint": string;
+        /**
+         * 圧縮スティッキー用デフォルトモデル
+         */
+        "adminCompressionDefaultModel": string;
+        /**
+         * 便箋要約に使うモデルです。空欄のときはインスタンスの「既定チャットモデル」に従います。
+         */
+        "adminCompressionDefaultModelCaption": string;
+        /**
+         * 圧縮スティッキー用モデル
+         */
+        "compressionModelForSession": string;
+        /**
+         * 候補は管理画面で有効な会話モデルと同じです。ここで随時変更できます。新規セッションは作成時点のサイト既定を起点にします。
+         */
+        "compressionModelForSessionCaption": string;
+        /**
+         * 便箋要約はこのモデルで別課金です。本返信とのタイミングは完全には一致しません。
+         */
+        "compressionModelSessionBillingLine": string;
+        /**
+         * 「圧縮スティッキー用デフォルトモデル」：{name}（管理画面で設定）
+         */
+        "compressionModelUsesAdminDefault": ParameterizedString<"name">;
+        /**
+         * 要約の圧縮を実行中です。完了すると表示が閉じます。
+         */
+        "compressionSidecarScheduledHint": string;
+        /**
+         * 便箋の圧縮に失敗しました。「記憶」で該当便箋を確認するか、後でもう一度お試しください。
+         */
+        "compressionSidecarLlmFailed": string;
+        /**
+         * 圧縮の完了待ちがタイムアウトしました。「記憶」で一覧を更新してください。
+         */
+        "compressionSidecarLlmTimeout": string;
+        /**
+         * 圧縮モデルの呼び出しに失敗しました（抜粋が表示されている場合があります。便箋を編集できます）。
+         */
+        "compressionStickyLlmFailedStored": string;
+        /**
+         * サイトに従う（{name}）
+         */
+        "compressionModelUseSiteDefault": ParameterizedString<"name">;
+        /**
+         * 利用不可
+         */
+        "compressionModelOrphanLabel": string;
+        /**
+         * 圧縮用 System プロンプト
+         */
+        "agentCompressionSystemPrompt": string;
+        /**
+         * LLM への system 文。空欄のとき内蔵（中文要点）にフォールバックします。
+         */
+        "agentCompressionSystemPromptCaption": string;
+        /**
+         * 節录の最大文字数
+         */
+        "agentCompressionMaxInputChars": string;
+        /**
+         * 送信前の節录切り捨て上限（500～200000、既定 12000）。
+         */
+        "agentCompressionMaxInputCharsCaption": string;
+        /**
+         * 圧縮補完 max_tokens
+         */
+        "agentCompressionMaxOutputTokens": string;
+        /**
+         * 要約の最大出力トークン（1～32000、既定 2048）。
+         */
+        "agentCompressionMaxOutputTokensCaption": string;
+        /**
+         * 節录の最大文字数は 500～200000の範囲で指定してください。
+         */
+        "adminCompressionInvalidInput": string;
+        /**
+         * 圧縮 max_tokens は 1～32000の範囲で指定してください。
+         */
+        "adminCompressionInvalidOutput": string;
+        /**
+         * t1 / t2 は 0.01～0.99 の数値、または両方空欄でデフォルトに戻します。
+         */
+        "adminCompressionInvalidBandRatio": string;
+        /**
+         * t1 < t2 が必要です（T1 上界、T2 下界）。
+         */
+        "adminCompressionInvalidBandT1T2": string;
+        /**
+         * 帯 t1 比率
+         */
+        "agentCompressionBandT1Ratio": string;
+        /**
+         * 履歴枠 H に対する比率。T1 = t1×H。既定 0.8。
+         */
+        "agentCompressionBandT1RatioCaption": string;
+        /**
+         * 帯 t2 比率
+         */
+        "agentCompressionBandT2Ratio": string;
+        /**
+         * T2 = t2×H、t1 < t2。既定 0.9。
+         */
+        "agentCompressionBandT2RatioCaption": string;
+        /**
+         * 両方空欄で保存すると既定 0.8 / 0.9 に戻します。
+         */
+        "agentCompressionBandRatiosEmptyHint": string;
+        /**
          * 記憶
          */
         "sessionMemoryTab": string;
+        /**
+         * 長期記憶の方式
+         */
+        "sessionLongMemoryProvider": string;
+        /**
+         * このセッションの長期記憶の方式を選びます。
+         */
+        "sessionLongMemoryProviderCaption": string;
+        /**
+         * オフ
+         */
+        "sessionLongMemoryProviderNone": string;
+        /**
+         * Alibaba Cloud（意味記憶）
+         */
+        "sessionLongMemoryProviderAliyun": string;
+        /**
+         * Alibaba Cloud（サイト未設定。別の方式へ変更するか管理者に依頼）
+         */
+        "sessionLongMemoryProviderAliyunSavedButUnavailable": string;
+        /**
+         * 便箋圧縮
+         */
+        "sessionLongMemoryProviderCompression": string;
+        /**
+         * 便箋圧縮（会話用モデルが無効です。切り替えするか管理者に依頼）
+         */
+        "sessionLongMemoryProviderCompressionSavedButUnavailable": string;
+        /**
+         * 長期記憶の方式を保存
+         */
+        "saveSessionLongMemoryMode": string;
+        /**
+         * 長期記憶の方式を保存しました
+         */
+        "sessionLongMemoryModeSaved": string;
+        /**
+         * 下の数値は概算。“ラテン1文字幅を約3で割る”程度の目安で、実トークンとは異なります。このモデルはだいたい {maxTok} 単位まで一括に読め、そのうち直近の会話向けにだいたい {h} 単位分の余白があります。最新から辿ると、整理待ち帯の目安境目が約 {t1} と約 {t2} の二つです。
+         */
+        "compressionBudgetSummary": ParameterizedString<"maxTok" | "h" | "t1" | "t2">;
+        /**
+         * 一覧と便箋は「長期記憶の方式の保存」後に最新の設定と一致します。切り替えたら先に保存してください。
+         */
+        "compressionPendingSaveHint": string;
+        /**
+         * 一覧を読み込めませんでした。
+         */
+        "compressionOverviewLoadFailed": string;
+        /**
+         * 再試行
+         */
+        "compressionOverviewRetry": string;
+        /**
+         * 圧縮を使う前に「対話スタイル」でスタイルを選んでください。
+         */
+        "compressionNeedDialogueStyle": string;
+        /**
+         * モデルまたは方式の変更により圧縮スティッキーが消去されました。
+         */
+        "compressionCacheCleared": string;
+        /**
+         * 圧縮スティッキー
+         */
+        "compressionStickyTitle": string;
+        /**
+         * 会話区間の要約です。並べ替え・文言の編集・両端のプレビューからスレッドへ移動できます。
+         */
+        "compressionStickyFolderCaption": string;
+        /**
+         * 圧縮スティッキーはまだありません。
+         */
+        "compressionStickyEmpty": string;
+        /**
+         * 自
+         */
+        "compressionStickyFrom": string;
+        /**
+         * 至
+         */
+        "compressionStickyTo": string;
+        /**
+         * 手動編集
+         */
+        "compressionStickyUserEdited": string;
+        /**
+         * 待機中
+         */
+        "compressionStateDormant": string;
+        /**
+         * 返答に使用
+         */
+        "compressionStateActive": string;
+        /**
+         * 処理中
+         */
+        "compressionStateOther": string;
+        /**
+         * 便箋を更新しました
+         */
+        "compressionStickyUpdated": string;
+        /**
+         * 便箋を削除しました
+         */
+        "compressionStickyDeleted": string;
+        /**
+         * この便箋を削除しますか？区間内の文は生テキストとして再び履歴に入ります。
+         */
+        "compressionStickyDeleteConfirm": string;
+        /**
+         * チャットで表示
+         */
+        "compressionStickyJumpMessage": string;
+        /**
+         * この便箋を上へ
+         */
+        "compressionStickyMoveUp": string;
+        /**
+         * この便箋を下へ
+         */
+        "compressionStickyMoveDown": string;
+        /**
+         * 文脈上の位置
+         */
+        "compressionMessageBands": string;
+        /**
+         * 新しい順です。行を選ぶとスレッドの該当メッセージへ移動します。
+         */
+        "compressionMessageBandsSubtitle": string;
+        /**
+         * 要約済み
+         */
+        "compressionMessageCompressed": string;
+        /**
+         * 自分
+         */
+        "compressionMessageRoleUser": string;
+        /**
+         * 相手
+         */
+        "compressionMessageRoleAssistant": string;
+        /**
+         * 他 {n} 件を折りたたみ
+         */
+        "compressionBandOmitted": ParameterizedString<"n">;
+        /**
+         * 今の会話の枠内
+         */
+        "compressionBandNew": string;
+        /**
+         * 待ち列・手前
+         */
+        "compressionBandPrep": string;
+        /**
+         * 待ち列・奥
+         */
+        "compressionBandStaged": string;
+        /**
+         * ウィンドウ外
+         */
+        "compressionBandOut": string;
+        /**
+         * 数字は目安で上のスケールと同じ換算です。「当メッセージ」は本文の長さの目安、「累計」は最新から遡る合計。「要約済み」は便箋に置き換えられた印。「ウィンドウ外」は原文として今回のリクエストに載りません。
+         */
+        "compressionBandLegend": string;
+        /**
+         * スケール（最新からの累計、表の「累計」と同じ）：ウィンドウ上限 {h}；第1境目 {t1}；第2境目 {t2}。
+         */
+        "compressionBandScaleCaption": ParameterizedString<"h" | "t1" | "t2">;
+        /**
+         * 当メッセージ {msg} · 累計 {cum}
+         */
+        "compressionBandMsgTokens": ParameterizedString<"msg" | "cum">;
+        /**
+         * 累計 {cum}
+         */
+        "compressionBandMsgTokensCumulativeOnly": ParameterizedString<"cum">;
+        /**
+         * **直近の会話**用の枠がほとんど残りません（説明・スタイル・予約でしばしば占有）。下表は順序の確認に使えます。文を短くする・文脈の大きいモデルにする・他の注入を抑える、などをご検討ください。
+         */
+        "compressionOverviewZeroHistoryBudget": string;
+        /**
+         * モデル変更で圧縮スティッキーは消去されます。続行しますか？
+         */
+        "compressionModelChangeWipeConfirm": string;
         /**
          * このセッションのみ：DashScope への記憶の追加・検索の有無と検索の強さ。
          * 各設定の意味が分からない場合は変更しないでください。
          */
         "sessionMemoryHint": string;
         /**
+         * このセッションのみ。各返信のあと便箋要約が走る場合があり、本編と別枠の単価で差し引かれます。
+         */
+        "sessionCompressionMemoryHint": string;
+        /**
+         * 1 回の要約に約 {cost} 、残高 {balance} 。不足の場合はチャージするか安いモデルに。
+         */
+        "sessionCompressionInsufficientCredit": ParameterizedString<"cost" | "balance">;
+        /**
          * このセッションで長期記憶を使う
          */
         "sessionMemoryEnable": string;
+        /**
+         * オフのときこの長期記憶への追加・参照は行いません。新規セッションは既定でオフです。必要なときにオンにしてください。
+         */
+        "sessionMemoryEnableCaption": string;
         /**
          * 検索 top_k
          */
@@ -14615,6 +15147,10 @@ export interface Locale extends ILocale {
          */
         "sessionMemoryInjectInvalid": string;
         /**
+         * 記憶設定を保存
+         */
+        "sessionMemorySaveAction": string;
+        /**
          * 記憶設定を保存しました
          */
         "sessionMemorySaved": string;
@@ -14663,6 +15199,46 @@ export interface Locale extends ILocale {
          */
         "sessionMemoryNextPage": string;
         /**
+         * コンテキストの入出力
+         */
+        "sessionMemoryContextPorterTitle": string;
+        /**
+         * コンテキストを書き出す
+         */
+        "sessionMemoryExportContext": string;
+        /**
+         * コンテキストをエクスポートしました
+         */
+        "sessionMemoryExportContextDone": string;
+        /**
+         * インポートして上書き
+         */
+        "sessionMemoryImportContext": string;
+        /**
+         * user/assistant の文脈メッセージのみを取り込みます。インポートすると現在のセッション履歴をすべて上書きします。
+         */
+        "sessionMemoryImportContextHint": string;
+        /**
+         * インポートすると現在のセッション内メッセージはすべて上書きされ、元に戻せません。続行しますか？
+         */
+        "sessionMemoryImportContextConfirm": string;
+        /**
+         * {n} 件のメッセージをインポートして上書きしました
+         */
+        "sessionMemoryImportContextDone": ParameterizedString<"n">;
+        /**
+         * JSON ファイルの形式が不正です。
+         */
+        "sessionMemoryImportContextInvalidJson": string;
+        /**
+         * コンテキスト形式が不正です。messages フィールドを確認してください。
+         */
+        "sessionMemoryImportContextInvalidFormat": string;
+        /**
+         * インポート失敗：メッセージ本文は空にできません。
+         */
+        "sessionMemoryImportContextEmptyContent": string;
+        /**
          * 長期記憶の検索に失敗しました。今回の応答には記憶を注入していません
          */
         "longTermMemorySearchUnavailable": string;
@@ -14679,6 +15255,10 @@ export interface Locale extends ILocale {
          */
         "sessionMemoryLocateContextDivider": string;
         /**
+         * 長さによる切り捨てが発生しておらず、表示できる「文脈境界」がありません。
+         */
+        "sessionMemoryLocateContextDividerDisabled": string;
+        /**
          * 文脈境界へスクロールできませんでした。履歴を読み込んでからもう一度お試しください。
          */
         "sessionMemoryLocateContextDividerFailed": string;
@@ -14694,5 +15274,425 @@ export interface Locale extends ILocale {
          * 送信できません：直前があなたのメッセージです。アシスタントの返信を待ってから続けてください。
          */
         "awaitAssistantReplyCannotSend": string;
+        /**
+         * Open-source prompt
+         */
+        "openSourcePrompt": string;
+        /**
+         * When enabled, the full prompt content is visible on the plaza detail page. Off by default.
+         */
+        "openSourcePromptCharacterCaption": string;
+        /**
+         * When enabled, the full style body is visible on the plaza detail page. Off by default.
+         */
+        "openSourcePromptStyleCaption": string;
+        /**
+         * Open-source settings
+         */
+        "editCharacterOpenSource": string;
+        /**
+         * Open-source settings
+         */
+        "editStyleOpenSource": string;
+        /**
+         * Full prompt (open-sourced)
+         */
+        "openSourcePromptDetail": string;
+        /**
+         * The following content is voluntarily open-sourced by the character author.
+         */
+        "openSourcePromptNotice": string;
+        /**
+         * Unlisted
+         */
+        "adminModelUnlistedBadge": string;
+        /**
+         * Unlist
+         */
+        "adminModelUnlist": string;
+        /**
+         * Re-list
+         */
+        "adminModelRelist": string;
+        /**
+         * Unlist model "{name}"? Users will no longer be able to select this model.
+         */
+        "adminModelUnlistConfirm": ParameterizedString<"name">;
+        /**
+         * Cost per call
+         */
+        "modelCostPerCall": string;
+        /**
+         * Charged on success or abort; not charged on failure. 0 = free.
+         */
+        "modelCostPerCallCaption": string;
+        /**
+         * Invalid cost value. Enter a number between 0 and 1,000,000.
+         */
+        "agentLlmModelsInvalidCost": string;
+        /**
+         * Abort this request
+         */
+        "abortRequestTooltip": string;
+        /**
+         * My Usage
+         */
+        "myStats": string;
+        /**
+         * Balance
+         */
+        "myStatsCreditBalance": string;
+        /**
+         * Time
+         */
+        "myStatsTime": string;
+        /**
+         * 種別
+         */
+        "myStatsUsageKind": string;
+        /**
+         * Model
+         */
+        "myStatsModel": string;
+        /**
+         * Status
+         */
+        "myStatsStatus": string;
+        /**
+         * Recent Requests
+         */
+        "myStatsRecentLogs": string;
+        /**
+         * Model Stats (Last 30 Days)
+         */
+        "myStatsModelStats": string;
+        /**
+         * Character Usage (Last 30 Days, Top 10)
+         */
+        "myStatsCharacterStats": string;
+        /**
+         * Style Usage (Last 30 Days, Top 10)
+         */
+        "myStatsStyleStats": string;
+        /**
+         * Success
+         */
+        "myStatsStatusSuccess": string;
+        /**
+         * Failed
+         */
+        "myStatsStatusFailed": string;
+        /**
+         * Aborted
+         */
+        "myStatsStatusAborted": string;
+        /**
+         * Duration
+         */
+        "myStatsDuration": string;
+        /**
+         * Cost
+         */
+        "myStatsCost": string;
+        /**
+         * Tokens
+         */
+        "myStatsTokens": string;
+        /**
+         * No records yet
+         */
+        "myStatsNoLogs": string;
+        /**
+         * 消費ログ
+         */
+        "billingLog": string;
+        /**
+         * 種類
+         */
+        "billingType": string;
+        /**
+         * 詳細
+         */
+        "billingDetail": string;
+        /**
+         * 金額
+         */
+        "billingAmount": string;
+        /**
+         * 控除
+         */
+        "billingKindUsage": string;
+        /**
+         * 会話
+         */
+        "billingKindChatUsage": string;
+        /**
+         * 圧縮
+         */
+        "billingKindCompressionUsage": string;
+        /**
+         * 引き換え
+         */
+        "billingKindRedeem": string;
+        /**
+         * 会話
+         */
+        "usageLogKindChat": string;
+        /**
+         * 圧縮
+         */
+        "usageLogKindCompression": string;
+        /**
+         * 中止
+         */
+        "billingLogStatusAborted": string;
+        /**
+         * 不明
+         */
+        "billingUsageStatusUnknown": string;
+        /**
+         * モデル呼び出しは成功。金額はインスタンスのルールに従い、0 のこともあります。
+         */
+        "billingUsageTitleSuccess": string;
+        /**
+         * 呼び出しは失敗。通常は課金されません。赤は状態表示です。
+         */
+        "billingUsageTitleFailed": string;
+        /**
+         * 呼び出しは中止されました（例：ユーザーがキャンセル）。
+         */
+        "billingUsageTitleAborted": string;
+        /**
+         * 状態が記録されていません。
+         */
+        "billingUsageTitleUnknown": string;
+        /**
+         * No data available
+         */
+        "noDataAvailable": string;
+        /**
+         * Total requests
+         */
+        "totalRequest": string;
+        /**
+         * times
+         */
+        "times": string;
+        /**
+         * Request Reports
+         */
+        "adminReports": string;
+        /**
+         * Overview
+         */
+        "adminReportsOverall": string;
+        /**
+         * By Model
+         */
+        "adminReportsByModel": string;
+        /**
+         * Hourly
+         */
+        "adminReportsHourly": string;
+        /**
+         * Total Requests
+         */
+        "adminReportsTotal": string;
+        /**
+         * Success Rate
+         */
+        "adminReportsSuccessRate": string;
+        /**
+         * Failed
+         */
+        "adminReportsFailed": string;
+        /**
+         * Aborted
+         */
+        "adminReportsAborted": string;
+        /**
+         * Total Cost
+         */
+        "adminReportsCost": string;
+        /**
+         * Active Users
+         */
+        "adminReportsActiveUsers": string;
+        /**
+         * Unlisted
+         */
+        "adminReportsUnlistedBadge": string;
+        /**
+         * Last 24h
+         */
+        "adminReportsWindow24h": string;
+        /**
+         * Last 72h
+         */
+        "adminReportsWindow72h": string;
+        /**
+         * Last 7 days
+         */
+        "adminReportsWindow168h": string;
+        /**
+         * Last 30 days
+         */
+        "adminReportsWindow720h": string;
+        /**
+         * Agent success rate (1h)
+         */
+        "agentSuccessRateLabel": string;
+        /**
+         * 引き換えコード管理
+         */
+        "redeemCodesManage": string;
+        /**
+         * エージェントのクレジット引き換えコードを生成・管理します。ユーザーは「利用状況」ページでコードを入力して残高をチャージできます。
+         */
+        "redeemCodesManageDescription": string;
+        /**
+         * コード生成
+         */
+        "redeemCodesGenerate": string;
+        /**
+         * クレジット量
+         */
+        "redeemCodesAmount": string;
+        /**
+         * コード1枚あたりのクレジット量。モデルの1回あたりのコストと同じ単位です。
+         */
+        "redeemCodesAmountCaption": string;
+        /**
+         * 枚数
+         */
+        "redeemCodesCount": string;
+        /**
+         * メモ
+         */
+        "redeemCodesNote": string;
+        /**
+         * 管理者向けのメモ（例：「イベント配布」）。
+         */
+        "redeemCodesNoteCaption": string;
+        /**
+         * 有効期限
+         */
+        "redeemCodesExpires": string;
+        /**
+         * 空白の場合は無期限です。
+         */
+        "redeemCodesExpiresCaption": string;
+        /**
+         * 生成
+         */
+        "redeemCodesGenerateBtn": string;
+        /**
+         * 生成されたコード
+         */
+        "redeemCodesGenerated": string;
+        /**
+         * 全てコピー
+         */
+        "redeemCodesCopyAll": string;
+        /**
+         * コードの生成に成功しました
+         */
+        "redeemCodesGenerateSuccess": string;
+        /**
+         * コード一覧
+         */
+        "redeemCodesList": string;
+        /**
+         * ステータスで絞り込み
+         */
+        "redeemCodesFilterStatus": string;
+        /**
+         * すべて
+         */
+        "redeemCodesStatusAll": string;
+        /**
+         * 利用可能
+         */
+        "redeemCodesStatusAvailable": string;
+        /**
+         * 引き換え済み
+         */
+        "redeemCodesStatusRedeemed": string;
+        /**
+         * 期限切れ
+         */
+        "redeemCodesStatusExpired": string;
+        /**
+         * 取り消し済み
+         */
+        "redeemCodesStatusRevoked": string;
+        /**
+         * コード
+         */
+        "redeemCodesColCode": string;
+        /**
+         * 作成日時
+         */
+        "redeemCodesColCreatedAt": string;
+        /**
+         * ステータス
+         */
+        "redeemCodesColStatus": string;
+        /**
+         * 引き換えユーザー
+         */
+        "redeemCodesColUser": string;
+        /**
+         * 取り消し
+         */
+        "redeemCodesRevoke": string;
+        /**
+         * このコードを取り消しますか？取り消し後は引き換えできなくなります。
+         */
+        "redeemCodesRevokeConfirm": string;
+        /**
+         * 取り消しました
+         */
+        "redeemCodesRevoked": string;
+        /**
+         * コードはまだありません。
+         */
+        "redeemCodesEmpty": string;
+        /**
+         * 引き換えコードを入力
+         */
+        "redeemCodeInput": string;
+        /**
+         * 引き換え
+         */
+        "redeemCodeSubmit": string;
+        /**
+         * 引き換え成功、{amount}クレジットを獲得しました
+         */
+        "redeemCodeSuccess": ParameterizedString<"amount">;
+        /**
+         * 引き換えコードが無効です。入力を確認してください
+         */
+        "redeemErrInvalid": string;
+        /**
+         * この引き換えコードは取り消されました
+         */
+        "redeemErrRevoked": string;
+        /**
+         * この引き換えコードは既に使用されています
+         */
+        "redeemErrUsed": string;
+        /**
+         * この引き換えコードの有効期限が切れています
+         */
+        "redeemErrExpired": string;
+        /**
+         * 移動
+         */
+        "pageJump": string;
+        /**
+         * 件数
+         */
+        "pageSize": string;
     };
 }

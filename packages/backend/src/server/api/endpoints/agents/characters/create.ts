@@ -58,6 +58,7 @@ export const paramDef = {
 		},
 		forbiddenBehavior: { type: 'string', maxLength: AGENT_TEXT_FIELD_MAX },
 		avatarFileId: { type: 'string', format: 'misskey:id', nullable: true },
+		promptOpenSourced: { type: 'boolean' },
 	},
 	required: ['name'],
 } as const;
@@ -105,6 +106,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				publishedVersion: null,
 				publishedSnapshot: null,
 				avatarFileId: ps.avatarFileId ?? null,
+				promptOpenSourced: ps.promptOpenSourced === true,
 			});
 
 			return {

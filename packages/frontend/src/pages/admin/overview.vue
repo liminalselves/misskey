@@ -7,57 +7,57 @@ SPDX-License-Identifier: AGPL-3.0-only
 <div class="_spacer" style="--MI_SPACER-w: 1000px;">
 	<div ref="rootEl" :class="$style.root">
 		<MkFoldableSection class="item">
-			<template #header>Stats</template>
+			<template #header>{{ i18n.ts.adminOverviewStats }}</template>
 			<XStats/>
 		</MkFoldableSection>
 
 		<MkFoldableSection class="item">
-			<template #header>Active users</template>
+			<template #header>{{ i18n.ts.adminOverviewActiveUsers }}</template>
 			<XActiveUsers/>
 		</MkFoldableSection>
 
 		<MkFoldableSection class="item">
-			<template #header>Heatmap</template>
+			<template #header>{{ i18n.ts.adminOverviewHeatmap }}</template>
 			<XHeatmap/>
 		</MkFoldableSection>
 
 		<MkFoldableSection class="item">
-			<template #header>Retention rate</template>
+			<template #header>{{ i18n.ts.adminOverviewRetentionRate }}</template>
 			<XRetention/>
 		</MkFoldableSection>
 
 		<MkFoldableSection class="item">
-			<template #header>Moderators</template>
+			<template #header>{{ i18n.ts.adminOverviewModerators }}</template>
 			<XModerators/>
 		</MkFoldableSection>
 
 		<MkFoldableSection class="item">
-			<template #header>Federation</template>
+			<template #header>{{ i18n.ts.federation }}</template>
 			<XFederation/>
 		</MkFoldableSection>
 
 		<MkFoldableSection class="item">
-			<template #header>Instances</template>
+			<template #header>{{ i18n.ts.instances }}</template>
 			<XInstances/>
 		</MkFoldableSection>
 
 		<MkFoldableSection class="item">
-			<template #header>Ap requests</template>
+			<template #header>{{ i18n.ts.adminOverviewApRequests }}</template>
 			<XApRequests/>
 		</MkFoldableSection>
 
 		<MkFoldableSection class="item">
-			<template #header>New users</template>
+			<template #header>{{ i18n.ts.adminOverviewNewUsers }}</template>
 			<XUsers/>
 		</MkFoldableSection>
 
 		<MkFoldableSection class="item">
-			<template #header>Deliver queue</template>
+			<template #header>{{ i18n.ts.adminOverviewDeliverQueue }}</template>
 			<XQueue domain="deliver"/>
 		</MkFoldableSection>
 
 		<MkFoldableSection class="item">
-			<template #header>Inbox queue</template>
+			<template #header>{{ i18n.ts.adminOverviewInboxQueue }}</template>
 			<XQueue domain="inbox"/>
 		</MkFoldableSection>
 	</div>
@@ -103,7 +103,6 @@ const filesPagination = {
 	limit: 9,
 	noPaging: true,
 };
-
 function onInstanceClick(i: Misskey.entities.FederationInstance) {
 	os.pageWindow(`/instance-info/${i.host}`);
 }

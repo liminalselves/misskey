@@ -60,6 +60,7 @@ import { WebAuthnService } from './WebAuthnService.js';
 import { UserBlockingService } from './UserBlockingService.js';
 import { CacheService } from './CacheService.js';
 import { UserService } from './UserService.js';
+import { UserWebSocketStatusService } from './UserWebSocketStatusService.js';
 import { UserFollowingService } from './UserFollowingService.js';
 import { UserKeypairService } from './UserKeypairService.js';
 import { UserListService } from './UserListService.js';
@@ -77,7 +78,9 @@ import { FeaturedService } from './FeaturedService.js';
 import { FanoutTimelineService } from './FanoutTimelineService.js';
 import { ChannelFollowingService } from './ChannelFollowingService.js';
 import { AgentService } from './AgentService.js';
+import { AgentCompressionMemoryService } from './AgentCompressionMemoryService.js';
 import { AgentPlazaReviewService } from './AgentPlazaReviewService.js';
+import { AgentModelUsageService } from './AgentModelUsageService.js';
 import { AgentDashscopeMemoryService } from './AgentDashscopeMemoryService.js';
 import { ChatService } from './ChatService.js';
 import { RegistryApiService } from './RegistryApiService.js';
@@ -208,6 +211,7 @@ const $WebAuthnService: Provider = { provide: 'WebAuthnService', useExisting: We
 const $UserBlockingService: Provider = { provide: 'UserBlockingService', useExisting: UserBlockingService };
 const $CacheService: Provider = { provide: 'CacheService', useExisting: CacheService };
 const $UserService: Provider = { provide: 'UserService', useExisting: UserService };
+const $UserWebSocketStatusService: Provider = { provide: 'UserWebSocketStatusService', useExisting: UserWebSocketStatusService };
 const $UserFollowingService: Provider = { provide: 'UserFollowingService', useExisting: UserFollowingService };
 const $UserKeypairService: Provider = { provide: 'UserKeypairService', useExisting: UserKeypairService };
 const $UserListService: Provider = { provide: 'UserListService', useExisting: UserListService };
@@ -232,6 +236,7 @@ const $ChannelFollowingService: Provider = { provide: 'ChannelFollowingService',
 const $ChannelMutingService: Provider = { provide: 'ChannelMutingService', useExisting: ChannelMutingService };
 const $AgentService: Provider = { provide: 'AgentService', useExisting: AgentService };
 const $AgentPlazaReviewService: Provider = { provide: 'AgentPlazaReviewService', useExisting: AgentPlazaReviewService };
+const $AgentModelUsageService: Provider = { provide: 'AgentModelUsageService', useExisting: AgentModelUsageService };
 const $AgentDashscopeMemoryService: Provider = { provide: 'AgentDashscopeMemoryService', useExisting: AgentDashscopeMemoryService };
 const $ChatService: Provider = { provide: 'ChatService', useExisting: ChatService };
 const $RegistryApiService: Provider = { provide: 'RegistryApiService', useExisting: RegistryApiService };
@@ -365,6 +370,7 @@ const $ApQuestionService: Provider = { provide: 'ApQuestionService', useExisting
 		UserBlockingService,
 		CacheService,
 		UserService,
+		UserWebSocketStatusService,
 		UserFollowingService,
 		UserKeypairService,
 		UserListService,
@@ -388,7 +394,9 @@ const $ApQuestionService: Provider = { provide: 'ApQuestionService', useExisting
 		ChannelFollowingService,
 		ChannelMutingService,
 		AgentService,
+		AgentCompressionMemoryService,
 		AgentPlazaReviewService,
+		AgentModelUsageService,
 		AgentDashscopeMemoryService,
 		ChatService,
 		RegistryApiService,
@@ -519,6 +527,7 @@ const $ApQuestionService: Provider = { provide: 'ApQuestionService', useExisting
 		$UserBlockingService,
 		$CacheService,
 		$UserService,
+		$UserWebSocketStatusService,
 		$UserFollowingService,
 		$UserKeypairService,
 		$UserListService,
@@ -543,6 +552,7 @@ const $ApQuestionService: Provider = { provide: 'ApQuestionService', useExisting
 		$ChannelMutingService,
 		$AgentService,
 		$AgentPlazaReviewService,
+		$AgentModelUsageService,
 		$AgentDashscopeMemoryService,
 		$ChatService,
 		$RegistryApiService,
@@ -673,6 +683,7 @@ const $ApQuestionService: Provider = { provide: 'ApQuestionService', useExisting
 		UserBlockingService,
 		CacheService,
 		UserService,
+		UserWebSocketStatusService,
 		UserFollowingService,
 		UserKeypairService,
 		UserListService,
@@ -696,7 +707,9 @@ const $ApQuestionService: Provider = { provide: 'ApQuestionService', useExisting
 		ChannelFollowingService,
 		ChannelMutingService,
 		AgentService,
+		AgentCompressionMemoryService,
 		AgentPlazaReviewService,
+		AgentModelUsageService,
 		AgentDashscopeMemoryService,
 		ChatService,
 		RegistryApiService,
@@ -826,6 +839,7 @@ const $ApQuestionService: Provider = { provide: 'ApQuestionService', useExisting
 		$UserBlockingService,
 		$CacheService,
 		$UserService,
+		$UserWebSocketStatusService,
 		$UserFollowingService,
 		$UserKeypairService,
 		$UserListService,
@@ -849,6 +863,7 @@ const $ApQuestionService: Provider = { provide: 'ApQuestionService', useExisting
 		$ChannelMutingService,
 		$AgentService,
 		$AgentPlazaReviewService,
+		$AgentModelUsageService,
 		$AgentDashscopeMemoryService,
 		$ChatService,
 		$RegistryApiService,

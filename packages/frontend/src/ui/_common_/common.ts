@@ -84,6 +84,11 @@ export function openInstanceMenu(ev: PointerEvent) {
 		to: '/about#charts',
 	}, { type: 'divider' }, {
 		type: 'link',
+		text: i18n.ts.appClientSettings,
+		icon: 'ti ti-device-mobile',
+		to: '/app',
+	}, {
+		type: 'link',
 		text: i18n.ts.ads,
 		icon: 'ti ti-ad',
 		to: '/ads',

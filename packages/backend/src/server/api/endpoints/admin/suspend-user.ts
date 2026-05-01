@@ -22,6 +22,8 @@ export const paramDef = {
 	type: 'object',
 	properties: {
 		userId: { type: 'string', format: 'misskey:id' },
+		/** 指定時はその時刻で凍結が自動解除される。未指定は従来どおり無期限。 */
+		expiresAt: { type: 'integer', nullable: true },
 	},
 	required: ['userId'],
 } as const;
@@ -46,7 +48,13 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				throw new Error('cannot suspend moderator account');
 			}
 
-			await this.userSuspendService.suspend(user, me);
+			if (ps.expiresAt != null && ps.expiresAt <= Date.now()) {
+				return;
+			}
+
+			await this.userSuspendService.suspend(user, me, {
+				expiresAt: ps.expiresAt != null ? new Date(ps.expiresAt) : null,
+			});
 		});
 	}
 }

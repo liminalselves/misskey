@@ -223,6 +223,7 @@ export const paramDef = {
 		emailNotificationTypes: { type: 'array', items: {
 			type: 'string',
 		} },
+		enableAppPush: { type: 'boolean' },
 		alsoKnownAs: {
 			type: 'array',
 			maxItems: 10,
@@ -367,6 +368,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			}
 			if (typeof ps.autoSensitive === 'boolean') profileUpdates.autoSensitive = ps.autoSensitive;
 			if (ps.emailNotificationTypes !== undefined) profileUpdates.emailNotificationTypes = ps.emailNotificationTypes;
+			if (typeof ps.enableAppPush === 'boolean') profileUpdates.enableAppPush = ps.enableAppPush;
 
 			if (ps.avatarId) {
 				policies ??= await this.roleService.getUserPolicies(user.id);

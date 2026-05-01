@@ -166,6 +166,34 @@ export type MiNotification = {
 	type: 'test';
 	id: string;
 	createdAt: string;
+} | {
+	type: 'agentReviewApproved';
+	id: string;
+	createdAt: string;
+	agentKind: 'character' | 'style';
+	resourceId: string;
+	resourceName: string;
+} | {
+	type: 'agentReviewRejected';
+	id: string;
+	createdAt: string;
+	agentKind: 'character' | 'style';
+	resourceId: string;
+	resourceName: string;
+} | {
+	type: 'agentCharacterBanned';
+	id: string;
+	createdAt: string;
+	characterId: string;
+	characterName: string;
+	banned: boolean;
+} | {
+	type: 'agentSessionBanned';
+	id: string;
+	createdAt: string;
+	sessionId: string;
+	sessionName: string;
+	banned: boolean;
 };
 
 export type MiGroupedNotification = MiNotification | {
