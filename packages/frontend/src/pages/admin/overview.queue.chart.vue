@@ -53,11 +53,11 @@ function pushData(value: number) {
 	chartInstance.update();
 }
 
-const label =
-	props.type === 'process' ? i18n.ts.adminOverviewProcess :
-	props.type === 'active' ? i18n.ts.active :
-	props.type === 'delayed' ? i18n.ts.delayed :
-	props.type === 'waiting' ? i18n.ts.adminOverviewWaiting :
+const label: string =
+	props.type === 'process' ? String(i18n.ts.adminOverviewProcess) :
+	props.type === 'active' ? String(i18n.ts.active) :
+	props.type === 'delayed' ? String(i18n.ts.delayed) :
+	props.type === 'waiting' ? String(i18n.ts.adminOverviewWaiting) :
 	'?' as never;
 
 const color =

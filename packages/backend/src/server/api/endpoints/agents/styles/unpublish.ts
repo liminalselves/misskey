@@ -50,21 +50,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			if (!row || row.userId !== me.id) {
 				throw new ApiError({ message: 'No such style.', code: 'NO_SUCH_STYLE', id: 'f8a9b0c1-d2e3-4567-1234-678901234567' });
 			}
-			if (row.reviewStatus === 'pending' && row.publishedVersion == null) {
-				row.reviewStatus = 'draft';
-				row.updatedAt = new Date();
-				this.agentService.syncStyleListedFlag(row);
-				await this.agentDialogueStylesRepository.save(row);
-				return {
-					id: row.id,
-					isPublished: row.isPublished,
-					reviewStatus: row.reviewStatus,
-					publishedVersion: row.publishedVersion,
-					updatedAt: row.updatedAt.toISOString(),
-				};
-			}
-			if (row.reviewStatus === 'pending' && row.publishedVersion != null) {
-				row.reviewStatus = 'published';
+			if (row.reviewStatus === 'pending') {
+				row.reviewStatus = row.publishedVersion == null ? 'draft' : 'published';
 				row.updatedAt = new Date();
 				this.agentService.syncStyleListedFlag(row);
 				await this.agentDialogueStylesRepository.save(row);

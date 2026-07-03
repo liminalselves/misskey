@@ -147,7 +147,7 @@ export async function assertSafeLlmHttpsUrl(raw: string): Promise<URL> {
 		throw new UnsafeLlmUrlError('userinfo_not_allowed');
 	}
 
-	let lookups: dns.LookupAddress[];
+	let lookups: { address: string }[];
 	try {
 		lookups = await dns.lookup(u.hostname, { all: true });
 	} catch {

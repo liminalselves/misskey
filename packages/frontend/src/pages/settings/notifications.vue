@@ -84,10 +84,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <script lang="ts" setup>
 import { useTemplateRef, computed } from 'vue';
-import { isEmbeddedAppShell } from '@/utility/is-embedded-app-shell.js';
 import { notificationTypes } from 'misskey-js';
 import XNotificationConfig from './notifications.notification-config.vue';
 import type { NotificationConfig } from './notifications.notification-config.vue';
+import { isEmbeddedAppShell } from '@/utility/is-embedded-app-shell.js';
 import FormLink from '@/components/form/link.vue';
 import FormSection from '@/components/form/section.vue';
 import MkFolder from '@/components/MkFolder.vue';

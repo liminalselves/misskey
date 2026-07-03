@@ -407,6 +407,68 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</div>
 			</MkFolder>
 
+			<MkFolder v-if="matchQuery(['AI 生图空间容量', 'agentImageDriveCapacityMb'])">
+				<template #label>AI 生图空间容量</template>
+				<template #suffix>
+					<span v-if="role.policies.agentImageDriveCapacityMb.useDefault" :class="$style.useDefaultLabel">{{ i18n.ts._role.useBaseValue }}</span>
+					<span v-else>{{ role.policies.agentImageDriveCapacityMb.value + 'MB' }}</span>
+					<span :class="$style.priorityIndicator"><i :class="getPriorityIcon(role.policies.agentImageDriveCapacityMb)"></i></span>
+				</template>
+				<div class="_gaps">
+					<MkSwitch v-model="role.policies.agentImageDriveCapacityMb.useDefault" :readonly="readonly">
+						<template #label>{{ i18n.ts._role.useBaseValue }}</template>
+					</MkSwitch>
+					<MkInput v-model="role.policies.agentImageDriveCapacityMb.value" :disabled="role.policies.agentImageDriveCapacityMb.useDefault" type="number" :readonly="readonly">
+						<template #suffix>MB</template>
+						<template #caption>AI 生图文件夹的独立空间额度，默认不占用普通网盘容量。</template>
+					</MkInput>
+					<MkRange v-model="role.policies.agentImageDriveCapacityMb.priority" :min="0" :max="2" :step="1" easing :textConverter="(v) => v === 0 ? i18n.ts._role._priority.low : v === 1 ? i18n.ts._role._priority.middle : v === 2 ? i18n.ts._role._priority.high : ''">
+						<template #label>{{ i18n.ts._role.priority }}</template>
+					</MkRange>
+				</div>
+			</MkFolder>
+
+			<MkFolder v-if="matchQuery(['AI 生图清理阈值', 'agentImageDriveCleanupThresholdMb'])">
+				<template #label>AI 生图清理阈值</template>
+				<template #suffix>
+					<span v-if="role.policies.agentImageDriveCleanupThresholdMb.useDefault" :class="$style.useDefaultLabel">{{ i18n.ts._role.useBaseValue }}</span>
+					<span v-else>{{ role.policies.agentImageDriveCleanupThresholdMb.value + 'MB' }}</span>
+					<span :class="$style.priorityIndicator"><i :class="getPriorityIcon(role.policies.agentImageDriveCleanupThresholdMb)"></i></span>
+				</template>
+				<div class="_gaps">
+					<MkSwitch v-model="role.policies.agentImageDriveCleanupThresholdMb.useDefault" :readonly="readonly">
+						<template #label>{{ i18n.ts._role.useBaseValue }}</template>
+					</MkSwitch>
+					<MkInput v-model="role.policies.agentImageDriveCleanupThresholdMb.value" :disabled="role.policies.agentImageDriveCleanupThresholdMb.useDefault" type="number" :readonly="readonly">
+						<template #suffix>MB</template>
+					</MkInput>
+					<MkRange v-model="role.policies.agentImageDriveCleanupThresholdMb.priority" :min="0" :max="2" :step="1" easing :textConverter="(v) => v === 0 ? i18n.ts._role._priority.low : v === 1 ? i18n.ts._role._priority.middle : v === 2 ? i18n.ts._role._priority.high : ''">
+						<template #label>{{ i18n.ts._role.priority }}</template>
+					</MkRange>
+				</div>
+			</MkFolder>
+
+			<MkFolder v-if="matchQuery(['AI 生图清理目标', 'agentImageDriveCleanupTargetMb'])">
+				<template #label>AI 生图清理目标</template>
+				<template #suffix>
+					<span v-if="role.policies.agentImageDriveCleanupTargetMb.useDefault" :class="$style.useDefaultLabel">{{ i18n.ts._role.useBaseValue }}</span>
+					<span v-else>{{ role.policies.agentImageDriveCleanupTargetMb.value + 'MB' }}</span>
+					<span :class="$style.priorityIndicator"><i :class="getPriorityIcon(role.policies.agentImageDriveCleanupTargetMb)"></i></span>
+				</template>
+				<div class="_gaps">
+					<MkSwitch v-model="role.policies.agentImageDriveCleanupTargetMb.useDefault" :readonly="readonly">
+						<template #label>{{ i18n.ts._role.useBaseValue }}</template>
+					</MkSwitch>
+					<MkInput v-model="role.policies.agentImageDriveCleanupTargetMb.value" :disabled="role.policies.agentImageDriveCleanupTargetMb.useDefault" type="number" :readonly="readonly">
+						<template #suffix>MB</template>
+						<template #caption>触发清理后，系统会尽量清理到这个可用空间目标，减少频繁清理。</template>
+					</MkInput>
+					<MkRange v-model="role.policies.agentImageDriveCleanupTargetMb.priority" :min="0" :max="2" :step="1" easing :textConverter="(v) => v === 0 ? i18n.ts._role._priority.low : v === 1 ? i18n.ts._role._priority.middle : v === 2 ? i18n.ts._role._priority.high : ''">
+						<template #label>{{ i18n.ts._role.priority }}</template>
+					</MkRange>
+				</div>
+			</MkFolder>
+
 			<MkFolder v-if="matchQuery([i18n.ts._role._options.maxFileSize, 'maxFileSizeMb'])">
 				<template #label>{{ i18n.ts._role._options.maxFileSize }}</template>
 				<template #suffix>

@@ -7,9 +7,12 @@ SPDX-License-Identifier: AGPL-3.0-only
 <PageWithHeader v-model:tab="tab" :actions="headerActions" :tabs="headerTabs">
 	<div v-if="file" class="_spacer" style="--MI_SPACER-w: 600px; --MI_SPACER-min: 16px; --MI_SPACER-max: 32px;">
 		<div v-if="tab === 'overview'" class="cxqhhsmd _gaps_m">
-			<a class="thumbnail" :href="file.url" target="_blank">
+			<a v-if="!isBlocked" class="thumbnail" :href="file.url" target="_blank">
 				<MkDriveFileThumbnail class="thumbnail" :file="file" fit="contain"/>
 			</a>
+			<div v-else class="thumbnail">
+				<MkDriveFileThumbnail class="thumbnail" :file="blockedFile" fit="contain"/>
+			</div>
 			<div>
 				<MkKeyValue :copy="file.type" oneline style="margin: 1em 0;">
 					<template #key>MIME Type</template>
@@ -38,6 +41,11 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 			<div>
 				<MkSwitch :modelValue="isSensitive" @update:modelValue="toggleSensitive">{{ i18n.ts.sensitive }}</MkSwitch>
+			</div>
+
+			<div v-if="file.type.startsWith('image/')">
+				<MkSwitch :modelValue="isBlocked" @update:modelValue="toggleBlocked">图片封禁</MkSwitch>
+				<MkInfo v-if="isBlocked" warn>该图片已被封禁，站内会显示封禁占位，服务器本地或 OSS 直链将不可访问。</MkInfo>
 			</div>
 
 			<div>
@@ -96,6 +104,7 @@ import * as os from '@/os.js';
 import { i18n } from '@/i18n.js';
 import { iAmAdmin, iAmModerator } from '@/i.js';
 import MkTabs from '@/components/MkTabs.vue';
+import { misskeyApi, formatApiError } from '@/utility/misskey-api.js';
 
 const props = defineProps<{
 	file: Misskey.entities.DriveFile,
@@ -104,9 +113,15 @@ const props = defineProps<{
 
 const tab = ref('overview');
 const isSensitive = ref(props.file.isSensitive);
+const isBlocked = ref(props.file.isAgentImageBlocked);
 const usageTab = ref<'note' | 'chat'>('note');
 const XNotes = defineAsyncComponent(() => import('./drive.file.notes.vue'));
 const XChat = defineAsyncComponent(() => import('./admin-file.chat.vue'));
+
+const blockedFile = computed(() => ({
+	...props.file,
+	isAgentImageBlocked: isBlocked.value,
+}));
 
 async function del() {
 	const { canceled } = await os.confirm({
@@ -135,13 +150,37 @@ async function toggleSensitive() {
 	});
 }
 
+async function toggleBlocked() {
+	const next = !isBlocked.value;
+	const { canceled } = await os.confirm({
+		type: next ? 'warning' : 'info',
+		text: next
+			? '确定要封禁这张图片吗？封禁后站内会显示封禁占位，服务器本地或 OSS 直链将不可访问。'
+			: '确定要解除这张图片的封禁吗？解除后图片将恢复可访问。',
+	});
+
+	if (canceled) return;
+
+	try {
+		const updated = await misskeyApi(
+			'admin/drive/files/set-blocked' as Parameters<typeof misskeyApi>[0],
+			{ fileId: props.file.id, blocked: next } as any,
+		) as Misskey.entities.DriveFile;
+		isBlocked.value = updated.isAgentImageBlocked;
+		os.toast(i18n.ts.done);
+	} catch (err) {
+		os.alert({ type: 'error', text: formatApiError(err) });
+	}
+}
+
 const headerActions = computed(() => [{
 	text: i18n.ts.openInNewTab,
 	icon: 'ti ti-external-link',
 	handler: () => {
+		if (isBlocked.value) return;
 		window.open(props.file.url, '_blank', 'noopener');
 	},
-}]);
+}].filter(action => !isBlocked.value || action.icon !== 'ti ti-external-link'));
 
 const headerTabs = computed(() => [{
 	key: 'overview',

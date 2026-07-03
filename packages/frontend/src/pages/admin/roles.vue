@@ -150,6 +150,32 @@ SPDX-License-Identifier: AGPL-3.0-only
 						</MkInput>
 					</MkFolder>
 
+					<MkFolder v-if="matchQuery(['AI 生图空间容量', 'agentImageDriveCapacityMb'])">
+						<template #label>AI 生图空间容量</template>
+						<template #suffix>{{ policies.agentImageDriveCapacityMb }}MB</template>
+						<MkInput v-model="policies.agentImageDriveCapacityMb" type="number">
+							<template #suffix>MB</template>
+							<template #caption>AI 生图文件夹的独立空间额度，默认不占用普通网盘容量。</template>
+						</MkInput>
+					</MkFolder>
+
+					<MkFolder v-if="matchQuery(['AI 生图清理阈值', 'agentImageDriveCleanupThresholdMb'])">
+						<template #label>AI 生图清理阈值</template>
+						<template #suffix>{{ policies.agentImageDriveCleanupThresholdMb }}MB</template>
+						<MkInput v-model="policies.agentImageDriveCleanupThresholdMb" type="number">
+							<template #suffix>MB</template>
+						</MkInput>
+					</MkFolder>
+
+					<MkFolder v-if="matchQuery(['AI 生图清理目标', 'agentImageDriveCleanupTargetMb'])">
+						<template #label>AI 生图清理目标</template>
+						<template #suffix>{{ policies.agentImageDriveCleanupTargetMb }}MB</template>
+						<MkInput v-model="policies.agentImageDriveCleanupTargetMb" type="number">
+							<template #suffix>MB</template>
+							<template #caption>触发清理后，系统会尽量清理到这个可用空间目标，减少频繁清理。</template>
+						</MkInput>
+					</MkFolder>
+
 					<MkFolder v-if="matchQuery([i18n.ts._role._options.maxFileSize, 'maxFileSizeMb'])">
 						<template #label>{{ i18n.ts._role._options.maxFileSize }}</template>
 						<template #suffix>{{ policies.maxFileSizeMb }}MB</template>

@@ -16,7 +16,8 @@ import { NotificationService } from '@/core/NotificationService.js';
 export const meta = {
 	tags: ['admin'],
 	requireCredential: true,
-	requireAdmin: true,
+	secure: true,
+	requireModerator: true,
 	kind: 'write:admin',
 	limit: { duration: ms('1hour'), max: 120 },
 	res: {
@@ -34,6 +35,7 @@ export const paramDef = {
 	properties: {
 		sessionId: { type: 'string', format: 'misskey:id' },
 		banned: { type: 'boolean' },
+		reason: { type: 'string', maxLength: 1000, nullable: true },
 	},
 	required: ['sessionId', 'banned'],
 } as const;
@@ -65,6 +67,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				characterId: row.characterId,
 				banned: ps.banned,
 				before,
+				reason: ps.reason?.trim() || null,
 			});
 			this.notificationService.createNotification(
 				row.userId,

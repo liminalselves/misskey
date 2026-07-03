@@ -72,6 +72,9 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				if (parent == null) {
 					throw new ApiError(meta.errors.noSuchFolder);
 				}
+				if (parent.systemType != null) {
+					throw new ApiError(meta.errors.noSuchFolder);
+				}
 			}
 
 			// Create folder

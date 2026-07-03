@@ -21,6 +21,11 @@ export const packedDriveFolderSchema = {
 			type: 'string',
 			optional: false, nullable: false,
 		},
+		systemType: {
+			type: 'string',
+			optional: false, nullable: true,
+			enum: ['agentGeneratedImages'],
+		},
 		parentId: {
 			type: 'string',
 			optional: false, nullable: true,

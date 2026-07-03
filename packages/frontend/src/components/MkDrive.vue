@@ -63,6 +63,39 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<div :class="$style.tipContainer">
 				<MkTip k="drive"><div v-html="i18n.ts.driveAboutTip"></div></MkTip>
 			</div>
+			<div v-if="driveStats" :class="$style.usageGrid">
+				<div :class="$style.usage">
+					<div :class="$style.usageHeader">
+						<span>普通网盘使用量</span>
+						<span>{{ driveStats.usagePercent }}%</span>
+					</div>
+					<div :class="$style.usageBar">
+						<div :class="$style.usageBarValue" :style="{ width: `${driveStats.usagePercent}%` }"></div>
+					</div>
+					<div :class="$style.usageText">
+						已使用 {{ bytes(driveStats.usage) }} / 可使用 {{ bytes(driveStats.capacity) }}
+					</div>
+					<div :class="$style.usageText">
+						AI 生图使用独立额度；图片移出 AI 生图文件夹后会占用普通网盘空间。
+					</div>
+				</div>
+
+				<div v-if="folder?.systemType === 'agentGeneratedImages'" :class="$style.usage">
+					<div :class="$style.usageHeader">
+						<span>AI 生图空间</span>
+						<span>{{ driveStats.agentImageUsagePercent }}%</span>
+					</div>
+					<div :class="$style.usageBar">
+						<div :class="$style.usageBarValue" :style="{ width: `${driveStats.agentImageUsagePercent}%` }"></div>
+					</div>
+					<div :class="$style.usageText">
+						已使用 {{ bytes(driveStats.agentImageUsage) }} / 可使用 {{ bytes(driveStats.agentImageCapacity) }}。低于 {{ bytes(driveStats.agentImageCleanupThreshold) }} 可用空间时，系统会自动清理最旧的 AI 生图，清理后聊天会显示“图片已被清理”。
+					</div>
+					<div :class="$style.usageText">
+						如需长期保存，请将图片移出该文件夹；移出后会消耗普通网盘额度，并不再受 AI 生图自动清理管理。
+					</div>
+				</div>
+			</div>
 
 			<div :class="$style.folders">
 				<XFolder
@@ -182,6 +215,7 @@ import { globalEvents, useGlobalEvent } from '@/events.js';
 import { checkDragDataType, getDragData, setDragData } from '@/drag-and-drop.js';
 import { getDriveFileMenu } from '@/utility/get-drive-file-menu.js';
 import { Paginator } from '@/utility/paginator.js';
+import bytes from '@/filters/bytes.js';
 
 const props = withDefaults(defineProps<{
 	initialFolder?: Misskey.entities.DriveFolder | Misskey.entities.DriveFolder['id'] | null;
@@ -231,6 +265,16 @@ watch([selectedFolders, isRootSelected], () => {
 });
 
 const fetching = ref(true);
+const driveStats = ref<{
+	usage: number;
+	capacity: number;
+	usagePercent: number;
+	agentImageUsage: number;
+	agentImageCapacity: number;
+	agentImageUsagePercent: number;
+	agentImageCleanupThreshold: number;
+	agentImageCleanupTarget: number;
+} | null>(null);
 
 const sortModeSelect = ref<NonNullable<Misskey.entities.DriveFilesRequest['sort']>>('+createdAt');
 
@@ -271,6 +315,7 @@ watch(sortModeSelect, () => {
 
 async function initialize() {
 	fetching.value = true;
+	await fetchDriveStats();
 	await foldersPaginator.reload();
 	filesPaginator.initialDirection = sortModeSelect.value === '-createdAt' ? 'newer' : 'older';
 	filesPaginator.order.value = sortModeSelect.value === '-createdAt' ? 'oldest' : 'newest';
@@ -278,10 +323,42 @@ async function initialize() {
 	fetching.value = false;
 }
 
+function isProtectedAgentImageFolderError(err: unknown): boolean {
+	return err != null && typeof err === 'object' && 'code' in err && (
+		(err as { code?: unknown }).code === 'PROTECTED_AGENT_IMAGE_FOLDER' ||
+		(err as { code?: unknown }).code === 'PROTECTED_FOLDER'
+	);
+}
+
+function showProtectedAgentImageFolderError(kind: 'upload' | 'move' = 'move') {
+	os.alert({
+		type: 'error',
+		title: kind === 'upload' ? i18n.ts.failedToUpload : '无法移动',
+		text: kind === 'upload'
+			? 'AI 生图专用文件夹只能保存智能体生成的图片，不能上传或移入其他图片。'
+			: 'AI 生图专用文件夹只能保存智能体生成的图片，不能移入其他图片。AI 生图移出后会占用普通网盘空间。',
+	});
+}
+
+async function fetchDriveStats() {
+	const stats = await misskeyApi('drive/stats' as any, {}) as Partial<NonNullable<typeof driveStats.value>> & { usage: number; capacity: number; usagePercent: number };
+	driveStats.value = {
+		usage: stats.usage,
+		capacity: stats.capacity,
+		usagePercent: stats.usagePercent,
+		agentImageUsage: stats.agentImageUsage ?? 0,
+		agentImageCapacity: stats.agentImageCapacity ?? 0,
+		agentImageUsagePercent: stats.agentImageUsagePercent ?? 0,
+		agentImageCleanupThreshold: stats.agentImageCleanupThreshold ?? 0,
+		agentImageCleanupTarget: stats.agentImageCleanupTarget ?? 0,
+	};
+}
+
 function onStreamDriveFileCreated(file: Misskey.entities.DriveFile) {
 	if (file.folderId === (folder.value?.id ?? null)) {
 		filesPaginator.prepend(file);
 	}
+	void fetchDriveStats();
 }
 
 function onFileDragstart(file: Misskey.entities.DriveFile, ev: DragEvent) {
@@ -310,6 +387,11 @@ function onDragover(ev: DragEvent) {
 	}
 
 	const isFile = ev.dataTransfer.items[0].kind === 'file';
+	if (isFile && folder.value?.systemType === 'agentGeneratedImages') {
+		ev.dataTransfer.dropEffect = 'none';
+		return false;
+	}
+
 	if (isFile || checkDragDataType(ev, ['driveFiles', 'driveFolders'])) {
 		switch (ev.dataTransfer.effectAllowed) {
 			case 'all':
@@ -349,6 +431,10 @@ function onDrop(ev: DragEvent): void | boolean {
 
 	// ドロップされてきたものがファイルだったら
 	if (ev.dataTransfer.files.length > 0) {
+		if (folder.value?.systemType === 'agentGeneratedImages') {
+			showProtectedAgentImageFolderError('upload');
+			return;
+		}
 		os.launchUploader(Array.from(ev.dataTransfer.files), {
 			folderId: folder.value?.id ?? null,
 		});
@@ -368,6 +454,16 @@ function onDrop(ev: DragEvent): void | boolean {
 					folderId: folder.value ? folder.value.id : null,
 					folder: folder.value,
 				})));
+				void fetchDriveStats();
+			}).catch(err => {
+				if (isProtectedAgentImageFolderError(err)) {
+					showProtectedAgentImageFolderError('move');
+					return;
+				}
+				os.alert({
+					type: 'error',
+					text: i18n.ts.somethingHappened,
+				});
 			});
 		}
 	}
@@ -413,12 +509,21 @@ function onDrop(ev: DragEvent): void | boolean {
 }
 
 function onUploadRequested(files: File[], folder?: Misskey.entities.DriveFolder | null) {
+	if (folder?.systemType === 'agentGeneratedImages') {
+		showProtectedAgentImageFolderError('upload');
+		return;
+	}
 	os.launchUploader(files, {
 		folderId: folder?.id ?? null,
 	});
 }
 
 async function urlUpload() {
+	if (folder.value?.systemType === 'agentGeneratedImages') {
+		showProtectedAgentImageFolderError('upload');
+		return;
+	}
+
 	const { canceled, result: url } = await os.inputText({
 		title: i18n.ts.uploadFromUrl,
 		type: 'url',
@@ -583,16 +688,29 @@ async function moveFilesBulk() {
 
 	if (canceled) return;
 
-	await os.apiWithDialog('drive/files/move-bulk', {
-		fileIds: selectedFiles.value.map(f => f.id),
-		folderId: folders[0] ? folders[0].id : null,
-	});
+	try {
+		await misskeyApi('drive/files/move-bulk', {
+			fileIds: selectedFiles.value.map(f => f.id),
+			folderId: folders[0] ? folders[0].id : null,
+		});
+	} catch (err) {
+		if (isProtectedAgentImageFolderError(err)) {
+			showProtectedAgentImageFolderError('move');
+			return;
+		}
+		os.alert({
+			type: 'error',
+			text: i18n.ts.somethingHappened,
+		});
+		return;
+	}
 
 	globalEvents.emit('driveFilesUpdated', selectedFiles.value.map(x => ({
 		...x,
 		folderId: folders[0] ? folders[0].id : null,
 		folder: folders[0] ?? null,
 	})));
+	void fetchDriveStats();
 }
 
 function goRoot() {
@@ -614,6 +732,10 @@ function getMenu() {
 		text: i18n.ts.upload,
 		icon: 'ti ti-upload',
 		action: () => {
+			if (folder.value?.systemType === 'agentGeneratedImages') {
+				showProtectedAgentImageFolderError('upload');
+				return;
+			}
 			chooseFileFromPcAndUpload({
 				multiple: true,
 				folderId: folder.value?.id,
@@ -703,6 +825,7 @@ useGlobalEvent('driveFileCreated', (file) => {
 	if (file.folderId === (folder.value?.id ?? null)) {
 		filesPaginator.prepend(file);
 	}
+	void fetchDriveStats();
 });
 
 useGlobalEvent('driveFilesUpdated', (files) => {
@@ -725,6 +848,7 @@ useGlobalEvent('driveFilesDeleted', (files) => {
 	for (const f of files) {
 		filesPaginator.removeItem(f.id);
 	}
+	void fetchDriveStats();
 });
 
 useGlobalEvent('driveFoldersUpdated', (folders) => {
@@ -856,6 +980,50 @@ onBeforeUnmount(() => {
 	padding: 16px 32px;
 }
 
+.usageGrid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+	gap: 10px;
+	margin: 8px 32px 12px;
+}
+
+.usage {
+	padding: 10px 12px;
+	border: 1px solid var(--MI_THEME-divider);
+	border-radius: 10px;
+	background: var(--MI_THEME-panel);
+	font-size: 0.86em;
+}
+
+.usageHeader {
+	display: flex;
+	justify-content: space-between;
+	gap: 12px;
+	font-weight: 700;
+	line-height: 1.2;
+}
+
+.usageBar {
+	overflow: hidden;
+	height: 7px;
+	margin: 7px 0;
+	border-radius: 999px;
+	background: color(from var(--MI_THEME-fg) srgb r g b / 0.12);
+}
+
+.usageBarValue {
+	height: 100%;
+	max-width: 100%;
+	border-radius: inherit;
+	background: var(--MI_THEME-accent);
+	transition: width 0.2s ease;
+}
+
+.usageText {
+	color: var(--MI_THEME-fgTransparentWeak);
+	line-height: 1.45;
+}
+
 .folders,
 .files {
 	display: grid;
@@ -867,6 +1035,11 @@ onBeforeUnmount(() => {
 @container (max-width: 600px) {
 	.tipContainer:not(:empty) {
 		padding: 16px;
+	}
+
+	.usageGrid {
+		margin: 8px 16px 12px;
+		grid-template-columns: 1fr;
 	}
 
 	.folders,

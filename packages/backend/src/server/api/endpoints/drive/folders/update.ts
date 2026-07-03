@@ -74,6 +74,9 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			if (folder == null) {
 				throw new ApiError(meta.errors.noSuchFolder);
 			}
+			if (folder.systemType != null) {
+				throw new ApiError(meta.errors.noSuchFolder);
+			}
 
 			if (ps.name) folder.name = ps.name;
 
@@ -90,6 +93,9 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					});
 
 					if (parent == null) {
+						throw new ApiError(meta.errors.noSuchParentFolder);
+					}
+					if (parent.systemType != null) {
 						throw new ApiError(meta.errors.noSuchParentFolder);
 					}
 

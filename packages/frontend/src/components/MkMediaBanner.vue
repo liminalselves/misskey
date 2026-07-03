@@ -5,7 +5,11 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <template>
 <div :class="$style.root">
-	<MkMediaAudio v-if="media.type.startsWith('audio') && media.type !== 'audio/midi'" :audio="media"/>
+	<div v-if="media.isAgentImageBlocked" :class="$style.blocked">
+		<span style="font-size: 1.6em;"><i class="ti ti-ban"></i></span>
+		<b>图片已封禁</b>
+	</div>
+	<MkMediaAudio v-else-if="media.type.startsWith('audio') && media.type !== 'audio/midi'" :audio="media"/>
 	<div v-else-if="hide" :class="$style.sensitive" @click="reveal">
 		<span style="font-size: 1.6em;"><i class="ti ti-alert-triangle"></i></span>
 		<b>{{ i18n.ts.sensitive }}</b>
@@ -37,6 +41,10 @@ const props = defineProps<{
 const hide = ref(shouldHideFileByDefault(props.media));
 
 async function reveal() {
+	if (props.media.isAgentImageBlocked) {
+		return;
+	}
+
 	if (!(await canRevealFile(props.media))) {
 		return;
 	}
@@ -54,7 +62,8 @@ async function reveal() {
 }
 
 .download,
-.sensitive {
+.sensitive,
+.blocked {
 	display: flex;
 	align-items: center;
 	font-size: 12px;
@@ -68,6 +77,12 @@ async function reveal() {
 .sensitive {
 	background: #111;
 	color: #fff;
+}
+
+.blocked {
+	background: var(--MI_THEME-bg);
+	color: var(--MI_THEME-error);
+	gap: 8px;
 }
 
 .audio {

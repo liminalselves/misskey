@@ -40,9 +40,29 @@ export const meta = {
 				},
 			},
 			forbiddenBehavior: { type: 'string' },
+			worldbook: {
+				type: 'array',
+				items: {
+					type: 'object',
+					properties: {
+						id: { type: 'string', minLength: 1, maxLength: 128 },
+						title: { type: 'string' },
+						content: { type: 'string' },
+						keywords: { type: 'array', items: { type: 'string' } },
+						triggerMode: { type: 'string' },
+						priority: { type: 'integer' },
+						enabled: { type: 'boolean' },
+						revision: { type: 'integer' },
+					},
+					required: ['id', 'title', 'content', 'keywords', 'triggerMode', 'priority', 'enabled', 'revision'],
+				},
+			},
 			isPublished: { type: 'boolean' },
 			reviewStatus: { type: 'string', optional: true },
 			publishedVersion: { type: 'integer', nullable: true, optional: true },
+			reviewRejectReason: { type: 'string', nullable: true, optional: true },
+			reviewRejectMessage: { type: 'string', nullable: true, optional: true },
+			draftRevision: { type: 'integer' },
 			avatarFileId: { type: 'string', format: 'misskey:id', nullable: true },
 			promptOpenSourced: { type: 'boolean' },
 			createdAt: { type: 'string', format: 'date-time' },
@@ -69,15 +89,41 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			this.agentService.assertAgentsEnabled();
 			const row = await this.agentCharactersRepository.findOneBy({ id: ps.characterId });
 			if (!row) {
-				throw new ApiError({ message: 'No such character.', code: 'NO_SUCH_CHARACTER', id: 'e1f2a3b4-c5d6-7890-4567-901234567890' });
+				throw new ApiError({ message: 'No such character.', code: 'NO_SUCH_CHARACTER', id: '4252d940-076b-4aa4-9a86-837ba0a71f8a' });
 			}
 			const isOwner = row.userId === me.id;
 			if (!isOwner && !this.agentService.isListedOnPlazaCharacter(row)) {
-				throw new ApiError({ message: 'No such character.', code: 'NO_SUCH_CHARACTER', id: 'f2a3b4c5-d6e7-8901-5678-012345678901' });
+				throw new ApiError({ message: 'No such character.', code: 'NO_SUCH_CHARACTER', id: 'c4c3e7fa-44ae-4389-8e76-007888f34739' });
 			}
 			const display = isOwner ? row : this.agentService.effectiveCharacterForLlm(row, true);
-			// 非作者访问：作者未勾选开源时屏蔽大字段，仅返回摘要性信息
+			// Non-authors only receive summary fields unless the author has open-sourced the prompt.
 			const exposePrompt = isOwner || row.promptOpenSourced === true;
+			const worldbook = exposePrompt
+				? (Array.isArray(display.worldbook) ? display.worldbook : []).flatMap((entry): Array<{
+					id: string;
+					title: string;
+					content: string;
+					keywords: string[];
+					triggerMode: string;
+					priority: number;
+					enabled: boolean;
+					revision: number;
+				}> => {
+					if (!entry || typeof entry !== 'object') return [];
+					const e = entry as Record<string, unknown>;
+					if (typeof e.id !== 'string') return [];
+					return [{
+						id: e.id,
+						title: typeof e.title === 'string' ? e.title : '',
+						content: typeof e.content === 'string' ? e.content : '',
+						keywords: Array.isArray(e.keywords) ? e.keywords.filter((keyword): keyword is string => typeof keyword === 'string') : [],
+						triggerMode: typeof e.triggerMode === 'string' ? e.triggerMode : 'keyword',
+						priority: typeof e.priority === 'number' ? e.priority : 0,
+						enabled: e.enabled !== false,
+						revision: typeof e.revision === 'number' ? e.revision : 1,
+					}];
+				})
+				: [];
 			return {
 				id: row.id,
 				userId: row.userId,
@@ -89,8 +135,15 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				greeting: exposePrompt ? display.greeting : '',
 				exampleTurns: exposePrompt ? this.agentService.exampleTurnsFromStored(display.exampleDialogue) : [],
 				forbiddenBehavior: exposePrompt ? display.forbiddenBehavior : '',
+				worldbook,
 				isPublished: row.isPublished,
-				...(isOwner ? { reviewStatus: row.reviewStatus, publishedVersion: row.publishedVersion } : {}),
+				...(isOwner ? {
+					reviewStatus: row.reviewStatus,
+					publishedVersion: row.publishedVersion,
+					reviewRejectReason: row.reviewRejectReason,
+					reviewRejectMessage: row.reviewRejectMessage,
+					draftRevision: row.draftRevision,
+				} : {}),
 				avatarFileId: display.avatarFileId,
 				promptOpenSourced: row.promptOpenSourced === true,
 				createdAt: row.createdAt.toISOString(),

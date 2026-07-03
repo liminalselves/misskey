@@ -122,10 +122,10 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			this.agentService.assertAgentsEnabled();
 			const row = await this.agentCharactersRepository.findOneBy({ id: ps.characterId });
 			if (!row) {
-				throw new ApiError({ message: 'No such character.', code: 'NO_SUCH_CHARACTER', id: 'e1f2a3b4-c5d6-7890-4567-901234567890' });
+				throw new ApiError({ message: 'No such character.', code: 'NO_SUCH_CHARACTER', id: 'a11ded29-5883-4c1e-972c-df6e9bc52bf8' });
 			}
 			if (row.userId !== me.id && !this.agentService.isListedOnPlazaCharacter(row)) {
-				throw new ApiError({ message: 'No such character.', code: 'NO_SUCH_CHARACTER', id: 'f2a3b4c5-d6e7-8901-5678-012345678901' });
+				throw new ApiError({ message: 'No such character.', code: 'NO_SUCH_CHARACTER', id: '83602119-95f5-4331-acc5-c8099cf679d7' });
 			}
 			const d = this.agentService.characterPlazaDisplayFields(row);
 			const promptStats = this.agentPlazaReviewService.characterPromptStatsFromRow(row);

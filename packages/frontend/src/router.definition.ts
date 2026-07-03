@@ -104,6 +104,14 @@ export const ROUTE_DEF = [{
 	component: page(() => import('@/pages/agents/style-edit.vue')),
 	loginRequired: true,
 }, {
+	path: '/agents/syntax-guide',
+	component: page(() => import('@/pages/agents/syntax-guide.vue')),
+	loginRequired: true,
+}, {
+	path: '/agents/character-guide',
+	component: page(() => import('@/pages/agents/character-guide.vue')),
+	loginRequired: true,
+}, {
 	path: '/agents',
 	component: page(() => import('@/pages/agents/index.vue')),
 	loginRequired: true,
@@ -526,7 +534,11 @@ export const ROUTE_DEF = [{
 	}, {
 		path: '/agents-chat-audit',
 		name: 'agents-chat-audit',
-		component: iAmAdmin ? page(() => import('@/pages/admin/agents-chat-audit.vue')) : page(() => import('@/pages/not-found.vue')),
+		component: page(() => import('@/pages/admin/agents-chat-audit.vue')),
+	}, {
+		path: '/agents-images-review',
+		name: 'agents-images-review',
+		component: page(() => import('@/pages/admin/agents-images-review.vue')),
 	}, {
 		path: '/agents-redeem-codes',
 		name: 'agents-redeem-codes',

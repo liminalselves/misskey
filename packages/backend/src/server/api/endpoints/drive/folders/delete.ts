@@ -29,6 +29,11 @@ export const meta = {
 			code: 'HAS_CHILD_FILES_OR_FOLDERS',
 			id: 'b0fc8a17-963c-405d-bfbc-859a487295e1',
 		},
+		systemFolder: {
+			message: 'This system folder cannot be deleted while it contains generated images.',
+			code: 'SYSTEM_FOLDER_NOT_EMPTY',
+			id: '3127c1de-fca5-445b-a84e-b3c80e9cc781',
+		},
 	},
 } as const;
 
@@ -66,6 +71,10 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				this.driveFoldersRepository.countBy({ parentId: folder.id }),
 				this.driveFilesRepository.countBy({ folderId: folder.id }),
 			]);
+
+			if (folder.systemType === 'agentGeneratedImages' && childFilesCount !== 0) {
+				throw new ApiError(meta.errors.systemFolder);
+			}
 
 			if (childFoldersCount !== 0 || childFilesCount !== 0) {
 				throw new ApiError(meta.errors.hasChildFilesOrFolders);

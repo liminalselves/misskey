@@ -65,6 +65,26 @@ export class MiAgentDialogueStyle {
 	})
 	public publishedSnapshot: Record<string, unknown> | null;
 
+	@Column('varchar', {
+		length: 64, nullable: true,
+	})
+	public reviewRejectReason: string | null;
+
+	@Column('text', {
+		nullable: true,
+	})
+	public reviewRejectMessage: string | null;
+
+	@Column('text', {
+		nullable: true,
+	})
+	public reviewInternalNote: string | null;
+
+	@Column('integer', {
+		default: 1,
+	})
+	public draftRevision: number;
+
 	/** 作者主动开源完整风格正文；为 true 时详情与广场详情返回完整 body */
 	@Column('boolean', {
 		default: false,

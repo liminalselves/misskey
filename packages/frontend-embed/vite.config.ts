@@ -10,8 +10,28 @@ import packageInfo from './package.json' with { type: 'json' };
 import pluginJson5 from './vite.json5.js';
 import { pluginRemoveUnrefI18n } from '../frontend-builder/rollup-plugin-remove-unref-i18n';
 
-const url = process.env.NODE_ENV === 'development' ? yaml.load(await fsp.readFile('../../.config/default.yml', 'utf-8')).url : null;
-const host = url ? (new URL(url)).hostname : undefined;
+const defaultConfig = process.env.NODE_ENV === 'development' ? yaml.load(await fsp.readFile('../../.config/default.yml', 'utf-8')) as { url?: string; port?: number | string } : null;
+const url = defaultConfig?.url ?? null;
+const configUrl = url ? new URL(url) : null;
+const host = configUrl?.hostname;
+const backendPortRaw = Number(process.env.MISSKEY_PORT ?? defaultConfig?.port ?? '3000');
+const backendPort = Number.isInteger(backendPortRaw) && backendPortRaw > 0 && backendPortRaw <= 65535 ? backendPortRaw : 3000;
+const embedVitePortRaw = Number(process.env.EMBED_VITE_PORT ?? '5174');
+const embedVitePort = Number.isInteger(embedVitePortRaw) && embedVitePortRaw > 0 && embedVitePortRaw <= 65535 ? embedVitePortRaw : 5174;
+const usePublicHmr = process.env.VITE_HMR_PUBLIC === 'true';
+const embedHmrClientPortRaw = Number(process.env.EMBED_VITE_HMR_CLIENT_PORT ?? process.env.VITE_HMR_CLIENT_PORT ?? (
+	usePublicHmr
+		? configUrl?.port
+			? configUrl.port
+			: configUrl?.protocol === 'https:'
+				? '443'
+				: configUrl?.protocol === 'http:'
+					? '80'
+					: String(embedVitePort)
+		: String(embedVitePort)
+));
+const embedHmrClientPort = Number.isInteger(embedHmrClientPortRaw) && embedHmrClientPortRaw > 0 && embedHmrClientPortRaw <= 65535 ? embedHmrClientPortRaw : embedVitePort;
+const embedHmrProtocol = (process.env.EMBED_VITE_HMR_PROTOCOL ?? process.env.VITE_HMR_PROTOCOL ?? (usePublicHmr && configUrl?.protocol === 'https:' ? 'wss' : 'ws')) as 'ws' | 'wss';
 
 const extensions = ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.json', '.json5', '.svg', '.sass', '.scss', '.css', '.vue'];
 
@@ -76,16 +96,16 @@ export function getConfig(): UserConfig {
 			// The backend allows access from any addresses, so vite also allows access from any addresses.
 			host: '0.0.0.0',
 			allowedHosts: host ? [host] : undefined,
-			port: 5174,
+			port: embedVitePort,
 			strictPort: true,
 			...(process.env.VITE_WATCH_POLLING === 'true'
 				? { watch: { usePolling: true, interval: 1000 } }
 				: {}),
 			hmr: {
-				// バックエンド経由での起動時、Viteは5174経由でアセットを参照していると思い込んでいるが実際は3000から配信される
-				// そのため、バックエンドのWSサーバーにHMRのWSリクエストが吸収されてしまい、正しくHMRが機能しない
-				// クライアント側のWSポートをViteサーバーのポートに強制させることで、正しくHMRが機能するようになる
-				clientPort: 5174,
+				// When the site is exposed through the backend or a tunnel, the browser must connect
+				// HMR to the public site port, and the backend will proxy /embed_vite WebSocket traffic to Vite.
+				protocol: embedHmrProtocol,
+				clientPort: embedHmrClientPort,
 			},
 		},
 

@@ -32,6 +32,7 @@ export type FinishLogParams = {
 	errorCode?: string | null;
 	promptTokens?: number | null;
 	completionTokens?: number | null;
+	costOverride?: number | null;
 };
 
 /**
@@ -86,7 +87,11 @@ export class AgentModelUsageService {
 		const durationMs = Math.max(0, completedAt.getTime() - log.requestedAt.getTime());
 		let cost = 0;
 		if (params.status === 'success' || params.status === 'aborted') {
-			cost = this.agentService.getUserFacingModelCostPerCall(instance, log.modelId);
+			cost = typeof params.costOverride === 'number'
+				? Math.max(0, params.costOverride)
+				: log.usageKind === 'image_generation'
+				? Math.max(0, Number(instance.agentImageCostPerCall) || 0)
+				: this.agentService.getUserFacingModelCostPerCall(instance, log.modelId);
 		}
 
 		log.completedAt = completedAt;

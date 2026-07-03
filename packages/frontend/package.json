@@ -54,6 +54,7 @@
 		"ios-haptics": "0.1.4",
 		"is-file-animated": "1.0.2",
 		"json5": "2.2.3",
+		"marked": "^15.0.12",
 		"matter-js": "0.20.0",
 		"mediabunny": "1.28.0",
 		"mfm-js": "0.25.0",

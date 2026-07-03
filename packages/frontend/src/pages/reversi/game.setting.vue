@@ -115,6 +115,7 @@ import { computed, watch, ref, onUnmounted } from 'vue';
 import * as Misskey from 'misskey-js';
 import * as Reversi from 'misskey-reversi';
 import type { MenuItem } from '@/types/menu.js';
+import type { MkRadiosOption } from '@/components/MkRadios.vue';
 import { i18n } from '@/i18n.js';
 import { ensureSignin } from '@/i.js';
 import { deepClone } from '@/utility/clone.js';
@@ -123,7 +124,6 @@ import MkRadios from '@/components/MkRadios.vue';
 import MkSwitch from '@/components/MkSwitch.vue';
 import MkFolder from '@/components/MkFolder.vue';
 import * as os from '@/os.js';
-import type { MkRadiosOption } from '@/components/MkRadios.vue';
 import { useRouter } from '@/router.js';
 
 const $i = ensureSignin();

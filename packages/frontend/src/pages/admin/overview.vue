@@ -103,6 +103,7 @@ const filesPagination = {
 	limit: 9,
 	noPaging: true,
 };
+
 function onInstanceClick(i: Misskey.entities.FederationInstance) {
 	os.pageWindow(`/instance-info/${i.host}`);
 }

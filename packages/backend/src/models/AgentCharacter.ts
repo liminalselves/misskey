@@ -60,6 +60,17 @@ export class MiAgentCharacter {
 	@Column('text', { default: '' })
 	public forbiddenBehavior: string;
 
+	/** 角色专属世界书与版本元数据的统一存储，第一版先用 JSON 承载，后续可拆表。 */
+	@Column('jsonb', {
+		default: () => "'[]'::jsonb",
+	})
+	public worldbook: Array<Record<string, unknown>>;
+
+	@Column('integer', {
+		default: 1,
+	})
+	public draftRevision: number;
+
 	@Column('boolean', {
 		default: false,
 	})
@@ -80,6 +91,21 @@ export class MiAgentCharacter {
 		nullable: true,
 	})
 	public publishedSnapshot: Record<string, unknown> | null;
+
+	@Column('varchar', {
+		length: 64, nullable: true,
+	})
+	public reviewRejectReason: string | null;
+
+	@Column('text', {
+		nullable: true,
+	})
+	public reviewRejectMessage: string | null;
+
+	@Column('text', {
+		nullable: true,
+	})
+	public reviewInternalNote: string | null;
 
 	@Column({
 		...id(),

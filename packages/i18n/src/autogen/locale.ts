@@ -13806,7 +13806,7 @@ export interface Locale extends ILocale {
          */
         "stylesTab": string;
         /**
-         * エージェント
+         * エージェント管理
          */
         "adminSettings": string;
         /**
@@ -14190,6 +14190,18 @@ export interface Locale extends ILocale {
          */
         "play": string;
         /**
+         * 新しいチャットを作成
+         */
+        "startAgentSessionConfirmTitle": string;
+        /**
+         * 新しいエージェントチャットを作成します。以前のチャットはダイレクトメッセージ→エージェントから探せます。
+         */
+        "startAgentSessionConfirmText": string;
+        /**
+         * チャットを作成
+         */
+        "startAgentSessionConfirmOk": string;
+        /**
          * 詳細
          */
         "plazaViewDetails": string;
@@ -14358,7 +14370,7 @@ export interface Locale extends ILocale {
          */
         "fieldGreeting": string;
         /**
-         * システムプロンプトに含め、冒頭の話し方の指針にします（最初の返信として自動挿入はしません）。
+         * セッション作成時に最初のアシスタントメッセージとして自動挿入されます。空の場合は挿入しません。
          */
         "fieldGreetingCaption": string;
         /**
@@ -14366,7 +14378,7 @@ export interface Locale extends ILocale {
          */
         "fieldExampleDialogue": string;
         /**
-         * 下にターンを追加し、話し手と本文を入力します。保存後、順に user/assistant メッセージとして送られます（システムプロンプトの直後・会話履歴の前）。空の本文は保存時に除外。最大 24 ターン。
+         * 下にターンを追加し、話し手と本文を入力します。保存後はシステムプロンプト内の参考例（reference-only と明記。口調の参考用で、実際の会話履歴としては扱われません）になります。空の本文は保存時に除外。最大 24 ターン。
          */
         "fieldExampleDialogueCaption": string;
         /**
@@ -15275,6 +15287,34 @@ export interface Locale extends ILocale {
          */
         "awaitAssistantReplyCannotSend": string;
         /**
+         * このメッセージを編集中
+         */
+        "editingMessageHint": string;
+        /**
+         * 編集をやめる
+         */
+        "editingCancel": string;
+        /**
+         * 保存しました
+         */
+        "editingMessageSaved": string;
+        /**
+         * メッセージを空にできません。
+         */
+        "editMessageEmpty": string;
+        /**
+         * 巻き戻し
+         */
+        "rollback": string;
+        /**
+         * このメッセージまで戻しますか？このメッセージ以降は削除され、本文が入力欄に戻ります。
+         */
+        "rollbackConfirm": string;
+        /**
+         * 巻き戻しました
+         */
+        "rollbackDone": string;
+        /**
          * Open-source prompt
          */
         "openSourcePrompt": string;
@@ -15694,5 +15734,149 @@ export interface Locale extends ILocale {
          * 件数
          */
         "pageSize": string;
+        /**
+         * チャット管理
+         */
+        "adminChatManage": string;
+        /**
+         * 会話セッション単位でエージェントのチャットを閲覧・管理します。左でセッションを選び、右でタイムラインを確認します。
+         */
+        "adminChatManageDescription": string;
+        /**
+         * セッション一覧
+         */
+        "adminChatManageTabSessions": string;
+        /**
+         * メッセージ検索
+         */
+        "adminChatManageTabMessages": string;
+        /**
+         * セッションはまだありません。
+         */
+        "adminChatManageSessionListEmpty": string;
+        /**
+         * 左の一覧からセッションを選ぶと、会話が表示されます。
+         */
+        "adminChatManageSelectSession": string;
+        /**
+         * 会話を見る
+         */
+        "adminChatManageViewTimeline": string;
+        /**
+         * ユーザー
+         */
+        "adminChatManageSessionUser": string;
+        /**
+         * キャラクター
+         */
+        "adminChatManageSessionCharacter": string;
+        /**
+         * 会話スタイル
+         */
+        "adminChatManageSessionStyle": string;
+        /**
+         * 種類
+         */
+        "adminChatManageSessionKind": string;
+        /**
+         * 最終メッセージ
+         */
+        "adminChatManageSessionLastMsg": string;
+        /**
+         * 作成日時
+         */
+        "adminChatManageSessionCreated": string;
+        /**
+         * 停止中
+         */
+        "adminChatManageSessionBanned": string;
+        /**
+         * このセッションにメッセージはまだありません。
+         */
+        "adminChatManageTimelineEmpty": string;
+        /**
+         * さらに読み込む
+         */
+        "adminChatManageTimelineLoadMore": string;
+        /**
+         * ユーザーIDで絞り込み
+         */
+        "adminChatManageFilterUser": string;
+        /**
+         * キャラクターIDで絞り込み
+         */
+        "adminChatManageFilterCharacter": string;
+        /**
+         * セッション名を検索
+         */
+        "adminChatManageFilterQuery": string;
+        /**
+         * 一覧に戻る
+         */
+        "adminChatManageBackToList": string;
+        /**
+         * セッションID
+         */
+        "adminAgentChatAuditIndexSessionId": string;
+        /**
+         * セッション名
+         */
+        "adminAgentChatAuditIndexSessionName": string;
+        /**
+         * キャラクターID
+         */
+        "adminAgentChatAuditCharacterId": string;
+        /**
+         * キャラクター名
+         */
+        "adminAgentChatAuditCharacterName": string;
+        /**
+         * 対話の記法ガイド
+         */
+        "syntaxGuide": string;
+        /**
+         * 記法ガイド
+         */
+        "syntaxGuideShort": string;
+        /**
+         * エージェントとの対話で使える記法をまとめています。実際の描画結果を見ながら確認できます。
+         */
+        "syntaxGuideDescription": string;
+        /**
+         * Markdownはエージェントとの対話（あなたとアシスタントの吹き出し）でのみ有効です。サイトの他の場所（ノート等）はこれまで通りMFMを使います。
+         */
+        "syntaxGuideScopeNote": string;
+        /**
+         * Markdown（GFM）
+         */
+        "syntaxGuideMarkdownSection": string;
+        /**
+         * 対話の吹き出しはGitHub Flavored Markdown（GFM）に対応しています。見出し・強調・リスト・表・コードブロック・チェックリストなどが使えます。
+         */
+        "syntaxGuideMarkdownIntro": string;
+        /**
+         * 安全な範囲でHTMLも使えます。スクリプトやイベント属性など危険な要素は自動的に除去されます。
+         */
+        "syntaxGuideHtmlNote": string;
+        /**
+         * MFM
+         */
+        "syntaxGuideMfmSection": string;
+        /**
+         * MFM（Misskey Flavored Markdown）はサイト全体（ノートやプロフィール等）で使える記法です。エージェントの吹き出しでは使えませんが、参考として掲載します。
+         */
+        "syntaxGuideMfmIntro": string;
+        /**
+         * 記法
+         */
+        "syntaxGuideColSyntax": string;
+        /**
+         * 表示
+         */
+        "syntaxGuideColPreview": string;
+        /**
+         * 詳しい仕様を見る
+         */
+        "syntaxGuideOpenSpec": string;
     };
 }

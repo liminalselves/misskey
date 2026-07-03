@@ -190,6 +190,95 @@ export const paramDef = {
 		agentCompressionBandT1Ratio: { type: 'number', nullable: true, minimum: 0.01, maximum: 0.99 },
 		agentCompressionBandT2Ratio: { type: 'number', nullable: true, minimum: 0.01, maximum: 0.99 },
 		agentCompressionDefaultModelId: { type: 'string', nullable: true, maxLength: 64 },
+		agentImageGenerationEnabled: { type: 'boolean' },
+		agentImageBaseUrl: { type: 'string', maxLength: 512 },
+		agentImageTokens: {
+			type: 'array',
+			items: {
+				type: 'object',
+				properties: {
+					id: { type: 'string', maxLength: 64 },
+					token: { type: 'string', minLength: 1, maxLength: 8192 },
+					name: { type: 'string', nullable: true, maxLength: 256 },
+					enabled: { type: 'boolean' },
+					sortOrder: { type: 'integer' },
+					points: { type: 'number', nullable: true },
+					lastUsedAt: { type: 'string', nullable: true },
+					lastCheckedAt: { type: 'string', nullable: true },
+					lastError: { type: 'string', nullable: true },
+				},
+				required: ['token'],
+			},
+		},
+		agentImageModels: {
+			type: 'array',
+			items: {
+				type: 'object',
+				properties: {
+					id: { type: 'string', minLength: 1, maxLength: 128 },
+					name: { type: 'string', minLength: 1, maxLength: 256 },
+					provider: { type: 'string', enum: ['aurora'] },
+					enabled: { type: 'boolean' },
+					apiModelName: { type: 'string', nullable: true, maxLength: 128 },
+					costPerCall: { type: 'number', nullable: true, minimum: 0, maximum: 1000000 },
+					defaultParams: { type: 'object', nullable: true, additionalProperties: true },
+					defaultArtistPresetId: { type: 'string', nullable: true, maxLength: 128 },
+				},
+				required: ['id', 'name', 'provider'],
+			},
+		},
+		agentImageArtistPresets: {
+			type: 'array',
+			items: {
+				type: 'object',
+				properties: {
+					id: { type: 'string', minLength: 1, maxLength: 128 },
+					name: { type: 'string', minLength: 1, maxLength: 256 },
+					promptPrefix: { type: 'string', nullable: true, maxLength: 20000 },
+					promptSuffix: { type: 'string', nullable: true, maxLength: 20000 },
+					negativePrompt: { type: 'string', nullable: true, maxLength: 20000 },
+					thumbnailUrl: { type: 'string', nullable: true, maxLength: 2048 },
+				},
+				required: ['id', 'name'],
+			},
+		},
+		agentImageDefaultModel: { type: 'string', maxLength: 128 },
+		agentImageDefaultParams: {
+			type: 'object',
+			nullable: false,
+			additionalProperties: true,
+		},
+		agentImageDefaultNegativePrompt: { type: 'string', nullable: true, maxLength: 20000 },
+		agentImageMaxPerReply: { type: 'integer', minimum: 0, maximum: 12 },
+		agentImageCostPerCall: { type: 'number', minimum: 0, maximum: 1000000 },
+		agentImageDefaultArtistPresetId: { type: 'string', nullable: true, maxLength: 128 },
+		agentImageTokenMinPoints: { type: 'integer', minimum: 0, maximum: 1000000 },
+		agentImageTokenBalanceTtlSeconds: { type: 'integer', minimum: 0, maximum: 86400 },
+		agentExternalAuditEnabled: { type: 'boolean' },
+		agentExternalAuditModels: {
+			type: 'array',
+			items: {
+				type: 'object',
+				properties: {
+					id: { type: 'string', minLength: 1, maxLength: 64 },
+					name: { type: 'string', minLength: 1, maxLength: 256 },
+					apiModelName: { type: 'string', minLength: 1, maxLength: 256 },
+					baseUrl: { type: 'string', minLength: 1, maxLength: 512 },
+					apiKey: { type: 'string', minLength: 1, maxLength: 8192 },
+					priority: { type: 'integer', minimum: -1000000, maximum: 1000000 },
+					enabled: { type: 'boolean' },
+					autoDisabledAt: { type: 'string', nullable: true, maxLength: 64 },
+					autoDisabledReason: { type: 'string', nullable: true, maxLength: 1024 },
+					lastError: { type: 'string', nullable: true, maxLength: 1024 },
+				},
+				required: ['id', 'name', 'apiModelName', 'baseUrl', 'apiKey', 'priority'],
+			},
+		},
+		agentExternalAuditTimeoutMs: { type: 'integer', minimum: 1000, maximum: 120000 },
+		agentExternalAuditFailureThresholdPercent: { type: 'integer', minimum: 1, maximum: 100 },
+		agentExternalAuditFailureMinRequests: { type: 'integer', minimum: 1, maximum: 100000 },
+		agentExternalAuditNotifyEmails: { type: 'string', nullable: true, maxLength: 4000 },
+		agentExternalAuditSystemPrompt: { type: 'string', nullable: true, maxLength: 20000 },
 		nativeClientAppInfo: {
 			type: 'object', nullable: false,
 			properties: {
@@ -804,6 +893,182 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					}
 				}
 				set.agentCompressionDefaultModelId = v;
+			}
+
+			if (ps.agentImageGenerationEnabled !== undefined) {
+				set.agentImageGenerationEnabled = ps.agentImageGenerationEnabled;
+			}
+			if (ps.agentImageBaseUrl !== undefined) {
+				const raw = ps.agentImageBaseUrl.trim().replace(/\/$/, '');
+				try {
+					const u = new URL(raw);
+					if (u.protocol !== 'https:') throw new Error('HTTPS is required.');
+					set.agentImageBaseUrl = u.toString().replace(/\/$/, '');
+				} catch (e) {
+					throw new ApiError({
+						message: `Image base URL: ${e instanceof Error ? e.message : String(e)}`,
+						code: 'INVALID_PARAM',
+						id: '78188bb5-fd11-46b8-87fb-a48f0e4b871e',
+					});
+				}
+			}
+			if (ps.agentImageTokens !== undefined) {
+				set.agentImageTokens = (ps.agentImageTokens ?? []).map((t, i) => ({
+					id: typeof t.id === 'string' && t.id.trim() ? t.id.trim() : `token-${i + 1}`,
+					token: t.token.trim(),
+					name: typeof t.name === 'string' && t.name.trim() ? t.name.trim() : null,
+					enabled: t.enabled !== false,
+					sortOrder: Number.isFinite(Number(t.sortOrder)) ? Math.trunc(Number(t.sortOrder)) : i,
+					points: typeof t.points === 'number' ? t.points : null,
+					lastUsedAt: typeof t.lastUsedAt === 'string' ? t.lastUsedAt : null,
+					lastCheckedAt: typeof t.lastCheckedAt === 'string' ? t.lastCheckedAt : null,
+					lastError: typeof t.lastError === 'string' ? t.lastError : null,
+				}));
+			}
+			if (ps.agentImageModels !== undefined) {
+				const seen = new Set<string>();
+				set.agentImageModels = (ps.agentImageModels ?? []).map((m, i) => {
+					const id = m.id.trim();
+					if (seen.has(id)) {
+						throw new ApiError({
+							message: `Duplicate image model id: ${id}`,
+							code: 'INVALID_PARAM',
+							id: '2fe74acd-4486-4549-a745-50f8586c76c4',
+						});
+					}
+					seen.add(id);
+					if (m.provider === 'aurora' && (typeof m.apiModelName !== 'string' || m.apiModelName.trim() === '')) {
+						throw new ApiError({
+							message: 'Aurora image model apiModelName is required.',
+							code: 'INVALID_PARAM',
+							id: 'b779a54b-01bf-4276-b48b-cff148ad9839',
+						});
+					}
+					return {
+						id,
+						name: m.name.trim(),
+						provider: 'aurora' as const,
+						enabled: m.enabled !== false,
+						apiModelName: typeof m.apiModelName === 'string' && m.apiModelName.trim() !== '' ? m.apiModelName.trim() : null,
+						costPerCall: typeof m.costPerCall === 'number' ? Math.max(0, m.costPerCall) : null,
+						defaultParams: m.defaultParams ?? null,
+						defaultArtistPresetId: typeof m.defaultArtistPresetId === 'string' && m.defaultArtistPresetId.trim() !== '' ? m.defaultArtistPresetId.trim() : null,
+					};
+				});
+			}
+			if (ps.agentImageArtistPresets !== undefined) {
+				const seen = new Set<string>();
+				set.agentImageArtistPresets = (ps.agentImageArtistPresets ?? []).map((p, i) => {
+					const id = String(p.id ?? '').trim();
+					const name = String(p.name ?? '').trim();
+					if (!id || !name) {
+						throw new ApiError({
+							message: `Image artist preset #${i + 1} requires id and name.`,
+							code: 'INVALID_PARAM',
+							id: 'f33a70d0-424b-4b10-adfc-64602f89db4f',
+						});
+					}
+					if (seen.has(id)) {
+						throw new ApiError({
+							message: `Duplicate image artist preset id: ${id}`,
+							code: 'INVALID_PARAM',
+							id: 'd611e2de-c5dc-438a-9258-cb618dd915f0',
+						});
+					}
+					seen.add(id);
+					return {
+						id,
+						name,
+						promptPrefix: typeof p.promptPrefix === 'string' ? p.promptPrefix : '',
+						promptSuffix: typeof p.promptSuffix === 'string' ? p.promptSuffix : '',
+						negativePrompt: typeof p.negativePrompt === 'string' ? p.negativePrompt : '',
+						thumbnailUrl: typeof p.thumbnailUrl === 'string' && p.thumbnailUrl.trim() !== '' ? p.thumbnailUrl.trim() : null,
+					};
+				});
+			}
+			if (ps.agentImageDefaultModel !== undefined) {
+				set.agentImageDefaultModel = ps.agentImageDefaultModel.trim() || 'nai-diffusion-4-5-full';
+			}
+			if (ps.agentImageDefaultParams !== undefined) {
+				set.agentImageDefaultParams = ps.agentImageDefaultParams;
+			}
+			if (ps.agentImageDefaultNegativePrompt !== undefined) {
+				set.agentImageDefaultNegativePrompt = ps.agentImageDefaultNegativePrompt === '' ? null : ps.agentImageDefaultNegativePrompt;
+			}
+			if (ps.agentImageMaxPerReply !== undefined) {
+				set.agentImageMaxPerReply = Math.max(0, Math.min(12, ps.agentImageMaxPerReply));
+			}
+			if (ps.agentImageCostPerCall !== undefined) {
+				set.agentImageCostPerCall = Math.max(0, ps.agentImageCostPerCall);
+			}
+			if (ps.agentImageDefaultArtistPresetId !== undefined) {
+				set.agentImageDefaultArtistPresetId = ps.agentImageDefaultArtistPresetId === '' ? null : ps.agentImageDefaultArtistPresetId;
+			}
+			if (ps.agentImageTokenMinPoints !== undefined) {
+				set.agentImageTokenMinPoints = Math.max(0, ps.agentImageTokenMinPoints);
+			}
+			if (ps.agentImageTokenBalanceTtlSeconds !== undefined) {
+				set.agentImageTokenBalanceTtlSeconds = Math.max(0, ps.agentImageTokenBalanceTtlSeconds);
+			}
+
+			if (ps.agentExternalAuditEnabled !== undefined) {
+				set.agentExternalAuditEnabled = ps.agentExternalAuditEnabled;
+			}
+			if (ps.agentExternalAuditModels !== undefined) {
+				const seen = new Set<string>();
+				set.agentExternalAuditModels = (ps.agentExternalAuditModels ?? []).map((m, i) => {
+					const id = String(m.id ?? '').trim();
+					if (seen.has(id)) {
+						throw new ApiError({
+							message: `Duplicate external audit model id: ${id}`,
+							code: 'INVALID_PARAM',
+							id: 'fd2e9f39-328a-4eb6-960a-e1795b72bfc0',
+						});
+					}
+					seen.add(id);
+					const baseUrlRaw = String(m.baseUrl ?? '').trim().replace(/\/$/, '');
+					try {
+						const u = new URL(baseUrlRaw);
+						if (u.protocol !== 'http:' && u.protocol !== 'https:') throw new Error('Only http and https endpoints are supported.');
+					} catch (e) {
+						throw new ApiError({
+							message: `External audit model "${id || i + 1}" base URL: ${e instanceof Error ? e.message : String(e)}`,
+							code: 'INVALID_PARAM',
+							id: '8446fb08-2442-4ced-995f-8c538d79d6a2',
+						});
+					}
+					return {
+						id,
+						name: String(m.name ?? '').trim(),
+						apiModelName: String(m.apiModelName ?? '').trim(),
+						baseUrl: baseUrlRaw,
+						apiKey: String(m.apiKey ?? '').trim(),
+						priority: Number.isFinite(Number(m.priority)) ? Math.trunc(Number(m.priority)) : i,
+						enabled: m.enabled !== false,
+						autoDisabledAt: typeof m.autoDisabledAt === 'string' && m.autoDisabledAt.trim() !== '' ? m.autoDisabledAt.trim() : null,
+						autoDisabledReason: typeof m.autoDisabledReason === 'string' && m.autoDisabledReason.trim() !== '' ? m.autoDisabledReason.trim() : null,
+						lastError: typeof m.lastError === 'string' && m.lastError.trim() !== '' ? m.lastError.trim() : null,
+					};
+				});
+			}
+			if (ps.agentExternalAuditTimeoutMs !== undefined) {
+				set.agentExternalAuditTimeoutMs = Math.max(1000, Math.min(120000, ps.agentExternalAuditTimeoutMs));
+			}
+			if (ps.agentExternalAuditFailureThresholdPercent !== undefined) {
+				set.agentExternalAuditFailureThresholdPercent = Math.max(1, Math.min(100, ps.agentExternalAuditFailureThresholdPercent));
+			}
+			if (ps.agentExternalAuditFailureMinRequests !== undefined) {
+				set.agentExternalAuditFailureMinRequests = Math.max(1, Math.min(100000, ps.agentExternalAuditFailureMinRequests));
+			}
+			if (ps.agentExternalAuditNotifyEmails !== undefined) {
+				set.agentExternalAuditNotifyEmails = ps.agentExternalAuditNotifyEmails === null || String(ps.agentExternalAuditNotifyEmails).trim() === ''
+					? null
+					: String(ps.agentExternalAuditNotifyEmails).trim();
+			}
+			if (ps.agentExternalAuditSystemPrompt !== undefined) {
+				set.agentExternalAuditSystemPrompt = ps.agentExternalAuditSystemPrompt === null || String(ps.agentExternalAuditSystemPrompt).trim() === ''
+					? null
+					: String(ps.agentExternalAuditSystemPrompt).trim();
 			}
 
 			if (ps.nativeClientAppInfo !== undefined) {

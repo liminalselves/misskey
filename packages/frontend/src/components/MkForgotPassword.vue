@@ -7,7 +7,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 <MkModalWindow
 	ref="dialog"
 	:width="370"
-	:height="400"
+	:height="520"
 	@close="dialog?.close()"
 	@closed="emit('closed')"
 >
@@ -26,7 +26,14 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<template #caption>{{ i18n.ts._forgotPassword.enterEmail }}</template>
 				</MkInput>
 
-				<MkButton type="submit" rounded :disabled="processing" primary style="margin: 0 auto;">{{ i18n.ts.send }}</MkButton>
+				<MkCaptcha v-if="instance.enableHcaptcha" ref="hcaptcha" v-model="hCaptchaResponse" provider="hcaptcha" :sitekey="instance.hcaptchaSiteKey"/>
+				<MkCaptcha v-if="instance.enableMcaptcha" ref="mcaptcha" v-model="mCaptchaResponse" provider="mcaptcha" :sitekey="instance.mcaptchaSiteKey" :instanceUrl="instance.mcaptchaInstanceUrl"/>
+				<MkCaptcha v-if="instance.enableRecaptcha" ref="recaptcha" v-model="reCaptchaResponse" provider="recaptcha" :sitekey="instance.recaptchaSiteKey"/>
+				<MkCaptcha v-if="instance.enableTurnstile" ref="turnstile" v-model="turnstileResponse" provider="turnstile" :sitekey="instance.turnstileSiteKey"/>
+				<MkCaptcha v-if="instance.enableAliyunCaptcha" ref="aliyuncaptcha" v-model="aliyunCaptchaResponse" provider="aliyuncaptcha" :sitekey="instance.aliyunCaptchaPrefix" :sceneId="instance.aliyunCaptchaSceneId" :region="instance.aliyunCaptchaRegion || 'cn'"/>
+				<MkCaptcha v-if="instance.enableTestcaptcha" ref="testcaptcha" v-model="testcaptchaResponse" provider="testcaptcha" :sitekey="null"/>
+
+				<MkButton type="submit" rounded :disabled="shouldDisableSubmitting" primary style="margin: 0 auto;">{{ i18n.ts.send }}</MkButton>
 
 				<MkInfo>{{ i18n.ts._forgotPassword.ifNoEmail }}</MkInfo>
 			</div>
@@ -39,11 +46,13 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { ref, useTemplateRef } from 'vue';
+import { computed, ref, useTemplateRef } from 'vue';
 import MkModalWindow from '@/components/MkModalWindow.vue';
 import MkButton from '@/components/MkButton.vue';
 import MkInput from '@/components/MkInput.vue';
 import MkInfo from '@/components/MkInfo.vue';
+import type { Captcha } from '@/components/MkCaptcha.vue';
+import MkCaptcha from '@/components/MkCaptcha.vue';
 import * as os from '@/os.js';
 import { instance } from '@/instance.js';
 import { i18n } from '@/i18n.js';
@@ -58,14 +67,55 @@ const dialog = useTemplateRef('dialog');
 const username = ref('');
 const email = ref('');
 const processing = ref(false);
+const hcaptcha = ref<Captcha | undefined>();
+const mcaptcha = ref<Captcha | undefined>();
+const recaptcha = ref<Captcha | undefined>();
+const turnstile = ref<Captcha | undefined>();
+const aliyuncaptcha = ref<Captcha | undefined>();
+const testcaptcha = ref<Captcha | undefined>();
+const hCaptchaResponse = ref<string | null>(null);
+const mCaptchaResponse = ref<string | null>(null);
+const reCaptchaResponse = ref<string | null>(null);
+const turnstileResponse = ref<string | null>(null);
+const aliyunCaptchaResponse = ref<string | null>(null);
+const testcaptchaResponse = ref<string | null>(null);
+
+const shouldDisableSubmitting = computed((): boolean => {
+	return processing.value ||
+		instance.enableHcaptcha && !hCaptchaResponse.value ||
+		instance.enableMcaptcha && !mCaptchaResponse.value ||
+		instance.enableRecaptcha && !reCaptchaResponse.value ||
+		instance.enableTurnstile && !turnstileResponse.value ||
+		instance.enableAliyunCaptcha && !aliyunCaptchaResponse.value ||
+		instance.enableTestcaptcha && !testcaptchaResponse.value;
+});
 
 async function onSubmit() {
+	if (shouldDisableSubmitting.value) return;
 	processing.value = true;
-	await os.apiWithDialog('request-reset-password', {
-		username: username.value,
-		email: email.value,
-	});
-	emit('done');
-	dialog.value?.close();
+	try {
+		await os.apiWithDialog('request-reset-password', {
+			username: username.value,
+			email: email.value,
+			'hcaptcha-response': hCaptchaResponse.value,
+			'm-captcha-response': mCaptchaResponse.value,
+			'g-recaptcha-response': reCaptchaResponse.value,
+			'turnstile-response': turnstileResponse.value,
+			'aliyun-captcha-response': aliyunCaptchaResponse.value,
+			'testcaptcha-response': testcaptchaResponse.value,
+		} as any);
+		emit('done');
+		dialog.value?.close();
+	} catch (err) {
+		hcaptcha.value?.reset?.();
+		mcaptcha.value?.reset?.();
+		recaptcha.value?.reset?.();
+		turnstile.value?.reset?.();
+		aliyuncaptcha.value?.reset?.();
+		testcaptcha.value?.reset?.();
+		throw err;
+	} finally {
+		processing.value = false;
+	}
 }
 </script>

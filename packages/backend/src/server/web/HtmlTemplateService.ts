@@ -28,6 +28,7 @@ export class HtmlTemplateService {
 	private frontendBootloadersFetched = false;
 	public frontendBootloaderJs: string | null = null;
 	public frontendBootloaderCss: string | null = null;
+	public frontendBrowserCheckJs: string | null = null;
 	public frontendEmbedBootloaderJs: string | null = null;
 	public frontendEmbedBootloaderCss: string | null = null;
 
@@ -47,9 +48,10 @@ export class HtmlTemplateService {
 		if (this.frontendBootloadersFetched) return;
 		this.frontendBootloadersFetched = true;
 
-		const [bootJs, bootCss, embedBootJs, embedBootCss] = await Promise.all([
+		const [bootJs, bootCss, browserCheckJs, embedBootJs, embedBootCss] = await Promise.all([
 			fsp.readFile(`${frontendVitePublic}loader/boot.js`, 'utf-8').catch(() => null),
 			fsp.readFile(`${frontendVitePublic}loader/style.css`, 'utf-8').catch(() => null),
+			fsp.readFile(`${frontendVitePublic}loader/check-browser.js`, 'utf-8').catch(() => null),
 			fsp.readFile(`${frontendEmbedVitePublic}loader/boot.js`, 'utf-8').catch(() => null),
 			fsp.readFile(`${frontendEmbedVitePublic}loader/style.css`, 'utf-8').catch(() => null),
 		]);
@@ -60,6 +62,10 @@ export class HtmlTemplateService {
 
 		if (bootCss != null) {
 			this.frontendBootloaderCss = bootCss;
+		}
+
+		if (browserCheckJs != null) {
+			this.frontendBrowserCheckJs = browserCheckJs;
 		}
 
 		if (embedBootJs != null) {
@@ -92,6 +98,7 @@ export class HtmlTemplateService {
 			federationEnabled: this.meta.federation !== 'none',
 			frontendBootloaderJs: this.frontendBootloaderJs,
 			frontendBootloaderCss: this.frontendBootloaderCss,
+			frontendBrowserCheckJs: this.frontendBrowserCheckJs,
 			frontendEmbedBootloaderJs: this.frontendEmbedBootloaderJs,
 			frontendEmbedBootloaderCss: this.frontendEmbedBootloaderCss,
 		};

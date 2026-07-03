@@ -153,6 +153,10 @@ export const meta = {
 				type: 'boolean',
 				optional: false, nullable: false,
 			},
+			isAgentImageBlocked: {
+				type: 'boolean',
+				optional: false, nullable: false,
+			},
 			isLink: {
 				type: 'boolean',
 				optional: false, nullable: false,
@@ -234,6 +238,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				maybePorn: file.maybePorn,
 				maybeSensitive: file.maybeSensitive,
 				isSensitive: file.isSensitive,
+				isAgentImageBlocked: file.isAgentImageBlocked,
 				folderId: file.folderId,
 				src: file.src,
 				uri: file.uri,

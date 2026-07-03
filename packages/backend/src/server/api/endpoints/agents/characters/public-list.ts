@@ -88,6 +88,7 @@ export const meta = {
 				createdAt: { type: 'string', format: 'date-time' },
 				updatedAt: { type: 'string', format: 'date-time' },
 				publishedVersion: { type: 'integer', nullable: true },
+				hasWorldbook: { type: 'boolean' },
 				user: { type: 'object', ref: 'UserLite' },
 				avatar: { type: 'object', ref: 'DriveFile', nullable: true },
 				rating: {
@@ -255,6 +256,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 							createdAt: r.createdAt.toISOString(),
 							updatedAt: r.updatedAt.toISOString(),
 							publishedVersion: r.publishedVersion,
+							hasWorldbook: d.hasWorldbook,
 							user: userById.get(r.userId)!,
 							avatar: avatarId ? avatarMap.get(avatarId) ?? null : null,
 							rating: { average: agg.average, count: agg.count },
@@ -265,8 +267,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				}
 			}
 
-			// For recommended we already limited by picked ids.
-			if (sort !== 'recommended') q = q.limit(limit);
+			// Recommended sort returns early above; only heat/rating/latest reach here.
+			q = q.limit(limit);
 
 			const rows = await q.getMany();
 			if (rows.length === 0) return [];
@@ -300,6 +302,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					createdAt: r.createdAt.toISOString(),
 					updatedAt: r.updatedAt.toISOString(),
 					publishedVersion: r.publishedVersion,
+					hasWorldbook: d.hasWorldbook,
 					user: userById.get(r.userId)!,
 					avatar: avatarId ? avatarMap.get(avatarId) ?? null : null,
 					rating: { average: agg.average, count: agg.count },

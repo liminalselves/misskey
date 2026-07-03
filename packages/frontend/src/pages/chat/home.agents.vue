@@ -55,6 +55,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <script lang="ts" setup>
 import { computed, onActivated, onMounted, ref, watch } from 'vue';
+import XRow from './home.agents.row.vue';
 import type { AgentsSessionsListMineResponse } from 'misskey-js/entities.js';
 import MkLoading from '@/components/global/MkLoading.vue';
 import MkInfo from '@/components/MkInfo.vue';
@@ -64,7 +65,6 @@ import MkButton from '@/components/MkButton.vue';
 import MkFoldableSection from '@/components/MkFoldableSection.vue';
 import { misskeyApi } from '@/utility/misskey-api.js';
 import { i18n } from '@/i18n.js';
-import XRow from './home.agents.row.vue';
 
 type SessionRow = AgentsSessionsListMineResponse[number];
 

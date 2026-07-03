@@ -9,6 +9,7 @@ import { Endpoint } from '@/server/api/endpoint-base.js';
 import { DI } from '@/di-symbols.js';
 import { RoleService } from '@/core/RoleService.js';
 import { DriveService } from '@/core/DriveService.js';
+import { IdentifiableError } from '@/misc/identifiable-error.js';
 import { ApiError } from '../../../error.js';
 
 export const meta = {
@@ -49,6 +50,16 @@ export const meta = {
 			message: 'This feature is restricted by your role.',
 			code: 'RESTRICTED_BY_ROLE',
 			id: '7f59dccb-f465-75ab-5cf4-3ce44e3282f7',
+		},
+		protectedFolder: {
+			message: 'This operation is not allowed for the AI-generated image folder.',
+			code: 'PROTECTED_AGENT_IMAGE_FOLDER',
+			id: 'e6f792bc-aaf6-47fd-afc5-58b31bb17d15',
+		},
+		noFreeSpace: {
+			message: 'Cannot move the file because you have no free space of drive.',
+			code: 'NO_FREE_SPACE',
+			id: '92bfeac9-bfc1-47f7-a6f2-5bbd94c2f520',
 		},
 	},
 	res: {
@@ -105,6 +116,10 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					throw new ApiError(meta.errors.noSuchFolder);
 				} else if (e instanceof DriveService.CannotUnmarkSensitiveError) {
 					throw new ApiError(meta.errors.restrictedByRole);
+				} else if (e instanceof DriveService.ProtectedFolderError) {
+					throw new ApiError(meta.errors.protectedFolder);
+				} else if (e instanceof IdentifiableError && e.id === 'c6244ed2-a39a-4e1c-bf93-f0fbd7764fa6') {
+					throw new ApiError(meta.errors.noFreeSpace);
 				} else {
 					throw e;
 				}

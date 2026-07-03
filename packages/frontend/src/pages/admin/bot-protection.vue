@@ -269,7 +269,7 @@ const botProtectionForm = useForm({
 						? state.turnstileSiteKey
 						: provider === 'aliyuncaptcha'
 							? state.aliyunCaptchaPrefix
-						: null;
+							: null;
 		const secret = provider === 'hcaptcha'
 			? state.hcaptchaSecretKey
 			: provider === 'mcaptcha'
@@ -280,7 +280,7 @@ const botProtectionForm = useForm({
 						? state.turnstileSecretKey
 						: provider === 'aliyuncaptcha'
 							? state.aliyunCaptchaAccessKeySecret
-						: null;
+							: null;
 
 		await os.apiWithDialog(
 			'admin/captcha/save',

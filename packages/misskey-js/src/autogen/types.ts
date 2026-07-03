@@ -129,6 +129,7 @@ export type paths = {
          * admin/agents/characters/set-moderation-banned
          * @description No description provided.
          *
+         *     **Internal Endpoint**: This endpoint is an API for the misskey mainframe and is not intended for use by third parties.
          *     **Credential required**: *Yes* / **Permission**: *write:admin*
          */
         post: operations['admin___agents___characters___set-moderation-banned'];
@@ -138,6 +139,7 @@ export type paths = {
          * admin/agents/messages/list
          * @description No description provided.
          *
+         *     **Internal Endpoint**: This endpoint is an API for the misskey mainframe and is not intended for use by third parties.
          *     **Credential required**: *Yes* / **Permission**: *read:admin*
          */
         post: operations['admin___agents___messages___list'];
@@ -147,6 +149,7 @@ export type paths = {
          * admin/agents/messages/timeline
          * @description No description provided.
          *
+         *     **Internal Endpoint**: This endpoint is an API for the misskey mainframe and is not intended for use by third parties.
          *     **Credential required**: *Yes* / **Permission**: *read:admin*
          */
         post: operations['admin___agents___messages___timeline'];
@@ -156,6 +159,7 @@ export type paths = {
          * admin/agents/redeem-codes/generate
          * @description No description provided.
          *
+         *     **Internal Endpoint**: This endpoint is an API for the misskey mainframe and is not intended for use by third parties.
          *     **Credential required**: *Yes* / **Permission**: *write:admin*
          */
         post: operations['admin___agents___redeem-codes___generate'];
@@ -165,6 +169,7 @@ export type paths = {
          * admin/agents/redeem-codes/list
          * @description No description provided.
          *
+         *     **Internal Endpoint**: This endpoint is an API for the misskey mainframe and is not intended for use by third parties.
          *     **Credential required**: *Yes* / **Permission**: *read:admin*
          */
         post: operations['admin___agents___redeem-codes___list'];
@@ -174,6 +179,7 @@ export type paths = {
          * admin/agents/redeem-codes/revoke
          * @description No description provided.
          *
+         *     **Internal Endpoint**: This endpoint is an API for the misskey mainframe and is not intended for use by third parties.
          *     **Credential required**: *Yes* / **Permission**: *write:admin*
          */
         post: operations['admin___agents___redeem-codes___revoke'];
@@ -183,6 +189,7 @@ export type paths = {
          * admin/agents/reports/overview
          * @description No description provided.
          *
+         *     **Internal Endpoint**: This endpoint is an API for the misskey mainframe and is not intended for use by third parties.
          *     **Credential required**: *Yes* / **Permission**: *read:admin*
          */
         post: operations['admin___agents___reports___overview'];
@@ -192,6 +199,7 @@ export type paths = {
          * admin/agents/review/list-pending
          * @description No description provided.
          *
+         *     **Internal Endpoint**: This endpoint is an API for the misskey mainframe and is not intended for use by third parties.
          *     **Credential required**: *Yes* / **Permission**: *read:admin*
          */
         post: operations['admin___agents___review___list-pending'];
@@ -211,6 +219,7 @@ export type paths = {
          * admin/agents/review/resolve
          * @description No description provided.
          *
+         *     **Internal Endpoint**: This endpoint is an API for the misskey mainframe and is not intended for use by third parties.
          *     **Credential required**: *Yes* / **Permission**: *write:admin*
          */
         post: operations['admin___agents___review___resolve'];
@@ -220,6 +229,7 @@ export type paths = {
          * admin/agents/sessions/list
          * @description No description provided.
          *
+         *     **Internal Endpoint**: This endpoint is an API for the misskey mainframe and is not intended for use by third parties.
          *     **Credential required**: *Yes* / **Permission**: *read:admin*
          */
         post: operations['admin___agents___sessions___list'];
@@ -229,6 +239,7 @@ export type paths = {
          * admin/agents/sessions/set-moderation-banned
          * @description No description provided.
          *
+         *     **Internal Endpoint**: This endpoint is an API for the misskey mainframe and is not intended for use by third parties.
          *     **Credential required**: *Yes* / **Permission**: *write:admin*
          */
         post: operations['admin___agents___sessions___set-moderation-banned'];
@@ -1028,6 +1039,7 @@ export type paths = {
          * admin/users/agent-success-rate
          * @description No description provided.
          *
+         *     **Internal Endpoint**: This endpoint is an API for the misskey mainframe and is not intended for use by third parties.
          *     **Credential required**: *Yes* / **Permission**: *read:admin*
          */
         post: operations['admin___users___agent-success-rate'];
@@ -1058,6 +1070,15 @@ export type paths = {
          *     **Credential required**: *Yes* / **Permission**: *write:chat*
          */
         post: operations['agents___characters___delete'];
+    };
+    '/agents/characters/diff': {
+        /**
+         * agents/characters/diff
+         * @description No description provided.
+         *
+         *     **Credential required**: *Yes* / **Permission**: *read:chat*
+         */
+        post: operations['agents___characters___diff'];
     };
     '/agents/characters/list-mine': {
         /**
@@ -1095,6 +1116,15 @@ export type paths = {
          */
         post: operations['agents___characters___publish'];
     };
+    '/agents/characters/rollback': {
+        /**
+         * agents/characters/rollback
+         * @description No description provided.
+         *
+         *     **Credential required**: *Yes* / **Permission**: *write:chat*
+         */
+        post: operations['agents___characters___rollback'];
+    };
     '/agents/characters/show': {
         /**
          * agents/characters/show
@@ -1121,6 +1151,24 @@ export type paths = {
          *     **Credential required**: *Yes* / **Permission**: *write:chat*
          */
         post: operations['agents___characters___update'];
+    };
+    '/agents/characters/versions': {
+        /**
+         * agents/characters/versions
+         * @description No description provided.
+         *
+         *     **Credential required**: *Yes* / **Permission**: *read:chat*
+         */
+        post: operations['agents___characters___versions'];
+    };
+    '/agents/characters/worldbook-match-preview': {
+        /**
+         * agents/characters/worldbook-match-preview
+         * @description No description provided.
+         *
+         *     **Credential required**: *Yes* / **Permission**: *read:chat*
+         */
+        post: operations['agents___characters___worldbook-match-preview'];
     };
     '/agents/compression-sticky/delete': {
         /**
@@ -1316,6 +1364,7 @@ export type paths = {
          * agents/plaza-reviews/list
          * @description No description provided.
          *
+         *     **Internal Endpoint**: This endpoint is an API for the misskey mainframe and is not intended for use by third parties.
          *     **Credential required**: *Yes* / **Permission**: *read:notes*
          */
         post: operations['agents___plaza-reviews___list'];
@@ -1355,6 +1404,15 @@ export type paths = {
          *     **Credential required**: *Yes* / **Permission**: *write:chat*
          */
         post: operations['agents___sessions___create'];
+    };
+    '/agents/sessions/delete': {
+        /**
+         * agents/sessions/delete
+         * @description No description provided.
+         *
+         *     **Credential required**: *Yes* / **Permission**: *write:chat*
+         */
+        post: operations['agents___sessions___delete'];
     };
     '/agents/sessions/list-mine': {
         /**
@@ -1410,6 +1468,15 @@ export type paths = {
          */
         post: operations['agents___styles___delete'];
     };
+    '/agents/styles/diff': {
+        /**
+         * agents/styles/diff
+         * @description No description provided.
+         *
+         *     **Credential required**: *Yes* / **Permission**: *read:chat*
+         */
+        post: operations['agents___styles___diff'];
+    };
     '/agents/styles/list-mine': {
         /**
          * agents/styles/list-mine
@@ -1455,6 +1522,15 @@ export type paths = {
          */
         post: operations['agents___styles___publish'];
     };
+    '/agents/styles/rollback': {
+        /**
+         * agents/styles/rollback
+         * @description No description provided.
+         *
+         *     **Credential required**: *Yes* / **Permission**: *write:chat*
+         */
+        post: operations['agents___styles___rollback'];
+    };
     '/agents/styles/show': {
         /**
          * agents/styles/show
@@ -1499,6 +1575,15 @@ export type paths = {
          *     **Credential required**: *Yes* / **Permission**: *write:chat*
          */
         post: operations['agents___styles___update'];
+    };
+    '/agents/styles/versions': {
+        /**
+         * agents/styles/versions
+         * @description No description provided.
+         *
+         *     **Credential required**: *Yes* / **Permission**: *read:chat*
+         */
+        post: operations['agents___styles___versions'];
     };
     '/announcements': {
         /**
@@ -5497,6 +5582,8 @@ export type components = {
             /** @example 51469 */
             size: number;
             isSensitive: boolean;
+            isAgentGenerated: boolean;
+            isAgentImageBlocked: boolean;
             blurhash: string | null;
             properties: {
                 /** @example 1280 */
@@ -5535,6 +5622,8 @@ export type components = {
             /** Format: date-time */
             createdAt: string;
             name: string;
+            /** @enum {string} */
+            systemType: 'agentGeneratedImages' | null;
             /**
              * Format: id
              * @example xxxxxxxxxx
@@ -6032,6 +6121,9 @@ export type components = {
             canUseTranslator: boolean;
             canHideAds: boolean;
             driveCapacityMb: number;
+            agentImageDriveCapacityMb: number;
+            agentImageDriveCleanupThresholdMb: number;
+            agentImageDriveCleanupTargetMb: number;
             maxFileSizeMb: number;
             uploadableFileTypes: string[];
             alwaysMarkNsfw: boolean;
@@ -15259,6 +15351,18 @@ export interface operations {
                         content: string;
                     }[] | null;
                     forbiddenBehavior?: string;
+                    worldbook?: {
+                        /** Format: misskey:id */
+                        id: string;
+                        title: string;
+                        content: string;
+                        keywords: string[];
+                        /** @enum {string} */
+                        triggerMode: 'keyword' | 'manual' | 'always';
+                        priority: number;
+                        enabled: boolean;
+                        revision: number;
+                    }[] | null;
                     /** Format: misskey:id */
                     avatarFileId?: string | null;
                     promptOpenSourced?: boolean;
@@ -15359,6 +15463,88 @@ export interface operations {
                 content: {
                     'application/json': {
                         success: boolean;
+                    };
+                };
+            };
+            /** @description Client error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Authentication error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Forbidden error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description I'm Ai */
+            418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+        };
+    };
+    agents___characters___diff: {
+        requestBody: {
+            content: {
+                'application/json': {
+                    /** Format: misskey:id */
+                    characterId: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK (with results) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': {
+                        hasChanges: boolean;
+                        fields: {
+                            key: string;
+                            draftPreview: string;
+                            publishedPreview: string;
+                        }[];
                     };
                 };
             };
@@ -15812,6 +15998,91 @@ export interface operations {
             };
         };
     };
+    agents___characters___rollback: {
+        requestBody: {
+            content: {
+                'application/json': {
+                    /** Format: misskey:id */
+                    characterId: string;
+                    version?: number | null;
+                };
+            };
+        };
+        responses: {
+            /** @description OK (with results) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': {
+                        /** Format: misskey:id */
+                        id: string;
+                        isPublished: boolean;
+                        reviewStatus: string;
+                        publishedVersion: number | null;
+                        draftRevision: number;
+                        /** Format: date-time */
+                        updatedAt: string;
+                    };
+                };
+            };
+            /** @description Client error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Authentication error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Forbidden error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description I'm Ai */
+            418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+        };
+    };
     agents___characters___show: {
         requestBody: {
             content: {
@@ -15845,9 +16116,21 @@ export interface operations {
                             content: string;
                         }[];
                         forbiddenBehavior: string;
+                        worldbook: {
+                            /** Format: misskey:id */
+                            id: string;
+                            title: string;
+                            content: string;
+                            keywords: string[];
+                            triggerMode: string;
+                            priority: number;
+                            enabled: boolean;
+                            revision: number;
+                        }[];
                         isPublished: boolean;
                         reviewStatus?: string;
                         publishedVersion?: number | null;
+                        draftRevision: number;
                         /** Format: misskey:id */
                         avatarFileId: string | null;
                         promptOpenSourced: boolean;
@@ -16015,6 +16298,18 @@ export interface operations {
                         content: string;
                     }[] | null;
                     forbiddenBehavior?: string;
+                    worldbook?: {
+                        /** Format: misskey:id */
+                        id: string;
+                        title: string;
+                        content: string;
+                        keywords: string[];
+                        /** @enum {string} */
+                        triggerMode: 'keyword' | 'manual' | 'always';
+                        priority: number;
+                        enabled: boolean;
+                        revision: number;
+                    }[] | null;
                     /** Format: misskey:id */
                     avatarFileId?: string | null;
                     promptOpenSourced?: boolean;
@@ -16037,6 +16332,190 @@ export interface operations {
                         /** Format: date-time */
                         updatedAt: string;
                     };
+                };
+            };
+            /** @description Client error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Authentication error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Forbidden error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description I'm Ai */
+            418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+        };
+    };
+    agents___characters___versions: {
+        requestBody: {
+            content: {
+                'application/json': {
+                    /** Format: misskey:id */
+                    characterId: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK (with results) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': {
+                        version: number;
+                        draftRevision: number;
+                        reviewStatus: string;
+                        isPublished: boolean;
+                        /** Format: date-time */
+                        createdAt: string;
+                        /** Format: date-time */
+                        updatedAt: string;
+                        isCurrentDraft: boolean;
+                        isCurrentPublished: boolean;
+                        isHistorical: boolean;
+                    }[];
+                };
+            };
+            /** @description Client error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Authentication error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Forbidden error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description I'm Ai */
+            418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+        };
+    };
+    'agents___characters___worldbook-match-preview': {
+        requestBody: {
+            content: {
+                'application/json': {
+                    /** Format: misskey:id */
+                    characterId: string;
+                    text: string;
+                    maxItems?: number | null;
+                    worldbook?: {
+                        id: string;
+                        title?: string;
+                        content?: string;
+                        keywords?: string[];
+                        /** @enum {string} */
+                        triggerMode?: 'keyword' | 'manual' | 'always';
+                        priority?: number;
+                        enabled?: boolean;
+                        revision?: number;
+                    }[] | null;
+                };
+            };
+        };
+        responses: {
+            /** @description OK (with results) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': {
+                        /** Format: misskey:id */
+                        id: string;
+                        title: string;
+                        triggerMode: string;
+                        priority: number;
+                        revision: number;
+                        matchedBy: string;
+                        matchedKeywords: string[];
+                    }[];
                 };
             };
             /** @description Client error */
@@ -18307,6 +18786,84 @@ export interface operations {
             };
         };
     };
+    agents___sessions___delete: {
+        requestBody: {
+            content: {
+                'application/json': {
+                    /** Format: misskey:id */
+                    sessionId: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK (with results) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': {
+                        ok: boolean;
+                        aliyunMemoryProviderError: boolean;
+                    };
+                };
+            };
+            /** @description Client error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Authentication error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Forbidden error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description I'm Ai */
+            418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+        };
+    };
     'agents___sessions___list-mine': {
         responses: {
             /** @description OK (with results) */
@@ -18844,6 +19401,88 @@ export interface operations {
             };
         };
     };
+    agents___styles___diff: {
+        requestBody: {
+            content: {
+                'application/json': {
+                    /** Format: misskey:id */
+                    styleId: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK (with results) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': {
+                        hasChanges: boolean;
+                        fields: {
+                            key: string;
+                            draftPreview: string;
+                            publishedPreview: string;
+                        }[];
+                    };
+                };
+            };
+            /** @description Client error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Authentication error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Forbidden error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description I'm Ai */
+            418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+        };
+    };
     'agents___styles___list-mine': {
         responses: {
             /** @description OK (with results) */
@@ -19312,6 +19951,91 @@ export interface operations {
             };
         };
     };
+    agents___styles___rollback: {
+        requestBody: {
+            content: {
+                'application/json': {
+                    /** Format: misskey:id */
+                    styleId: string;
+                    version?: number | null;
+                };
+            };
+        };
+        responses: {
+            /** @description OK (with results) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': {
+                        /** Format: misskey:id */
+                        id: string;
+                        isPublished: boolean;
+                        reviewStatus: string;
+                        publishedVersion: number | null;
+                        draftRevision: number;
+                        /** Format: date-time */
+                        updatedAt: string;
+                    };
+                };
+            };
+            /** @description Client error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Authentication error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Forbidden error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description I'm Ai */
+            418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+        };
+    };
     agents___styles___show: {
         requestBody: {
             content: {
@@ -19339,6 +20063,7 @@ export interface operations {
                         isPublished: boolean;
                         reviewStatus?: string;
                         publishedVersion?: number | null;
+                        draftRevision?: number;
                         promptOpenSourced: boolean;
                         /** Format: date-time */
                         createdAt: string;
@@ -19668,6 +20393,93 @@ export interface operations {
                         /** Format: date-time */
                         updatedAt: string;
                     };
+                };
+            };
+            /** @description Client error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Authentication error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Forbidden error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description I'm Ai */
+            418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+        };
+    };
+    agents___styles___versions: {
+        requestBody: {
+            content: {
+                'application/json': {
+                    /** Format: misskey:id */
+                    styleId: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK (with results) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': {
+                        version: number;
+                        draftRevision: number;
+                        reviewStatus: string;
+                        isPublished: boolean;
+                        /** Format: date-time */
+                        createdAt: string;
+                        /** Format: date-time */
+                        updatedAt: string;
+                        isCurrentDraft: boolean;
+                        isCurrentPublished: boolean;
+                        isHistorical: boolean;
+                    }[];
                 };
             };
             /** @description Client error */
@@ -44008,4 +44820,3 @@ export interface operations {
         };
     };
 }
-

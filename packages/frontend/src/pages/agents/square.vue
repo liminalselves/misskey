@@ -45,6 +45,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 							<span :class="$style.cardTitle">{{ a.name }}</span>
 							<div :class="$style.badgeRow">
 								<span v-if="a.publishedVersion != null" :class="$style.metaBadge">V{{ a.publishedVersion }}</span>
+								<span v-if="a.hasWorldbook" :class="[$style.metaBadge, $style.worldbookBadge]"><i class="ti ti-book"></i> 世界书</span>
 							</div>
 						</div>
 						<p v-if="a.summary" :class="$style.cardSummary">{{ a.summary }}</p>
@@ -188,6 +189,7 @@ import MkUserName from '@/components/global/MkUserName.vue';
 import MkTime from '@/components/global/MkTime.vue';
 import MkDriveFileThumbnail from '@/components/MkDriveFileThumbnail.vue';
 import { misskeyApi, formatApiError } from '@/utility/misskey-api.js';
+import { confirmStartAgentSession } from '@/utility/confirm-start-agent-session.js';
 import { i18n } from '@/i18n.js';
 import * as os from '@/os.js';
 import { useRouter } from '@/router.js';
@@ -205,7 +207,8 @@ type SortKey = 'recommended' | 'heat' | 'rating' | 'latest';
 const sortCharacters = ref<SortKey>('recommended');
 const sortStyles = ref<SortKey>('recommended');
 
-const list = ref<AgentsCharactersPublicListResponse>([]);
+type CharacterPublicListItem = AgentsCharactersPublicListResponse[number] & { hasWorldbook?: boolean };
+const list = ref<CharacterPublicListItem[]>([]);
 const loadingCh = ref(true);
 const plazaStyles = ref<AgentsStylesPublicListResponse>([]);
 const usableById = ref<Map<string, { isMine: boolean; subscribed: boolean }>>(new Map());
@@ -443,6 +446,8 @@ function goStyleDetail(styleId: string) {
 }
 
 async function startPlay(a: { id: string }) {
+	if (!await confirmStartAgentSession()) return;
+
 	try {
 		const session = await misskeyApi('agents/sessions/create', {
 			characterId: a.id,
@@ -614,6 +619,7 @@ async function startPlay(a: { id: string }) {
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
+	gap: 4px;
 	height: 26px;
 	padding: 0 11px;
 	border-radius: 999px;
@@ -624,6 +630,12 @@ async function startPlay(a: { id: string }) {
 	border: solid 1px color-mix(in srgb, var(--MI_THEME-divider) 88%, transparent);
 	background: color-mix(in srgb, var(--MI_THEME-panel) 86%, transparent);
 	color: var(--MI_THEME-fg);
+}
+
+.worldbookBadge {
+	border-color: color-mix(in srgb, var(--MI_THEME-accent) 34%, var(--MI_THEME-divider));
+	background: color-mix(in srgb, var(--MI_THEME-accent) 12%, var(--MI_THEME-panel));
+	color: var(--MI_THEME-accent);
 }
 
 .cardSummary {

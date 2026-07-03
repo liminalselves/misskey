@@ -15,7 +15,8 @@ import { AgentService } from '@/core/AgentService.js';
 export const meta = {
 	tags: ['admin'],
 	requireCredential: true,
-	requireAdmin: true,
+	secure: true,
+	requireModerator: true,
 	kind: 'read:admin',
 	limit: { duration: ms('1hour'), max: 180 },
 	res: {

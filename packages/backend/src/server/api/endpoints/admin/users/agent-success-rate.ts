@@ -12,6 +12,7 @@ import { AgentModelUsageService } from '@/core/AgentModelUsageService.js';
 export const meta = {
 	tags: ['admin', 'agents'],
 	requireCredential: true,
+	secure: true,
 	requireModerator: true,
 	kind: 'read:admin',
 	limit: { duration: ms('1min'), max: 30 },

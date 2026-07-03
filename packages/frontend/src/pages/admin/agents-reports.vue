@@ -16,36 +16,38 @@ SPDX-License-Identifier: AGPL-3.0-only
 						type="button"
 						:class="[$style.twBtn, selectedHours === w.value ? $style.twBtnActive : null]"
 						@click="setWindow(w.value)"
-					>{{ w.label }}</button>
+					>
+						{{ w.label }}
+					</button>
 				</div>
 			</div>
 
 			<MkLoading v-if="loading"/>
 			<template v-else-if="data">
 				<div :class="$style.summaryGrid">
-					<div :class="$style.summaryCard" v-panel>
+					<div v-panel :class="$style.summaryCard">
 						<div :class="$style.summaryCardLabel">总请求</div>
 						<div :class="$style.summaryCardValue">{{ data.overall.total }}</div>
 					</div>
-					<div :class="$style.summaryCard" v-panel>
+					<div v-panel :class="$style.summaryCard">
 						<div :class="$style.summaryCardLabel">成功率</div>
 						<div :class="[$style.summaryCardValue, $style.success]">
 							{{ data.overall.total > 0 ? ((data.overall.success / data.overall.total) * 100).toFixed(1) : '—' }}%
 						</div>
 					</div>
-					<div :class="$style.summaryCard" v-panel>
+					<div v-panel :class="$style.summaryCard">
 						<div :class="$style.summaryCardLabel">失败数</div>
 						<div :class="[$style.summaryCardValue, data.overall.failed > 0 ? $style.failed : null]">{{ data.overall.failed }}</div>
 					</div>
-					<div :class="$style.summaryCard" v-panel>
+					<div v-panel :class="$style.summaryCard">
 						<div :class="$style.summaryCardLabel">中断数</div>
 						<div :class="[$style.summaryCardValue, data.overall.aborted > 0 ? $style.aborted : null]">{{ data.overall.aborted }}</div>
 					</div>
-					<div :class="$style.summaryCard" v-panel>
+					<div v-panel :class="$style.summaryCard">
 						<div :class="$style.summaryCardLabel">总费用</div>
 						<div :class="$style.summaryCardValue">{{ data.overall.totalCost.toFixed(4) }}</div>
 					</div>
-					<div :class="$style.summaryCard" v-panel>
+					<div v-panel :class="$style.summaryCard">
 						<div :class="$style.summaryCardLabel">活跃用户</div>
 						<div :class="$style.summaryCardValue">{{ data.overall.uniqueUsers }}</div>
 					</div>
@@ -96,17 +98,17 @@ SPDX-License-Identifier: AGPL-3.0-only
 										:class="[$style.chartBar, $style.barSuccess]"
 										:style="{ height: barHeight(bucket.success, maxBucketTotal) }"
 										:title="`成功: ${bucket.success}`"
-									/>
+									></div>
 									<div
 										:class="[$style.chartBar, $style.barFailed]"
 										:style="{ height: barHeight(bucket.failed, maxBucketTotal) }"
 										:title="`失败: ${bucket.failed}`"
-									/>
+									></div>
 									<div
 										:class="[$style.chartBar, $style.barAborted]"
 										:style="{ height: barHeight(bucket.aborted, maxBucketTotal) }"
 										:title="`中断: ${bucket.aborted}`"
-									/>
+									></div>
 								</div>
 								<div :class="$style.chartLabel">{{ bucketLabel(bucket.bucketStart) }}</div>
 							</div>
@@ -130,9 +132,10 @@ import { computed, onMounted, ref } from 'vue';
 import MkLoading from '@/components/global/MkLoading.vue';
 import MkInfo from '@/components/MkInfo.vue';
 import MkFolder from '@/components/MkFolder.vue';
-import { misskeyApi } from '@/utility/misskey-api.js';
+import { misskeyApi, formatApiError } from '@/utility/misskey-api.js';
 import { i18n } from '@/i18n.js';
 import { definePage } from '@/page.js';
+import * as os from '@/os.js';
 
 type ReportsOverview = {
 	overall: { total: number; success: number; failed: number; aborted: number; totalCost: number; uniqueUsers: number };
@@ -156,6 +159,9 @@ async function load() {
 	data.value = null;
 	try {
 		data.value = await misskeyApi('admin/agents/reports/overview' as any, { hours: selectedHours.value }) as ReportsOverview;
+	} catch (err) {
+		// 失败时只弹一次 alert；模板已有「加载失败，请稍后重试」占位
+		os.alert({ type: 'error', text: formatApiError(err) });
 	} finally {
 		loading.value = false;
 	}

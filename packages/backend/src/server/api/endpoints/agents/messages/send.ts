@@ -12,6 +12,8 @@ import type {
 	AgentSessionsRepository,
 	UserProfilesRepository,
 } from '@/models/_.js';
+import type { MiAgentMessage } from '@/models/AgentMessage.js';
+import type { MiAgentModelUsageLog } from '@/models/AgentModelUsageLog.js';
 import { Endpoint } from '@/server/api/endpoint-base.js';
 import { DI } from '@/di-symbols.js';
 import { ApiError } from '@/server/api/error.js';
@@ -26,6 +28,9 @@ import { AgentModelUsageService } from '@/core/AgentModelUsageService.js';
 import { ChatService } from '@/core/ChatService.js';
 import { MetaService } from '@/core/MetaService.js';
 import { AgentCompressionMemoryService } from '@/core/AgentCompressionMemoryService.js';
+import { AgentImageService } from '@/core/AgentImageService.js';
+import { AgentExternalAuditService } from '@/core/AgentExternalAuditService.js';
+import { AGENT_IMAGE_WORLD_PROMPT } from '@/core/agent-image-presets.js';
 
 export const meta = {
 	tags: ['agents'],
@@ -45,13 +50,15 @@ export const meta = {
 			compressionLlmPending: { type: 'boolean' },
 			compressionStickiesBaselineCount: { type: 'number' },
 			aborted: { type: 'boolean' },
+			auditBlocked: { type: 'boolean' },
+			auditBlockCode: { type: 'string', nullable: true },
 		},
 	},
 	errors: {
 		agentsLlmAborted: {
 			message: 'LLM request was aborted by the client.',
 			code: 'AGENTS_LLM_ABORTED',
-			id: 'e5f6a7b8-c9d0-1234-ef01-345678901234',
+			id: 'ac65031e-5b21-4d61-b8a4-9822e52f7a2b',
 			httpStatusCode: 409,
 		},
 	},
@@ -91,7 +98,7 @@ function assertAgentSessionTurnOrderAllowsUserSend(rows: { role: string }[]): vo
 			throw new ApiError({
 				message: 'The conversation has consecutive user or assistant messages. Delete or fix messages before sending.',
 				code: 'AGENT_THREAD_INVALID_TURNS',
-				id: 'b2c3d4e5-f6a7-8901-bcde-f12345678901',
+				id: 'f4fee7e6-df64-4ec8-867e-d7282bee4fd6',
 				kind: 'client',
 				httpStatusCode: 400,
 			});
@@ -101,7 +108,7 @@ function assertAgentSessionTurnOrderAllowsUserSend(rows: { role: string }[]): vo
 		throw new ApiError({
 			message: 'Wait for the assistant reply before sending another message.',
 			code: 'AGENT_AWAIT_ASSISTANT_REPLY',
-			id: 'c3d4e5f6-a7b8-9012-cdef-123456789012',
+			id: '1ae86b90-37b6-4e4b-ac1c-74833f931c60',
 			kind: 'client',
 			httpStatusCode: 400,
 		});
@@ -130,8 +137,10 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		private agentDashscopeMemoryService: AgentDashscopeMemoryService,
 		private agentModelUsageService: AgentModelUsageService,
 		private chatService: ChatService,
-		private metaService: MetaService,
-		private agentCompressionMemoryService: AgentCompressionMemoryService,
+	private metaService: MetaService,
+	private agentCompressionMemoryService: AgentCompressionMemoryService,
+	private agentImageService: AgentImageService,
+	private agentExternalAuditService: AgentExternalAuditService,
 	) {
 		super(meta, paramDef, async (ps, me) => {
 			this.agentService.assertAgentsEnabled();
@@ -139,7 +148,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 
 			const session = await this.agentSessionsRepository.findOneBy({ id: ps.sessionId });
 			if (!session || session.userId !== me.id) {
-				throw new ApiError({ message: 'No such session.', code: 'NO_SUCH_SESSION', id: 'c7d8e9f0-a1b2-3456-0123-567890123456' });
+				throw new ApiError({ message: 'No such session.', code: 'NO_SUCH_SESSION', id: 'eaaf419d-5dff-4ba1-96e1-7ea983241a04' });
 			}
 
 			const characterRow = await this.agentCharactersRepository.findOneByOrFail({ id: session.characterId });
@@ -178,13 +187,20 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			const character = this.agentService.effectiveCharacterForLlm(characterRow, usePublishedFace);
 			const style = this.agentService.effectiveStyleForLlm(styleRow, usePublishedFace);
 
-			if (session.agentReplyPending) {
-				throw new ApiError({
-					message: 'A reply is still being generated for this session.',
-					code: 'AGENT_REPLY_PENDING',
-					id: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
-				});
-			}
+			// 关于「并发互斥」与「失败状态清理」的设计契约（修改前必读）：
+			//
+			// 旧实现的两条故障路径：
+			//   (a) 「读 if(agentReplyPending) 抛错」与「save(pending=true)」之间存在非原子窗口，
+			//       并发同会话两路 send 都可能通过预检查，导致：双轮 LLM、双轮扣费、turn 校验脏。
+			//   (b) `insertOne(user)`、`registerAbortable`、`startLog` 均位于 try/catch 之前。
+			//       其中任何一步抛错都会让会话停留在 `agentReplyPending=true`、abort 控制器悬挂、
+			//       用户消息变孤儿，且没有任何路径会清理。
+			//
+			// 新实现做了两件事：
+			//   1) 用一条 UPDATE ... WHERE id=... AND "agentReplyPending"=false 把「检查」与「置位」合一，
+			//      affected!==1 即代表已被并发请求占走，直接抛 AGENT_REPLY_PENDING。
+			//   2) 把 userMsg / abortController / usageLog 三个副作用全部纳入同一 try；
+			//      catch 据它们是否为 null 决定清理动作，finally 兜底取消注册 abort。
 
 			const turnOrderRows = await this.agentMessagesRepository.find({
 				where: { sessionId: session.id },
@@ -209,42 +225,59 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			}
 
 			const now = new Date();
-			const userMsg = await this.agentMessagesRepository.insertOne({
-				id: this.agentService.newId(),
-				createdAt: now,
-				sessionId: session.id,
-				role: 'user',
-				content: ps.text,
-				statsDialogueStyleId: session.dialogueStyleId,
-				promptTokens: null,
-				completionTokens: null,
-			});
-
+			// 原子占位：失败说明并发请求已抢占。WHERE 子句里的 "agentReplyPending" 须显式引号，PostgreSQL 才认识 camelCase 列名。
+			const occupy = await this.agentSessionsRepository.createQueryBuilder()
+				.update()
+				.set({ agentReplyPending: true, updatedAt: now })
+				.where('id = :id AND "agentReplyPending" = false', { id: session.id })
+				.execute();
+			if ((occupy.affected ?? 0) !== 1) {
+				throw new ApiError({
+					message: 'A reply is still being generated for this session.',
+					code: 'AGENT_REPLY_PENDING',
+					id: '8d99fad8-c487-4a7e-bb28-5df37a590116',
+				});
+			}
+			// 与库侧 UPDATE 同步内存视图：成功/失败末尾的 save(session) 才能把 pending=false 正确写回。
 			session.agentReplyPending = true;
 			session.updatedAt = now;
-			await this.agentSessionsRepository.save(session);
 
 			const clientRequestId = ps.clientRequestId ?? this.agentService.newId();
-			const abortController = this.agentService.registerAbortable(session.id, clientRequestId);
-			const modelApiName = (() => {
-				try {
-					return this.agentService.resolveModelApiName(instanceMeta, session.agentModelId ?? null);
-				} catch {
-					return null;
-				}
-			})();
-			const usageLog = await this.agentModelUsageService.startLog({
-				userId: me.id,
-				sessionId: session.id,
-				characterId: session.characterId,
-				dialogueStyleId: session.dialogueStyleId,
-				modelId: session.agentModelId ?? null,
-				modelApiName,
-				usageKind: 'chat',
-			});
-
+			let userMsg: MiAgentMessage | null = null;
+			let abortController: AbortController | null = null;
+			let usageLog: MiAgentModelUsageLog | null = null;
 			let assistantPersisted = false;
+
 			try {
+				userMsg = await this.agentMessagesRepository.insertOne({
+					id: this.agentService.newId(),
+					createdAt: now,
+					sessionId: session.id,
+					role: 'user',
+					content: ps.text,
+					statsDialogueStyleId: session.dialogueStyleId,
+					promptTokens: null,
+					completionTokens: null,
+				});
+
+				abortController = this.agentService.registerAbortable(session.id, clientRequestId);
+				const modelApiName = (() => {
+					try {
+						return this.agentService.resolveModelApiName(instanceMeta, session.agentModelId ?? null);
+					} catch {
+						return null;
+					}
+				})();
+				usageLog = await this.agentModelUsageService.startLog({
+					userId: me.id,
+					sessionId: session.id,
+					characterId: session.characterId,
+					dialogueStyleId: session.dialogueStyleId,
+					modelId: session.agentModelId ?? null,
+					modelApiName,
+					usageKind: 'chat',
+				});
+
 				const longMemProvider = this.agentCompressionMemoryService.resolveEffectiveProvider(
 					session.agentLongMemoryProvider,
 					instanceMeta,
@@ -257,6 +290,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					provider: longMemProvider,
 				});
 				const { maxContextTokens, maxOutputTokensPerCall, historyBudget } = budgets;
+				const selectedWorldbook = this.agentService.selectWorldbookEntriesForPrompt(character, ps.text);
 				const systemBase = this.agentService.buildSystemPrompt({
 					globalPrompt: instanceMeta.agentGlobalSystemPrompt,
 					character,
@@ -315,6 +349,13 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				}
 
 				let system = systemBase;
+				const activeImageModel = this.agentImageService.resolveImageModel(instanceMeta, session.agentImageModelId);
+				if (activeImageModel?.provider === 'aurora') {
+					system += '\n\n<agent_image_generation_protocol>\n';
+					system += AGENT_IMAGE_WORLD_PROMPT;
+					system += '\n';
+					system += '</agent_image_generation_protocol>';
+				}
 				if (memoryBlock.length > 0) {
 					system += AGENT_LLM_MEMORY_XML_OPEN + escapeAgentXmlText(memoryBlock) + AGENT_LLM_MEMORY_XML_CLOSE;
 				}
@@ -333,21 +374,62 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				// 《context-window》分割线用 `buildContextDividerAlignedBudgets`（不预扣 comp）；《compression-overview》
 				// 在压缩模式下与发信共用同一 H。勿在检索等之后无约束重载历史。
 
-				const assistantText = await this.agentService.invokeChatCompletions({
+				// 风格 directive 仅在「发往 LLM 的最新 user」一处注入：
+				// - DB（上文 userMsg 已落 ps.text）、长期记忆检索（searchMsgs）、长期记忆 add（buildMessagesForAddMemory）、
+				//   压缩侧车（pairs）、UI 时间线均见原始用户文本，不受 directive 污染；
+				// - directive 长度已通过 `buildSendPathBudgets` 预扣到 historyBudget，对应 system 仅保留
+				//   `<dialogue_style_protocol>` 安全网说明，与 `AgentService.buildLatestUserDirectiveBlock` 一一呼应。
+				const wrappedUserText = this.agentService.wrapLatestUserTextWithStyleDirective(ps.text, style, selectedWorldbook);
+
+				const rawAssistantText = await this.agentService.invokeChatCompletions({
 					system,
 					messages: pairs,
-					userText: ps.text,
+					userText: wrappedUserText,
 					sessionModelId: session.agentModelId ?? null,
 					externalAbortSignal: abortController.signal,
 				});
 
+				const auditResult = await this.agentExternalAuditService.auditReply({
+					instance: instanceMeta,
+					user: me,
+					session,
+					userText: ps.text,
+					assistantText: rawAssistantText,
+				}).catch(() => ({ blocked: false as const, allFailed: true }));
+				if (auditResult.blocked === true) {
+					if (userMsg) {
+						try {
+							await this.agentMessagesRepository.delete({ id: userMsg.id });
+							userMsg = null;
+						} catch {
+							// 与主动停止一致：删除失败时 turn 校验会阻止下一次不一致发送。
+						}
+					}
+					const blockedAt = new Date();
+					session.updatedAt = blockedAt;
+					session.agentReplyPending = false;
+					await this.agentSessionsRepository.save(session);
+					await this.agentModelUsageService.finishLog(usageLog, instanceMeta, { status: 'success' });
+					return {
+						userMessageId: null,
+						assistantMessageId: null,
+						assistantText: '',
+						longTermMemorySearchUnavailable,
+						longTermMemoryAddScheduled: false,
+						compressionLlmPending: false,
+						compressionStickiesBaselineCount: 0,
+						aborted: false,
+						auditBlocked: true,
+						auditBlockCode: auditResult.blockCode,
+					};
+				}
 				const asstNow = new Date();
 				const assistantMsg = await this.agentMessagesRepository.insertOne({
 					id: this.agentService.newId(),
 					createdAt: asstNow,
 					sessionId: session.id,
 					role: 'assistant',
-					content: assistantText,
+					content: rawAssistantText,
 					statsDialogueStyleId: session.dialogueStyleId,
 					promptTokens: null,
 					completionTokens: null,
@@ -376,7 +458,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 						const addMessages = this.agentDashscopeMemoryService.buildMessagesForAddMemory({
 							priorMessages: pairs,
 							currentUserText: ps.text,
-							assistantText,
+							assistantText: rawAssistantText,
 							maxRounds: addRounds,
 						});
 						this.agentDashscopeMemoryService.scheduleAddMemory({
@@ -411,31 +493,45 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				return {
 					userMessageId: userMsg.id,
 					assistantMessageId: assistantMsg.id,
-					assistantText,
+					assistantText: rawAssistantText,
 					longTermMemorySearchUnavailable,
 					longTermMemoryAddScheduled,
 					compressionLlmPending,
 					compressionStickiesBaselineCount,
 					aborted: false,
+					auditBlocked: false,
+					auditBlockCode: null,
 				};
 			} catch (err) {
-				const aborted = abortController.signal.aborted
+				const aborted = (abortController?.signal.aborted === true)
 					|| (err instanceof ApiError && err.code === 'AGENTS_LLM_ABORTED');
-				// 助手消息未落库时（主动取消或 LLM 等失败）移除已插入的用户消息；若助手已写入则不得删 user，以免破坏轮次
-				if (!assistantPersisted) {
-					await this.agentMessagesRepository.delete({ id: userMsg.id });
+				// 助手消息未落库时（主动取消、LLM 失败、或 startLog 之前的副作用阶段失败）移除已插入的用户消息；
+				// userMsg 为 null 说明插入本身就失败了——不存在要清理的孤儿行。
+				if (userMsg && !assistantPersisted) {
+					try {
+						await this.agentMessagesRepository.delete({ id: userMsg.id });
+					} catch {
+						// 删除失败不应吞掉原始 err；下一次发信时 turn 校验会拦下不一致状态
+					}
 				}
+				// 始终释放 pending 锁：与开头的原子 occupy 配对，无论中途哪一步失败都不能让会话卡死。
 				session.agentReplyPending = false;
 				session.updatedAt = new Date();
-				await this.agentSessionsRepository.save(session);
-
 				try {
-					await this.agentModelUsageService.finishLog(usageLog, instanceMeta, {
-						status: aborted ? 'aborted' : 'failed',
-						errorCode: err instanceof ApiError ? err.code : null,
-					});
+					await this.agentSessionsRepository.save(session);
 				} catch {
-					// 日志结算失败不应淹没原始错误
+					// 极端：save 失败时 pending 仍为 true 落库；下次成功发信会覆盖，或由运维介入
+				}
+				// startLog 失败时 usageLog 为 null；非 null 才结算
+				if (usageLog) {
+					try {
+						await this.agentModelUsageService.finishLog(usageLog, instanceMeta, {
+							status: aborted ? 'aborted' : 'failed',
+							errorCode: err instanceof ApiError ? err.code : null,
+						});
+					} catch {
+						// 日志结算失败不应淹没原始错误
+					}
 				}
 
 				if (aborted) {
@@ -448,11 +544,16 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 						compressionLlmPending: false,
 						compressionStickiesBaselineCount: 0,
 						aborted: true,
+						auditBlocked: false,
+						auditBlockCode: null,
 					};
 				}
 				throw err;
 			} finally {
-				this.agentService.unregisterAbortable(session.id, clientRequestId, abortController);
+				// abortController 为 null 说明 registerAbortable 阶段之前就抛了；无需取消注册。
+				if (abortController) {
+					this.agentService.unregisterAbortable(session.id, clientRequestId, abortController);
+				}
 			}
 		});
 	}

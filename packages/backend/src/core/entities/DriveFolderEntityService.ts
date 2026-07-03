@@ -54,6 +54,7 @@ export class DriveFolderEntityService {
 			id: folder.id,
 			createdAt: this.idService.parse(folder.id).date.toISOString(),
 			name: folder.name,
+			systemType: folder.systemType,
 			parentId: folder.parentId,
 
 			...(opts.detail ? {

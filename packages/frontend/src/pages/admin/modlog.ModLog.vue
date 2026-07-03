@@ -262,7 +262,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<div class="_text">{{ entry.label }}</div>
 				<div v-if="entry.kind === 'primitive'">{{ entry.value }}</div>
 				<div v-else :class="$style.objectViewWrap">
-					<MkObjectView :value="entry.value"/>
+					<MkObjectView :value="entry.value as Record<string, unknown>"/>
 				</div>
 			</div>
 		</div>
@@ -298,18 +298,18 @@ type ParsedInfoEntry = {
 };
 
 const keyLabelMap: Record<string, string> = {
-	userId: i18n.ts.user,
-	ownerUserId: i18n.ts.user,
-	roleId: i18n.ts.role,
-	roleName: i18n.ts.role,
-	sessionId: i18n.ts._agents.adminAgentChatAuditIndexSessionId,
-	sessionName: i18n.ts._agents.adminAgentChatAuditIndexSessionName,
-	characterId: i18n.ts._agents.adminAgentChatAuditCharacterId,
-	characterName: i18n.ts._agents.adminAgentChatAuditCharacterName,
-	decision: i18n.ts.action,
-	kind: i18n.ts.type,
-	reviewStatus: i18n.ts.status,
-	host: i18n.ts.instance,
+	userId: String(i18n.ts.user),
+	ownerUserId: String(i18n.ts.user),
+	roleId: String(i18n.ts.role),
+	roleName: String(i18n.ts.role),
+	sessionId: String(i18n.ts._agents.adminAgentChatAuditIndexSessionId),
+	sessionName: String(i18n.ts._agents.adminAgentChatAuditIndexSessionName),
+	characterId: String(i18n.ts._agents.adminAgentChatAuditCharacterId),
+	characterName: String(i18n.ts._agents.adminAgentChatAuditCharacterName),
+	decision: String(i18n.ts.action),
+	kind: String(i18n.ts.type),
+	reviewStatus: String(i18n.ts.status),
+	host: String(i18n.ts.instance),
 };
 
 function formatFieldLabel(key: string): string {

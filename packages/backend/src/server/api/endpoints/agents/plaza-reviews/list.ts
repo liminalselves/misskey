@@ -12,6 +12,7 @@ import { AgentPlazaReviewService } from '@/core/AgentPlazaReviewService.js';
 export const meta = {
 	tags: ['agents'],
 	requireCredential: true,
+	secure: true,
 	kind: 'read:notes',
 	limit: { duration: ms('1hour'), max: 120 },
 	res: {
@@ -38,7 +39,7 @@ export const meta = {
 		invalidTarget: {
 			message: 'Specify exactly one of characterId or styleId.',
 			code: 'INVALID_PLAZA_REVIEW_LIST_TARGET',
-			id: 'f6a7b8c9-d0e1-2345-f012-456789012345',
+			id: '7dfff0c8-822a-4cb8-b375-e44dbabe1746',
 		},
 	},
 } as const;

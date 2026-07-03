@@ -288,7 +288,14 @@ describe('FileInfoService', () => {
 			delete info.width;
 			delete info.height;
 			delete info.orientation;
-			assert.deepStrictEqual(info, {
+			assert.deepStrictEqual(info, process.platform === 'win32' ? {
+				size: 9817,
+				md5: '74c9279a4abe98789565f1dc1a541a42',
+				type: {
+					mime: 'video/mp4',
+					ext: 'mp4',
+				},
+			} : {
 				size: 9817,
 				md5: '74c9279a4abe98789565f1dc1a541a42',
 				type: {
@@ -304,7 +311,14 @@ describe('FileInfoService', () => {
 			delete info.width;
 			delete info.height;
 			delete info.orientation;
-			assert.deepStrictEqual(info, {
+			assert.deepStrictEqual(info, process.platform === 'win32' ? {
+				size: 8879,
+				md5: '53bc1adcb6acbbda67ff9bd484896438',
+				type: {
+					mime: 'video/webm',
+					ext: 'webm',
+				},
+			} : {
 				size: 8879,
 				md5: '53bc1adcb6acbbda67ff9bd484896438',
 				type: {

@@ -9,7 +9,7 @@ import type { AgentCharactersRepository, DriveFilesRepository } from '@/models/_
 import { Endpoint } from '@/server/api/endpoint-base.js';
 import { DI } from '@/di-symbols.js';
 import { ApiError } from '@/server/api/error.js';
-import { AgentService, AGENT_TEXT_FIELD_MAX, AGENT_EXAMPLE_TURN_CONTENT_MAX } from '@/core/AgentService.js';
+import { AgentService, AGENT_TEXT_FIELD_MAX, AGENT_EXAMPLE_TURN_CONTENT_MAX, type AgentWorldbookEntry } from '@/core/AgentService.js';
 
 export const meta = {
 	tags: ['agents'],
@@ -54,6 +54,29 @@ export const paramDef = {
 			},
 		},
 		forbiddenBehavior: { type: 'string', maxLength: AGENT_TEXT_FIELD_MAX },
+		worldbook: {
+			type: 'array',
+			nullable: true,
+			items: {
+				type: 'object',
+				properties: {
+					id: { type: 'string', minLength: 1, maxLength: 128 },
+					title: { type: 'string', minLength: 1, maxLength: 128 },
+					content: { type: 'string', maxLength: AGENT_TEXT_FIELD_MAX },
+					keywords: {
+						type: 'array',
+						items: { type: 'string', minLength: 1, maxLength: 64 },
+						maxItems: 32,
+					},
+					triggerMode: { type: 'string', enum: ['keyword', 'manual', 'always'] },
+					priority: { type: 'integer', minimum: 0, maximum: 9999 },
+					enabled: { type: 'boolean' },
+					revision: { type: 'integer', minimum: 1 },
+				},
+				required: ['id', 'title', 'content', 'keywords', 'triggerMode', 'priority', 'enabled', 'revision'],
+			},
+			maxItems: 128,
+		},
 		avatarFileId: { type: 'string', format: 'misskey:id', nullable: true },
 		promptOpenSourced: { type: 'boolean' },
 	},
@@ -75,12 +98,12 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			this.agentService.assertAgentsEnabled();
 			const row = await this.agentCharactersRepository.findOneBy({ id: ps.characterId });
 			if (!row || row.userId !== me.id) {
-				throw new ApiError({ message: 'No such character.', code: 'NO_SUCH_CHARACTER', id: 'f6a7b8c9-d0e1-2345-f012-456789012345' });
+				throw new ApiError({ message: 'No such character.', code: 'NO_SUCH_CHARACTER', id: '72c74cc7-ed2e-48e5-952d-27233545bf22' });
 			}
 			if (ps.avatarFileId) {
 				const f = await this.driveFilesRepository.findOneBy({ id: ps.avatarFileId, userId: me.id });
 				if (!f) {
-					throw new ApiError({ message: 'No such file.', code: 'NO_SUCH_FILE', id: 'a7b8c9d0-e1f2-3456-0123-567890123456' });
+					throw new ApiError({ message: 'No such file.', code: 'NO_SUCH_FILE', id: '61ff62dd-58c8-4dbb-a7a2-3e7a2eb6fd7b' });
 				}
 			}
 
@@ -97,8 +120,19 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				row.exampleDialogue = this.agentService.serializeExampleTurns(turns);
 			}
 			if (ps.forbiddenBehavior !== undefined) row.forbiddenBehavior = ps.forbiddenBehavior;
+			if (ps.worldbook !== undefined) row.worldbook = (ps.worldbook ?? []).map((entry): AgentWorldbookEntry => ({
+				id: entry.id,
+				title: entry.title,
+				content: entry.content,
+				keywords: entry.keywords,
+				triggerMode: entry.triggerMode,
+				priority: entry.priority,
+				enabled: entry.enabled,
+				revision: entry.revision,
+			}));
 			if (ps.avatarFileId !== undefined) row.avatarFileId = ps.avatarFileId;
 			if (ps.promptOpenSourced !== undefined) row.promptOpenSourced = ps.promptOpenSourced === true;
+			row.draftRevision = (row.draftRevision ?? 1) + 1;
 			row.updatedAt = new Date();
 			await this.agentCharactersRepository.save(row);
 

@@ -46,10 +46,10 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		private driveFileEntityService: DriveFileEntityService,
 	) {
 		super(meta, paramDef, async (ps, me) => {
-			const files = await this.driveFilesRepository.findBy({
-				md5: ps.md5,
-				userId: me.id,
-			});
+			const files = await this.driveFilesRepository.createQueryBuilder('file')
+				.where('file.md5 = :md5', { md5: ps.md5 })
+				.andWhere('file.userId = :userId', { userId: me.id })
+				.getMany();
 
 			return await this.driveFileEntityService.packMany(files, { self: true });
 		});

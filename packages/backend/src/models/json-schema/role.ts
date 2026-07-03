@@ -228,6 +228,18 @@ export const packedRolePoliciesSchema = {
 			type: 'integer',
 			optional: false, nullable: false,
 		},
+		agentImageDriveCapacityMb: {
+			type: 'integer',
+			optional: false, nullable: false,
+		},
+		agentImageDriveCleanupThresholdMb: {
+			type: 'integer',
+			optional: false, nullable: false,
+		},
+		agentImageDriveCleanupTargetMb: {
+			type: 'integer',
+			optional: false, nullable: false,
+		},
 		maxFileSizeMb: {
 			type: 'integer',
 			optional: false, nullable: false,

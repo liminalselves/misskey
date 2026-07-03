@@ -22,6 +22,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<path d="M190,25C195.523,25 200,29.477 200,35C200,58.415 200,116.585 200,140C200,145.523 195.523,150 190,150C155.86,150 44.14,150 10,150C4.477,150 0,145.523 0,140C0,112.727 0,37.273 0,10C0,4.477 4.477,0 10,-0C26.642,0 59.332,0 70.858,0C73.51,-0 76.054,1.054 77.929,2.929C82.74,7.74 92.26,17.26 97.071,22.071C98.946,23.946 101.49,25 104.142,25C118.808,25 168.535,25 190,25Z" style="fill:var(--MI_THEME-accentedBg);"/>
 	</svg>
 	<div :class="$style.name">{{ folder.name }}</div>
+	<div v-if="folder.systemType === 'agentGeneratedImages'" :class="$style.systemBadge">
+		<i class="ti ti-lock"></i> AI 生图专用
+	</div>
 	<div v-if="prefer.s.uploadFolder == folder.id" :class="$style.upload">
 		{{ i18n.ts.uploadFolder }}
 	</div>
@@ -86,6 +89,10 @@ function onMouseout() {
 
 function onDragover(ev: DragEvent) {
 	if (!ev.dataTransfer) return;
+	if (props.folder.systemType === 'agentGeneratedImages') {
+		ev.dataTransfer.dropEffect = 'none';
+		return;
+	}
 
 	// 自分自身がドラッグされている場合
 	if (isDragging.value) {
@@ -127,6 +134,7 @@ function onDragleave() {
 
 function onDrop(ev: DragEvent) {
 	draghover.value = false;
+	if (props.folder.systemType === 'agentGeneratedImages') return;
 
 	if (!ev.dataTransfer) return;
 
@@ -196,6 +204,10 @@ function onDrop(ev: DragEvent) {
 
 function onDragstart(ev: DragEvent) {
 	if (!ev.dataTransfer) return;
+	if (props.folder.systemType != null) {
+		ev.preventDefault();
+		return;
+	}
 
 	ev.dataTransfer.effectAllowed = 'move';
 	setDragData(ev, 'driveFolders', [props.folder]);
@@ -279,6 +291,28 @@ function setAsUploadFolder() {
 
 function onContextmenu(ev: PointerEvent) {
 	let menu: MenuItem[];
+	if (props.folder.systemType === 'agentGeneratedImages') {
+		menu = [{
+			text: i18n.ts.openInWindow,
+			icon: 'ti ti-app-window',
+			action: async () => {
+				const { dispose } = await os.popupAsyncWithDialog(import('@/components/MkDriveWindow.vue').then(x => x.default), {
+					initialFolder: props.folder,
+				}, {
+					closed: () => dispose(),
+				});
+			},
+		}, ...(props.folder.filesCount === 0 ? [{
+			type: 'divider' as const,
+		}, {
+			text: i18n.ts.delete,
+			icon: 'ti ti-trash',
+			danger: true,
+			action: deleteFolder,
+		}] : [])];
+		os.contextMenu(menu, ev);
+		return;
+	}
 	menu = [{
 		text: i18n.ts.openInWindow,
 		icon: 'ti ti-app-window',
@@ -398,5 +432,12 @@ function onContextmenu(ev: PointerEvent) {
 .upload {
 	font-size: 0.8em;
 	text-align: right;
+}
+
+.systemBadge {
+	position: relative;
+	margin-top: 4px;
+	font-size: 0.72em;
+	color: var(--MI_THEME-accent);
 }
 </style>

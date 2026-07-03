@@ -22,6 +22,63 @@ export type MiNativeClientAppInfo = {
 	announcement?: string | null;
 };
 
+export type MiAgentImageToken = {
+	id: string;
+	token: string;
+	name?: string | null;
+	enabled?: boolean;
+	sortOrder?: number;
+	points?: number | null;
+	lastUsedAt?: string | null;
+	lastCheckedAt?: string | null;
+	lastError?: string | null;
+};
+
+export type MiAgentImageDefaultParams = {
+	steps?: number;
+	scale?: number;
+	cfgRescale?: number;
+	sampler?: string;
+	noiseSchedule?: string;
+	promptPrefix?: string;
+	promptSuffix?: string;
+};
+
+export type MiAgentImageProvider = 'aurora';
+
+export type MiAgentImageModel = {
+	id: string;
+	name: string;
+	provider: MiAgentImageProvider;
+	enabled?: boolean;
+	apiModelName?: string | null;
+	costPerCall?: number | null;
+	defaultParams?: MiAgentImageDefaultParams | null;
+	defaultArtistPresetId?: string | null;
+};
+
+export type MiAgentImageArtistPreset = {
+	id: string;
+	name: string;
+	promptPrefix?: string | null;
+	promptSuffix?: string | null;
+	negativePrompt?: string | null;
+	thumbnailUrl?: string | null;
+};
+
+export type MiAgentExternalAuditModel = {
+	id: string;
+	name: string;
+	apiModelName: string;
+	baseUrl: string;
+	apiKey: string;
+	priority: number;
+	enabled?: boolean;
+	autoDisabledAt?: string | null;
+	autoDisabledReason?: string | null;
+	lastError?: string | null;
+};
+
 @Entity('meta')
 export class MiMeta {
 	@PrimaryColumn({
@@ -976,6 +1033,109 @@ export class MiMeta {
 		nullable: true,
 	})
 	public agentCompressionBandT2Ratio: number | null;
+
+	@Column('boolean', {
+		default: false,
+	})
+	public agentImageGenerationEnabled: boolean;
+
+	@Column('varchar', {
+		length: 512,
+		default: 'https://love.auroralove.cc',
+	})
+	public agentImageBaseUrl: string;
+
+	@Column('jsonb', {
+		default: [],
+	})
+	public agentImageTokens: MiAgentImageToken[];
+
+	@Column('jsonb', {
+		default: [],
+	})
+	public agentImageModels: MiAgentImageModel[];
+
+	@Column('jsonb', {
+		default: [],
+	})
+	public agentImageArtistPresets: MiAgentImageArtistPreset[];
+
+	@Column('varchar', {
+		length: 128,
+		default: 'nai-diffusion-4-5-full',
+	})
+	public agentImageDefaultModel: string;
+
+	@Column('jsonb', {
+		default: {},
+	})
+	public agentImageDefaultParams: MiAgentImageDefaultParams;
+
+	@Column('text', {
+		nullable: true,
+	})
+	public agentImageDefaultNegativePrompt: string | null;
+
+	@Column('integer', {
+		default: 2,
+	})
+	public agentImageMaxPerReply: number;
+
+	@Column('double precision', {
+		default: 0,
+	})
+	public agentImageCostPerCall: number;
+
+	@Column('varchar', {
+		length: 128,
+		nullable: true,
+	})
+	public agentImageDefaultArtistPresetId: string | null;
+
+	@Column('integer', {
+		default: 1,
+	})
+	public agentImageTokenMinPoints: number;
+
+	@Column('integer', {
+		default: 300,
+	})
+	public agentImageTokenBalanceTtlSeconds: number;
+
+	@Column('boolean', {
+		default: false,
+	})
+	public agentExternalAuditEnabled: boolean;
+
+	@Column('jsonb', {
+		default: [],
+	})
+	public agentExternalAuditModels: MiAgentExternalAuditModel[];
+
+	@Column('integer', {
+		default: 10000,
+	})
+	public agentExternalAuditTimeoutMs: number;
+
+	@Column('integer', {
+		default: 60,
+	})
+	public agentExternalAuditFailureThresholdPercent: number;
+
+	@Column('integer', {
+		default: 10,
+	})
+	public agentExternalAuditFailureMinRequests: number;
+
+	@Column('text', {
+		nullable: true,
+	})
+	public agentExternalAuditNotifyEmails: string | null;
+
+	@Column('text', {
+		nullable: true,
+	})
+	public agentExternalAuditSystemPrompt: string | null;
 }
 
 export type SoftwareSuspension = {

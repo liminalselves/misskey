@@ -78,6 +78,8 @@ import { FeaturedService } from './FeaturedService.js';
 import { FanoutTimelineService } from './FanoutTimelineService.js';
 import { ChannelFollowingService } from './ChannelFollowingService.js';
 import { AgentService } from './AgentService.js';
+import { AgentImageService } from './AgentImageService.js';
+import { AgentExternalAuditService } from './AgentExternalAuditService.js';
 import { AgentCompressionMemoryService } from './AgentCompressionMemoryService.js';
 import { AgentPlazaReviewService } from './AgentPlazaReviewService.js';
 import { AgentModelUsageService } from './AgentModelUsageService.js';
@@ -235,6 +237,8 @@ const $FanoutTimelineEndpointService: Provider = { provide: 'FanoutTimelineEndpo
 const $ChannelFollowingService: Provider = { provide: 'ChannelFollowingService', useExisting: ChannelFollowingService };
 const $ChannelMutingService: Provider = { provide: 'ChannelMutingService', useExisting: ChannelMutingService };
 const $AgentService: Provider = { provide: 'AgentService', useExisting: AgentService };
+const $AgentImageService: Provider = { provide: 'AgentImageService', useExisting: AgentImageService };
+const $AgentExternalAuditService: Provider = { provide: 'AgentExternalAuditService', useExisting: AgentExternalAuditService };
 const $AgentPlazaReviewService: Provider = { provide: 'AgentPlazaReviewService', useExisting: AgentPlazaReviewService };
 const $AgentModelUsageService: Provider = { provide: 'AgentModelUsageService', useExisting: AgentModelUsageService };
 const $AgentDashscopeMemoryService: Provider = { provide: 'AgentDashscopeMemoryService', useExisting: AgentDashscopeMemoryService };
@@ -394,6 +398,8 @@ const $ApQuestionService: Provider = { provide: 'ApQuestionService', useExisting
 		ChannelFollowingService,
 		ChannelMutingService,
 		AgentService,
+		AgentImageService,
+		AgentExternalAuditService,
 		AgentCompressionMemoryService,
 		AgentPlazaReviewService,
 		AgentModelUsageService,
@@ -551,6 +557,8 @@ const $ApQuestionService: Provider = { provide: 'ApQuestionService', useExisting
 		$ChannelFollowingService,
 		$ChannelMutingService,
 		$AgentService,
+		$AgentImageService,
+		$AgentExternalAuditService,
 		$AgentPlazaReviewService,
 		$AgentModelUsageService,
 		$AgentDashscopeMemoryService,
@@ -707,6 +715,8 @@ const $ApQuestionService: Provider = { provide: 'ApQuestionService', useExisting
 		ChannelFollowingService,
 		ChannelMutingService,
 		AgentService,
+		AgentImageService,
+		AgentExternalAuditService,
 		AgentCompressionMemoryService,
 		AgentPlazaReviewService,
 		AgentModelUsageService,
@@ -862,6 +872,8 @@ const $ApQuestionService: Provider = { provide: 'ApQuestionService', useExisting
 		$ChannelFollowingService,
 		$ChannelMutingService,
 		$AgentService,
+		$AgentImageService,
+		$AgentExternalAuditService,
 		$AgentPlazaReviewService,
 		$AgentModelUsageService,
 		$AgentDashscopeMemoryService,

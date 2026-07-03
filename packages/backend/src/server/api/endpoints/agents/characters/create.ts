@@ -57,6 +57,25 @@ export const paramDef = {
 			},
 		},
 		forbiddenBehavior: { type: 'string', maxLength: AGENT_TEXT_FIELD_MAX },
+		worldbook: {
+			type: 'array',
+			nullable: true,
+			items: {
+				type: 'object',
+				properties: {
+					id: { type: 'string', minLength: 1, maxLength: 128 },
+					title: { type: 'string', minLength: 1, maxLength: 128 },
+					content: { type: 'string', maxLength: AGENT_TEXT_FIELD_MAX },
+					keywords: { type: 'array', items: { type: 'string', minLength: 1, maxLength: 64 }, maxItems: 32 },
+					triggerMode: { type: 'string', enum: ['keyword', 'manual', 'always'] },
+					priority: { type: 'integer', minimum: 0, maximum: 9999 },
+					enabled: { type: 'boolean' },
+					revision: { type: 'integer', minimum: 1 },
+				},
+				required: ['id', 'title', 'content', 'keywords', 'triggerMode', 'priority', 'enabled', 'revision'],
+			},
+			maxItems: 128,
+		},
 		avatarFileId: { type: 'string', format: 'misskey:id', nullable: true },
 		promptOpenSourced: { type: 'boolean' },
 	},
@@ -80,7 +99,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			if (ps.avatarFileId) {
 				const f = await this.driveFilesRepository.findOneBy({ id: ps.avatarFileId, userId: me.id });
 				if (!f) {
-					throw new ApiError({ message: 'No such file.', code: 'NO_SUCH_FILE', id: 'e5f6a7b8-c9d0-1234-ef01-345678901234' });
+					throw new ApiError({ message: 'No such file.', code: 'NO_SUCH_FILE', id: '1866aaac-36e5-430a-94db-7eb8b2278b2c' });
 				}
 			}
 
@@ -101,6 +120,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				greeting: ps.greeting ?? '',
 				exampleDialogue: this.agentService.serializeExampleTurns(exampleTurns),
 				forbiddenBehavior: ps.forbiddenBehavior ?? '',
+				worldbook: ps.worldbook ?? [],
+				draftRevision: 1,
 				isPublished: false,
 				reviewStatus: 'draft',
 				publishedVersion: null,

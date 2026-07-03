@@ -21,7 +21,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 			:title="i18n.ts._agents.editingCancel"
 			:aria-label="i18n.ts._agents.editingCancel"
 			@click="onCancelEdit"
-		><i class="ti ti-x"></i></button>
+		>
+			<i class="ti ti-x"></i>
+		</button>
 	</div>
 	<div :class="$style.compose">
 		<textarea
@@ -37,6 +39,17 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<div :class="$style.buttons">
 				<button class="_button" :class="$style.button" type="button" @click="insertEmoji"><i class="ti ti-mood-happy"></i></button>
 				<button
+					class="_button"
+					:class="$style.button"
+					type="button"
+					:disabled="disabled || sending"
+					title="生图"
+					aria-label="生图"
+					@click="onDrawClick"
+				>
+					<i class="ti ti-brush"></i>
+				</button>
+				<button
 					v-if="sending"
 					class="_button"
 					:class="[$style.button, $style.abort]"
@@ -44,7 +57,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 					:title="i18n.ts._agents.abortRequestTooltip"
 					:aria-label="i18n.ts._agents.abortRequestTooltip"
 					@click="onAbortClick"
-				><i class="ti ti-x"></i></button>
+				>
+					<i class="ti ti-x"></i>
+				</button>
 				<button
 					v-else
 					class="_button"
@@ -53,7 +68,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 					:disabled="sendDisabled"
 					:title="submitTitle"
 					@click="submit"
-				><i class="ti ti-send"></i></button>
+				>
+					<i class="ti ti-send"></i>
+				</button>
 			</div>
 		</footer>
 	</div>
@@ -77,6 +94,7 @@ const emit = defineEmits<{
 	(e: 'submit', text: string): void;
 	(e: 'cancelEdit'): void;
 	(e: 'abort'): void;
+	(e: 'draw'): void;
 }>();
 
 const textareaEl = shallowRef<HTMLTextAreaElement>();
@@ -122,6 +140,10 @@ function onCancelEdit() {
 
 function onAbortClick() {
 	emit('abort');
+}
+
+function onDrawClick() {
+	emit('draw');
 }
 
 function restoreDraft(t: string) {

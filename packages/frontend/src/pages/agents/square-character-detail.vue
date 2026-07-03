@@ -4,7 +4,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 -->
 
 <template>
-<PageWithHeader show-back narrow-merged-row>
+<PageWithHeader showBack narrowMergedRow>
 	<div class="_spacer" style="--MI_SPACER-w: 700px;">
 		<MkLoading v-if="loading"/>
 		<MkInfo v-else-if="character == null">{{ i18n.ts.somethingHappened }}</MkInfo>
@@ -46,7 +46,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 					</div>
 					<div :class="$style.plazaMetrics">
 						<div :class="$style.plazaMetric">
-							<span :class="$style.plazaMetricLabel"><i class="ti ti-star"/> {{ i18n.ts._agents.plazaMetricRating }}</span>
+							<span :class="$style.plazaMetricLabel"><i class="ti ti-star"></i> {{ i18n.ts._agents.plazaMetricRating }}</span>
 							<div :class="$style.plazaMetricBody">
 								<template v-if="character.rating.count === 0">
 									<span :class="$style.plazaMetricMuted">{{ i18n.ts._agents.plazaRatingNone }}</span>
@@ -58,7 +58,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 							</div>
 						</div>
 						<div :class="$style.plazaMetric">
-							<span :class="$style.plazaMetricLabel"><i class="ti ti-message-cog"/> {{ i18n.ts._agents.plazaMetricAiReplies }}</span>
+							<span :class="$style.plazaMetricLabel"><i class="ti ti-message-cog"></i> {{ i18n.ts._agents.plazaMetricAiReplies }}</span>
 							<span :class="$style.plazaMetricValue">{{ character.aiReplyCount }}</span>
 						</div>
 					</div>
@@ -125,9 +125,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 			<div v-panel :class="$style.reviewsCard">
 				<XSquarePlazaReviews
-					:character-id="character.id"
+					:characterId="character.id"
 					:rating="character.rating"
-					:show-rating-summary="false"
+					:showRatingSummary="false"
 					@updated="load"
 				/>
 			</div>
@@ -144,6 +144,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <script lang="ts" setup>
 import { computed, onMounted, ref, watch } from 'vue';
+import XSquarePlazaReviews from './square-plaza-reviews.vue';
 import type * as Misskey from 'misskey-js';
 import type { DriveFile, UserDetailed } from 'misskey-js/entities.js';
 import MkButton from '@/components/MkButton.vue';
@@ -154,8 +155,8 @@ import MkAvatar from '@/components/global/MkAvatar.vue';
 import MkUserName from '@/components/global/MkUserName.vue';
 import MkTime from '@/components/global/MkTime.vue';
 import MkDriveFileThumbnail from '@/components/MkDriveFileThumbnail.vue';
-import XSquarePlazaReviews from './square-plaza-reviews.vue';
 import { misskeyApi, formatApiError } from '@/utility/misskey-api.js';
+import { confirmStartAgentSession } from '@/utility/confirm-start-agent-session.js';
 import { i18n } from '@/i18n.js';
 import { definePage } from '@/page.js';
 import * as os from '@/os.js';
@@ -261,7 +262,7 @@ async function load() {
 }
 
 function goPlaza() {
-	router.push('/agents' as '/agents');
+	router.push('/agents' as const);
 }
 
 function goEdit() {
@@ -269,6 +270,8 @@ function goEdit() {
 }
 
 async function startPlay() {
+	if (!await confirmStartAgentSession()) return;
+
 	try {
 		const session = await misskeyApi('agents/sessions/create', {
 			characterId: props.characterId,
@@ -278,7 +281,7 @@ async function startPlay() {
 	} catch (e) {
 		if (e && typeof e === 'object' && (e as { code?: string }).code === 'AGENT_NEED_PUBLISHED_STYLE') {
 			os.alert({ type: 'info', text: i18n.ts._agents.needPublishedStyleExplore });
-			router.push('/agents' as '/agents');
+			router.push('/agents' as const);
 			return;
 		}
 		os.alert({ type: 'error', text: formatApiError(e) });

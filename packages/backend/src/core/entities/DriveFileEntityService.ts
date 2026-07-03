@@ -159,6 +159,24 @@ export class DriveFileEntityService {
 			.createQueryBuilder('file')
 			.where('file.userId = :id', { id: id })
 			.andWhere('file.isLink = FALSE')
+			.andWhere('file.isAgentGenerated = FALSE')
+			.select('SUM(file.size)', 'sum')
+			.getRawOne();
+
+		return parseInt(sum, 10) || 0;
+	}
+
+	@bindThis
+	public async calcAgentImageDriveUsageOf(user: MiUser['id'] | { id: MiUser['id'] }): Promise<number> {
+		const id = typeof user === 'object' ? user.id : user;
+
+		const { sum } = await this.driveFilesRepository
+			.createQueryBuilder('file')
+			.innerJoin('drive_folder', 'folder', 'folder.id = file.folderId')
+			.where('file.userId = :id', { id })
+			.andWhere('file.isLink = FALSE')
+			.andWhere('file.isAgentGenerated = TRUE')
+			.andWhere('folder.systemType = :systemType', { systemType: 'agentGeneratedImages' })
 			.select('SUM(file.size)', 'sum')
 			.getRawOne();
 
@@ -221,6 +239,8 @@ export class DriveFileEntityService {
 			md5: file.md5,
 			size: file.size,
 			isSensitive: file.isSensitive,
+			isAgentGenerated: file.isAgentGenerated,
+			isAgentImageBlocked: file.isAgentImageBlocked,
 			blurhash: file.blurhash,
 			properties: opts.self ? file.properties : this.getPublicProperties(file),
 			url: opts.self ? (this.normalizeObjectStoragePublicUrl(file.url, file) ?? file.url) : this.getPublicUrl(file),
@@ -242,6 +262,7 @@ export class DriveFileEntityService {
 		hint?: {
 			packedUser?: Packed<'UserLite'>
 			packedFolder?: Packed<'DriveFolder'>
+			skipBlockedAgentImageCheck?: boolean
 		},
 	): Promise<Packed<'DriveFile'> | null> {
 		const opts = Object.assign({
@@ -260,6 +281,8 @@ export class DriveFileEntityService {
 			md5: file.md5,
 			size: file.size,
 			isSensitive: file.isSensitive,
+			isAgentGenerated: file.isAgentGenerated,
+			isAgentImageBlocked: file.isAgentImageBlocked,
 			blurhash: file.blurhash,
 			properties: opts.self ? file.properties : this.getPublicProperties(file),
 			url: opts.self ? (this.normalizeObjectStoragePublicUrl(file.url, file) ?? file.url) : this.getPublicUrl(file),
@@ -279,6 +302,7 @@ export class DriveFileEntityService {
 		files: MiDriveFile[],
 		options?: PackOptions,
 	): Promise<Packed<'DriveFile'>[]> {
+		if (files.length === 0) return [];
 		// -- ユーザ情報の事前取得 --
 
 		let userMap: Map<string, Packed<'UserLite'>> | null = null;
@@ -311,6 +335,7 @@ export class DriveFileEntityService {
 			{
 				packedUser: f.userId ? userMap?.get(f.userId) : undefined,
 				packedFolder: f.folderId ? folderMap?.get(f.folderId) : undefined,
+				skipBlockedAgentImageCheck: true,
 			},
 		)));
 

@@ -47,7 +47,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			this.agentService.assertAgentsEnabled();
 			const s = await this.agentSessionsRepository.findOneBy({ id: ps.sessionId });
 			if (!s || s.userId !== me.id) {
-				throw new ApiError({ message: 'No such session.', code: 'NO_SUCH_SESSION', id: 'e5e5e5e5-f6f6-f6f6-f6f6-555555555555' });
+				throw new ApiError({ message: 'No such session.', code: 'NO_SUCH_SESSION', id: '2bc64fdf-895f-4165-84c2-a117ba8099a0' });
 			}
 			await this.agentCompressionMemoryService.reorderStickies(
 				ps.sessionId,

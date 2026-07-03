@@ -6,8 +6,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 <template>
 <div :class="[hide ? $style.hidden : $style.visible, (image.isSensitive && prefer.s.highlightSensitiveMedia) && $style.sensitive]" @click="reveal" @contextmenu.stop="onContextmenu">
 	<component
-		:is="disableImageLink ? 'div' : 'a'"
-		v-bind="disableImageLink ? {
+		:is="disableImageLink || image.isAgentImageBlocked ? 'div' : 'a'"
+		v-bind="disableImageLink || image.isAgentImageBlocked ? {
 			title: image.name,
 			class: $style.imageContainer,
 		} : {
@@ -17,8 +17,12 @@ SPDX-License-Identifier: AGPL-3.0-only
 			style: 'cursor: zoom-in;'
 		}"
 	>
+		<div v-if="image.isAgentImageBlocked" :class="$style.blockedImage">
+			<i class="ti ti-ban"></i>
+			<span>图片已封禁</span>
+		</div>
 		<MkImgWithBlurhash
-			v-if="prefer.s.enableHighQualityImagePlaceholders"
+			v-else-if="prefer.s.enableHighQualityImagePlaceholders"
 			:hash="image.blurhash"
 			:src="(prefer.s.dataSaver.media && hide) ? null : url"
 			:forceBlurhash="hide"
@@ -44,7 +48,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 			:class="$style.image"
 		/>
 	</component>
-	<template v-if="hide">
+	<template v-if="hide && !image.isAgentImageBlocked">
 		<div :class="$style.hiddenText">
 			<div :class="$style.hiddenTextWrapper">
 				<b v-if="image.isSensitive" style="display: block;"><i class="ti ti-eye-exclamation"></i> {{ i18n.ts.sensitive }}{{ prefer.s.dataSaver.media ? ` (${i18n.ts.image}${image.size ? ' ' + bytes(image.size) : ''})` : '' }}</b>
@@ -53,7 +57,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 			</div>
 		</div>
 	</template>
-	<template v-else-if="controls">
+	<template v-else-if="controls && !image.isAgentImageBlocked">
 		<div :class="$style.indicators">
 			<div v-if="['image/gif', 'image/apng'].includes(image.type)" :class="$style.indicator">GIF</div>
 			<div v-if="image.comment" :class="$style.indicator">ALT</div>
@@ -101,6 +105,10 @@ const url = computed(() => (props.raw || prefer.s.loadRawImages)
 );
 
 async function reveal(ev: PointerEvent) {
+	if (props.image.isAgentImageBlocked) {
+		return;
+	}
+
 	if (!props.controls) {
 		return;
 	}
@@ -328,5 +336,21 @@ html[data-color-scheme=light] .visible {
 	height: 100%;
 	object-fit: contain;
 	object-position: center;
+}
+
+.blockedImage {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	width: 100%;
+	height: 100%;
+	color: var(--MI_THEME-error);
+	font-weight: 700;
+	gap: 8px;
+
+	> i {
+		font-size: 40px;
+	}
 }
 </style>

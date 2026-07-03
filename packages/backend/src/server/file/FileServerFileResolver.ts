@@ -79,6 +79,7 @@ export class FileServerFileResolver {
 			.getOne();
 
 		if (file == null) return { kind: 'not-found' };
+		if (file.isAgentImageBlocked) return { kind: 'not-found' };
 
 		const isThumbnail = file.thumbnailAccessKey === key;
 		const isWebpublic = file.webpublicAccessKey === key;

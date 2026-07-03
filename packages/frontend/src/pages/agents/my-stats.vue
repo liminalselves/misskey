@@ -77,7 +77,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 								<span :class="$style.billingStatusValue">{{ billingUsageRowStatus(item.status) }}</span>
 							</span>
 							<span v-else :class="[$style.badge, $style.badgeRedeem, $style.billingRedeemChip]">
-								<i class="ti ti-ticket" :class="$style.billingRedeemIcon" aria-hidden="true"/>
+								<i class="ti ti-ticket" :class="$style.billingRedeemIcon" aria-hidden="true"></i>
 								{{ i18n.ts._agents.billingKindRedeem }}
 							</span>
 						</span>
@@ -94,7 +94,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 							class="_button"
 							:class="[$style.pagerSegBtn, billingPageSize === size ? $style.pagerSegBtnActive : null]"
 							@click="billingPageSize = size"
-						>{{ size }}</button>
+						>
+							{{ size }}
+						</button>
 					</div>
 					<div :class="$style.pagerNavGroup" role="group">
 						<button
@@ -105,7 +107,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 							:aria-label="i18n.ts._agents.sessionMemoryPrevPage"
 							@click="goBillingPage(billingPage - 1)"
 						>
-							<i class="ti ti-chevron-left" aria-hidden="true"/>
+							<i class="ti ti-chevron-left" aria-hidden="true"></i>
 						</button>
 						<span :class="$style.pagerNavText">{{ billingPage }} / {{ billingTotalPages }}</span>
 						<button
@@ -116,7 +118,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 							:aria-label="i18n.ts._agents.sessionMemoryNextPage"
 							@click="goBillingPage(billingPage + 1)"
 						>
-							<i class="ti ti-chevron-right" aria-hidden="true"/>
+							<i class="ti ti-chevron-right" aria-hidden="true"></i>
 						</button>
 					</div>
 					<div :class="$style.pagerGoGroup" role="group" :aria-label="i18n.ts._agents.pageJump">
@@ -140,7 +142,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 							:class="$style.pagerGoJumpBtn"
 							:disabled="billingLoading"
 							@click="goBillingInputPage"
-						>{{ i18n.ts._agents.pageJump }}</button>
+						>
+							{{ i18n.ts._agents.pageJump }}
+						</button>
 					</div>
 				</div>
 			</template>
@@ -204,7 +208,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 							class="_button"
 							:class="[$style.pagerSegBtn, recentLogsPageSize === size ? $style.pagerSegBtnActive : null]"
 							@click="recentLogsPageSize = size"
-						>{{ size }}</button>
+						>
+							{{ size }}
+						</button>
 					</div>
 					<div :class="$style.pagerNavGroup" role="group">
 						<button
@@ -215,7 +221,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 							:aria-label="i18n.ts._agents.sessionMemoryPrevPage"
 							@click="goRecentLogsPage(recentLogsPage - 1)"
 						>
-							<i class="ti ti-chevron-left" aria-hidden="true"/>
+							<i class="ti ti-chevron-left" aria-hidden="true"></i>
 						</button>
 						<span :class="$style.pagerNavText">{{ recentLogsPage }} / {{ recentLogsTotalPages }}</span>
 						<button
@@ -226,7 +232,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 							:aria-label="i18n.ts._agents.sessionMemoryNextPage"
 							@click="goRecentLogsPage(recentLogsPage + 1)"
 						>
-							<i class="ti ti-chevron-right" aria-hidden="true"/>
+							<i class="ti ti-chevron-right" aria-hidden="true"></i>
 						</button>
 					</div>
 					<div :class="$style.pagerGoGroup" role="group" :aria-label="i18n.ts._agents.pageJump">
@@ -250,7 +256,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 							:class="$style.pagerGoJumpBtn"
 							:disabled="recentLogsLoading"
 							@click="goRecentLogsInputPage"
-						>{{ i18n.ts._agents.pageJump }}</button>
+						>
+							{{ i18n.ts._agents.pageJump }}
+						</button>
 					</div>
 				</div>
 			</template>
@@ -306,6 +314,8 @@ import { misskeyApi, formatApiError } from '@/utility/misskey-api.js';
 import { i18n } from '@/i18n.js';
 import * as os from '@/os.js';
 
+type UsageKind = 'chat' | 'compression' | 'image_generation';
+
 type RecentLog = {
 	id: string;
 	requestedAt: string;
@@ -314,7 +324,7 @@ type RecentLog = {
 	modelId: string | null;
 	modelName: string | null;
 	modelApiName: string | null;
-	usageKind: 'chat' | 'compression';
+	usageKind: UsageKind;
 	status: 'success' | 'failed' | 'aborted';
 	cost: number;
 	promptTokens: number | null;
@@ -344,7 +354,7 @@ type BillingItem = {
 	createdAt: string;
 	amount: number;
 	modelName: string | null;
-	usageKind: 'chat' | 'compression' | null;
+	usageKind: UsageKind | null;
 	status: string | null;
 	durationMs: number | null;
 	redeemCode: string | null;
@@ -546,7 +556,8 @@ function toBJT(iso: string): string {
 	return d.toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false });
 }
 
-function usageLogKindLabel(usageKind: 'chat' | 'compression' | undefined): string {
+function usageLogKindLabel(usageKind: UsageKind | undefined): string {
+	if (usageKind === 'image_generation') return '生图';
 	if (usageKind === 'compression') return i18n.ts._agents.usageLogKindCompression;
 	return i18n.ts._agents.usageLogKindChat;
 }
@@ -559,6 +570,7 @@ function statusLabel(status: 'success' | 'failed' | 'aborted'): string {
 
 function billingUsageSubkindLabel(item: BillingItem): string {
 	if (item.kind !== 'usage') return i18n.ts._agents.billingKindUsage;
+	if (item.usageKind === 'image_generation') return '生图扣费';
 	if (item.usageKind === 'compression') return i18n.ts._agents.billingKindCompressionUsage;
 	return i18n.ts._agents.billingKindChatUsage;
 }
@@ -598,6 +610,9 @@ onMounted(async () => {
 		recentLogsPageInput.value = String(summaryRes.recentLogsPage);
 		characterStatsItems.value = summaryRes.characterStats;
 		styleStatsItems.value = summaryRes.dialogueStyleStats;
+	} catch (err) {
+		// 首屏失败仅弹一次提示；UI 落入「summary 为 null 且非 loading」分支，模板已有 somethingHappened 占位。
+		os.alert({ type: 'error', text: formatApiError(err) });
 	} finally {
 		loading.value = false;
 	}

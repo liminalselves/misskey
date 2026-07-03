@@ -16,7 +16,8 @@ import { UserEntityService } from '@/core/entities/UserEntityService.js';
 export const meta = {
 	tags: ['admin'],
 	requireCredential: true,
-	requireAdmin: true,
+	secure: true,
+	requireModerator: true,
 	kind: 'read:admin',
 	limit: { duration: ms('1hour'), max: 120 },
 	res: {

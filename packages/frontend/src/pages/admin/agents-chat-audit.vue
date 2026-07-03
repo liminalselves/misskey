@@ -28,121 +28,122 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<!-- ===== 会话管理面板 ===== -->
 				<template v-if="activeTab === 'sessions'">
 					<div :class="$style.splitViewRoot">
-					<div :class="$style.splitView">
-						<!-- 左：会话列表 -->
-						<div :class="[$style.leftPanel, selectedSession && $style.leftPanelHideMobile]">
-							<div :class="$style.panelHeader">
-								<h3 :class="$style.panelTitle">{{ i18n.ts._agents.adminChatManageTabSessions }}</h3>
-								<MkButton small rounded :disabled="sessionsLoading" @click="loadSessions(true)"><i class="ti ti-refresh"></i></MkButton>
-							</div>
-
-							<div :class="$style.sessionFilters" class="_gaps_s">
-								<MkInput v-model="sessionFilterUserId" type="text" autocomplete="off" small>
-									<template #label>{{ i18n.ts._agents.adminChatManageFilterUser }}</template>
-								</MkInput>
-								<div class="_buttons">
-									<MkButton small rounded primary :disabled="sessionsLoading" @click="loadSessions(true)"><i class="ti ti-search"></i></MkButton>
-									<MkButton small rounded :disabled="sessionsLoading" @click="clearSessionFilters"><i class="ti ti-filter-off"></i></MkButton>
-								</div>
-							</div>
-
-							<MkLoading v-if="sessionsLoading && sessions.length === 0"/>
-							<div v-else-if="sessions.length === 0" :class="$style.emptyMsg">{{ i18n.ts._agents.adminChatManageSessionListEmpty }}</div>
-
-							<div v-if="sessions.length > 0" :class="$style.sessionList">
-								<button
-									v-for="s in sessions" :key="s.id"
-									:class="[$style.sessionItem, selectedSession?.id === s.id && $style.sessionItemActive]"
-									@click="selectSession(s)"
-								>
-									<div :class="$style.sessionItemHead">
-										<span :class="$style.sessionItemName">{{ s.name }}</span>
-										<span :class="$style.sessionItemKind">{{ sessionKindLabel(s.sessionKind) }}</span>
-									</div>
-									<div :class="$style.sessionItemMeta">
-										<template v-if="s.user">
-											<MkUserName :user="s.user" :class="$style.sessionItemUser"/>
-										</template>
-										<span v-else :class="$style.sessionItemUserId">{{ s.userId }}</span>
-										<span :class="$style.sessionItemDot">·</span>
-										<span :class="$style.sessionItemCharName">{{ s.characterName || '—' }}</span>
-									</div>
-									<div :class="$style.sessionItemFooter">
-										<time :class="$style.sessionItemTime">{{ formatTime(s.lastMessageAt || s.updatedAt) }}</time>
-										<span v-if="s.moderationBanned" :class="$style.bannedBadge">{{ i18n.ts._agents.adminChatManageSessionBanned }}</span>
-									</div>
-								</button>
-
-								<div v-if="sessionsCanLoadMore" :class="$style.loadMoreWrap">
-									<MkButton small rounded :disabled="sessionsLoading" @click="loadMoreSessions"><i class="ti ti-chevron-down"></i> {{ i18n.ts._agents.adminChatManageTimelineLoadMore }}</MkButton>
-								</div>
-							</div>
-						</div>
-
-						<!-- 右：对话时间线 -->
-						<div :class="[$style.rightPanel, !selectedSession && $style.rightPanelHideMobile]">
-							<template v-if="selectedSession">
+						<div :class="$style.splitView">
+							<!-- 左：会话列表 -->
+							<div :class="[$style.leftPanel, selectedSession && $style.leftPanelHideMobile]">
 								<div :class="$style.panelHeader">
-									<button :class="$style.backBtn" @click="selectedSession = null"><i class="ti ti-arrow-left"></i> {{ i18n.ts._agents.adminChatManageBackToList }}</button>
-									<h3 :class="$style.panelTitle">{{ selectedSession.name }}</h3>
+									<h3 :class="$style.panelTitle">{{ i18n.ts._agents.adminChatManageTabSessions }}</h3>
+									<MkButton small rounded :disabled="sessionsLoading" @click="loadSessions(true)"><i class="ti ti-refresh"></i></MkButton>
 								</div>
 
-								<div :class="$style.sessionDetailBar">
-									<div :class="$style.detailItem">
-										<span :class="$style.detailKey">{{ i18n.ts._agents.adminChatManageSessionUser }}</span>
-										<template v-if="selectedSession.user">
-											<MkA :to="`/admin/user/${selectedSession.userId}`" class="_link"><MkUserName :user="selectedSession.user"/></MkA>
-										</template>
-										<code v-else>{{ selectedSession.userId }}</code>
-									</div>
-									<div :class="$style.detailItem">
-										<span :class="$style.detailKey">{{ i18n.ts._agents.adminChatManageSessionCharacter }}</span>
-										<span>{{ selectedSession.characterName || '—' }}</span>
-										<code :class="$style.detailMono">{{ selectedSession.characterId }}</code>
-									</div>
-									<div :class="$style.detailItem">
-										<span :class="$style.detailKey">{{ i18n.ts._agents.adminChatManageSessionKind }}</span>
-										<span>{{ sessionKindLabel(selectedSession.sessionKind) }}</span>
-									</div>
-									<div :class="$style.detailItem">
-										<span :class="$style.detailKey">ID</span>
-										<code :class="$style.detailMono">{{ selectedSession.id }}</code>
-										<button type="button" class="_button" :class="$style.miniCopy" @click="copyId(selectedSession.id)"><i class="ti ti-copy"></i></button>
+								<div :class="$style.sessionFilters" class="_gaps_s">
+									<MkInput v-model="sessionFilterUserId" type="text" autocomplete="off" small>
+										<template #label>{{ i18n.ts._agents.adminChatManageFilterUser }}</template>
+									</MkInput>
+									<div class="_buttons">
+										<MkButton small rounded primary :disabled="sessionsLoading" @click="loadSessions(true)"><i class="ti ti-search"></i></MkButton>
+										<MkButton small rounded :disabled="sessionsLoading" @click="clearSessionFilters"><i class="ti ti-filter-off"></i></MkButton>
 									</div>
 								</div>
 
-								<div :class="$style.modActionsBar" class="_buttons">
-									<span v-if="selectedSession.moderationBanned" :class="$style.bannedBadge">{{ i18n.ts._agents.adminAgentChatAuditSessionBannedBadge }}</span>
-									<MkButton small rounded :disabled="banBusy" @click="toggleSessionBanFromDetail">
-										{{ selectedSession.moderationBanned ? i18n.ts._agents.adminAgentChatAuditUnbanSession : i18n.ts._agents.adminAgentChatAuditBanSession }}
-									</MkButton>
-								</div>
+								<MkLoading v-if="sessionsLoading && sessions.length === 0"/>
+								<div v-else-if="sessions.length === 0" :class="$style.emptyMsg">{{ i18n.ts._agents.adminChatManageSessionListEmpty }}</div>
 
-								<MkLoading v-if="timelineLoading && timeline.length === 0"/>
-								<div v-else-if="timeline.length === 0" :class="$style.emptyMsg">{{ i18n.ts._agents.adminChatManageTimelineEmpty }}</div>
-
-								<div v-if="timeline.length > 0" :class="$style.timeline">
-									<div v-if="timelineCanLoadMore" :class="$style.loadMoreWrap">
-										<MkButton small rounded :disabled="timelineLoading" @click="loadMoreTimeline"><i class="ti ti-chevron-up"></i> {{ i18n.ts._agents.adminChatManageTimelineLoadMore }}</MkButton>
-									</div>
-									<div
-										v-for="msg in timelineReversed" :key="msg.id"
-										:class="[$style.msgBubble, msg.role === 'user' ? $style.msgUser : msg.role === 'assistant' ? $style.msgAssistant : $style.msgSystem]"
+								<div v-if="sessions.length > 0" :class="$style.sessionList">
+									<button
+										v-for="s in sessions" :key="s.id"
+										:class="[$style.sessionItem, selectedSession?.id === s.id && $style.sessionItemActive]"
+										@click="selectSession(s)"
 									>
-										<div :class="$style.msgHead">
-											<span :class="$style.msgRole">{{ roleLabel(msg.role) }}</span>
-											<time :class="$style.msgTime">{{ formatTime(msg.createdAt) }}</time>
+										<div :class="$style.sessionItemHead">
+											<span :class="$style.sessionItemName">{{ s.name }}</span>
+											<span :class="$style.sessionItemKind">{{ sessionKindLabel(s.sessionKind) }}</span>
 										</div>
-										<pre :class="$style.msgContent">{{ msg.content }}</pre>
+										<div :class="$style.sessionItemMeta">
+											<template v-if="s.user">
+												<MkUserName :user="s.user" :class="$style.sessionItemUser"/>
+											</template>
+											<span v-else :class="$style.sessionItemUserId">{{ s.userId }}</span>
+											<span :class="$style.sessionItemDot">·</span>
+											<span :class="$style.sessionItemCharName">{{ s.characterName || '—' }}</span>
+										</div>
+										<div :class="$style.sessionItemFooter">
+											<time :class="$style.sessionItemTime">{{ formatTime(s.lastMessageAt || s.updatedAt) }}</time>
+											<span v-if="s.moderationBanned" :class="$style.bannedBadge">{{ i18n.ts._agents.adminChatManageSessionBanned }}</span>
+										</div>
+									</button>
+
+									<div v-if="sessionsCanLoadMore" :class="$style.loadMoreWrap">
+										<MkButton small rounded :disabled="sessionsLoading" @click="loadMoreSessions"><i class="ti ti-chevron-down"></i> {{ i18n.ts._agents.adminChatManageTimelineLoadMore }}</MkButton>
 									</div>
 								</div>
-							</template>
-							<div v-else :class="$style.selectHint">
-								<i class="ti ti-messages" :class="$style.selectHintIcon"></i>
-								<p>{{ i18n.ts._agents.adminChatManageSelectSession }}</p>
+							</div>
+
+							<!-- 右：对话时间线 -->
+							<div :class="[$style.rightPanel, !selectedSession && $style.rightPanelHideMobile]">
+								<template v-if="selectedSession">
+									<div :class="$style.panelHeader">
+										<button :class="$style.backBtn" @click="selectedSession = null"><i class="ti ti-arrow-left"></i> {{ i18n.ts._agents.adminChatManageBackToList }}</button>
+										<h3 :class="$style.panelTitle">{{ selectedSession.name }}</h3>
+									</div>
+
+									<div :class="$style.sessionDetailBar">
+										<div :class="$style.detailItem">
+											<span :class="$style.detailKey">{{ i18n.ts._agents.adminChatManageSessionUser }}</span>
+											<template v-if="selectedSession.user">
+												<MkA :to="`/admin/user/${selectedSession.userId}`" class="_link"><MkUserName :user="selectedSession.user"/></MkA>
+											</template>
+											<code v-else>{{ selectedSession.userId }}</code>
+										</div>
+										<div :class="$style.detailItem">
+											<span :class="$style.detailKey">{{ i18n.ts._agents.adminChatManageSessionCharacter }}</span>
+											<span>{{ selectedSession.characterName || '—' }}</span>
+											<code :class="$style.detailMono">{{ selectedSession.characterId }}</code>
+										</div>
+										<div :class="$style.detailItem">
+											<span :class="$style.detailKey">{{ i18n.ts._agents.adminChatManageSessionKind }}</span>
+											<span>{{ sessionKindLabel(selectedSession.sessionKind) }}</span>
+										</div>
+										<div :class="$style.detailItem">
+											<span :class="$style.detailKey">ID</span>
+											<code :class="$style.detailMono">{{ selectedSession.id }}</code>
+											<button type="button" class="_button" :class="$style.miniCopy" @click="copyId(selectedSession.id)"><i class="ti ti-copy"></i></button>
+										</div>
+									</div>
+
+									<div :class="$style.modActionsBar" class="_buttons">
+										<span v-if="selectedSession.moderationBanned" :class="$style.bannedBadge">{{ i18n.ts._agents.adminAgentChatAuditSessionBannedBadge }}</span>
+										<MkButton small rounded :disabled="banBusy" @click="toggleSessionBanFromDetail">
+											{{ selectedSession.moderationBanned ? i18n.ts._agents.adminAgentChatAuditUnbanSession : i18n.ts._agents.adminAgentChatAuditBanSession }}
+										</MkButton>
+									</div>
+
+									<MkLoading v-if="timelineLoading && timeline.length === 0"/>
+									<div v-else-if="timeline.length === 0" :class="$style.emptyMsg">{{ i18n.ts._agents.adminChatManageTimelineEmpty }}</div>
+
+									<div v-if="timeline.length > 0" :class="$style.timeline">
+										<div v-if="timelineCanLoadMore" :class="$style.loadMoreWrap">
+											<MkButton small rounded :disabled="timelineLoading" @click="loadMoreTimeline"><i class="ti ti-chevron-up"></i> {{ i18n.ts._agents.adminChatManageTimelineLoadMore }}</MkButton>
+										</div>
+										<div
+											v-for="msg in timelineReversed" :key="msg.id"
+											:class="[$style.msgBubble, msg.role === 'user' ? $style.msgUser : msg.role === 'assistant' ? $style.msgAssistant : $style.msgSystem]"
+										>
+											<div :class="$style.msgHead">
+												<span :class="$style.msgRole">{{ roleLabel(msg.role) }}</span>
+												<time :class="$style.msgTime">{{ formatTime(msg.createdAt) }}</time>
+											</div>
+											<pre :class="$style.msgContent">{{ msg.content }}</pre>
+											<div :class="$style.renderPreview" v-html="renderAuditContent(msg.content)"></div>
+										</div>
+									</div>
+								</template>
+								<div v-else :class="$style.selectHint">
+									<i class="ti ti-messages" :class="$style.selectHintIcon"></i>
+									<p>{{ i18n.ts._agents.adminChatManageSelectSession }}</p>
+								</div>
 							</div>
 						</div>
-					</div>
 					</div>
 				</template>
 
@@ -220,6 +221,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 							</div>
 							<div :class="$style.contentBox">
 								<pre :class="$style.pre">{{ row.content }}</pre>
+								<div :class="$style.renderPreview" v-html="renderAuditContent(row.content)"></div>
 							</div>
 						</article>
 
@@ -250,6 +252,7 @@ import SearchMarker from '@/components/global/SearchMarker.vue';
 import { misskeyApi, formatApiError } from '@/utility/misskey-api.js';
 import { formatDateTimeString } from '@/utility/format-time-string.js';
 import { copyToClipboard } from '@/utility/copy-to-clipboard.js';
+import { renderAgentChatMarkdown } from '@/utility/agent-chat-markdown.js';
 import { i18n } from '@/i18n.js';
 import { definePage } from '@/page.js';
 import * as os from '@/os.js';
@@ -260,6 +263,10 @@ definePage({
 });
 
 const activeTab = ref<'sessions' | 'messages'>('sessions');
+
+function renderAuditContent(content: string): string {
+	return renderAgentChatMarkdown(content);
+}
 
 // ──── 会话列表 ────
 type SessionRow = {
@@ -358,12 +365,11 @@ async function loadTimeline(reset: boolean) {
 	}
 	timelineLoading.value = true;
 	try {
-		const params: Record<string, unknown> = {
+		const list = await misskeyApi('admin/agents/messages/timeline', {
 			sessionId: selectedSession.value.id,
 			limit: TL_LIMIT,
-		};
-		if (timelineUntilId.value) params['untilId'] = timelineUntilId.value;
-		const list = await misskeyApi('admin/agents/messages/timeline', params) as TimelineMsg[];
+			...(timelineUntilId.value ? { untilId: timelineUntilId.value } : {}),
+		}) as TimelineMsg[];
 		if (reset) {
 			timeline.value = list;
 		} else {
@@ -548,7 +554,6 @@ function sessionKindLabel(kind: string): string {
 
 function copyId(id: string): void {
 	copyToClipboard(id);
-	os.toast(i18n.ts.copiedToClipboard);
 }
 
 onMounted(() => {
@@ -900,6 +905,27 @@ onMounted(() => {
 	line-height: 1.45;
 	max-height: min(46vh, 420px);
 	overflow: auto;
+}
+
+.renderPreview {
+	margin-top: 8px;
+	padding: 10px 12px;
+	border-radius: 8px;
+	border: solid 1px var(--MI_THEME-divider);
+	background: color-mix(in srgb, var(--MI_THEME-panel) 88%, var(--MI_THEME-bg));
+	line-height: 1.5;
+	word-break: break-word;
+
+	&:deep(img) {
+		max-width: 100%;
+		max-height: 360px;
+		object-fit: contain;
+		border-radius: 6px;
+	}
+
+	&:deep(p) {
+		margin: 0.35em 0;
+	}
 }
 
 .emptyMsg {

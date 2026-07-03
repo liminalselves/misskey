@@ -52,7 +52,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			this.agentService.assertAgentsEnabled();
 			const session = await this.agentSessionsRepository.findOneBy({ id: ps.sessionId });
 			if (!session || session.userId !== me.id) {
-				throw new ApiError({ message: 'No such session.', code: 'NO_SUCH_SESSION', id: 'c7d8e9f0-a1b2-3456-0123-567890123456' });
+				throw new ApiError({ message: 'No such session.', code: 'NO_SUCH_SESSION', id: 'fdb17c96-1d40-43e0-8bb3-a69a57db4a71' });
 			}
 			const aborted = this.agentService.abortPending(session.id, ps.clientRequestId);
 			return { aborted };

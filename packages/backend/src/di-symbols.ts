@@ -96,10 +96,13 @@ export const DI = {
 	agentDialogueStylesRepository: Symbol('agentDialogueStylesRepository'),
 	agentSessionsRepository: Symbol('agentSessionsRepository'),
 	agentMessagesRepository: Symbol('agentMessagesRepository'),
+	agentImageGenerationsRepository: Symbol('agentImageGenerationsRepository'),
+	agentExternalAuditLogsRepository: Symbol('agentExternalAuditLogsRepository'),
 	agentUserStyleSubscriptionsRepository: Symbol('agentUserStyleSubscriptionsRepository'),
 	agentPlazaReviewsRepository: Symbol('agentPlazaReviewsRepository'),
 	agentModelUsageLogsRepository: Symbol('agentModelUsageLogsRepository'),
 	agentRedeemCodesRepository: Symbol('agentRedeemCodesRepository'),
 	agentSessionCompressionStickyRepository: Symbol('agentSessionCompressionStickyRepository'),
+	agentPublishedVersionsRepository: Symbol('agentPublishedVersionsRepository'),
 	//#endregion
 };

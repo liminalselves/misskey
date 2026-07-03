@@ -4,7 +4,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 -->
 
 <template>
-<PageWithHeader show-back narrow-merged-row>
+<PageWithHeader showBack narrowMergedRow>
 	<div class="_spacer" style="--MI_SPACER-w: 700px;">
 		<MkLoading v-if="loading"/>
 		<MkInfo v-else-if="styleRow == null">{{ i18n.ts.somethingHappened }}</MkInfo>
@@ -42,7 +42,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 					</div>
 					<div :class="$style.plazaMetrics">
 						<div :class="$style.plazaMetric">
-							<span :class="$style.plazaMetricLabel"><i class="ti ti-star"/> {{ i18n.ts._agents.plazaMetricRating }}</span>
+							<span :class="$style.plazaMetricLabel"><i class="ti ti-star"></i> {{ i18n.ts._agents.plazaMetricRating }}</span>
 							<div :class="$style.plazaMetricBody">
 								<template v-if="styleRow.rating.count === 0">
 									<span :class="$style.plazaMetricMuted">{{ i18n.ts._agents.plazaRatingNone }}</span>
@@ -54,7 +54,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 							</div>
 						</div>
 						<div :class="$style.plazaMetric">
-							<span :class="$style.plazaMetricLabel"><i class="ti ti-message-cog"/> {{ i18n.ts._agents.plazaMetricAiReplies }}</span>
+							<span :class="$style.plazaMetricLabel"><i class="ti ti-message-cog"></i> {{ i18n.ts._agents.plazaMetricAiReplies }}</span>
 							<span :class="$style.plazaMetricValue">{{ styleRow.aiReplyCount }}</span>
 						</div>
 					</div>
@@ -81,9 +81,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 			<div v-panel :class="$style.reviewsCard">
 				<XSquarePlazaReviews
-					:style-id="styleRow.id"
+					:styleId="styleRow.id"
 					:rating="styleRow.rating"
-					:show-rating-summary="false"
+					:showRatingSummary="false"
 					@updated="load"
 				/>
 			</div>
@@ -101,6 +101,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <script lang="ts" setup>
 import { computed, onMounted, ref, watch } from 'vue';
+import XSquarePlazaReviews from './square-plaza-reviews.vue';
 import type * as Misskey from 'misskey-js';
 import type { UserDetailed } from 'misskey-js/entities.js';
 import MkButton from '@/components/MkButton.vue';
@@ -110,7 +111,6 @@ import MkFolder from '@/components/MkFolder.vue';
 import MkAvatar from '@/components/global/MkAvatar.vue';
 import MkUserName from '@/components/global/MkUserName.vue';
 import MkTime from '@/components/global/MkTime.vue';
-import XSquarePlazaReviews from './square-plaza-reviews.vue';
 import { misskeyApi, formatApiError } from '@/utility/misskey-api.js';
 import { i18n } from '@/i18n.js';
 import { definePage } from '@/page.js';
@@ -208,7 +208,7 @@ async function load() {
 }
 
 function goPlaza() {
-	router.push('/agents' as '/agents');
+	router.push('/agents' as const);
 }
 
 function goEdit() {

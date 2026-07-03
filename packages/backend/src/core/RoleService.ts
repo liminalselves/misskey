@@ -49,6 +49,9 @@ export type RolePolicies = {
 	canUseTranslator: boolean;
 	canHideAds: boolean;
 	driveCapacityMb: number;
+	agentImageDriveCapacityMb: number;
+	agentImageDriveCleanupThresholdMb: number;
+	agentImageDriveCleanupTargetMb: number;
 	maxFileSizeMb: number;
 	alwaysMarkNsfw: boolean;
 	canUpdateBioMedia: boolean;
@@ -90,6 +93,9 @@ export const DEFAULT_POLICIES: RolePolicies = {
 	canUseTranslator: true,
 	canHideAds: false,
 	driveCapacityMb: 100,
+	agentImageDriveCapacityMb: 100,
+	agentImageDriveCleanupThresholdMb: 5,
+	agentImageDriveCleanupTargetMb: 20,
 	maxFileSizeMb: 30,
 	alwaysMarkNsfw: false,
 	canUpdateBioMedia: true,
@@ -412,6 +418,9 @@ export class RoleService implements OnApplicationShutdown, OnModuleInit {
 			canUseTranslator: calc('canUseTranslator', vs => vs.some(v => v === true)),
 			canHideAds: calc('canHideAds', vs => vs.some(v => v === true)),
 			driveCapacityMb: calc('driveCapacityMb', vs => Math.max(...vs)),
+			agentImageDriveCapacityMb: calc('agentImageDriveCapacityMb', vs => Math.max(...vs)),
+			agentImageDriveCleanupThresholdMb: calc('agentImageDriveCleanupThresholdMb', vs => Math.max(...vs)),
+			agentImageDriveCleanupTargetMb: calc('agentImageDriveCleanupTargetMb', vs => Math.max(...vs)),
 			maxFileSizeMb: calc('maxFileSizeMb', vs => Math.max(...vs)),
 			alwaysMarkNsfw: calc('alwaysMarkNsfw', vs => vs.some(v => v === true)),
 			canUpdateBioMedia: calc('canUpdateBioMedia', vs => vs.some(v => v === true)),

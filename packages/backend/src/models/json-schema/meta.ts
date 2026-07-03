@@ -397,6 +397,26 @@ export const packedMetaLiteSchema = {
 			type: 'boolean',
 			optional: false, nullable: false,
 		},
+		agentImageGenerationEnabled: {
+			type: 'boolean',
+			optional: false, nullable: false,
+		},
+		agentImageConfigured: {
+			type: 'boolean',
+			optional: false, nullable: false,
+		},
+		agentImageDefaultModel: {
+			type: 'string',
+			optional: false, nullable: false,
+		},
+		agentImageMaxPerReply: {
+			type: 'number',
+			optional: false, nullable: false,
+		},
+		agentImageCostPerCall: {
+			type: 'number',
+			optional: false, nullable: false,
+		},
 		agentLongMemoryConfigured: {
 			type: 'boolean',
 			optional: false, nullable: false,

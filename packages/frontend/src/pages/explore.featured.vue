@@ -35,11 +35,11 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <script lang="ts" setup>
 import { computed, markRaw, ref, watch } from 'vue';
+import type { MkSelectItem } from '@/components/MkSelect.vue';
 import MkFeaturedTimeline from '@/components/MkFeaturedTimeline.vue';
 import MkTab from '@/components/MkTab.vue';
 import MkButton from '@/components/MkButton.vue';
 import MkSelect from '@/components/MkSelect.vue';
-import type { MkSelectItem } from '@/components/MkSelect.vue';
 import { i18n } from '@/i18n.js';
 import { Paginator } from '@/utility/paginator.js';
 

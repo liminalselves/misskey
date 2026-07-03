@@ -25,8 +25,16 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<img :class="$style.labelImg" src="/client-assets/label-red.svg"/>
 			<p :class="$style.labelText">{{ i18n.ts.sensitive }}</p>
 		</div>
+		<div v-if="file.isAgentImageBlocked" :class="[$style.label, $style.red]">
+			<img :class="$style.labelImg" src="/client-assets/label-red.svg"/>
+			<p :class="$style.labelText">已封禁</p>
+		</div>
 
-		<MkDriveFileThumbnail :class="$style.thumbnail" :file="file" fit="contain"/>
+		<div v-if="file.isAgentImageBlocked" :class="[$style.thumbnail, $style.blockedThumbnail]">
+			<i class="ti ti-ban"></i>
+			<span>图片已封禁</span>
+		</div>
+		<MkDriveFileThumbnail v-else :class="$style.thumbnail" :file="file" fit="contain"/>
 
 		<p :class="$style.name">
 			<span>{{ file.name.lastIndexOf('.') != -1 ? file.name.substring(0, file.name.lastIndexOf('.')) : file.name }}</span>
@@ -217,6 +225,25 @@ function onDragend() {
 	width: 110px;
 	height: 110px;
 	margin: auto;
+}
+
+.blockedThumbnail {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	border-radius: 8px;
+	background: var(--MI_THEME-bg);
+	color: var(--MI_THEME-error);
+
+	> i {
+		font-size: 32px;
+	}
+
+	> span {
+		font-size: 12px;
+	}
 }
 
 .name {

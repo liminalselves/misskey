@@ -107,6 +107,8 @@ describe('FileServerService', () => {
 		name?: string;
 		type?: string;
 		size?: number;
+		isAgentGenerated?: boolean;
+		isAgentImageBlocked?: boolean;
 	}) {
 		const accessKey = params.accessKey;
 		const url = params.uri ?? `${config.url}/files/${accessKey}`;
@@ -133,6 +135,8 @@ describe('FileServerService', () => {
 			src: null,
 			folderId: null,
 			isSensitive: false,
+			isAgentGenerated: params.isAgentGenerated ?? false,
+			isAgentImageBlocked: params.isAgentImageBlocked ?? false,
 			maybeSensitive: false,
 			maybePorn: false,
 			isLink: params.isLink,
@@ -289,6 +293,26 @@ describe('FileServerService', () => {
 	describe('GET /files/:key', () => {
 		test('GET /files/:key 404 のときダミー画像を返す', async () => {
 			const accessKey = randomString();
+
+			const res = await fastify.inject({
+				method: 'GET',
+				url: `/files/${accessKey}`,
+			});
+
+			expect(res.statusCode).toBe(404);
+			expect(res.headers['cache-control']).toBe('max-age=86400');
+		});
+
+		test('GET /files/:key AI生成画像が封禁されているとき404を返す', async () => {
+			const accessKey = randomString();
+			writeInternalFile(accessKey);
+			await insertDriveFile({
+				accessKey,
+				storedInternal: true,
+				isLink: false,
+				isAgentGenerated: true,
+				isAgentImageBlocked: true,
+			});
 
 			const res = await fastify.inject({
 				method: 'GET',

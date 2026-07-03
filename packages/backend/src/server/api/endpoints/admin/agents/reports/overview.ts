@@ -7,6 +7,7 @@ import ms from 'ms';
 import { Injectable } from '@nestjs/common';
 import { Endpoint } from '@/server/api/endpoint-base.js';
 import { AgentService } from '@/core/AgentService.js';
+import { AgentImageService } from '@/core/AgentImageService.js';
 import { AgentModelUsageService } from '@/core/AgentModelUsageService.js';
 import { MetaService } from '@/core/MetaService.js';
 import { getEffectiveLlmModels } from '@/misc/agent-llm-models.js';
@@ -14,6 +15,7 @@ import { getEffectiveLlmModels } from '@/misc/agent-llm-models.js';
 export const meta = {
 	tags: ['admin', 'agents'],
 	requireCredential: true,
+	secure: true,
 	requireAdmin: true,
 	kind: 'read:admin',
 	limit: { duration: ms('5min'), max: 60 },
@@ -80,6 +82,7 @@ export const paramDef = {
 export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-disable-line import/no-default-export
 	constructor(
 		private agentService: AgentService,
+		private agentImageService: AgentImageService,
 		private agentModelUsageService: AgentModelUsageService,
 		private metaService: MetaService,
 	) {
@@ -89,8 +92,12 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			const since = new Date(Date.now() - hours * 60 * 60 * 1000);
 
 			const instanceMeta = await this.metaService.fetch(true);
-			const allModels = getEffectiveLlmModels(instanceMeta);
-			const modelMap = new Map(allModels.map(m => [m.id, m]));
+			const llmModels = getEffectiveLlmModels(instanceMeta);
+			const imageModels = this.agentImageService.listAvailableImageModels(instanceMeta, true);
+			const modelMap = new Map<string, { name: string; unlisted: boolean }>([
+				...llmModels.map(m => [m.id, { name: m.name, unlisted: m.unlisted === true }] as const),
+				...imageModels.map(m => [m.id, { name: `生图：${m.name}`, unlisted: m.enabled === false }] as const),
+			]);
 
 			const [overall, byModel, hourlyBuckets] = await Promise.all([
 				this.agentModelUsageService.overallStats({ since }),

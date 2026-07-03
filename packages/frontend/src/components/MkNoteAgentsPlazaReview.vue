@@ -20,11 +20,11 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</div>
 				<div :class="$style.title">「{{ meta.name }}」</div>
 			</div>
-			<div :class="$style.chevron"><i class="ti ti-chevron-right"/></div>
+			<div :class="$style.chevron"><i class="ti ti-chevron-right"></i></div>
 		</div>
 		<div :class="$style.metricGrid">
 			<div :class="$style.metricCard">
-				<div :class="$style.metricTop"><i class="ti ti-star"/> {{ i18n.ts._agents.plazaMetricRating }}</div>
+				<div :class="$style.metricTop"><i class="ti ti-star"></i> {{ i18n.ts._agents.plazaMetricRating }}</div>
 				<template v-if="plazaRatingCount === 0">
 					<div :class="$style.metricMuted">{{ i18n.ts._agents.plazaRatingNone }}</div>
 				</template>
@@ -39,14 +39,14 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<div :class="$style.metricValue">({{ meta.stars }}/5)</div>
 			</div>
 			<div :class="$style.metricCard">
-				<div :class="$style.metricTop"><i class="ti ti-message-cog"/> {{ i18n.ts._agents.plazaMetricAiReplies }}</div>
+				<div :class="$style.metricTop"><i class="ti ti-message-cog"></i> {{ i18n.ts._agents.plazaMetricAiReplies }}</div>
 				<div :class="$style.metricValue">{{ aiReplyCount }}</div>
 			</div>
 		</div>
 		<div :class="$style.hint">{{ i18n.ts._agents.plazaViewDetails }}</div>
 	</div>
-	<div :class="$style.accent"/>
-	</button>
+	<div :class="$style.accent"></div>
+</button>
 </template>
 
 <script lang="ts" setup>

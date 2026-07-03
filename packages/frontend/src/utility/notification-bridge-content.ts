@@ -32,7 +32,7 @@ function openPathForChatRoom(room: { id?: string } | null | undefined): string {
 export function buildNotificationBridgeContent(notification: Misskey.entities.Notification): { title: string; body: string; openPath: string } {
 	const n = notification as Record<string, any>;
 	const userName: string = n.user?.name ?? n.user?.username ?? i18n.ts.notification;
-	const ts = i18n.ts._notification as Record<string, string>;
+	const ts = i18n.ts._notification as unknown as Record<string, string>;
 
 	switch (notification.type) {
 		// ── user-triggered, note-backed ──────────────────────────────────────

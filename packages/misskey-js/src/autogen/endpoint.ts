@@ -168,6 +168,8 @@ import type {
 	AgentsCharactersCreateResponse,
 	AgentsCharactersDeleteRequest,
 	AgentsCharactersDeleteResponse,
+	AgentsCharactersDiffRequest,
+	AgentsCharactersDiffResponse,
 	AgentsCharactersListMineResponse,
 	AgentsCharactersPlazaDetailRequest,
 	AgentsCharactersPlazaDetailResponse,
@@ -175,12 +177,18 @@ import type {
 	AgentsCharactersPublicListResponse,
 	AgentsCharactersPublishRequest,
 	AgentsCharactersPublishResponse,
+	AgentsCharactersRollbackRequest,
+	AgentsCharactersRollbackResponse,
 	AgentsCharactersShowRequest,
 	AgentsCharactersShowResponse,
 	AgentsCharactersUnpublishRequest,
 	AgentsCharactersUnpublishResponse,
 	AgentsCharactersUpdateRequest,
 	AgentsCharactersUpdateResponse,
+	AgentsCharactersVersionsRequest,
+	AgentsCharactersVersionsResponse,
+	AgentsCharactersWorldbookMatchPreviewRequest,
+	AgentsCharactersWorldbookMatchPreviewResponse,
 	AgentsCompressionStickyDeleteRequest,
 	AgentsCompressionStickyDeleteResponse,
 	AgentsCompressionStickyListRequest,
@@ -232,6 +240,8 @@ import type {
 	AgentsSessionsContextWindowResponse,
 	AgentsSessionsCreateRequest,
 	AgentsSessionsCreateResponse,
+	AgentsSessionsDeleteRequest,
+	AgentsSessionsDeleteResponse,
 	AgentsSessionsListMineResponse,
 	AgentsSessionsPreviewModelChangeRequest,
 	AgentsSessionsPreviewModelChangeResponse,
@@ -243,6 +253,8 @@ import type {
 	AgentsStylesCreateResponse,
 	AgentsStylesDeleteRequest,
 	AgentsStylesDeleteResponse,
+	AgentsStylesDiffRequest,
+	AgentsStylesDiffResponse,
 	AgentsStylesListMineResponse,
 	AgentsStylesListUsableResponse,
 	AgentsStylesPlazaDetailRequest,
@@ -251,6 +263,8 @@ import type {
 	AgentsStylesPublicListResponse,
 	AgentsStylesPublishRequest,
 	AgentsStylesPublishResponse,
+	AgentsStylesRollbackRequest,
+	AgentsStylesRollbackResponse,
 	AgentsStylesShowRequest,
 	AgentsStylesShowResponse,
 	AgentsStylesSubscribeRequest,
@@ -261,6 +275,8 @@ import type {
 	AgentsStylesUnsubscribeResponse,
 	AgentsStylesUpdateRequest,
 	AgentsStylesUpdateResponse,
+	AgentsStylesVersionsRequest,
+	AgentsStylesVersionsResponse,
 	AnnouncementsRequest,
 	AnnouncementsResponse,
 	AnnouncementsShowRequest,
@@ -911,13 +927,17 @@ export type Endpoints = {
 	'agents/billing-logs': { req: AgentsBillingLogsRequest; res: AgentsBillingLogsResponse };
 	'agents/characters/create': { req: AgentsCharactersCreateRequest; res: AgentsCharactersCreateResponse };
 	'agents/characters/delete': { req: AgentsCharactersDeleteRequest; res: AgentsCharactersDeleteResponse };
+	'agents/characters/diff': { req: AgentsCharactersDiffRequest; res: AgentsCharactersDiffResponse };
 	'agents/characters/list-mine': { req: EmptyRequest; res: AgentsCharactersListMineResponse };
 	'agents/characters/plaza-detail': { req: AgentsCharactersPlazaDetailRequest; res: AgentsCharactersPlazaDetailResponse };
 	'agents/characters/public-list': { req: AgentsCharactersPublicListRequest; res: AgentsCharactersPublicListResponse };
 	'agents/characters/publish': { req: AgentsCharactersPublishRequest; res: AgentsCharactersPublishResponse };
+	'agents/characters/rollback': { req: AgentsCharactersRollbackRequest; res: AgentsCharactersRollbackResponse };
 	'agents/characters/show': { req: AgentsCharactersShowRequest; res: AgentsCharactersShowResponse };
 	'agents/characters/unpublish': { req: AgentsCharactersUnpublishRequest; res: AgentsCharactersUnpublishResponse };
 	'agents/characters/update': { req: AgentsCharactersUpdateRequest; res: AgentsCharactersUpdateResponse };
+	'agents/characters/versions': { req: AgentsCharactersVersionsRequest; res: AgentsCharactersVersionsResponse };
+	'agents/characters/worldbook-match-preview': { req: AgentsCharactersWorldbookMatchPreviewRequest; res: AgentsCharactersWorldbookMatchPreviewResponse };
 	'agents/compression-sticky/delete': { req: AgentsCompressionStickyDeleteRequest; res: AgentsCompressionStickyDeleteResponse };
 	'agents/compression-sticky/list': { req: AgentsCompressionStickyListRequest; res: AgentsCompressionStickyListResponse };
 	'agents/compression-sticky/reorder': { req: AgentsCompressionStickyReorderRequest; res: AgentsCompressionStickyReorderResponse };
@@ -944,22 +964,26 @@ export type Endpoints = {
 	'agents/sessions/compression-overview': { req: AgentsSessionsCompressionOverviewRequest; res: AgentsSessionsCompressionOverviewResponse };
 	'agents/sessions/context-window': { req: AgentsSessionsContextWindowRequest; res: AgentsSessionsContextWindowResponse };
 	'agents/sessions/create': { req: AgentsSessionsCreateRequest; res: AgentsSessionsCreateResponse };
+	'agents/sessions/delete': { req: AgentsSessionsDeleteRequest; res: AgentsSessionsDeleteResponse };
 	'agents/sessions/list-mine': { req: EmptyRequest; res: AgentsSessionsListMineResponse };
 	'agents/sessions/preview-model-change': { req: AgentsSessionsPreviewModelChangeRequest; res: AgentsSessionsPreviewModelChangeResponse };
 	'agents/sessions/show': { req: AgentsSessionsShowRequest; res: AgentsSessionsShowResponse };
 	'agents/sessions/update': { req: AgentsSessionsUpdateRequest; res: AgentsSessionsUpdateResponse };
 	'agents/styles/create': { req: AgentsStylesCreateRequest; res: AgentsStylesCreateResponse };
 	'agents/styles/delete': { req: AgentsStylesDeleteRequest; res: AgentsStylesDeleteResponse };
+	'agents/styles/diff': { req: AgentsStylesDiffRequest; res: AgentsStylesDiffResponse };
 	'agents/styles/list-mine': { req: EmptyRequest; res: AgentsStylesListMineResponse };
 	'agents/styles/list-usable': { req: EmptyRequest; res: AgentsStylesListUsableResponse };
 	'agents/styles/plaza-detail': { req: AgentsStylesPlazaDetailRequest; res: AgentsStylesPlazaDetailResponse };
 	'agents/styles/public-list': { req: AgentsStylesPublicListRequest; res: AgentsStylesPublicListResponse };
 	'agents/styles/publish': { req: AgentsStylesPublishRequest; res: AgentsStylesPublishResponse };
+	'agents/styles/rollback': { req: AgentsStylesRollbackRequest; res: AgentsStylesRollbackResponse };
 	'agents/styles/show': { req: AgentsStylesShowRequest; res: AgentsStylesShowResponse };
 	'agents/styles/subscribe': { req: AgentsStylesSubscribeRequest; res: AgentsStylesSubscribeResponse };
 	'agents/styles/unpublish': { req: AgentsStylesUnpublishRequest; res: AgentsStylesUnpublishResponse };
 	'agents/styles/unsubscribe': { req: AgentsStylesUnsubscribeRequest; res: AgentsStylesUnsubscribeResponse };
 	'agents/styles/update': { req: AgentsStylesUpdateRequest; res: AgentsStylesUpdateResponse };
+	'agents/styles/versions': { req: AgentsStylesVersionsRequest; res: AgentsStylesVersionsResponse };
 	'announcements': { req: AnnouncementsRequest; res: AnnouncementsResponse };
 	'announcements/show': { req: AnnouncementsShowRequest; res: AnnouncementsShowResponse };
 	'antennas/create': { req: AntennasCreateRequest; res: AntennasCreateResponse };

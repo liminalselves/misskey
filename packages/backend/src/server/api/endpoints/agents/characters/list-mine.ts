@@ -30,6 +30,9 @@ export const meta = {
 				isPublished: { type: 'boolean' },
 				reviewStatus: { type: 'string' },
 				publishedVersion: { type: 'integer', nullable: true },
+				reviewRejectReason: { type: 'string', nullable: true },
+				reviewRejectMessage: { type: 'string', nullable: true },
+				hasWorldbook: { type: 'boolean' },
 				createdAt: { type: 'string', format: 'date-time' },
 				updatedAt: { type: 'string', format: 'date-time' },
 				avatar: { type: 'object', ref: 'DriveFile', nullable: true },
@@ -58,7 +61,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			const rows = await this.agentCharactersRepository.find({
 				where: { userId: me.id },
 				order: { updatedAt: 'DESC' },
-				select: ['id', 'name', 'summary', 'isPublished', 'reviewStatus', 'publishedVersion', 'avatarFileId', 'createdAt', 'updatedAt'],
+				select: ['id', 'name', 'summary', 'isPublished', 'reviewStatus', 'publishedVersion', 'reviewRejectReason', 'reviewRejectMessage', 'worldbook', 'avatarFileId', 'createdAt', 'updatedAt'],
 				take: 100,
 			});
 			const avatarIds = [...new Set(rows.map(r => r.avatarFileId).filter((id): id is string => id != null))];
@@ -72,6 +75,9 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				isPublished: r.isPublished,
 				reviewStatus: r.reviewStatus,
 				publishedVersion: r.publishedVersion,
+				reviewRejectReason: r.reviewRejectReason,
+				reviewRejectMessage: r.reviewRejectMessage,
+				hasWorldbook: this.agentService.hasWorldbookEntries(r.worldbook),
 				createdAt: r.createdAt.toISOString(),
 				updatedAt: r.updatedAt.toISOString(),
 				avatar: r.avatarFileId ? avatarMap.get(r.avatarFileId) ?? null : null,

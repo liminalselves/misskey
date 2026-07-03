@@ -49,6 +49,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <script lang="ts" setup>
 import { computed, ref, watch } from 'vue';
+import type { MkSelectItem } from '@/components/MkSelect.vue';
+import type { MkRadiosOption } from '@/components/MkRadios.vue';
+import type { Form, EnumFormItem, RadioFormItem } from '@/utility/form.js';
 import XFile from '@/components/MkForm.file.vue';
 import MkInput from '@/components/MkInput.vue';
 import MkTextarea from '@/components/MkTextarea.vue';
@@ -58,9 +61,6 @@ import MkRange from '@/components/MkRange.vue';
 import MkButton from '@/components/MkButton.vue';
 import MkRadios from '@/components/MkRadios.vue';
 import { i18n } from '@/i18n.js';
-import type { MkSelectItem } from '@/components/MkSelect.vue';
-import type { MkRadiosOption } from '@/components/MkRadios.vue';
-import type { Form, EnumFormItem, RadioFormItem } from '@/utility/form.js';
 
 const props = defineProps<{
 	form: Form;
@@ -86,7 +86,7 @@ const canSave = computed(() => {
 		if (
 			('manualSave' in props.form[key] && props.form[key].manualSave && state.changed) ||
 			state.invalid
-	 	) {
+		) {
 			return false;
 		}
 		if ('required' in props.form[key] && props.form[key].required) {

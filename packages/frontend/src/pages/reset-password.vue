@@ -12,14 +12,21 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<template #label>{{ i18n.ts.newPassword }}</template>
 			</MkInput>
 
-			<MkButton primary @click="save">{{ i18n.ts.save }}</MkButton>
+			<MkInput v-model="retypedPassword" type="password">
+				<template #prefix><i class="ti ti-lock"></i></template>
+				<template #label>{{ i18n.ts.newPassword }} ({{ i18n.ts.retype }})</template>
+				<template v-if="passwordRetypeState === 'match'" #caption><span style="color: var(--MI_THEME-success)"><i class="ti ti-check ti-fw"></i> {{ i18n.ts.passwordMatched }}</span></template>
+				<template v-else-if="passwordRetypeState === 'not-match'" #caption><span style="color: var(--MI_THEME-error)"><i class="ti ti-alert-triangle ti-fw"></i> {{ i18n.ts.passwordNotMatched }}</span></template>
+			</MkInput>
+
+			<MkButton primary :disabled="!canSave" @click="save">{{ i18n.ts.save }}</MkButton>
 		</div>
 	</div>
 </PageWithHeader>
 </template>
 
 <script lang="ts" setup>
-import { defineAsyncComponent, onMounted, ref, computed } from 'vue';
+import { onMounted, ref, computed } from 'vue';
 import MkInput from '@/components/MkInput.vue';
 import MkButton from '@/components/MkButton.vue';
 import * as os from '@/os.js';
@@ -32,9 +39,17 @@ const props = defineProps<{
 }>();
 
 const password = ref('');
+const retypedPassword = ref('');
+
+const passwordRetypeState = computed(() => {
+	if (password.value === '' || retypedPassword.value === '') return null;
+	return password.value === retypedPassword.value ? 'match' : 'not-match';
+});
+
+const canSave = computed(() => password.value !== '' && passwordRetypeState.value === 'match');
 
 async function save() {
-	if (props.token == null) return;
+	if (props.token == null || !canSave.value) return;
 	await os.apiWithDialog('reset-password', {
 		token: props.token,
 		password: password.value,

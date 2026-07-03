@@ -3,8 +3,6 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
-import type { App, Directive } from 'vue';
-
 import { userPreviewDirective } from './user-preview.js';
 import { getSizeDirective } from './get-size.js';
 import { rippleDirective } from './ripple.js';
@@ -16,6 +14,7 @@ import { clickAnimeDirective } from './click-anime.js';
 import { panelDirective } from './panel.js';
 import { adaptiveBorderDirective } from './adaptive-border.js';
 import { adaptiveBgDirective } from './adaptive-bg.js';
+import type { App, Directive } from 'vue';
 
 export default function(app: App) {
 	for (const [key, value] of Object.entries(directives)) {

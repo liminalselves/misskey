@@ -90,9 +90,12 @@ import {
 	MiAgentSession,
 	MiAgentSessionCompressionSticky,
 	MiAgentMessage,
+	MiAgentImageGeneration,
+	MiAgentExternalAuditLog,
 	MiAgentUserStyleSubscription,
 	MiAgentModelUsageLog,
 	MiAgentRedeemCode,
+	MiAgentPublishedVersion,
 	MiAgentPlazaReview,
 } from './_.js';
 import type { Provider } from '@nestjs/common';
@@ -572,6 +575,18 @@ const $agentMessagesRepository: Provider = {
 	inject: [DI.db],
 };
 
+const $agentImageGenerationsRepository: Provider = {
+	provide: DI.agentImageGenerationsRepository,
+	useFactory: (db: DataSource) => db.getRepository(MiAgentImageGeneration).extend(miRepository as MiRepository<MiAgentImageGeneration>),
+	inject: [DI.db],
+};
+
+const $agentExternalAuditLogsRepository: Provider = {
+	provide: DI.agentExternalAuditLogsRepository,
+	useFactory: (db: DataSource) => db.getRepository(MiAgentExternalAuditLog).extend(miRepository as MiRepository<MiAgentExternalAuditLog>),
+	inject: [DI.db],
+};
+
 const $agentUserStyleSubscriptionsRepository: Provider = {
 	provide: DI.agentUserStyleSubscriptionsRepository,
 	useFactory: (db: DataSource) => db.getRepository(MiAgentUserStyleSubscription).extend(miRepository as MiRepository<MiAgentUserStyleSubscription>),
@@ -599,6 +614,12 @@ const $agentRedeemCodesRepository: Provider = {
 const $agentSessionCompressionStickyRepository: Provider = {
 	provide: DI.agentSessionCompressionStickyRepository,
 	useFactory: (db: DataSource) => db.getRepository(MiAgentSessionCompressionSticky).extend(miRepository as MiRepository<MiAgentSessionCompressionSticky>),
+	inject: [DI.db],
+};
+
+const $agentPublishedVersionsRepository: Provider = {
+	provide: DI.agentPublishedVersionsRepository,
+	useFactory: (db: DataSource) => db.getRepository(MiAgentPublishedVersion).extend(miRepository as MiRepository<MiAgentPublishedVersion>),
 	inject: [DI.db],
 };
 
@@ -696,11 +717,14 @@ const $reversiGamesRepository: Provider = {
 		$agentDialogueStylesRepository,
 		$agentSessionsRepository,
 		$agentMessagesRepository,
+		$agentImageGenerationsRepository,
+		$agentExternalAuditLogsRepository,
 		$agentUserStyleSubscriptionsRepository,
 		$agentPlazaReviewsRepository,
 		$agentModelUsageLogsRepository,
 		$agentRedeemCodesRepository,
 		$agentSessionCompressionStickyRepository,
+		$agentPublishedVersionsRepository,
 		$bubbleGameRecordsRepository,
 		$reversiGamesRepository,
 	],
@@ -784,11 +808,14 @@ const $reversiGamesRepository: Provider = {
 		$agentDialogueStylesRepository,
 		$agentSessionsRepository,
 		$agentMessagesRepository,
+		$agentImageGenerationsRepository,
+		$agentExternalAuditLogsRepository,
 		$agentUserStyleSubscriptionsRepository,
 		$agentPlazaReviewsRepository,
 		$agentModelUsageLogsRepository,
 		$agentRedeemCodesRepository,
 		$agentSessionCompressionStickyRepository,
+		$agentPublishedVersionsRepository,
 		$bubbleGameRecordsRepository,
 		$reversiGamesRepository,
 	],

@@ -16,7 +16,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 	<section v-panel :class="$style.formSection">
 		<h2 :class="$style.formSectionTitle">
-			<i class="ti ti-star"/>
+			<i class="ti ti-star"></i>
 			{{ i18n.ts._agents.plazaReviewFormTitle }}
 		</h2>
 		<div class="_gaps">
@@ -52,7 +52,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 	<div :class="$style.reviewsHead">
 		<h2 :class="$style.reviewsTitle">{{ i18n.ts._agents.plazaReviewsListTitle }}</h2>
 		<MkButton rounded small :disabled="listLoading" @click="loadList">
-			<i class="ti ti-refresh"/>
+			<i class="ti ti-refresh"></i>
 		</MkButton>
 	</div>
 	<MkLoading v-if="listLoading && reviews.length === 0"/>

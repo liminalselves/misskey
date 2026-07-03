@@ -52,13 +52,13 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			await this.chatService.checkChatAvailability(me.id, 'write');
 			const session = await this.agentSessionsRepository.findOneBy({ id: ps.sessionId });
 			if (!session || session.userId !== me.id) {
-				throw new ApiError({ message: 'No such session.', code: 'NO_SUCH_SESSION', id: 'd0e1f2a3-b4c5-6789-3456-890123456789' });
+				throw new ApiError({ message: 'No such session.', code: 'NO_SUCH_SESSION', id: 'caf2dbf1-f7c0-4989-93af-72313d914fa4' });
 			}
 			const characterRow = await this.agentService.loadCharacterForAgentSessionOrThrow(session);
 			this.agentService.assertAgentUserSessionChatAllowed(characterRow, session);
 			const instanceMeta = await this.metaService.fetch(true);
 			if (!this.agentDashscopeMemoryService.isRunnable(instanceMeta)) {
-				throw new ApiError({ message: 'Long-term memory is not available.', code: 'MEMORY_NOT_AVAILABLE', id: 'e1f2a3b4-c5d6-7890-4567-901234567890' });
+				throw new ApiError({ message: 'Long-term memory is not available.', code: 'MEMORY_NOT_AVAILABLE', id: '6a00fde3-e545-4674-997a-4d24c8994254' });
 			}
 			const bailianUserId = this.agentDashscopeMemoryService.bailianUserId(me.id, session.id);
 			const ok = await this.agentDashscopeMemoryService.deleteMemoryNode({
@@ -67,7 +67,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				memoryNodeId: ps.memoryNodeId,
 			});
 			if (!ok) {
-				throw new ApiError({ message: 'Could not delete memory.', code: 'MEMORY_PROVIDER_ERROR', id: 'f2a3b4c5-d6e7-8901-5678-012345678901' });
+				throw new ApiError({ message: 'Could not delete memory.', code: 'MEMORY_PROVIDER_ERROR', id: '55bd663a-6b19-456b-a8e1-f652117358f1' });
 			}
 			return {};
 		});

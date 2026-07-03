@@ -48,7 +48,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			this.agentService.assertAgentsEnabled();
 			const row = await this.agentCharactersRepository.findOneBy({ id: ps.characterId });
 			if (!row || row.userId !== me.id) {
-				throw new ApiError({ message: 'No such character.', code: 'NO_SUCH_CHARACTER', id: 'c9d0e1f2-a3b4-5678-2345-789012345678' });
+				throw new ApiError({ message: 'No such character.', code: 'NO_SUCH_CHARACTER', id: '6728c360-15aa-4802-9082-2f148a355842' });
 			}
 			if (row.reviewStatus === 'pending') {
 				throw new ApiError({
@@ -65,6 +65,10 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				});
 			}
 			row.reviewStatus = 'pending';
+			row.draftRevision = (row.draftRevision ?? 1) + 1;
+			// 审核中不覆盖已批准的 publishedSnapshot：广场卡片与社区会话在审核期间应继续使用上一已上线快照，
+			// 待审内容（当前 row 的草稿字段）由管理端 review/resolve 在通过时再重建快照。首次发布时 publishedVersion 为 null、
+			// isPublished 为 false，草稿不会进入广场或社区，因此无需提前写入快照。
 			row.updatedAt = new Date();
 			this.agentService.syncCharacterListedFlag(row);
 			await this.agentCharactersRepository.save(row);

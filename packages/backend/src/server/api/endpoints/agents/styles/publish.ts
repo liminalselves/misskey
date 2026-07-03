@@ -65,6 +65,9 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				});
 			}
 			row.reviewStatus = 'pending';
+			row.draftRevision = (row.draftRevision ?? 1) + 1;
+			// 审核中不覆盖已批准的 publishedSnapshot：审核期间广场与社区会话继续使用上一已上线快照，
+			// 待审内容由管理端 review/resolve 在通过时重建快照。首次发布尚未上线，草稿不会外泄。
 			row.updatedAt = new Date();
 			this.agentService.syncStyleListedFlag(row);
 			await this.agentDialogueStylesRepository.save(row);

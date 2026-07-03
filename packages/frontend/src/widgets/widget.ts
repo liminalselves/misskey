@@ -7,10 +7,10 @@ import { defineAsyncComponent, reactive, watch } from 'vue';
 import { throttle } from 'throttle-debounce';
 import type { Reactive } from 'vue';
 import type { FormWithDefault, GetFormResultType } from '@/utility/form.js';
+import type { WidgetName } from './index.js';
 import { getDefaultFormValues } from '@/utility/form.js';
 import * as os from '@/os.js';
 import { deepClone } from '@/utility/clone.js';
-import type { WidgetName } from './index.js';
 
 export type Widget<P extends Record<string, unknown>> = {
 	id: string;

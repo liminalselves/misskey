@@ -156,11 +156,11 @@ SPDX-License-Identifier: AGPL-3.0-only
 import { ref, useTemplateRef, watch, onMounted, onUnmounted, reactive, nextTick } from 'vue';
 import ExifReader from 'exifreader';
 import { throttle } from 'throttle-debounce';
+import MkPreviewWithControls from './MkPreviewWithControls.vue';
 import type { ImageFrameParams, ImageFramePreset } from '@/utility/image-frame-renderer/ImageFrameRenderer.js';
 import { ImageFrameRenderer } from '@/utility/image-frame-renderer/ImageFrameRenderer.js';
 import { i18n } from '@/i18n.js';
 import MkModalWindow from '@/components/MkModalWindow.vue';
-import MkPreviewWithControls from './MkPreviewWithControls.vue';
 import MkSelect from '@/components/MkSelect.vue';
 import MkFolder from '@/components/MkFolder.vue';
 import MkSwitch from '@/components/MkSwitch.vue';

@@ -851,7 +851,7 @@ export class ChatService {
 
 	@bindThis
 	public async muteRoom(userId: MiUser['id'], roomId: MiChatRoom['id'], mute: boolean) {
-		let membership = await this.chatRoomMembershipsRepository.findOneBy({ roomId, userId });
+		const membership = await this.chatRoomMembershipsRepository.findOneBy({ roomId, userId });
 		if (membership == null) {
 			const room = await this.chatRoomsRepository.findOneBy({ id: roomId });
 			if (room == null) {

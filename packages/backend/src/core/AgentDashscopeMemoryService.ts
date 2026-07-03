@@ -6,6 +6,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { bindThis } from '@/decorators.js';
 import type { MiMeta } from '@/models/Meta.js';
+import { assertSafeLlmHttpsUrl, UnsafeLlmUrlError } from '@/misc/validate-llm-endpoint-url.js';
 
 const DEFAULT_API_ORIGIN = 'https://dashscope.aliyuncs.com';
 const SEARCH_TIMEOUT_MS = 10_000;
@@ -36,13 +37,25 @@ export class AgentDashscopeMemoryService {
 		return `${misskeyUserId}:${sessionId}`;
 	}
 
-	private apiOrigin(meta: MiMeta): string {
+	/**
+	 * 解析「实际向阿里云百炼发起请求的 origin」并做 SSRF 防护：
+	 *  - 管理员未自定义 `agentMem0ApiBaseUrl` → 直接使用 DEFAULT_API_ORIGIN（公网阿里云域名，可信）。
+	 *  - 管理员自定义但 `assertSafeLlmHttpsUrl` 拒绝（非 https / 内网 / 元数据 / DNS 私有 / 含凭据）→
+	 *    记录 warn 并回退到 DEFAULT_API_ORIGIN，避免「错配 base url + 长期记忆侧车自由出网」的 SSRF 面。
+	 *  - 与 `AgentService.invokeChatCompletions` 路径走同一份校验，保持「凡是 LLM 系外部调用都先过 SSRF 闸门」的一致性。
+	 *
+	 * 静默回退（而非抛出）是为了保持长期记忆侧车在面对管理员误配时仍可降级运行，
+	 * 实际侧车失败时调用方已有 null / [] 等优雅处理。
+	 */
+	private async resolveSafeApiOrigin(meta: MiMeta): Promise<string> {
 		const raw = meta.agentMem0ApiBaseUrl?.trim();
 		if (!raw) return DEFAULT_API_ORIGIN;
 		try {
-			const u = new URL(raw.startsWith('http') ? raw : `https://${raw}`);
+			const u = await assertSafeLlmHttpsUrl(raw);
 			return u.origin;
-		} catch {
+		} catch (e) {
+			const reason = e instanceof UnsafeLlmUrlError ? e.reason : 'unknown';
+			this.logger.warn(`Dashscope custom origin rejected as unsafe (${reason}); falling back to ${DEFAULT_API_ORIGIN}`);
 			return DEFAULT_API_ORIGIN;
 		}
 	}
@@ -62,7 +75,7 @@ export class AgentDashscopeMemoryService {
 		const key = params.meta.agentMem0ApiKey?.trim();
 		if (!key) return null;
 		const topK = Math.max(1, Math.min(100, Math.trunc(params.topK)));
-		const origin = this.apiOrigin(params.meta);
+		const origin = await this.resolveSafeApiOrigin(params.meta);
 		const url = `${origin}/api/v2/apps/memory/memory_nodes/search`;
 		const body: Record<string, unknown> = {
 			user_id: params.bailianUserId,
@@ -162,8 +175,6 @@ export class AgentDashscopeMemoryService {
 		const key = params.meta.agentMem0ApiKey?.trim();
 		if (!key) return;
 		if (params.messages.length === 0) return;
-		const origin = this.apiOrigin(params.meta);
-		const url = `${origin}/api/v2/apps/memory/add`;
 		const body: Record<string, unknown> = {
 			user_id: params.bailianUserId,
 			messages: params.messages,
@@ -173,6 +184,8 @@ export class AgentDashscopeMemoryService {
 
 		setImmediate(() => {
 			void (async () => {
+				const origin = await this.resolveSafeApiOrigin(params.meta);
+				const url = `${origin}/api/v2/apps/memory/add`;
 				const ac = new AbortController();
 				const t = setTimeout(() => ac.abort(), ADD_TIMEOUT_MS);
 				try {
@@ -234,7 +247,7 @@ export class AgentDashscopeMemoryService {
 		if (!key) return null;
 		const pageNum = Math.max(1, Math.trunc(params.pageNum));
 		const pageSize = Math.max(1, Math.min(50, Math.trunc(params.pageSize)));
-		const origin = this.apiOrigin(params.meta);
+		const origin = await this.resolveSafeApiOrigin(params.meta);
 		const q = new URLSearchParams({
 			user_id: params.bailianUserId,
 			page_num: String(pageNum),
@@ -303,7 +316,7 @@ export class AgentDashscopeMemoryService {
 	}): Promise<{ memoryNodes: { memoryNodeId: string; content: string }[] } | null> {
 		const key = params.meta.agentMem0ApiKey?.trim();
 		if (!key) return null;
-		const origin = this.apiOrigin(params.meta);
+		const origin = await this.resolveSafeApiOrigin(params.meta);
 		const url = `${origin}/api/v2/apps/memory/add`;
 		const body: Record<string, unknown> = {
 			user_id: params.bailianUserId,
@@ -358,7 +371,7 @@ export class AgentDashscopeMemoryService {
 	}): Promise<boolean> {
 		const key = params.meta.agentMem0ApiKey?.trim();
 		if (!key) return false;
-		const origin = this.apiOrigin(params.meta);
+		const origin = await this.resolveSafeApiOrigin(params.meta);
 		const url = `${origin}/api/v2/apps/memory/memory_nodes/${encodeURIComponent(params.memoryNodeId)}`;
 		const body: Record<string, unknown> = {
 			user_id: params.bailianUserId,
@@ -399,7 +412,7 @@ export class AgentDashscopeMemoryService {
 	}): Promise<boolean> {
 		const key = params.meta.agentMem0ApiKey?.trim();
 		if (!key) return false;
-		const origin = this.apiOrigin(params.meta);
+		const origin = await this.resolveSafeApiOrigin(params.meta);
 		const q = new URLSearchParams({ user_id: params.bailianUserId });
 		const lib = params.meta.agentMem0OrgId?.trim();
 		if (lib) q.set('memory_library_id', lib);

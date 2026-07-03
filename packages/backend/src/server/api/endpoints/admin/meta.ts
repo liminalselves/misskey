@@ -10,6 +10,9 @@ import type { Config } from '@/config.js';
 import { DI } from '@/di-symbols.js';
 import { DEFAULT_POLICIES } from '@/core/RoleService.js';
 import { SystemAccountService } from '@/core/SystemAccountService.js';
+import { resolveAgentImageNegativePrompt } from '@/core/agent-image-defaults.js';
+import { resolveAgentImageArtistPresets } from '@/core/agent-image-presets.js';
+import { DEFAULT_AGENT_EXTERNAL_AUDIT_SYSTEM_PROMPT } from '@/core/AgentExternalAuditService.js';
 
 export const meta = {
 	tags: ['meta'],
@@ -472,6 +475,122 @@ export const meta = {
 			agentCompressionBandT2Ratio: {
 				type: 'number',
 				optional: false, nullable: true,
+			},
+			agentImageGenerationEnabled: {
+				type: 'boolean',
+				optional: false, nullable: false,
+			},
+			agentImageBaseUrl: {
+				type: 'string',
+				optional: false, nullable: false,
+			},
+			agentImageTokens: {
+				type: 'array',
+				optional: false, nullable: false,
+				items: {
+					type: 'object',
+					optional: false, nullable: false,
+					additionalProperties: true,
+				},
+			},
+			agentImageModels: {
+				type: 'array',
+				optional: false, nullable: false,
+				items: {
+					type: 'object',
+					optional: false, nullable: false,
+					additionalProperties: true,
+				},
+			},
+			agentImageDefaultModel: {
+				type: 'string',
+				optional: false, nullable: false,
+			},
+			agentImageDefaultParams: {
+				type: 'object',
+				optional: false, nullable: false,
+				additionalProperties: true,
+			},
+			agentImageDefaultNegativePrompt: {
+				type: 'string',
+				optional: false, nullable: true,
+			},
+			agentImageDefaultNegativePromptResolved: {
+				type: 'string',
+				optional: false, nullable: false,
+			},
+			agentImageArtistPresets: {
+				type: 'array',
+				optional: false, nullable: false,
+				items: {
+					type: 'object',
+					additionalProperties: true,
+				},
+			},
+			agentImageArtistPresetsResolved: {
+				type: 'array',
+				optional: false, nullable: false,
+				items: {
+					type: 'object',
+					additionalProperties: true,
+				},
+			},
+			agentImageMaxPerReply: {
+				type: 'number',
+				optional: false, nullable: false,
+			},
+			agentImageCostPerCall: {
+				type: 'number',
+				optional: false, nullable: false,
+			},
+			agentImageDefaultArtistPresetId: {
+				type: 'string',
+				optional: false, nullable: true,
+			},
+			agentImageTokenMinPoints: {
+				type: 'number',
+				optional: false, nullable: false,
+			},
+			agentImageTokenBalanceTtlSeconds: {
+				type: 'number',
+				optional: false, nullable: false,
+			},
+			agentExternalAuditEnabled: {
+				type: 'boolean',
+				optional: false, nullable: false,
+			},
+			agentExternalAuditModels: {
+				type: 'array',
+				optional: false, nullable: false,
+				items: {
+					type: 'object',
+					optional: false, nullable: false,
+					additionalProperties: true,
+				},
+			},
+			agentExternalAuditTimeoutMs: {
+				type: 'number',
+				optional: false, nullable: false,
+			},
+			agentExternalAuditFailureThresholdPercent: {
+				type: 'number',
+				optional: false, nullable: false,
+			},
+			agentExternalAuditFailureMinRequests: {
+				type: 'number',
+				optional: false, nullable: false,
+			},
+			agentExternalAuditNotifyEmails: {
+				type: 'string',
+				optional: false, nullable: true,
+			},
+			agentExternalAuditSystemPrompt: {
+				type: 'string',
+				optional: false, nullable: true,
+			},
+			agentExternalAuditSystemPromptResolved: {
+				type: 'string',
+				optional: false, nullable: false,
 			},
 			useObjectStorage: {
 				type: 'boolean',
@@ -947,6 +1066,31 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				agentCompressionMaxOutputTokens: instance.agentCompressionMaxOutputTokens,
 				agentCompressionBandT1Ratio: instance.agentCompressionBandT1Ratio,
 				agentCompressionBandT2Ratio: instance.agentCompressionBandT2Ratio,
+				agentImageGenerationEnabled: instance.agentImageGenerationEnabled,
+				agentImageBaseUrl: instance.agentImageBaseUrl,
+				agentImageTokens: instance.agentImageTokens ?? [],
+				agentImageModels: instance.agentImageModels ?? [],
+				agentImageDefaultModel: instance.agentImageDefaultModel,
+				agentImageDefaultParams: instance.agentImageDefaultParams ?? {},
+				agentImageDefaultNegativePrompt: instance.agentImageDefaultNegativePrompt,
+				agentImageDefaultNegativePromptResolved: resolveAgentImageNegativePrompt(instance.agentImageDefaultNegativePrompt),
+				agentImageArtistPresets: instance.agentImageArtistPresets ?? [],
+				agentImageArtistPresetsResolved: resolveAgentImageArtistPresets(instance.agentImageArtistPresets),
+				agentImageMaxPerReply: instance.agentImageMaxPerReply,
+				agentImageCostPerCall: instance.agentImageCostPerCall,
+				agentImageDefaultArtistPresetId: instance.agentImageDefaultArtistPresetId,
+				agentImageTokenMinPoints: instance.agentImageTokenMinPoints,
+				agentImageTokenBalanceTtlSeconds: instance.agentImageTokenBalanceTtlSeconds,
+				agentExternalAuditEnabled: instance.agentExternalAuditEnabled,
+				agentExternalAuditModels: instance.agentExternalAuditModels ?? [],
+				agentExternalAuditTimeoutMs: instance.agentExternalAuditTimeoutMs,
+				agentExternalAuditFailureThresholdPercent: instance.agentExternalAuditFailureThresholdPercent,
+				agentExternalAuditFailureMinRequests: instance.agentExternalAuditFailureMinRequests,
+				agentExternalAuditNotifyEmails: instance.agentExternalAuditNotifyEmails,
+				agentExternalAuditSystemPrompt: instance.agentExternalAuditSystemPrompt,
+				agentExternalAuditSystemPromptResolved: typeof instance.agentExternalAuditSystemPrompt === 'string' && instance.agentExternalAuditSystemPrompt.trim() !== ''
+					? instance.agentExternalAuditSystemPrompt
+					: DEFAULT_AGENT_EXTERNAL_AUDIT_SYSTEM_PROMPT,
 				useObjectStorage: instance.useObjectStorage,
 				objectStorageBaseUrl: instance.objectStorageBaseUrl,
 				objectStorageBucket: instance.objectStorageBucket,

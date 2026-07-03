@@ -256,7 +256,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				}
 			}
 
-			if (sort !== 'recommended') q = q.limit(limit);
+			// Recommended sort returns early above; only heat/rating/latest reach here.
+			q = q.limit(limit);
 
 			const rows = await q.getMany();
 			if (rows.length === 0) return [];

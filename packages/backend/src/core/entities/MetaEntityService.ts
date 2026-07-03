@@ -172,6 +172,11 @@ export class MetaEntityService {
 				return null;
 			})(),
 			agentLlmConfigured: isAgentLlmRunnable(instance),
+			agentImageGenerationEnabled: instance.agentImageGenerationEnabled === true,
+			agentImageConfigured: instance.agentImageGenerationEnabled === true && Array.isArray(instance.agentImageTokens) && instance.agentImageTokens.some(t => t.enabled !== false && typeof t.token === 'string' && t.token.trim().length > 0),
+			agentImageDefaultModel: instance.agentImageDefaultModel,
+			agentImageMaxPerReply: instance.agentImageMaxPerReply,
+			agentImageCostPerCall: instance.agentImageCostPerCall,
 			agentLongMemoryConfigured: instance.agentMem0Enabled === true && (instance.agentMem0ApiKey?.trim().length ?? 0) > 0,
 			agentMem0AddMemoryMaxRounds: (() => {
 				const v = Math.trunc(Number(instance.agentMem0AddMemoryMaxRounds));
@@ -224,4 +229,3 @@ export class MetaEntityService {
 		return packDetailed;
 	}
 }
-

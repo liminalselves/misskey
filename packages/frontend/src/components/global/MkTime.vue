@@ -15,8 +15,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 <script lang="ts" setup>
 import isChromatic from 'chromatic/isChromatic';
 import { computed } from 'vue';
-import { i18n } from '@/i18n.js';
 import { dateTimeFormat } from '@@/js/intl-const.js';
+import { i18n } from '@/i18n.js';
 import { useLowresTime } from '@/composables/use-lowres-time.js';
 
 const props = withDefaults(defineProps<{
@@ -49,8 +49,7 @@ const absolute = !invalid ? dateTimeFormat.format(_time) : i18n.ts._ago.invalid;
 
 const actualNow = useLowresTime();
 const now = computed(() => (props.origin ? props.origin.getTime() : actualNow.value));
-
-// eslint-disable-next-line vue/no-setup-props-reactivity-loss
+ 
 const ago = computed(() => (now.value - _time) / 1000/*ms*/);
 
 const relative = computed<string>(() => {

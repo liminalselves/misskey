@@ -12,6 +12,7 @@ import { ApiError } from '@/server/api/error.js';
 import { AgentService } from '@/core/AgentService.js';
 import { MetaService } from '@/core/MetaService.js';
 import { agentLongMemoryProviderIds } from '@/core/AgentCompressionMemoryService.js';
+import { AgentImageService } from '@/core/AgentImageService.js';
 
 export const meta = {
 	tags: ['agents'],
@@ -35,6 +36,8 @@ export const meta = {
 			agentLongMemoryAddEveryNRounds: { type: 'integer', nullable: true },
 			agentLongMemoryProvider: { type: 'string' },
 			agentCompressionModelId: { type: 'string', nullable: true },
+			agentImageModelId: { type: 'string', nullable: true },
+			agentImageSettings: { type: 'object' },
 			compressionCacheInvalidated: { type: 'boolean' },
 			updatedAt: { type: 'string', format: 'date-time' },
 		},
@@ -56,6 +59,12 @@ export const paramDef = {
 		agentLongMemoryAddEveryNRounds: { type: 'integer', minimum: 1, maximum: 48, nullable: true },
 		agentLongMemoryProvider: { type: 'string', enum: [...agentLongMemoryProviderIds] },
 		agentCompressionModelId: { type: 'string', nullable: true, maxLength: 64 },
+		agentImageModelId: { type: 'string', nullable: true, maxLength: 128 },
+		agentImageSettings: {
+			type: 'object',
+			nullable: true,
+			additionalProperties: true,
+		},
 	},
 	required: ['sessionId'],
 } as const;
@@ -71,6 +80,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 
 		private agentService: AgentService,
 		private metaService: MetaService,
+		private agentImageService: AgentImageService,
 	) {
 		super(meta, paramDef, async (ps, me) => {
 			this.agentService.assertAgentsEnabled();
@@ -151,6 +161,16 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					row.agentCompressionModelId = ps.agentCompressionModelId.trim();
 				}
 			}
+			if (ps.agentImageModelId !== undefined) {
+				const mid = ps.agentImageModelId == null || ps.agentImageModelId.trim() === '' ? null : ps.agentImageModelId.trim();
+				if (mid != null && this.agentImageService.resolveImageModel(instanceMeta, mid) == null) {
+					throw new ApiError({ message: 'No such image model.', code: 'NO_SUCH_AGENT_IMAGE_MODEL', id: '02065f09-7ac7-49e0-ac0a-d9f64a82a0f9' });
+				}
+				row.agentImageModelId = mid;
+			}
+			if (ps.agentImageSettings !== undefined) {
+				row.agentImageSettings = this.normalizeAgentImageSettings(ps.agentImageSettings);
+			}
 
 			row.updatedAt = new Date();
 			await this.agentSessionsRepository.save(row);
@@ -167,9 +187,26 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				agentLongMemoryAddEveryNRounds: row.agentLongMemoryAddEveryNRounds,
 				agentLongMemoryProvider: row.agentLongMemoryProvider,
 				agentCompressionModelId: row.agentCompressionModelId,
+				agentImageModelId: row.agentImageModelId,
+				agentImageSettings: row.agentImageSettings ?? {},
 				compressionCacheInvalidated: false,
 				updatedAt: row.updatedAt.toISOString(),
 			};
 		});
+	}
+
+	private normalizeAgentImageSettings(raw: Record<string, unknown> | null | undefined): Record<string, unknown> {
+		if (raw == null || typeof raw !== 'object') return {};
+		const out: Record<string, unknown> = {};
+		if (typeof raw.size === 'string' && ['portrait', 'landscape', 'square'].includes(raw.size)) out.size = raw.size;
+		if (typeof raw.artistPresetId === 'string' && raw.artistPresetId.length <= 128) out.artistPresetId = raw.artistPresetId;
+		for (const key of ['steps', 'scale', 'cfgRescale']) {
+			const n = Number(raw[key]);
+			if (Number.isFinite(n)) out[key] = n;
+		}
+		for (const key of ['sampler', 'noiseSchedule']) {
+			if (typeof raw[key] === 'string' && raw[key].length <= 128) out[key] = raw[key];
+		}
+		return out;
 	}
 }

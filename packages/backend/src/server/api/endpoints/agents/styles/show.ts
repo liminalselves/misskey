@@ -28,6 +28,9 @@ export const meta = {
 			isPublished: { type: 'boolean' },
 			reviewStatus: { type: 'string', optional: true },
 			publishedVersion: { type: 'integer', nullable: true, optional: true },
+			reviewRejectReason: { type: 'string', nullable: true, optional: true },
+			reviewRejectMessage: { type: 'string', nullable: true, optional: true },
+			draftRevision: { type: 'integer', optional: true },
 			promptOpenSourced: { type: 'boolean' },
 			createdAt: { type: 'string', format: 'date-time' },
 			updatedAt: { type: 'string', format: 'date-time' },
@@ -53,11 +56,11 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			this.agentService.assertAgentsEnabled();
 			const row = await this.agentDialogueStylesRepository.findOneBy({ id: ps.styleId });
 			if (!row) {
-				throw new ApiError({ message: 'No such style.', code: 'NO_SUCH_STYLE', id: 'c5d6e7f8-a9b0-1234-8901-345678901234' });
+				throw new ApiError({ message: 'No such style.', code: 'NO_SUCH_STYLE', id: '82f59083-e47b-4df2-a85c-dd2af557c9d6' });
 			}
 			const isOwner = row.userId === me.id;
 			if (!isOwner && !this.agentService.isListedOnPlazaStyle(row)) {
-				throw new ApiError({ message: 'No such style.', code: 'NO_SUCH_STYLE', id: 'd6e7f8a9-b0c1-2345-9012-456789012345' });
+				throw new ApiError({ message: 'No such style.', code: 'NO_SUCH_STYLE', id: '16b07b9b-581f-45bd-894b-3b5944f84657' });
 			}
 			const display = isOwner ? row : this.agentService.effectiveStyleForLlm(row, true);
 			const exposeBody = isOwner || row.promptOpenSourced === true;
@@ -68,7 +71,13 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				summary: display.summary,
 				body: exposeBody ? display.body : '',
 				isPublished: row.isPublished,
-				...(isOwner ? { reviewStatus: row.reviewStatus, publishedVersion: row.publishedVersion } : {}),
+				...(isOwner ? {
+					reviewStatus: row.reviewStatus,
+					publishedVersion: row.publishedVersion,
+					reviewRejectReason: row.reviewRejectReason,
+					reviewRejectMessage: row.reviewRejectMessage,
+					draftRevision: row.draftRevision ?? 1,
+				} : {}),
 				promptOpenSourced: row.promptOpenSourced === true,
 				createdAt: row.createdAt.toISOString(),
 				updatedAt: row.updatedAt.toISOString(),

@@ -81,7 +81,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				throw new ApiError(meta.errors.noSuchFile);
 			}
 
-			if (!await this.roleService.isModerator(me) && (file.userId !== me.id)) {
+			const isModerator = await this.roleService.isModerator(me);
+			if (!isModerator && (file.userId !== me.id)) {
 				throw new ApiError(meta.errors.accessDenied);
 			}
 

@@ -11,13 +11,15 @@ packages:
   - packages/misskey-js/generator
   - packages/misskey-reversi
   - packages/misskey-bubble-game
+overrides:
+  '@aiscript-dev/aiscript-languageserver': '-'
+  chokidar: 5.0.0
+  lodash: 4.17.23
 onlyBuiltDependencies:
   - '@nestjs/core'
   - '@parcel/watcher'
   - '@sentry/profiling-node'
-  - '@sentry-internal/node-cpu-profiler'
   - '@swc/core'
-  - '@tensorflow/tfjs-node'
   - bufferutil
   - canvas
   - core-js
@@ -31,6 +33,10 @@ onlyBuiltDependencies:
   - utf-8-validate
   - v-code-diff
   - vue-demi
+ignoredBuiltDependencies:
+  - '@sentry-internal/node-cpu-profiler'
+  - '@tensorflow/tfjs-node'
+  - exifreader
 ignorePatchFailures: false
 minimumReleaseAge: 10080 # delay 7days to mitigate supply-chain attack
 minimumReleaseAgeExclude:
@@ -38,3 +44,21 @@ minimumReleaseAgeExclude:
   - '@fastify/express' # 脆弱性対応。そのうち消すこと
   - 'lodash' # 脆弱性対応。そのうち消すこと
   - 'tar' # 脆弱性対応。そのうち消すこと
+allowBuilds:
+  '@nestjs/core': true
+  '@parcel/watcher': true
+  '@sentry-internal/node-cpu-profiler': false
+  '@swc/core': true
+  '@tensorflow/tfjs-node': true
+  bufferutil: true
+  core-js: true
+  cypress: true
+  esbuild: true
+  exifreader: false
+  msgpackr-extract: true
+  msw: true
+  re2: true
+  sharp: true
+  utf-8-validate: true
+  v-code-diff: true
+  vue-demi: true

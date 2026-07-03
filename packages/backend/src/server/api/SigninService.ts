@@ -50,9 +50,9 @@ export class SigninService {
 
 			const profile = await this.userProfilesRepository.findOneByOrFail({ userId: user.id });
 			if (profile.email && profile.emailVerified) {
-				this.emailService.sendEmail(profile.email, 'New login / ログインがありました',
-					'There is a new login. If you do not recognize this login, update the security status of your account, including changing your password. / 新しいログインがありました。このログインに心当たりがない場合は、パスワードを変更するなど、アカウントのセキュリティ状態を更新してください。',
-					'There is a new login. If you do not recognize this login, update the security status of your account, including changing your password. / 新しいログインがありました。このログインに心当たりがない場合は、パスワードを変更するなど、アカウントのセキュリティ状態を更新してください。');
+				this.emailService.sendEmail(profile.email, '新的登录 / New login',
+					'检测到一次新的登录。如果这不是你本人操作，请尽快更新账号安全状态，包括修改密码。<br><br>There is a new login. If you do not recognize this login, update the security status of your account, including changing your password.',
+					'检测到一次新的登录。如果这不是你本人操作，请尽快更新账号安全状态，包括修改密码。\n\nThere is a new login. If you do not recognize this login, update the security status of your account, including changing your password.');
 			}
 		});
 
@@ -64,4 +64,3 @@ export class SigninService {
 		} satisfies Misskey.entities.SigninFlowResponse;
 	}
 }
-

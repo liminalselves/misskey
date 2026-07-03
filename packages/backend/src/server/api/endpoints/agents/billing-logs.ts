@@ -31,7 +31,7 @@ export const meta = {
 						createdAt: { type: 'string', format: 'date-time' },
 						amount: { type: 'number' },
 						modelName: { type: 'string', nullable: true },
-						usageKind: { type: 'string', enum: ['chat', 'compression'], nullable: true },
+						usageKind: { type: 'string', enum: ['chat', 'compression', 'image_generation'], nullable: true },
 						status: { type: 'string', nullable: true },
 						durationMs: { type: 'integer', nullable: true },
 						redeemCode: { type: 'string', nullable: true },
@@ -63,7 +63,7 @@ type BillingItem = {
 	createdAt: string;
 	amount: number;
 	modelName: string | null;
-	usageKind: 'chat' | 'compression' | null;
+	usageKind: 'chat' | 'compression' | 'image_generation' | null;
 	status: string | null;
 	durationMs: number | null;
 	redeemCode: string | null;

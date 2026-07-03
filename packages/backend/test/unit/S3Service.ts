@@ -5,41 +5,32 @@
 
 process.env.NODE_ENV = 'test';
 
-import { Test } from '@nestjs/testing';
+import * as http from 'node:http';
 import {
 	CompleteMultipartUploadCommand,
 	CreateMultipartUploadCommand,
 	PutObjectCommand,
+	PutObjectAclCommand,
 	S3Client,
 	UploadPartCommand,
 } from '@aws-sdk/client-s3';
 import { mockClient } from 'aws-sdk-client-mock';
-import { GlobalModule } from '@/GlobalModule.js';
-import { CoreModule } from '@/core/CoreModule.js';
 import { S3Service } from '@/core/S3Service.js';
 import { MiMeta } from '@/models/_.js';
-import type { TestingModule } from '@nestjs/testing';
+import type { HttpRequestService } from '@/core/HttpRequestService.js';
 
 describe('S3Service', () => {
-	let app: TestingModule;
 	let s3Service: S3Service;
 	const s3Mock = mockClient(S3Client);
 
-	beforeAll(async () => {
-		app = await Test.createTestingModule({
-			imports: [GlobalModule, CoreModule],
-			providers: [S3Service],
-		}).compile();
-		app.enableShutdownHooks();
-		s3Service = app.get<S3Service>(S3Service);
+	beforeAll(() => {
+		s3Service = new S3Service({
+			getAgentByUrl: () => new http.Agent(),
+		} as unknown as HttpRequestService);
 	});
 
 	beforeEach(async () => {
 		s3Mock.reset();
-	});
-
-	afterAll(async () => {
-		await app.close();
 	});
 
 	describe('upload', () => {
@@ -83,6 +74,24 @@ describe('S3Service', () => {
 				Key: 'fake',
 				Body: 'x'.repeat(8 * 1024 * 1024 + 1), // デフォルトpartSizeにしている 8 * 1024 * 1024 を越えるサイズ
 			})).rejects.toThrow(Error);
+		});
+	});
+
+	describe('setObjectAcl', () => {
+		test('updates an object ACL', async () => {
+			s3Mock.on(PutObjectAclCommand).resolves({});
+
+			await s3Service.setObjectAcl({ objectStorageRegion: 'us-east-1' } as MiMeta, {
+				Bucket: 'fake',
+				Key: 'fake',
+				ACL: 'private',
+			});
+
+			expect(s3Mock.commandCalls(PutObjectAclCommand)[0]?.args[0].input).toEqual({
+				Bucket: 'fake',
+				Key: 'fake',
+				ACL: 'private',
+			});
 		});
 	});
 });

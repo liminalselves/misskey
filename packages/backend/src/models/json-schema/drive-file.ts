@@ -42,6 +42,14 @@ export const packedDriveFileSchema = {
 			type: 'boolean',
 			optional: false, nullable: false,
 		},
+		isAgentGenerated: {
+			type: 'boolean',
+			optional: false, nullable: false,
+		},
+		isAgentImageBlocked: {
+			type: 'boolean',
+			optional: false, nullable: false,
+		},
 		blurhash: {
 			type: 'string',
 			optional: false, nullable: true,

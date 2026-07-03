@@ -138,6 +138,8 @@ export function file(isSensitive = false): entities.DriveFile {
 		md5: 'f6fc51c73dc21b1fb85ead2cdf57530a',
 		size: 77752,
 		isSensitive,
+		isAgentGenerated: false,
+		isAgentImageBlocked: false,
 		blurhash: 'eQAmoa^-MH8w9ZIvNLSvo^$*MwRPbwtSxutRozjEiwR.RjWBoeozog',
 		properties: {
 			width: 1024,
@@ -192,6 +194,7 @@ export function folder(id = 'somefolderid', name = 'Some Folder', parentId: stri
 		id,
 		createdAt: '2016-12-28T22:49:51.000Z',
 		name,
+		systemType: null,
 		parentId,
 	};
 }

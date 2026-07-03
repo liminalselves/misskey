@@ -69,7 +69,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 							<MkSelect v-model="filterStatus" :items="statusItems" small>
 								<template #label>{{ i18n.ts._agents.redeemCodesFilterStatus }}</template>
 							</MkSelect>
-							<MkButton small rounded :disabled="listLoading" @click="loadList(true)"><i class="ti ti-refresh"></i></MkButton>
+							<MkButton small rounded :disabled="listLoading" @click="loadListPage(1, true)"><i class="ti ti-refresh"></i></MkButton>
 						</div>
 
 						<MkLoading v-if="listLoading && listItems.length === 0"/>
@@ -114,7 +114,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 									class="_button"
 									:class="[$style.pagerSegBtn, listPageSize === size ? $style.pagerSegBtnActive : null]"
 									@click="listPageSize = size"
-								>{{ size }}</button>
+								>
+									{{ size }}
+								</button>
 							</div>
 							<div :class="$style.pagerNavGroup" role="group">
 								<button
@@ -125,7 +127,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 									:aria-label="i18n.ts._agents.sessionMemoryPrevPage"
 									@click="goListPage(listPage - 1)"
 								>
-									<i class="ti ti-chevron-left" aria-hidden="true"/>
+									<i class="ti ti-chevron-left" aria-hidden="true"></i>
 								</button>
 								<span :class="$style.pagerNavText">{{ listPage }}</span>
 								<button
@@ -136,7 +138,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 									:aria-label="i18n.ts._agents.sessionMemoryNextPage"
 									@click="goListPage(listPage + 1)"
 								>
-									<i class="ti ti-chevron-right" aria-hidden="true"/>
+									<i class="ti ti-chevron-right" aria-hidden="true"></i>
 								</button>
 							</div>
 							<div :class="$style.pagerGoGroup" role="group" :aria-label="i18n.ts._agents.pageJump">
@@ -159,7 +161,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 									:class="$style.pagerGoJumpBtn"
 									:disabled="listLoading"
 									@click="goListInputPage"
-								>{{ i18n.ts._agents.pageJump }}</button>
+								>
+									{{ i18n.ts._agents.pageJump }}
+								</button>
 							</div>
 						</div>
 					</div>
@@ -217,7 +221,7 @@ async function generate() {
 		const result = await misskeyApi('admin/agents/redeem-codes/generate' as any, params);
 		generated.value = result as any;
 		os.toast(i18n.ts._agents.redeemCodesGenerateSuccess);
-		loadList(true);
+		loadListPage(1, true);
 	} catch (err) {
 		os.alert({ type: 'error', text: formatApiError(err) });
 	} finally {
@@ -227,13 +231,11 @@ async function generate() {
 
 function copyOne(code: string) {
 	copyToClipboard(code);
-	os.toast(i18n.ts.copiedToClipboard);
 }
 
 function copyAllCodes() {
 	const text = generated.value.map(c => c.code).join('\n');
 	copyToClipboard(text);
-	os.toast(i18n.ts.copiedToClipboard);
 }
 
 // ──── 列表 ────

@@ -49,6 +49,11 @@ export class StreamingApiServerService {
 				return;
 			}
 
+			const path = request.url.split('?', 1)[0];
+			if (path !== '/streaming') {
+				return;
+			}
+
 			const q = new URL(request.url, `http://${request.headers.host}`).searchParams;
 
 			let user: MiLocalUser | null = null;

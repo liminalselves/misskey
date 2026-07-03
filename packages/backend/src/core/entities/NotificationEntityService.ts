@@ -14,7 +14,7 @@ import type { MiNote } from '@/models/Note.js';
 import type { Packed } from '@/misc/json-schema.js';
 import { bindThis } from '@/decorators.js';
 import { isUserEffectivelySuspended } from '@/misc/user-effective-suspension.js';
-import { FilterUnionByProperty, groupedNotificationTypes } from '@/types.js';
+import { FilterUnionByProperty } from '@/types.js';
 import { CacheService } from '@/core/CacheService.js';
 import { RoleEntityService } from './RoleEntityService.js';
 import { ChatEntityService } from './ChatEntityService.js';
@@ -22,7 +22,7 @@ import type { OnModuleInit } from '@nestjs/common';
 import type { UserEntityService } from './UserEntityService.js';
 import type { NoteEntityService } from './NoteEntityService.js';
 
-const NOTE_REQUIRED_NOTIFICATION_TYPES = new Set([
+const NOTE_REQUIRED_NOTIFICATION_TYPES = new Set<string>([
 	'note',
 	'mention',
 	'reply',
@@ -33,7 +33,7 @@ const NOTE_REQUIRED_NOTIFICATION_TYPES = new Set([
 	'reaction:grouped',
 	'pollEnded',
 	'scheduledNotePosted',
-] as (typeof groupedNotificationTypes[number])[]);
+]);
 
 @Injectable()
 export class NotificationEntityService implements OnModuleInit {

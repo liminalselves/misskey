@@ -4,6 +4,7 @@
  */
 
 import type { DeckProfile } from '@/deck.js';
+import type { SoundStore } from '@/preferences/def.js';
 import { genId } from '@/utility/id.js';
 import { store } from '@/store.js';
 import { prefer } from '@/preferences.js';
@@ -12,7 +13,6 @@ import { deckStore } from '@/ui/deck/deck-store.js';
 import { unisonReload } from '@/utility/unison-reload.js';
 import * as os from '@/os.js';
 import { i18n } from '@/i18n.js';
-import type { SoundStore } from '@/preferences/def.js';
 
 // TODO: そのうち消す
 export function migrateOldSettings() {

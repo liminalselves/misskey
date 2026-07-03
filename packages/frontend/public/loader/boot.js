@@ -7,6 +7,9 @@
 
 // ブロックの中に入れないと、定義した変数がブラウザのグローバルスコープに登録されてしまい邪魔なので
 (async () => {
+	// check-browser.js が非対応ブラウザと判定した場合は、専用ページが表示済みなので本体を起動しない
+	if (window.__misskeyUnsupportedBrowser) return;
+
 	window.onerror = (e) => {
 		console.error(e);
 		renderError('SOMETHING_HAPPENED', e);

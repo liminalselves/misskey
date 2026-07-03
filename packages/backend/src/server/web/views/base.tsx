@@ -87,6 +87,9 @@ export function Layout(props: PropsWithChildren<CommonProps<{
 					{safeMetaJson != null ? <script type="application/json" id="misskey_meta" data-generated-at={now}>{safeMetaJson}</script> : null}
 					{safeClientCtxJson != null ? <script type="application/json" id="misskey_clientCtx" data-generated-at={now}>{safeClientCtxJson}</script> : null}
 
+					{/* boot.js より前に実行する必要があるブラウザ互換性チェック（ES5・非module）。非対応ブラウザにはここで専用ページを表示し、本体の起動を止める */}
+					{props.frontendBrowserCheckJs != null ? <script>{props.frontendBrowserCheckJs}</script> : <script src="/vite/loader/check-browser.js"></script>}
+
 					{props.frontendBootloaderJs != null ? <script>{props.frontendBootloaderJs}</script> : <script src="/vite/loader/boot.js"></script>}
 				</head>
 				<body>

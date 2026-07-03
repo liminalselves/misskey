@@ -59,6 +59,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			if (ps.summary !== undefined) row.summary = ps.summary;
 			if (ps.body != null) row.body = ps.body;
 			if (ps.promptOpenSourced !== undefined) row.promptOpenSourced = ps.promptOpenSourced === true;
+			row.draftRevision = (row.draftRevision ?? 1) + 1;
 			row.updatedAt = new Date();
 			await this.agentDialogueStylesRepository.save(row);
 			return {

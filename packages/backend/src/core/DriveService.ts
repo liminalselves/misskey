@@ -65,6 +65,8 @@ type AddFileArgs = {
 	uri?: string | null;
 	/** Mark file as sensitive */
 	sensitive?: boolean | null;
+	/** Reserved for files created by the agent image service. */
+	agentGenerated?: boolean;
 	/** Extension to force */
 	ext?: string | null;
 
@@ -90,6 +92,7 @@ export class DriveService {
 	public static NoSuchFolderError = class extends Error {};
 	public static InvalidFileNameError = class extends Error {};
 	public static CannotUnmarkSensitiveError = class extends Error {};
+	public static ProtectedFolderError = class extends Error {};
 	private registerLogger: Logger;
 	private downloaderLogger: Logger;
 	private deleteLogger: Logger;
@@ -456,6 +459,7 @@ export class DriveService {
 		requestIp = null,
 		requestHeaders = null,
 		ext = null,
+		agentGenerated = false,
 	}: AddFileArgs): Promise<MiDriveFile> {
 		let skipNsfwCheck = false;
 		const userRoleNSFW = user && (await this.roleService.getUserPolicies(user.id)).alwaysMarkNsfw;
@@ -542,13 +546,13 @@ export class DriveService {
 					}
 				}
 
-				const usage = await this.driveFileEntityService.calcDriveUsageOf(user);
+				const usage = agentGenerated ? 0 : await this.driveFileEntityService.calcDriveUsageOf(user);
 
 				this.registerLogger.debug('drive capacity override applied');
 				this.registerLogger.debug(`overrideCap: ${driveCapacity}bytes, usage: ${usage}bytes, u+s: ${usage + info.size}bytes`);
 
 				// If usage limit exceeded
-				if (driveCapacity < usage + info.size) {
+				if (!agentGenerated && driveCapacity < usage + info.size) {
 					if (isLocalUser) {
 						throw new IdentifiableError('c6244ed2-a39a-4e1c-bf93-f0fbd7764fa6', 'No free space.');
 					}
@@ -569,6 +573,9 @@ export class DriveService {
 			});
 
 			if (driveFolder == null) throw new Error('folder-not-found');
+			if (driveFolder.systemType === 'agentGeneratedImages' && !agentGenerated) {
+				throw new DriveService.ProtectedFolderError();
+			}
 
 			return driveFolder;
 		};
@@ -608,6 +615,8 @@ export class DriveService {
 			? this.userEntityService.isLocalUser(user) && profile!.alwaysMarkNsfw ? true :
 			sensitive ?? false
 			: false;
+		file.isAgentGenerated = agentGenerated;
+		file.isAgentImageBlocked = false;
 
 		if (user && this.utilityService.isMediaSilencedHost(this.meta.mediaSilencedHosts, user.host)) file.isSensitive = true;
 		if (info.sensitive && profile!.autoSensitive) file.isSensitive = true;
@@ -692,14 +701,24 @@ export class DriveService {
 			throw new DriveService.CannotUnmarkSensitiveError();
 		}
 
-		if (values.folderId != null) {
-			const folder = await this.driveFoldersRepository.findOneBy({
-				id: values.folderId,
-				userId: file.userId!,
-			});
+		if (values.folderId !== undefined && values.folderId !== file.folderId) {
+			if (values.folderId !== null) {
+				const folder = await this.driveFoldersRepository.findOneBy({
+					id: values.folderId,
+					userId: file.userId!,
+				});
 
-			if (folder == null) {
-				throw new DriveService.NoSuchFolderError();
+				if (folder == null) {
+					throw new DriveService.NoSuchFolderError();
+				}
+				if (folder.systemType === 'agentGeneratedImages') {
+					throw new DriveService.ProtectedFolderError();
+				}
+			}
+			if (file.isAgentGenerated) {
+				await this.assertOrdinaryDriveCapacityForAgentImageMoveOut(file, updater);
+				values.isAgentGenerated = false;
+				values.isAgentImageBlocked = false;
 			}
 		}
 
@@ -742,13 +761,40 @@ export class DriveService {
 			id: folderId,
 			userId: userId,
 		}) : null;
+		if (folder?.systemType === 'agentGeneratedImages') {
+			throw new DriveService.ProtectedFolderError();
+		}
+		const agentFiles = await this.driveFilesRepository.findBy({
+			id: In(fileIds),
+			userId,
+			isAgentGenerated: true,
+		});
+		if (agentFiles.length > 0) {
+			await this.assertOrdinaryDriveCapacityForAgentImageMoveOut(agentFiles, { id: userId } as MiUser);
+		}
 
 		await this.driveFilesRepository.update({
 			id: In(fileIds),
 			userId: userId,
 		}, {
 			folderId: folder ? folder.id : null,
+			...(agentFiles.length > 0 ? { isAgentGenerated: false, isAgentImageBlocked: false } : {}),
 		});
+	}
+
+	private async assertOrdinaryDriveCapacityForAgentImageMoveOut(fileOrFiles: MiDriveFile | MiDriveFile[], updater: MiUser | { id: MiUser['id'] }) {
+		const files = Array.isArray(fileOrFiles) ? fileOrFiles : [fileOrFiles];
+		const userId = files[0]?.userId;
+		if (!userId) return;
+		if (await this.roleService.isModerator(updater)) return;
+
+		const policies = await this.roleService.getUserPolicies(userId);
+		const driveCapacity = 1024 * 1024 * policies.driveCapacityMb;
+		const usage = await this.driveFileEntityService.calcDriveUsageOf(userId);
+		const movingSize = files.reduce((sum, file) => sum + file.size, 0);
+		if (driveCapacity < usage + movingSize) {
+			throw new IdentifiableError('c6244ed2-a39a-4e1c-bf93-f0fbd7764fa6', 'No free space.');
+		}
 	}
 
 	@bindThis

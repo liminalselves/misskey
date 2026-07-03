@@ -327,7 +327,10 @@ describe('CaptchaService', () => {
 					.resolves
 					.toStrictEqual({ success: true });
 				const partialParams = metaService.update.mock.calls[0][0];
-				expect(partialParams).toStrictEqual(expectMeta);
+				expect(partialParams).toStrictEqual({
+					enableAliyunCaptcha: false,
+					...expectMeta,
+				});
 			}
 
 			test('none', async () => {

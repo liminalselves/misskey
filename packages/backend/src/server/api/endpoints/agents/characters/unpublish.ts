@@ -48,23 +48,10 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			this.agentService.assertAgentsEnabled();
 			const row = await this.agentCharactersRepository.findOneBy({ id: ps.characterId });
 			if (!row || row.userId !== me.id) {
-				throw new ApiError({ message: 'No such character.', code: 'NO_SUCH_CHARACTER', id: 'd0e1f2a3-b4c5-6789-3456-890123456789' });
+				throw new ApiError({ message: 'No such character.', code: 'NO_SUCH_CHARACTER', id: '514ceb53-9f25-486d-bc96-c4a1b67a997b' });
 			}
-			if (row.reviewStatus === 'pending' && row.publishedVersion == null) {
-				row.reviewStatus = 'draft';
-				row.updatedAt = new Date();
-				this.agentService.syncCharacterListedFlag(row);
-				await this.agentCharactersRepository.save(row);
-				return {
-					id: row.id,
-					isPublished: row.isPublished,
-					reviewStatus: row.reviewStatus,
-					publishedVersion: row.publishedVersion,
-					updatedAt: row.updatedAt.toISOString(),
-				};
-			}
-			if (row.reviewStatus === 'pending' && row.publishedVersion != null) {
-				row.reviewStatus = 'published';
+			if (row.reviewStatus === 'pending') {
+				row.reviewStatus = row.publishedVersion == null ? 'draft' : 'published';
 				row.updatedAt = new Date();
 				this.agentService.syncCharacterListedFlag(row);
 				await this.agentCharactersRepository.save(row);

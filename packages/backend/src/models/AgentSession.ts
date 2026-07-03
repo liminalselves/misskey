@@ -97,6 +97,18 @@ export class MiAgentSession {
 	})
 	public agentCompressionModelId: string | null;
 
+	/** 当前会话启用的生图模型；空表示关闭自动生图 */
+	@Column('varchar', {
+		length: 128, nullable: true,
+	})
+	public agentImageModelId: string | null;
+
+	/** 当前会话对所选生图模型的 provider 参数覆盖 */
+	@Column('jsonb', {
+		default: {},
+	})
+	public agentImageSettings: Record<string, unknown>;
+
 	@Column('timestamp with time zone', {
 		nullable: true,
 	})
@@ -112,9 +124,13 @@ export class MiAgentSession {
 	})
 	public agentLongMemoryProvider: string;
 
-	/** 本会话是否使用阿里云百炼长期记忆（Add/Search）；仅 agentLongMemoryProvider=aliyun 时有效 */
+	/**
+	 * 本会话是否使用阿里云百炼长期记忆（Add/Search）；仅 agentLongMemoryProvider=aliyun 时有效。
+	 * 库默认见迁移 `1772300000000-AgentLongMemoryDefaultOff.js`：自该迁移起 DB 默认 `false`，故此装饰器默认与之对齐，
+	 * 避免「ORM 新建对象时 true、INSERT 后从库读出 false」的不一致。
+	 */
 	@Column('boolean', {
-		default: true,
+		default: false,
 	})
 	public agentLongMemoryEnabled: boolean;
 

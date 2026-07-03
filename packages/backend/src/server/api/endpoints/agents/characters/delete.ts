@@ -42,7 +42,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			this.agentService.assertAgentsEnabled();
 			const row = await this.agentCharactersRepository.findOneBy({ id: ps.characterId });
 			if (!row || row.userId !== me.id) {
-				throw new ApiError({ message: 'No such character.', code: 'NO_SUCH_CHARACTER', id: 'b8c9d0e1-f2a3-4567-1234-678901234567' });
+				throw new ApiError({ message: 'No such character.', code: 'NO_SUCH_CHARACTER', id: '9aab27e7-bcc2-4eb2-96cb-cd4fcbfbd292' });
 			}
 			await this.agentCharactersRepository.delete({ id: row.id });
 			return { success: true };

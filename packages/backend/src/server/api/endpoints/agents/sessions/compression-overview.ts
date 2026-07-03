@@ -91,7 +91,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			this.agentService.assertAgentsEnabled();
 			const row = await this.agentSessionsRepository.findOneBy({ id: ps.sessionId });
 			if (!row || row.userId !== me.id) {
-				throw new ApiError({ message: 'No such session.', code: 'NO_SUCH_SESSION', id: 'e5e5e5e5-f6f6-f6f6-f6f6-555555555555' });
+				throw new ApiError({ message: 'No such session.', code: 'NO_SUCH_SESSION', id: '775235f7-4ecd-4dbf-9dda-1f020b8b8bac' });
 			}
 			if (!row.dialogueStyleId) {
 				return {

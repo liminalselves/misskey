@@ -62,7 +62,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				sessionId: ps.sessionId,
 			});
 			if (!row) {
-				throw new ApiError({ message: 'No such message.', code: 'NO_SUCH_MESSAGE', id: 'b2c3d4e5-f6a7-8901-bcde-f12345678902' });
+				throw new ApiError({ message: 'No such message.', code: 'NO_SUCH_MESSAGE', id: 'bd8b45b6-52d7-4a64-8c64-b893d29a4623' });
 			}
 
 			await this.agentMessagesRepository.delete({

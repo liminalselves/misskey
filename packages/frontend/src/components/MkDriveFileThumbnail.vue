@@ -11,8 +11,12 @@ SPDX-License-Identifier: AGPL-3.0-only
 		[$style.large]: large,
 	}]"
 >
+	<div v-if="file.isAgentImageBlocked" :class="$style.blocked">
+		<i class="ti ti-ban"></i>
+		<span>图片已封禁</span>
+	</div>
 	<MkImgWithBlurhash
-		v-if="isThumbnailAvailable && prefer.s.enableHighQualityImagePlaceholders"
+		v-else-if="isThumbnailAvailable && prefer.s.enableHighQualityImagePlaceholders"
 		:hash="file.blurhash"
 		:src="file.thumbnailUrl"
 		:alt="file.name"
@@ -128,5 +132,26 @@ const isThumbnailAvailable = computed(() => {
 
 .thumbnail {
 	width: 100%;
+}
+
+.blocked {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	width: 100%;
+	min-height: 100%;
+	margin: auto;
+	color: var(--MI_THEME-error);
+	font-weight: 700;
+	gap: 8px;
+
+	> i {
+		font-size: 32px;
+	}
+
+	> span {
+		font-size: 12px;
+	}
 }
 </style>

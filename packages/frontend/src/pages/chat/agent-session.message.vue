@@ -10,7 +10,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 	:data-message-id="message.id"
 	@click="onSearchResultClick"
 >
-	<span :class="$style.systemText">{{ message.content }}</span>
+	<span
+		:class="$style.systemText"
+		v-html="systemHtml"
+	></span>
 	<div :class="$style.systemFooter" @click.stop>
 		<button class="_textButton" style="color: currentColor;" @click="showMenu"><i class="ti ti-dots-circle-horizontal"></i></button>
 		<MkTime :class="$style.systemTime" :time="message.createdAt"/>
@@ -36,15 +39,40 @@ SPDX-License-Identifier: AGPL-3.0-only
 	<div :class="$style.body" @contextmenu.stop="onContextmenu">
 		<div v-if="!isUser && prefer.s['chat.showSenderName'] && assistantName" :class="$style.header">{{ assistantName }}</div>
 		<MkFukidashi :class="$style.fukidashi" :tail="isUser ? 'right' : 'left'" :accented="isUser">
-			<Mfm
-				v-if="message.content"
-				class="_selectable"
-				:text="message.content"
-				:i="$i"
-				:nyaize="'respect'"
-				:enableEmojiMenu="true"
-				:enableEmojiMenuReaction="false"
-			/>
+			<div
+				v-if="message.content && !hasDrawPlaceholders"
+				:class="[$style.mdRoot, '_selectable']"
+				v-html="userOrAssistantHtml"
+			></div>
+			<div v-else-if="message.content" :class="[$style.mdRoot, '_selectable']">
+				<template v-for="part in renderedParts" :key="part.key">
+					<div v-if="part.type === 'text'" v-html="part.html"></div>
+					<div v-else :class="$style.drawCard">
+						<div :class="$style.drawCardHead">
+							<span><i class="ti ti-brush"></i> AI生成图片</span>
+							<button
+								class="_button"
+								:class="$style.drawRetry"
+								:title="drawState(part.index)?.status === 'generating' ? '生成中' : '重新生成'"
+								:disabled="drawState(part.index)?.status === 'generating'"
+								@click.stop="regenerateDraw(part.index)"
+							>
+								<i class="ti ti-refresh"></i>
+							</button>
+						</div>
+						<div v-if="drawState(part.index)?.status === 'succeeded' && drawState(part.index)?.url && !isDrawBlocked(part.index)" :class="$style.drawImageWrap">
+							<MkMediaList v-if="drawFileList(part.index).length > 0" :key="drawState(part.index)?.fileId ?? part.index" :class="$style.drawMediaList" :mediaList="drawFileList(part.index)"/>
+							<img v-else :src="drawState(part.index)?.url ?? ''" :class="$style.drawImage" alt="AI生成图片"/>
+						</div>
+						<div v-else :class="$style.drawPending">
+							<MkLoading v-if="drawState(part.index)?.status === 'generating' || drawState(part.index)?.status === 'pending'"/>
+							<i v-else-if="isDrawBlocked(part.index)" class="ti ti-ban"></i>
+							<i v-else class="ti ti-alert-circle"></i>
+							<span>{{ drawStatusText(part.index) }}</span>
+						</div>
+					</div>
+				</template>
+			</div>
 		</MkFukidashi>
 		<div :class="$style.footer">
 			<button class="_textButton" style="color: currentColor;" @click="showMenu"><i class="ti ti-dots-circle-horizontal"></i></button>
@@ -55,7 +83,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { computed } from 'vue';
+import { computed, onMounted, reactive, watch } from 'vue';
+import { isLink } from '@@/js/is-link.js';
+import type { DriveFile } from 'misskey-js/entities.js';
+import { renderAgentChatMarkdown } from '@/utility/agent-chat-markdown.js';
 import type { MenuItem } from '@/types/menu.js';
 import { ensureSignin } from '@/i.js';
 import { i18n } from '@/i18n.js';
@@ -64,8 +95,9 @@ import MkTime from '@/components/global/MkTime.vue';
 import * as os from '@/os.js';
 import { copyToClipboard } from '@/utility/copy-to-clipboard.js';
 import { prefer } from '@/preferences.js';
-import { isLink } from '@@/js/is-link.js';
 import { misskeyApi, formatApiError } from '@/utility/misskey-api.js';
+import MkLoading from '@/components/global/MkLoading.vue';
+import MkMediaList from '@/components/MkMediaList.vue';
 
 const $i = ensureSignin();
 
@@ -94,6 +126,167 @@ const emit = defineEmits<{
 }>();
 
 const isUser = computed(() => props.message.role === 'user');
+
+const userOrAssistantHtml = computed(() => renderAgentChatMarkdown(props.message.content ?? ''));
+const systemHtml = computed(() => renderAgentChatMarkdown(props.message.content ?? ''));
+const AGENT_DRAW_RE = /\[\[agent_draw(?:\s+size=(portrait|landscape|square))?\s+tag=([\s\S]*?)\]\]/g;
+
+type DrawResult = {
+	id: string;
+	messageId: string;
+	placeholderIndex: number;
+	status: 'pending' | 'generating' | 'succeeded' | 'failed' | 'blocked' | 'deleted' | 'auto_cleaned';
+	fileId: string | null;
+	url: string | null;
+	file: DriveFile | null;
+	errorCode: string | null;
+	tag: string;
+	size: 'portrait' | 'landscape' | 'square';
+	isBlocked: boolean;
+};
+
+type RenderPart =
+	| { type: 'text'; key: string; html: string }
+	| { type: 'draw'; key: string; index: number; tag: string; size: 'portrait' | 'landscape' | 'square' };
+
+const drawResults = reactive<Record<number, DrawResult | undefined>>({});
+
+const renderedParts = computed((): RenderPart[] => {
+	if (props.message.role !== 'assistant') {
+		return [{ type: 'text', key: 'text:all', html: renderAgentChatMarkdown(props.message.content ?? '') }];
+	}
+	const text = props.message.content ?? '';
+	const parts: RenderPart[] = [];
+	let lastIndex = 0;
+	let drawIndex = 0;
+	for (const match of text.matchAll(AGENT_DRAW_RE)) {
+		const start = match.index ?? 0;
+		if (start > lastIndex) {
+			parts.push({ type: 'text', key: `text:${lastIndex}`, html: renderAgentChatMarkdown(text.slice(lastIndex, start)) });
+		}
+		const size = match[1] === 'landscape' || match[1] === 'square' || match[1] === 'portrait' ? match[1] : 'portrait';
+		parts.push({
+			type: 'draw',
+			key: `draw:${drawIndex}`,
+			index: drawIndex,
+			size,
+			tag: String(match[2] ?? '').trim(),
+		});
+		drawIndex++;
+		lastIndex = start + match[0].length;
+	}
+	if (lastIndex < text.length) {
+		parts.push({ type: 'text', key: `text:${lastIndex}`, html: renderAgentChatMarkdown(text.slice(lastIndex)) });
+	}
+	return parts.length > 0 ? parts : [{ type: 'text', key: 'text:all', html: renderAgentChatMarkdown(text) }];
+});
+const hasDrawPlaceholders = computed(() => renderedParts.value.some(p => p.type === 'draw'));
+
+function drawState(index: number): DrawResult | undefined {
+	return drawResults[index];
+}
+
+function shouldRefreshDrawState(current: DrawResult | undefined): boolean {
+	return current == null || current.status === 'pending' || (current.status === 'failed' && current.errorCode === 'AGENT_IMAGE_FILE_REMOVED');
+}
+
+function isDrawBlocked(index: number): boolean {
+	const s = drawResults[index];
+	return s?.status === 'blocked' || s?.isBlocked === true || s?.file?.isAgentImageBlocked === true;
+}
+
+function drawFileList(index: number): DriveFile[] {
+	if (isDrawBlocked(index)) return [];
+	const file = drawResults[index]?.file;
+	return file ? [file] : [];
+}
+
+function drawErrorText(code: string | null): string {
+	switch (code) {
+		case 'AGENT_IMAGE_NO_FREE_DRIVE_SPACE':
+			return '网盘空间不足，无法保存生成图片';
+		case 'AGENT_IMAGE_MAX_FILE_SIZE_EXCEEDED':
+			return '图片超过账号允许的最大文件大小';
+		case 'AGENT_IMAGE_UNALLOWED_FILE_TYPE':
+			return '图片文件类型不允许上传';
+		case 'AGENT_IMAGE_INSUFFICIENT_CREDIT':
+			return '智能体额度不足';
+		case 'AGENT_IMAGE_DISABLED':
+			return '生图模型未启用';
+		case null:
+		case '':
+			return '生成失败';
+		default:
+			return code;
+	}
+}
+
+function drawStatusText(index: number): string {
+	const s = drawState(index);
+	if (!s || s.status === 'pending' || s.status === 'generating') return '图片生成中...';
+	if (isDrawBlocked(index)) return '图片已被审核封禁';
+	if (s.status === 'auto_cleaned') return '图片已自动清理';
+	if (s.status === 'deleted') return '图片已删除';
+	if (s.status === 'failed') return `生成失败：${drawErrorText(s.errorCode)}`;
+	return '图片生成中...';
+}
+
+async function generateDraw(index: number, regenerate = false) {
+	if (props.isSearchResult) return;
+	const current = drawResults[index];
+	if (!regenerate && !shouldRefreshDrawState(current)) return;
+	drawResults[index] = {
+		id: current?.id ?? `${props.message.id}:${index}`,
+		messageId: props.message.id,
+		placeholderIndex: index,
+		status: 'generating',
+		fileId: current?.fileId ?? null,
+		url: current?.url ?? null,
+		file: current?.file ?? null,
+		errorCode: null,
+		tag: current?.tag ?? '',
+		size: current?.size ?? 'portrait',
+		isBlocked: false,
+	};
+	try {
+		const regenerationOfId = regenerate && current?.id && !current.id.includes(':') ? current.id : null;
+		const res = await misskeyApi(
+			'agents/images/generate-placeholder' as Parameters<typeof misskeyApi>[0],
+			{
+				sessionId: props.sessionId,
+				messageId: props.message.id,
+				placeholderIndex: index,
+				regenerate,
+				regenerationOfId,
+			} as any,
+		) as DrawResult;
+		drawResults[index] = res;
+	} catch (e) {
+		drawResults[index] = {
+			...drawResults[index]!,
+			status: 'failed',
+			file: null,
+			errorCode: formatApiError(e),
+		};
+	}
+}
+
+function regenerateDraw(index: number) {
+	void generateDraw(index, true);
+}
+
+function startDraws() {
+	if (props.message.role !== 'assistant' || props.isSearchResult) return;
+	for (const part of renderedParts.value) {
+		if (part.type === 'draw') void generateDraw(part.index, false);
+	}
+}
+
+onMounted(startDraws);
+watch(() => `${props.message.id}:${props.message.content}`, () => {
+	for (const key of Object.keys(drawResults)) delete drawResults[Number(key)];
+	startDraws();
+});
 
 function onSearchResultClick(ev: MouseEvent) {
 	if (!props.isSearchResult) return;
@@ -341,6 +534,126 @@ async function confirmDelete() {
 	text-align: left;
 }
 
+/* GFM（marked）渲染：仅此处 v-html，样式用 :deep 作用于 sanitize 后的子节点 */
+.mdRoot {
+	max-width: 100%;
+	font-size: 0.95em;
+	line-height: 1.45;
+	word-break: break-word;
+
+	&:deep(p) {
+		margin: 0.35em 0;
+
+		&:first-child {
+			margin-top: 0;
+		}
+
+		&:last-child {
+			margin-bottom: 0;
+		}
+	}
+
+	&:deep(h1),
+	&:deep(h2),
+	&:deep(h3),
+	&:deep(h4),
+	&:deep(h5),
+	&:deep(h6) {
+		margin: 0.5em 0 0.25em;
+		font-weight: 700;
+		line-height: 1.25;
+
+		&:first-child {
+			margin-top: 0;
+		}
+	}
+
+	&:deep(h1) { font-size: 1.25em; }
+	&:deep(h2) { font-size: 1.15em; }
+	&:deep(h3) { font-size: 1.08em; }
+
+	&:deep(ul),
+	&:deep(ol) {
+		margin: 0.35em 0;
+		padding-left: 1.35em;
+	}
+
+	&:deep(li) {
+		margin: 0.15em 0;
+	}
+
+	&:deep(blockquote) {
+		margin: 0.35em 0;
+		padding: 0.2em 0 0.2em 0.65em;
+		border-left: 3px solid var(--MI_THEME-divider);
+		color: var(--MI_THEME-fgTransparentWeak);
+	}
+
+	&:deep(hr) {
+		margin: 0.6em 0;
+		border: none;
+		border-top: 1px solid var(--MI_THEME-divider);
+	}
+
+	&:deep(pre) {
+		margin: 0.4em 0;
+		padding: 0.5em 0.65em;
+		overflow-x: auto;
+		border-radius: 6px;
+		background: color-mix(in srgb, var(--MI_THEME-panel) 92%, var(--MI_THEME-fg));
+		font-size: 0.88em;
+	}
+
+	&:deep(code) {
+		padding: 0.1em 0.35em;
+		border-radius: 4px;
+		background: color-mix(in srgb, var(--MI_THEME-panel) 88%, var(--MI_THEME-fg));
+		font-size: 0.9em;
+	}
+
+	&:deep(pre code) {
+		padding: 0;
+		background: transparent;
+		font-size: inherit;
+	}
+
+	&:deep(a) {
+		color: var(--MI_THEME-link);
+		text-decoration: underline;
+		text-underline-offset: 2px;
+	}
+
+	&:deep(table) {
+		margin: 0.4em 0;
+		width: 100%;
+		border-collapse: collapse;
+		font-size: 0.92em;
+	}
+
+	&:deep(th),
+	&:deep(td) {
+		border: 1px solid var(--MI_THEME-divider);
+		padding: 0.25em 0.45em;
+	}
+
+	&:deep(th) {
+		background: color-mix(in srgb, var(--MI_THEME-panel) 80%, transparent);
+	}
+
+	&:deep(img) {
+		max-width: 100%;
+		height: auto;
+		vertical-align: middle;
+		border-radius: 4px;
+	}
+
+	&:deep(input[type="checkbox"]) {
+		margin-right: 0.35em;
+		vertical-align: middle;
+		pointer-events: none;
+	}
+}
+
 .footer {
 	display: flex;
 	flex-direction: row;
@@ -351,5 +664,95 @@ async function confirmDelete() {
 
 .time {
 	opacity: 0.5;
+}
+
+.drawCard {
+	position: relative;
+	margin: 0.5em 0;
+	width: min(100%, 300px);
+	overflow: hidden;
+	border-radius: 8px;
+	border: solid 1px var(--MI_THEME-divider);
+	background: color-mix(in srgb, var(--MI_THEME-panel) 92%, var(--MI_THEME-bg));
+}
+
+.drawCardHead {
+	position: absolute;
+	top: 8px;
+	right: 8px;
+	left: 8px;
+	z-index: 1;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	pointer-events: none;
+
+	> span {
+		display: inline-flex;
+		align-items: center;
+		gap: 5px;
+		min-height: 28px;
+		padding: 0 10px;
+		border-radius: 999px;
+		background: color-mix(in srgb, var(--MI_THEME-panel) 88%, #000);
+		color: var(--MI_THEME-fg);
+		font-size: 0.82em;
+		font-weight: 700;
+		box-shadow: 0 6px 18px color-mix(in srgb, #000 20%, transparent);
+	}
+}
+
+.drawRetry {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 30px;
+	height: 30px;
+	border-radius: 999px;
+	background: color-mix(in srgb, var(--MI_THEME-panel) 88%, #000);
+	color: var(--MI_THEME-fg);
+	box-shadow: 0 6px 18px color-mix(in srgb, #000 20%, transparent);
+	pointer-events: auto;
+
+	&:disabled {
+		opacity: 0.5;
+		cursor: wait;
+	}
+}
+
+.drawImageWrap {
+	display: block;
+	max-width: min(100%, 300px);
+	background: var(--MI_THEME-panel);
+}
+
+.drawMediaList {
+	width: 100%;
+}
+
+.drawImage {
+	display: block;
+	width: 100%;
+	max-height: 220px;
+	object-fit: contain;
+	background: var(--MI_THEME-panel);
+}
+
+.drawPending {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex-direction: column;
+	gap: 10px;
+	min-height: 180px;
+	padding: 52px 18px 24px;
+	color: var(--MI_THEME-fgTransparentWeak);
+	text-align: center;
+
+	> i {
+		font-size: 1.7em;
+		color: var(--MI_THEME-accent);
+	}
 }
 </style>

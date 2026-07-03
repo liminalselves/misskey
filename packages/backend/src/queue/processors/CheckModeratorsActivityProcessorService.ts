@@ -16,11 +16,11 @@ import { SystemWebhookService } from '@/core/SystemWebhookService.js';
 import { AnnouncementService } from '@/core/AnnouncementService.js';
 import { QueueLoggerService } from '../QueueLoggerService.js';
 
-// モデレーターが不在と判断する日付の閾値
+// The period after which moderators are considered inactive.
 const MODERATOR_INACTIVITY_LIMIT_DAYS = 7;
-// 警告通知やログ出力を行う残日数の閾値
+// Remaining days threshold for warning notifications and logs.
 const MODERATOR_INACTIVITY_WARNING_REMAINING_DAYS = 2;
-// 期限から6時間ごとに通知を行う
+// Send warning notifications every 6 hours near the deadline.
 const MODERATOR_INACTIVITY_WARNING_NOTIFY_INTERVAL_HOURS = 6;
 const ONE_HOUR_MILLI_SEC = 1000 * 60 * 60;
 const ONE_DAY_MILLI_SEC = ONE_HOUR_MILLI_SEC * 24;
@@ -38,22 +38,22 @@ export type ModeratorInactivityRemainingTime = {
 };
 
 function generateModeratorInactivityMail(remainingTime: ModeratorInactivityRemainingTime) {
-	const subject = 'Moderator Inactivity Warning / モデレーター不在の通知';
+	const subject = '版主不活跃警告 / Moderator Inactivity Warning';
 
 	const timeVariant = remainingTime.asDays === 0 ? `${remainingTime.asHours} hours` : `${remainingTime.asDays} days`;
-	const timeVariantJa = remainingTime.asDays === 0 ? `${remainingTime.asHours} 時間` : `${remainingTime.asDays} 日間`;
+	const timeVariantZh = remainingTime.asDays === 0 ? `${remainingTime.asHours} 小时` : `${remainingTime.asDays} 天`;
 	const message = [
+		'各位版主：',
+		'',
+		`版主已经有一段时间没有活动。如果继续不活跃 ${timeVariantZh}，实例将切换为仅邀请注册。`,
+		'如果你不希望切换为仅邀请注册，请登录 Misskey 以更新你的最后活动时间。',
+		'',
+		'---------------',
+		'',
 		'To Moderators,',
 		'',
 		`A moderator has been inactive for a period of time. If there are ${timeVariant} of inactivity left, it will switch to invitation only.`,
 		'If you do not wish to move to invitation only, you must log into Misskey and update your last active date and time.',
-		'',
-		'---------------',
-		'',
-		'To モデレーター各位',
-		'',
-		`モデレーターが一定期間活動していないようです。あと${timeVariantJa}活動していない状態が続くと招待制に切り替わります。`,
-		'招待制に切り替わることを望まない場合は、Misskeyにログインして最終アクティブ日時を更新してください。',
 		'',
 	];
 
@@ -68,20 +68,20 @@ function generateModeratorInactivityMail(remainingTime: ModeratorInactivityRemai
 }
 
 function generateInvitationOnlyChangedMail() {
-	const subject = 'Change to Invitation-Only / 招待制に変更されました';
+	const subject = '已切换为仅邀请注册 / Change to Invitation-Only';
 
 	const message = [
+		'各位版主：',
+		'',
+		`由于 ${MODERATOR_INACTIVITY_LIMIT_DAYS} 天内未检测到版主活动，实例已切换为仅邀请注册。`,
+		'如需取消仅邀请注册，请访问控制面板进行设置。',
+		'',
+		'---------------',
+		'',
 		'To Moderators,',
 		'',
 		`Changed to invitation only because no moderator activity was detected for ${MODERATOR_INACTIVITY_LIMIT_DAYS} days.`,
 		'To cancel the invitation only, you need to access the control panel.',
-		'',
-		'---------------',
-		'',
-		'To モデレーター各位',
-		'',
-		`モデレーターの活動が${MODERATOR_INACTIVITY_LIMIT_DAYS}日間検出されなかったため、招待制に変更されました。`,
-		'招待制を解除するには、コントロールパネルにアクセスする必要があります。',
 		'',
 	];
 

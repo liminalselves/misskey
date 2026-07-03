@@ -23,7 +23,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 				full
 				:disabled="!hasReachedBottom"
 				@click="ok"
-			>{{ hasReachedBottom ? i18n.ts.close : i18n.ts.scrollToClose }}</MkButton>
+			>
+				{{ hasReachedBottom ? i18n.ts.close : i18n.ts.scrollToClose }}
+			</MkButton>
 		</div>
 	</div>
 </MkModal>

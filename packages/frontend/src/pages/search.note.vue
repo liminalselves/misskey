@@ -112,6 +112,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 import { computed, markRaw, ref, shallowRef, toRef } from 'vue';
 import { host as localHost } from '@@/js/config.js';
 import type * as Misskey from 'misskey-js';
+import type { MkRadiosOption } from '@/components/MkRadios.vue';
 import { $i } from '@/i.js';
 import { i18n } from '@/i18n.js';
 import { instance } from '@/instance.js';
@@ -126,7 +127,6 @@ import MkNotesTimeline from '@/components/MkNotesTimeline.vue';
 import MkRadios from '@/components/MkRadios.vue';
 import MkUserCardMini from '@/components/MkUserCardMini.vue';
 import { Paginator } from '@/utility/paginator.js';
-import type { MkRadiosOption } from '@/components/MkRadios.vue';
 
 const props = withDefaults(defineProps<{
 	query?: string;

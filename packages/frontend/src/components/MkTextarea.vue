@@ -11,12 +11,13 @@ SPDX-License-Identifier: AGPL-3.0-only
 			ref="inputEl"
 			v-model="v"
 			v-adaptive-border
-			:class="[$style.textarea, { _monospace: code }]"
+			:class="[$style.textarea, { _monospace: code, [$style.hasRows]: rows != null }]"
 			:disabled="disabled"
 			:required="required"
 			:readonly="readonly"
 			:placeholder="placeholder"
 			:pattern="pattern"
+			:rows="rows"
 			:autocomplete="autocomplete"
 			:spellcheck="spellcheck"
 			@focus="focused = true"
@@ -60,6 +61,7 @@ const props = defineProps<{
 	code?: boolean;
 	tall?: boolean;
 	pre?: boolean;
+	rows?: number;
 }>();
 
 const emit = defineEmits<{
@@ -201,6 +203,10 @@ onUnmounted(() => {
 	&:hover {
 		border-color: var(--MI_THEME-inputBorderHover) !important;
 	}
+}
+
+.hasRows {
+	min-height: auto;
 }
 
 .focused {

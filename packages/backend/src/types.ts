@@ -410,6 +410,9 @@ export type ModerationLogPayloads = {
 		reviewStatus: string;
 		publishedVersion: number | null;
 		isPublished: boolean;
+		rejectReason?: string | null;
+		rejectMessage?: string | null;
+		internalNote?: string | null;
 	};
 	setAgentSessionModerationBan: {
 		sessionId: string;
@@ -418,6 +421,7 @@ export type ModerationLogPayloads = {
 		characterId: string;
 		banned: boolean;
 		before: boolean;
+		reason?: string | null;
 	};
 	setAgentCharacterModerationBan: {
 		characterId: string;
@@ -425,6 +429,7 @@ export type ModerationLogPayloads = {
 		ownerUserId: string;
 		banned: boolean;
 		before: boolean;
+		reason?: string | null;
 	};
 };
 

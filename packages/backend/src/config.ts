@@ -251,8 +251,9 @@ export function loadConfig(): Config {
 
 	const meta = JSON.parse(fs.readFileSync(resolve(projectBuiltDir, 'meta.json'), 'utf-8'));
 
-	const frontendManifestExists = fs.existsSync(resolve(projectBuiltDir, '_frontend_vite_/manifest.json'));
-	const frontendEmbedManifestExists = fs.existsSync(resolve(projectBuiltDir, '_frontend_embed_vite_/manifest.json'));
+	const useViteDevServer = process.env.NODE_ENV === 'development';
+	const frontendManifestExists = !useViteDevServer && fs.existsSync(resolve(projectBuiltDir, '_frontend_vite_/manifest.json'));
+	const frontendEmbedManifestExists = !useViteDevServer && fs.existsSync(resolve(projectBuiltDir, '_frontend_embed_vite_/manifest.json'));
 	const frontendManifest = frontendManifestExists ?
 		JSON.parse(fs.readFileSync(resolve(projectBuiltDir, '_frontend_vite_/manifest.json'), 'utf-8'))
 		: { 'src/_boot_.ts': { file: null } };

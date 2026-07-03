@@ -41,9 +41,16 @@ SPDX-License-Identifier: AGPL-3.0-only
 									<span v-else-if="c.isPublished" :class="$style.metaBadge">{{ i18n.ts._agents.publishedBadge }}</span>
 									<span v-else :class="$style.metaBadge">{{ i18n.ts._agents.draftBadge }}</span>
 									<span v-if="c.publishedVersion != null" :class="$style.metaBadge">V{{ c.publishedVersion }}</span>
+									<span v-if="c.hasWorldbook" :class="[$style.metaBadge, $style.worldbookBadge]"><i class="ti ti-book"></i> 世界书</span>
 								</div>
 							</div>
 							<p v-if="c.summary" :class="$style.cardSummary">{{ c.summary }}</p>
+							<div v-if="reviewRejected(c)" :class="$style.reviewRejectBox">
+								<div :class="$style.reviewRejectTitle"><i class="ti ti-alert-triangle"></i> 未通过审核</div>
+								<div v-if="c.reviewRejectReason" :class="$style.reviewRejectMeta">原因：{{ rejectReasonLabel(c.reviewRejectReason) }}</div>
+								<p v-if="c.reviewRejectMessage">{{ c.reviewRejectMessage }}</p>
+								<p v-else>管理员没有填写具体说明，请修改后重新提交审核。</p>
+							</div>
 							<div :class="$style.cardTimes">
 								<span :class="$style.timeChip">
 									<i class="ti ti-calendar-plus"></i>
@@ -91,6 +98,12 @@ SPDX-License-Identifier: AGPL-3.0-only
 							</div>
 							<p v-if="s.summary" :class="$style.cardSummary">{{ s.summary }}</p>
 							<p v-else-if="s.bodyPreview" :class="$style.cardSummary">{{ s.bodyPreview }}</p>
+							<div v-if="reviewRejected(s)" :class="$style.reviewRejectBox">
+								<div :class="$style.reviewRejectTitle"><i class="ti ti-alert-triangle"></i> 未通过审核</div>
+								<div v-if="s.reviewRejectReason" :class="$style.reviewRejectMeta">原因：{{ rejectReasonLabel(s.reviewRejectReason) }}</div>
+								<p v-if="s.reviewRejectMessage">{{ s.reviewRejectMessage }}</p>
+								<p v-else>管理员没有填写具体说明，请修改后重新提交审核。</p>
+							</div>
 							<div :class="$style.cardMeta">
 								<span :class="$style.metaLabel"><i class="ti ti-user-heart"></i> {{ i18n.ts._agents.cardCreator }}</span>
 								<div :class="$style.metaAuthor">
@@ -129,6 +142,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <script lang="ts" setup>
 import { computed, onMounted, ref, watch } from 'vue';
+import XSquare from './square.vue';
+import XMyStats from './my-stats.vue';
 import type { AgentsCharactersListMineResponse, AgentsStylesListMineResponse } from 'misskey-js/entities.js';
 import MkButton from '@/components/MkButton.vue';
 import MkLoading from '@/components/global/MkLoading.vue';
@@ -138,12 +153,11 @@ import MkUserName from '@/components/global/MkUserName.vue';
 import MkTime from '@/components/global/MkTime.vue';
 import MkDriveFileThumbnail from '@/components/MkDriveFileThumbnail.vue';
 import { misskeyApi, formatApiError } from '@/utility/misskey-api.js';
+import { confirmStartAgentSession } from '@/utility/confirm-start-agent-session.js';
 import { i18n } from '@/i18n.js';
 import { definePage } from '@/page.js';
 import * as os from '@/os.js';
 import { useRouter } from '@/router.js';
-import XSquare from './square.vue';
-import XMyStats from './my-stats.vue';
 
 const props = withDefaults(defineProps<{
 	view?: string;
@@ -157,8 +171,16 @@ const router = useRouter();
 
 const mainTab = ref<'square' | 'create' | 'my-stats'>('square');
 const createSub = ref<'characters' | 'styles'>('characters');
-const characters = ref<AgentsCharactersListMineResponse>([]);
-const styles = ref<AgentsStylesListMineResponse>([]);
+type ReviewRejectInfo = {
+	reviewStatus?: string;
+	isPublished?: boolean;
+	reviewRejectReason?: string | null;
+	reviewRejectMessage?: string | null;
+};
+type CharacterListMineItem = AgentsCharactersListMineResponse[number] & ReviewRejectInfo & { hasWorldbook?: boolean };
+type StyleListMineItem = AgentsStylesListMineResponse[number] & ReviewRejectInfo;
+const characters = ref<CharacterListMineItem[]>([]);
+const styles = ref<StyleListMineItem[]>([]);
 const loadingCh = ref(true);
 const loadingSt = ref(true);
 
@@ -201,10 +223,9 @@ watch(() => props.sub, () => {
 });
 
 watch(mainTab, (t) => {
-	const qs = new URLSearchParams();
-	qs.set('view', t);
-	if (t === 'create') qs.set('sub', createSub.value);
-	void router.replace(`/agents?${qs.toString()}`);
+	void router.replace('/agents', {
+		query: t === 'create' ? { view: t, sub: createSub.value } : { view: t },
+	});
 	if (t === 'create') {
 		if (createSub.value === 'characters') void loadCharacters();
 		else void loadStyles();
@@ -213,10 +234,9 @@ watch(mainTab, (t) => {
 
 watch(createSub, (s) => {
 	if (mainTab.value !== 'create') return;
-	const qs = new URLSearchParams();
-	qs.set('view', 'create');
-	qs.set('sub', s);
-	void router.replace(`/agents?${qs.toString()}`);
+	void router.replace('/agents', {
+		query: { view: 'create', sub: s },
+	});
 	if (s === 'characters') void loadCharacters();
 	else void loadStyles();
 });
@@ -227,6 +247,24 @@ function goEditCharacter(id: string) {
 
 function goEditStyle(id: string) {
 	router.push(('/agents/style/' + id) as '/agents/style/:styleId');
+}
+
+function reviewRejected(item: ReviewRejectInfo) {
+	return item.reviewStatus === 'rejected' && item.isPublished !== true;
+}
+
+function rejectReasonLabel(reason: string) {
+	const labels: Record<string, string> = {
+		policy: '违反社区规范',
+		sexual: '色情或露骨内容',
+		violence: '暴力或危险内容',
+		hate: '仇恨或骚扰',
+		illegal: '违法或侵权',
+		prompt_injection: '提示词注入/越权',
+		spam: '广告或低质内容',
+		other: '其他',
+	};
+	return labels[reason] ?? reason;
 }
 
 async function loadCharacters() {
@@ -304,6 +342,8 @@ async function unpublishStyle(id: string) {
 }
 
 async function testChar(characterId: string) {
+	if (!await confirmStartAgentSession()) return;
+
 	const session = await misskeyApi('agents/sessions/create', {
 		characterId,
 		sessionKind: 'draft_test',
@@ -417,6 +457,7 @@ async function testChar(characterId: string) {
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
+	gap: 4px;
 	height: 26px;
 	padding: 0 11px;
 	border-radius: 999px;
@@ -427,6 +468,37 @@ async function testChar(characterId: string) {
 	border: solid 1px color-mix(in srgb, var(--MI_THEME-divider) 88%, transparent);
 	background: color-mix(in srgb, var(--MI_THEME-panel) 86%, transparent);
 	color: var(--MI_THEME-fg);
+}
+
+.worldbookBadge {
+	border-color: color-mix(in srgb, var(--MI_THEME-accent) 34%, var(--MI_THEME-divider));
+	background: color-mix(in srgb, var(--MI_THEME-accent) 12%, var(--MI_THEME-panel));
+	color: var(--MI_THEME-accent);
+}
+
+.reviewRejectBox {
+	padding: 10px 12px;
+	border-radius: 8px;
+	border: solid 1px color-mix(in srgb, var(--MI_THEME-warn) 40%, var(--MI_THEME-divider));
+	background: color-mix(in srgb, var(--MI_THEME-warn) 10%, var(--MI_THEME-panel));
+}
+.reviewRejectTitle {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	font-weight: 700;
+	color: var(--MI_THEME-warn);
+}
+.reviewRejectMeta {
+	margin-top: 4px;
+	font-size: 0.85em;
+	color: var(--MI_THEME-fgTransparentWeak);
+}
+.reviewRejectBox p {
+	margin: 6px 0 0;
+	white-space: pre-wrap;
+	word-break: break-word;
+	line-height: 1.5;
 }
 
 .cardSummary {

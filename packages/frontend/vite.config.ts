@@ -17,8 +17,28 @@ import pluginCreateSearchIndex from './lib/vite-plugin-create-search-index.js';
 import pluginWatchLocales from './lib/vite-plugin-watch-locales.js';
 import { pluginRemoveUnrefI18n } from '../frontend-builder/rollup-plugin-remove-unref-i18n.js';
 
-const url = process.env.NODE_ENV === 'development' ? yaml.load(await fsp.readFile('../../.config/default.yml', 'utf-8')).url : null;
-const host = url ? (new URL(url)).hostname : undefined;
+const defaultConfig = process.env.NODE_ENV === 'development' ? yaml.load(await fsp.readFile('../../.config/default.yml', 'utf-8')) as { url?: string; port?: number | string } : null;
+const url = defaultConfig?.url ?? null;
+const configUrl = url ? new URL(url) : null;
+const host = configUrl?.hostname;
+const backendPortRaw = Number(process.env.MISSKEY_PORT ?? defaultConfig?.port ?? '3000');
+const backendPort = Number.isInteger(backendPortRaw) && backendPortRaw > 0 && backendPortRaw <= 65535 ? backendPortRaw : 3000;
+const vitePortRaw = Number(process.env.VITE_PORT ?? '5173');
+const vitePort = Number.isInteger(vitePortRaw) && vitePortRaw > 0 && vitePortRaw <= 65535 ? vitePortRaw : 5173;
+const usePublicHmr = process.env.VITE_HMR_PUBLIC === 'true';
+const hmrClientPortRaw = Number(process.env.VITE_HMR_CLIENT_PORT ?? (
+	usePublicHmr
+		? configUrl?.port
+			? configUrl.port
+			: configUrl?.protocol === 'https:'
+				? '443'
+				: configUrl?.protocol === 'http:'
+					? '80'
+					: String(vitePort)
+		: String(vitePort)
+));
+const hmrClientPort = Number.isInteger(hmrClientPortRaw) && hmrClientPortRaw > 0 && hmrClientPortRaw <= 65535 ? hmrClientPortRaw : vitePort;
+const hmrProtocol = (process.env.VITE_HMR_PROTOCOL ?? (usePublicHmr && configUrl?.protocol === 'https:' ? 'wss' : 'ws')) as 'ws' | 'wss';
 
 const extensions = ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.json', '.json5', '.svg', '.sass', '.scss', '.css', '.vue'];
 
@@ -98,17 +118,17 @@ export function getConfig(): UserConfig {
 			// The backend allows access from any addresses, so vite also allows access from any addresses.
 			host: '0.0.0.0',
 			allowedHosts: host ? [host] : undefined,
-			port: 5173,
+			port: vitePort,
 			strictPort: true,
 			// Windows でファイル監視が不安定な場合: 環境変数 VITE_WATCH_POLLING=true（CPU 使用率は上がる）
 			...(process.env.VITE_WATCH_POLLING === 'true'
 				? { watch: { usePolling: true, interval: 1000 } }
 				: {}),
 			hmr: {
-				// バックエンド経由での起動時、Viteは5173経由でアセットを参照していると思い込んでいるが実際は3000から配信される
-				// そのため、バックエンドのWSサーバーにHMRのWSリクエストが吸収されてしまい、正しくHMRが機能しない
-				// クライアント側のWSポートをViteサーバーのポートに強制させることで、正しくHMRが機能するようになる
-				clientPort: 5173,
+				// When the site is exposed through the backend or a tunnel, the browser must connect
+				// HMR to the public site port, and the backend will proxy /vite WebSocket traffic to Vite.
+				protocol: hmrProtocol,
+				clientPort: hmrClientPort,
 			},
 			headers:
 				process.env.MISSKEY_VITE_ALLOW_IFRAME === 'true'

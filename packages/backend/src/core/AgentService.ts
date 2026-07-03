@@ -18,18 +18,38 @@ import { MetaService } from '@/core/MetaService.js';
 import { IdService } from '@/core/IdService.js';
 import { ApiError } from '@/server/api/error.js';
 
-/** 单字段最大长度（初始版本防滥用） */
+/** Maximum length for a single agent text field. */
 export const AGENT_TEXT_FIELD_MAX = 100_000;
 
-/** 示例对话（结构化存储于 character.exampleDialogue JSON） */
+/** Example dialogue is stored as structured JSON in character.exampleDialogue. */
 export const AGENT_EXAMPLE_TURN_MAX = 24;
 export const AGENT_EXAMPLE_TURN_CONTENT_MAX = 8000;
 export const AGENT_EXAMPLE_TURNS_CHAR_TOTAL_MAX = 12000;
 
 export type AgentExampleTurn = { role: 'user' | 'assistant'; content: string };
 
-/** 审核状态：广场展示以 publishedVersion 为准；通过后 reviewStatus 为 published */
+/** Plaza display uses publishedVersion; reviewStatus becomes published after approval. */
 export type AgentReviewStatus = 'draft' | 'pending' | 'published' | 'rejected';
+
+export type AgentWorldbookEntry = {
+	id: string;
+	title: string;
+	content: string;
+	keywords: string[];
+	triggerMode: 'keyword' | 'manual' | 'always';
+	priority: number;
+	enabled: boolean;
+	revision: number;
+};
+
+export type AgentWorldbookMatch = AgentWorldbookEntry & {
+	matchedBy: 'always' | 'manual' | 'keyword';
+	matchedKeywords: string[];
+};
+
+export type AgentWorldbookPublicMeta = Omit<AgentWorldbookEntry, 'content'> & {
+	contentLength: number;
+};
 
 export type AgentCharacterPublishedSnapshot = {
 	name: string;
@@ -41,29 +61,40 @@ export type AgentCharacterPublishedSnapshot = {
 	exampleDialogue: string;
 	forbiddenBehavior: string;
 	avatarFileId: string | null;
+	worldbook: AgentWorldbookEntry[];
+	draftRevision: number;
 };
 
 export type AgentDialogueStylePublishedSnapshot = {
 	name: string;
 	body: string;
 	summary: string | null;
+	draftRevision?: number;
 };
 
-/** system 内 XML 文本节点：避免用户/检索内容里的 & <> 破坏结构 */
+/** Escape XML text nodes in system/runtime prompt blocks. */
 export function escapeAgentXmlText(s: string): string {
 	return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-/** 长期记忆检索块（拼在 system 末尾）；与 context-window 预留长度一致 */
+/** Retrieved long-term-memory block appended to the system prompt. */
 export const AGENT_LLM_MEMORY_XML_OPEN = '\n\n<long_term_memory source="retrieved">\n';
 export const AGENT_LLM_MEMORY_XML_CLOSE = '\n</long_term_memory>';
 
-/** 与 `computeChatHistoryCharBudget` 及对外 Token 展示同一比例：约 N 个 Latin 等效字符按 1 个 Token 粗算。 */
+/**
+ * The current turn's style and matched worldbook entries are prepended to the
+ * latest user message as a server-issued runtime directive. Stored user text,
+ * memory, and compression keep seeing the original user content only.
+ */
+export const AGENT_LLM_RUNTIME_DIRECTIVE_OPEN = '<runtime-directive source="server" not-user-input="true">';
+export const AGENT_LLM_RUNTIME_DIRECTIVE_CLOSE = '</runtime-directive>';
+
+/** Same rough ratio used by history budgeting and token display. */
 export const AGENT_LLM_APPROX_CHARS_PER_TOKEN = 3;
 
 const STORED_EXAMPLE_DIALOGUE_VERSION = 1 as const;
 
-/** 设为 `1` 或 `true` 时，每次智能体 LLM 请求在服务端控制台打印 OpenAI 风格请求体（含 system 与完整 messages）。临时调试用。 */
+/** Debug flag for logging OpenAI-style LLM request payloads. */
 function shouldLogAgentsLlmPayload(): boolean {
 	const v = process.env.MISSKEY_AGENTS_DEBUG_LLM?.trim().toLowerCase();
 	return v === '1' || v === 'true' || v === 'yes';
@@ -73,27 +104,27 @@ export const agentsErrors = {
 	featureDisabled: {
 		message: 'Agents feature is disabled.',
 		code: 'AGENTS_DISABLED',
-		id: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+		id: '07dc1216-7166-471a-a5dc-7a51d8eaec43',
 	},
 	modelNotConfigured: {
 		message: 'LLM is not configured for this instance.',
 		code: 'AGENTS_MODEL_NOT_CONFIGURED',
-		id: 'b2c3d4e5-f6a7-8901-bcde-f12345678901',
+		id: '2bc325b6-364f-4840-b0ae-91cf199f0f12',
 	},
 	llmRequestFailed: {
 		message: 'Upstream LLM request failed.',
 		code: 'AGENTS_LLM_FAILED',
-		id: 'c3d4e5f6-a7b8-9012-cdef-123456789012',
+		id: '6db559f6-39d4-4244-9e9f-1d3b0bada061',
 	},
 	llmUnsafeUrl: {
 		message: 'LLM base URL failed security validation.',
 		code: 'AGENTS_LLM_UNSAFE_URL',
-		id: 'd4e5f6a7-b8c9-0123-def0-234567890123',
+		id: '424243ef-98e0-4aab-9b03-1acb4efab443',
 	},
 	llmAborted: {
 		message: 'LLM request was aborted by the client.',
 		code: 'AGENTS_LLM_ABORTED',
-		id: 'e5f6a7b8-c9d0-1234-ef01-345678901234',
+		id: 'ac65031e-5b21-4d61-b8a4-9822e52f7a2b',
 		httpStatusCode: 409,
 	},
 } as const;
@@ -173,7 +204,7 @@ export class AgentService {
 
 	@bindThis
 	private pickModelOrThrow(instance: MiMeta, modelId: string | null): AgentLlmModelJson {
-		// 用户侧路径：始终使用未下架的模型，下架模型即视为不存在。
+		// User-facing paths only allow active models.
 		const models = getActiveLlmModels(instance);
 		if (models.length === 0) {
 			throw new ApiError(agentsErrors.modelNotConfigured);
@@ -192,8 +223,7 @@ export class AgentService {
 	}
 
 	/**
-	 * 与会话选用模型（含站点默认）对应的单次扣费，与 {@link pickModelOrThrow} 一致。
-	 * 无可用模型或参数非法时返回 0，由后续 LLM 路径再抛出具体错误。
+	 * Cost for the selected session model. Returns 0 when model selection is invalid.
 	 */
 	@bindThis
 	public getUserFacingModelCostPerCall(instance: MiMeta, sessionModelId: string | null): number {
@@ -205,7 +235,7 @@ export class AgentService {
 		}
 	}
 
-	/** 管理端或日志上下文：允许按 id 查询任意（含下架）模型元数据；不做可用性断言 */
+	/** Admin/logging path: look up any configured model metadata, including inactive models. */
 	@bindThis
 	public lookupAnyModelById(instance: MiMeta, modelId: string | null): AgentLlmModelJson | null {
 		if (!modelId) return null;
@@ -273,7 +303,7 @@ export class AgentService {
 	}
 
 	/**
-	 * 示例对话：仅作文风参考写入 system，绝不作为 chat 里的 user/assistant 消息（避免模型误认已发生）。
+	 * Example dialogue is style reference only; it is never added as chat history.
 	 */
 	@bindThis
 	public formatExampleDialogueReferenceBlock(exampleDialogueRaw: string): string {
@@ -292,6 +322,172 @@ export class AgentService {
 	}
 
 	@bindThis
+	public selectWorldbookEntriesForPrompt(
+		// Accept structured input so preview can test unsaved worldbook entries.
+		source: { worldbook: unknown },
+		userText: string,
+		opts?: { maxTotal?: number; maxAlways?: number; maxManual?: number; maxKeyword?: number },
+	): AgentWorldbookMatch[] {
+		const worldbook = this.normalizeWorldbookEntries(source.worldbook);
+		if (worldbook.length === 0) return [];
+		const normalizedUserText = userText.toLowerCase();
+		const maxTotal = Math.max(1, Math.min(24, opts?.maxTotal ?? 12));
+		const maxAlways = Math.max(0, Math.min(maxTotal, opts?.maxAlways ?? 4));
+		const maxManual = Math.max(0, Math.min(maxTotal, opts?.maxManual ?? 4));
+		const maxKeyword = Math.max(0, Math.min(maxTotal, opts?.maxKeyword ?? 8));
+		const manualHints = this.extractWorldbookManualHints(userText);
+		const allMatches = worldbook
+			.filter(entry => entry.enabled)
+			.map(entry => {
+				const keywords = entry.keywords.filter(keyword => keyword.trim().length > 0);
+				const matchedKeywords = entry.triggerMode === 'keyword'
+					? keywords.filter(keyword => this.matchWorldbookKeyword(normalizedUserText, keyword))
+					: [];
+				const matchedBy = entry.triggerMode === 'always'
+					? 'always'
+					: entry.triggerMode === 'manual'
+						? this.matchWorldbookManualHint(entry, manualHints)
+							? 'manual'
+							: null
+						: matchedKeywords.length > 0
+							? 'keyword'
+							: null;
+				return matchedBy ? { ...entry, matchedBy, matchedKeywords } : null;
+			})
+			.filter((entry): entry is AgentWorldbookMatch => entry != null)
+			.sort((a, b) => b.priority - a.priority || b.revision - a.revision || a.title.localeCompare(b.title));
+		const selected: AgentWorldbookMatch[] = [];
+		const selectedIds = new Set<string>();
+		const pickByMode = (mode: AgentWorldbookMatch['matchedBy'], limit: number) => {
+			if (limit <= 0) return;
+			for (const item of allMatches) {
+				if (selected.length >= maxTotal) break;
+				if (item.matchedBy !== mode) continue;
+				if (selectedIds.has(item.id)) continue;
+				selected.push(item);
+				selectedIds.add(item.id);
+				if (selected.filter(x => x.matchedBy === mode).length >= limit) break;
+			}
+		};
+		pickByMode('always', maxAlways);
+		pickByMode('manual', maxManual);
+		pickByMode('keyword', maxKeyword);
+		if (selected.length < maxTotal) {
+			for (const item of allMatches) {
+				if (selected.length >= maxTotal) break;
+				if (selectedIds.has(item.id)) continue;
+				selected.push(item);
+				selectedIds.add(item.id);
+			}
+		}
+		return selected;
+	}
+
+	/**
+	 * Stable worldbook serialization for snapshot comparison and diff display.
+	 */
+	@bindThis
+	public worldbookStableString(raw: unknown): string {
+		const items = this.normalizeWorldbookEntries(raw)
+			.map(item => ({
+				...item,
+				keywords: [...item.keywords].sort((a, b) => a.localeCompare(b)),
+			}))
+			.sort((a, b) => a.id.localeCompare(b.id));
+		return JSON.stringify(items);
+	}
+
+	@bindThis
+	public hasWorldbookEntries(raw: unknown): boolean {
+		return this.normalizeWorldbookEntries(raw)
+			.some(entry => entry.enabled && entry.title.trim().length > 0 && entry.content.trim().length > 0);
+	}
+
+	@bindThis
+	public listWorldbookPublicMeta(raw: unknown): AgentWorldbookPublicMeta[] {
+		return this.normalizeWorldbookEntries(raw)
+			.map(({ content, ...entry }) => ({
+				...entry,
+				contentLength: content.trim().length,
+			}))
+			.sort((a, b) => {
+				if (a.enabled !== b.enabled) return a.enabled ? -1 : 1;
+				return b.priority - a.priority || b.revision - a.revision || a.title.localeCompare(b.title);
+			});
+	}
+
+	/**
+	 * Conservative token budgeting: treat every enabled worldbook entry as possibly injected.
+	 */
+	@bindThis
+	public buildBudgetWorldbookEntries(character: MiAgentCharacter): AgentWorldbookMatch[] {
+		return this.normalizeWorldbookEntries(character.worldbook)
+			.filter(entry => entry.enabled)
+			.map(entry => ({
+				...entry,
+				matchedBy: entry.triggerMode,
+				matchedKeywords: [],
+			}));
+	}
+
+	@bindThis
+	public normalizeWorldbookEntries(raw: unknown): AgentWorldbookEntry[] {
+		if (!Array.isArray(raw)) return [];
+		const out: AgentWorldbookEntry[] = [];
+		for (const item of raw) {
+			if (!item || typeof item !== 'object') continue;
+			const e = item as Record<string, unknown>;
+			if (typeof e.id !== 'string') continue;
+			const keywords = Array.isArray(e.keywords)
+				? e.keywords.filter((keyword): keyword is string => typeof keyword === 'string')
+				: [];
+			out.push({
+				id: e.id,
+				title: typeof e.title === 'string' ? e.title : '',
+				content: typeof e.content === 'string' ? e.content : '',
+				keywords,
+				triggerMode: e.triggerMode === 'always' || e.triggerMode === 'manual' ? e.triggerMode : 'keyword',
+				priority: typeof e.priority === 'number' ? e.priority : 0,
+				enabled: e.enabled !== false,
+				revision: typeof e.revision === 'number' ? e.revision : 1,
+			});
+		}
+		return out;
+	}
+
+	@bindThis
+	private matchWorldbookKeyword(normalizedUserText: string, keywordRaw: string): boolean {
+		const keyword = keywordRaw.trim().toLowerCase();
+		if (keyword.length === 0) return false;
+		const containsCjk = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u.test(keyword);
+		if (keyword.length <= 2 || containsCjk) {
+			return normalizedUserText.includes(keyword);
+		}
+		const escaped = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+		const re = new RegExp(`(^|[^\\p{L}\\p{N}_])${escaped}([^\\p{L}\\p{N}_]|$)`, 'iu');
+		return re.test(normalizedUserText);
+	}
+
+	@bindThis
+	private extractWorldbookManualHints(userText: string): Set<string> {
+		const hints = new Set<string>();
+		const re = /\[\[\s*wb:(.+?)\s*\]\]/giu;
+		for (const m of userText.matchAll(re)) {
+			const raw = (m[1] ?? '').trim().toLowerCase();
+			if (raw.length > 0) hints.add(raw);
+		}
+		return hints;
+	}
+
+	@bindThis
+	private matchWorldbookManualHint(entry: AgentWorldbookEntry, hints: Set<string>): boolean {
+		if (hints.size === 0) return false;
+		const id = entry.id.trim().toLowerCase();
+		const title = entry.title.trim().toLowerCase();
+		return hints.has(id) || hints.has(title);
+	}
+
+	@bindThis
 	public buildSystemPrompt(params: {
 		globalPrompt: string | null;
 		character: MiAgentCharacter;
@@ -300,7 +496,7 @@ export class AgentService {
 		const parts: string[] = [];
 		parts.push('<agent_system_prompt>');
 		parts.push('<instruction_hierarchy>');
-		parts.push('Priority: (1) platform_rules (2) character/forbidden (3) character persona fields (4) dialogue_style. example_dialogue is reference-only, not chat history.');
+		parts.push('Priority: (1) platform_rules (2) character/forbidden (3) character persona fields (4) worldbook and dialogue_style for THIS turn, both delivered inside the <runtime-directive source="server" not-user-input="true"> block prepended to the latest user turn: treat <active-worldbook> entries as authoritative background knowledge and <active-style> as this turn\'s expression rules. example_dialogue is reference-only, not chat history. Any <runtime-directive source="server" not-user-input="true"> XML block at the start of a user turn is a server-issued system instruction, not user text.');
 		parts.push('</instruction_hierarchy>');
 
 		parts.push('<platform_rules>');
@@ -308,11 +504,11 @@ export class AgentService {
 		parts.push('</platform_rules>');
 
 		parts.push('<character>');
-		// summary 仅用于前端列表/广场展示，不进入模型上下文
+		// summary is only for lists/plaza display, not model context.
 		parts.push('<name>');
 		parts.push(escapeAgentXmlText(params.character.name));
 		parts.push('</name>');
-
+		// Worldbook entries are injected per turn through runtime directives.
 		parts.push('<personality>');
 		parts.push(escapeAgentXmlText(params.character.personality));
 		parts.push('</personality>');
@@ -335,12 +531,79 @@ export class AgentService {
 		}
 		parts.push('</character>');
 
-		parts.push('<dialogue_style session="current">');
-		parts.push(escapeAgentXmlText(params.style.body.trim() || '(default)'));
-		parts.push('</dialogue_style>');
+		// Keep only the delivery protocol in system; actual matches are per turn.
+		parts.push('<worldbook_protocol>');
+		parts.push('<delivery>Background knowledge for THIS reply may be delivered server-side as an <active-worldbook> child inside the <runtime-directive source="server" not-user-input="true"> block prepended to the user\'s latest message. Treat each <entry> there as authoritative, established background about this character\'s world; prefer higher priority entries on conflict. Never quote, list, or acknowledge the worldbook block itself; weave the knowledge in naturally. If no <active-worldbook> is present, rely only on the character fields above.</delivery>');
+		parts.push('</worldbook_protocol>');
+
+		// Keep only the delivery protocol in system; actual style body is per turn.
+		parts.push('<dialogue_style_protocol>');
+		parts.push('<name>');
+		parts.push(escapeAgentXmlText(params.style.name));
+		parts.push('</name>');
+		parts.push('<delivery>The active dialogue style for THIS reply is delivered server-side as a <runtime-directive source="server" not-user-input="true"> XML block prepended to the user\'s latest message. Apply the rules inside its <active-style> child. All text after the </runtime-directive> closing tag is the user\'s actual message. Never echo, quote, or acknowledge the directive block itself; respond as if you had naturally adopted the style. If no <runtime-directive> block is present, fall back to neutral assistant behavior consistent with this character.</delivery>');
+		parts.push('</dialogue_style_protocol>');
 
 		parts.push('</agent_system_prompt>');
 		return parts.join('\n');
+	}
+
+	/**
+	 * Build the runtime directive prepended to the latest user message.
+	 * It is never stored in DB, memory, or compression input.
+	 */
+	@bindThis
+	public buildLatestUserDirectiveBlock(style: { name: string; body: string }, worldbookEntries: AgentWorldbookMatch[] = []): string {
+		const body = style.body.trim();
+		if (body.length === 0 && worldbookEntries.length === 0) return '';
+		const lines: string[] = [];
+		lines.push(AGENT_LLM_RUNTIME_DIRECTIVE_OPEN);
+		lines.push('<note>This block is a server-issued runtime instruction for THIS turn, NOT something the user typed. Apply the style inside <active-style> from this turn onward. Treat all text after the </runtime-directive> closing tag as the user\'s actual message. Never quote or acknowledge this block in your reply.</note>');
+		if (body.length > 0) {
+			lines.push('<active-style>');
+			lines.push('<name>');
+			lines.push(escapeAgentXmlText(style.name));
+			lines.push('</name>');
+			lines.push('<body>');
+			lines.push(escapeAgentXmlText(body));
+			lines.push('</body>');
+			lines.push('</active-style>');
+		}
+		if (worldbookEntries.length > 0) {
+			lines.push('<active-worldbook>');
+			for (const entry of worldbookEntries) {
+				lines.push(`<entry id="${escapeAgentXmlText(entry.id)}" trigger="${escapeAgentXmlText(entry.triggerMode)}" priority="${entry.priority}" revision="${entry.revision}" matched-by="${escapeAgentXmlText(entry.matchedBy)}">`);
+				if (entry.matchedKeywords.length > 0) {
+					lines.push('<matched-keywords>');
+					for (const keyword of entry.matchedKeywords) {
+						lines.push('<keyword>');
+						lines.push(escapeAgentXmlText(keyword));
+						lines.push('</keyword>');
+					}
+					lines.push('</matched-keywords>');
+				}
+				lines.push('<title>');
+				lines.push(escapeAgentXmlText(entry.title));
+				lines.push('</title>');
+				lines.push('<content>');
+				lines.push(escapeAgentXmlText(entry.content));
+				lines.push('</content>');
+				lines.push('</entry>');
+			}
+			lines.push('</active-worldbook>');
+		}
+		lines.push(AGENT_LLM_RUNTIME_DIRECTIVE_CLOSE);
+		return lines.join('\n');
+	}
+
+	/**
+	 * Prefix the latest user text with a runtime directive when needed.
+	 */
+	@bindThis
+	public wrapLatestUserTextWithStyleDirective(rawUserText: string, style: { name: string; body: string }, worldbookEntries: AgentWorldbookMatch[] = []): string {
+		const directive = this.buildLatestUserDirectiveBlock(style, worldbookEntries);
+		if (directive.length === 0) return rawUserText;
+		return `${directive}\n\n${rawUserText}`;
 	}
 
 	@bindThis
@@ -350,7 +613,7 @@ export class AgentService {
 			throw new ApiError({
 				message: 'exampleTurns must be an array.',
 				code: 'INVALID_PARAM',
-				id: 'b2c3d4e5-f6a7-8901-bcde-f12345678902',
+				id: '376da962-ba44-4cab-9cdb-35cbe247ffb6',
 			});
 		}
 		if (input.length > AGENT_EXAMPLE_TURN_MAX) {
@@ -413,7 +676,7 @@ export class AgentService {
 		return JSON.stringify({ v: STORED_EXAMPLE_DIALOGUE_VERSION, turns });
 	}
 
-	/** 从 DB 文本列读取；仅识别本服务写入的 JSON，不做自然语言解析 */
+	/** Read example turns from the JSON format written by this service. */
 	@bindThis
 	public exampleTurnsFromStored(raw: string): AgentExampleTurn[] {
 		const t = raw.trim();
@@ -443,7 +706,7 @@ export class AgentService {
 		}
 	}
 
-	/** 示例对话作为 API 前缀消息的粗略字符量（内容 + 少量 role 包装） */
+	/** Rough character estimate for example dialogue prefix messages. */
 	@bindThis
 	public estimatePrefixMessagesChars(turns: AgentExampleTurn[]): number {
 		if (turns.length === 0) return 0;
@@ -452,8 +715,8 @@ export class AgentService {
 	}
 
 	/**
-	 * 从模型上下文上限中扣除 system（含长期记忆与示例对话等已拼进 system 的部分）、可选 prefix 消息、以及为本次回复预留的字符后，
-	 * 留给历史 user/assistant 轮文的预算。与 invoke 前拼装一致（按约 3 字符 ≈ 1 token 估算）。
+	 * Estimate how much room is left for historical messages after system,
+	 * prefix messages, runtime directives, and reply budget.
 	 */
 	@bindThis
 	public computeChatHistoryCharBudget(params: {
@@ -461,16 +724,19 @@ export class AgentService {
 		maxOutputTokensPerCall: number;
 		systemChars: number;
 		prefixMessages: AgentExampleTurn[];
+		/** Runtime directive length prepended to the latest user text. */
+		runtimeDirectiveChars?: number;
 	}): number {
 		const c = AGENT_LLM_APPROX_CHARS_PER_TOKEN;
 		const maxContextChars = Math.max(4000, params.maxContextTokens * c);
 		const prefixChars = this.estimatePrefixMessagesChars(params.prefixMessages);
 		const reserveReply = Math.max(256, Math.min(384_000, params.maxOutputTokensPerCall * c));
-		return Math.max(0, maxContextChars - params.systemChars - prefixChars - reserveReply);
+		const directiveChars = Math.max(0, params.runtimeDirectiveChars ?? 0);
+		return Math.max(0, maxContextChars - params.systemChars - prefixChars - directiveChars - reserveReply);
 	}
 
 	/**
-	 * 将 `computeChatHistoryCharBudget` 等路径上的「字符预算」换成为界面展示的 Token 约数（四舍五入，下限 0）。
+	 * Convert character-budget estimates to approximate tokens for UI display.
 	 */
 	@bindThis
 	public approxLlmTokensFromCharEstimate(chars: number): number {
@@ -483,13 +749,14 @@ export class AgentService {
 		sessionId: string,
 		maxContextChars: number,
 	): Promise<{
-		messages: Pick<MiAgentMessage, 'id' | 'role' | 'content'>[];
+		/** createdAt is used by compression windows; LLM history uses role/content. */
+		messages: Pick<MiAgentMessage, 'id' | 'role' | 'content' | 'createdAt'>[];
 		truncated: boolean;
 		oldestIncludedId: string | null;
 	}> {
 		const rows = await this.agentMessagesRepository.find({
 			where: { sessionId },
-			// 与 `AgentCompressionMemoryService.dMapFromRowsNewestFirst` 一致：同刻多条时 id 大的视为更新（与发送顺序一致）
+			// Match AgentCompressionMemoryService ordering for same-timestamp rows.
 			order: { createdAt: 'DESC', id: 'DESC' },
 			take: 500,
 			select: ['id', 'role', 'content', 'createdAt'],
@@ -530,14 +797,14 @@ export class AgentService {
 	@bindThis
 	public async invokeChatCompletions(params: {
 		system: string;
-		/** 插在 system 之后、真实历史之前（智能体示例对话已改入 system，此处通常为空） */
+		/** Messages inserted after system and before real history. */
 		prefixMessages?: { role: 'user' | 'assistant'; content: string }[];
 		messages: { role: 'user' | 'assistant'; content: string }[];
 		userText: string;
 		sessionModelId: string | null;
-		/** 由调用方（send endpoint）提供的取消信号；触发时视作用户主动中断 */
+		/** Caller-provided cancellation signal. */
 		externalAbortSignal?: AbortSignal;
-		/** 覆盖本次调用的 max_tokens 上限（仍不超过模型与站点配置） */
+		/** Per-call max_tokens override, capped by model/site settings. */
 		maxTokens?: number;
 	}): Promise<string> {
 		const instance = await this.metaService.fetch(true);
@@ -580,7 +847,7 @@ export class AgentService {
 				messages: body.messages.map(m => ({ role: m.role, content: m.content })),
 				max_tokens: body.max_tokens,
 			};
-			// 服务端终端输出（非浏览器 F12）；与 Chat Completions 请求 JSON 字段一致
+			// Server terminal output, not browser DevTools.
 			console.log('[MISSKEY_AGENTS_DEBUG_LLM] POST /v1/chat/completions payload:\n' + JSON.stringify(openAiStylePayload, null, 2));
 		}
 
@@ -633,8 +900,7 @@ export class AgentService {
 	}
 
 	/**
-	 * 以 (sessionId, clientRequestId) 维度维护当前活跃的 AbortController。
-	 * 用户点击对话页的终止按钮后，`agents/messages/abort` 端点通过此表找到并触发 abort。
+	 * Track active AbortControllers by session and client request id.
 	 */
 	private readonly pendingAbortControllers = new Map<string, AbortController>();
 
@@ -690,6 +956,8 @@ export class AgentService {
 			exampleDialogue: row.exampleDialogue,
 			forbiddenBehavior: row.forbiddenBehavior,
 			avatarFileId: row.avatarFileId,
+			worldbook: this.normalizeWorldbookEntries(row.worldbook),
+			draftRevision: row.draftRevision ?? 1,
 		};
 	}
 
@@ -699,10 +967,56 @@ export class AgentService {
 			name: row.name,
 			body: row.body,
 			summary: row.summary,
+			draftRevision: row.draftRevision ?? 1,
 		};
 	}
 
-	/** 已上线版本存在且当前编辑内容与已发布快照一致（无可审核的实质变更） */
+	/** Apply a parsed or raw snapshot to editable character draft fields. */
+	@bindThis
+	public applyCharacterSnapshot(row: MiAgentCharacter, raw: unknown): boolean {
+		const snap = this.parseCharacterSnapshot(raw);
+		if (!snap) return false;
+		row.name = snap.name;
+		row.summary = snap.summary;
+		row.personality = snap.personality;
+		row.background = snap.background;
+		row.speakingStyle = snap.speakingStyle;
+		row.greeting = snap.greeting;
+		row.exampleDialogue = snap.exampleDialogue;
+		row.forbiddenBehavior = snap.forbiddenBehavior;
+		row.avatarFileId = snap.avatarFileId;
+		row.worldbook = snap.worldbook ?? [];
+		row.draftRevision = snap.draftRevision ?? (row.draftRevision ?? 1);
+		row.reviewStatus = row.publishedVersion == null ? 'draft' : 'published';
+		return true;
+	}
+
+	@bindThis
+	public restoreCharacterFromPublishedSnapshot(row: MiAgentCharacter): boolean {
+		if (row.publishedSnapshot == null) return false;
+		return this.applyCharacterSnapshot(row, row.publishedSnapshot);
+	}
+
+	/** Apply a parsed or raw snapshot to editable style draft fields. */
+	@bindThis
+	public applyStyleSnapshot(row: MiAgentDialogueStyle, raw: unknown): boolean {
+		const snap = this.parseStyleSnapshot(raw);
+		if (!snap) return false;
+		row.name = snap.name;
+		row.body = snap.body;
+		row.summary = snap.summary;
+		row.draftRevision = snap.draftRevision ?? (row.draftRevision ?? 1);
+		row.reviewStatus = row.publishedVersion == null ? 'draft' : 'published';
+		return true;
+	}
+
+	@bindThis
+	public restoreStyleFromPublishedSnapshot(row: MiAgentDialogueStyle): boolean {
+		if (row.publishedSnapshot == null) return false;
+		return this.applyStyleSnapshot(row, row.publishedSnapshot);
+	}
+
+	/** Published version exists and current draft matches the published snapshot. */
 	@bindThis
 	public isCharacterContentUnchangedFromPublished(row: MiAgentCharacter): boolean {
 		if (row.publishedVersion == null || row.publishedSnapshot == null) return false;
@@ -717,7 +1031,8 @@ export class AgentService {
 			&& cur.greeting === pub.greeting
 			&& cur.exampleDialogue === pub.exampleDialogue
 			&& cur.forbiddenBehavior === pub.forbiddenBehavior
-			&& cur.avatarFileId === pub.avatarFileId;
+			&& cur.avatarFileId === pub.avatarFileId
+			&& this.worldbookStableString(cur.worldbook) === this.worldbookStableString(pub.worldbook);
 	}
 
 	@bindThis
@@ -734,6 +1049,24 @@ export class AgentService {
 		if (!raw || typeof raw !== 'object') return null;
 		const o = raw as Record<string, unknown>;
 		if (typeof o.name !== 'string') return null;
+		const worldbook: AgentWorldbookEntry[] = [];
+		if (Array.isArray(o.worldbook)) {
+			for (const entry of o.worldbook) {
+				if (!entry || typeof entry !== 'object') continue;
+				const e = entry as Record<string, unknown>;
+				if (typeof e.id !== 'string' || typeof e.title !== 'string' || typeof e.content !== 'string' || !Array.isArray(e.keywords) || typeof e.triggerMode !== 'string' || typeof e.priority !== 'number' || typeof e.enabled !== 'boolean' || typeof e.revision !== 'number') continue;
+				worldbook.push({
+					id: e.id,
+					title: e.title,
+					content: e.content,
+					keywords: e.keywords.filter((keyword): keyword is string => typeof keyword === 'string'),
+					triggerMode: e.triggerMode as AgentWorldbookEntry['triggerMode'],
+					priority: e.priority,
+					enabled: e.enabled,
+					revision: e.revision,
+				});
+			}
+		}
 		return {
 			name: o.name,
 			summary: typeof o.summary === 'string' ? o.summary : null,
@@ -744,6 +1077,8 @@ export class AgentService {
 			exampleDialogue: typeof o.exampleDialogue === 'string' ? o.exampleDialogue : '',
 			forbiddenBehavior: typeof o.forbiddenBehavior === 'string' ? o.forbiddenBehavior : '',
 			avatarFileId: typeof o.avatarFileId === 'string' ? o.avatarFileId : null,
+			worldbook,
+			draftRevision: typeof o.draftRevision === 'number' ? o.draftRevision : 1,
 		};
 	}
 
@@ -756,6 +1091,7 @@ export class AgentService {
 			name: o.name,
 			body: o.body,
 			summary: typeof o.summary === 'string' ? o.summary : null,
+			draftRevision: typeof o.draftRevision === 'number' ? o.draftRevision : undefined,
 		};
 	}
 
@@ -768,7 +1104,7 @@ export class AgentService {
 			throw new ApiError({
 				message: 'Published character snapshot is missing.',
 				code: 'AGENT_PUBLISHED_UNAVAILABLE',
-				id: 'b1c2d3e4-f5a6-7890-bcde-f12345678901',
+				id: '47df84e5-ae35-4099-98f3-60a48984c14b',
 			});
 		}
 		const snap = this.parseCharacterSnapshot(row.publishedSnapshot);
@@ -776,7 +1112,7 @@ export class AgentService {
 			throw new ApiError({
 				message: 'Published character snapshot is invalid.',
 				code: 'AGENT_PUBLISHED_UNAVAILABLE',
-				id: 'c2d3e4f5-a6b7-8901-cdef-123456789012',
+				id: '18182c22-7f4e-466b-b3fb-b0964fc3571a',
 			});
 		}
 		return Object.assign(new MiAgentCharacter(), row, {
@@ -789,6 +1125,8 @@ export class AgentService {
 			exampleDialogue: snap.exampleDialogue,
 			forbiddenBehavior: snap.forbiddenBehavior,
 			avatarFileId: snap.avatarFileId,
+			worldbook: snap.worldbook,
+			draftRevision: snap.draftRevision,
 		});
 	}
 
@@ -819,15 +1157,15 @@ export class AgentService {
 		});
 	}
 
-	/** 同步 isPublished：与「曾在广场上线过」一致，供旧查询与索引使用 */
-	/** 广场卡片：始终用已上线快照，避免审核中的草稿泄漏到列表 */
+	/** Keep legacy listing/index flags in sync with publishedVersion. */
+	/** Plaza cards always render from the published snapshot. */
 	@bindThis
-	public characterPlazaDisplayFields(row: MiAgentCharacter): { name: string; summary: string | null; avatarFileId: string | null } {
+	public characterPlazaDisplayFields(row: MiAgentCharacter): { name: string; summary: string | null; avatarFileId: string | null; hasWorldbook: boolean } {
 		const snap = row.publishedSnapshot != null ? this.parseCharacterSnapshot(row.publishedSnapshot) : null;
 		if (snap) {
-			return { name: snap.name, summary: snap.summary, avatarFileId: snap.avatarFileId };
+			return { name: snap.name, summary: snap.summary, avatarFileId: snap.avatarFileId, hasWorldbook: this.hasWorldbookEntries(snap.worldbook) };
 		}
-		return { name: row.name, summary: row.summary, avatarFileId: row.avatarFileId };
+		return { name: row.name, summary: row.summary, avatarFileId: row.avatarFileId, hasWorldbook: this.hasWorldbookEntries(row.worldbook) };
 	}
 
 	@bindThis

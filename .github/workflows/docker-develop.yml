@@ -8,7 +8,9 @@ on:
 
 env:
   REGISTRY_IMAGE: ghcr.io/${{ github.repository }}
-  TCR_REGISTRY_IMAGE: ccr.ccs.tencentyun.com/w573/yjrg
+  # 此 workflow 只负责把 develop 镜像推到 GHCR；腾讯云 TCR 端通过控制台的「镜像复制」功能
+  # 主动从 GHCR 拉取（TCR → GHCR 链路比 GitHub runner → TCR 跨海稳得多）。
+  # 历史上这里曾同时直推 TCR，长期被大 blob HTTP/2 PROTOCOL_ERROR 中断；已迁移至 TCR 侧拉取。
 
 jobs:
   # see https://docs.docker.com/build/ci/github-actions/multi-platform/#distribute-build-across-multiple-runners
@@ -31,7 +33,6 @@ jobs:
           echo "PLATFORM_PAIR=${platform//\//-}" >> $GITHUB_ENV
           # Lowercase registry image name
           echo "REGISTRY_IMAGE=${REGISTRY_IMAGE,,}" >> $GITHUB_ENV
-          echo "TCR_REGISTRY_IMAGE=${TCR_REGISTRY_IMAGE,,}" >> $GITHUB_ENV
       - name: Check out the repo
         uses: actions/checkout@v6.0.1
       - name: Set up Docker Buildx
@@ -42,12 +43,6 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Log in to Tencent Cloud TCR
-        uses: docker/login-action@v3
-        with:
-          registry: ccr.ccs.tencentyun.com
-          username: ${{ secrets.TCR_USERNAME }}
-          password: ${{ secrets.TCR_PASSWORD }}
       - name: Build and push by digest
         id: build
         uses: docker/build-push-action@v6
@@ -85,7 +80,6 @@ jobs:
         run: |
           # Lowercase registry image name
           echo "REGISTRY_IMAGE=${REGISTRY_IMAGE,,}" >> $GITHUB_ENV
-          echo "TCR_REGISTRY_IMAGE=${TCR_REGISTRY_IMAGE,,}" >> $GITHUB_ENV
       - name: Download digests
         uses: actions/download-artifact@v7
         with:
@@ -100,21 +94,12 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Log in to Tencent Cloud TCR
-        uses: docker/login-action@v3
-        with:
-          registry: ccr.ccs.tencentyun.com
-          username: ${{ secrets.TCR_USERNAME }}
-          password: ${{ secrets.TCR_PASSWORD }}
       - name: Create manifest list and push
         working-directory: /tmp/digests
         run: |
           docker buildx imagetools create \
             --tag ${{ env.REGISTRY_IMAGE }}:develop \
             $(printf '${{ env.REGISTRY_IMAGE }}@sha256:%s ' *)
-          docker buildx imagetools create \
-            --tag ${{ env.TCR_REGISTRY_IMAGE }}:develop \
-            ${{ env.REGISTRY_IMAGE }}:develop
       - name: Inspect image
         run: |
           docker buildx imagetools inspect ${{ env.REGISTRY_IMAGE }}:develop

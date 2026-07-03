@@ -87,10 +87,10 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			this.agentService.assertAgentsEnabled();
 			const row = await this.agentDialogueStylesRepository.findOneBy({ id: ps.styleId });
 			if (!row) {
-				throw new ApiError({ message: 'No such style.', code: 'NO_SUCH_STYLE', id: 'c5d6e7f8-a9b0-1234-8901-345678901234' });
+				throw new ApiError({ message: 'No such style.', code: 'NO_SUCH_STYLE', id: '39cef33f-942e-4b01-8cb8-81497454863b' });
 			}
 			if (row.userId !== me.id && !this.agentService.isListedOnPlazaStyle(row)) {
-				throw new ApiError({ message: 'No such style.', code: 'NO_SUCH_STYLE', id: 'd6e7f8a9-b0c1-2345-9012-456789012345' });
+				throw new ApiError({ message: 'No such style.', code: 'NO_SUCH_STYLE', id: '5d9afadb-477f-4f94-b473-e09b1f04ff17' });
 			}
 			const d = this.agentService.stylePlazaDisplayFields(row);
 			const bodyChars = this.agentPlazaReviewService.styleBodyCharCount(row);

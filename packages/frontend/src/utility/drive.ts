@@ -102,6 +102,12 @@ export function uploadFile(file: File | Blob, options: {
 							title: i18n.ts.failedToUpload,
 							text: i18n.ts.cannotUploadBecauseUnallowedFileType,
 						});
+					} else if (res.error?.code === 'PROTECTED_FOLDER' || res.error?.code === 'PROTECTED_AGENT_IMAGE_FOLDER') {
+						os.alert({
+							type: 'error',
+							title: i18n.ts.failedToUpload,
+							text: 'AI 生图专用文件夹只能保存智能体生成的图片，不能上传或移入其他图片。',
+						});
 					} else {
 						os.alert({
 							type: 'error',

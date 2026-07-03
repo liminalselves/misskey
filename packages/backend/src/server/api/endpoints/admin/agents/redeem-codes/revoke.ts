@@ -13,6 +13,7 @@ import { ApiError } from '@/server/api/error.js';
 export const meta = {
 	tags: ['admin'],
 	requireCredential: true,
+	secure: true,
 	requireAdmin: true,
 	kind: 'write:admin',
 	limit: { duration: ms('1hour'), max: 120 },

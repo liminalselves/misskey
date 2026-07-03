@@ -40,6 +40,8 @@ export const meta = {
 				bodyPreview: { type: 'string' },
 				reviewStatus: { type: 'string', optional: true },
 				publishedVersion: { type: 'integer', nullable: true, optional: true },
+				reviewRejectReason: { type: 'string', nullable: true, optional: true },
+				reviewRejectMessage: { type: 'string', nullable: true, optional: true },
 				createdAt: { type: 'string', format: 'date-time' },
 				updatedAt: { type: 'string', format: 'date-time' },
 				user: { type: 'object', ref: 'UserLite' },
@@ -64,7 +66,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			const rows = await this.agentDialogueStylesRepository.find({
 				where: { userId: me.id },
 				order: { updatedAt: 'DESC' },
-				select: ['id', 'userId', 'name', 'body', 'summary', 'isPublished', 'reviewStatus', 'publishedVersion', 'createdAt', 'updatedAt'],
+				select: ['id', 'userId', 'name', 'body', 'summary', 'isPublished', 'reviewStatus', 'publishedVersion', 'reviewRejectReason', 'reviewRejectMessage', 'createdAt', 'updatedAt'],
 				take: 200,
 			});
 			const userLite = await this.userEntityService.pack(me, me, { schema: 'UserLite' });
@@ -79,6 +81,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				bodyPreview: previewBody(r.body),
 				reviewStatus: r.reviewStatus,
 				publishedVersion: r.publishedVersion,
+				reviewRejectReason: r.reviewRejectReason,
+				reviewRejectMessage: r.reviewRejectMessage,
 				createdAt: r.createdAt.toISOString(),
 				updatedAt: r.updatedAt.toISOString(),
 				user: userLite,

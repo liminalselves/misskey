@@ -67,11 +67,11 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			this.agentService.assertAgentsEnabled();
 			const session = await this.agentSessionsRepository.findOneBy({ id: ps.sessionId });
 			if (!session || session.userId !== me.id) {
-				throw new ApiError({ message: 'No such session.', code: 'NO_SUCH_SESSION', id: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890' });
+				throw new ApiError({ message: 'No such session.', code: 'NO_SUCH_SESSION', id: '2bcab4d6-20eb-4cc5-82c0-f5118e33742b' });
 			}
 			const instanceMeta = await this.metaService.fetch(true);
 			if (!this.agentDashscopeMemoryService.isRunnable(instanceMeta)) {
-				throw new ApiError({ message: 'Long-term memory is not available.', code: 'MEMORY_NOT_AVAILABLE', id: 'b2c3d4e5-f6a7-8901-bcde-f12345678901' });
+				throw new ApiError({ message: 'Long-term memory is not available.', code: 'MEMORY_NOT_AVAILABLE', id: 'accb8086-0532-42f7-b218-a9e7a86f57df' });
 			}
 			const bailianUserId = this.agentDashscopeMemoryService.bailianUserId(me.id, session.id);
 			const pageNum = ps.pageNum ?? 1;
@@ -83,7 +83,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				pageSize,
 			});
 			if (result == null) {
-				throw new ApiError({ message: 'Could not load memories from provider.', code: 'MEMORY_PROVIDER_ERROR', id: 'c3d4e5f6-a7b8-9012-cdef-123456789012' });
+				throw new ApiError({ message: 'Could not load memories from provider.', code: 'MEMORY_PROVIDER_ERROR', id: '9a3d0f1b-bd41-4f79-b222-72ee271b91a3' });
 			}
 			return {
 				memoryNodes: result.memoryNodes.map(n => ({

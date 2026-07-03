@@ -4,7 +4,6 @@
  */
 
 import { Inject, Injectable } from '@nestjs/common';
-import { IsNull } from 'typeorm';
 import { Endpoint } from '@/server/api/endpoint-base.js';
 import type { DriveFilesRepository } from '@/models/_.js';
 import { DriveFileEntityService } from '@/core/entities/DriveFileEntityService.js';
@@ -48,11 +47,17 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		private driveFileEntityService: DriveFileEntityService,
 	) {
 		super(meta, paramDef, async (ps, me) => {
-			const files = await this.driveFilesRepository.findBy({
-				name: ps.name,
-				userId: me.id,
-				folderId: ps.folderId ?? IsNull(),
-			});
+			const query = this.driveFilesRepository.createQueryBuilder('file')
+				.where('file.name = :name', { name: ps.name })
+				.andWhere('file.userId = :userId', { userId: me.id });
+
+			if (ps.folderId) {
+				query.andWhere('file.folderId = :folderId', { folderId: ps.folderId });
+			} else {
+				query.andWhere('file.folderId IS NULL');
+			}
+
+			const files = await query.getMany();
 
 			return await this.driveFileEntityService.packMany(files, { self: true });
 		});

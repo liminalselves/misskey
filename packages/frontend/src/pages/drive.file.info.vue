@@ -9,7 +9,12 @@ SPDX-License-Identifier: AGPL-3.0-only
 	<MkLoading v-if="fetching"/>
 	<div v-else-if="file" class="_gaps">
 		<div :class="$style.filePreviewRoot">
-			<MkMediaList :mediaList="[file]"></MkMediaList>
+			<div v-if="file.isAgentImageBlocked" :class="$style.blockedPreview">
+				<i class="ti ti-ban"></i>
+				<strong>图片已封禁</strong>
+				<span>该 AI 生成图片已被审核封禁，无法预览或下载。</span>
+			</div>
+			<MkMediaList v-else :mediaList="[file]"></MkMediaList>
 		</div>
 		<div :class="$style.fileQuickActionsRoot">
 			<button class="_button" :class="$style.fileNameEditBtn" @click="rename()">
@@ -17,7 +22,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<i class="ti ti-pencil" :class="$style.fileNameEditIcon"></i>
 			</button>
 			<div :class="$style.fileQuickActionsOthers">
-				<button v-tooltip="i18n.ts.createNoteFromTheFile" class="_button" :class="$style.fileQuickActionsOthersButton" @click="postThis()">
+				<button v-if="!file.isAgentImageBlocked" v-tooltip="i18n.ts.createNoteFromTheFile" class="_button" :class="$style.fileQuickActionsOthersButton" @click="postThis()">
 					<i class="ti ti-pencil"></i>
 				</button>
 				<button v-if="file.isSensitive" v-tooltip="i18n.ts.unmarkAsSensitive" class="_button" :class="$style.fileQuickActionsOthersButton" @click="toggleSensitive()">
@@ -26,7 +31,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<button v-else v-tooltip="i18n.ts.markAsSensitive" class="_button" :class="$style.fileQuickActionsOthersButton" @click="toggleSensitive()">
 					<i class="ti ti-eye-exclamation"></i>
 				</button>
-				<a v-tooltip="i18n.ts.download" :href="file.url" :download="file.name" class="_button" :class="$style.fileQuickActionsOthersButton">
+				<a v-if="!file.isAgentImageBlocked" v-tooltip="i18n.ts.download" :href="file.url" :download="file.name" class="_button" :class="$style.fileQuickActionsOthersButton">
 					<i class="ti ti-download"></i>
 				</a>
 				<button v-tooltip="i18n.ts.delete" class="_button" :class="[$style.fileQuickActionsOthersButton, $style.danger]" @click="deleteFile()">
@@ -59,9 +64,13 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<template #key>{{ i18n.ts._fileViewer.size }}</template>
 				<template #value>{{ bytes(file.size) }}</template>
 			</MkKeyValue>
-			<MkKeyValue :class="$style.fileMetaDataChildren" :copy="file.url">
+			<MkKeyValue v-if="!file.isAgentImageBlocked" :class="$style.fileMetaDataChildren" :copy="file.url">
 				<template #key>URL</template>
 				<template #value>{{ file.url }}</template>
+			</MkKeyValue>
+			<MkKeyValue v-else :class="$style.fileMetaDataChildren">
+				<template #key>状态</template>
+				<template #value>已封禁</template>
 			</MkKeyValue>
 		</div>
 	</div>
@@ -230,6 +239,27 @@ onMounted(async () => {
 	border-radius: var(--MI-radius);
 	// MkMediaList 内の上部マージン 4px
 	padding: calc(1rem - 4px) 1rem 1rem;
+}
+
+.blockedPreview {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	min-height: 220px;
+	border: 1px solid var(--MI_THEME-divider);
+	border-radius: var(--MI-radius);
+	color: var(--MI_THEME-error);
+	text-align: center;
+
+	> i {
+		font-size: 40px;
+	}
+
+	> span {
+		color: var(--MI_THEME-fgTransparentWeak);
+	}
 }
 
 .fileQuickActionsRoot {

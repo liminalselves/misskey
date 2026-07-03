@@ -14,6 +14,21 @@ import { misskeyApi } from '@/utility/misskey-api.js';
 import { prefer } from '@/preferences.js';
 import { globalEvents } from '@/events.js';
 
+function isProtectedAgentImageFolderError(err: unknown): boolean {
+	return err != null && typeof err === 'object' && 'code' in err && (
+		(err as { code?: unknown }).code === 'PROTECTED_AGENT_IMAGE_FOLDER' ||
+		(err as { code?: unknown }).code === 'PROTECTED_FOLDER'
+	);
+}
+
+function showProtectedAgentImageFolderError() {
+	os.alert({
+		type: 'error',
+		title: '无法移动',
+		text: 'AI 生图专用文件夹只能保存智能体生成的图片，不能移入其他图片。AI 生图移出后会占用普通网盘空间。',
+	});
+}
+
 function rename(file: Misskey.entities.DriveFile) {
 	os.inputText({
 		title: i18n.ts.renameFile,
@@ -49,6 +64,16 @@ function move(file: Misskey.entities.DriveFile) {
 		misskeyApi('drive/files/update', {
 			fileId: file.id,
 			folderId: folders[0] ? folders[0].id : null,
+		}).catch(err => {
+			if (isProtectedAgentImageFolderError(err)) {
+				showProtectedAgentImageFolderError();
+				return;
+			}
+			os.alert({
+				type: 'error',
+				title: i18n.ts.error,
+				text: err.message,
+			});
 		});
 	});
 }

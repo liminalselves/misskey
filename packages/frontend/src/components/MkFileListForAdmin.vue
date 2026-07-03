@@ -21,6 +21,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				:class="[$style.file, '_button']"
 			>
 				<div v-if="file.isSensitive" :class="$style.sensitiveLabel">{{ i18n.ts.sensitive }}</div>
+				<div v-if="file.isAgentImageBlocked" :class="$style.blockedLabel">已封禁</div>
 				<MkDriveFileThumbnail :class="$style.thumbnail" :file="file" fit="contain" :highlightWhenSensitive="true"/>
 				<div v-if="viewMode === 'list'" :class="$style.body">
 					<div>
@@ -122,5 +123,17 @@ defineProps<{
 	border-radius: 4px;
 	font-size: 85%;
 	animation: sensitive-blink 1s infinite;
+}
+
+.blockedLabel {
+	position: absolute;
+	z-index: 10;
+	top: 8px;
+	right: 8px;
+	padding: 2px 4px;
+	background: #d81e1ebf;
+	color: #fff;
+	border-radius: 4px;
+	font-size: 85%;
 }
 </style>

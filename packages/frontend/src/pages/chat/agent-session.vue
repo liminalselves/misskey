@@ -4,8 +4,34 @@ SPDX-License-Identifier: AGPL-3.0-only
 -->
 
 <template>
-<PageWithHeader v-model:tab="tab" :reversed="tab === 'chat'" :tabs="headerTabs" narrow-merged-row show-back :actions="headerActions">
-	<div v-if="tab === 'chat'" class="_spacer" style="--MI_SPACER-w: 700px;">
+<PageWithHeader v-model:tab="tab" :reversed="tab === 'chat'" :tabs="headerTabs" narrowMergedRow showBack :actions="headerActions">
+	<div v-if="tab === 'chat'" :class="['_spacer', $style.chatSpacer]" style="--MI_SPACER-w: 700px;">
+		<div
+			v-if="showWorldbookHitHint && sending && pendingWorldbookMatches.length > 0"
+			:class="[$style.worldbookHitHint, worldbookHitPopoverOpen && $style.worldbookHitHintActive]"
+			:title="pendingWorldbookTooltip"
+			tabindex="0"
+			role="button"
+			:aria-expanded="worldbookHitPopoverOpen"
+			@mouseenter="openWorldbookHitPopover"
+			@mouseleave="closeWorldbookHitPopover"
+			@focus="openWorldbookHitPopover"
+			@blur="closeWorldbookHitPopover"
+			@click="toggleWorldbookHitPopover"
+		>
+			<i class="ti ti-book"></i>
+			<span>{{ pendingWorldbookMatches.length }}</span>
+			<div :class="$style.worldbookHitTooltip">
+				<div :class="$style.worldbookHitTitle">本轮命中世界书</div>
+				<div v-for="item in pendingWorldbookMatches" :key="item.id" :class="$style.worldbookHitItem">
+					<div :class="$style.worldbookHitName">{{ item.title }}</div>
+					<div :class="$style.worldbookHitMeta">
+						{{ worldbookMatchedByLabel(item.matchedBy) }} · 优先级 {{ item.priority }}
+						<template v-if="item.matchedKeywords.length > 0"> · {{ item.matchedKeywords.join(', ') }}</template>
+					</div>
+				</div>
+			</div>
+		</div>
 		<div v-if="loading || chatInitializing" class="_gaps">
 			<MkLoading/>
 		</div>
@@ -72,6 +98,149 @@ SPDX-License-Identifier: AGPL-3.0-only
 			@scrollToMessage="handleScrollToMessageFromSearch"
 			@messageDeleted="onAgentMessageDeleted"
 		/>
+	</div>
+
+	<div v-else-if="tab === 'worldbook'" class="_spacer" style="--MI_SPACER-w: 760px;">
+		<div v-if="loading || worldbookListLoading" class="_gaps">
+			<MkLoading/>
+		</div>
+		<div v-else class="_gaps">
+			<div v-panel :class="$style.worldbookOverview">
+				<div :class="$style.worldbookOverviewIcon"><i class="ti ti-book"></i></div>
+				<div>
+					<div :class="$style.worldbookOverviewTitle">世界书 · {{ worldbookStats.enabledCount }} / {{ worldbookStats.totalCount }}</div>
+					<div :class="$style.worldbookOverviewText">这里只显示世界书规模和提示设置，不展示条目标题、关键词或正文，避免剧透。</div>
+				</div>
+			</div>
+			<MkInfo v-if="worldbookEntries.length === 0">当前会话使用的角色版本没有世界书条目。</MkInfo>
+			<template v-else>
+				<div :class="$style.worldbookStatsGrid">
+					<div v-panel :class="$style.worldbookStatCard">
+						<span>启用条目</span>
+						<b>{{ worldbookStats.enabledCount }}</b>
+					</div>
+					<div v-panel :class="$style.worldbookStatCard">
+						<span>总条目</span>
+						<b>{{ worldbookStats.totalCount }}</b>
+					</div>
+					<div v-panel :class="$style.worldbookStatCard">
+						<span>正文量级</span>
+						<b>{{ worldbookStats.textScaleLabel }}</b>
+					</div>
+					<div v-panel :class="$style.worldbookStatCard">
+						<span>触发方式</span>
+						<b>{{ worldbookStats.modeSummary }}</b>
+					</div>
+				</div>
+				<div v-panel :class="$style.worldbookSettingCard">
+					<MkSwitch v-model="showWorldbookHitHint">
+						<template #label>命中世界书时显示提示</template>
+						<template #caption>开启后，发送消息命中世界书时会在聊天边缘显示标志。桌面端悬浮查看详情，触屏设备点击显示、再点隐藏。</template>
+					</MkSwitch>
+				</div>
+				<MkInfo>为避免剧透，此页不展示世界书条目、关键词和正文。命中提示只展示本轮实际命中的条目标题和命中原因。</MkInfo>
+			</template>
+		</div>
+	</div>
+
+	<div v-else-if="tab === 'draw'" class="_spacer" style="--MI_SPACER-w: 760px;">
+		<div class="_gaps">
+			<MkInfo>
+				<div :class="$style.drawInfoContent">
+					<span>生成的图片会保存到网盘里的“AI 智能体生成图片”文件夹。该文件夹使用独立 AI 生图额度；空间不足时系统会自动清理最旧图片，聊天中会显示“图片已自动清理”。</span>
+					<MkButton small rounded @click="router.push('/my/drive' as any)"><i class="ti ti-folder"></i> 前往网盘查看</MkButton>
+				</div>
+			</MkInfo>
+			<div v-panel :class="$style.drawPanel">
+				<div :class="$style.drawHead">
+					<div>
+						<div :class="$style.drawTitle">生图配置</div>
+						<div :class="$style.drawCaption">配置当前会话的智能体自动插图能力。模型选择为“无”时关闭生图。</div>
+					</div>
+					<MkButton rounded primary :disabled="drawSaving || !drawConfigDirty" @click="saveAgentImageSettings">
+						<i class="ti ti-device-floppy"></i> 保存配置
+					</MkButton>
+				</div>
+				<div class="_gaps">
+					<MkSelect v-model="drawImageModelId" :items="drawImageModelItems">
+						<template #label>生图模型</template>
+						<template #caption>选择“无”时关闭生图；选择模型后会显示该提供商的可配置参数。</template>
+					</MkSelect>
+					<MkInfo v-if="drawImageModels.length === 0">管理员还没有配置可用的生图模型。</MkInfo>
+					<MkInfo v-if="drawSelectedImageModel?.provider === 'aurora'" warn>
+						Naval AI 参数会直接影响出图质量、费用和稳定性。不了解时请保持默认，或使用“恢复默认设置”。
+					</MkInfo>
+					<template v-if="drawSelectedImageModel?.provider === 'aurora'">
+						<div :class="$style.drawSizeRow">
+							<MkSelect v-model="drawSize" :items="drawSizeItems">
+								<template #label>默认尺寸</template>
+							</MkSelect>
+							<MkButton rounded :class="$style.drawResetButton" @click="resetAgentImageDefaults">
+								<i class="ti ti-restore"></i> 恢复默认设置
+							</MkButton>
+						</div>
+						<div v-if="drawArtistPresets.length > 0" class="_gaps_s">
+							<div :class="$style.drawFieldLabel">画师串</div>
+							<div :class="$style.drawPresetGrid">
+								<button
+									v-for="preset in drawArtistPresets"
+									:key="preset.id"
+									type="button"
+									:class="[$style.drawPresetCard, drawArtistPresetId === preset.id && $style.drawPresetCardActive]"
+									@click="drawArtistPresetId = preset.id"
+								>
+									<img v-if="preset.thumbnailUrl" :src="preset.thumbnailUrl" :class="$style.drawPresetThumb" alt=""/>
+									<span v-else :class="$style.drawPresetThumbFallback"><i class="ti ti-brush"></i></span>
+									<span :class="$style.drawPresetName">{{ preset.name }}</span>
+								</button>
+							</div>
+						</div>
+						<FormSplit :minWidth="180">
+							<MkInput v-model="drawSteps" type="text">
+								<template #label>Steps</template>
+							</MkInput>
+							<MkInput v-model="drawScale" type="text">
+								<template #label>Scale</template>
+							</MkInput>
+							<MkInput v-model="drawCfgRescale" type="text">
+								<template #label>CFG Rescale</template>
+							</MkInput>
+						</FormSplit>
+						<FormSplit :minWidth="220">
+							<MkInput v-model="drawSampler">
+								<template #label>Sampler</template>
+							</MkInput>
+							<MkInput v-model="drawNoiseSchedule">
+								<template #label>Noise Schedule</template>
+							</MkInput>
+						</FormSplit>
+					</template>
+				</div>
+			</div>
+
+			<div v-if="drawSelectedImageModel" v-panel :class="$style.drawPanel">
+				<div :class="$style.drawHead">
+					<div>
+						<div :class="$style.drawTitle">测试生图</div>
+						<div :class="$style.drawCaption">使用上方已保存配置生成测试图，结果仅在此处显示并保存到你的网盘。</div>
+					</div>
+					<MkButton rounded :disabled="drawGenerating || drawTag.trim().length === 0" @click="generateAgentImage">
+						<i class="ti ti-brush"></i> 生成
+					</MkButton>
+				</div>
+				<div class="_gaps">
+					<MkTextarea v-model="drawTag" tall>
+						<template #label>测试提示词</template>
+						<template #caption>例如：1girl, solo, blue eyes, long hair, standing, soft light</template>
+					</MkTextarea>
+					<MkInfo v-if="drawLastUrl">生成完成，已保存到你的网盘。</MkInfo>
+					<div v-if="drawLastFile" :key="drawLastFile.id" :class="$style.drawPreviewMedia">
+						<MkMediaList :mediaList="[drawLastFile]"/>
+					</div>
+					<img v-else-if="drawLastUrl" :src="drawLastUrl" :class="$style.drawPreview" alt="AI生成图片"/>
+				</div>
+			</div>
+		</div>
 	</div>
 
 	<div v-else-if="tab === 'memory'" class="_spacer" style="--MI_SPACER-w: 720px;">
@@ -142,7 +311,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 							<span :class="$style.settingLabel">{{ i18n.ts._agents.sessionMemoryNodesTitle }}</span>
 							<div :class="$style.memNodesActions">
 								<MkButton rounded small :disabled="memoryListLoading" @click="loadMemoryNodes">
-									<i class="ti ti-refresh"/>
+									<i class="ti ti-refresh"></i>
 								</MkButton>
 							</div>
 						</div>
@@ -233,7 +402,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 							<template #caption>{{ i18n.ts._agents.compressionStickyFolderCaption }}</template>
 							<template #suffix>
 								<button type="button" class="_button" :disabled="compressionOverviewLoading" :title="i18n.ts.reload" @click.stop="() => { void loadCompressionOverview(); }">
-									<i class="ti ti-refresh"/>
+									<i class="ti ti-refresh"></i>
 								</button>
 							</template>
 							<div v-if="compressionOverviewLoading" class="_gaps">
@@ -277,10 +446,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 											<div :class="$style.compressionStickySummary">{{ st.summaryText }}</div>
 											<div :class="$style.compressionStickyToolbar">
 												<MkButton rounded small :disabled="compressionStickyMutating || moderationLocksSessionWrites || stIdx === 0" :title="i18n.ts._agents.compressionStickyMoveUp" @click="moveCompressionSticky(st.id, -1)">
-													<i class="ti ti-chevron-up"/>
+													<i class="ti ti-chevron-up"></i>
 												</MkButton>
 												<MkButton rounded small :disabled="compressionStickyMutating || moderationLocksSessionWrites || stIdx >= compressionOverview.stickies.length - 1" :title="i18n.ts._agents.compressionStickyMoveDown" @click="moveCompressionSticky(st.id, 1)">
-													<i class="ti ti-chevron-down"/>
+													<i class="ti ti-chevron-down"></i>
 												</MkButton>
 												<MkButton rounded small danger :disabled="compressionStickyMutating || moderationLocksSessionWrites" @click="confirmDeleteCompressionSticky(st.id)">
 													{{ i18n.ts.delete }}
@@ -355,39 +524,58 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 				<div :class="[$style.memContextDividerRow, $style.memToolbar, $style.memContextDividerBeforePorter]">
 					<MkButton
+						v-tooltip="contextDividerButtonTooltip"
 						rounded
 						:primary="canLocateContextDivider"
 						:disabled="!canLocateContextDivider"
-						v-tooltip="contextDividerButtonTooltip"
 						@click="scrollToContextWindowDivider"
 					>
-						<i class="ti ti-messages"/>
+						<i class="ti ti-messages"></i>
 						{{ i18n.ts._agents.sessionMemoryLocateContextDivider }}
 					</MkButton>
 				</div>
-				<hr :class="$style.memDivider">
-				<div :class="[$style.memContextPorter, $style.memPorterPanel]">
-					<div :class="$style.memContextPorterLabel">{{ i18n.ts._agents.sessionMemoryContextPorterTitle }}</div>
-					<div :class="$style.memContextPorterActions">
-						<MkButton rounded :wait="contextExporting" :disabled="contextExporting" @click="exportSessionContext">
-							<i class="ti ti-download"/>
-							{{ i18n.ts._agents.sessionMemoryExportContext }}
-						</MkButton>
-						<MkButton rounded :wait="contextImporting" :disabled="contextImporting || moderationLocksSessionWrites" @click="openContextImportFileDialog">
-							<i class="ti ti-upload"/>
-							{{ i18n.ts._agents.sessionMemoryImportContext }}
-						</MkButton>
-						<input
-							ref="contextImportInputEl"
-							type="file"
-							accept="application/json,.json"
-							style="display: none;"
-							@change="onContextImportFileChange"
-						>
-					</div>
-					<MkInfo warn>{{ i18n.ts._agents.sessionMemoryImportContextHint }}</MkInfo>
-				</div>
 			</template>
+		</div>
+	</div>
+
+	<div v-else-if="tab === 'operations'" class="_spacer" style="--MI_SPACER-w: 720px;">
+		<div class="_gaps">
+			<MkInfo v-if="moderationLocksSessionWrites" warn>{{ moderationBlockUserMessage }}</MkInfo>
+			<div v-panel :class="[$style.memContextPorter, $style.memPorterPanel]">
+				<div :class="$style.memContextPorterLabel">会话导入导出</div>
+				<div :class="$style.memContextPorterActions">
+					<MkButton rounded :wait="contextExporting" :disabled="contextExporting" @click="exportSessionContext">
+						<i class="ti ti-download"></i>
+						导出会话
+					</MkButton>
+					<MkButton rounded :wait="contextImporting" :disabled="contextImporting || moderationLocksSessionWrites" @click="openContextImportFileDialog">
+						<i class="ti ti-upload"></i>
+						导入并覆盖
+					</MkButton>
+					<input
+						ref="contextImportInputEl"
+						type="file"
+						accept="application/json,.json"
+						style="display: none;"
+						@change="onContextImportFileChange"
+					>
+				</div>
+				<MkInfo warn>导出文件包含聊天记录和当前会话配置（对话风格、模型、长期记忆、压缩、生图设置）。导入会先验证并应用配置，再覆盖当前会话消息；旧版仅上下文文件仍可导入。</MkInfo>
+			</div>
+			<div v-panel :class="[$style.memContextPorter, $style.memPorterPanel]">
+				<div :class="$style.memContextPorterLabel">会话管理</div>
+				<div :class="$style.memContextPorterActions">
+					<MkButton rounded :disabled="moderationLocksSessionWrites" @click="renameSession">
+						<i class="ti ti-pencil"></i>
+						{{ i18n.ts._agents.renameSession }}
+					</MkButton>
+					<MkButton rounded danger @click="deleteAgentSession">
+						<i class="ti ti-trash"></i>
+						{{ i18n.ts._agents.deleteSession }}
+					</MkButton>
+				</div>
+				<MkInfo>这些操作只影响当前智能体会话。删除会话无法撤销。</MkInfo>
+			</div>
 		</div>
 	</div>
 
@@ -438,7 +626,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 								<p v-if="s.summary" :class="$style.selectCardDesc">{{ s.summary }}</p>
 								<p v-else-if="s.bodyPreview" :class="$style.selectCardDesc">{{ s.bodyPreview }}</p>
 								<div :class="$style.stylePlazaRow">
-									<span :class="$style.stylePlazaLabel"><i class="ti ti-star"/> {{ i18n.ts._agents.plazaMetricRating }}</span>
+									<span :class="$style.stylePlazaLabel"><i class="ti ti-star"></i> {{ i18n.ts._agents.plazaMetricRating }}</span>
 									<template v-if="s.rating.count === 0">
 										<span :class="$style.stylePlazaMuted">{{ i18n.ts._agents.plazaRatingNone }}</span>
 									</template>
@@ -447,7 +635,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 										<span>{{ styleUsableAverageText(s.rating.average) }} · {{ s.rating.count }} {{ i18n.ts._agents.plazaRatingCountSuffix }}</span>
 									</template>
 									<span :class="$style.stylePlazaSep">·</span>
-									<span :class="$style.stylePlazaLabel"><i class="ti ti-message-cog"/> {{ i18n.ts._agents.plazaMetricAiReplies }}</span>
+									<span :class="$style.stylePlazaLabel"><i class="ti ti-message-cog"></i> {{ i18n.ts._agents.plazaMetricAiReplies }}</span>
 									<span>{{ s.aiReplyCount }}</span>
 								</div>
 								<div :class="$style.selectCardMeta">
@@ -519,7 +707,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 												:title="i18n.ts._agents.maxContextTokens"
 												role="listitem"
 											>
-												<i class="ti ti-stack-2" :class="$style.modelMetaChipIcon" aria-hidden="true"/>
+												<i class="ti ti-stack-2" :class="$style.modelMetaChipIcon" aria-hidden="true"></i>
 												<span :class="$style.modelMetaChipKicker">{{ i18n.ts._agents.modelRowLabelContext }}</span>
 												<span :class="$style.modelMetaChipVal">{{ formatTokenCountCompact(m.maxContextTokens) }}</span>
 											</span>
@@ -528,7 +716,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 												:title="i18n.ts._agents.maxOutputTokens"
 												role="listitem"
 											>
-												<i class="ti ti-message-2" :class="$style.modelMetaChipIcon" aria-hidden="true"/>
+												<i class="ti ti-message-2" :class="$style.modelMetaChipIcon" aria-hidden="true"></i>
 												<span :class="$style.modelMetaChipKicker">{{ i18n.ts._agents.modelRowLabelOutput }}</span>
 												<span :class="$style.modelMetaChipVal">{{ formatTokenCountCompact(m.maxOutputTokensPerCall) }}</span>
 											</span>
@@ -537,7 +725,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 												:title="i18n.ts._agents.modelCostPerCall"
 												role="listitem"
 											>
-												<i class="ti ti-coin" :class="$style.modelMetaChipIcon" aria-hidden="true"/>
+												<i class="ti ti-coin" :class="$style.modelMetaChipIcon" aria-hidden="true"></i>
 												<span :class="$style.modelMetaChipKicker">{{ i18n.ts._agents.modelRowLabelCost }}</span>
 												<span
 													:class="[
@@ -553,7 +741,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 												:title="i18n.ts._agents.successRate1h"
 												role="listitem"
 											>
-												<i class="ti ti-chart-line" :class="$style.modelMetaChipIcon" aria-hidden="true"/>
+												<i class="ti ti-chart-line" :class="$style.modelMetaChipIcon" aria-hidden="true"></i>
 												<span :class="$style.modelMetaChipKicker">{{ i18n.ts._agents.modelRowLabelSuccess1h }}</span>
 												<template v-if="modelSuccessRates[m.id] && modelSuccessRates[m.id].total > 0">
 													<span :class="[...getSuccessRateClassNameModelRow(modelSuccessRates[m.id].success, modelSuccessRates[m.id].total), $style.modelMetaChipValLong]">
@@ -595,7 +783,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<i class="ti ti-loader-2" :class="$style.memAddHintIcon"></i>
 				<span>{{ i18n.ts._agents.compressionSidecarScheduledHint }}</span>
 			</div>
-			<XForm ref="formRef" :class="$style.form" :disabled="formDisabled" :sending="sending || editSaving" :editing="editingForForm" @submit="onFormSubmit" @cancelEdit="cancelEditingMessage" @abort="onAbortRequest"/>
+			<XForm ref="formRef" :class="$style.form" :disabled="formDisabled" :sending="sending || editSaving" :editing="editingForForm" @submit="onFormSubmit" @cancelEdit="cancelEditingMessage" @abort="onAbortRequest" @draw="openDrawTab"/>
 		</div>
 	</template>
 </PageWithHeader>
@@ -604,6 +792,13 @@ SPDX-License-Identifier: AGPL-3.0-only
 <script lang="ts" setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, useCssModule, useTemplateRef, watch } from 'vue';
 import { getScrollContainer } from '@@/js/scroll.js';
+import XAgentMessage from './agent-session.message.vue';
+import XForm from './agent-session.form.vue';
+import XAgentSearch from './agent-session.search.vue';
+import type { PageHeaderItem } from '@/types/page-header.js';
+import type { DateSeparetedTimelineItem } from '@/utility/timeline-date-separate.js';
+import type { AgentsStylesListUsableResponse, DriveFile } from 'misskey-js/entities.js';
+import type { MkSelectItem } from '@/components/MkSelect.vue';
 import MkLoading from '@/components/global/MkLoading.vue';
 import MkAvatar from '@/components/global/MkAvatar.vue';
 import MkUserName from '@/components/global/MkUserName.vue';
@@ -614,7 +809,8 @@ import MkSwitch from '@/components/MkSwitch.vue';
 import MkInput from '@/components/MkInput.vue';
 import MkButton from '@/components/MkButton.vue';
 import MkTextarea from '@/components/MkTextarea.vue';
-import MkSelect, { type MkSelectItem } from '@/components/MkSelect.vue';
+import MkSelect from '@/components/MkSelect.vue';
+import MkMediaList from '@/components/MkMediaList.vue';
 import FormSplit from '@/components/form/split.vue';
 import MkFolder from '@/components/MkFolder.vue';
 import { formatDateTimeString } from '@/utility/format-time-string.js';
@@ -622,16 +818,11 @@ import { misskeyApi, formatApiError } from '@/utility/misskey-api.js';
 import { i18n } from '@/i18n.js';
 import { definePage } from '@/page.js';
 import * as os from '@/os.js';
-import type { PageHeaderItem } from '@/types/page-header.js';
 import { fetchInstance, instance } from '@/instance.js';
 import { useRouter } from '@/router.js';
-import { makeDateSeparatedTimelineComputedRef, type DateSeparetedTimelineItem } from '@/utility/timeline-date-separate.js';
+import { makeDateSeparatedTimelineComputedRef } from '@/utility/timeline-date-separate.js';
 import { useMutationObserver } from '@/composables/use-mutation-observer.js';
 import { prefer } from '@/preferences.js';
-import XAgentMessage from './agent-session.message.vue';
-import XForm from './agent-session.form.vue';
-import XAgentSearch from './agent-session.search.vue';
-import type { AgentsStylesListUsableResponse } from 'misskey-js/entities.js';
 
 const agentSessionCss = useCssModule();
 
@@ -645,6 +836,25 @@ const router = useRouter();
 const PAGE_LIMIT = 30;
 
 type AgentMsg = { id: string; role: string; content: string; createdAt: string };
+type PendingWorldbookMatch = {
+	id: string;
+	title: string;
+	triggerMode: string;
+	priority: number;
+	revision: number;
+	matchedBy: string;
+	matchedKeywords: string[];
+};
+type SessionWorldbookEntry = {
+	id: string;
+	title: string;
+	keywords: string[];
+	triggerMode: 'keyword' | 'manual' | 'always';
+	priority: number;
+	enabled: boolean;
+	revision: number;
+	contentLength: number;
+};
 
 const messages = ref<AgentMsg[]>([]);
 const loading = ref(true);
@@ -655,6 +865,11 @@ const canFetchNewer = ref(false);
 const moreFetching = ref(false);
 const fetchingNewer = ref(false);
 const highlightedMessageId = ref<string | null>(null);
+const pendingWorldbookMatches = ref<PendingWorldbookMatch[]>([]);
+const worldbookEntries = ref<SessionWorldbookEntry[]>([]);
+const worldbookListLoading = ref(false);
+const showWorldbookHitHint = ref(localStorage.getItem('agent.showWorldbookHitHint') !== '0');
+const worldbookHitPopoverOpen = ref(false);
 let highlightTimeoutId: number | null = null;
 const session = ref<{
 	id: string;
@@ -663,6 +878,8 @@ const session = ref<{
 	dialogueStyleId: string | null;
 	agentModelId: string | null;
 	agentCompressionModelId?: string | null;
+	agentImageModelId?: string | null;
+	agentImageSettings?: Record<string, unknown>;
 	characterId: string;
 	agentLongMemoryEnabled?: boolean;
 	agentLongMemoryTopK?: number;
@@ -682,6 +899,72 @@ const assistantAvatarUrl = ref<string | null>(null);
 const timelineEl = useTemplateRef('timelineEl');
 const formRef = useTemplateRef<InstanceType<typeof XForm>>('formRef');
 const timeline = makeDateSeparatedTimelineComputedRef(messages);
+const pendingWorldbookTooltip = computed(() => pendingWorldbookMatches.value
+	.map(item => {
+		const keywords = item.matchedKeywords.length > 0 ? ` / ${item.matchedKeywords.join(', ')}` : '';
+		return `${item.title} (${worldbookMatchedByLabel(item.matchedBy)}, priority ${item.priority}${keywords})`;
+	})
+	.join('\n'));
+
+const worldbookStats = computed(() => {
+	const totalCount = worldbookEntries.value.length;
+	const enabled = worldbookEntries.value.filter(entry => entry.enabled);
+	const totalTextLength = enabled.reduce((sum, entry) => sum + Math.max(0, entry.contentLength ?? 0), 0);
+	const modeCounts = enabled.reduce((acc, entry) => {
+		acc[entry.triggerMode] += 1;
+		return acc;
+	}, { keyword: 0, manual: 0, always: 0 });
+	const modes = [
+		modeCounts.keyword > 0 ? `关键词 ${modeCounts.keyword}` : '',
+		modeCounts.manual > 0 ? `手动 ${modeCounts.manual}` : '',
+		modeCounts.always > 0 ? `常驻 ${modeCounts.always}` : '',
+	].filter(Boolean);
+	return {
+		totalCount,
+		enabledCount: enabled.length,
+		totalTextLength,
+		textScaleLabel: worldbookTextScaleLabel(totalTextLength),
+		modeSummary: modes.length > 0 ? modes.join(' / ') : '无启用条目',
+	};
+});
+
+function worldbookMatchedByLabel(matchedBy: string): string {
+	if (matchedBy === 'always') return '常驻';
+	if (matchedBy === 'manual') return '手动';
+	if (matchedBy === 'keyword') return '关键词';
+	return matchedBy;
+}
+
+function worldbookTriggerLabel(triggerMode: string): string {
+	if (triggerMode === 'always') return '常驻';
+	if (triggerMode === 'manual') return '手动';
+	if (triggerMode === 'keyword') return '关键词';
+	return triggerMode;
+}
+
+function worldbookTextScaleLabel(chars: number): string {
+	if (chars <= 0) return '无正文';
+	if (chars < 1000) return `${chars} 字符`;
+	if (chars < 10000) return `${(chars / 1000).toFixed(1)}k 字符`;
+	return `${Math.round(chars / 1000)}k 字符`;
+}
+
+function openWorldbookHitPopover() {
+	worldbookHitPopoverOpen.value = true;
+}
+
+function closeWorldbookHitPopover() {
+	worldbookHitPopoverOpen.value = false;
+}
+
+function toggleWorldbookHitPopover() {
+	worldbookHitPopoverOpen.value = !worldbookHitPopoverOpen.value;
+}
+
+watch(showWorldbookHitHint, value => {
+	localStorage.setItem('agent.showWorldbookHitHint', value ? '1' : '0');
+	if (!value) worldbookHitPopoverOpen.value = false;
+});
 
 const timelineForChat = computed((): AgentChatTimelineItem[] => {
 	const base = timeline.value;
@@ -745,13 +1028,70 @@ function styleUsableStarVisual(avg: number | null | undefined): string {
 	const full = Math.max(0, Math.min(5, Math.round(avg)));
 	return '★'.repeat(full) + '☆'.repeat(5 - full);
 }
+
 function styleUsableAverageText(avg: number | null | undefined): string {
 	if (avg == null || !Number.isFinite(avg)) return '—';
 	return avg.toFixed(2);
 }
+
 const selectedModelId = ref('');
 const selectedStyleId = ref('');
 const tab = ref('chat');
+type AgentImageArtistPreset = {
+	id: string;
+	name: string;
+	thumbnailUrl: string | null;
+};
+type AgentImageModel = {
+	id: string;
+	name: string;
+	provider: 'aurora';
+	apiModelName: string | null;
+	costPerCall: number;
+	defaultParams: Record<string, unknown>;
+	defaultArtistPresetId: string | null;
+};
+const drawTag = ref('');
+const drawImageModels = ref<AgentImageModel[]>([]);
+const drawImageModelId = ref('');
+const drawSize = ref<'portrait' | 'landscape' | 'square'>('portrait');
+const drawSteps = ref('28');
+const drawScale = ref('5');
+const drawCfgRescale = ref('0');
+const drawSampler = ref('k_euler_ancestral');
+const drawNoiseSchedule = ref('karras');
+const drawSaving = ref(false);
+const drawGenerating = ref(false);
+const drawLastUrl = ref<string | null>(null);
+const drawLastFile = ref<DriveFile | null>(null);
+const drawArtistPresets = ref<AgentImageArtistPreset[]>([]);
+const drawArtistPresetId = ref<string | null>(null);
+
+const drawSizeItems: MkSelectItem[] = [
+	{ value: 'portrait', label: '竖图' },
+	{ value: 'landscape', label: '横图' },
+	{ value: 'square', label: '方图' },
+];
+const drawImageModelItems = computed((): MkSelectItem[] => [
+	{ value: '', label: '无' },
+	...drawImageModels.value.map(m => ({ value: m.id, label: m.name })),
+]);
+const drawSelectedImageModel = computed(() => drawImageModels.value.find(m => m.id === drawImageModelId.value) ?? null);
+const drawCurrentSettings = computed(() => ({
+	size: drawSize.value,
+	artistPresetId: drawArtistPresetId.value,
+	steps: nullableNumberInput(drawSteps.value),
+	scale: nullableNumberInput(drawScale.value),
+	cfgRescale: nullableNumberInput(drawCfgRescale.value),
+	sampler: drawSampler.value.trim() || null,
+	noiseSchedule: drawNoiseSchedule.value.trim() || null,
+}));
+const drawConfigDirty = computed(() => {
+	const s = session.value;
+	if (!s) return false;
+	if ((s.agentImageModelId ?? '') !== drawImageModelId.value) return true;
+	return JSON.stringify(normalizeAgentImageSettingsForCompare(s.agentImageSettings ?? {})) !== JSON.stringify(normalizeAgentImageSettingsForCompare(drawCurrentSettings.value));
+});
 const settingsHydrating = ref(false);
 const memSaving = ref(false);
 const memLongMemoryEnabled = ref(false);
@@ -1102,7 +1442,7 @@ function stopReplyPendingPoll() {
 
 async function pollSessionReplyState() {
 	try {
-		const row = await misskeyApi('agents/sessions/show', { sessionId });
+		const row = await misskeyApi('agents/sessions/show', { sessionId }) as NonNullable<typeof session.value>;
 		if (session.value != null) {
 			Object.assign(session.value, row);
 		} else {
@@ -1350,9 +1690,19 @@ const headerTabs = computed(() => {
 			icon: 'ti ti-messages',
 		},
 		{
+			key: 'draw',
+			title: '生图',
+			icon: 'ti ti-brush',
+		},
+		{
 			key: 'search',
 			title: i18n.ts.search,
 			icon: 'ti ti-search',
+		},
+		{
+			key: 'worldbook',
+			title: '世界书',
+			icon: 'ti ti-book',
 		},
 	];
 	if (showLongMemoryTab.value) {
@@ -1372,10 +1722,24 @@ const headerTabs = computed(() => {
 		title: i18n.ts._agents.sessionDialogueStyle,
 		icon: 'ti ti-message-cog',
 	});
+	tabs.push({
+		key: 'operations',
+		title: '会话操作',
+		icon: 'ti ti-tool',
+	});
 	return tabs;
 });
 
+function openDrawTab() {
+	tab.value = 'draw';
+}
+
 const headerActions = computed<PageHeaderItem[]>(() => [
+	{
+		icon: 'ti ti-help-circle',
+		text: i18n.ts._agents.syntaxGuideShort,
+		handler: () => { router.push('/agents/syntax-guide'); },
+	},
 	{
 		icon: 'ti ti-pencil',
 		text: i18n.ts._agents.renameSession,
@@ -1412,6 +1776,8 @@ watch(tab, (v) => {
 		if (longMemoryConfigured.value) {
 			void loadMemoryNodes();
 		}
+	} else if (v === 'worldbook' && session.value != null) {
+		void loadWorldbookEntries();
 	} else if (v === 'model') {
 		void loadModelSuccessRates();
 		void loadAgentCreditBalance();
@@ -1466,6 +1832,13 @@ watch(
 		}
 	},
 );
+
+watch(drawImageModelId, (next, prev) => {
+	if (next === prev) return;
+	if (!settingsHydrating.value) {
+		applyAgentImageDefaultsForModel(drawSelectedImageModel.value);
+	}
+});
 
 async function renameSession() {
 	if (!session.value) return;
@@ -1539,8 +1912,12 @@ async function loadSession() {
 				}
 			}
 			memCompressionModelId.value = displayCompressionModelIdForSession(session.value.agentCompressionModelId);
+			hydrateAgentImageSettingsFromSession();
 			compressionOverview.value = null;
 			await loadCharacter(session.value.characterId);
+			if (tab.value === 'worldbook') {
+				await loadWorldbookEntries();
+			}
 		}
 	} catch {
 		session.value = null;
@@ -1570,6 +1947,21 @@ async function loadCharacter(characterId: string) {
 	} catch {
 		character.value = null;
 		assistantAvatarUrl.value = null;
+	}
+}
+
+async function loadWorldbookEntries() {
+	worldbookListLoading.value = true;
+	try {
+		const rows = await misskeyApi(
+			'agents/sessions/worldbook-list' as Parameters<typeof misskeyApi>[0],
+			{ sessionId } as any,
+		) as SessionWorldbookEntry[];
+		worldbookEntries.value = Array.isArray(rows) ? rows : [];
+	} catch {
+		worldbookEntries.value = [];
+	} finally {
+		worldbookListLoading.value = false;
 	}
 }
 
@@ -1878,12 +2270,125 @@ async function scrollToContextWindowDivider() {
 	os.alert({ type: 'error', text: i18n.ts._agents.sessionMemoryLocateContextDividerFailed });
 }
 
+function normalizeAgentImageSettingsForCompare(raw: Record<string, unknown>): Record<string, unknown> {
+	const out: Record<string, unknown> = {};
+	if (typeof raw.size === 'string') out.size = raw.size;
+	if (typeof raw.artistPresetId === 'string' && raw.artistPresetId !== '') out.artistPresetId = raw.artistPresetId;
+	for (const key of ['steps', 'scale', 'cfgRescale'] as const) {
+		const n = Number(raw[key]);
+		if (Number.isFinite(n)) out[key] = n;
+	}
+	for (const key of ['sampler', 'noiseSchedule'] as const) {
+		if (typeof raw[key] === 'string' && raw[key] !== '') out[key] = raw[key];
+	}
+	return out;
+}
+
+function applyAgentImageSettings(settings: Record<string, unknown>) {
+	drawSize.value = settings.size === 'landscape' || settings.size === 'square' || settings.size === 'portrait' ? settings.size : 'portrait';
+	drawArtistPresetId.value = typeof settings.artistPresetId === 'string' ? settings.artistPresetId : drawSelectedImageModel.value?.defaultArtistPresetId ?? drawArtistPresets.value[0]?.id ?? null;
+	drawSteps.value = String(Number.isFinite(Number(settings.steps)) ? Number(settings.steps) : 28);
+	drawScale.value = String(Number.isFinite(Number(settings.scale)) ? Number(settings.scale) : 5);
+	drawCfgRescale.value = String(Number.isFinite(Number(settings.cfgRescale)) ? Number(settings.cfgRescale) : 0);
+	drawSampler.value = typeof settings.sampler === 'string' && settings.sampler !== '' ? settings.sampler : 'k_euler_ancestral';
+	drawNoiseSchedule.value = typeof settings.noiseSchedule === 'string' && settings.noiseSchedule !== '' ? settings.noiseSchedule : 'karras';
+}
+
+function applyAgentImageDefaultsForModel(model: AgentImageModel | null) {
+	if (!model) {
+		applyAgentImageSettings({});
+		return;
+	}
+	applyAgentImageSettings({
+		...(model.defaultParams ?? {}),
+		artistPresetId: model.defaultArtistPresetId ?? drawArtistPresets.value[0]?.id ?? null,
+	});
+}
+
+function hydrateAgentImageSettingsFromSession() {
+	if (!session.value) return;
+	settingsHydrating.value = true;
+	try {
+		drawImageModelId.value = session.value.agentImageModelId ?? '';
+		const model = drawImageModels.value.find(m => m.id === drawImageModelId.value) ?? null;
+		if (model) {
+			applyAgentImageSettings({
+				...(model.defaultParams ?? {}),
+				artistPresetId: model.defaultArtistPresetId ?? drawArtistPresets.value[0]?.id ?? null,
+				...(session.value.agentImageSettings ?? {}),
+			});
+		} else {
+			applyAgentImageSettings(session.value.agentImageSettings ?? {});
+		}
+	} finally {
+		settingsHydrating.value = false;
+	}
+}
+
+function resetAgentImageDefaults() {
+	applyAgentImageDefaultsForModel(drawSelectedImageModel.value);
+}
+
+async function saveAgentImageSettings(): Promise<boolean> {
+	if (!session.value || drawSaving.value) return false;
+	drawSaving.value = true;
+	try {
+		await misskeyApi(
+			'agents/sessions/update' as Parameters<typeof misskeyApi>[0],
+			{
+				sessionId,
+				agentImageModelId: drawImageModelId.value === '' ? null : drawImageModelId.value,
+				agentImageSettings: drawImageModelId.value === '' ? {} : drawCurrentSettings.value,
+			} as any,
+		);
+		await loadSession();
+		os.toast('生图配置已保存');
+		return true;
+	} catch (e) {
+		os.alert({ type: 'error', text: formatApiError(e) });
+		return false;
+	} finally {
+		drawSaving.value = false;
+	}
+}
+
+async function loadDrawImageModels() {
+	try {
+		const rows = await misskeyApi(
+			'agents/images/models/list' as Parameters<typeof misskeyApi>[0],
+			{} as any,
+		) as AgentImageModel[];
+		drawImageModels.value = Array.isArray(rows) ? rows : [];
+		hydrateAgentImageSettingsFromSession();
+	} catch {
+		drawImageModels.value = [];
+	}
+}
+
+async function loadDrawArtistPresets() {
+	try {
+		const rows = await misskeyApi(
+			'agents/images/presets/list' as Parameters<typeof misskeyApi>[0],
+			{} as any,
+		) as AgentImageArtistPreset[];
+		drawArtistPresets.value = Array.isArray(rows) ? rows : [];
+		if (drawArtistPresetId.value == null && drawArtistPresets.value.length > 0) {
+			drawArtistPresetId.value = drawArtistPresets.value[0]!.id;
+		}
+		hydrateAgentImageSettingsFromSession();
+	} catch {
+		drawArtistPresets.value = [];
+	}
+}
+
 onMounted(async () => {
 	try {
 		await fetchInstance(true);
 		await loadUsableStyles();
 		void loadModelSuccessRates();
 		void loadAgentCreditBalance();
+		void loadDrawArtistPresets();
+		void loadDrawImageModels();
 		await loadSession();
 		if (props.messageId) {
 			await loadContextAround(props.messageId);
@@ -2180,6 +2685,7 @@ watch(memCompressionModelId, () => {
 
 /** 发送后便签在后台写出，多次延迟刷新记忆总览，让便签列表与消息区带尽快与服务器一致 */
 let compressionOverviewSidecarTimeoutIds: number[] = [];
+
 function scheduleCompressionOverviewAfterSidecar() {
 	for (const id of compressionOverviewSidecarTimeoutIds) {
 		window.clearTimeout(id);
@@ -2402,12 +2908,37 @@ async function confirmDeleteCompressionSticky(stickyId: string) {
 
 type SessionContextRole = 'user' | 'assistant';
 type SessionContextRow = { role: SessionContextRole; content: string };
-type SessionContextExportPayload = {
-	format: 'misskey-agent-context-compatible-v1';
-	version: 1;
+type SessionExportSettings = {
+	name?: string;
+	dialogueStyleId?: string | null;
+	agentModelId?: string | null;
+	agentLongMemoryEnabled?: boolean;
+	agentLongMemoryTopK?: number;
+	agentLongMemoryMinScore?: number | null;
+	agentLongMemoryInjectMaxChars?: number;
+	agentLongMemoryAddMaxRounds?: number | null;
+	agentLongMemoryAddEveryNRounds?: number | null;
+	agentLongMemoryProvider?: 'none' | 'aliyun' | 'compression';
+	agentCompressionModelId?: string | null;
+	agentImageModelId?: string | null;
+	agentImageSettings?: Record<string, unknown>;
+};
+type SessionExportPayload = {
+	format: 'misskey-agent-session-export-v2';
+	version: 2;
 	sessionId: string;
 	exportedAt: string;
+	source: {
+		characterId: string | null;
+		sessionKind: 'draft_test' | 'community' | null;
+	};
+	settings: SessionExportSettings;
 	messages: SessionContextRow[];
+};
+type ParsedSessionImportPayload = {
+	messages: SessionContextRow[];
+	settings: SessionExportSettings | null;
+	legacy: boolean;
 };
 
 function normalizeSessionContextRows(rows: AgentMsg[]): SessionContextRow[] {
@@ -2426,6 +2957,26 @@ function normalizeSessionContextRows(rows: AgentMsg[]): SessionContextRow[] {
 		});
 	}
 	return out;
+}
+
+function buildSessionExportSettings(): SessionExportSettings {
+	const s = session.value;
+	if (s == null) return {};
+	return {
+		name: s.name,
+		dialogueStyleId: s.dialogueStyleId ?? null,
+		agentModelId: s.agentModelId ?? null,
+		agentLongMemoryEnabled: s.agentLongMemoryEnabled ?? false,
+		agentLongMemoryTopK: s.agentLongMemoryTopK ?? 8,
+		agentLongMemoryMinScore: s.agentLongMemoryMinScore ?? null,
+		agentLongMemoryInjectMaxChars: s.agentLongMemoryInjectMaxChars ?? 4000,
+		agentLongMemoryAddMaxRounds: s.agentLongMemoryAddMaxRounds ?? null,
+		agentLongMemoryAddEveryNRounds: s.agentLongMemoryAddEveryNRounds ?? null,
+		agentLongMemoryProvider: s.agentLongMemoryProvider ?? 'none',
+		agentCompressionModelId: s.agentCompressionModelId ?? null,
+		agentImageModelId: s.agentImageModelId ?? null,
+		agentImageSettings: s.agentImageSettings ?? {},
+	};
 }
 
 async function fetchAllSessionMessages(): Promise<AgentMsg[]> {
@@ -2464,15 +3015,20 @@ async function exportSessionContext() {
 	try {
 		const all = await fetchAllSessionMessages();
 		const messagesForContext = normalizeSessionContextRows(all);
-		const payload: SessionContextExportPayload = {
-			format: 'misskey-agent-context-compatible-v1',
-			version: 1,
+		const payload: SessionExportPayload = {
+			format: 'misskey-agent-session-export-v2',
+			version: 2,
 			sessionId,
 			exportedAt: new Date().toISOString(),
+			source: {
+				characterId: session.value?.characterId ?? null,
+				sessionKind: session.value?.sessionKind ?? null,
+			},
+			settings: buildSessionExportSettings(),
 			messages: messagesForContext,
 		};
 		const json = JSON.stringify(payload, null, 2);
-		const filename = `agent-context-${sessionId}-${Date.now()}.json`;
+		const filename = `agent-session-${sessionId}-${Date.now()}.json`;
 		downloadJsonFile(filename, json);
 		os.toast(i18n.ts._agents.sessionMemoryExportContextDone);
 	} catch (e) {
@@ -2487,7 +3043,7 @@ function openContextImportFileDialog() {
 	contextImportInputEl.value?.click();
 }
 
-function parseImportedContext(text: string): SessionContextRow[] {
+function parseImportedContext(text: string): ParsedSessionImportPayload {
 	let parsed: unknown;
 	try {
 		parsed = JSON.parse(text);
@@ -2502,6 +3058,9 @@ function parseImportedContext(text: string): SessionContextRow[] {
 		throw new Error(i18n.ts._agents.sessionMemoryImportContextInvalidFormat);
 	}
 	const out: SessionContextRow[] = [];
+	if (rawMessages.length > 1000) {
+		throw new Error('导入失败：最多只能导入 1000 条消息。');
+	}
 	for (const row of rawMessages) {
 		if (row == null || typeof row !== 'object') {
 			throw new Error(i18n.ts._agents.sessionMemoryImportContextInvalidFormat);
@@ -2514,9 +3073,117 @@ function parseImportedContext(text: string): SessionContextRow[] {
 		if (content.trim() === '') {
 			throw new Error(i18n.ts._agents.sessionMemoryImportContextEmptyContent);
 		}
+		if (content.length > 16000) {
+			throw new Error('导入失败：单条消息不能超过 16000 字符。');
+		}
 		out.push({ role, content });
 	}
+	const settings = parseImportedSessionSettings((parsed as { settings?: unknown }).settings);
+	const format = (parsed as { format?: unknown }).format;
+	const isSessionExport = format === 'misskey-agent-session-export-v1' || format === 'misskey-agent-session-export-v2';
+	const legacy = !isSessionExport;
+	if (out.length === 0 && (legacy || settings == null || Object.keys(settings).length === 0)) {
+		throw new Error(i18n.ts._agents.sessionMemoryImportContextInvalidFormat);
+	}
+	return {
+		messages: out,
+		settings,
+		legacy,
+	};
+}
+
+function parseImportedSessionSettings(raw: unknown): SessionExportSettings | null {
+	if (raw === undefined || raw === null) return null;
+	if (typeof raw !== 'object' || Array.isArray(raw)) {
+		throw new Error('会话配置格式无效：settings 必须是对象。');
+	}
+	const src = raw as Record<string, unknown>;
+	const out: SessionExportSettings = {};
+
+	if ('name' in src) out.name = validateOptionalString(src.name, 'name', 1, 256, false) ?? undefined;
+	if ('dialogueStyleId' in src) out.dialogueStyleId = validateOptionalString(src.dialogueStyleId, 'dialogueStyleId', 1, 128, true);
+	if ('agentModelId' in src) out.agentModelId = validateOptionalString(src.agentModelId, 'agentModelId', 1, 64, true);
+	if ('agentLongMemoryEnabled' in src) out.agentLongMemoryEnabled = validateBoolean(src.agentLongMemoryEnabled, 'agentLongMemoryEnabled');
+	if ('agentLongMemoryTopK' in src) out.agentLongMemoryTopK = validateInteger(src.agentLongMemoryTopK, 'agentLongMemoryTopK', 1, 100);
+	if ('agentLongMemoryMinScore' in src) out.agentLongMemoryMinScore = validateNullableNumber(src.agentLongMemoryMinScore, 'agentLongMemoryMinScore', 0, 1);
+	if ('agentLongMemoryInjectMaxChars' in src) out.agentLongMemoryInjectMaxChars = validateInteger(src.agentLongMemoryInjectMaxChars, 'agentLongMemoryInjectMaxChars', 200, 50000);
+	if ('agentLongMemoryAddMaxRounds' in src) out.agentLongMemoryAddMaxRounds = validateNullableInteger(src.agentLongMemoryAddMaxRounds, 'agentLongMemoryAddMaxRounds', 1, 24);
+	if ('agentLongMemoryAddEveryNRounds' in src) out.agentLongMemoryAddEveryNRounds = validateNullableInteger(src.agentLongMemoryAddEveryNRounds, 'agentLongMemoryAddEveryNRounds', 1, 48);
+	if ('agentLongMemoryProvider' in src) {
+		if (src.agentLongMemoryProvider !== 'none' && src.agentLongMemoryProvider !== 'aliyun' && src.agentLongMemoryProvider !== 'compression') {
+			throw new Error('会话配置无效：agentLongMemoryProvider 必须是 none、aliyun 或 compression。');
+		}
+		out.agentLongMemoryProvider = src.agentLongMemoryProvider;
+	}
+	if ('agentCompressionModelId' in src) out.agentCompressionModelId = validateOptionalString(src.agentCompressionModelId, 'agentCompressionModelId', 1, 64, true);
+	if ('agentImageModelId' in src) out.agentImageModelId = validateOptionalString(src.agentImageModelId, 'agentImageModelId', 1, 128, true);
+	if ('agentImageSettings' in src) out.agentImageSettings = validateAgentImageSettings(src.agentImageSettings);
+
 	return out;
+}
+
+function validateBoolean(value: unknown, field: string): boolean {
+	if (typeof value !== 'boolean') throw new Error(`会话配置无效：${field} 必须是布尔值。`);
+	return value;
+}
+
+function validateOptionalString(value: unknown, field: string, min: number, max: number, nullable: boolean): string | null {
+	if (value === null && nullable) return null;
+	if (typeof value !== 'string') throw new Error(`会话配置无效：${field} 必须是字符串${nullable ? '或 null' : ''}。`);
+	const trimmed = value.trim();
+	if (trimmed.length < min || trimmed.length > max) throw new Error(`会话配置无效：${field} 长度必须在 ${min}-${max} 之间。`);
+	return trimmed;
+}
+
+function validateInteger(value: unknown, field: string, min: number, max: number): number {
+	if (typeof value !== 'number' || !Number.isInteger(value) || value < min || value > max) {
+		throw new Error(`会话配置无效：${field} 必须是 ${min}-${max} 的整数。`);
+	}
+	return value;
+}
+
+function validateNullableInteger(value: unknown, field: string, min: number, max: number): number | null {
+	if (value === null) return null;
+	return validateInteger(value, field, min, max);
+}
+
+function validateNullableNumber(value: unknown, field: string, min: number, max: number): number | null {
+	if (value === null) return null;
+	if (typeof value !== 'number' || !Number.isFinite(value) || value < min || value > max) {
+		throw new Error(`会话配置无效：${field} 必须是 ${min}-${max} 的数字或 null。`);
+	}
+	return value;
+}
+
+function validateAgentImageSettings(raw: unknown): Record<string, unknown> {
+	if (raw === null) return {};
+	if (typeof raw !== 'object' || Array.isArray(raw)) {
+		throw new Error('会话配置无效：agentImageSettings 必须是对象或 null。');
+	}
+	const src = raw as Record<string, unknown>;
+	const out: Record<string, unknown> = {};
+	if ('size' in src) {
+		if (src.size !== 'portrait' && src.size !== 'landscape' && src.size !== 'square') {
+			throw new Error('会话配置无效：agentImageSettings.size 必须是 portrait、landscape 或 square。');
+		}
+		out.size = src.size;
+	}
+	if ('artistPresetId' in src) out.artistPresetId = validateOptionalString(src.artistPresetId, 'agentImageSettings.artistPresetId', 1, 128, true);
+	if ('steps' in src && src.steps !== null) out.steps = validateNullableNumber(src.steps, 'agentImageSettings.steps', 1, 150);
+	if ('scale' in src && src.scale !== null) out.scale = validateNullableNumber(src.scale, 'agentImageSettings.scale', 0, 30);
+	if ('cfgRescale' in src && src.cfgRescale !== null) out.cfgRescale = validateNullableNumber(src.cfgRescale, 'agentImageSettings.cfgRescale', 0, 1);
+	if ('sampler' in src) out.sampler = validateOptionalString(src.sampler, 'agentImageSettings.sampler', 1, 128, true);
+	if ('noiseSchedule' in src) out.noiseSchedule = validateOptionalString(src.noiseSchedule, 'agentImageSettings.noiseSchedule', 1, 128, true);
+	return out;
+}
+
+async function applyImportedSessionSettings(settings: SessionExportSettings | null): Promise<boolean> {
+	if (settings == null || Object.keys(settings).length === 0) return false;
+	await misskeyApi('agents/sessions/update', {
+		sessionId,
+		...settings,
+	});
+	return true;
 }
 
 async function onContextImportFileChange(ev: Event) {
@@ -2528,22 +3195,30 @@ async function onContextImportFileChange(ev: Event) {
 	contextImporting.value = true;
 	try {
 		const text = await file.text();
-		const importedMessages = parseImportedContext(text);
+		const importedPayload = parseImportedContext(text);
+		const importedMessages = importedPayload.messages;
 		const { canceled } = await os.confirm({
 			type: 'warning',
-			text: i18n.ts._agents.sessionMemoryImportContextConfirm,
+			text: importedPayload.settings == null
+				? i18n.ts._agents.sessionMemoryImportContextConfirm
+				: '导入将先应用文件中的会话配置，再覆盖当前会话中的全部消息记录，且无法撤销。是否继续？',
 		});
 		if (canceled) return;
-		await (misskeyApi as unknown as (
-			endpoint: 'agents/messages/import-context',
-			data: { sessionId: string; messages: SessionContextRow[] },
-		) => Promise<{ importedCount: number }>)('agents/messages/import-context', {
-			sessionId,
-			messages: importedMessages,
-		});
+		const settingsApplied = await applyImportedSessionSettings(importedPayload.settings);
+		if (importedMessages.length > 0) {
+			await (misskeyApi as unknown as (
+				endpoint: 'agents/messages/import-context',
+				data: { sessionId: string; messages: SessionContextRow[] },
+			) => Promise<{ importedCount: number }>)('agents/messages/import-context', {
+				sessionId,
+				messages: importedMessages,
+			});
+		}
 		await loadInitialTimeline();
 		await loadSession();
-		os.toast(i18n.tsx._agents.sessionMemoryImportContextDone({ n: importedMessages.length }));
+		os.toast(settingsApplied
+			? `已导入会话配置并覆盖 ${importedMessages.length} 条消息`
+			: i18n.tsx._agents.sessionMemoryImportContextDone({ n: importedMessages.length }));
 	} catch (e) {
 		const text = e instanceof Error ? e.message : formatApiError(e);
 		os.alert({ type: 'error', text });
@@ -2593,6 +3268,19 @@ function showMemoryAddScheduledHintNow(res: { longTermMemoryAddScheduled?: boole
 	return assistantCount > 0 && assistantCount % everyN === 0;
 }
 
+async function previewPendingWorldbookMatches(text: string) {
+	pendingWorldbookMatches.value = [];
+	try {
+		const rows = await misskeyApi(
+			'agents/sessions/worldbook-match-preview' as Parameters<typeof misskeyApi>[0],
+			{ sessionId, text, maxItems: 12 } as any,
+		) as PendingWorldbookMatch[];
+		pendingWorldbookMatches.value = Array.isArray(rows) ? rows : [];
+	} catch {
+		pendingWorldbookMatches.value = [];
+	}
+}
+
 async function onFormSubmit(text: string) {
 	if (editingMessage.value != null) {
 		await saveEditingMessage(text);
@@ -2634,6 +3322,7 @@ async function onFormSubmit(text: string) {
 	let leaveSendingSpinner = false;
 	const clientRequestId = crypto.randomUUID();
 	currentClientRequestId = clientRequestId;
+	await previewPendingWorldbookMatches(trimmed);
 	const optimisticId = OPTIMISTIC_MESSAGE_ID_PREFIX + crypto.randomUUID();
 	const userCreatedAt = new Date().toISOString();
 	messages.value.unshift({
@@ -2653,7 +3342,19 @@ async function onFormSubmit(text: string) {
 			compressionLlmPending?: boolean;
 			compressionStickiesBaselineCount?: number;
 			aborted?: boolean;
+			auditBlocked?: boolean;
+			auditBlockCode?: string | null;
 		};
+		if (res.auditBlocked === true) {
+			messages.value = messages.value.filter(m => m.id !== optimisticId);
+			formRef.value?.restoreDraft(trimmed);
+			void loadAgentCreditBalance();
+			os.alert({
+				type: 'warning',
+				text: `内容已被安全审核拦截。拦截编码：${res.auditBlockCode ?? '未知'}`,
+			});
+			return;
+		}
 		if (res.aborted === true || !res.userMessageId || !res.assistantMessageId) {
 			// 服务端已回滚用户消息，回填文本到输入框
 			messages.value = messages.value.filter(m => m.id !== optimisticId);
@@ -2734,9 +3435,69 @@ async function onFormSubmit(text: string) {
 		}
 	} finally {
 		currentClientRequestId = null;
+		pendingWorldbookMatches.value = [];
 		if (!leaveSendingSpinner) {
 			sending.value = false;
 		}
+	}
+}
+
+function nullableNumberInput(v: string): number | null {
+	const n = Number(v);
+	return Number.isFinite(n) ? n : null;
+}
+
+function formatAgentImageError(err: unknown): string {
+	const code = err != null && typeof err === 'object' && 'code' in err ? String((err as { code?: unknown }).code ?? '') : '';
+	const info = err != null && typeof err === 'object' && 'info' in err ? (err as { info?: unknown }).info : null;
+	const blockCode = info != null && typeof info === 'object' && 'blockCode' in info ? String((info as { blockCode?: unknown }).blockCode ?? '') : '';
+	switch (code) {
+		case 'AGENT_IMAGE_PROMPT_AUDIT_BLOCKED':
+			return `生图提示词已被安全审核拦截。拦截编码：${blockCode || '未知'}`;
+		case 'AGENT_IMAGE_NO_FREE_DRIVE_SPACE':
+			return '网盘空间不足，无法保存生成图片。请清理网盘后再试。';
+		case 'AGENT_IMAGE_MAX_FILE_SIZE_EXCEEDED':
+			return '生成图片超过当前账号允许的最大文件大小，无法保存到网盘。';
+		case 'AGENT_IMAGE_UNALLOWED_FILE_TYPE':
+			return '生成图片的文件类型不在当前账号允许上传的范围内。';
+		case 'AGENT_IMAGE_INSUFFICIENT_CREDIT':
+			return '智能体额度不足，无法生成图片。';
+		default:
+			return formatApiError(err);
+	}
+}
+
+async function generateAgentImage() {
+	const tag = drawTag.value.trim();
+	if (!tag || drawGenerating.value) return;
+	if (drawImageModelId.value === '') {
+		os.alert({ type: 'info', text: '请先选择并保存生图模型。' });
+		return;
+	}
+	drawGenerating.value = true;
+	drawLastUrl.value = null;
+	drawLastFile.value = null;
+	try {
+		if (drawConfigDirty.value) {
+			const saved = await saveAgentImageSettings();
+			if (!saved) return;
+		}
+		const res = await misskeyApi(
+			'agents/images/generate' as Parameters<typeof misskeyApi>[0],
+			{
+				sessionId,
+				tag,
+				size: drawSize.value,
+			} as any,
+		) as { fileId: string; url: string; file: DriveFile };
+		drawLastUrl.value = res.url;
+		drawLastFile.value = res.file;
+		void loadAgentCreditBalance();
+		os.toast('生图完成，已保存到网盘');
+	} catch (e) {
+		os.alert({ type: 'error', text: formatAgentImageError(e) });
+	} finally {
+		drawGenerating.value = false;
 	}
 }
 
@@ -2768,6 +3529,245 @@ async function onAbortRequest() {
 }
 .transition_x_leaveActive {
 	position: absolute;
+}
+
+.chatSpacer {
+	position: relative;
+}
+
+.worldbookHitHint {
+	position: fixed;
+	top: 216px;
+	right: clamp(16px, 21vw, 440px);
+	z-index: 3;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 3px;
+	width: 42px;
+	height: 34px;
+	border-radius: 999px;
+	border: solid 1px color-mix(in srgb, var(--MI_THEME-accent) 36%, var(--MI_THEME-divider));
+	background: color-mix(in srgb, var(--MI_THEME-panel) 88%, var(--MI_THEME-accent));
+	color: var(--MI_THEME-accent);
+	font-size: 0.88rem;
+	font-weight: 800;
+	box-shadow: 0 8px 24px color-mix(in srgb, #000 24%, transparent);
+	outline: none;
+	cursor: help;
+}
+
+.worldbookHitTooltip {
+	position: absolute;
+	top: 42px;
+	right: 0;
+	width: min(320px, calc(100vw - 32px));
+	max-height: 320px;
+	overflow: auto;
+	padding: 12px;
+	border-radius: var(--MI-radius);
+	border: solid 1px var(--MI_THEME-divider);
+	background: color-mix(in srgb, var(--MI_THEME-panel) 96%, #000);
+	color: var(--MI_THEME-fg);
+	box-shadow: 0 14px 38px color-mix(in srgb, #000 32%, transparent);
+	opacity: 0;
+	pointer-events: none;
+	transform: translateY(-4px);
+	transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.worldbookHitHint:hover .worldbookHitTooltip,
+.worldbookHitHint:focus-visible .worldbookHitTooltip,
+.worldbookHitHintActive .worldbookHitTooltip {
+	opacity: 1;
+	pointer-events: auto;
+	transform: translateY(0);
+}
+
+.worldbookHitTitle {
+	font-size: 0.86rem;
+	font-weight: 800;
+	margin-bottom: 8px;
+}
+
+.worldbookHitItem {
+	padding: 8px 0;
+	border-top: solid 1px var(--MI_THEME-divider);
+
+	&:first-of-type {
+		border-top: none;
+		padding-top: 0;
+	}
+}
+
+.worldbookHitName {
+	font-weight: 800;
+	line-height: 1.35;
+}
+
+.worldbookHitMeta {
+	margin-top: 3px;
+	font-size: 0.8rem;
+	line-height: 1.4;
+	color: var(--MI_THEME-fgTransparentWeak);
+	word-break: break-word;
+}
+
+.worldbookOverview {
+	display: grid;
+	grid-template-columns: auto minmax(0, 1fr);
+	gap: 14px;
+	align-items: center;
+	padding: 16px;
+	border-radius: var(--MI-radius);
+}
+
+.worldbookOverviewIcon {
+	width: 46px;
+	height: 46px;
+	border-radius: 14px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	font-size: 1.45rem;
+	color: var(--MI_THEME-accent);
+	background: color-mix(in srgb, var(--MI_THEME-accent) 14%, transparent);
+	border: solid 1px color-mix(in srgb, var(--MI_THEME-accent) 30%, transparent);
+}
+
+.worldbookOverviewTitle {
+	font-weight: 800;
+	font-size: 1.05rem;
+	line-height: 1.35;
+}
+
+.worldbookOverviewText {
+	margin-top: 3px;
+	font-size: 0.88rem;
+	line-height: 1.45;
+	color: var(--MI_THEME-fgTransparentWeak);
+}
+
+.worldbookStatsGrid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+	gap: 12px;
+}
+
+.worldbookStatCard {
+	padding: 14px 16px;
+	border-radius: var(--MI-radius);
+
+	> span {
+		display: block;
+		font-size: 0.84rem;
+		color: var(--MI_THEME-fgTransparentWeak);
+	}
+
+	> b {
+		display: block;
+		margin-top: 5px;
+		font-size: 1.25rem;
+		line-height: 1.25;
+		word-break: break-word;
+	}
+}
+
+.worldbookSettingCard {
+	padding: 14px 16px;
+	border-radius: var(--MI-radius);
+}
+
+.worldbookList {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+}
+
+.worldbookCard {
+	padding: 14px;
+	border-radius: var(--MI-radius);
+}
+
+.worldbookCardDisabled {
+	opacity: 0.58;
+}
+
+.worldbookCardHeader {
+	display: flex;
+	justify-content: space-between;
+	align-items: flex-start;
+	gap: 12px;
+	flex-wrap: wrap;
+}
+
+.worldbookTitleRow {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
+}
+
+.worldbookTitle {
+	font-weight: 800;
+	line-height: 1.35;
+	word-break: break-word;
+}
+
+.worldbookMutedBadge {
+	flex-shrink: 0;
+	padding: 3px 8px;
+	border-radius: 999px;
+	font-size: 0.78rem;
+	font-weight: 800;
+	color: var(--MI_THEME-fgTransparentWeak);
+	background: color-mix(in srgb, var(--MI_THEME-panel) 80%, transparent);
+	border: solid 1px var(--MI_THEME-divider);
+}
+
+.worldbookMetaPills {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	justify-content: flex-end;
+}
+
+.worldbookMetaPill {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	height: 24px;
+	padding: 0 9px;
+	border-radius: 999px;
+	font-size: 0.8rem;
+	font-weight: 800;
+	color: var(--MI_THEME-accent);
+	background: color-mix(in srgb, var(--MI_THEME-accent) 10%, transparent);
+	border: solid 1px color-mix(in srgb, var(--MI_THEME-accent) 24%, var(--MI_THEME-divider));
+}
+
+.worldbookKeywords {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	margin-top: 10px;
+}
+
+.worldbookKeyword,
+.worldbookNoKeywords {
+	display: inline-flex;
+	align-items: center;
+	min-height: 24px;
+	padding: 2px 9px;
+	border-radius: 999px;
+	font-size: 0.8rem;
+	line-height: 1.35;
+	background: color-mix(in srgb, var(--MI_THEME-panel) 78%, transparent);
+	border: solid 1px var(--MI_THEME-divider);
+}
+
+.worldbookNoKeywords {
+	color: var(--MI_THEME-fgTransparentWeak);
 }
 
 .footer {
@@ -2829,6 +3829,13 @@ async function onAbortRequest() {
 
 .contextWindowDividerHighlight {
 	animation: agentContextDividerHighlight 1.2s ease-in-out 1;
+}
+
+@container (max-width: 820px) {
+	.worldbookHitHint {
+		top: 76px;
+		right: 16px;
+	}
 }
 
 @keyframes agentContextDividerHighlight {
@@ -3712,5 +4719,133 @@ async function onAbortRequest() {
 }
 .compressionOmitHint {
 	font-size: 0.9em;
+}
+.drawPanel {
+	padding: 16px;
+	border-radius: 8px;
+}
+.drawInfoContent {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+
+	> span {
+		min-width: 0;
+		line-height: 1.55;
+	}
+}
+.drawHead {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 12px;
+	margin-bottom: 16px;
+}
+.drawTitle {
+	font-size: 1.1em;
+	font-weight: 700;
+}
+.drawCaption {
+	margin-top: 4px;
+	font-size: 0.9em;
+	opacity: 0.72;
+}
+.drawFieldLabel {
+	font-size: 0.9em;
+	font-weight: 700;
+	color: var(--MI_THEME-fg);
+}
+.drawSizeRow {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	align-items: end;
+	gap: 12px;
+}
+.drawResetButton {
+	margin-bottom: 0;
+	white-space: nowrap;
+	align-self: end;
+}
+@container (max-width: 560px) {
+	.drawInfoContent {
+		align-items: flex-start;
+		flex-direction: column;
+	}
+
+	.drawSizeRow {
+		grid-template-columns: 1fr;
+		align-items: stretch;
+	}
+
+	.drawHead {
+		align-items: stretch;
+		flex-direction: column;
+	}
+
+	.drawResetButton {
+		justify-self: start;
+	}
+}
+.drawPresetGrid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+	gap: 10px;
+}
+.drawPresetCard {
+	display: grid;
+	grid-template-rows: 84px auto;
+	gap: 8px;
+	width: 100%;
+	min-width: 0;
+	padding: 8px;
+	border: solid 1px var(--MI_THEME-divider);
+	border-radius: 8px;
+	background: var(--MI_THEME-panel);
+	color: var(--MI_THEME-fg);
+	text-align: left;
+	cursor: pointer;
+}
+.drawPresetCardActive {
+	border-color: color-mix(in srgb, var(--MI_THEME-accent) 70%, var(--MI_THEME-divider));
+	background: color-mix(in srgb, var(--MI_THEME-accent) 9%, var(--MI_THEME-panel));
+}
+.drawPresetThumb,
+.drawPresetThumbFallback {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 100%;
+	height: 84px;
+	border-radius: 6px;
+	background: color-mix(in srgb, var(--MI_THEME-fg) 7%, var(--MI_THEME-panel));
+	object-fit: cover;
+	overflow: hidden;
+}
+.drawPresetThumbFallback {
+	font-size: 1.4em;
+	color: color-mix(in srgb, var(--MI_THEME-accent) 70%, var(--MI_THEME-fg));
+}
+.drawPresetName {
+	display: block;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: 0.92em;
+	font-weight: 700;
+}
+.drawPreview {
+	display: block;
+	width: min(100%, 280px);
+	max-height: 220px;
+	height: auto;
+	object-fit: contain;
+	border-radius: 8px;
+	background: var(--MI_THEME-panel);
+}
+
+.drawPreviewMedia {
+	width: min(100%, 280px);
 }
 </style>

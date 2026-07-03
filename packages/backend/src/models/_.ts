@@ -27,12 +27,15 @@ import { MiChannelMuting } from "@/models/ChannelMuting.js";
 import { MiAgentCharacter } from '@/models/AgentCharacter.js';
 import { MiAgentDialogueStyle } from '@/models/AgentDialogueStyle.js';
 import { MiAgentMessage } from '@/models/AgentMessage.js';
+import { MiAgentImageGeneration } from '@/models/AgentImageGeneration.js';
+import { MiAgentExternalAuditLog } from '@/models/AgentExternalAuditLog.js';
 import { MiAgentUserStyleSubscription } from '@/models/AgentUserStyleSubscription.js';
 import { MiAgentPlazaReview } from '@/models/AgentPlazaReview.js';
 import { MiAgentModelUsageLog } from '@/models/AgentModelUsageLog.js';
 import { MiAgentRedeemCode } from '@/models/AgentRedeemCode.js';
 import { MiAgentSession } from '@/models/AgentSession.js';
 import { MiAgentSessionCompressionSticky } from '@/models/AgentSessionCompressionSticky.js';
+import { MiAgentPublishedVersion } from '@/models/AgentPublishedVersion.js';
 import { MiChatApproval } from '@/models/ChatApproval.js';
 import { MiChatMessage } from '@/models/ChatMessage.js';
 import { MiChatRoom } from '@/models/ChatRoom.js';
@@ -187,10 +190,13 @@ export {
 	MiAgentSession,
 	MiAgentSessionCompressionSticky,
 	MiAgentMessage,
+	MiAgentImageGeneration,
+	MiAgentExternalAuditLog,
 	MiAgentUserStyleSubscription,
 	MiAgentPlazaReview,
 	MiAgentModelUsageLog,
 	MiAgentRedeemCode,
+	MiAgentPublishedVersion,
 	MiBubbleGameRecord,
 	MiReversiGame,
 };
@@ -278,8 +284,11 @@ export type AgentCharactersRepository = Repository<MiAgentCharacter> & MiReposit
 export type AgentDialogueStylesRepository = Repository<MiAgentDialogueStyle> & MiRepository<MiAgentDialogueStyle>;
 export type AgentSessionsRepository = Repository<MiAgentSession> & MiRepository<MiAgentSession>;
 export type AgentMessagesRepository = Repository<MiAgentMessage> & MiRepository<MiAgentMessage>;
+export type AgentImageGenerationsRepository = Repository<MiAgentImageGeneration> & MiRepository<MiAgentImageGeneration>;
+export type AgentExternalAuditLogsRepository = Repository<MiAgentExternalAuditLog> & MiRepository<MiAgentExternalAuditLog>;
 export type AgentUserStyleSubscriptionsRepository = Repository<MiAgentUserStyleSubscription> & MiRepository<MiAgentUserStyleSubscription>;
 export type AgentPlazaReviewsRepository = Repository<MiAgentPlazaReview> & MiRepository<MiAgentPlazaReview>;
 export type AgentModelUsageLogsRepository = Repository<MiAgentModelUsageLog> & MiRepository<MiAgentModelUsageLog>;
 export type AgentRedeemCodesRepository = Repository<MiAgentRedeemCode> & MiRepository<MiAgentRedeemCode>;
 export type AgentSessionCompressionStickyRepository = Repository<MiAgentSessionCompressionSticky> & MiRepository<MiAgentSessionCompressionSticky>;
+export type AgentPublishedVersionsRepository = Repository<MiAgentPublishedVersion> & MiRepository<MiAgentPublishedVersion>;

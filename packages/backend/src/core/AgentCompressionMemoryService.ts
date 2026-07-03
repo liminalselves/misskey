@@ -160,11 +160,17 @@ export class AgentCompressionMemoryService {
 		const maxComp = Math.max(200, Math.min(50_000, session.agentLongMemoryInjectMaxChars));
 		const compReserve = provider === 'compression' ? this.computeCompressionReserveChars(maxComp) : 0;
 		const systemChars = systemBase.length + memReserve + compReserve;
+		// 与 `send.ts` 注入到最新 user 的 directive 同步预扣，避免历史填到上限后叠加 directive 溢出上下文窗。
+		// 世界书已从 system 移除、改由 directive 的 <active-worldbook> 交付，这里按「全部已启用条目」保守预扣（上界），
+		// 与世界书曾整段写入 system 时的预留量一致，避免上下文溢出回归。
+		const budgetWorldbook = this.agentService.buildBudgetWorldbookEntries(character);
+		const directiveChars = this.agentService.buildLatestUserDirectiveBlock(style, budgetWorldbook).length;
 		const historyBudget = this.agentService.computeChatHistoryCharBudget({
 			maxContextTokens,
 			maxOutputTokensPerCall,
 			systemChars,
 			prefixMessages: [],
+			runtimeDirectiveChars: directiveChars,
 		});
 		return { historyBudget, maxContextTokens, maxOutputTokensPerCall, memReserveChars: memReserve, compReserveChars: compReserve };
 	}
@@ -216,11 +222,14 @@ export class AgentCompressionMemoryService {
 		});
 		const prov = this.resolveEffectiveProvider(session.agentLongMemoryProvider, instanceMeta);
 		const memReserveChars = this.computeAliyunMemoryXmlReserveIfActive(prov, session, instanceMeta);
+		// 与 send 路径一致预扣最新 user 风格 directive 占位（不预扣压缩段，故 H 仍大于发信 H）。
+		const directiveChars = this.agentService.buildLatestUserDirectiveBlock(style).length;
 		const historyBudgetChars = this.agentService.computeChatHistoryCharBudget({
 			maxContextTokens,
 			maxOutputTokensPerCall,
 			systemChars: systemBase.length + memReserveChars,
 			prefixMessages: [],
+			runtimeDirectiveChars: directiveChars,
 		});
 		return { maxContextTokens, maxOutputTokensPerCall, historyBudgetChars };
 	}

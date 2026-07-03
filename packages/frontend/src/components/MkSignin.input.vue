@@ -35,6 +35,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<MkInput v-model="username" :placeholder="i18n.ts.username" type="text" pattern="^[a-zA-Z0-9_]+$" :spellcheck="false" autocomplete="username webauthn" autofocus required data-cy-signin-username>
 				<template #prefix>@</template>
 				<template #suffix>@{{ host }}</template>
+				<template #caption><button class="_textButton" type="button" @click="resetPassword">{{ i18n.ts.forgotPassword }}</button></template>
 			</MkInput>
 			<MkButton type="submit" large primary rounded style="margin: 0 auto;" data-cy-signin-page-input-continue>{{ i18n.ts.continue }} <i class="ti ti-arrow-right"></i></MkButton>
 		</form>
@@ -53,7 +54,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { defineAsyncComponent, ref } from 'vue';
 import { toUnicode } from 'punycode.js';
 
 import { query, extractDomain } from '@@/js/url.js';
@@ -84,6 +85,12 @@ const emit = defineEmits<{
 const host = toUnicode(configHost);
 
 const username = ref(props.initialUsername ?? '');
+
+function resetPassword(): void {
+	const { dispose } = os.popup(defineAsyncComponent(() => import('@/components/MkForgotPassword.vue')), {}, {
+		closed: () => dispose(),
+	});
+}
 
 //#region Open on remote
 function openRemote(options: OpenOnRemoteOptions, targetHost?: string): void {

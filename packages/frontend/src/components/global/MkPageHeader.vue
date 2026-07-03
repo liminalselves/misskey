@@ -150,6 +150,7 @@ function goBack() {
 		router.push('/chat');
 	}
 }
+
 const show = computed(() => {
 	return !hideTitle.value || hasTabs.value || hasActions.value;
 });
@@ -349,6 +350,7 @@ onUnmounted(() => {
 	flex-shrink: 0;
 	display: flex;
 	align-items: center;
+	margin-left: auto;
 	min-width: var(--height);
 	height: var(--height);
 	&:empty {
