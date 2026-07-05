@@ -74,6 +74,7 @@
 		"@alicloud/pop-core": "1.7.13",
 		"@aws-sdk/client-s3": "3.970.0",
 		"@aws-sdk/lib-storage": "3.970.0",
+		"@aws-sdk/s3-request-presigner": "3.970.0",
 		"@discordapp/twemoji": "16.0.1",
 		"@fastify/accepts": "5.0.4",
 		"@fastify/cors": "11.2.0",

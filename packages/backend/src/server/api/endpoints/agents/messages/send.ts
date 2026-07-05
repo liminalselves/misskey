@@ -52,6 +52,8 @@ export const meta = {
 			aborted: { type: 'boolean' },
 			auditBlocked: { type: 'boolean' },
 			auditBlockCode: { type: 'string', nullable: true },
+			auditCategory: { type: 'string', nullable: true },
+			auditReason: { type: 'string', nullable: true },
 		},
 	},
 	errors: {
@@ -421,6 +423,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 						aborted: false,
 						auditBlocked: true,
 						auditBlockCode: auditResult.blockCode,
+						auditCategory: auditResult.category,
+						auditReason: auditResult.reason,
 					};
 				}
 				const asstNow = new Date();
@@ -501,6 +505,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					aborted: false,
 					auditBlocked: false,
 					auditBlockCode: null,
+					auditCategory: null,
+					auditReason: null,
 				};
 			} catch (err) {
 				const aborted = (abortController?.signal.aborted === true)
@@ -546,6 +552,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 						aborted: true,
 						auditBlocked: false,
 						auditBlockCode: null,
+						auditCategory: null,
+						auditReason: null,
 					};
 				}
 				throw err;

@@ -177,6 +177,9 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					});
 					if (existing) return await this.pack(await this.waitForExistingGeneration(existing));
 				}
+				if (this.isForeignKeyViolation(err)) {
+					throw new ApiError(noSuchMessageError);
+				}
 				throw err;
 			}
 
@@ -211,6 +214,10 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 
 	private isUniqueViolation(err: unknown): boolean {
 		return err instanceof QueryFailedError && (err.driverError as { code?: string } | undefined)?.code === '23505';
+	}
+
+	private isForeignKeyViolation(err: unknown): boolean {
+		return err instanceof QueryFailedError && (err.driverError as { code?: string } | undefined)?.code === '23503';
 	}
 
 	private async waitForExistingGeneration(row: MiAgentImageGeneration): Promise<MiAgentImageGeneration> {

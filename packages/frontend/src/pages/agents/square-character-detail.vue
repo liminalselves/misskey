@@ -120,6 +120,23 @@ SPDX-License-Identifier: AGPL-3.0-only
 						<h3 :class="$style.promptHeading">{{ i18n.ts._agents.fieldForbidden }}</h3>
 						<p :class="$style.promptBody">{{ character.openSourcePrompt.forbiddenBehavior }}</p>
 					</section>
+					<section v-if="character.openSourcePrompt.worldbook.length > 0" :class="$style.promptSection">
+						<h3 :class="$style.promptHeading">世界书</h3>
+						<div class="_gaps_s">
+							<div v-for="entry in character.openSourcePrompt.worldbook" :key="entry.id" :class="$style.worldbookEntry">
+								<div :class="$style.worldbookEntryHeader">
+									<strong>{{ entry.title }}</strong>
+									<span v-if="!entry.enabled" class="_acrylicBadge">已停用</span>
+								</div>
+								<p :class="$style.promptBody">{{ entry.content }}</p>
+								<div :class="$style.worldbookMeta">
+									<span>触发方式：{{ worldbookTriggerLabel(entry.triggerMode) }}</span>
+									<span>优先级：{{ entry.priority }}</span>
+									<span v-if="entry.keywords.length > 0">关键词：{{ entry.keywords.join('、') }}</span>
+								</div>
+							</div>
+						</div>
+					</section>
 				</div>
 			</MkFolder>
 
@@ -200,6 +217,16 @@ type CharacterPlazaDetail = {
 		greeting: string;
 		forbiddenBehavior: string;
 		exampleTurns: { role: 'user' | 'assistant'; content: string }[];
+		worldbook: {
+			id: string;
+			title: string;
+			content: string;
+			keywords: string[];
+			triggerMode: string;
+			priority: number;
+			enabled: boolean;
+			revision: number;
+		}[];
 	};
 };
 
@@ -229,6 +256,12 @@ const ratingAverageText = computed(() => {
 	if (a == null || !Number.isFinite(a)) return '—';
 	return a.toFixed(2);
 });
+
+function worldbookTriggerLabel(triggerMode: string): string {
+	if (triggerMode === 'always') return '常驻';
+	if (triggerMode === 'manual') return '手动';
+	return '关键词';
+}
 
 definePage(computed(() => ({
 	title: character.value?.name ?? i18n.ts._agents.publicAgents,
@@ -527,6 +560,28 @@ watch(() => props.characterId, () => { void load(); });
 	border-radius: 10px;
 	border: solid 1px var(--MI_THEME-divider);
 	background: color-mix(in srgb, var(--MI_THEME-bg) 30%, transparent);
+}
+
+.worldbookEntry {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	padding: 12px;
+	border-radius: 10px;
+	border: solid 1px var(--MI_THEME-divider);
+}
+
+.worldbookEntryHeader,
+.worldbookMeta {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px;
+}
+
+.worldbookMeta {
+	color: var(--MI_THEME-fgTransparentWeak);
+	font-size: 0.8em;
 }
 
 .exampleTurn {

@@ -15,7 +15,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		v-html="systemHtml"
 	></span>
 	<div :class="$style.systemFooter" @click.stop>
-		<button class="_textButton" style="color: currentColor;" @click="showMenu"><i class="ti ti-dots-circle-horizontal"></i></button>
+		<button class="_textButton" style="color: currentColor;" @pointerdown.stop @click.stop="showMenu"><i class="ti ti-dots-circle-horizontal"></i></button>
 		<MkTime :class="$style.systemTime" :time="message.createdAt"/>
 	</div>
 </div>
@@ -38,44 +38,53 @@ SPDX-License-Identifier: AGPL-3.0-only
 	</div>
 	<div :class="$style.body" @contextmenu.stop="onContextmenu">
 		<div v-if="!isUser && prefer.s['chat.showSenderName'] && assistantName" :class="$style.header">{{ assistantName }}</div>
-		<MkFukidashi :class="$style.fukidashi" :tail="isUser ? 'right' : 'left'" :accented="isUser">
-			<div
-				v-if="message.content && !hasDrawPlaceholders"
-				:class="[$style.mdRoot, '_selectable']"
-				v-html="userOrAssistantHtml"
-			></div>
-			<div v-else-if="message.content" :class="[$style.mdRoot, '_selectable']">
-				<template v-for="part in renderedParts" :key="part.key">
-					<div v-if="part.type === 'text'" v-html="part.html"></div>
-					<div v-else :class="$style.drawCard">
-						<div :class="$style.drawCardHead">
-							<span><i class="ti ti-brush"></i> AI生成图片</span>
-							<button
-								class="_button"
-								:class="$style.drawRetry"
-								:title="drawState(part.index)?.status === 'generating' ? '生成中' : '重新生成'"
-								:disabled="drawState(part.index)?.status === 'generating'"
-								@click.stop="regenerateDraw(part.index)"
-							>
-								<i class="ti ti-refresh"></i>
-							</button>
+		<TransitionGroup
+			tag="div"
+			:class="$style.segmentStack"
+			:enterActiveClass="prefer.s.animation ? $style.segmentEnterActive : ''"
+			:enterFromClass="prefer.s.animation ? $style.segmentEnterFrom : ''"
+			:moveClass="prefer.s.animation ? $style.segmentMove : ''"
+		>
+			<MkFukidashi
+				v-for="(segment, segmentIndex) in renderedSegments"
+				:key="segment.key"
+				:class="[$style.fukidashi, segment.drawOnly ? $style.drawFukidashi : null]"
+				:tail="isUser ? 'right' : (segmentIndex === renderedSegments.length - 1 ? 'left' : 'none')"
+				:accented="isUser"
+			>
+				<div v-if="segment.content" :class="[$style.mdRoot, segment.drawOnly ? $style.drawSegmentContent : null, '_selectable']">
+					<template v-for="part in segment.parts" :key="part.key">
+						<div v-if="part.type === 'text'" v-html="part.html"></div>
+						<div v-else :class="$style.drawCard">
+							<div :class="$style.drawCardHead">
+								<span><i class="ti ti-brush"></i> AI生成图片</span>
+								<button
+									class="_button"
+									:class="$style.drawRetry"
+									:title="drawState(part.index)?.status === 'generating' ? '生成中' : '重新生成'"
+									:disabled="drawState(part.index)?.status === 'generating'"
+									@click.stop="regenerateDraw(part.index)"
+								>
+									<i class="ti ti-refresh"></i>
+								</button>
+							</div>
+							<div v-if="drawState(part.index)?.status === 'succeeded' && drawState(part.index)?.url && !isDrawBlocked(part.index)" :class="$style.drawImageWrap">
+								<MkMediaList v-if="drawFileList(part.index).length > 0" :key="drawState(part.index)?.fileId ?? part.index" :class="$style.drawMediaList" :mediaList="drawFileList(part.index)"/>
+								<img v-else :src="drawState(part.index)?.url ?? ''" :class="$style.drawImage" alt="AI生成图片"/>
+							</div>
+							<div v-else :class="$style.drawPending">
+								<MkLoading v-if="!drawState(part.index) || drawState(part.index)?.status === 'generating' || drawState(part.index)?.status === 'pending'"/>
+								<i v-else-if="isDrawBlocked(part.index)" class="ti ti-ban"></i>
+								<i v-else class="ti ti-alert-circle"></i>
+								<span>{{ drawStatusText(part.index) }}</span>
+							</div>
 						</div>
-						<div v-if="drawState(part.index)?.status === 'succeeded' && drawState(part.index)?.url && !isDrawBlocked(part.index)" :class="$style.drawImageWrap">
-							<MkMediaList v-if="drawFileList(part.index).length > 0" :key="drawState(part.index)?.fileId ?? part.index" :class="$style.drawMediaList" :mediaList="drawFileList(part.index)"/>
-							<img v-else :src="drawState(part.index)?.url ?? ''" :class="$style.drawImage" alt="AI生成图片"/>
-						</div>
-						<div v-else :class="$style.drawPending">
-							<MkLoading v-if="drawState(part.index)?.status === 'generating' || drawState(part.index)?.status === 'pending'"/>
-							<i v-else-if="isDrawBlocked(part.index)" class="ti ti-ban"></i>
-							<i v-else class="ti ti-alert-circle"></i>
-							<span>{{ drawStatusText(part.index) }}</span>
-						</div>
-					</div>
-				</template>
-			</div>
-		</MkFukidashi>
+					</template>
+				</div>
+			</MkFukidashi>
+		</TransitionGroup>
 		<div :class="$style.footer">
-			<button class="_textButton" style="color: currentColor;" @click="showMenu"><i class="ti ti-dots-circle-horizontal"></i></button>
+			<button class="_textButton" style="color: currentColor;" @pointerdown.stop @click.stop="showMenu"><i class="ti ti-dots-circle-horizontal"></i></button>
 			<MkTime :class="$style.time" :time="message.createdAt"/>
 		</div>
 	</div>
@@ -98,6 +107,7 @@ import { prefer } from '@/preferences.js';
 import { misskeyApi, formatApiError } from '@/utility/misskey-api.js';
 import MkLoading from '@/components/global/MkLoading.vue';
 import MkMediaList from '@/components/MkMediaList.vue';
+import { splitAgentMessageIntoSegments } from '@/utility/agent-message-segments.js';
 
 const $i = ensureSignin();
 
@@ -114,6 +124,8 @@ const props = defineProps<{
 	assistantName?: string | null;
 	assistantAvatarUrl?: string | null;
 	highlighted?: boolean;
+	segmentedOutputEnabled?: boolean;
+	visibleSegmentCount?: number;
 	/** 与私信 XMessage 搜索结果一致：点击行跳转到该条消息 */
 	isSearchResult?: boolean;
 }>();
@@ -127,7 +139,6 @@ const emit = defineEmits<{
 
 const isUser = computed(() => props.message.role === 'user');
 
-const userOrAssistantHtml = computed(() => renderAgentChatMarkdown(props.message.content ?? ''));
 const systemHtml = computed(() => renderAgentChatMarkdown(props.message.content ?? ''));
 const AGENT_DRAW_RE = /\[\[agent_draw(?:\s+size=(portrait|landscape|square))?\s+tag=([\s\S]*?)\]\]/g;
 
@@ -151,14 +162,33 @@ type RenderPart =
 
 const drawResults = reactive<Record<number, DrawResult | undefined>>({});
 
-const renderedParts = computed((): RenderPart[] => {
-	if (props.message.role !== 'assistant') {
-		return [{ type: 'text', key: 'text:all', html: renderAgentChatMarkdown(props.message.content ?? '') }];
-	}
-	const text = props.message.content ?? '';
+const displaySegmentContents = computed(() => {
+	const content = props.message.content ?? '';
+	if (props.message.role !== 'assistant' || !props.segmentedOutputEnabled) return [content];
+	const segments = splitAgentMessageIntoSegments(content);
+	if (props.visibleSegmentCount == null) return segments;
+	return segments.slice(0, Math.max(1, Math.min(segments.length, props.visibleSegmentCount)));
+});
+
+const renderedSegments = computed(() => {
+	let drawOffset = 0;
+	return displaySegmentContents.value.map((content, segmentIndex) => {
+		const parts = renderParts(content, drawOffset);
+		drawOffset += parts.filter(part => part.type === 'draw').length;
+		return {
+			key: `segment:${segmentIndex}`,
+			content,
+			parts,
+			hasDraw: parts.some(part => part.type === 'draw'),
+			drawOnly: parts.length === 1 && parts[0]?.type === 'draw',
+		};
+	});
+});
+
+function renderParts(text: string, drawOffset: number): RenderPart[] {
 	const parts: RenderPart[] = [];
 	let lastIndex = 0;
-	let drawIndex = 0;
+	let localDrawIndex = 0;
 	for (const match of text.matchAll(AGENT_DRAW_RE)) {
 		const start = match.index ?? 0;
 		if (start > lastIndex) {
@@ -167,20 +197,19 @@ const renderedParts = computed((): RenderPart[] => {
 		const size = match[1] === 'landscape' || match[1] === 'square' || match[1] === 'portrait' ? match[1] : 'portrait';
 		parts.push({
 			type: 'draw',
-			key: `draw:${drawIndex}`,
-			index: drawIndex,
+			key: `draw:${drawOffset + localDrawIndex}`,
+			index: drawOffset + localDrawIndex,
 			size,
 			tag: String(match[2] ?? '').trim(),
 		});
-		drawIndex++;
+		localDrawIndex++;
 		lastIndex = start + match[0].length;
 	}
 	if (lastIndex < text.length) {
 		parts.push({ type: 'text', key: `text:${lastIndex}`, html: renderAgentChatMarkdown(text.slice(lastIndex)) });
 	}
 	return parts.length > 0 ? parts : [{ type: 'text', key: 'text:all', html: renderAgentChatMarkdown(text) }];
-});
-const hasDrawPlaceholders = computed(() => renderedParts.value.some(p => p.type === 'draw'));
+}
 
 function drawState(index: number): DrawResult | undefined {
 	return drawResults[index];
@@ -277,8 +306,10 @@ function regenerateDraw(index: number) {
 
 function startDraws() {
 	if (props.message.role !== 'assistant' || props.isSearchResult) return;
-	for (const part of renderedParts.value) {
-		if (part.type === 'draw') void generateDraw(part.index, false);
+	for (const segment of renderedSegments.value) {
+		for (const part of segment.parts) {
+			if (part.type === 'draw') void generateDraw(part.index, false);
+		}
 	}
 }
 
@@ -287,6 +318,12 @@ watch(() => `${props.message.id}:${props.message.content}`, () => {
 	for (const key of Object.keys(drawResults)) delete drawResults[Number(key)];
 	startDraws();
 });
+watch(() => props.visibleSegmentCount, startDraws);
+watch(
+	() => renderedSegments.value.flatMap(segment => segment.parts.filter(part => part.type === 'draw').map(part => part.index)).join(','),
+	startDraws,
+	{ flush: 'post' },
+);
 
 function onSearchResultClick(ev: MouseEvent) {
 	if (!props.isSearchResult) return;
@@ -534,6 +571,29 @@ async function confirmDelete() {
 	text-align: left;
 }
 
+.drawFukidashi {
+	width: 328px;
+	max-width: 100%;
+	box-sizing: border-box;
+}
+
+.drawSegmentContent {
+	width: 300px;
+	max-width: 100%;
+	box-sizing: border-box;
+}
+
+.segmentStack {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 8px;
+}
+
+.isMe .segmentStack {
+	align-items: flex-end;
+}
+
 /* GFM（marked）渲染：仅此处 v-html，样式用 :deep 作用于 sanitize 后的子节点 */
 .mdRoot {
 	max-width: 100%;
@@ -754,5 +814,15 @@ async function confirmDelete() {
 		font-size: 1.7em;
 		color: var(--MI_THEME-accent);
 	}
+}
+
+.segmentEnterActive,
+.segmentMove {
+	transition: opacity 0.22s cubic-bezier(0,.5,.5,1), transform 0.22s cubic-bezier(0,.5,.5,1) !important;
+}
+
+.segmentEnterFrom {
+	opacity: 0;
+	transform: translateY(12px) scale(0.985);
 }
 </style>

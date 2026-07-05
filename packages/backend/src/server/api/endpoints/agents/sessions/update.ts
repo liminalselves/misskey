@@ -38,6 +38,7 @@ export const meta = {
 			agentCompressionModelId: { type: 'string', nullable: true },
 			agentImageModelId: { type: 'string', nullable: true },
 			agentImageSettings: { type: 'object' },
+			segmentedOutputEnabled: { type: 'boolean' },
 			compressionCacheInvalidated: { type: 'boolean' },
 			updatedAt: { type: 'string', format: 'date-time' },
 		},
@@ -65,6 +66,7 @@ export const paramDef = {
 			nullable: true,
 			additionalProperties: true,
 		},
+		segmentedOutputEnabled: { type: 'boolean' },
 	},
 	required: ['sessionId'],
 } as const;
@@ -171,6 +173,9 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			if (ps.agentImageSettings !== undefined) {
 				row.agentImageSettings = this.normalizeAgentImageSettings(ps.agentImageSettings);
 			}
+			if (ps.segmentedOutputEnabled !== undefined) {
+				row.segmentedOutputEnabled = ps.segmentedOutputEnabled;
+			}
 
 			row.updatedAt = new Date();
 			await this.agentSessionsRepository.save(row);
@@ -189,6 +194,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				agentCompressionModelId: row.agentCompressionModelId,
 				agentImageModelId: row.agentImageModelId,
 				agentImageSettings: row.agentImageSettings ?? {},
+				segmentedOutputEnabled: row.segmentedOutputEnabled,
 				compressionCacheInvalidated: false,
 				updatedAt: row.updatedAt.toISOString(),
 			};

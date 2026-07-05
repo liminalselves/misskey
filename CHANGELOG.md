@@ -7,6 +7,13 @@
 - Enhance: 升级智能体会话导入导出格式，导出内容包含聊天消息与会话个性化配置；导入时会校验消息与配置合理性，并兼容 `misskey-agent-session-export-v1`、`misskey-agent-session-export-v2` 及旧版仅上下文消息文件。
 - Enhance: 用户从智能体广场、详情页或个人智能体入口开始聊天时，新增确认提示，明确这是创建新的会话，旧会话需前往「私信 - 智能体」查找。
 - Fix: 修复移动端部分复制按钮失效的问题，智能体消息复制、兑换码复制等复制操作现在使用 Clipboard API 与 textarea fallback 兼容处理。
+- Enhance: 智能体会话新增「分段输出」开关，后端仍一次性返回并入库完整回复，前端按 Markdown/HTML/生图语法安全分段播放；播放中止时会立即展示剩余内容。
+- Fix: 修复智能体分段输出下生图占位卡片、图片自动生成、Markdown 排版、消息尾巴、操作按钮与气泡动画等显示和交互异常。
+- Fix: 修复用户编辑助手消息后重新生成图片可绕过外部审计的问题；外审不通过时会保留编辑内容，并用统一反馈弹窗展示拦截原因。
+- Fix: 统一 AI 回复、生图测试与编辑助手消息等外审拦截弹窗样式和反馈文案。
+- Fix: 修复开源角色详情页在角色绑定世界书时未展示世界书内容的问题。
+- Fix: 移除智能体聊天输入区底部不必要的生图画笔入口。
+- Fix: 修复 Misskey 媒体全屏预览下载按钮样式不一致，以及下载跳转直链、跨域失败或走代理过慢的问题。
 
 #### General
 
@@ -33,7 +40,7 @@
 - Enhance: **提示词开源标记**：角色与对话风格表的 `promptOpenSourced`（`1772000000000-AgentPromptOpenSource`），与广场与个人展示接口对齐。
 - Enhance: 会话删除 `agents/sessions/delete`；消息 `agents/messages/update`、`abort`、`rollback`、`import-context`；`agents/messages/send` 等与计费、压缩、会话状态耦合的发送管线扩展；流媒体 API、全局 API 调用钩子、验证码登录路径等随会话与用户状态做小步适配。
 
-部署须依次执行迁移：`1771900000000-AddUserAppPush` 至 `1773000000000-AgentModelUsageLogUsageKind`（按文件名时间戳排序）。
+部署须依次执行迁移：`1771900000000-AddUserAppPush` 至 `1773000000000-AgentModelUsageLogUsageKind`，以及 `1774600000000-AgentSegmentedOutput`（按文件名时间戳排序）。
 
 ### General
 - Fix: Windows 上执行 `pnpm --filter i18n generate` 时，`generateLocaleInterface.ts` 的 `isMain` 判断因路径格式与 `import.meta.url` 不一致导致脚本未实际更新 `packages/i18n/src/autogen/locale.ts`；已改为使用 `fileURLToPath` 与 `path.resolve` 比较，与 Unix 行为一致。

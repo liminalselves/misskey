@@ -168,6 +168,12 @@ export class MiAgentSession {
 	})
 	public agentReplyPending: boolean;
 
+	/** 完整回复仍按一条消息存储；启用后由前端按安全块逐段展示。 */
+	@Column('boolean', {
+		default: false,
+	})
+	public segmentedOutputEnabled: boolean;
+
 	/** 管理封禁：该会话下用户无法继续对话 */
 	@Column('boolean', {
 		default: false,

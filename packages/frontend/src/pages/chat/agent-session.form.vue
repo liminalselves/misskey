@@ -39,17 +39,6 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<div :class="$style.buttons">
 				<button class="_button" :class="$style.button" type="button" @click="insertEmoji"><i class="ti ti-mood-happy"></i></button>
 				<button
-					class="_button"
-					:class="$style.button"
-					type="button"
-					:disabled="disabled || sending"
-					title="生图"
-					aria-label="生图"
-					@click="onDrawClick"
-				>
-					<i class="ti ti-brush"></i>
-				</button>
-				<button
 					v-if="sending"
 					class="_button"
 					:class="[$style.button, $style.abort]"
@@ -94,7 +83,6 @@ const emit = defineEmits<{
 	(e: 'submit', text: string): void;
 	(e: 'cancelEdit'): void;
 	(e: 'abort'): void;
-	(e: 'draw'): void;
 }>();
 
 const textareaEl = shallowRef<HTMLTextAreaElement>();
@@ -140,10 +128,6 @@ function onCancelEdit() {
 
 function onAbortClick() {
 	emit('abort');
-}
-
-function onDrawClick() {
-	emit('draw');
 }
 
 function restoreDraft(t: string) {

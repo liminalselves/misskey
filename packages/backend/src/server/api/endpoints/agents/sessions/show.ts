@@ -39,6 +39,7 @@ export const meta = {
 			agentLongMemoryAddEveryNRounds: { type: 'integer', nullable: true },
 			agentLongMemoryProvider: { type: 'string' },
 			agentReplyPending: { type: 'boolean' },
+			segmentedOutputEnabled: { type: 'boolean' },
 			sessionModerationBanned: { type: 'boolean' },
 			characterModerationBanned: { type: 'boolean' },
 		},
@@ -99,6 +100,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				agentLongMemoryAddEveryNRounds: row.agentLongMemoryAddEveryNRounds,
 				agentLongMemoryProvider: row.agentLongMemoryProvider,
 				agentReplyPending: row.agentReplyPending,
+				segmentedOutputEnabled: row.segmentedOutputEnabled,
 				sessionModerationBanned: row.moderationBanned,
 				characterModerationBanned: characterRow.moderationBanned,
 			};

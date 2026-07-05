@@ -50,8 +50,25 @@ export const meta = {
 							required: ['role', 'content'],
 						},
 					},
+					worldbook: {
+						type: 'array',
+						items: {
+							type: 'object',
+							properties: {
+								id: { type: 'string' },
+								title: { type: 'string' },
+								content: { type: 'string' },
+								keywords: { type: 'array', items: { type: 'string' } },
+								triggerMode: { type: 'string' },
+								priority: { type: 'integer' },
+								enabled: { type: 'boolean' },
+								revision: { type: 'integer' },
+							},
+							required: ['id', 'title', 'content', 'keywords', 'triggerMode', 'priority', 'enabled', 'revision'],
+						},
+					},
 				},
-				required: ['personality', 'background', 'speakingStyle', 'greeting', 'forbiddenBehavior', 'exampleTurns'],
+				required: ['personality', 'background', 'speakingStyle', 'greeting', 'forbiddenBehavior', 'exampleTurns', 'worldbook'],
 			},
 			createdAt: { type: 'string', format: 'date-time' },
 			updatedAt: { type: 'string', format: 'date-time' },
@@ -143,6 +160,16 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				greeting: string;
 				forbiddenBehavior: string;
 				exampleTurns: { role: 'user' | 'assistant'; content: string }[];
+				worldbook: {
+					id: string;
+					title: string;
+					content: string;
+					keywords: string[];
+					triggerMode: string;
+					priority: number;
+					enabled: boolean;
+					revision: number;
+				}[];
 			} | undefined;
 			if (row.promptOpenSourced === true) {
 				// 已开源：使用发布态字段供广场访客查看完整提示词
@@ -154,6 +181,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					greeting: effective.greeting,
 					forbiddenBehavior: effective.forbiddenBehavior,
 					exampleTurns: this.agentService.exampleTurnsFromStored(effective.exampleDialogue),
+					worldbook: this.agentService.normalizeWorldbookEntries(effective.worldbook),
 				};
 			}
 			return {

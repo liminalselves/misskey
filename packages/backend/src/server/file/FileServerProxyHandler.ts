@@ -28,6 +28,7 @@ type ProxyQuery = {
 	badge?: string;
 	origin?: string;
 	url?: string;
+	download?: string;
 };
 
 export class FileServerProxyHandler {
@@ -80,8 +81,10 @@ export class FileServerProxyHandler {
 			reply.header('Cache-Control', 'max-age=31536000, immutable');
 			reply.header('Content-Disposition',
 				contentDisposition(
-					'inline',
-					correctFilename(file.filename, image.ext),
+					typeof request.query.download === 'string' ? 'attachment' : 'inline',
+					typeof request.query.download === 'string' && request.query.download.trim() !== ''
+						? correctFilename(request.query.download.trim().slice(0, 255), image.ext)
+						: correctFilename(file.filename, image.ext),
 				),
 			);
 			return image.data;

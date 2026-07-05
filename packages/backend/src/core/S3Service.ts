@@ -7,13 +7,14 @@ import { URL } from 'node:url';
 import * as http from 'node:http';
 import * as https from 'node:https';
 import { Injectable } from '@nestjs/common';
-import { DeleteObjectCommand, PutObjectAclCommand, S3Client } from '@aws-sdk/client-s3';
+import { DeleteObjectCommand, GetObjectCommand, PutObjectAclCommand, S3Client } from '@aws-sdk/client-s3';
 import { Upload } from '@aws-sdk/lib-storage';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { NodeHttpHandler, NodeHttpHandlerOptions } from '@smithy/node-http-handler';
 import type { MiMeta } from '@/models/Meta.js';
 import { HttpRequestService } from '@/core/HttpRequestService.js';
 import { bindThis } from '@/decorators.js';
-import type { DeleteObjectCommandInput, PutObjectAclCommandInput, PutObjectCommandInput } from '@aws-sdk/client-s3';
+import type { DeleteObjectCommandInput, GetObjectCommandInput, PutObjectAclCommandInput, PutObjectCommandInput } from '@aws-sdk/client-s3';
 
 @Injectable()
 export class S3Service {
@@ -67,6 +68,12 @@ export class S3Service {
 	public delete(meta: MiMeta, input: DeleteObjectCommandInput) {
 		const client = this.getS3Client(meta);
 		return client.send(new DeleteObjectCommand(input));
+	}
+
+	@bindThis
+	public async getSignedDownloadUrl(meta: MiMeta, input: GetObjectCommandInput, expiresIn = 60) {
+		const client = this.getS3Client(meta);
+		return await getSignedUrl(client, new GetObjectCommand(input), { expiresIn });
 	}
 
 	@bindThis

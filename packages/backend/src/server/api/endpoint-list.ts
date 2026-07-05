@@ -266,6 +266,7 @@ export * as 'drive/files/attached-chat-messages' from './endpoints/drive/files/a
 export * as 'drive/files/check-existence' from './endpoints/drive/files/check-existence.js';
 export * as 'drive/files/create' from './endpoints/drive/files/create.js';
 export * as 'drive/files/delete' from './endpoints/drive/files/delete.js';
+export * as 'drive/files/download-url' from './endpoints/drive/files/download-url.js';
 export * as 'drive/files/find' from './endpoints/drive/files/find.js';
 export * as 'drive/files/find-by-hash' from './endpoints/drive/files/find-by-hash.js';
 export * as 'drive/files/show' from './endpoints/drive/files/show.js';

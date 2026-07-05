@@ -42,6 +42,7 @@ import * as os from '@/os.js';
 import { focusParent } from '@/utility/focus.js';
 import { prefer } from '@/preferences.js';
 import { i18n } from '@/i18n.js';
+import { misskeyApi, formatApiError } from '@/utility/misskey-api.js';
 
 const props = defineProps<{
 	mediaList: Misskey.entities.DriveFile[];
@@ -78,14 +79,18 @@ function displayMediaComment(media: Misskey.entities.DriveFile): string {
 	return text === AGENT_IMAGE_GENERATION_COMMENT_EN ? AGENT_IMAGE_GENERATION_COMMENT_ZH : text;
 }
 
-function downloadMedia(media: Misskey.entities.DriveFile): void {
+async function downloadMedia(media: Misskey.entities.DriveFile): Promise<void> {
 	if (media.isAgentImageBlocked) return;
 
+	const result = await (misskeyApi as unknown as (
+		endpoint: 'drive/files/download-url',
+		data: { fileId: string },
+	) => Promise<{ url: string }>)('drive/files/download-url', {
+		fileId: media.id,
+	});
 	const a = window.document.createElement('a');
-	a.href = media.url;
+	a.href = result.url;
 	a.download = media.name || 'download';
-	a.rel = 'noopener';
-	a.target = '_blank';
 	a.style.display = 'none';
 	window.document.body.appendChild(a);
 	a.click();
@@ -199,12 +204,20 @@ onMounted(() => {
 			isButton: true,
 			html: {
 				isCustomSVG: true,
-				inner: '<path fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" d="M16 5v15m0 0l-6-6m6 6l6-6"/><path fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" d="M7 25h18"/>',
+				inner: '<path class="pswp__icn-shadow" d="M16 5v15m0 0-6-6m6 6 6-6M7 25h18"/><path d="M16 5v15m0 0-6-6m6 6 6-6M7 25h18"/>',
 			},
-			onClick: (ev, _el, pswp) => {
+			onClick: async (ev, el, pswp) => {
 				ev.preventDefault();
 				const media = lightboxMediaList()[pswp.currIndex];
-				if (media) downloadMedia(media);
+				if (!media || !(el instanceof HTMLButtonElement) || el.disabled) return;
+				el.disabled = true;
+				try {
+					await downloadMedia(media);
+				} catch (error) {
+					os.alert({ type: 'error', text: formatApiError(error) });
+				} finally {
+					el.disabled = false;
+				}
 			},
 		});
 		lightbox?.pswp?.ui?.registerElement({
@@ -383,20 +396,13 @@ defineExpose({
 	backdrop-filter: var(--MI-modalBgFilter);
 }
 
-.pswp__button--download {
+.pswp__button--download .pswp__icn {
 	color: var(--pswp-icon-color);
-	opacity: .85;
-}
-
-.pswp__button--download:hover {
-	opacity: 1;
-}
-
-.pswp__button--download svg,
-.pswp__button--download path {
-	color: inherit;
-	stroke: currentColor !important;
-	fill: none !important;
+	fill: none;
+	stroke: currentColor;
+	stroke-width: 1.8;
+	stroke-linecap: round;
+	stroke-linejoin: round;
 }
 
 .pswp__alt-text-container {

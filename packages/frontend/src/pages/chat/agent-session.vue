@@ -62,6 +62,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 							:assistantName="character?.name ?? null"
 							:assistantAvatarUrl="assistantAvatarUrl"
 							:highlighted="highlightedMessageId === item.data.id"
+							:segmentedOutputEnabled="session?.segmentedOutputEnabled === true"
+							:visibleSegmentCount="segmentPlayback?.messageId === item.data.id ? segmentPlayback.visibleCount : undefined"
 							@deleted="onAgentMessageDeleted"
 							@editRequested="onEditRequested"
 							@rollbackRequested="onRollbackRequested"
@@ -542,6 +544,17 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<div class="_gaps">
 			<MkInfo v-if="moderationLocksSessionWrites" warn>{{ moderationBlockUserMessage }}</MkInfo>
 			<div v-panel :class="[$style.memContextPorter, $style.memPorterPanel]">
+				<div :class="$style.memContextPorterLabel">消息显示</div>
+				<MkSwitch
+					v-model="segmentedOutputEnabled"
+					:disabled="segmentedOutputSaving || moderationLocksSessionWrites"
+					@update:modelValue="saveSegmentedOutputSetting"
+				>
+					分段输出
+					<template #caption>默认关闭。开启后，完整回复仍保存为一条消息，但会按换行和完整语法结构逐段显示，每段间隔 1～3 秒。</template>
+				</MkSwitch>
+			</div>
+			<div v-panel :class="[$style.memContextPorter, $style.memPorterPanel]">
 				<div :class="$style.memContextPorterLabel">会话导入导出</div>
 				<div :class="$style.memContextPorterActions">
 					<MkButton rounded :wait="contextExporting" :disabled="contextExporting" @click="exportSessionContext">
@@ -783,7 +796,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<i class="ti ti-loader-2" :class="$style.memAddHintIcon"></i>
 				<span>{{ i18n.ts._agents.compressionSidecarScheduledHint }}</span>
 			</div>
-			<XForm ref="formRef" :class="$style.form" :disabled="formDisabled" :sending="sending || editSaving" :editing="editingForForm" @submit="onFormSubmit" @cancelEdit="cancelEditingMessage" @abort="onAbortRequest" @draw="openDrawTab"/>
+			<XForm ref="formRef" :class="$style.form" :disabled="formDisabled" :sending="sending || editSaving" :editing="editingForForm" @submit="onFormSubmit" @cancelEdit="cancelEditingMessage" @abort="onAbortRequest"/>
 		</div>
 	</template>
 </PageWithHeader>
@@ -811,6 +824,7 @@ import MkButton from '@/components/MkButton.vue';
 import MkTextarea from '@/components/MkTextarea.vue';
 import MkSelect from '@/components/MkSelect.vue';
 import MkMediaList from '@/components/MkMediaList.vue';
+import MkAgentAuditFeedbackDialog from '@/components/MkAgentAuditFeedbackDialog.vue';
 import FormSplit from '@/components/form/split.vue';
 import MkFolder from '@/components/MkFolder.vue';
 import { formatDateTimeString } from '@/utility/format-time-string.js';
@@ -823,6 +837,7 @@ import { useRouter } from '@/router.js';
 import { makeDateSeparatedTimelineComputedRef } from '@/utility/timeline-date-separate.js';
 import { useMutationObserver } from '@/composables/use-mutation-observer.js';
 import { prefer } from '@/preferences.js';
+import { agentSegmentDelayMs, splitAgentMessageIntoSegments } from '@/utility/agent-message-segments.js';
 
 const agentSessionCss = useCssModule();
 
@@ -834,6 +849,30 @@ const sessionId = props.sessionId;
 const router = useRouter();
 
 const PAGE_LIMIT = 30;
+
+type AgentAuditFeedback = {
+	title: string;
+	guide?: string;
+	blockCode?: string | null;
+	category?: string | null;
+	reason?: string | null;
+};
+
+function showAgentAuditFeedback(feedback: AgentAuditFeedback) {
+	const { dispose } = os.popup(MkAgentAuditFeedbackDialog, feedback, {
+		closed: () => dispose(),
+	});
+}
+
+function agentAuditFeedbackFromError(err: unknown): Omit<AgentAuditFeedback, 'title'> {
+	const info = err != null && typeof err === 'object' && 'info' in err ? (err as { info?: unknown }).info : null;
+	const details = info != null && typeof info === 'object' ? info as Record<string, unknown> : {};
+	return {
+		blockCode: typeof details.blockCode === 'string' ? details.blockCode : null,
+		category: typeof details.category === 'string' ? details.category : null,
+		reason: typeof details.reason === 'string' ? details.reason : null,
+	};
+}
 
 type AgentMsg = { id: string; role: string; content: string; createdAt: string };
 type PendingWorldbookMatch = {
@@ -880,6 +919,7 @@ const session = ref<{
 	agentCompressionModelId?: string | null;
 	agentImageModelId?: string | null;
 	agentImageSettings?: Record<string, unknown>;
+	segmentedOutputEnabled?: boolean;
 	characterId: string;
 	agentLongMemoryEnabled?: boolean;
 	agentLongMemoryTopK?: number;
@@ -1021,6 +1061,8 @@ useMutationObserver(timelineEl, {
 });
 
 const savingSettings = ref(false);
+const segmentedOutputEnabled = ref(false);
+const segmentedOutputSaving = ref(false);
 const usableStyles = ref<AgentsStylesListUsableResponse>([]);
 
 function styleUsableStarVisual(avg: number | null | undefined): string {
@@ -1391,10 +1433,31 @@ async function saveEditingMessage(text: string) {
 		const updated = await (misskeyApi as unknown as (
 			endpoint: 'agents/messages/update',
 			data: { sessionId: string; messageId: string; content: string },
-		) => Promise<{ id: string; role: string; content: string; createdAt: string }>)(
+		) => Promise<{
+			id: string;
+			role: string;
+			content: string;
+			createdAt: string;
+			auditBlocked: boolean;
+			auditBlockCode: string | null;
+			auditCategory: string | null;
+			auditReason: string | null;
+		}>)(
 			'agents/messages/update',
 			{ sessionId, messageId: target.id, content },
 		);
+		if (updated.auditBlocked) {
+			showAgentAuditFeedback({
+				title: '修改内容未通过外审',
+				guide: '你的修改已保留在输入框中，不会丢失。',
+				blockCode: updated.auditBlockCode ?? '未知',
+				category: updated.auditCategory,
+				reason: updated.auditReason,
+			});
+			await nextTick();
+			formRef.value?.focus();
+			return;
+		}
 		const idx = messages.value.findIndex(m => m.id === target.id);
 		if (idx !== -1) {
 			messages.value[idx] = {
@@ -1435,7 +1498,7 @@ let replyPollTimer: number | null = null;
 
 function stopReplyPendingPoll() {
 	if (replyPollTimer != null) {
-		window.clearInterval(replyPollTimer);
+		window.clearTimeout(replyPollTimer);
 		replyPollTimer = null;
 	}
 }
@@ -1459,18 +1522,23 @@ function startReplyPendingPoll() {
 		await pollSessionReplyState();
 		if (!session.value?.agentReplyPending) {
 			stopReplyPendingPoll();
-			sending.value = false;
 			try {
-				await loadInitialTimeline();
-				await scrollToLatest();
-				await refreshContextWindow();
+				const previousIds = new Set(messages.value.map(message => message.id));
+				const list = await loadInitialTimeline();
+				const assistant = list.find(message => message.role === 'assistant' && !previousIds.has(message.id));
+				if (assistant != null) {
+					await playSegmentedReply(assistant);
+				}
 			} catch {
 				// ignore
+			} finally {
+				sending.value = false;
 			}
+			return;
 		}
+		replyPollTimer = window.setTimeout(() => void tick(), 2500);
 	};
 	void tick();
-	replyPollTimer = window.setInterval(() => void tick(), 2500);
 }
 
 function isAgentReplyPendingError(e: unknown): boolean {
@@ -1724,7 +1792,7 @@ const headerTabs = computed(() => {
 	});
 	tabs.push({
 		key: 'operations',
-		title: '会话操作',
+		title: '会话',
 		icon: 'ti ti-tool',
 	});
 	return tabs;
@@ -1739,17 +1807,6 @@ const headerActions = computed<PageHeaderItem[]>(() => [
 		icon: 'ti ti-help-circle',
 		text: i18n.ts._agents.syntaxGuideShort,
 		handler: () => { router.push('/agents/syntax-guide'); },
-	},
-	{
-		icon: 'ti ti-pencil',
-		text: i18n.ts._agents.renameSession,
-		handler: () => { void renameSession(); },
-	},
-	{
-		icon: 'ti ti-trash',
-		text: i18n.ts._agents.deleteSession,
-		danger: true,
-		handler: () => { void deleteAgentSession(); },
 	},
 ]);
 
@@ -1840,6 +1897,28 @@ watch(drawImageModelId, (next, prev) => {
 	}
 });
 
+async function saveSegmentedOutputSetting(enabled: boolean) {
+	if (!session.value || segmentedOutputSaving.value || moderationLocksSessionWrites.value) return;
+	const previous = session.value.segmentedOutputEnabled === true;
+	segmentedOutputSaving.value = true;
+	try {
+		await (misskeyApi as unknown as (
+			endpoint: 'agents/sessions/update',
+			data: { sessionId: string; segmentedOutputEnabled: boolean },
+		) => Promise<unknown>)('agents/sessions/update', {
+			sessionId,
+			segmentedOutputEnabled: enabled,
+		});
+		session.value.segmentedOutputEnabled = enabled;
+		os.toast('分段输出设置已保存');
+	} catch (e) {
+		segmentedOutputEnabled.value = previous;
+		os.alert({ type: 'error', text: formatApiError(e) });
+	} finally {
+		segmentedOutputSaving.value = false;
+	}
+}
+
 async function renameSession() {
 	if (!session.value) return;
 	const { canceled, result } = await os.inputText({
@@ -1912,6 +1991,7 @@ async function loadSession() {
 				}
 			}
 			memCompressionModelId.value = displayCompressionModelIdForSession(session.value.agentCompressionModelId);
+			segmentedOutputEnabled.value = session.value.segmentedOutputEnabled === true;
 			hydrateAgentImageSettingsFromSession();
 			compressionOverview.value = null;
 			await loadCharacter(session.value.characterId);
@@ -2045,7 +2125,7 @@ async function applyStyle() {
 	}
 }
 
-async function loadInitialTimeline() {
+async function loadInitialTimeline(): Promise<AgentMsg[]> {
 	const list = await misskeyApi('agents/messages/timeline', {
 		sessionId,
 		limit: PAGE_LIMIT,
@@ -2055,6 +2135,7 @@ async function loadInitialTimeline() {
 	canFetchNewer.value = false;
 	await scrollToLatest();
 	await refreshContextWindow();
+	return list;
 }
 
 async function loadContextAround(targetId: string, limit = PAGE_LIMIT) {
@@ -2413,6 +2494,7 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
 	stopReplyPendingPoll();
+	finishSegmentPlayback(false);
 	clearContextDividerHighlight();
 	if (memoryAddHintTimer != null) {
 		window.clearTimeout(memoryAddHintTimer);
@@ -2922,6 +3004,7 @@ type SessionExportSettings = {
 	agentCompressionModelId?: string | null;
 	agentImageModelId?: string | null;
 	agentImageSettings?: Record<string, unknown>;
+	segmentedOutputEnabled?: boolean;
 };
 type SessionExportPayload = {
 	format: 'misskey-agent-session-export-v2';
@@ -2976,6 +3059,7 @@ function buildSessionExportSettings(): SessionExportSettings {
 		agentCompressionModelId: s.agentCompressionModelId ?? null,
 		agentImageModelId: s.agentImageModelId ?? null,
 		agentImageSettings: s.agentImageSettings ?? {},
+		segmentedOutputEnabled: s.segmentedOutputEnabled === true,
 	};
 }
 
@@ -3118,6 +3202,7 @@ function parseImportedSessionSettings(raw: unknown): SessionExportSettings | nul
 	if ('agentCompressionModelId' in src) out.agentCompressionModelId = validateOptionalString(src.agentCompressionModelId, 'agentCompressionModelId', 1, 64, true);
 	if ('agentImageModelId' in src) out.agentImageModelId = validateOptionalString(src.agentImageModelId, 'agentImageModelId', 1, 128, true);
 	if ('agentImageSettings' in src) out.agentImageSettings = validateAgentImageSettings(src.agentImageSettings);
+	if ('segmentedOutputEnabled' in src) out.segmentedOutputEnabled = validateBoolean(src.segmentedOutputEnabled, 'segmentedOutputEnabled');
 
 	return out;
 }
@@ -3231,6 +3316,105 @@ const OPTIMISTIC_MESSAGE_ID_PREFIX = 'agent-opt:';
 
 /** 当前正在进行的发送请求 ID；由 abort 端点使用 */
 let currentClientRequestId: string | null = null;
+const segmentPlayback = ref<{
+	token: number;
+	messageId: string;
+	segments: string[];
+	visibleCount: number;
+	completed: boolean;
+	canceled: boolean;
+} | null>(null);
+let segmentPlaybackTimer: number | null = null;
+let releaseSegmentDelay: (() => void) | null = null;
+let segmentPlaybackToken = 0;
+
+function playableSegmentsFor(content: string): string[] {
+	if (session.value?.segmentedOutputEnabled !== true) return [];
+	const segments = splitAgentMessageIntoSegments(content);
+	return segments.length > 1 ? segments : [];
+}
+
+function waitForSegmentDelay(ms: number, state: NonNullable<typeof segmentPlayback.value>): Promise<void> {
+	const current = segmentPlayback.value;
+	if (state.canceled || current == null || current.token !== state.token) return Promise.resolve();
+	return new Promise(resolve => {
+		let timerId: number | null = null;
+		const release = () => {
+			if (timerId != null) {
+				window.clearTimeout(timerId);
+			}
+			if (segmentPlaybackTimer === timerId) {
+				segmentPlaybackTimer = null;
+			}
+			if (releaseSegmentDelay === release) {
+				releaseSegmentDelay = null;
+			}
+			resolve();
+		};
+		releaseSegmentDelay = release;
+		timerId = window.setTimeout(release, ms);
+		segmentPlaybackTimer = timerId;
+	});
+}
+
+async function waitForSegmentRender() {
+	await nextTick();
+	await new Promise<void>(resolve => window.requestAnimationFrame(() => resolve()));
+}
+
+function finishSegmentPlayback(complete = true): boolean {
+	const playback = segmentPlayback.value;
+	if (playback == null) return false;
+	playback.completed = complete;
+	playback.canceled = !complete;
+	releaseSegmentDelay?.();
+	segmentPlayback.value = null;
+	return true;
+}
+
+async function playSegmentedReply(message: AgentMsg, precomputedSegments?: string[]): Promise<boolean> {
+	if (session.value?.segmentedOutputEnabled !== true) return true;
+	const segments = precomputedSegments ?? playableSegmentsFor(message.content);
+	if (segments.length <= 1) return true;
+
+	const state = {
+		token: ++segmentPlaybackToken,
+		messageId: message.id,
+		segments,
+		visibleCount: 1,
+		completed: false,
+		canceled: false,
+	};
+	try {
+		segmentPlayback.value = state;
+		void scrollToLatest().catch(() => {});
+		await waitForSegmentRender();
+
+		for (let i = 1; i < segments.length; i++) {
+			if (state.completed) return true;
+			let current = segmentPlayback.value;
+			if (state.canceled || current == null || current.token !== state.token) {
+				return false;
+			}
+			await waitForSegmentDelay(agentSegmentDelayMs(segments[i]!), state);
+			if (state.completed) return true;
+			current = segmentPlayback.value;
+			if (state.canceled || current == null || current.token !== state.token) {
+				return false;
+			}
+			current.visibleCount = i + 1;
+			void scrollToLatest().catch(() => {});
+			await waitForSegmentRender();
+		}
+
+		if (segmentPlayback.value?.token === state.token) segmentPlayback.value = null;
+		return true;
+	} catch (err) {
+		console.error('[agents] segmented reply playback failed', err);
+		if (segmentPlayback.value?.token === state.token) segmentPlayback.value = null;
+		return true;
+	}
+}
 
 /** 与 agents/messages/send 中 assertAgentSessionTurnOrderAllowsUserSend 一致 */
 function agentSendTurnOrderBlockReason(msgs: AgentMsg[]): 'invalidTurns' | 'awaitAssistant' | null {
@@ -3287,6 +3471,7 @@ async function onFormSubmit(text: string) {
 		return;
 	}
 	if (sending.value) return;
+	stopReplyPendingPoll();
 	const trimmed = text.trim();
 	if (!trimmed) return;
 	if (!session.value?.dialogueStyleId) {
@@ -3344,14 +3529,19 @@ async function onFormSubmit(text: string) {
 			aborted?: boolean;
 			auditBlocked?: boolean;
 			auditBlockCode?: string | null;
+			auditCategory?: string | null;
+			auditReason?: string | null;
 		};
 		if (res.auditBlocked === true) {
 			messages.value = messages.value.filter(m => m.id !== optimisticId);
 			formRef.value?.restoreDraft(trimmed);
 			void loadAgentCreditBalance();
-			os.alert({
-				type: 'warning',
-				text: `内容已被安全审核拦截。拦截编码：${res.auditBlockCode ?? '未知'}`,
+			showAgentAuditFeedback({
+				title: 'AI 回复未通过外审',
+				guide: '本次回复已被拦截，不会写入会话。你发送的内容已恢复到输入框。',
+				blockCode: res.auditBlockCode,
+				category: res.auditCategory,
+				reason: res.auditReason,
 			});
 			return;
 		}
@@ -3378,7 +3568,10 @@ async function onFormSubmit(text: string) {
 			content: res.assistantText,
 			createdAt: assistantCreatedAt,
 		};
+		const segments = playableSegmentsFor(asstMsg.content);
 		messages.value = [asstMsg, userMsg, ...withoutOpt];
+		const playbackCompleted = await playSegmentedReply(asstMsg, segments);
+		if (!playbackCompleted) return;
 		const assistantCount = messages.value.filter(m => m.role === 'assistant').length;
 		if (showMemoryAddScheduledHintNow(res, assistantCount)) {
 			if (memoryAddHintTimer != null) {
@@ -3406,11 +3599,6 @@ async function onFormSubmit(text: string) {
 		const isAborted = e != null && typeof e === 'object' && (e as { code?: string }).code === 'AGENTS_LLM_ABORTED';
 		// 中断或失败时均移除乐观气泡
 		messages.value = messages.value.filter(m => m.id !== optimisticId);
-		try {
-			await loadInitialTimeline();
-		} catch {
-			// ignore secondary failure
-		}
 		if (isAgentReplyPendingError(e)) {
 			os.toast(i18n.ts._agents.replyStillGenerating);
 			leaveSendingSpinner = true;
@@ -3420,6 +3608,11 @@ async function onFormSubmit(text: string) {
 			formRef.value?.restoreDraft(trimmed);
 		} else {
 			formRef.value?.restoreDraft(trimmed);
+			try {
+				await loadInitialTimeline();
+			} catch {
+				// ignore secondary failure
+			}
 			if (e != null && typeof e === 'object' && (e as { code?: string }).code === 'AGENT_DIALOGUE_STYLE_REQUIRED') {
 				os.alert({ type: 'info', text: i18n.ts._agents.needDialogueStyleBeforeSend });
 				tab.value = 'style';
@@ -3449,11 +3642,7 @@ function nullableNumberInput(v: string): number | null {
 
 function formatAgentImageError(err: unknown): string {
 	const code = err != null && typeof err === 'object' && 'code' in err ? String((err as { code?: unknown }).code ?? '') : '';
-	const info = err != null && typeof err === 'object' && 'info' in err ? (err as { info?: unknown }).info : null;
-	const blockCode = info != null && typeof info === 'object' && 'blockCode' in info ? String((info as { blockCode?: unknown }).blockCode ?? '') : '';
 	switch (code) {
-		case 'AGENT_IMAGE_PROMPT_AUDIT_BLOCKED':
-			return `生图提示词已被安全审核拦截。拦截编码：${blockCode || '未知'}`;
 		case 'AGENT_IMAGE_NO_FREE_DRIVE_SPACE':
 			return '网盘空间不足，无法保存生成图片。请清理网盘后再试。';
 		case 'AGENT_IMAGE_MAX_FILE_SIZE_EXCEEDED':
@@ -3495,16 +3684,33 @@ async function generateAgentImage() {
 		void loadAgentCreditBalance();
 		os.toast('生图完成，已保存到网盘');
 	} catch (e) {
-		os.alert({ type: 'error', text: formatAgentImageError(e) });
+		if (e != null && typeof e === 'object' && (e as { code?: string }).code === 'AGENT_IMAGE_PROMPT_AUDIT_BLOCKED') {
+			showAgentAuditFeedback({
+				title: '测试生图提示词未通过外审',
+				guide: '图片尚未生成，也不会扣除生图调用费用。',
+				...agentAuditFeedbackFromError(e),
+			});
+		} else {
+			os.alert({ type: 'error', text: formatAgentImageError(e) });
+		}
 	} finally {
 		drawGenerating.value = false;
 	}
 }
 
 async function onAbortRequest() {
-	const reqId = currentClientRequestId;
 	const sess = session.value;
-	if (!sending.value || !reqId || !sess) return;
+	if (!sending.value || !sess) return;
+
+	const playback = segmentPlayback.value;
+	if (playback) {
+		finishSegmentPlayback();
+		sending.value = false;
+		return;
+	}
+
+	const reqId = currentClientRequestId;
+	if (!reqId) return;
 	try {
 		await misskeyApi(
 			'agents/messages/abort' as Parameters<typeof misskeyApi>[0],

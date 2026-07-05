@@ -11,6 +11,8 @@ import { DI } from '@/di-symbols.js';
 import { ApiError } from '@/server/api/error.js';
 import { AgentService } from '@/core/AgentService.js';
 import { ChatService } from '@/core/ChatService.js';
+import { MetaService } from '@/core/MetaService.js';
+import { AgentExternalAuditService } from '@/core/AgentExternalAuditService.js';
 
 export const meta = {
 	tags: ['agents'],
@@ -26,6 +28,10 @@ export const meta = {
 			role: { type: 'string' },
 			content: { type: 'string' },
 			createdAt: { type: 'string', format: 'date-time' },
+			auditBlocked: { type: 'boolean' },
+			auditBlockCode: { type: 'string', nullable: true },
+			auditCategory: { type: 'string', nullable: true },
+			auditReason: { type: 'string', nullable: true },
 		},
 	},
 } as const;
@@ -51,6 +57,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 
 		private agentService: AgentService,
 		private chatService: ChatService,
+		private metaService: MetaService,
+		private agentExternalAuditService: AgentExternalAuditService,
 	) {
 		super(meta, paramDef, async (ps, me) => {
 			this.agentService.assertAgentsEnabled();
@@ -81,6 +89,29 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				});
 			}
 
+			if (row.role === 'assistant' && ps.content !== row.content) {
+				const instance = await this.metaService.fetch(true);
+				const audit = await this.agentExternalAuditService.auditReply({
+					instance,
+					user: me,
+					session,
+					userText: '用户正在修改一条既有的智能体助手回复。请审核修改后的助手内容是否允许展示或执行。',
+					assistantText: ps.content,
+				}).catch(() => ({ blocked: false as const, allFailed: true }));
+				if (audit.blocked === true) {
+					return {
+						id: row.id,
+						role: row.role,
+						content: row.content,
+						createdAt: row.createdAt.toISOString(),
+						auditBlocked: true,
+						auditBlockCode: audit.blockCode,
+						auditCategory: audit.category,
+						auditReason: audit.reason,
+					};
+				}
+			}
+
 			row.content = ps.content;
 			await this.agentMessagesRepository.save(row);
 
@@ -89,6 +120,10 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				role: row.role,
 				content: row.content,
 				createdAt: row.createdAt.toISOString(),
+				auditBlocked: false,
+				auditBlockCode: null,
+				auditCategory: null,
+				auditReason: null,
 			};
 		});
 	}
