@@ -6,6 +6,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 <template>
 <div
 	:class="$style.root"
+	:style="rootStyle"
 >
 	<!-- 编辑提示栏：复用输入框，但外观与功能切到「保存修改」 -->
 	<div v-if="editing" :class="$style.editHint">
@@ -72,6 +73,7 @@ import { i18n } from '@/i18n.js';
 import { prefer } from '@/preferences.js';
 import { Autocomplete } from '@/utility/autocomplete.js';
 import { emojiPicker } from '@/utility/emoji-picker.js';
+import { useVisualViewportBottomInset } from '@/composables/use-visual-viewport-bottom-inset.js';
 
 const props = defineProps<{
 	disabled?: boolean;
@@ -89,6 +91,11 @@ const textareaEl = shallowRef<HTMLTextAreaElement>();
 const text = ref('');
 const textareaReadOnly = ref(false);
 let autocompleteInstance: Autocomplete | null = null;
+const { bottomInsetPx } = useVisualViewportBottomInset();
+
+const rootStyle = computed(() => ({
+	'--_visualViewportBottomInset': bottomInsetPx.value,
+}));
 
 const sendDisabled = computed(() => props.disabled || props.sending || text.value.trim().length === 0);
 
@@ -201,6 +208,7 @@ onBeforeUnmount(() => {
 <style lang="scss" module>
 .root {
 	position: relative;
+	--_visualViewportBottomInset: 0px;
 	border-bottom: none;
 	border-radius: 14px 14px 0 0;
 	overflow: clip;
@@ -332,12 +340,16 @@ onBeforeUnmount(() => {
 @media (max-width: 500px) {
 	.root {
 		border-radius: 10px 10px 0 0;
-		/* 避免横向 flex 略超宽时把右侧发送按钮裁掉 */
-		overflow-x: hidden;
-		overflow-y: visible;
+		overflow: visible;
+		padding-bottom: calc(var(--MI-minBottomSpacingMobile) + var(--_visualViewportBottomInset));
 	}
 
 	.compose {
+		position: fixed;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		z-index: 1;
 		flex-direction: row;
 		align-items: flex-end;
 		gap: 8px;
@@ -345,7 +357,7 @@ onBeforeUnmount(() => {
 		width: 100%;
 		min-width: 0;
 		max-width: 100%;
-		padding: 8px max(12px, env(safe-area-inset-right, 0px)) max(8px, env(safe-area-inset-bottom, 0px)) max(12px, env(safe-area-inset-left, 0px));
+		padding: 8px max(12px, env(safe-area-inset-right, 0px)) calc(var(--_visualViewportBottomInset) + max(8px, env(safe-area-inset-bottom, 0px))) max(12px, env(safe-area-inset-left, 0px));
 		background: var(--MI_THEME-panel);
 	}
 
