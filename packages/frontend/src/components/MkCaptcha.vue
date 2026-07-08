@@ -4,24 +4,36 @@ SPDX-License-Identifier: AGPL-3.0-only
 -->
 
 <template>
-<div>
-	<span v-if="!available">Loading<MkEllipsis/></span>
-	<div v-if="props.provider == 'mcaptcha'">
-		<div id="mcaptcha__widget-container" class="m-captcha-style"></div>
-		<div ref="captchaEl"></div>
-	</div>
-	<div v-if="props.provider == 'testcaptcha'" style="background: #eee; border: solid 1px #888; padding: 8px; color: #000; max-width: 320px; display: flex; gap: 10px; align-items: center; box-shadow: 2px 2px 6px #0004; border-radius: 4px;">
-		<img src="/client-assets/testcaptcha.png" style="width: 60px; height: 60px; "/>
-		<div v-if="testcaptchaPassed">
-			<div style="color: green;">Test captcha passed!</div>
+<div :class="$style.root">
+	<div :class="$style.widget">
+		<div v-if="!available" :class="$style.loading">
+			<i class="ti ti-loader-2" aria-hidden="true"></i>
+			<span>{{ i18n.ts.loading }}<MkEllipsis/></span>
 		</div>
-		<div v-else>
-			<div style="font-size: 13px; margin-bottom: 4px;">Type "ai-chan-kawaii" to pass captcha</div>
-			<input v-model="testcaptchaInput" data-cy-testcaptcha-input/>
-			<button type="button" data-cy-testcaptcha-submit @click="testcaptchaSubmit">Submit</button>
+		<template v-else-if="props.provider === 'mcaptcha'">
+			<div id="mcaptcha__widget-container" class="m-captcha-style"></div>
+			<div ref="captchaEl" :class="$style.externalWidget"></div>
+		</template>
+		<div v-else-if="props.provider === 'testcaptcha'" :class="$style.testCaptcha">
+			<img src="/client-assets/testcaptcha.png" :class="$style.testCaptchaImage" alt=""/>
+			<div :class="$style.testCaptchaBody">
+				<div v-if="testcaptchaPassed" :class="$style.testCaptchaPassed">
+					<i class="ti ti-check" aria-hidden="true"></i>
+					Test captcha passed
+				</div>
+				<template v-else>
+					<label :class="$style.testCaptchaLabel" for="testcaptcha-input">Type "ai-chan-kawaii" to pass captcha</label>
+					<div :class="$style.testCaptchaControls">
+						<input id="testcaptcha-input" v-model="testcaptchaInput" :class="$style.testCaptchaInput" data-cy-testcaptcha-input @keydown.enter.prevent="testcaptchaSubmit"/>
+						<button type="button" :class="$style.testCaptchaSubmit" data-cy-testcaptcha-submit @click="testcaptchaSubmit">
+							<i class="ti ti-arrow-right" aria-hidden="true"></i>
+						</button>
+					</div>
+				</template>
+			</div>
 		</div>
+		<div v-else ref="captchaEl" :class="$style.externalWidget"></div>
 	</div>
-	<div v-else ref="captchaEl"></div>
 </div>
 </template>
 
@@ -97,6 +109,9 @@ const available = ref(false);
 const captchaEl = useTemplateRef('captchaEl');
 const captchaWidgetId = ref<string | undefined>(undefined);
 const aliyunCaptchaInstance = ref<AliyunCaptcha | undefined>(undefined);
+const aliyunTriggerEl = ref<HTMLButtonElement | undefined>(undefined);
+const aliyunTriggerIconEl = ref<HTMLElement | undefined>(undefined);
+const aliyunTriggerLabelEl = ref<HTMLSpanElement | undefined>(undefined);
 const testcaptchaInput = ref('');
 const testcaptchaPassed = ref(false);
 const styleModule = useCssModule();
@@ -110,6 +125,7 @@ const variable = computed(() => {
 		case 'aliyuncaptcha': return 'initAliyunCaptcha';
 		case 'testcaptcha': return 'testcaptcha';
 	}
+	return '';
 });
 
 const loaded = !!(window as any)[variable.value];
@@ -123,6 +139,7 @@ const src = computed(() => {
 		case 'mcaptcha': return null;
 		case 'testcaptcha': return null;
 	}
+	return null;
 });
 
 const scriptId = computed(() => `script-${props.provider}`);
@@ -184,12 +201,19 @@ async function requestRender() {
 		if (captchaEl.value instanceof Element && props.sitekey && props.sceneId && (window as AliyunCaptchaWindow).initAliyunCaptcha) {
 			const root = window.document.createElement('div');
 			const trigger = window.document.createElement('button');
+			const triggerIcon = window.document.createElement('i');
+			const triggerLabel = window.document.createElement('span');
 			const uniq = Math.random().toString(36).slice(2);
 			root.id = `aliyun-captcha-element-${uniq}`;
 			trigger.id = `aliyun-captcha-button-${uniq}`;
 			trigger.type = 'button';
-			trigger.textContent = i18n.ts._captcha.verify ?? '验证';
 			trigger.className = styleModule.aliyunTrigger;
+			triggerIcon.setAttribute('aria-hidden', 'true');
+			trigger.append(triggerIcon, triggerLabel);
+			aliyunTriggerEl.value = trigger;
+			aliyunTriggerIconEl.value = triggerIcon;
+			aliyunTriggerLabelEl.value = triggerLabel;
+			updateAliyunTriggerState(false);
 			captchaEl.value.appendChild(root);
 			captchaEl.value.appendChild(trigger);
 
@@ -257,6 +281,9 @@ function clearWidget() {
 		}
 	} else {
 		aliyunCaptchaInstance.value = undefined;
+		aliyunTriggerEl.value = undefined;
+		aliyunTriggerIconEl.value = undefined;
+		aliyunTriggerLabelEl.value = undefined;
 		reset();
 		remove();
 
@@ -268,7 +295,21 @@ function clearWidget() {
 }
 
 function callback(response?: string) {
+	updateAliyunTriggerState(typeof response === 'string' && response.length > 0);
 	emit('update:modelValue', typeof response === 'string' ? response : null);
+}
+
+function updateAliyunTriggerState(verified: boolean) {
+	const trigger = aliyunTriggerEl.value;
+	const icon = aliyunTriggerIconEl.value;
+	const label = aliyunTriggerLabelEl.value;
+	if (trigger == null || icon == null || label == null) return;
+
+	trigger.classList.toggle(styleModule.aliyunTriggerVerified, verified);
+	trigger.disabled = verified;
+	trigger.setAttribute('aria-label', verified ? i18n.ts.done : i18n.ts._captcha.verify);
+	icon.className = verified ? 'ti ti-circle-check' : 'ti ti-shield-check';
+	label.textContent = verified ? i18n.ts.done : i18n.ts._captcha.verify;
 }
 
 function onReceivedMessage(message: MessageEvent) {
@@ -309,35 +350,160 @@ defineExpose({
 </script>
 
 <style lang="scss" module>
-.aliyunTrigger {
-	display: inline-flex;
+.root {
+	width: 100%;
+	max-width: 304px;
+	margin-inline: auto;
+	overflow-x: auto;
+}
+
+.widget {
+	display: flex;
 	align-items: center;
 	justify-content: center;
-	min-width: 100px;
-	height: 40px;
-	padding: 0 16px;
-	border-radius: 999px;
-	border: none;
-	background: var(--MI_THEME-accent);
-	color: var(--MI_THEME-fgOnAccent);
-	font-size: 100%;
-	font-weight: 700;
-	line-height: 1;
+	min-height: 40px;
+}
+
+.loading {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	color: var(--MI_THEME-fgTransparentWeak);
+	font-size: 0.9em;
+
+	> i {
+		color: var(--MI_THEME-accent);
+		animation: captcha-spin 1s linear infinite;
+	}
+}
+
+.externalWidget {
+	display: flex;
+	width: 100%;
+	align-items: center;
+	justify-content: center;
+
+	:global(iframe) {
+		max-width: 100%;
+	}
+}
+
+.aliyunTrigger {
+	display: flex;
+	width: 100%;
+	align-items: center;
+	justify-content: center;
+	gap: 7px;
+	min-height: 40px;
+	padding: 7px 12px;
+	border: solid 1px color-mix(in srgb, var(--MI_THEME-accent) 42%, var(--MI_THEME-divider));
+	border-radius: 8px;
+	background: color-mix(in srgb, var(--MI_THEME-accentedBg) 72%, var(--MI_THEME-panel));
+	color: var(--MI_THEME-fg);
+	font: inherit;
+	font-size: 0.9em;
+	font-weight: 600;
+	line-height: 1.2;
 	cursor: pointer;
-	transition: background 0.1s ease, transform 0.1s ease;
+	transition: background-color 0.15s ease, border-color 0.15s ease;
 	user-select: none;
 }
 
 .aliyunTrigger:hover {
-	background: hsl(from var(--MI_THEME-accent) h s calc(l + 5));
-}
-
-.aliyunTrigger:active {
-	background: hsl(from var(--MI_THEME-accent) h s calc(l + 5));
+	border-color: var(--MI_THEME-accent);
+	background: var(--MI_THEME-accentedBg);
 }
 
 .aliyunTrigger:focus-visible {
 	outline: 2px solid color-mix(in srgb, var(--MI_THEME-accent) 45%, transparent);
 	outline-offset: 2px;
 }
+
+.aliyunTriggerVerified,
+.aliyunTrigger:disabled {
+	border-color: color-mix(in srgb, var(--MI_THEME-accent) 45%, var(--MI_THEME-divider));
+	background: var(--MI_THEME-accentedBg);
+	color: var(--MI_THEME-accent);
+	cursor: default;
+}
+
+.testCaptcha {
+	display: flex;
+	width: 100%;
+	align-items: center;
+	gap: 12px;
+}
+
+.testCaptchaImage {
+	flex: 0 0 42px;
+	width: 42px;
+	height: 42px;
+	border: solid 1px var(--MI_THEME-divider);
+	border-radius: 8px;
+	object-fit: cover;
+}
+
+.testCaptchaBody {
+	display: flex;
+	flex: 1;
+	min-width: 0;
+	flex-direction: column;
+	gap: 7px;
+}
+
+.testCaptchaLabel {
+	color: var(--MI_THEME-fgTransparentWeak);
+	font-size: 0.78em;
+	line-height: 1.35;
+}
+
+.testCaptchaControls {
+	display: flex;
+	gap: 6px;
+}
+
+.testCaptchaInput {
+	width: 100%;
+	min-width: 0;
+	height: 36px;
+	padding: 0 10px;
+	border: solid 1px var(--MI_THEME-divider);
+	border-radius: 6px;
+	outline: none;
+	background: var(--MI_THEME-bg);
+	color: var(--MI_THEME-fg);
+	font: inherit;
+
+	&:focus {
+		border-color: var(--MI_THEME-accent);
+	}
+}
+
+.testCaptchaSubmit {
+	display: grid;
+	flex: 0 0 36px;
+	width: 36px;
+	height: 36px;
+	place-items: center;
+	border: 0;
+	border-radius: 6px;
+	background: var(--MI_THEME-accent);
+	color: var(--MI_THEME-fgOnAccent);
+	cursor: pointer;
+}
+
+.testCaptchaPassed {
+	display: flex;
+	align-items: center;
+	gap: 7px;
+	color: var(--MI_THEME-accent);
+	font-weight: 700;
+}
+
+@keyframes captcha-spin {
+	to {
+		transform: rotate(360deg);
+	}
+}
+
 </style>

@@ -362,6 +362,9 @@ export class ApiCallService implements OnApplicationShutdown {
 					code: 'YOUR_ACCOUNT_SUSPENDED',
 					kind: 'permission',
 					id: 'a8c724b3-6e9c-4b46-b1a8-bc3ed6258370',
+				}, {
+					reason: user.suspensionReason,
+					suspendedUntil: user.suspendedUntil?.toISOString() ?? null,
 				});
 			}
 		}

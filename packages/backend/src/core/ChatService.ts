@@ -475,43 +475,29 @@ export class ChatService {
 
 	@bindThis
 	public async userHistory(meId: MiUser['id'], limit: number): Promise<MiChatMessage[]> {
-		const history: MiChatMessage[] = [];
-
 		const mutingQuery = this.mutingsRepository.createQueryBuilder('muting')
 			.select('muting.muteeId')
 			.where('muting.muterId = :muterId', { muterId: meId });
 
-		for (let i = 0; i < limit; i++) {
-			const found = history.map(m => (m.fromUserId === meId) ? m.toUserId! : m.fromUserId!);
+		const otherIdExpr = 'CASE WHEN "message"."fromUserId" = :meId THEN "message"."toUserId" ELSE "message"."fromUserId" END';
+		const rows = await this.chatMessagesRepository.createQueryBuilder('message')
+			.select(otherIdExpr, 'otherId')
+			.addSelect('MAX("message"."id")', 'messageId')
+			.where(new Brackets(qb => {
+				qb
+					.where('message.fromUserId = :meId', { meId })
+					.orWhere('message.toUserId = :meId', { meId });
+			}))
+			.andWhere('message.toRoomId IS NULL')
+			.andWhere(`message.fromUserId NOT IN (${mutingQuery.getQuery()})`)
+			.andWhere(`message.toUserId NOT IN (${mutingQuery.getQuery()})`)
+			.setParameters(mutingQuery.getParameters())
+			.groupBy(otherIdExpr)
+			.orderBy('"messageId"', 'DESC')
+			.limit(limit)
+			.getRawMany<{ otherId: MiUser['id']; messageId: MiChatMessage['id'] }>();
 
-			const query = this.chatMessagesRepository.createQueryBuilder('message')
-				.orderBy('message.id', 'DESC')
-				.where(new Brackets(qb => {
-					qb
-						.where('message.fromUserId = :meId', { meId: meId })
-						.orWhere('message.toUserId = :meId', { meId: meId });
-				}))
-				.andWhere('message.toRoomId IS NULL')
-				.andWhere(`message.fromUserId NOT IN (${ mutingQuery.getQuery() })`)
-				.andWhere(`message.toUserId NOT IN (${ mutingQuery.getQuery() })`);
-
-			if (found.length > 0) {
-				query.andWhere('message.fromUserId NOT IN (:...found)', { found: found });
-				query.andWhere('message.toUserId NOT IN (:...found)', { found: found });
-			}
-
-			query.setParameters(mutingQuery.getParameters());
-
-			const message = await query.getOne();
-
-			if (message) {
-				history.push(message);
-			} else {
-				break;
-			}
-		}
-
-		return history;
+		return this.findMessagesPreservingOrder(rows.map(row => row.messageId));
 	}
 
 	@bindThis
@@ -526,35 +512,33 @@ export class ChatService {
 			}).then(xs => xs.map(x => x.id)),
 		]);
 
-		const roomIds = memberRoomIds.concat(ownedRoomIds);
+		const roomIds = [...new Set(memberRoomIds.concat(ownedRoomIds))];
 
-		if (memberRoomIds.length === 0 && ownedRoomIds.length === 0) {
+		if (roomIds.length === 0) {
 			return [];
 		}
 
-		const history: MiChatMessage[] = [];
+		const rows = await this.chatMessagesRepository.createQueryBuilder('message')
+			.select('message.toRoomId', 'roomId')
+			.addSelect('MAX("message"."id")', 'messageId')
+			.where('message.toRoomId IN (:...roomIds)', { roomIds })
+			.groupBy('message.toRoomId')
+			.orderBy('"messageId"', 'DESC')
+			.limit(limit)
+			.getRawMany<{ roomId: MiChatRoom['id']; messageId: MiChatMessage['id'] }>();
 
-		for (let i = 0; i < limit; i++) {
-			const found = history.map(m => m.toRoomId!);
+		return this.findMessagesPreservingOrder(rows.map(row => row.messageId));
+	}
 
-			const query = this.chatMessagesRepository.createQueryBuilder('message')
-				.orderBy('message.id', 'DESC')
-				.where('message.toRoomId IN (:...roomIds)', { roomIds });
-
-			if (found.length > 0) {
-				query.andWhere('message.toRoomId NOT IN (:...found)', { found: found });
-			}
-
-			const message = await query.getOne();
-
-			if (message) {
-				history.push(message);
-			} else {
-				break;
-			}
-		}
-
-		return history;
+	private async findMessagesPreservingOrder(messageIds: MiChatMessage['id'][]): Promise<MiChatMessage[]> {
+		if (messageIds.length === 0) return [];
+		const messages = await this.chatMessagesRepository.createQueryBuilder('message')
+			.where('message.id IN (:...messageIds)', { messageIds })
+			.getMany();
+		const map = new Map(messages.map(message => [message.id, message]));
+		return messageIds
+			.map(id => map.get(id))
+			.filter((message): message is MiChatMessage => message != null);
 	}
 
 	@bindThis

@@ -31,6 +31,7 @@ import { migrateOldSettings } from '@/pref-migrate.js';
 import { unisonReload } from '@/utility/unison-reload.js';
 import { isBirthday } from '@/utility/is-birthday.js';
 import { isEmbeddedAppShell } from '@/utility/is-embedded-app-shell.js';
+import { signout } from '@/signout.js';
 
 export async function mainBoot() {
 	const { isClientUpdated, lastVersion } = await common(async () => {
@@ -342,6 +343,10 @@ export async function mainBoot() {
 			// 自分の情報が更新されたとき
 			main.on('meUpdated', i => {
 				updateCurrentAccountPartial(i);
+			});
+
+			main.on('myTokenRegenerated', () => {
+				void signout();
 			});
 
 			main.on('readAllNotifications', () => {

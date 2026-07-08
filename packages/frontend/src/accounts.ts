@@ -83,7 +83,7 @@ function fetchAccount(token: string, id?: string, forceShowDialog?: boolean): Pr
 					if (res.error.id === 'a8c724b3-6e9c-4b46-b1a8-bc3ed6258370') {
 						// SUSPENDED
 						if (forceShowDialog || $i && (token === $i.token || id === $i.id)) {
-							await showSuspendedDialog();
+							await showSuspendedDialog(res.error.info);
 						}
 					} else if (res.error.id === 'e5b3b9f0-2b8f-4b9f-9c1f-8c5c1b2e1b1a') {
 						// USER_IS_DELETED

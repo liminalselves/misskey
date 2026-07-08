@@ -5,7 +5,7 @@
 
 import { Inject, Injectable } from '@nestjs/common';
 import { Not, IsNull } from 'typeorm';
-import type { FollowingsRepository, FollowRequestsRepository, UsersRepository } from '@/models/_.js';
+import type { AccessTokensRepository, FollowingsRepository, FollowRequestsRepository, UsersRepository } from '@/models/_.js';
 import type { MiUser } from '@/models/User.js';
 import { QueueService } from '@/core/QueueService.js';
 import { GlobalEventService } from '@/core/GlobalEventService.js';
@@ -16,6 +16,7 @@ import { bindThis } from '@/decorators.js';
 import { RelationshipJobData } from '@/queue/types.js';
 import { ModerationLogService } from '@/core/ModerationLogService.js';
 import { MetaService } from '@/core/MetaService.js';
+import { generateNativeUserToken } from '@/misc/token.js';
 
 @Injectable()
 export class UserSuspendService {
@@ -29,6 +30,9 @@ export class UserSuspendService {
 		@Inject(DI.followRequestsRepository)
 		private followRequestsRepository: FollowRequestsRepository,
 
+		@Inject(DI.accessTokensRepository)
+		private accessTokensRepository: AccessTokensRepository,
+
 		private userEntityService: UserEntityService,
 		private queueService: QueueService,
 		private globalEventService: GlobalEventService,
@@ -39,22 +43,35 @@ export class UserSuspendService {
 	}
 
 	@bindThis
-	public async suspend(user: MiUser, moderator: MiUser, opts?: { expiresAt?: Date | null }): Promise<void> {
+	public async suspend(user: MiUser, moderator: MiUser, opts?: { expiresAt?: Date | null; reason?: string | null }): Promise<void> {
 		const expiresAt = opts?.expiresAt ?? null;
+		const reason = opts?.reason?.trim() || null;
 		if (expiresAt != null && expiresAt.getTime() <= Date.now()) {
 			return;
 		}
 
+		const oldToken = this.userEntityService.isLocalUser(user) ? user.token : null;
+		const newToken = oldToken != null ? generateNativeUserToken() : null;
+
 		await this.usersRepository.update(user.id, {
 			isSuspended: true,
 			suspendedUntil: expiresAt,
+			suspensionReason: reason,
+			...(newToken != null ? { token: newToken } : {}),
 		});
+		await this.accessTokensRepository.delete({ userId: user.id });
+
+		if (oldToken != null && newToken != null) {
+			this.globalEventService.publishInternalEvent('userTokenRegenerated', { id: user.id, oldToken, newToken });
+			this.globalEventService.publishMainStream(user.id, 'myTokenRegenerated');
+		}
 
 		this.moderationLogService.log(moderator, 'suspend', {
 			userId: user.id,
 			userUsername: user.username,
 			userHost: user.host,
 			suspendedUntil: expiresAt ? expiresAt.toISOString() : null,
+			reason,
 		});
 
 		(async () => {
@@ -106,6 +123,7 @@ export class UserSuspendService {
 		await this.usersRepository.update(user.id, {
 			isSuspended: false,
 			suspendedUntil: null,
+			suspensionReason: null,
 		});
 
 		if (opts.logKind === 'moderator' && opts.moderator) {

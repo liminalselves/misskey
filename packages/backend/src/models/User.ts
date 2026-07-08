@@ -176,6 +176,13 @@ export class MiUser {
 	})
 	public suspendedUntil: Date | null;
 
+	@Column('varchar', {
+		length: 2048,
+		nullable: true,
+		comment: 'User-facing suspension reason.',
+	})
+	public suspensionReason: string | null;
+
 	@Column('boolean', {
 		default: false,
 		comment: 'Whether the User is locked.',

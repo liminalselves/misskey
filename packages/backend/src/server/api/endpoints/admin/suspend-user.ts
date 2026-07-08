@@ -24,8 +24,9 @@ export const paramDef = {
 		userId: { type: 'string', format: 'misskey:id' },
 		/** 指定時はその時刻で凍結が自動解除される。未指定は従来どおり無期限。 */
 		expiresAt: { type: 'integer', nullable: true },
+		reason: { type: 'string', minLength: 1, maxLength: 2048 },
 	},
-	required: ['userId'],
+	required: ['userId', 'reason'],
 } as const;
 
 @Injectable()
@@ -54,6 +55,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 
 			await this.userSuspendService.suspend(user, me, {
 				expiresAt: ps.expiresAt != null ? new Date(ps.expiresAt) : null,
+				reason: ps.reason,
 			});
 		});
 	}

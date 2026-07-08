@@ -92,7 +92,7 @@ export class SigninApiService {
 		const password = body['password'];
 		const token = body['token'];
 
-		function error(status: number, error: { id: string }) {
+		function error(status: number, error: { id: string; info?: Record<string, unknown> }) {
 			reply.code(status);
 			return { error };
 		}
@@ -140,6 +140,10 @@ export class SigninApiService {
 		if (isUserEffectivelySuspended(user)) {
 			return error(403, {
 				id: 'e03a5f46-d309-4865-9b69-56282d94e1eb',
+				info: {
+					reason: user.suspensionReason,
+					suspendedUntil: user.suspendedUntil?.toISOString() ?? null,
+				},
 			});
 		}
 
@@ -148,22 +152,60 @@ export class SigninApiService {
 
 		if (password == null) {
 			reply.code(200);
-			if (profile.twoFactorEnabled) {
-				return {
-					finished: false,
-					next: 'password',
-				} satisfies Misskey.entities.SigninFlowResponse;
-			} else {
-				return {
-					finished: false,
-					next: 'captcha',
-				} satisfies Misskey.entities.SigninFlowResponse;
-			}
+			return {
+				finished: false,
+				next: 'captcha',
+			} satisfies Misskey.entities.SigninFlowResponse;
 		}
 
 		if (typeof password !== 'string') {
 			reply.code(400);
 			return;
+		}
+
+		const isInitialPasswordSubmission = token == null && body.credential == null;
+		if (isInitialPasswordSubmission && process.env.NODE_ENV !== 'test') {
+			if (this.meta.enableHcaptcha && this.meta.hcaptchaSecretKey) {
+				await this.captchaService.verifyHcaptcha(this.meta.hcaptchaSecretKey, body['hcaptcha-response']).catch(err => {
+					throw new FastifyReplyError(400, err);
+				});
+			}
+
+			if (this.meta.enableMcaptcha && this.meta.mcaptchaSecretKey && this.meta.mcaptchaSitekey && this.meta.mcaptchaInstanceUrl) {
+				await this.captchaService.verifyMcaptcha(this.meta.mcaptchaSecretKey, this.meta.mcaptchaSitekey, this.meta.mcaptchaInstanceUrl, body['m-captcha-response']).catch(err => {
+					throw new FastifyReplyError(400, err);
+				});
+			}
+
+			if (this.meta.enableRecaptcha && this.meta.recaptchaSecretKey) {
+				await this.captchaService.verifyRecaptcha(this.meta.recaptchaSecretKey, body['g-recaptcha-response']).catch(err => {
+					throw new FastifyReplyError(400, err);
+				});
+			}
+
+			if (this.meta.enableTurnstile && this.meta.turnstileSecretKey) {
+				await this.captchaService.verifyTurnstile(this.meta.turnstileSecretKey, body['turnstile-response']).catch(err => {
+					throw new FastifyReplyError(400, err);
+				});
+			}
+
+			if (this.meta.enableAliyunCaptcha && this.meta.aliyunCaptchaAccessKeyId && this.meta.aliyunCaptchaAccessKeySecret && this.meta.aliyunCaptchaSceneId) {
+				await this.captchaService.verifyAliyunCaptcha(
+					this.meta.aliyunCaptchaAccessKeyId,
+					this.meta.aliyunCaptchaAccessKeySecret,
+					this.meta.aliyunCaptchaRegion ?? 'cn',
+					this.meta.aliyunCaptchaSceneId,
+					body['aliyun-captcha-response'],
+				).catch(err => {
+					throw new FastifyReplyError(400, err);
+				});
+			}
+
+			if (this.meta.enableTestcaptcha) {
+				await this.captchaService.verifyTestcaptcha(body['testcaptcha-response']).catch(err => {
+					throw new FastifyReplyError(400, err);
+				});
+			}
 		}
 
 		// Compare password
@@ -183,50 +225,6 @@ export class SigninApiService {
 		};
 
 		if (!profile.twoFactorEnabled) {
-			if (process.env.NODE_ENV !== 'test') {
-				if (this.meta.enableHcaptcha && this.meta.hcaptchaSecretKey) {
-					await this.captchaService.verifyHcaptcha(this.meta.hcaptchaSecretKey, body['hcaptcha-response']).catch(err => {
-						throw new FastifyReplyError(400, err);
-					});
-				}
-
-				if (this.meta.enableMcaptcha && this.meta.mcaptchaSecretKey && this.meta.mcaptchaSitekey && this.meta.mcaptchaInstanceUrl) {
-					await this.captchaService.verifyMcaptcha(this.meta.mcaptchaSecretKey, this.meta.mcaptchaSitekey, this.meta.mcaptchaInstanceUrl, body['m-captcha-response']).catch(err => {
-						throw new FastifyReplyError(400, err);
-					});
-				}
-
-				if (this.meta.enableRecaptcha && this.meta.recaptchaSecretKey) {
-					await this.captchaService.verifyRecaptcha(this.meta.recaptchaSecretKey, body['g-recaptcha-response']).catch(err => {
-						throw new FastifyReplyError(400, err);
-					});
-				}
-
-				if (this.meta.enableTurnstile && this.meta.turnstileSecretKey) {
-					await this.captchaService.verifyTurnstile(this.meta.turnstileSecretKey, body['turnstile-response']).catch(err => {
-						throw new FastifyReplyError(400, err);
-					});
-				}
-
-				if (this.meta.enableAliyunCaptcha && this.meta.aliyunCaptchaAccessKeyId && this.meta.aliyunCaptchaAccessKeySecret && this.meta.aliyunCaptchaSceneId) {
-					await this.captchaService.verifyAliyunCaptcha(
-						this.meta.aliyunCaptchaAccessKeyId,
-						this.meta.aliyunCaptchaAccessKeySecret,
-						this.meta.aliyunCaptchaRegion ?? 'cn',
-						this.meta.aliyunCaptchaSceneId,
-						body['aliyun-captcha-response'],
-					).catch(err => {
-						throw new FastifyReplyError(400, err);
-					});
-				}
-
-				if (this.meta.enableTestcaptcha) {
-					await this.captchaService.verifyTestcaptcha(body['testcaptcha-response']).catch(err => {
-						throw new FastifyReplyError(400, err);
-					});
-				}
-			}
-
 			if (same) {
 				return this.signinService.signin(request, reply, user);
 			} else {

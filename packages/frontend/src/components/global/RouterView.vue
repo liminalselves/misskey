@@ -53,6 +53,10 @@ const key = ref(router.getCurrentFullPath());
 router.useListener('change', ({ resolved }) => {
 	if (resolved == null || 'redirect' in resolved.route) return;
 	if (resolved.route.path === currentRoutePath && deepEqual(resolved.props, currentPageProps.value)) return;
+	if (resolved.route.path === currentRoutePath && resolved.route.reuseComponent) {
+		currentPageProps.value = resolved.props;
+		return;
+	}
 
 	currentPageComponent.value = resolved.route.component;
 	currentPageProps.value = resolved.props;

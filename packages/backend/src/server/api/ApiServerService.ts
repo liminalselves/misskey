@@ -91,7 +91,7 @@ export class ApiServerService {
 					Params: { endpoint: string; },
 					Body: Record<string, unknown>,
 					Querystring: Record<string, unknown>,
-				}>('/' + endpoint.name, { bodyLimit: 1024 * 1024 }, async (request, reply) => {
+				}>('/' + endpoint.name, { bodyLimit: endpoint.meta.bodyLimit ?? 1024 * 1024 }, async (request, reply) => {
 					if (request.method === 'GET' && !endpoint.meta.allowGet) {
 						reply.code(405);
 						reply.send();
@@ -116,6 +116,7 @@ export class ApiServerService {
 				'g-recaptcha-response'?: string;
 				'turnstile-response'?: string;
 				'm-captcha-response'?: string;
+				'aliyun-captcha-response'?: string;
 				'testcaptcha-response'?: string;
 			}
 		}>('/signup', (request, reply) => this.signupApiService.signup(request, reply));
@@ -130,6 +131,7 @@ export class ApiServerService {
 				'g-recaptcha-response'?: string;
 				'turnstile-response'?: string;
 				'm-captcha-response'?: string;
+				'aliyun-captcha-response'?: string;
 				'testcaptcha-response'?: string;
 			};
 		}>('/signin-flow', (request, reply) => this.signinApiService.signin(request, reply));

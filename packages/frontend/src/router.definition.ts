@@ -115,6 +115,7 @@ export const ROUTE_DEF = [{
 	path: '/agents',
 	component: page(() => import('@/pages/agents/index.vue')),
 	loginRequired: true,
+	reuseComponent: true,
 	query: {
 		view: 'view',
 		sub: 'sub',
@@ -531,14 +532,6 @@ export const ROUTE_DEF = [{
 		path: '/agents-review',
 		name: 'agents-review',
 		component: page(() => import('@/pages/admin/agents-review.vue')),
-	}, {
-		path: '/agents-chat-audit',
-		name: 'agents-chat-audit',
-		component: page(() => import('@/pages/admin/agents-chat-audit.vue')),
-	}, {
-		path: '/agents-images-review',
-		name: 'agents-images-review',
-		component: page(() => import('@/pages/admin/agents-images-review.vue')),
 	}, {
 		path: '/agents-redeem-codes',
 		name: 'agents-redeem-codes',

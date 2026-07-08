@@ -174,7 +174,7 @@ const styleRatingAverageText = computed(() => {
 });
 
 definePage(computed(() => ({
-	title: styleRow.value?.name ?? i18n.ts._agents.stylesPlazaTab,
+	title: styleRow.value?.name ?? i18n.ts._agents.stylesTab,
 	icon: 'ti ti-message-cog',
 })));
 

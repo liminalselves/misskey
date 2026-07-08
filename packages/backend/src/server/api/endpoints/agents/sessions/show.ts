@@ -10,6 +10,8 @@ import { Endpoint } from '@/server/api/endpoint-base.js';
 import { DI } from '@/di-symbols.js';
 import { ApiError } from '@/server/api/error.js';
 import { AgentService } from '@/core/AgentService.js';
+import { DriveFileEntityService } from '@/core/entities/DriveFileEntityService.js';
+import type { MiAgentCharacter } from '@/models/AgentCharacter.js';
 
 export const meta = {
 	tags: ['agents'],
@@ -25,6 +27,8 @@ export const meta = {
 			characterId: { type: 'string', format: 'misskey:id' },
 			dialogueStyleId: { type: 'string', format: 'misskey:id', nullable: true },
 			sessionKind: { type: 'string', enum: ['draft_test', 'community'] },
+			characterName: { type: 'string' },
+			characterAvatar: { type: 'object', ref: 'DriveFile', nullable: true },
 			lastMessageAt: { type: 'string', format: 'date-time', nullable: true },
 			createdAt: { type: 'string', format: 'date-time' },
 			agentModelId: { type: 'string', nullable: true },
@@ -62,6 +66,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		private agentMessagesRepository: AgentMessagesRepository,
 
 		private agentService: AgentService,
+		private driveFileEntityService: DriveFileEntityService,
 	) {
 		super(meta, paramDef, async (ps, me) => {
 			this.agentService.assertAgentsEnabled();
@@ -80,12 +85,21 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				}
 			}
 			const characterRow = await this.agentService.loadCharacterForAgentSessionOrThrow(row);
+			const characterDisplay = row.sessionKind === 'community' && this.agentService.isListedOnPlazaCharacter(characterRow as MiAgentCharacter)
+				? this.agentService.characterPlazaDisplayFields(characterRow as MiAgentCharacter)
+				: { name: characterRow.name, avatarFileId: characterRow.avatarFileId };
+			const characterAvatar = characterDisplay.avatarFileId
+				? await this.driveFileEntityService.pack(characterDisplay.avatarFileId, {})
+					.catch(() => null)
+				: null;
 			return {
 				id: row.id,
 				name: row.name,
 				characterId: row.characterId,
 				dialogueStyleId: row.dialogueStyleId,
 				sessionKind: row.sessionKind,
+				characterName: characterDisplay.name,
+				characterAvatar,
 				lastMessageAt: row.lastMessageAt ? row.lastMessageAt.toISOString() : null,
 				createdAt: row.createdAt.toISOString(),
 				agentModelId: row.agentModelId,

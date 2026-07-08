@@ -1,63 +1,33 @@
-<div align="center">
-<a href="https://misskey-hub.net">
-	<img src="./assets/title_float.svg" alt="Misskey logo" style="border-radius:50%" width="300"/>
-</a>
+# Liminal Selves Misskey
 
-**🌎 **Misskey** is an open source, federated social media platform that's free forever! 🚀**
+这是 [Misskey](https://github.com/misskey-dev/misskey) 的第三方 Fork 分支，由阈界人格项目组维护。
 
-[Learn more](https://misskey-hub.net/)
+项目官网与线上实例：
 
----
+- 官网 / 实例：[https://misskey.liminalselves.top](https://misskey.liminalselves.top)
+- 代码仓库：[https://github.com/liminalselves/misskey](https://github.com/liminalselves/misskey)
+- 上游项目：[https://github.com/misskey-dev/misskey](https://github.com/misskey-dev/misskey)
 
-<a href="https://misskey-hub.net/servers/">
-		<img src="https://custom-icon-badges.herokuapp.com/badge/find_an-instance-acea31?logoColor=acea31&style=for-the-badge&logo=misskey&labelColor=363B40" alt="find an instance"/></a>
+## 项目定位
 
-<a href="https://misskey-hub.net/docs/for-admin/install/guides/">
-		<img src="https://custom-icon-badges.herokuapp.com/badge/create_an-instance-FBD53C?logoColor=FBD53C&style=for-the-badge&logo=server&labelColor=363B40" alt="create an instance"/></a>
+本仓库服务于阈界人格项目的 Misskey 实例，基于 Misskey 上游进行定制开发和长期维护。该分支不是 Misskey 官方发行版，主要包含与阈界人格社区、智能体能力、站点体验和运营需求相关的功能调整。
 
-<a href="./CONTRIBUTING.md">
-		<img src="https://custom-icon-badges.herokuapp.com/badge/become_a-contributor-A371F7?logoColor=A371F7&style=for-the-badge&logo=git-merge&labelColor=363B40" alt="become a contributor"/></a>
+## 维护说明
 
-<a href="https://discord.gg/Wp8gVStHW3">
-		<img src="https://custom-icon-badges.herokuapp.com/badge/join_the-community-5865F2?logoColor=5865F2&style=for-the-badge&logo=discord&labelColor=363B40" alt="join the community"/></a>
+- 维护方：阈界人格项目组
+- 实例地址：[misskey.liminalselves.top](https://misskey.liminalselves.top)
+- 上游同步：以 `misskey-dev/misskey` 为基础，根据项目需要选择性合并上游更新
+- 问题反馈：请优先通过阈界人格项目组指定渠道反馈站点相关问题
 
-<a href="https://www.patreon.com/syuilo">
-		<img src="https://custom-icon-badges.herokuapp.com/badge/become_a-patron-F96854?logoColor=F96854&style=for-the-badge&logo=patreon&labelColor=363B40" alt="become a patron"/></a>
+## 与上游 Misskey 的关系
 
-[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/misskey-dev/misskey)
+Misskey 是一个开源、联邦式社交平台。本仓库保留 Misskey 的开源协议与上游版权声明，并在其基础上进行第三方定制。
 
-<a href="https://flatt.tech/oss/gmo/trampoline" target="_blank"><img src="https://flatt.tech/assets/images/badges/gmo-oss.svg" height="24px"/></a>
+如果你需要部署通用 Misskey 实例，建议优先参考上游官方文档：
 
-</div>
+- [Misskey Hub](https://misskey-hub.net/)
+- [Misskey GitHub](https://github.com/misskey-dev/misskey)
 
-## Thanks
+## License
 
-<a href="https://sentry.io/"><img src="https://github.com/misskey-dev/misskey/assets/4439005/98576556-222f-467a-94be-e98dbda1d852" height="30" alt="Sentry" /></a>
-
-Thanks to [Sentry](https://sentry.io/) for providing the error tracking platform that helps us catch unexpected errors.
-
-<a href="https://www.chromatic.com/"><img src="https://user-images.githubusercontent.com/321738/84662277-e3db4f80-af1b-11ea-88f5-91d67a5e59f6.png" height="30" alt="Chromatic" /></a>
-
-Thanks to [Chromatic](https://www.chromatic.com/) for providing the visual testing platform that helps us review UI changes and catch visual regressions.
-
-<a href="https://about.codecov.io/for/open-source/"><img src="https://about.codecov.io/wp-content/themes/codecov/assets/brand/sentry-cobranding/logos/codecov-by-sentry-logo.svg" height="30" alt="Codecov" /></a>
-
-Thanks to [Codecov](https://about.codecov.io/for/open-source/) for providing the code coverage platform that helps us improve our test coverage.
-
-<a href="https://crowdin.com/"><img src="https://user-images.githubusercontent.com/20679825/230709597-1299a011-171a-4294-a91e-355a9b37c672.svg" height="30" alt="Crowdin" /></a>
-
-Thanks to [Crowdin](https://crowdin.com/) for providing the localization platform that helps us translate Misskey into many languages.
-
-<a href="https://hub.docker.com/"><img src="https://user-images.githubusercontent.com/20679825/230148221-f8e73a32-a49b-47c3-9029-9a15c3824f92.png" height="30" alt="Docker" /></a>
-
-Thanks to [Docker](https://hub.docker.com/) for providing the container platform that helps us run Misskey in production.
-
----
-
-<div align="center">
-	
-Support us with a ⭐ !
-
-[![Star History Chart](https://api.star-history.com/svg?repos=misskey-dev/misskey&type=Date)](https://star-history.com/#misskey-dev/misskey&Date)
-
-</div>
+本项目继承 Misskey 上游的许可证。详情请查看仓库中的 [LICENSE](./LICENSE) 及相关版权声明文件。

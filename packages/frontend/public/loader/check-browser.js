@@ -8,7 +8,7 @@
  *
  * このファイルは boot.js より前に、いかなる古いブラウザでも「構文解析できて実行できる」必要があるため、
  * ES5 の範囲のみで記述する（アロー関数・テンプレートリテラル・const/let・async/await・分割代入などは使わない）。
- * フロントエンド本体は chrome116 / firefox116 / safari16 を最低ターゲットとしてビルドされているため、
+ * フロントエンド本体は chrome100 / firefox104 / safari15.4 を最低ターゲットとしてビルドされているため、
  * それらに満たないブラウザでは本体スクリプト(boot.js)が構文解析すらできずに白画面になりうる。
  * ここで先回りして機能検出を行い、非対応なら「どのブラウザでも表示できる」非対応ページを描画して本体の起動を止める。
  */
@@ -19,7 +19,7 @@
 	if (window.__misskeyBrowserChecked) return;
 	window.__misskeyBrowserChecked = true;
 
-	// 機能検出。chrome116 / firefox116 / safari16 のいずれにも存在し、
+	// 機能検出。chrome100 / firefox104 / safari15.4 のいずれにも存在し、
 	// かつ本当に古いブラウザ（IE・旧Android WebView・旧Safari 等）には存在しない API を選ぶ。
 	// 検出自体が例外を投げた場合は「対応」とみなす（誤判定で締め出さない = fail open）。
 	function isSupported() {
@@ -28,23 +28,13 @@
 			var script = document.createElement('script');
 			if (!('noModule' in script)) return false;
 
-			if (typeof window.Promise === 'undefined' || typeof window.Promise.any !== 'function') return false;
+			if (typeof window.Promise === 'undefined') return false;
 			if (typeof window.BigInt === 'undefined') return false;
-			if (typeof window.WeakRef === 'undefined') return false;
-			if (typeof window.structuredClone !== 'function') return false;
 			if (typeof window.ResizeObserver === 'undefined') return false;
 			if (typeof window.IntersectionObserver === 'undefined') return false;
 			if (typeof window.queueMicrotask !== 'function') return false;
-
-			if (typeof Object.hasOwn !== 'function') return false;
 			if (typeof Object.fromEntries !== 'function') return false;
-
-			if (typeof Array.prototype.at !== 'function') return false;
 			if (typeof Array.prototype.flat !== 'function') return false;
-			if (typeof Array.prototype.findLast !== 'function') return false;
-
-			if (typeof String.prototype.at !== 'function') return false;
-			if (typeof String.prototype.replaceAll !== 'function') return false;
 
 			return true;
 		} catch (e) {
@@ -67,7 +57,7 @@
 			s1: 'Update your browser and operating system to the latest version',
 			s2: 'Use a recent version of Chrome, Firefox, Edge or Safari',
 			s3: 'Avoid opening this page inside an in-app browser (open it in a real browser instead)',
-			req: 'Recommended: Chrome 116+, Firefox 116+, Safari 16+ (or newer).',
+			req: 'Recommended: Chrome 100+, Firefox 104+, Safari 15.4+ (or newer).',
 		},
 		'zh-CN': {
 			title: '您的浏览器不受支持',
@@ -77,7 +67,7 @@
 			s1: '将浏览器及操作系统更新到最新版本',
 			s2: '使用较新版本的 Chrome、Firefox、Edge 或 Safari',
 			s3: '不要在 App 内置浏览器中打开本页（请改用独立浏览器打开）',
-			req: '推荐：Chrome 116+、Firefox 116+、Safari 16+（或更新版本）。',
+			req: '推荐：Chrome 100+、Firefox 104+、Safari 15.4+（或更新版本）。',
 		},
 		'zh-TW': {
 			title: '您的瀏覽器不受支援',
@@ -87,7 +77,7 @@
 			s1: '將瀏覽器與作業系統更新到最新版本',
 			s2: '使用較新版本的 Chrome、Firefox、Edge 或 Safari',
 			s3: '請勿在 App 內建瀏覽器中開啟本頁（請改用獨立瀏覽器開啟）',
-			req: '建議：Chrome 116+、Firefox 116+、Safari 16+（或更新版本）。',
+			req: '建議：Chrome 100+、Firefox 104+、Safari 15.4+（或更新版本）。',
 		},
 		'ja': {
 			title: 'お使いのブラウザには対応していません',
@@ -97,7 +87,7 @@
 			s1: 'ブラウザとOSを最新バージョンに更新してください',
 			s2: '新しいバージョンの Chrome・Firefox・Edge・Safari をご利用ください',
 			s3: 'アプリ内ブラウザではなく、通常のブラウザで開いてください',
-			req: '推奨: Chrome 116+ / Firefox 116+ / Safari 16+ （またはそれ以降）。',
+			req: '推奨: Chrome 100+ / Firefox 104+ / Safari 15.4+ （またはそれ以降）。',
 		},
 		'ko': {
 			title: '지원되지 않는 브라우저입니다',
@@ -107,7 +97,7 @@
 			s1: '브라우저와 운영체제를 최신 버전으로 업데이트하세요',
 			s2: '최신 버전의 Chrome, Firefox, Edge 또는 Safari를 사용하세요',
 			s3: '앱 내장 브라우저가 아닌 일반 브라우저에서 열어 주세요',
-			req: '권장: Chrome 116+, Firefox 116+, Safari 16+ (또는 이후 버전).',
+			req: '권장: Chrome 100+, Firefox 104+, Safari 15.4+ (또는 이후 버전).',
 		}
 	};
 

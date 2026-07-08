@@ -29,8 +29,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<template #key>ID</template>
 					<template #value><span class="_monospace">{{ user.id }}</span></template>
 				</MkKeyValue>
-				<!-- 要る？
-					<MkKeyValue v-if="ips.length > 0" :copy="user.id" oneline>
+				<!-- 瑕併倠锛?					<MkKeyValue v-if="ips.length > 0" :copy="user.id" oneline>
 						<template #key>IP (recent)</template>
 						<template #value><span class="_monospace">{{ ips[0].ip }}</span></template>
 					</MkKeyValue>
@@ -98,6 +97,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<MkKeyValue v-if="info?.suspendedUntil" oneline>
 						<template #key>{{ i18n.ts.userSuspendAutoRelease }}</template>
 						<template #value><span class="_monospace"><MkTime :time="info.suspendedUntil" :mode="'detail'"/></span></template>
+					</MkKeyValue>
+					<MkKeyValue v-if="info?.suspensionReason" oneline>
+						<template #key>{{ SUSPENSION_REASON_LABEL }}</template>
+						<template #value>{{ info.suspensionReason }}</template>
 					</MkKeyValue>
 
 					<div>
@@ -238,6 +241,7 @@ import MkPagination from '@/components/MkPagination.vue';
 import { Paginator } from '@/utility/paginator.js';
 
 const $i = ensureSignin();
+const SUSPENSION_REASON_LABEL = '\u51bb\u7ed3\u539f\u56e0';
 
 const props = withDefaults(defineProps<{
 	userId: string;
@@ -247,6 +251,9 @@ const props = withDefaults(defineProps<{
 });
 
 const result = await _fetch_();
+type AdminUserInfo = typeof result.info & {
+	suspensionReason?: string | null;
+};
 
 const tab = ref(props.initialTab);
 const {
@@ -259,7 +266,7 @@ const {
 	initialValue: 'per-user-notes',
 });
 const user = ref(result.user);
-const info = ref(result.info);
+const info = ref(result.info as AdminUserInfo);
 const ips = ref(result.ips);
 const ap = ref<Misskey.entities.ApGetResponse | null>(null);
 const moderator = ref(info.value.isModerator);
@@ -383,6 +390,14 @@ async function toggleSuspend(v: boolean) {
 		return;
 	}
 
+	const { canceled: reasonCanceled, result } = await os.form(SUSPENSION_REASON_LABEL, {
+		reason: { type: 'string', label: SUSPENSION_REASON_LABEL, required: true, multiline: true },
+	});
+	if (reasonCanceled) {
+		suspended.value = !v;
+		return;
+	}
+
 	const confirm = await os.confirm({
 		type: 'warning',
 		text: i18n.ts.suspendConfirm,
@@ -399,7 +414,7 @@ async function toggleSuspend(v: boolean) {
 		: period === 'oneMonth' ? Date.now() + (1000 * 60 * 60 * 24 * 30)
 		: null;
 
-	await misskeyApi('admin/suspend-user', { userId: user.value.id, expiresAt: expiresAt ?? undefined });
+	await misskeyApi('admin/suspend-user', { userId: user.value.id, expiresAt: expiresAt ?? undefined, reason: result.reason });
 	await refreshUser();
 }
 

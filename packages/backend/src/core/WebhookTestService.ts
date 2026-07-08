@@ -46,6 +46,7 @@ function generateDummyUser(override?: Partial<MiUser>): MiUser {
 		tags: [],
 		isSuspended: false,
 		suspendedUntil: null,
+		suspensionReason: null,
 		isLocked: false,
 		isBot: false,
 		isCat: true,

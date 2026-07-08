@@ -4,6 +4,7 @@
  */
 
 // https://vitejs.dev/config/build-options.html#build-modulepreload
+import '@@/js/legacy-browser-polyfills.js';
 import 'vite/modulepreload-polyfill';
 
 if (import.meta.env.DEV) {

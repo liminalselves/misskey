@@ -68,7 +68,7 @@ export class SigninWithPasskeyApiService {
 		const body = request.body;
 		const credential = body['credential'];
 
-		function error(status: number, error: { id: string }) {
+		function error(status: number, error: { id: string; info?: Record<string, unknown> }) {
 			reply.code(status);
 			return { error };
 		}
@@ -160,6 +160,10 @@ export class SigninWithPasskeyApiService {
 		if (isUserEffectivelySuspended(user)) {
 			return error(403, {
 				id: 'e03a5f46-d309-4865-9b69-56282d94e1eb',
+				info: {
+					reason: user.suspensionReason,
+					suspendedUntil: user.suspendedUntil?.toISOString() ?? null,
+				},
 			});
 		}
 

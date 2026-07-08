@@ -85,6 +85,17 @@ router.useListener('change', ({ resolved }) => {
 	const routePath = resolved.route.path;
 	if (resolved == null || 'redirect' in resolved.route) return;
 	if (resolved.route.path === currentTab.routePath && deepEqual(resolved.props, currentTab.props)) return;
+	if (resolved.route.path === currentTab.routePath && resolved.route.reuseComponent) {
+		tabs.value = [
+			...tabs.value.slice(0, tabs.value.length - 1),
+			{
+				...currentTab,
+				fullPath: router.getCurrentFullPath(),
+				props: resolved.props,
+			},
+		];
+		return;
+	}
 	const fullPath = router.getCurrentFullPath();
 
 	if (tabs.value.some(tab => tab.routePath === routePath && deepEqual(resolved.props, tab.props))) {

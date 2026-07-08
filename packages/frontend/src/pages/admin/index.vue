@@ -188,9 +188,9 @@ const menuDef = computed<SuperMenuDef[]>(() => [{
 		active: currentPage.value?.route.name === 'modlog',
 	}, {
 		icon: 'ti ti-checkbox',
-		text: i18n.ts._agents.adminAgentReview,
+		text: '\u667a\u80fd\u4f53\u6cbb\u7406',
 		to: '/admin/agents-review',
-		active: ['agents-review', 'agents-chat-audit', 'agents-images-review'].includes(String(currentPage.value?.route.name)),
+		active: currentPage.value?.route.name === 'agents-review',
 	}],
 }, {
 	title: i18n.ts.settings,

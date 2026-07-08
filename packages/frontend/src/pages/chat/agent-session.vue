@@ -164,10 +164,95 @@ SPDX-License-Identifier: AGPL-3.0-only
 					</MkButton>
 				</div>
 				<div class="_gaps">
-					<MkSelect v-model="drawImageModelId" :items="drawImageModelItems">
-						<template #label>生图模型</template>
-						<template #caption>选择“无”时关闭生图；选择模型后会显示该提供商的可配置参数。</template>
-					</MkSelect>
+					<div :class="$style.drawModelChooser">
+						<div :class="$style.drawFieldLabel">生图模型</div>
+						<div :class="$style.selectCardList">
+							<div
+								v-panel
+								:class="[$style.selectCard, $style.modelSelectCard, drawImageModelId === '' ? $style.selectCardActive : '']"
+							>
+								<div :class="[$style.selectCardMain, $style.modelSelectCardMain]">
+									<div :class="[$style.selectCardHead, $style.modelSelectCardHead]">
+										<div :class="$style.selectCardTitleWrap">
+											<div :class="$style.modelSelectCardTitle">无</div>
+											<div :class="$style.modelMetaChips" role="list">
+												<span :class="$style.modelMetaChip" role="listitem">
+													<i class="ti ti-power" :class="$style.modelMetaChipIcon" aria-hidden="true"></i>
+													<span :class="$style.modelMetaChipKicker">状态</span>
+													<span :class="$style.modelMetaChipVal">关闭生图</span>
+												</span>
+												<span :class="$style.modelMetaChip" role="listitem">
+													<i class="ti ti-coin" :class="$style.modelMetaChipIcon" aria-hidden="true"></i>
+													<span :class="$style.modelMetaChipKicker">{{ i18n.ts._agents.modelRowLabelCost }}</span>
+													<span :class="[$style.modelMetaChipVal, $style.modelMetaChipValHighlight]">{{ i18n.ts._agents.modelCostPerCallValueFree }}</span>
+												</span>
+											</div>
+										</div>
+										<MkButton
+											rounded
+											:primary="drawImageModelId !== ''"
+											:disabled="drawSaving || drawImageModelId === ''"
+											@click="chooseDrawImageModel('')"
+										>
+											{{ drawImageModelId === '' ? i18n.ts.enabled : i18n.ts._agents.sessionPickButton }}
+										</MkButton>
+									</div>
+								</div>
+							</div>
+							<div
+								v-for="m in drawImageModels"
+								:key="m.id"
+								v-panel
+								:class="[$style.selectCard, $style.modelSelectCard, drawImageModelId === m.id ? $style.selectCardActive : '']"
+							>
+								<div :class="[$style.selectCardMain, $style.modelSelectCardMain]">
+									<div :class="[$style.selectCardHead, $style.modelSelectCardHead]">
+										<div :class="$style.selectCardTitleWrap">
+											<div :class="$style.modelSelectCardTitle">{{ m.name }}</div>
+											<div :class="$style.modelMetaChips" role="list">
+												<span :class="$style.modelMetaChip" role="listitem">
+													<i class="ti ti-server" :class="$style.modelMetaChipIcon" aria-hidden="true"></i>
+													<span :class="$style.modelMetaChipKicker">提供商</span>
+													<span :class="$style.modelMetaChipVal">{{ imageProviderLabel(m.provider) }}</span>
+												</span>
+												<span :class="$style.modelMetaChip" role="listitem">
+													<i class="ti ti-coin" :class="$style.modelMetaChipIcon" aria-hidden="true"></i>
+													<span :class="$style.modelMetaChipKicker">{{ i18n.ts._agents.modelRowLabelCost }}</span>
+													<span
+														:class="[
+															$style.modelMetaChipVal,
+															typeof m.costPerCall === 'number' && m.costPerCall === 0
+																? $style.modelMetaChipValHighlight
+																: '',
+														]"
+													>{{ formatModelCostPerCall(m.costPerCall) }}</span>
+												</span>
+												<span :class="$style.modelMetaChip" :title="i18n.ts._agents.successRate1h" role="listitem">
+													<i class="ti ti-chart-line" :class="$style.modelMetaChipIcon" aria-hidden="true"></i>
+													<span :class="$style.modelMetaChipKicker">{{ i18n.ts._agents.modelRowLabelSuccess1h }}</span>
+													<template v-if="modelSuccessRates[m.id] && modelSuccessRates[m.id].total > 0">
+														<span :class="[...getSuccessRateClassNameModelRow(modelSuccessRates[m.id].success, modelSuccessRates[m.id].total), $style.modelMetaChipValLong]">
+															{{ getSuccessRatePercentage(modelSuccessRates[m.id].success, modelSuccessRates[m.id].total) }}% ({{ modelSuccessRates[m.id].success }}/{{ modelSuccessRates[m.id].total }})
+														</span>
+													</template>
+													<span v-else :class="[$style.modelMetaChipVal, $style.modelMetaChipValMuted]">{{ i18n.ts._agents.noDataAvailable }}</span>
+												</span>
+											</div>
+										</div>
+										<MkButton
+											rounded
+											:primary="drawImageModelId !== m.id"
+											:disabled="drawSaving || drawImageModelId === m.id"
+											@click="chooseDrawImageModel(m.id)"
+										>
+											{{ drawImageModelId === m.id ? i18n.ts.enabled : i18n.ts._agents.sessionPickButton }}
+										</MkButton>
+									</div>
+								</div>
+							</div>
+						</div>
+						<p :class="$style.drawCaption">选择“无”时关闭生图；选择模型后会显示该提供商的可配置参数。</p>
+					</div>
 					<MkInfo v-if="drawImageModels.length === 0">管理员还没有配置可用的生图模型。</MkInfo>
 					<MkInfo v-if="drawSelectedImageModel?.provider === 'aurora'" warn>
 						Naval AI 参数会直接影响出图质量、费用和稳定性。不了解时请保持默认，或使用“恢复默认设置”。
@@ -914,6 +999,8 @@ const session = ref<{
 	id: string;
 	name: string;
 	sessionKind: 'draft_test' | 'community';
+	characterName?: string;
+	characterAvatar?: DriveFile | null;
 	dialogueStyleId: string | null;
 	agentModelId: string | null;
 	agentCompressionModelId?: string | null;
@@ -933,7 +1020,7 @@ const session = ref<{
 	characterModerationBanned?: boolean;
 } | null>(null);
 
-const character = ref<{ name: string; avatarFileId: string | null } | null>(null);
+const character = ref<{ name: string; avatarFileId: string | null; avatar?: DriveFile | null } | null>(null);
 const assistantAvatarUrl = ref<string | null>(null);
 
 const timelineEl = useTemplateRef('timelineEl');
@@ -1114,10 +1201,6 @@ const drawSizeItems: MkSelectItem[] = [
 	{ value: 'landscape', label: '横图' },
 	{ value: 'square', label: '方图' },
 ];
-const drawImageModelItems = computed((): MkSelectItem[] => [
-	{ value: '', label: '无' },
-	...drawImageModels.value.map(m => ({ value: m.id, label: m.name })),
-]);
 const drawSelectedImageModel = computed(() => drawImageModels.value.find(m => m.id === drawImageModelId.value) ?? null);
 const drawCurrentSettings = computed(() => ({
 	size: drawSize.value,
@@ -1758,21 +1841,21 @@ const headerTabs = computed(() => {
 			icon: 'ti ti-messages',
 		},
 		{
-			key: 'draw',
-			title: '生图',
-			icon: 'ti ti-brush',
-		},
-		{
 			key: 'search',
 			title: i18n.ts.search,
 			icon: 'ti ti-search',
 		},
-		{
-			key: 'worldbook',
-			title: '世界书',
-			icon: 'ti ti-book',
-		},
 	];
+	tabs.push({
+		key: 'model',
+		title: i18n.ts._agents.sessionModelTab,
+		icon: 'ti ti-cpu',
+	});
+	tabs.push({
+		key: 'draw',
+		title: '生图',
+		icon: 'ti ti-brush',
+	});
 	if (showLongMemoryTab.value) {
 		tabs.push({
 			key: 'memory',
@@ -1781,9 +1864,9 @@ const headerTabs = computed(() => {
 		});
 	}
 	tabs.push({
-		key: 'model',
-		title: i18n.ts._agents.sessionModelTab,
-		icon: 'ti ti-cpu',
+		key: 'worldbook',
+		title: '世界书',
+		icon: 'ti ti-book',
 	});
 	tabs.push({
 		key: 'style',
@@ -2014,19 +2097,38 @@ async function loadSession() {
 	}
 }
 
+function driveFilePreviewUrl(file: DriveFile | null | undefined): string | null {
+	return file?.thumbnailUrl ?? file?.url ?? null;
+}
+
 async function loadCharacter(characterId: string) {
+	const sessionCharacterName = session.value?.characterName ?? null;
+	const sessionCharacterAvatar = session.value?.characterAvatar ?? null;
 	try {
-		const c = await misskeyApi('agents/characters/show', { characterId });
-		character.value = { name: c.name, avatarFileId: c.avatarFileId };
-		if (c.avatarFileId) {
-			const f = await misskeyApi('drive/files/show', { fileId: c.avatarFileId });
-			assistantAvatarUrl.value = f.thumbnailUrl ?? f.url ?? null;
+		const c = await misskeyApi('agents/characters/show', { characterId }) as {
+			name: string;
+			avatarFileId: string | null;
+			avatar?: DriveFile | null;
+		};
+		const avatar = c.avatar ?? sessionCharacterAvatar;
+		character.value = {
+			name: c.name || sessionCharacterName || '',
+			avatarFileId: c.avatarFileId,
+			avatar,
+		};
+		assistantAvatarUrl.value = driveFilePreviewUrl(avatar);
+	} catch {
+		if (sessionCharacterName || sessionCharacterAvatar) {
+			character.value = {
+				name: sessionCharacterName ?? '',
+				avatarFileId: null,
+				avatar: sessionCharacterAvatar,
+			};
+			assistantAvatarUrl.value = driveFilePreviewUrl(sessionCharacterAvatar);
 		} else {
+			character.value = null;
 			assistantAvatarUrl.value = null;
 		}
-	} catch {
-		character.value = null;
-		assistantAvatarUrl.value = null;
 	}
 }
 
@@ -2090,6 +2192,15 @@ function chooseStyle(styleId: string) {
 function chooseModel(modelId: string) {
 	selectedModelId.value = modelId;
 	void onModelSelect();
+}
+
+function chooseDrawImageModel(modelId: string) {
+	drawImageModelId.value = modelId;
+}
+
+function imageProviderLabel(provider: AgentImageModel['provider']): string {
+	if (provider === 'aurora') return 'Aurora';
+	return provider;
 }
 
 async function applyModel() {
@@ -2990,6 +3101,8 @@ async function confirmDeleteCompressionSticky(stickyId: string) {
 
 type SessionContextRole = 'user' | 'assistant';
 type SessionContextRow = { role: SessionContextRole; content: string };
+const SESSION_IMPORT_MAX_MESSAGES = 10_000;
+const SESSION_IMPORT_MAX_MESSAGE_CHARS = 16_000;
 type SessionExportSettings = {
 	name?: string;
 	dialogueStyleId?: string | null;
@@ -3142,8 +3255,8 @@ function parseImportedContext(text: string): ParsedSessionImportPayload {
 		throw new Error(i18n.ts._agents.sessionMemoryImportContextInvalidFormat);
 	}
 	const out: SessionContextRow[] = [];
-	if (rawMessages.length > 1000) {
-		throw new Error('导入失败：最多只能导入 1000 条消息。');
+	if (rawMessages.length > SESSION_IMPORT_MAX_MESSAGES) {
+		throw new Error(`导入失败：最多只能导入 ${SESSION_IMPORT_MAX_MESSAGES} 条消息。`);
 	}
 	for (const row of rawMessages) {
 		if (row == null || typeof row !== 'object') {
@@ -3157,8 +3270,8 @@ function parseImportedContext(text: string): ParsedSessionImportPayload {
 		if (content.trim() === '') {
 			throw new Error(i18n.ts._agents.sessionMemoryImportContextEmptyContent);
 		}
-		if (content.length > 16000) {
-			throw new Error('导入失败：单条消息不能超过 16000 字符。');
+		if (content.length > SESSION_IMPORT_MAX_MESSAGE_CHARS) {
+			throw new Error(`导入失败：单条消息不能超过 ${SESSION_IMPORT_MAX_MESSAGE_CHARS} 字符。`);
 		}
 		out.push({ role, content });
 	}
@@ -4962,6 +5075,21 @@ async function onAbortRequest() {
 	font-weight: 700;
 	color: var(--MI_THEME-fg);
 }
+.drawModelChooser {
+	display: flex;
+	flex-direction: column;
+	gap: 0.6em;
+
+	.modelMetaChip {
+		max-width: 100%;
+	}
+
+	.modelMetaChipVal {
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+}
 .drawSizeRow {
 	display: grid;
 	grid-template-columns: minmax(0, 1fr) auto;
@@ -4987,6 +5115,13 @@ async function onAbortRequest() {
 	.drawHead {
 		align-items: stretch;
 		flex-direction: column;
+	}
+
+	.drawModelChooser {
+		.modelSelectCardHead {
+			align-items: stretch;
+			flex-direction: column;
+		}
 	}
 
 	.drawResetButton {

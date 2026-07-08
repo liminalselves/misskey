@@ -9,6 +9,23 @@ import { apiUrl } from '@@/js/config.js';
 import { $i } from '@/i.js';
 export const pendingApiRequestsCount = ref(0);
 
+let handlingSuspendedAccount = false;
+
+async function handleSuspendedAccount(error: { code?: string; info?: unknown }): Promise<void> {
+	if (!$i || error.code !== 'YOUR_ACCOUNT_SUSPENDED' || handlingSuspendedAccount) return;
+	handlingSuspendedAccount = true;
+	try {
+		const [{ showSuspendedDialog }, { signout }] = await Promise.all([
+			import('@/utility/show-suspended-dialog.js'),
+			import('@/signout.js'),
+		]);
+		await showSuspendedDialog(error.info as { reason?: string | null; suspendedUntil?: string | null } | null);
+		await signout();
+	} finally {
+		handlingSuspendedAccount = false;
+	}
+}
+
 /** Use in catch() when misskeyApi rejects with `{ message, code, id, info? }` — avoid String(err) → "[object Object]". */
 export function formatApiError(err: unknown): string {
 	if (err != null && typeof err === 'object' && 'message' in err) {
@@ -63,6 +80,7 @@ export function misskeyApi<
 			} else if (res.status === 204) {
 				resolve(undefined as _ResT); // void -> undefined
 			} else {
+				void handleSuspendedAccount(body.error);
 				reject(body.error);
 			}
 		}).catch(reject);
@@ -105,6 +123,7 @@ export function misskeyApiGet<
 			} else if (res.status === 204) {
 				resolve(undefined as _ResT); // void -> undefined
 			} else {
+				void handleSuspendedAccount(body.error);
 				reject(body.error);
 			}
 		}).catch(reject);

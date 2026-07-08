@@ -15,6 +15,7 @@ import { MiChatRoom } from './ChatRoom.js';
 @Index('IDX_chat_message_1on1_timeline', { synchronize: false })
 @Index('IDX_chat_message_1on1_from', { synchronize: false })
 @Index('IDX_chat_message_1on1_to', { synchronize: false })
+@Index('IDX_chat_message_room_timeline', { synchronize: false })
 export class MiChatMessage {
 	@PrimaryColumn(id())
 	public id: string;

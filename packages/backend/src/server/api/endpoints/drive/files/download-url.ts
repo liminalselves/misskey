@@ -63,7 +63,6 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				const url = await this.s3Service.getSignedDownloadUrl(instance, {
 					Bucket: instance.objectStorageBucket,
 					Key: file.accessKey,
-					ResponseContentType: file.type,
 					ResponseContentDisposition: contentDisposition('attachment', file.name),
 				}, 60);
 				const signedUrl = new URL(url);

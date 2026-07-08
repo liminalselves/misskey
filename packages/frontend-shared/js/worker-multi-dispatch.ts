@@ -15,7 +15,7 @@ export class WorkerMultiDispatch<POST = unknown, RETURN = unknown> {
 	private terminated = false;
 	private prevWorkerNumber = 0;
 	private getUseWorkerNumber: WorkerNumberGetter;
-	private finalizationRegistry: FinalizationRegistry<symbol>;
+	private finalizationRegistry: FinalizationRegistry<symbol> | null = null;
 
 	constructor(workerConstructor: () => Worker, concurrency: number, getUseWorkerNumber = defaultUseWorkerNumber) {
 		this.getUseWorkerNumber = getUseWorkerNumber;
@@ -23,10 +23,12 @@ export class WorkerMultiDispatch<POST = unknown, RETURN = unknown> {
 			this.workers.push(workerConstructor());
 		}
 
-		this.finalizationRegistry = new FinalizationRegistry(() => {
-			this.terminate();
-		});
-		this.finalizationRegistry.register(this, this.symbol);
+		if (typeof globalThis.FinalizationRegistry === 'function') {
+			this.finalizationRegistry = new FinalizationRegistry(() => {
+				this.terminate();
+			});
+			this.finalizationRegistry.register(this, this.symbol);
+		}
 
 		if (_DEV_) console.log('WorkerMultiDispatch: Created', this);
 	}
@@ -69,7 +71,7 @@ export class WorkerMultiDispatch<POST = unknown, RETURN = unknown> {
 			worker.terminate();
 		});
 		this.workers = [];
-		this.finalizationRegistry.unregister(this);
+		this.finalizationRegistry?.unregister(this);
 	}
 
 	public isTerminated() {

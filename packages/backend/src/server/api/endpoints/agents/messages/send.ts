@@ -71,7 +71,7 @@ export const paramDef = {
 	properties: {
 		sessionId: { type: 'string', format: 'misskey:id' },
 		text: { type: 'string', minLength: 1, maxLength: 16000 },
-		/** 前端生成的客户端请求 ID；用于通过 agents/messages/abort 取消本次请求 */
+		/** 前端生成的客户端请求 ID；用于请求幂等与通过 agents/messages/abort 取消本次请求 */
 		clientRequestId: { type: 'string', minLength: 1, maxLength: 64 },
 	},
 	required: ['sessionId', 'text'],
@@ -151,6 +151,53 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			const session = await this.agentSessionsRepository.findOneBy({ id: ps.sessionId });
 			if (!session || session.userId !== me.id) {
 				throw new ApiError({ message: 'No such session.', code: 'NO_SUCH_SESSION', id: 'eaaf419d-5dff-4ba1-96e1-7ea983241a04' });
+			}
+
+			const clientRequestId = ps.clientRequestId ?? this.agentService.newId();
+			if (ps.clientRequestId) {
+				const priorUserMessage = await this.agentMessagesRepository.findOneBy({
+					sessionId: session.id,
+					clientRequestId,
+					role: 'user',
+				});
+				if (priorUserMessage) {
+					if (priorUserMessage.content !== ps.text) {
+						throw new ApiError({
+							message: 'This client request ID has already been used with different content.',
+							code: 'AGENT_CLIENT_REQUEST_ID_REUSED',
+							id: '8f5a6680-8a9c-4ae8-b46e-84ff821f9952',
+							kind: 'client',
+							httpStatusCode: 409,
+						});
+					}
+					const priorAssistantMessage = await this.agentMessagesRepository.findOneBy({
+						sessionId: session.id,
+						clientRequestId,
+						role: 'assistant',
+					});
+					if (priorAssistantMessage) {
+						return {
+							userMessageId: priorUserMessage.id,
+							assistantMessageId: priorAssistantMessage.id,
+							assistantText: priorAssistantMessage.content,
+							longTermMemorySearchUnavailable: false,
+							longTermMemoryAddScheduled: false,
+							compressionLlmPending: false,
+							compressionStickiesBaselineCount: 0,
+							aborted: false,
+							auditBlocked: false,
+							auditBlockCode: null,
+							auditCategory: null,
+							auditReason: null,
+						};
+					}
+					throw new ApiError({
+						message: 'A reply is still being generated for this client request.',
+						code: 'AGENT_REPLY_PENDING',
+						id: '8d99fad8-c487-4a7e-bb28-5df37a590116',
+						httpStatusCode: 409,
+					});
+				}
 			}
 
 			const characterRow = await this.agentCharactersRepository.findOneByOrFail({ id: session.characterId });
@@ -244,7 +291,6 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			session.agentReplyPending = true;
 			session.updatedAt = now;
 
-			const clientRequestId = ps.clientRequestId ?? this.agentService.newId();
 			let userMsg: MiAgentMessage | null = null;
 			let abortController: AbortController | null = null;
 			let usageLog: MiAgentModelUsageLog | null = null;
@@ -257,6 +303,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					sessionId: session.id,
 					role: 'user',
 					content: ps.text,
+					clientRequestId,
 					statsDialogueStyleId: session.dialogueStyleId,
 					promptTokens: null,
 					completionTokens: null,
@@ -434,6 +481,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					sessionId: session.id,
 					role: 'assistant',
 					content: rawAssistantText,
+					clientRequestId,
 					statsDialogueStyleId: session.dialogueStyleId,
 					promptTokens: null,
 					completionTokens: null,

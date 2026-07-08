@@ -41,7 +41,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<MkButton rounded @click="activeTab = 'credits'"><i class="ti ti-ticket"></i> 额度与卡密</MkButton>
 					<MkButton rounded @click="activeTab = 'reports'"><i class="ti ti-report-analytics"></i> 请求报表</MkButton>
 					<MkButton rounded @click="activeTab = 'externalAudit'"><i class="ti ti-shield-check"></i> 外部审核</MkButton>
-					<MkButton rounded @click="router.push('/admin/agents-review' as any)"><i class="ti ti-checkbox"></i> 智能体审查</MkButton>
+					<MkButton rounded @click="router.push('/admin/agents-review' as any)"><i class="ti ti-shield-check"></i> {{ i18n.ts._agents.adminAgentReview }}</MkButton>
 				</div>
 			</template>
 

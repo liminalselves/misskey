@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
+import '@@/js/legacy-browser-polyfills.js';
 import '@/polyfills/crypto-randomuuid.js';
 
 // https://vitejs.dev/config/build-options.html#build-modulepreload

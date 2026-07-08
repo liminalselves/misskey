@@ -47,11 +47,11 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <script lang="ts" setup>
 import { computed, ref, useTemplateRef } from 'vue';
+import type { Captcha } from '@/components/MkCaptcha.vue';
 import MkModalWindow from '@/components/MkModalWindow.vue';
 import MkButton from '@/components/MkButton.vue';
 import MkInput from '@/components/MkInput.vue';
 import MkInfo from '@/components/MkInfo.vue';
-import type { Captcha } from '@/components/MkCaptcha.vue';
 import MkCaptcha from '@/components/MkCaptcha.vue';
 import * as os from '@/os.js';
 import { instance } from '@/instance.js';
@@ -104,6 +104,11 @@ async function onSubmit() {
 			'aliyun-captcha-response': aliyunCaptchaResponse.value,
 			'testcaptcha-response': testcaptchaResponse.value,
 		} as any);
+		await os.alert({
+			type: 'info',
+			title: i18n.ts.done,
+			text: i18n.ts._forgotPassword.enterEmail,
+		});
 		emit('done');
 		dialog.value?.close();
 	} catch (err) {

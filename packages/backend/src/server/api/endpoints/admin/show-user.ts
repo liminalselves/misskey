@@ -130,6 +130,10 @@ export const meta = {
 				type: 'string',
 				optional: false, nullable: true,
 			},
+			suspensionReason: {
+				type: 'string',
+				optional: false, nullable: true,
+			},
 			isHibernated: {
 				type: 'boolean',
 				optional: false, nullable: false,
@@ -253,6 +257,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				isSilenced: isSilenced,
 				isSuspended: user.isSuspended,
 				suspendedUntil: user.suspendedUntil ? user.suspendedUntil.toISOString() : null,
+				suspensionReason: user.suspensionReason,
 				isHibernated: user.isHibernated,
 				lastActiveDate: user.lastActiveDate ? user.lastActiveDate.toISOString() : null,
 				moderationNote: profile.moderationNote ?? '',

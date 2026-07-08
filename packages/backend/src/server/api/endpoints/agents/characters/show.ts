@@ -10,6 +10,7 @@ import { Endpoint } from '@/server/api/endpoint-base.js';
 import { DI } from '@/di-symbols.js';
 import { ApiError } from '@/server/api/error.js';
 import { AgentService } from '@/core/AgentService.js';
+import { DriveFileEntityService } from '@/core/entities/DriveFileEntityService.js';
 
 export const meta = {
 	tags: ['agents'],
@@ -64,6 +65,7 @@ export const meta = {
 			reviewRejectMessage: { type: 'string', nullable: true, optional: true },
 			draftRevision: { type: 'integer' },
 			avatarFileId: { type: 'string', format: 'misskey:id', nullable: true },
+			avatar: { type: 'object', ref: 'DriveFile', nullable: true },
 			promptOpenSourced: { type: 'boolean' },
 			createdAt: { type: 'string', format: 'date-time' },
 			updatedAt: { type: 'string', format: 'date-time' },
@@ -84,6 +86,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		private agentCharactersRepository: AgentCharactersRepository,
 
 		private agentService: AgentService,
+		private driveFileEntityService: DriveFileEntityService,
 	) {
 		super(meta, paramDef, async (ps, me) => {
 			this.agentService.assertAgentsEnabled();
@@ -96,6 +99,10 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				throw new ApiError({ message: 'No such character.', code: 'NO_SUCH_CHARACTER', id: 'c4c3e7fa-44ae-4389-8e76-007888f34739' });
 			}
 			const display = isOwner ? row : this.agentService.effectiveCharacterForLlm(row, true);
+			const avatar = display.avatarFileId
+				? await this.driveFileEntityService.pack(display.avatarFileId, {})
+					.catch(() => null)
+				: null;
 			// Non-authors only receive summary fields unless the author has open-sourced the prompt.
 			const exposePrompt = isOwner || row.promptOpenSourced === true;
 			const worldbook = exposePrompt
@@ -145,6 +152,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					draftRevision: row.draftRevision,
 				} : {}),
 				avatarFileId: display.avatarFileId,
+				avatar,
 				promptOpenSourced: row.promptOpenSourced === true,
 				createdAt: row.createdAt.toISOString(),
 				updatedAt: row.updatedAt.toISOString(),

@@ -200,9 +200,9 @@ export function getConfig(): UserConfig {
 
 		build: {
 			target: [
-				'chrome116',
-				'firefox116',
-				'safari16',
+				'chrome100',
+				'firefox104',
+				'safari15.4',
 			],
 			manifest: 'manifest.json',
 			rollupOptions: {

@@ -131,9 +131,11 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			}
 
 			const profile = await this.userProfilesRepository.findOneByOrFail({ userId: user.id });
+			const registeredEmail = profile.email?.trim() ?? null;
+			const requestedEmail = ps.email.trim();
 
 			// 合致するメアドが登録されていなかったら無視
-			if (profile.email !== ps.email) {
+			if (registeredEmail == null || registeredEmail.toLowerCase() !== requestedEmail.toLowerCase()) {
 				return;
 			}
 
@@ -152,7 +154,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 
 			const link = `${this.config.url}/reset-password/${token}`;
 
-			this.emailService.sendEmail(ps.email, '密码重置请求 / Password reset requested',
+			this.emailService.sendEmail(registeredEmail, '密码重置请求 / Password reset requested',
 				`请点击以下链接重置密码：<br><a href="${link}">${link}</a><br><br>To reset password, please click this link:<br><a href="${link}">${link}</a>`,
 				`请点击以下链接重置密码：${link}\n\nTo reset password, please click this link: ${link}`);
 		});

@@ -311,7 +311,7 @@ function onSigninApiError(err?: any): void {
 			break;
 		}
 		case 'e03a5f46-d309-4865-9b69-56282d94e1eb': {
-			showSuspendedDialog();
+			showSuspendedDialog(err?.info);
 			break;
 		}
 		case '22d05606-fbcf-421a-a2db-b32610dcfd1b': {

@@ -167,7 +167,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 
 			const modelNameMap = new Map<string, string>([
 				...packPublicAgentModels(instanceMeta).map(m => [m.id, m.name] as const),
-				...this.agentImageService.listAvailableImageModels(instanceMeta, true).map(m => [m.id, `生图：${m.name}`] as const),
+				...this.agentImageService.listAvailableImageModels(instanceMeta, true).map(m => [m.id, m.name] as const),
 			]);
 			const characterIds = characterStatsRaw.map(r => r.characterId);
 			const dialogueStyleIds = dialogueStyleStatsRaw.map(r => r.dialogueStyleId);
@@ -199,20 +199,20 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				totalCost: r.totalCost,
 			}));
 
-		const recentLogs = recentLogsRaw.map(log => ({
-			id: log.id,
-			requestedAt: log.requestedAt.toISOString(),
-			completedAt: log.completedAt?.toISOString() ?? null,
-			durationMs: log.durationMs,
-			modelId: log.modelId,
-			modelName: log.modelId ? (modelNameMap.get(log.modelId) ?? null) : null,
-			modelApiName: log.modelApiName,
-			usageKind: log.usageKind,
-			status: log.status,
-			cost: log.cost,
-			promptTokens: log.promptTokens,
-			completionTokens: log.completionTokens,
-		}));
+			const recentLogs = recentLogsRaw.map(log => ({
+				id: log.id,
+				requestedAt: log.requestedAt.toISOString(),
+				completedAt: log.completedAt?.toISOString() ?? null,
+				durationMs: log.durationMs,
+				modelId: log.modelId,
+				modelName: log.modelId ? (modelNameMap.get(log.modelId) ?? null) : null,
+				modelApiName: log.modelApiName,
+				usageKind: log.usageKind,
+				status: log.status,
+				cost: log.cost,
+				promptTokens: log.promptTokens,
+				completionTokens: log.completionTokens,
+			}));
 
 			return {
 				creditBalance,

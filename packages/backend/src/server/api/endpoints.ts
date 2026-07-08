@@ -105,6 +105,12 @@ interface IEndpointMetaBase {
 	 * 正常応答をキャッシュ (Cache-Control: public) する秒数
 	 */
 	readonly cacheSec?: number;
+
+	/**
+	 * Maximum request body size in bytes.
+	 * Defaults to 1 MiB for regular JSON endpoints.
+	 */
+	readonly bodyLimit?: number;
 }
 
 export type IEndpointMeta = (Omit<IEndpointMetaBase, 'requireCrential' | 'requireModerator' | 'requireAdmin'> & {

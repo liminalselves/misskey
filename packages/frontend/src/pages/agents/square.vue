@@ -96,7 +96,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 	<template v-else>
 		<div :class="$style.sortBar">
-			<div :class="$style.sortInfo">{{ i18n.ts._agents.stylesPlazaTab }} · {{ plazaStyles.length }}</div>
+			<div :class="$style.sortInfo">{{ i18n.ts._agents.stylesTab }} · {{ plazaStyles.length }}</div>
 			<div :class="$style.sortControls">
 				<div :class="$style.sortSwitch" role="tablist" :aria-label="i18n.ts.sort">
 					<button type="button" :class="[$style.sortBtn, sortStyles === 'recommended' ? $style.sortBtnActive : '']" @click="sortStyles = 'recommended'">{{ i18n.ts.recommended }}</button>
@@ -199,7 +199,7 @@ const router = useRouter();
 const sub = ref<'characters' | 'stylesPlaza'>('characters');
 const subTabs = computed(() => [
 	{ key: 'characters', label: i18n.ts._agents.exploreSubCharacters },
-	{ key: 'stylesPlaza', label: i18n.ts._agents.stylesPlazaTab },
+	{ key: 'stylesPlaza', label: i18n.ts._agents.stylesTab },
 ]);
 
 type SortKey = 'recommended' | 'heat' | 'rating' | 'latest';

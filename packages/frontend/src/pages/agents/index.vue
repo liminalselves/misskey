@@ -4,16 +4,17 @@ SPDX-License-Identifier: AGPL-3.0-only
 -->
 
 <template>
-<PageWithHeader v-model:tab="mainTab" :tabs="mainHeaderTabs" :swipable="true">
+<PageWithHeader :tab="mainTab" :tabs="mainHeaderTabs" :swipable="false" @update:tab="onMainTabChange">
 	<div v-if="mainTab === 'square'" class="_spacer" style="--MI_SPACER-w: 700px;">
 		<XSquare/>
 	</div>
 	<div v-else-if="mainTab === 'create'" class="_spacer" style="--MI_SPACER-w: 700px;">
 		<div style="display: flex; align-items: center; gap: 10px; margin-bottom: var(--MI-margin);">
 			<MkTab
-				v-model="createSub"
+				:modelValue="createSub"
 				:tabs="createTabs"
 				style="flex: 1;"
+				@update:modelValue="onCreateSubChange"
 			/>
 		</div>
 
@@ -169,8 +170,11 @@ const props = withDefaults(defineProps<{
 
 const router = useRouter();
 
-const mainTab = ref<'square' | 'create' | 'my-stats'>('square');
-const createSub = ref<'characters' | 'styles'>('characters');
+type MainTab = 'square' | 'create' | 'my-stats';
+type CreateSub = 'characters' | 'styles';
+
+const mainTab = ref<MainTab>('square');
+const createSub = ref<CreateSub>('characters');
 type ReviewRejectInfo = {
 	reviewStatus?: string;
 	isPublished?: boolean;
@@ -200,29 +204,29 @@ definePage(() => ({
 	icon: 'ti ti-robot',
 }));
 
-function applyRouteQuery() {
-	if (props.view === 'create') mainTab.value = 'create';
-	else if (props.view === 'my-stats') mainTab.value = 'my-stats';
-	else mainTab.value = 'square';
-	if (props.sub === 'styles') createSub.value = 'styles';
-	else createSub.value = 'characters';
+function normalizeMainTab(view: string | undefined): MainTab {
+	if (view === 'create' || view === 'my-stats') return view;
+	return 'square';
+}
+
+function normalizeCreateSub(sub: string | undefined): CreateSub {
+	return sub === 'styles' ? 'styles' : 'characters';
 }
 
 onMounted(() => {
-	applyRouteQuery();
 	loadCharacters();
 	loadStyles();
 });
 
-watch(() => props.view, () => {
-	applyRouteQuery();
-});
+watch([() => props.view, () => props.sub], ([view, sub]) => {
+	mainTab.value = normalizeMainTab(view);
+	createSub.value = normalizeCreateSub(sub);
+}, { immediate: true });
 
-watch(() => props.sub, () => {
-	applyRouteQuery();
-});
-
-watch(mainTab, (t) => {
+function onMainTabChange(value: string | undefined) {
+	const t = normalizeMainTab(value);
+	if (mainTab.value === t) return;
+	mainTab.value = t;
 	void router.replace('/agents', {
 		query: t === 'create' ? { view: t, sub: createSub.value } : { view: t },
 	});
@@ -230,16 +234,19 @@ watch(mainTab, (t) => {
 		if (createSub.value === 'characters') void loadCharacters();
 		else void loadStyles();
 	}
-});
+}
 
-watch(createSub, (s) => {
+function onCreateSubChange(value: string | undefined) {
+	const s = normalizeCreateSub(value);
+	if (createSub.value === s) return;
+	createSub.value = s;
 	if (mainTab.value !== 'create') return;
 	void router.replace('/agents', {
 		query: { view: 'create', sub: s },
 	});
 	if (s === 'characters') void loadCharacters();
 	else void loadStyles();
-});
+}
 
 function goEditCharacter(id: string) {
 	router.push(('/agents/character/' + id) as '/agents/character/:characterId');

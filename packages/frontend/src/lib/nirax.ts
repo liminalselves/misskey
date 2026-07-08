@@ -24,6 +24,11 @@ interface RouteDefBase {
 	name?: string;
 	hash?: string;
 	children?: RouteDef[];
+	/**
+	 * Keep the current component instance when only the resolved props change.
+	 * Useful for query-driven tabs that manage their own local view state.
+	 */
+	reuseComponent?: boolean;
 }
 
 interface RouteDefWithComponent extends RouteDefBase {

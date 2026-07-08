@@ -196,6 +196,15 @@ describe('2要素認証', () => {
 		}, alice);
 		assert.strictEqual(doneResponse.status, 200);
 
+		const signinStartResponse = await api('signin-flow', {
+			username,
+		});
+		assert.strictEqual(signinStartResponse.status, 200);
+		assert.deepStrictEqual(signinStartResponse.body, {
+			finished: false,
+			next: 'captcha',
+		});
+
 		const signinWithoutTokenResponse = await api('signin-flow', {
 			...signinParam(),
 		});
