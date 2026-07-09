@@ -6,7 +6,6 @@ SPDX-License-Identifier: AGPL-3.0-only
 <template>
 <div
 	:class="$style.root"
-	:style="rootStyle"
 	@dragover.stop="onDragover"
 	@drop.stop="onDrop"
 >
@@ -59,7 +58,6 @@ import { prefer } from '@/preferences.js';
 import { Autocomplete } from '@/utility/autocomplete.js';
 import { emojiPicker } from '@/utility/emoji-picker.js';
 import { checkDragDataType, getDragData } from '@/drag-and-drop.js';
-import { useVisualViewportBottomInset } from '@/composables/use-visual-viewport-bottom-inset.js';
 
 const props = defineProps<{
 	user?: Misskey.entities.UserDetailed | null;
@@ -80,11 +78,6 @@ const file = ref<Misskey.entities.DriveFile | null>(null);
 const sending = ref(false);
 const textareaReadOnly = ref(false);
 let autocompleteInstance: Autocomplete | null = null;
-const { bottomInsetPx } = useVisualViewportBottomInset();
-
-const rootStyle = computed(() => ({
-	'--_visualViewportBottomInset': bottomInsetPx.value,
-}));
 
 const canSend = computed(() => (text.value != null && text.value !== '') || file.value != null);
 
@@ -363,7 +356,6 @@ onBeforeUnmount(() => {
 <style lang="scss" module>
 .root {
 	position: relative;
-	--_visualViewportBottomInset: 0px;
 	border-bottom: none;
 	border-radius: 14px 14px 0 0;
 	overflow: clip;
@@ -434,16 +426,11 @@ onBeforeUnmount(() => {
 @media (max-width: 500px) {
 	.root {
 		border-radius: 10px 10px 0 0;
-		overflow: visible;
-		padding-bottom: calc(var(--MI-minBottomSpacingMobile) + var(--_visualViewportBottomInset));
+		overflow-x: hidden;
+		overflow-y: visible;
 	}
 
 	.compose {
-		position: fixed;
-		left: 0;
-		right: 0;
-		bottom: 0;
-		z-index: 1;
 		flex-direction: row;
 		align-items: flex-end;
 		gap: 8px;
@@ -451,7 +438,7 @@ onBeforeUnmount(() => {
 		width: 100%;
 		min-width: 0;
 		max-width: 100%;
-		padding: 8px max(12px, env(safe-area-inset-right, 0px)) calc(var(--_visualViewportBottomInset) + max(8px, env(safe-area-inset-bottom, 0px))) max(12px, env(safe-area-inset-left, 0px));
+		padding: 8px max(12px, env(safe-area-inset-right, 0px)) max(8px, env(safe-area-inset-bottom, 0px)) max(12px, env(safe-area-inset-left, 0px));
 		background: var(--MI_THEME-panel);
 	}
 
