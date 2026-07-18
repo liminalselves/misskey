@@ -90,6 +90,7 @@ import {
 	MiAgentSession,
 	MiAgentSessionCompressionSticky,
 	MiAgentMessage,
+	MiAgentProactiveSchedule,
 	MiAgentImageGeneration,
 	MiAgentExternalAuditLog,
 	MiAgentUserStyleSubscription,
@@ -575,6 +576,12 @@ const $agentMessagesRepository: Provider = {
 	inject: [DI.db],
 };
 
+const $agentProactiveSchedulesRepository: Provider = {
+	provide: DI.agentProactiveSchedulesRepository,
+	useFactory: (db: DataSource) => db.getRepository(MiAgentProactiveSchedule).extend(miRepository as MiRepository<MiAgentProactiveSchedule>),
+	inject: [DI.db],
+};
+
 const $agentImageGenerationsRepository: Provider = {
 	provide: DI.agentImageGenerationsRepository,
 	useFactory: (db: DataSource) => db.getRepository(MiAgentImageGeneration).extend(miRepository as MiRepository<MiAgentImageGeneration>),
@@ -717,6 +724,7 @@ const $reversiGamesRepository: Provider = {
 		$agentDialogueStylesRepository,
 		$agentSessionsRepository,
 		$agentMessagesRepository,
+		$agentProactiveSchedulesRepository,
 		$agentImageGenerationsRepository,
 		$agentExternalAuditLogsRepository,
 		$agentUserStyleSubscriptionsRepository,
@@ -808,6 +816,7 @@ const $reversiGamesRepository: Provider = {
 		$agentDialogueStylesRepository,
 		$agentSessionsRepository,
 		$agentMessagesRepository,
+		$agentProactiveSchedulesRepository,
 		$agentImageGenerationsRepository,
 		$agentExternalAuditLogsRepository,
 		$agentUserStyleSubscriptionsRepository,

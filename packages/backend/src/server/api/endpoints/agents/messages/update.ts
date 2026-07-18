@@ -13,6 +13,7 @@ import { AgentService } from '@/core/AgentService.js';
 import { ChatService } from '@/core/ChatService.js';
 import { MetaService } from '@/core/MetaService.js';
 import { AgentExternalAuditService } from '@/core/AgentExternalAuditService.js';
+import { AgentProactiveScheduleService } from '@/core/AgentProactiveScheduleService.js';
 
 export const meta = {
 	tags: ['agents'],
@@ -41,7 +42,7 @@ export const paramDef = {
 	properties: {
 		sessionId: { type: 'string', format: 'misskey:id' },
 		messageId: { type: 'string', format: 'misskey:id' },
-		content: { type: 'string', minLength: 1, maxLength: 16000 },
+		content: { type: 'string', minLength: 0, maxLength: 16000 },
 	},
 	required: ['sessionId', 'messageId', 'content'],
 } as const;
@@ -59,6 +60,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		private chatService: ChatService,
 		private metaService: MetaService,
 		private agentExternalAuditService: AgentExternalAuditService,
+		private agentProactiveScheduleService: AgentProactiveScheduleService,
 	) {
 		super(meta, paramDef, async (ps, me) => {
 			this.agentService.assertAgentsEnabled();
@@ -88,15 +90,27 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					httpStatusCode: 400,
 				});
 			}
+			if (ps.content.trim() === '' && !(row.role === 'user' && row.imageFileId != null)) {
+				throw new ApiError({
+					message: 'Text is required unless the user message has an attached image.',
+					code: 'AGENT_MESSAGE_EMPTY',
+					id: '1a0b0ecf-0d89-465a-8565-3f1e0d94f4e8',
+					kind: 'client',
+					httpStatusCode: 400,
+				});
+			}
 
-			if (row.role === 'assistant' && ps.content !== row.content) {
+			const editedVisibleContent = row.role === 'assistant'
+				? this.extractEditedAssistantVisibleContent(ps.content, row.proactiveScheduleControlRaw)
+				: ps.content;
+			if (row.role === 'assistant' && editedVisibleContent !== row.content) {
 				const instance = await this.metaService.fetch(true);
 				const audit = await this.agentExternalAuditService.auditReply({
 					instance,
 					user: me,
 					session,
 					userText: '用户正在修改一条既有的智能体助手回复。请审核修改后的助手内容是否允许展示或执行。',
-					assistantText: ps.content,
+					assistantText: editedVisibleContent,
 				}).catch(() => ({ blocked: false as const, allFailed: true }));
 				if (audit.blocked === true) {
 					return {
@@ -112,7 +126,11 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				}
 			}
 
-			row.content = ps.content;
+			row.content = editedVisibleContent;
+			if (row.role === 'assistant' && row.proactiveScheduleControlRaw) {
+				// The executed control journal is immutable; editing changes only the visible reply.
+				row.rawContent = `${editedVisibleContent}\n${row.proactiveScheduleControlRaw}`;
+			}
 			await this.agentMessagesRepository.save(row);
 
 			return {
@@ -126,5 +144,17 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				auditReason: null,
 			};
 		});
+	}
+
+	private extractEditedAssistantVisibleContent(content: string, immutableControlRaw: string | null): string {
+		if (immutableControlRaw) {
+			const controlAt = content.lastIndexOf(immutableControlRaw);
+			if (controlAt >= 0) return content.slice(0, controlAt).trimEnd();
+			// The editor may contain the server-only rejection receipt. It is not user-visible
+			// content and must never be persisted as part of the assistant reply.
+			const withoutResult = content.replace(/\n?<proactive_schedule_result\b[\s\S]*?<\/proactive_schedule_result>\s*$/u, '').trimEnd();
+			return this.agentProactiveScheduleService.extractControl(withoutResult).visibleContent;
+		}
+		return this.agentProactiveScheduleService.extractControl(content).visibleContent;
 	}
 }

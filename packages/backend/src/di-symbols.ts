@@ -96,6 +96,7 @@ export const DI = {
 	agentDialogueStylesRepository: Symbol('agentDialogueStylesRepository'),
 	agentSessionsRepository: Symbol('agentSessionsRepository'),
 	agentMessagesRepository: Symbol('agentMessagesRepository'),
+	agentProactiveSchedulesRepository: Symbol('agentProactiveSchedulesRepository'),
 	agentImageGenerationsRepository: Symbol('agentImageGenerationsRepository'),
 	agentExternalAuditLogsRepository: Symbol('agentExternalAuditLogsRepository'),
 	agentUserStyleSubscriptionsRepository: Symbol('agentUserStyleSubscriptionsRepository'),

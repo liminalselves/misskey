@@ -44,14 +44,21 @@ export type MiAgentImageDefaultParams = {
 	promptSuffix?: string;
 };
 
-export type MiAgentImageProvider = 'aurora';
+export type MiAgentImageProvider = 'aurora' | 'openai';
 
 export type MiAgentImageModel = {
 	id: string;
 	name: string;
+	description?: string | null;
 	provider: MiAgentImageProvider;
 	enabled?: boolean;
 	apiModelName?: string | null;
+	/** Full OpenAI-compatible /images/generations or /chat/completions endpoint URL. */
+	apiUrl?: string | null;
+	/** Per-model credential for an OpenAI-compatible image endpoint. */
+	apiKey?: string | null;
+	/** Whether this model accepts the character's default reference image. */
+	supportsReferenceImage?: boolean;
 	costPerCall?: number | null;
 	defaultParams?: MiAgentImageDefaultParams | null;
 	defaultArtistPresetId?: string | null;
@@ -64,6 +71,17 @@ export type MiAgentImageArtistPreset = {
 	promptSuffix?: string | null;
 	negativePrompt?: string | null;
 	thumbnailUrl?: string | null;
+};
+
+export type MiAgentVisionModel = {
+	id: string;
+	name: string;
+	enabled?: boolean;
+	/** Full OpenAI-compatible /v1/chat/completions endpoint URL. */
+	apiUrl: string;
+	apiKey: string;
+	apiModelName: string;
+	costPerCall?: number | null;
 };
 
 export type MiAgentExternalAuditModel = {
@@ -1054,6 +1072,17 @@ export class MiMeta {
 		default: [],
 	})
 	public agentImageModels: MiAgentImageModel[];
+
+	@Column('jsonb', {
+		default: [],
+	})
+	public agentVisionModels: MiAgentVisionModel[];
+
+	@Column('varchar', {
+		length: 128,
+		nullable: true,
+	})
+	public agentVisionDefaultModelId: string | null;
 
 	@Column('jsonb', {
 		default: [],

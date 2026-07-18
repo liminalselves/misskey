@@ -2077,6 +2077,10 @@ export interface Locale extends ILocale {
      */
     "unavailable": string;
     /**
+     * このユーザー名は予約されているため使用できません
+     */
+    "usernameReserved": string;
+    /**
      * a~z、A~Z、0~9、_が使えます
      */
     "usernameInvalidFormat": string;
@@ -11259,6 +11263,10 @@ export interface Locale extends ILocale {
          */
         "scheduledNotePostFailed": string;
         /**
+         * {name} から自発メッセージが届きました
+         */
+        "agentProactiveMessage": ParameterizedString<"name">;
+        /**
          * 新しい投稿
          */
         "newNote": string;
@@ -11459,6 +11467,10 @@ export interface Locale extends ILocale {
              * エージェントセッション禁止変更
              */
             "agentSessionBanned": string;
+            /**
+             * エージェントからの自発メッセージ
+             */
+            "agentProactiveMessage": string;
             /**
              * 実績の獲得
              */
@@ -14138,6 +14150,374 @@ export interface Locale extends ILocale {
          */
         "modelDescription": string;
         /**
+         * 画像生成モデルの説明
+         */
+        "adminImageModelDescription": string;
+        /**
+         * ユーザー側の画像生成モデル選択カードに表示されます。空欄の場合は表示されません。
+         */
+        "adminImageModelDescriptionCaption": string;
+        /**
+         * 画像認識
+         */
+        "adminVisionTitle": string;
+        /**
+         * 画像メッセージ用の OpenAI 互換画像認識モデルを設定します。
+         */
+        "adminVisionCaption": string;
+        /**
+         * 既定の画像認識モデル
+         */
+        "adminVisionDefaultModel": string;
+        /**
+         * 画像認識モデル
+         */
+        "adminVisionModel": string;
+        /**
+         * 認識リクエスト URL
+         */
+        "adminVisionRequestUrl": string;
+        /**
+         * 認識 API キー
+         */
+        "adminVisionApiKey": string;
+        /**
+         * 上流モデル名
+         */
+        "adminVisionUpstreamModel": string;
+        /**
+         * 認識ごとの料金
+         */
+        "adminVisionCost": string;
+        /**
+         * 認識モデルを追加
+         */
+        "adminVisionAddModel": string;
+        /**
+         * 画像認識モデルには一意の ID、名前、HTTPS URL、API キー、上流モデル名、0 以上の料金が必要です。
+         */
+        "adminVisionInvalid": string;
+        /**
+         * 既定の画像認識モデルは有効である必要があります。
+         */
+        "adminVisionInvalidDefault": string;
+        /**
+         * 画像認識モデル
+         */
+        "visionModel": string;
+        /**
+         * 認識料金
+         */
+        "visionModelCost": string;
+        /**
+         * 画像認識モデルを保存できませんでした。更新して再試行してください。
+         */
+        "visionModelSaveFailed": string;
+        /**
+         * AI エージェントの画像メッセージは画像のみ対応しています。動画やその他のファイル形式は利用できません。
+         */
+        "imageMessageImagesOnly": string;
+        /**
+         * 画像認識の内容を表示
+         */
+        "imageRecognitionContent": string;
+        /**
+         * AI に送信した画像認識の内容
+         */
+        "imageRecognitionContentTitle": string;
+        /**
+         * この画像には利用可能な画像認識の内容が生成されていません。
+         */
+        "imageRecognitionUnavailable": string;
+        /**
+         * スケジュールメッセージを追加しました
+         */
+        "proactiveScheduleActionCreate": string;
+        /**
+         * スケジュールメッセージを変更しました
+         */
+        "proactiveScheduleActionUpdate": string;
+        /**
+         * スケジュールメッセージを削除しました
+         */
+        "proactiveScheduleActionCancel": string;
+        /**
+         * 追加
+         */
+        "proactiveScheduleActionCreateLabel": string;
+        /**
+         * 変更
+         */
+        "proactiveScheduleActionUpdateLabel": string;
+        /**
+         * 削除
+         */
+        "proactiveScheduleActionCancelLabel": string;
+        /**
+         * スケジュールメッセージ操作: {actions}
+         */
+        "proactiveScheduleActionSummary": ParameterizedString<"actions">;
+        /**
+         * 試行したスケジュールメッセージ操作: {actions}
+         */
+        "proactiveScheduleActionAttemptedSummary": ParameterizedString<"actions">;
+        /**
+         * スケジュールメッセージ操作
+         */
+        "proactiveScheduleActionUnknown": string;
+        /**
+         * 操作に失敗
+         */
+        "proactiveScheduleActionFailed": string;
+        /**
+         * 参照画像をサポート
+         */
+        "adminImageModelReferenceImage": string;
+        /**
+         * 有効にすると、この OpenAI 互換画像モデルにキャラクターの既定参照画像を送信します。
+         */
+        "adminImageModelReferenceImageCaption": string;
+        /**
+         * 画像生成リクエスト URL
+         */
+        "adminOpenaiImageRequestUrl": string;
+        /**
+         * 完全な OpenAI 互換 /images/generations または /chat/completions エンドポイントです。保存時に安全性を検証します。
+         */
+        "adminOpenaiImageRequestUrlCaption": string;
+        /**
+         * 画像 API キー（秘密）
+         */
+        "adminOpenaiImageApiKey": string;
+        /**
+         * 上流画像モデル名
+         */
+        "adminOpenaiImageModelName": string;
+        /**
+         * 画像 1 枚あたりの料金
+         */
+        "adminImageModelCost": string;
+        /**
+         * OpenAI 互換画像モデルにはリクエスト URL、API キー、上流モデル名が必要です。
+         */
+        "adminOpenaiImageRequired": string;
+        /**
+         * 画像サイズ
+         */
+        "adminOpenaiImageSize": string;
+        /**
+         * OpenAI 互換
+         */
+        "imageProviderOpenai": string;
+        /**
+         * 正規表現
+         */
+        "editCharacterRegex": string;
+        /**
+         * ユーザーメッセージまたはAI出力に一致するフィルターを適用します。元のメッセージは編集画面で確認できます。
+         */
+        "editCharacterRegexCaption": string;
+        /**
+         * 正規表現ルール
+         */
+        "regexRule": string;
+        /**
+         * 正規表現
+         */
+        "regexPattern": string;
+        /**
+         * JavaScriptの正規表現構文を使用します。一致した内容は削除されます。
+         */
+        "regexPatternCaption": string;
+        /**
+         * 対象（複数選択可）
+         */
+        "regexTargets": string;
+        /**
+         * ユーザーメッセージ
+         */
+        "regexTargetUser": string;
+        /**
+         * AI出力
+         */
+        "regexTargetAssistant": string;
+        /**
+         * 効果（複数選択可）
+         */
+        "regexEffects": string;
+        /**
+         * チャットから非表示
+         */
+        "regexEffectHide": string;
+        /**
+         * AIから非表示
+         */
+        "regexEffectAiInvisible": string;
+        /**
+         * 正規表現を追加
+         */
+        "addRegexRule": string;
+        /**
+         * パターンを入力し、対象と効果を1つ以上選択してください。
+         */
+        "regexRuleIncomplete": string;
+        /**
+         * 正規表現が無効です。構文を確認してください。
+         */
+        "regexPatternInvalid": string;
+        /**
+         * テストプレビュー
+         */
+        "regexTestPreview": string;
+        /**
+         * 現在の未保存ルールで、ユーザーに表示される内容とAIに送信される内容を確認します。
+         */
+        "regexTestCaption": string;
+        /**
+         * メッセージ種別
+         */
+        "regexTestSource": string;
+        /**
+         * テストテキスト
+         */
+        "regexTestInput": string;
+        /**
+         * ユーザーに表示
+         */
+        "regexTestUserView": string;
+        /**
+         * AIに送信
+         */
+        "regexTestAiView": string;
+        /**
+         * 内容なし
+         */
+        "regexTestEmpty": string;
+        /**
+         * 無効な正規表現はこのプレビューでは無視されます。
+         */
+        "regexTestInvalidRules": string;
+        /**
+         * 時間認識
+         */
+        "timeAwareness": string;
+        /**
+         * 現在の北京時間をエージェントに提供します。デフォルトで有効です。チャットや編集画面には表示されません。
+         */
+        "timeAwarenessCaption": string;
+        /**
+         * 時間認識の設定を保存しました
+         */
+        "timeAwarenessSaved": string;
+        /**
+         * 自発メッセージ
+         */
+        "proactiveMessages": string;
+        /**
+         * 参照画像対応
+         */
+        "imageModelReferenceImage": string;
+        /**
+         * キャラクターの既定参照画像
+         */
+        "imageReferenceImage": string;
+        /**
+         * このキャラクターには既定の参照画像がありません。
+         */
+        "imageReferenceImageEmpty": string;
+        /**
+         * ランダムな自発メッセージ
+         */
+        "randomProactiveMessages": string;
+        /**
+         * 30分間の無応答後、北京時間の日中を優先して自発メッセージを1回予定します。
+         */
+        "randomProactiveMessagesCaption": string;
+        /**
+         * 定時の自発メッセージ
+         */
+        "scheduledProactiveMessages": string;
+        /**
+         * エージェントは最大5件の定時プランを作成、変更、取消できます。
+         */
+        "scheduledProactiveMessagesCaption": string;
+        /**
+         * 自発メッセージを使うには時間認識を有効にしてください。
+         */
+        "proactiveTimeAwarenessRequired": string;
+        /**
+         * 前回のランダム自発メッセージは失敗したためスキップされました。
+         */
+        "proactiveRandomLastError": string;
+        /**
+         * 前回の定時自発メッセージは失敗したためスキップされました。
+         */
+        "proactiveScheduledLastError": string;
+        /**
+         * 定時タスクの設定でエラーが発生しました。会話を続けてエージェントに修正させてください。
+         */
+        "proactiveScheduleSettingFailed": string;
+        /**
+         * 現在の定時プラン
+         */
+        "proactiveScheduleList": string;
+        /**
+         * プランはエージェントが管理します。停止、再開、削除ができます。
+         */
+        "proactiveScheduleListCaption": string;
+        /**
+         * 定時プランはありません。
+         */
+        "proactiveScheduleEmpty": string;
+        /**
+         * 停止
+         */
+        "proactivePause": string;
+        /**
+         * 再開
+         */
+        "proactiveResume": string;
+        /**
+         * 次回実行
+         */
+        "proactiveNextRun": string;
+        /**
+         * 実行中
+         */
+        "proactiveScheduleActive": string;
+        /**
+         * 停止中
+         */
+        "proactiveSchedulePaused": string;
+        /**
+         * 完了
+         */
+        "proactiveScheduleCompleted": string;
+        /**
+         * 取消済み
+         */
+        "proactiveScheduleCancelled": string;
+        /**
+         * 一度のみ
+         */
+        "proactiveScheduleOnce": string;
+        /**
+         * 無制限
+         */
+        "proactiveScheduleUnlimited": string;
+        /**
+         * {count} 回繰り返す
+         */
+        "proactiveScheduleCount": ParameterizedString<"count">;
+        /**
+         * 残り {count} 回
+         */
+        "proactiveScheduleRemaining": ParameterizedString<"count">;
+        /**
+         * この一度限りの定時プランは期限切れのため再開できません。
+         */
+        "proactiveScheduleExpired": string;
+        /**
          * モデルID（APIのmodel）
          */
         "modelApiName": string;
@@ -14325,6 +14705,26 @@ export interface Locale extends ILocale {
          * 基本情報
          */
         "editCharacterBasic": string;
+        /**
+         * 既定の画像参照
+         */
+        "characterReferenceImage": string;
+        /**
+         * 最大4枚、各5 MiBまでです。参照画像をサポートする画像モデルを選択した場合にのみ送信されます。
+         */
+        "characterReferenceImageCaption": string;
+        /**
+         * 参照画像をアップロード
+         */
+        "characterReferenceImagePick": string;
+        /**
+         * 参照画像を削除
+         */
+        "characterReferenceImageClear": string;
+        /**
+         * 5 MiB 以下の画像を選択してください。
+         */
+        "characterReferenceImageInvalid": string;
         /**
          * 人格と世界観
          */
@@ -15471,6 +15871,22 @@ export interface Locale extends ILocale {
          */
         "billingKindCompressionUsage": string;
         /**
+         * 画像生成
+         */
+        "billingKindImageGenerationUsage": string;
+        /**
+         * 画像認識
+         */
+        "billingKindVisionUsage": string;
+        /**
+         * ランダム自発メッセージ
+         */
+        "billingKindProactiveRandomUsage": string;
+        /**
+         * 定時自発メッセージ
+         */
+        "billingKindProactiveScheduledUsage": string;
+        /**
          * 引き換え
          */
         "billingKindRedeem": string;
@@ -15482,6 +15898,22 @@ export interface Locale extends ILocale {
          * 圧縮
          */
         "usageLogKindCompression": string;
+        /**
+         * 画像生成
+         */
+        "usageLogKindImageGeneration": string;
+        /**
+         * 画像認識
+         */
+        "usageLogKindVision": string;
+        /**
+         * ランダム自発メッセージ
+         */
+        "usageLogKindProactiveRandom": string;
+        /**
+         * 定時自発メッセージ
+         */
+        "usageLogKindProactiveScheduled": string;
         /**
          * 中止
          */

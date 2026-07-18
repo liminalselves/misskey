@@ -12,7 +12,7 @@ import { DI } from '@/di-symbols.js';
 import { QueryService } from '@/core/QueryService.js';
 import { AgentService } from '@/core/AgentService.js';
 import { UserEntityService } from '@/core/entities/UserEntityService.js';
-import { packSessionGovernanceRow } from '../_utils.js';
+import { packSessionGovernanceRow, resolveUserIdFromAcctOrId } from '../_utils.js';
 
 export const meta = {
 	tags: ['admin', 'agents'],
@@ -27,7 +27,7 @@ export const meta = {
 export const paramDef = {
 	type: 'object',
 	properties: {
-		userId: { type: 'string', format: 'misskey:id', nullable: true },
+		userId: { type: 'string', minLength: 1, maxLength: 256, nullable: true },
 		sessionId: { type: 'string', format: 'misskey:id', nullable: true },
 		limit: { type: 'integer', minimum: 1, maximum: 100, default: 30 },
 		untilId: { type: 'string', format: 'misskey:id', nullable: true },
@@ -53,6 +53,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 	) {
 		super(meta, paramDef, async (ps, me) => {
 			this.agentService.assertAgentsEnabled();
+			const userId = await resolveUserIdFromAcctOrId(this.usersRepository, ps.userId);
 			const select = ['s.id', 's.createdAt', 's.updatedAt', 's.userId', 's.name', 's.characterId', 's.dialogueStyleId', 's.sessionKind', 's.lastMessageAt', 's.agentReplyPending', 's.moderationBanned'] as const;
 
 			const q = ps.sessionId
@@ -62,7 +63,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					null,
 					ps.untilId ?? null,
 				).take(ps.limit ?? 30);
-			if (!ps.sessionId && ps.userId) q.andWhere('s.userId = :userId', { userId: ps.userId });
+			if (!ps.sessionId && userId) q.andWhere('s.userId = :userId', { userId });
 
 			const rows = await q.getMany();
 			if (rows.length === 0) return [];

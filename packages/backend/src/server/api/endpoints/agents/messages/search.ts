@@ -67,6 +67,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			const pattern = `%${escapeIlikePattern(ps.query)}%`;
 			const rows = await this.agentMessagesRepository.createQueryBuilder('m')
 				.where('m.sessionId = :sessionId', { sessionId: ps.sessionId })
+				.andWhere('m.isInternal = false')
 				.andWhere('m.content ILIKE :pattern ESCAPE \'\\\'', { pattern })
 				.orderBy('m.id', 'DESC')
 				.take(limit)

@@ -92,7 +92,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			const lastRows = await this.agentMessagesRepository.query(
 				`SELECT DISTINCT ON ("sessionId") "sessionId", "content", "role"
 				 FROM "agent_message"
-				 WHERE "sessionId" = ANY($1)
+				 WHERE "sessionId" = ANY($1) AND "isInternal" = false
 				 ORDER BY "sessionId", "id" DESC`,
 				[sessionIds],
 			) as { sessionId: string; content: string; role: 'user' | 'assistant' | 'system' }[];

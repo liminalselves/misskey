@@ -12,7 +12,7 @@ import { DI } from '@/di-symbols.js';
 import { AgentService } from '@/core/AgentService.js';
 import { QueryService } from '@/core/QueryService.js';
 import { UserEntityService } from '@/core/entities/UserEntityService.js';
-import { escapeIlikePattern } from '../_utils.js';
+import { escapeIlikePattern, resolveUserIdFromAcctOrId } from '../_utils.js';
 
 export const meta = {
 	tags: ['admin', 'agents'],
@@ -27,7 +27,7 @@ export const meta = {
 export const paramDef = {
 	type: 'object',
 	properties: {
-		userId: { type: 'string', format: 'misskey:id', nullable: true },
+		userId: { type: 'string', minLength: 1, maxLength: 256, nullable: true },
 		sessionId: { type: 'string', format: 'misskey:id', nullable: true },
 		messageId: { type: 'string', format: 'misskey:id', nullable: true },
 		status: { type: 'string', nullable: true },
@@ -55,8 +55,9 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 	) {
 		super(meta, paramDef, async (ps, me) => {
 			this.agentService.assertAgentsEnabled();
+			const userId = await resolveUserIdFromAcctOrId(this.usersRepository, ps.userId);
 			let q = this.agentImageGenerationsRepository.createQueryBuilder('g');
-			if (ps.userId) q = q.andWhere('g.userId = :userId', { userId: ps.userId });
+			if (userId) q = q.andWhere('g.userId = :userId', { userId });
 			if (ps.sessionId) q = q.andWhere('g.sessionId = :sessionId', { sessionId: ps.sessionId });
 			if (ps.messageId) q = q.andWhere('g.messageId = :messageId', { messageId: ps.messageId });
 			if (ps.status) q = q.andWhere('g.status = :status', { status: ps.status });
@@ -88,6 +89,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				fileId: r.fileId,
 				url: r.isBlocked ? null : r.url,
 				errorCode: r.errorCode,
+				errorMessage: r.errorMessage,
 				cost: r.cost,
 				isBlocked: r.isBlocked,
 				blockedReason: r.blockedReason,

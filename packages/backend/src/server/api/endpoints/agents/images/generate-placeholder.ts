@@ -11,7 +11,7 @@ import { DI } from '@/di-symbols.js';
 import { Endpoint } from '@/server/api/endpoint-base.js';
 import { ApiError } from '@/server/api/error.js';
 import { AgentService } from '@/core/AgentService.js';
-import { AgentImageService } from '@/core/AgentImageService.js';
+import { AgentImageService, getAgentImageErrorDiagnostic } from '@/core/AgentImageService.js';
 import { DriveFileEntityService } from '@/core/entities/DriveFileEntityService.js';
 import type { MiAgentImageGeneration } from '@/models/AgentImageGeneration.js';
 
@@ -44,7 +44,8 @@ export const meta = {
 			fileId: { type: 'string', nullable: true },
 			url: { type: 'string', nullable: true },
 			file: { type: 'object', nullable: true, ref: 'DriveFile' },
-			errorCode: { type: 'string', nullable: true },
+				errorCode: { type: 'string', nullable: true },
+				errorMessage: { type: 'string', nullable: true },
 			tag: { type: 'string' },
 			size: { type: 'string' },
 			isBlocked: { type: 'boolean' },
@@ -159,6 +160,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					fileId: null,
 					url: null,
 					errorCode: null,
+					errorMessage: null,
 					cost: 0,
 					regenerationOfId,
 					isBlocked: false,
@@ -205,6 +207,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			} catch (err) {
 				row.status = 'failed';
 				row.errorCode = err instanceof ApiError ? err.code : 'AGENT_IMAGE_FAILED';
+				row.errorMessage = getAgentImageErrorDiagnostic(err);
 				row.updatedAt = new Date();
 				await this.agentImageGenerationsRepository.save(row);
 				return await this.pack(row);
@@ -233,14 +236,16 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			{ id: current.id, status: 'generating' },
 			{
 				status: 'failed',
-				errorCode: 'AGENT_IMAGE_GENERATION_INTERRUPTED',
+					errorCode: 'AGENT_IMAGE_GENERATION_INTERRUPTED',
+					errorMessage: null,
 				updatedAt: new Date(),
 			},
 		);
 		return await this.agentImageGenerationsRepository.findOneBy({ id: current.id }) ?? {
 			...current,
 			status: 'failed',
-			errorCode: 'AGENT_IMAGE_GENERATION_INTERRUPTED',
+				errorCode: 'AGENT_IMAGE_GENERATION_INTERRUPTED',
+				errorMessage: null,
 			updatedAt: new Date(),
 		};
 	}
@@ -266,7 +271,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			fileId: row.fileId,
 			url: isAutoCleaned || isBlocked ? null : row.url,
 			file,
-			errorCode: isAutoCleaned || isBlocked ? null : row.errorCode,
+				errorCode: isAutoCleaned || isBlocked ? null : row.errorCode,
+				errorMessage: isAutoCleaned || isBlocked ? null : row.errorMessage,
 			tag: row.tag,
 			size: row.size,
 			isBlocked: isAutoCleaned ? false : isBlocked,

@@ -76,7 +76,22 @@ export const paramDef = {
 			},
 			maxItems: 128,
 		},
+		regexRules: {
+			type: 'array', maxItems: 64,
+			items: {
+				type: 'object',
+				properties: {
+					id: { type: 'string', minLength: 1, maxLength: 128 },
+					pattern: { type: 'string', minLength: 1, maxLength: 2000 },
+					targets: { type: 'array', minItems: 1, maxItems: 2, items: { type: 'string', enum: ['user', 'assistant'] } },
+					effects: { type: 'array', minItems: 1, maxItems: 2, items: { type: 'string', enum: ['hide', 'aiInvisible'] } },
+				},
+				required: ['id', 'pattern', 'targets', 'effects'],
+			},
+		},
 		avatarFileId: { type: 'string', format: 'misskey:id', nullable: true },
+		referenceImageFileId: { type: 'string', format: 'misskey:id', nullable: true },
+		referenceImageFileIds: { type: 'array', nullable: true, maxItems: 4, items: { type: 'string', format: 'misskey:id' } },
 		promptOpenSourced: { type: 'boolean' },
 	},
 	required: ['name'],
@@ -102,6 +117,15 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					throw new ApiError({ message: 'No such file.', code: 'NO_SUCH_FILE', id: '1866aaac-36e5-430a-94db-7eb8b2278b2c' });
 				}
 			}
+			const referenceImageFileIds = [...new Set(
+				ps.referenceImageFileIds ?? (ps.referenceImageFileId ? [ps.referenceImageFileId] : []),
+			)].slice(0, 4);
+			for (const referenceImageFileId of referenceImageFileIds) {
+				const f = await this.driveFilesRepository.findOneBy({ id: referenceImageFileId, userId: me.id });
+				if (!f || !f.type.startsWith('image/') || f.size > 5 * 1024 * 1024) {
+					throw new ApiError({ message: 'Each reference image must be an image up to 5 MiB from your Drive.', code: 'INVALID_REFERENCE_IMAGE', id: '7bd424d8-4205-4a5d-a23e-0bfdf3294b65' });
+				}
+			}
 
 			const exampleTurns = ps.exampleTurns != null
 				? this.agentService.validateExampleTurnsOrThrow(ps.exampleTurns)
@@ -121,12 +145,15 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				exampleDialogue: this.agentService.serializeExampleTurns(exampleTurns),
 				forbiddenBehavior: ps.forbiddenBehavior ?? '',
 				worldbook: ps.worldbook ?? [],
+				regexRules: this.agentService.normalizeRegexRules(ps.regexRules),
 				draftRevision: 1,
 				isPublished: false,
 				reviewStatus: 'draft',
 				publishedVersion: null,
 				publishedSnapshot: null,
 				avatarFileId: ps.avatarFileId ?? null,
+				referenceImageFileId: referenceImageFileIds[0] ?? null,
+				referenceImageFileIds,
 				promptOpenSourced: ps.promptOpenSourced === true,
 			});
 

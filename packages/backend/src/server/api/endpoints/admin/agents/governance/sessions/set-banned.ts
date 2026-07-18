@@ -5,13 +5,14 @@
 
 import ms from 'ms';
 import { Inject, Injectable } from '@nestjs/common';
-import type { AgentSessionsRepository } from '@/models/_.js';
+import type { AgentSessionsRepository, UsersRepository } from '@/models/_.js';
 import { Endpoint } from '@/server/api/endpoint-base.js';
 import { DI } from '@/di-symbols.js';
 import { ApiError } from '@/server/api/error.js';
 import { AgentService } from '@/core/AgentService.js';
 import { ModerationLogService } from '@/core/ModerationLogService.js';
 import { NotificationService } from '@/core/NotificationService.js';
+import { getAcctByUserId } from '../_utils.js';
 
 export const meta = {
 	tags: ['admin', 'agents'],
@@ -39,6 +40,9 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		@Inject(DI.agentSessionsRepository)
 		private agentSessionsRepository: AgentSessionsRepository,
 
+		@Inject(DI.usersRepository)
+		private usersRepository: UsersRepository,
+
 		private agentService: AgentService,
 		private moderationLogService: ModerationLogService,
 		private notificationService: NotificationService,
@@ -51,10 +55,12 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			row.moderationBanned = ps.banned;
 			row.updatedAt = new Date();
 			await this.agentSessionsRepository.save(row);
+			const userAcct = await getAcctByUserId(this.usersRepository, row.userId);
 			await this.moderationLogService.log(me, 'setAgentSessionModerationBan', {
 				sessionId: row.id,
 				sessionName: row.name,
 				userId: row.userId,
+				userAcct,
 				characterId: row.characterId,
 				banned: ps.banned,
 				before,

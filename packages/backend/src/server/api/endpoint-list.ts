@@ -165,6 +165,9 @@ export * as 'agents/compression-sticky/reorder' from './endpoints/agents/compres
 export * as 'agents/credit-balance' from './endpoints/agents/credit-balance.js';
 export * as 'agents/my-usage-summary' from './endpoints/agents/my-usage-summary.js';
 export * as 'agents/redeem-code' from './endpoints/agents/redeem-code.js';
+export * as 'agents/proactive-schedules/list' from './endpoints/agents/proactive-schedules/list.js';
+export * as 'agents/proactive-schedules/set-status' from './endpoints/agents/proactive-schedules/set-status.js';
+export * as 'agents/proactive-schedules/delete' from './endpoints/agents/proactive-schedules/delete.js';
 export * as 'agents/models/success-rates' from './endpoints/agents/models/success-rates.js';
 export * as 'admin/agents/reports/overview' from './endpoints/admin/agents/reports/overview.js';
 export * as 'admin/agents/redeem-codes/generate' from './endpoints/admin/agents/redeem-codes/generate.js';
@@ -183,6 +186,7 @@ export * as 'agents/messages/import-context' from './endpoints/agents/messages/i
 export * as 'agents/images/generate' from './endpoints/agents/images/generate.js';
 export * as 'agents/images/generate-placeholder' from './endpoints/agents/images/generate-placeholder.js';
 export * as 'agents/images/models/list' from './endpoints/agents/images/models/list.js';
+export * as 'agents/vision-models/list' from './endpoints/agents/vision-models/list.js';
 export * as 'agents/images/presets/list' from './endpoints/agents/images/presets/list.js';
 export * as 'agents/memory/add' from './endpoints/agents/memory/add.js';
 export * as 'agents/memory/delete' from './endpoints/agents/memory/delete.js';

@@ -305,6 +305,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 							<MkSelect v-model="row.provider" :items="agentImageProviderItems"><template #label>模型提供商</template></MkSelect>
 						</FormSplit>
 						<MkSwitch v-model="row.enabled"><template #label>启用</template></MkSwitch>
+						<MkTextarea v-model="row.description">
+							<template #label>{{ i18n.ts._agents.adminImageModelDescription }}</template>
+							<template #caption>{{ i18n.ts._agents.adminImageModelDescriptionCaption }}</template>
+						</MkTextarea>
 						<template v-if="row.provider === 'aurora'">
 							<FormSplit :minWidth="220">
 								<MkInput v-model="row.apiModelName"><template #label>Aurora 上游模型名</template></MkInput>
@@ -323,6 +327,23 @@ SPDX-License-Identifier: AGPL-3.0-only
 							</FormSplit>
 							<MkTextarea v-model="row.promptPrefix"><template #label>Prompt Prefix</template></MkTextarea>
 							<MkTextarea v-model="row.promptSuffix"><template #label>Prompt Suffix</template></MkTextarea>
+						</template>
+						<template v-else>
+							<FormSplit :minWidth="220">
+								<MkInput v-model="row.apiUrl">
+									<template #label>{{ i18n.ts._agents.adminOpenaiImageRequestUrl }}</template>
+									<template #caption>{{ i18n.ts._agents.adminOpenaiImageRequestUrlCaption }}</template>
+								</MkInput>
+								<MkInput v-model="row.apiKey" type="password"><template #label>{{ i18n.ts._agents.adminOpenaiImageApiKey }}</template></MkInput>
+							</FormSplit>
+							<FormSplit :minWidth="220">
+								<MkInput v-model="row.apiModelName"><template #label>{{ i18n.ts._agents.adminOpenaiImageModelName }}</template></MkInput>
+								<MkInput v-model="row.costPerCall" type="text"><template #label>{{ i18n.ts._agents.adminImageModelCost }}</template></MkInput>
+							</FormSplit>
+							<MkSwitch v-model="row.supportsReferenceImage">
+								<template #label>{{ i18n.ts._agents.adminImageModelReferenceImage }}</template>
+								<template #caption>{{ i18n.ts._agents.adminImageModelReferenceImageCaption }}</template>
+							</MkSwitch>
 						</template>
 					</div>
 					<MkButton rounded @click="addImageModel"><i class="ti ti-plus"></i> 添加生图模型</MkButton>
@@ -406,6 +427,22 @@ SPDX-License-Identifier: AGPL-3.0-only
 						<template #label>默认负面提示词</template>
 						<template #caption>留空会使用内置默认负面词；后端始终会额外追加 NSFW、未成年、暴力等安全负面标签。</template>
 					</MkTextarea>
+				</div>
+			</MkFolder>
+
+			<MkFolder v-if="activeTab === 'vision'" :defaultOpen="true">
+				<template #icon><i class="ti ti-eye"></i></template>
+				<template #label>{{ i18n.ts._agents.adminVisionTitle }}</template>
+				<div class="_gaps">
+					<MkInfo>{{ i18n.ts._agents.adminVisionCaption }}</MkInfo>
+					<MkSelect v-model="form.state.agentVisionDefaultModelId" :items="agentVisionDefaultItems"><template #label>{{ i18n.ts._agents.adminVisionDefaultModel }}</template></MkSelect>
+					<div v-for="(row, i) in form.state.agentVisionModelRows" :key="row.id" :class="$style.modelCard" class="_gaps_s">
+						<div :class="$style.modelCardHead"><b>{{ row.name.trim() || `${i18n.ts._agents.adminVisionModel} #${i + 1}` }}</b><button type="button" class="_button" :class="$style.iconWarn" @click="removeVisionModel(i)"><i class="ti ti-trash"></i></button></div>
+						<FormSplit :minWidth="220"><MkInput v-model="row.name"><template #label>{{ i18n.ts._agents.adminVisionModel }}</template></MkInput><MkSwitch v-model="row.enabled"><template #label>{{ i18n.ts.enabled }}</template></MkSwitch></FormSplit>
+						<FormSplit :minWidth="220"><MkInput v-model="row.apiUrl"><template #label>{{ i18n.ts._agents.adminVisionRequestUrl }}</template></MkInput><MkInput v-model="row.apiKey" type="password"><template #label>{{ i18n.ts._agents.adminVisionApiKey }}</template></MkInput></FormSplit>
+						<FormSplit :minWidth="220"><MkInput v-model="row.apiModelName"><template #label>{{ i18n.ts._agents.adminVisionUpstreamModel }}</template></MkInput><MkInput v-model="row.costPerCall" type="text"><template #label>{{ i18n.ts._agents.adminVisionCost }}</template></MkInput></FormSplit>
+					</div>
+					<MkButton rounded @click="addVisionModel"><i class="ti ti-plus"></i> {{ i18n.ts._agents.adminVisionAddModel }}</MkButton>
 				</div>
 			</MkFolder>
 
@@ -513,7 +550,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</template>
 			</template>
 
-			<div v-if="form.modified.value && ['basic', 'models', 'memory', 'compression', 'externalAudit', 'images'].includes(activeTab)" :class="$style.saveBar">
+			<div v-if="form.modified.value && ['basic', 'models', 'memory', 'compression', 'externalAudit', 'images', 'vision'].includes(activeTab)" :class="$style.saveBar">
 				<MkFormFooter :form="form"/>
 			</div>
 		</div>
@@ -598,9 +635,13 @@ type AgentImageTokenRow = {
 type AgentImageModelRow = {
 	id: string;
 	name: string;
-	provider: 'aurora';
+	description: string;
+	provider: 'aurora' | 'openai';
 	enabled: boolean;
 	apiModelName: string;
+	apiUrl: string;
+	apiKey: string;
+	supportsReferenceImage: boolean;
 	costPerCall: string;
 	defaultArtistPresetId: string;
 	steps: string;
@@ -620,6 +661,8 @@ type AgentImageArtistPresetRow = {
 	negativePrompt: string;
 	thumbnailUrl: string;
 };
+
+type AgentVisionModelRow = { id: string; name: string; enabled: boolean; apiUrl: string; apiKey: string; apiModelName: string; costPerCall: string };
 
 type AgentExternalAuditModelRow = {
 	id: string;
@@ -649,7 +692,9 @@ type AgentExternalAuditModelStat = {
 
 const agentImageProviderItems: MkSelectItem[] = [
 	{ value: 'aurora', label: 'Aurora / Naval AI' },
+	{ value: 'openai', label: i18n.ts._agents.imageProviderOpenai },
 ];
+
 
 function numFromMeta(v: unknown, fallback: number): number {
 	if (typeof v === 'number' && Number.isFinite(v)) return Math.trunc(v);
@@ -726,9 +771,13 @@ function initAgentImageModelRows(): AgentImageModelRow[] {
 		return {
 			id: typeof o.id === 'string' && o.id ? o.id : genId(),
 			name: typeof o.name === 'string' ? o.name : '',
-			provider: 'aurora',
+			description: typeof o.description === 'string' ? o.description : '',
+			provider: o.provider === 'openai' ? 'openai' : 'aurora',
 			enabled: o.enabled !== false,
 			apiModelName: typeof o.apiModelName === 'string' ? o.apiModelName : '',
+			apiUrl: typeof o.apiUrl === 'string' ? o.apiUrl : '',
+			apiKey: typeof o.apiKey === 'string' ? o.apiKey : '',
+			supportsReferenceImage: o.provider === 'openai' && o.supportsReferenceImage === true,
 			costPerCall: typeof o.costPerCall === 'number' ? String(o.costPerCall) : '',
 			defaultArtistPresetId: typeof o.defaultArtistPresetId === 'string' ? o.defaultArtistPresetId : '',
 			steps: String(numFromMeta(p.steps, 28)),
@@ -756,6 +805,15 @@ function initAgentImageArtistPresetRows(): AgentImageArtistPresetRow[] {
 			negativePrompt: typeof o.negativePrompt === 'string' ? o.negativePrompt : '',
 			thumbnailUrl: typeof o.thumbnailUrl === 'string' ? o.thumbnailUrl : '',
 		};
+	});
+}
+
+function initAgentVisionModelRows(): AgentVisionModelRow[] {
+	const raw = meta.agentVisionModels;
+	if (!Array.isArray(raw)) return [];
+	return raw.map(item => {
+		const o = item && typeof item === 'object' ? item as Record<string, unknown> : {};
+		return { id: typeof o.id === 'string' && o.id ? o.id : genId(), name: typeof o.name === 'string' ? o.name : '', enabled: o.enabled !== false, apiUrl: typeof o.apiUrl === 'string' ? o.apiUrl : '', apiKey: typeof o.apiKey === 'string' ? o.apiKey : '', apiModelName: typeof o.apiModelName === 'string' ? o.apiModelName : '', costPerCall: typeof o.costPerCall === 'number' ? String(o.costPerCall) : '0' };
 	});
 }
 
@@ -827,6 +885,8 @@ const form = useForm({
 	agentImageNoiseSchedule: typeof imageParams.noiseSchedule === 'string' ? imageParams.noiseSchedule : 'karras',
 	agentImagePromptPrefix: typeof imageParams.promptPrefix === 'string' ? imageParams.promptPrefix : '',
 	agentImagePromptSuffix: typeof imageParams.promptSuffix === 'string' ? imageParams.promptSuffix : 'masterpiece,best quality,very aesthetic,highres,absurdres',
+	agentVisionModelRows: initAgentVisionModelRows(),
+	agentVisionDefaultModelId: typeof meta.agentVisionDefaultModelId === 'string' ? meta.agentVisionDefaultModelId : '',
 	agentExternalAuditEnabled: Boolean(meta.agentExternalAuditEnabled),
 	agentExternalAuditModelRows: initAgentExternalAuditModelRows(),
 	agentExternalAuditTimeoutMs: String(numFromMeta(meta.agentExternalAuditTimeoutMs, 10000)),
@@ -931,7 +991,7 @@ const form = useForm({
 			lastError: row.lastError || null,
 		}));
 	const imageModels = state.agentImageModelRows
-		.filter(row => row.name.trim() !== '' || row.apiModelName.trim() !== '')
+		.filter(row => row.name.trim() !== '' || row.apiModelName.trim() !== '' || row.apiUrl.trim() !== '')
 		.map((row) => {
 			const steps = Math.trunc(Number(row.steps));
 			const scale = Number(row.scale);
@@ -939,12 +999,16 @@ const form = useForm({
 			return {
 				id: row.id.trim() || genId(),
 				name: row.name.trim(),
+				description: row.description.trim() === '' ? null : row.description.trim(),
 				provider: row.provider,
 				enabled: row.enabled,
 				apiModelName: row.apiModelName.trim() === '' ? null : row.apiModelName.trim(),
+				apiUrl: row.provider === 'openai' && row.apiUrl.trim() !== '' ? row.apiUrl.trim() : null,
+				apiKey: row.provider === 'openai' && row.apiKey.trim() !== '' ? row.apiKey.trim() : null,
+				supportsReferenceImage: row.provider === 'openai' && row.supportsReferenceImage,
 				costPerCall: row.costPerCall.trim() === '' ? null : Number(row.costPerCall),
 				defaultArtistPresetId: row.defaultArtistPresetId.trim() === '' ? null : row.defaultArtistPresetId.trim(),
-				defaultParams: {
+				defaultParams: row.provider === 'aurora' ? {
 					steps,
 					scale,
 					cfgRescale,
@@ -952,16 +1016,38 @@ const form = useForm({
 					noiseSchedule: row.noiseSchedule.trim() || 'karras',
 					promptPrefix: row.promptPrefix,
 					promptSuffix: row.promptSuffix.trim() || 'masterpiece,best quality,very aesthetic,highres,absurdres',
-				},
+				} : null,
 			};
 		});
 	for (const row of imageModels) {
 		if (!row.id || !row.name || !row.provider) throw new Error('invalid image model row');
 		if (row.provider === 'aurora' && !row.apiModelName) throw new Error('invalid aurora image model api name');
+		if (row.provider === 'openai' && (!row.apiModelName || !row.apiUrl || !row.apiKey)) {
+			os.alert({ type: 'error', text: i18n.ts._agents.adminOpenaiImageRequired });
+			throw new Error('invalid openai image model configuration');
+		}
 		if (row.costPerCall != null && (!Number.isFinite(row.costPerCall) || row.costPerCall < 0)) throw new Error('invalid image model cost');
-		if (!Number.isFinite(row.defaultParams.steps) || row.defaultParams.steps < 1 || row.defaultParams.steps > 80) throw new Error('invalid image model steps');
-		if (!Number.isFinite(row.defaultParams.scale) || row.defaultParams.scale < 0 || row.defaultParams.scale > 30) throw new Error('invalid image model scale');
-		if (!Number.isFinite(row.defaultParams.cfgRescale) || row.defaultParams.cfgRescale < 0 || row.defaultParams.cfgRescale > 1) throw new Error('invalid image model cfg rescale');
+		if (row.provider === 'aurora' && row.defaultParams != null) {
+			if (!Number.isFinite(row.defaultParams.steps) || row.defaultParams.steps < 1 || row.defaultParams.steps > 80) throw new Error('invalid image model steps');
+			if (!Number.isFinite(row.defaultParams.scale) || row.defaultParams.scale < 0 || row.defaultParams.scale > 30) throw new Error('invalid image model scale');
+			if (!Number.isFinite(row.defaultParams.cfgRescale) || row.defaultParams.cfgRescale < 0 || row.defaultParams.cfgRescale > 1) throw new Error('invalid image model cfg rescale');
+		}
+	}
+	const visionModels = state.agentVisionModelRows
+		.filter(row => row.name.trim() !== '' || row.apiUrl.trim() !== '' || row.apiModelName.trim() !== '')
+		.map(row => ({ id: row.id.trim() || genId(), name: row.name.trim(), enabled: row.enabled, apiUrl: row.apiUrl.trim(), apiKey: row.apiKey.trim(), apiModelName: row.apiModelName.trim(), costPerCall: Number(row.costPerCall) }));
+	const visionIds = new Set<string>();
+	for (const row of visionModels) {
+		if (!row.id || !row.name || !row.apiUrl || !row.apiKey || !row.apiModelName || !Number.isFinite(row.costPerCall) || row.costPerCall < 0 || visionIds.has(row.id)) {
+			os.alert({ type: 'error', text: i18n.ts._agents.adminVisionInvalid });
+			throw new Error('invalid vision model');
+		}
+		visionIds.add(row.id);
+	}
+	const visionDefaultId = state.agentVisionDefaultModelId.trim();
+	if (visionDefaultId !== '' && !visionModels.some(row => row.id === visionDefaultId && row.enabled)) {
+		os.alert({ type: 'error', text: i18n.ts._agents.adminVisionInvalidDefault });
+		throw new Error('invalid vision default model');
 	}
 	const imageArtistPresets = state.agentImageArtistPresetRows
 		.filter(row => row.id.trim() !== '' || row.name.trim() !== '' || row.promptPrefix.trim() !== '' || row.promptSuffix.trim() !== '' || row.negativePrompt.trim() !== '' || row.thumbnailUrl.trim() !== '')
@@ -1122,6 +1208,8 @@ const form = useForm({
 		agentImageBaseUrl: state.agentImageBaseUrl.trim() || 'https://love.auroralove.cc',
 		agentImageTokens: imageTokens,
 		agentImageModels: imageModels,
+		agentVisionModels: visionModels,
+		agentVisionDefaultModelId: visionDefaultId === '' ? null : visionDefaultId,
 		agentImageArtistPresets: imageArtistPresets,
 		agentImageDefaultModel: state.agentImageDefaultModel.trim() || 'nai-diffusion-4-5-full',
 		agentImageDefaultArtistPresetId: state.agentImageDefaultArtistPresetId.trim() === '' ? null : state.agentImageDefaultArtistPresetId.trim(),
@@ -1196,6 +1284,20 @@ const generatedCodes = ref<{ id: string; code: string; creditAmount: number }[]>
 const redeemLoading = ref(false);
 const redeemCodes = ref<RedeemCodeRow[]>([]);
 const redeemStatus = ref<'available' | 'redeemed' | 'expired' | 'revoked' | 'all'>('available');
+
+const agentVisionDefaultItems = computed(() => [
+	{ value: '', label: i18n.ts.none },
+	...form.state.agentVisionModelRows.filter(row => row.enabled && row.name.trim() !== '').map(row => ({ value: row.id, label: row.name.trim() })),
+]);
+
+function addVisionModel() {
+	form.state.agentVisionModelRows.push({ id: genId(), name: '', enabled: true, apiUrl: '', apiKey: '', apiModelName: '', costPerCall: '0' });
+}
+
+function removeVisionModel(index: number) {
+	const [removed] = form.state.agentVisionModelRows.splice(index, 1);
+	if (removed && form.state.agentVisionDefaultModelId === removed.id) form.state.agentVisionDefaultModelId = '';
+}
 const redeemPageSize = ref(30);
 const redeemStatusItems: MkSelectItem[] = [
 	{ value: 'all', label: '全部' },
@@ -1409,9 +1511,13 @@ function addImageModel() {
 	form.state.agentImageModelRows.push({
 		id: genId(),
 		name: '',
+		description: '',
 		provider: 'aurora',
 		enabled: true,
 		apiModelName: form.state.agentImageDefaultModel || 'nai-diffusion-4-5-full',
+		apiUrl: '',
+		apiKey: '',
+		supportsReferenceImage: false,
 		costPerCall: form.state.agentImageCostPerCall || '',
 		defaultArtistPresetId: form.state.agentImageDefaultArtistPresetId || '',
 		steps: form.state.agentImageSteps || '28',
@@ -1514,6 +1620,10 @@ const headerTabs = computed(() => [{
 	key: 'images',
 	title: '绘图',
 	icon: 'ti ti-brush',
+}, {
+	key: 'vision',
+	title: i18n.ts._agents.adminVisionTitle,
+	icon: 'ti ti-eye',
 }, {
 	key: 'credits',
 	title: '额度',

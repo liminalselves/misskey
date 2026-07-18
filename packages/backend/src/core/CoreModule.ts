@@ -78,7 +78,10 @@ import { FeaturedService } from './FeaturedService.js';
 import { FanoutTimelineService } from './FanoutTimelineService.js';
 import { ChannelFollowingService } from './ChannelFollowingService.js';
 import { AgentService } from './AgentService.js';
+import { AgentProactiveScheduleService } from './AgentProactiveScheduleService.js';
+import { AgentProactiveMessageService } from './AgentProactiveMessageService.js';
 import { AgentImageService } from './AgentImageService.js';
+import { AgentVisionService } from './AgentVisionService.js';
 import { AgentExternalAuditService } from './AgentExternalAuditService.js';
 import { AgentCompressionMemoryService } from './AgentCompressionMemoryService.js';
 import { AgentPlazaReviewService } from './AgentPlazaReviewService.js';
@@ -238,6 +241,7 @@ const $ChannelFollowingService: Provider = { provide: 'ChannelFollowingService',
 const $ChannelMutingService: Provider = { provide: 'ChannelMutingService', useExisting: ChannelMutingService };
 const $AgentService: Provider = { provide: 'AgentService', useExisting: AgentService };
 const $AgentImageService: Provider = { provide: 'AgentImageService', useExisting: AgentImageService };
+const $AgentVisionService: Provider = { provide: 'AgentVisionService', useExisting: AgentVisionService };
 const $AgentExternalAuditService: Provider = { provide: 'AgentExternalAuditService', useExisting: AgentExternalAuditService };
 const $AgentPlazaReviewService: Provider = { provide: 'AgentPlazaReviewService', useExisting: AgentPlazaReviewService };
 const $AgentModelUsageService: Provider = { provide: 'AgentModelUsageService', useExisting: AgentModelUsageService };
@@ -398,7 +402,10 @@ const $ApQuestionService: Provider = { provide: 'ApQuestionService', useExisting
 		ChannelFollowingService,
 		ChannelMutingService,
 		AgentService,
+		AgentProactiveScheduleService,
+		AgentProactiveMessageService,
 		AgentImageService,
+		AgentVisionService,
 		AgentExternalAuditService,
 		AgentCompressionMemoryService,
 		AgentPlazaReviewService,
@@ -558,6 +565,7 @@ const $ApQuestionService: Provider = { provide: 'ApQuestionService', useExisting
 		$ChannelMutingService,
 		$AgentService,
 		$AgentImageService,
+		$AgentVisionService,
 		$AgentExternalAuditService,
 		$AgentPlazaReviewService,
 		$AgentModelUsageService,
@@ -715,7 +723,10 @@ const $ApQuestionService: Provider = { provide: 'ApQuestionService', useExisting
 		ChannelFollowingService,
 		ChannelMutingService,
 		AgentService,
+		AgentProactiveScheduleService,
+		AgentProactiveMessageService,
 		AgentImageService,
+		AgentVisionService,
 		AgentExternalAuditService,
 		AgentCompressionMemoryService,
 		AgentPlazaReviewService,

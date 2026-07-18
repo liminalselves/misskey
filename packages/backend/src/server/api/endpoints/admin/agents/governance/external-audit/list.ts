@@ -13,7 +13,7 @@ import { AgentService } from '@/core/AgentService.js';
 import { QueryService } from '@/core/QueryService.js';
 import { UserEntityService } from '@/core/entities/UserEntityService.js';
 import { agentExternalAuditStatuses } from '@/models/AgentExternalAuditLog.js';
-import { escapeIlikePattern } from '../_utils.js';
+import { escapeIlikePattern, resolveUserIdFromAcctOrId } from '../_utils.js';
 
 export const meta = {
 	tags: ['admin', 'agents'],
@@ -28,7 +28,7 @@ export const meta = {
 export const paramDef = {
 	type: 'object',
 	properties: {
-		userId: { type: 'string', format: 'misskey:id', nullable: true },
+		userId: { type: 'string', minLength: 1, maxLength: 256, nullable: true },
 		sessionId: { type: 'string', format: 'misskey:id', nullable: true },
 		modelId: { type: 'string', nullable: true },
 		status: { type: 'string', enum: [...agentExternalAuditStatuses], nullable: true },
@@ -56,10 +56,11 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 	) {
 		super(meta, paramDef, async (ps, me) => {
 			this.agentService.assertAgentsEnabled();
+			const userId = await resolveUserIdFromAcctOrId(this.usersRepository, ps.userId);
 			let q = this.agentExternalAuditLogsRepository.createQueryBuilder('log')
 				.leftJoinAndSelect('log.session', 'session')
 				.leftJoinAndSelect('log.character', 'character');
-			if (ps.userId) q = q.andWhere('log.userId = :userId', { userId: ps.userId });
+			if (userId) q = q.andWhere('log.userId = :userId', { userId });
 			if (ps.sessionId) q = q.andWhere('log.sessionId = :sessionId', { sessionId: ps.sessionId });
 			if (ps.modelId) q = q.andWhere('log.modelId = :modelId', { modelId: ps.modelId });
 			if (ps.status) q = q.andWhere('log.status = :status', { status: ps.status });

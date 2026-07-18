@@ -12,6 +12,13 @@ import { ApiError } from '@/server/api/error.js';
 import { AgentService } from '@/core/AgentService.js';
 import { DriveFileEntityService } from '@/core/entities/DriveFileEntityService.js';
 
+function referenceImageFileIdsOf(character: { referenceImageFileIds?: unknown; referenceImageFileId?: string | null }): string[] {
+	const raw = Array.isArray(character.referenceImageFileIds)
+		? character.referenceImageFileIds
+		: character.referenceImageFileId ? [character.referenceImageFileId] : [];
+	return [...new Set(raw.filter((id): id is string => typeof id === 'string' && id !== ''))].slice(0, 4);
+}
+
 export const meta = {
 	tags: ['agents'],
 	requireCredential: true,
@@ -58,6 +65,10 @@ export const meta = {
 					required: ['id', 'title', 'content', 'keywords', 'triggerMode', 'priority', 'enabled', 'revision'],
 				},
 			},
+			regexRules: {
+				type: 'array',
+				items: { type: 'object' },
+			},
 			isPublished: { type: 'boolean' },
 			reviewStatus: { type: 'string', optional: true },
 			publishedVersion: { type: 'integer', nullable: true, optional: true },
@@ -66,6 +77,10 @@ export const meta = {
 			draftRevision: { type: 'integer' },
 			avatarFileId: { type: 'string', format: 'misskey:id', nullable: true },
 			avatar: { type: 'object', ref: 'DriveFile', nullable: true },
+			referenceImageFileId: { type: 'string', format: 'misskey:id', nullable: true },
+			referenceImage: { type: 'object', ref: 'DriveFile', nullable: true },
+			referenceImageFileIds: { type: 'array', items: { type: 'string', format: 'misskey:id' } },
+			referenceImages: { type: 'array', items: { type: 'object', ref: 'DriveFile' } },
 			promptOpenSourced: { type: 'boolean' },
 			createdAt: { type: 'string', format: 'date-time' },
 			updatedAt: { type: 'string', format: 'date-time' },
@@ -103,6 +118,9 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				? await this.driveFileEntityService.pack(display.avatarFileId, {})
 					.catch(() => null)
 				: null;
+			const referenceImageFileIds = referenceImageFileIdsOf(display);
+			const referenceImages = (await Promise.all(referenceImageFileIds.map(fileId => this.driveFileEntityService.pack(fileId, {})
+				.catch(() => null)))).filter((file): file is NonNullable<typeof file> => file != null);
 			// Non-authors only receive summary fields unless the author has open-sourced the prompt.
 			const exposePrompt = isOwner || row.promptOpenSourced === true;
 			const worldbook = exposePrompt
@@ -143,6 +161,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				exampleTurns: exposePrompt ? this.agentService.exampleTurnsFromStored(display.exampleDialogue) : [],
 				forbiddenBehavior: exposePrompt ? display.forbiddenBehavior : '',
 				worldbook,
+				// Regex rules are behavior configuration, not prompt prose; clients need them even when the prompt is private.
+				regexRules: this.agentService.normalizeRegexRules(display.regexRules),
 				isPublished: row.isPublished,
 				...(isOwner ? {
 					reviewStatus: row.reviewStatus,
@@ -153,6 +173,10 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				} : {}),
 				avatarFileId: display.avatarFileId,
 				avatar,
+				referenceImageFileId: referenceImageFileIds[0] ?? null,
+				referenceImage: referenceImages[0] ?? null,
+				referenceImageFileIds,
+				referenceImages,
 				promptOpenSourced: row.promptOpenSourced === true,
 				createdAt: row.createdAt.toISOString(),
 				updatedAt: row.updatedAt.toISOString(),

@@ -6,6 +6,9 @@
 import type { AgentService } from '@/core/AgentService.js';
 import type { MiAgentCharacter } from '@/models/AgentCharacter.js';
 import type { MiAgentDialogueStyle } from '@/models/AgentDialogueStyle.js';
+import type { UsersRepository } from '@/models/_.js';
+import { IsNull } from 'typeorm';
+import * as Acct from '@/misc/acct.js';
 
 export const agentGovernanceLogTypes = ['resolveAgentReview', 'setAgentSessionModerationBan', 'setAgentCharacterModerationBan'] as const;
 
@@ -15,6 +18,33 @@ export function escapeIlikePattern(s: string): string {
 
 function asIso(date: Date | null | undefined): string | null {
 	return date == null ? null : date.toISOString();
+}
+
+export async function resolveUserIdFromAcctOrId(usersRepository: UsersRepository, input: string | null | undefined): Promise<string | null> {
+	const value = input?.trim();
+	if (!value) return null;
+
+	const userById = await usersRepository.findOne({ where: { id: value }, select: ['id'] });
+	if (userById) return userById.id;
+
+	const acct = Acct.parse(value);
+	if (!acct.username) return value;
+
+	const userByAcct = await usersRepository.findOne({
+		where: {
+			usernameLower: acct.username.toLowerCase(),
+			host: acct.host == null || acct.host === '' ? IsNull() : acct.host.toLowerCase(),
+		},
+		select: ['id'],
+	});
+
+	return userByAcct?.id ?? value;
+}
+
+export async function getAcctByUserId(usersRepository: UsersRepository, userId: string): Promise<string | null> {
+	const user = await usersRepository.findOne({ where: { id: userId }, select: ['username', 'host'] });
+	if (!user) return null;
+	return `@${Acct.toString({ username: user.username, host: user.host })}`;
 }
 
 function extractTextFromWorldbook(worldbook: Array<Record<string, unknown>>): string {

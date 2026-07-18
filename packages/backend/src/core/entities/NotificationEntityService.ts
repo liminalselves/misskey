@@ -220,6 +220,13 @@ export class NotificationEntityService implements OnModuleInit {
 				sessionName: notification.sessionName,
 				banned: notification.banned,
 			} : {}),
+			...(notification.type === 'agentProactiveMessage' ? {
+				sessionId: notification.sessionId,
+				sessionName: notification.sessionName,
+				agentAvatarUrl: notification.agentAvatarUrl,
+				messageId: notification.messageId,
+				messageText: notification.messageText,
+			} : {}),
 		});
 	}
 

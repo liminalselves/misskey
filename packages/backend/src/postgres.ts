@@ -92,6 +92,7 @@ import { MiAgentDialogueStyle } from '@/models/AgentDialogueStyle.js';
 import { MiAgentSession } from '@/models/AgentSession.js';
 import { MiAgentSessionCompressionSticky } from '@/models/AgentSessionCompressionSticky.js';
 import { MiAgentMessage } from '@/models/AgentMessage.js';
+import { MiAgentProactiveSchedule } from '@/models/AgentProactiveSchedule.js';
 import { MiAgentImageGeneration } from '@/models/AgentImageGeneration.js';
 import { MiAgentExternalAuditLog } from '@/models/AgentExternalAuditLog.js';
 import { MiAgentUserStyleSubscription } from '@/models/AgentUserStyleSubscription.js';
@@ -271,6 +272,7 @@ export const entities = [
 	MiAgentSession,
 	MiAgentSessionCompressionSticky,
 	MiAgentMessage,
+	MiAgentProactiveSchedule,
 	MiAgentImageGeneration,
 	MiAgentExternalAuditLog,
 	MiAgentUserStyleSubscription,

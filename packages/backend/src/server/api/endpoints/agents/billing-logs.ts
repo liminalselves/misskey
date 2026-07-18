@@ -10,6 +10,7 @@ import { Endpoint } from '@/server/api/endpoint-base.js';
 import { DI } from '@/di-symbols.js';
 import { AgentService } from '@/core/AgentService.js';
 import { MetaService } from '@/core/MetaService.js';
+import { AgentVisionService } from '@/core/AgentVisionService.js';
 import { packPublicAgentModels } from '@/misc/agent-llm-models.js';
 
 export const meta = {
@@ -31,7 +32,7 @@ export const meta = {
 						createdAt: { type: 'string', format: 'date-time' },
 						amount: { type: 'number' },
 						modelName: { type: 'string', nullable: true },
-						usageKind: { type: 'string', enum: ['chat', 'compression', 'image_generation'], nullable: true },
+						usageKind: { type: 'string', enum: ['chat', 'compression', 'image_generation', 'vision', 'proactive_random', 'proactive_scheduled'], nullable: true },
 						status: { type: 'string', nullable: true },
 						durationMs: { type: 'integer', nullable: true },
 						redeemCode: { type: 'string', nullable: true },
@@ -63,7 +64,7 @@ type BillingItem = {
 	createdAt: string;
 	amount: number;
 	modelName: string | null;
-	usageKind: 'chat' | 'compression' | 'image_generation' | null;
+	usageKind: 'chat' | 'compression' | 'image_generation' | 'vision' | 'proactive_random' | 'proactive_scheduled' | null;
 	status: string | null;
 	durationMs: number | null;
 	redeemCode: string | null;
@@ -80,6 +81,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 
 		private agentService: AgentService,
 		private metaService: MetaService,
+		private agentVisionService: AgentVisionService,
 	) {
 		super(meta, paramDef, async (ps, me) => {
 			this.agentService.assertAgentsEnabled();
@@ -92,7 +94,10 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			const untilDate = ps.untilDate ? new Date(ps.untilDate) : null;
 
 			const instanceMeta = await this.metaService.fetch(true);
-			const modelNameMap = new Map(packPublicAgentModels(instanceMeta).map(m => [m.id, m.name]));
+			const modelNameMap = new Map([
+				...packPublicAgentModels(instanceMeta).map(m => [m.id, m.name] as const),
+				...this.agentVisionService.listAvailableVisionModels(instanceMeta).map(m => [m.id, m.name] as const),
+			]);
 
 			const usageQb = this.agentModelUsageLogsRepository.createQueryBuilder('log')
 				.where('log.userId = :userId', { userId: me.id })

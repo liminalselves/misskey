@@ -48,10 +48,15 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<MkFukidashi
 				v-for="(segment, segmentIndex) in renderedSegments"
 				:key="segment.key"
-				:class="[$style.fukidashi, segment.drawOnly ? $style.drawFukidashi : null]"
+				:class="[
+					$style.fukidashi,
+					segment.drawOnly ? $style.drawFukidashi : null,
+					isUser && segmentIndex === 0 && message.file ? $style.imageFukidashi : null,
+				]"
 				:tail="isUser ? 'right' : (segmentIndex === renderedSegments.length - 1 ? 'left' : 'none')"
 				:accented="isUser"
 			>
+				<MkMediaList v-if="isUser && segmentIndex === 0 && message.file" :class="$style.attachedMedia" :mediaList="[message.file]"/>
 				<div v-if="segment.content" :class="[$style.mdRoot, segment.drawOnly ? $style.drawSegmentContent : null, '_selectable']">
 					<template v-for="part in segment.parts" :key="part.key">
 						<div v-if="part.type === 'text'" v-html="part.html"></div>
@@ -77,12 +82,18 @@ SPDX-License-Identifier: AGPL-3.0-only
 								<i v-else-if="isDrawBlocked(part.index)" class="ti ti-ban"></i>
 								<i v-else class="ti ti-alert-circle"></i>
 								<span>{{ drawStatusText(part.index) }}</span>
+								<span v-if="drawErrorDiagnostic(part.index)" :class="$style.drawErrorDiagnostic">{{ drawErrorDiagnostic(part.index) }}</span>
 							</div>
 						</div>
 					</template>
 				</div>
 			</MkFukidashi>
 		</TransitionGroup>
+		<div v-if="proactiveScheduleActionSummary" :class="$style.proactiveScheduleActionSummary">
+			<i class="ti ti-calendar-clock"></i>
+			<span>{{ proactiveScheduleActionSummary.text }}</span>
+			<span v-if="proactiveScheduleActionSummary.failed" :class="$style.proactiveScheduleActionFailed">{{ i18n.ts._agents.proactiveScheduleActionFailed }}</span>
+		</div>
 		<div :class="$style.footer">
 			<button class="_textButton" style="color: currentColor;" @pointerdown.stop @click.stop="showMenu"><i class="ti ti-dots-circle-horizontal"></i></button>
 			<MkTime :class="$style.time" :time="message.createdAt"/>
@@ -116,6 +127,11 @@ export type AgentSessionMessageView = {
 	role: string;
 	content: string;
 	createdAt: string;
+	file?: DriveFile | null;
+	imageRecognitionStatus?: 'succeeded' | 'failed' | null;
+	imageRecognitionDescription?: string | null;
+	proactiveScheduleActionTypes?: ('create' | 'update' | 'cancel')[];
+	proactiveScheduleControlFailed?: boolean;
 };
 
 const props = defineProps<{
@@ -123,6 +139,7 @@ const props = defineProps<{
 	message: AgentSessionMessageView;
 	assistantName?: string | null;
 	assistantAvatarUrl?: string | null;
+	regexRules?: Array<{ id: string; pattern: string; targets: ('user' | 'assistant')[]; effects: ('hide' | 'aiInvisible')[] }>;
 	highlighted?: boolean;
 	segmentedOutputEnabled?: boolean;
 	visibleSegmentCount?: number;
@@ -138,6 +155,39 @@ const emit = defineEmits<{
 }>();
 
 const isUser = computed(() => props.message.role === 'user');
+const proactiveScheduleActionSummary = computed(() => {
+	const labels = (props.message.proactiveScheduleActionTypes ?? [])
+		.map(type => {
+			switch (type) {
+				case 'create': return i18n.ts._agents.proactiveScheduleActionCreateLabel;
+				case 'update': return i18n.ts._agents.proactiveScheduleActionUpdateLabel;
+				case 'cancel': return i18n.ts._agents.proactiveScheduleActionCancelLabel;
+			}
+		})
+		.filter((text): text is string => text != null);
+	const failed = props.message.proactiveScheduleControlFailed === true;
+	if (labels.length === 0) {
+		return failed ? { text: i18n.ts._agents.proactiveScheduleActionUnknown, failed } : null;
+	}
+	const actions = labels.join('、');
+	return {
+		text: failed
+			? i18n.tsx._agents.proactiveScheduleActionAttemptedSummary({ actions })
+			: i18n.tsx._agents.proactiveScheduleActionSummary({ actions }),
+		failed,
+	};
+});
+
+const displayContent = computed(() => {
+	let content = props.message.content ?? '';
+	const role = props.message.role === 'user' ? 'user' : props.message.role === 'assistant' ? 'assistant' : null;
+	if (!role) return content;
+	for (const rule of props.regexRules ?? []) {
+		if (!rule.targets.includes(role) || !rule.effects.includes('hide')) continue;
+		try { content = content.replace(new RegExp(rule.pattern, 'gu'), ''); } catch { /* Invalid rules are ignored in the client too. */ }
+	}
+	return content;
+});
 
 const systemHtml = computed(() => renderAgentChatMarkdown(props.message.content ?? ''));
 const AGENT_DRAW_RE = /\[\[agent_draw(?:\s+size=(portrait|landscape|square))?\s+tag=([\s\S]*?)\]\]/g;
@@ -151,6 +201,7 @@ type DrawResult = {
 	url: string | null;
 	file: DriveFile | null;
 	errorCode: string | null;
+	errorMessage: string | null;
 	tag: string;
 	size: 'portrait' | 'landscape' | 'square';
 	isBlocked: boolean;
@@ -163,7 +214,7 @@ type RenderPart =
 const drawResults = reactive<Record<number, DrawResult | undefined>>({});
 
 const displaySegmentContents = computed(() => {
-	const content = props.message.content ?? '';
+	const content = displayContent.value;
 	if (props.message.role !== 'assistant' || !props.segmentedOutputEnabled) return [content];
 	const segments = splitAgentMessageIntoSegments(content);
 	if (props.visibleSegmentCount == null) return segments;
@@ -260,6 +311,11 @@ function drawStatusText(index: number): string {
 	return '图片生成中...';
 }
 
+function drawErrorDiagnostic(index: number): string | null {
+	const state = drawState(index);
+	return state?.status === 'failed' && state.errorMessage ? state.errorMessage : null;
+}
+
 async function generateDraw(index: number, regenerate = false) {
 	if (props.isSearchResult) return;
 	const current = drawResults[index];
@@ -273,6 +329,7 @@ async function generateDraw(index: number, regenerate = false) {
 		url: current?.url ?? null,
 		file: current?.file ?? null,
 		errorCode: null,
+		errorMessage: null,
 		tag: current?.tag ?? '',
 		size: current?.size ?? 'portrait',
 		isBlocked: false,
@@ -296,6 +353,9 @@ async function generateDraw(index: number, regenerate = false) {
 			status: 'failed',
 			file: null,
 			errorCode: formatApiError(e),
+			errorMessage: e != null && typeof e === 'object' && typeof (e as { info?: { diagnostic?: unknown } }).info?.diagnostic === 'string'
+				? (e as { info: { diagnostic: string } }).info.diagnostic
+				: null,
 		};
 	}
 }
@@ -340,6 +400,15 @@ function menuItems(): MenuItem[] {
 			copyToClipboard(props.message.content ?? '');
 		},
 	}];
+	if (props.message.role === 'user' && props.message.file) {
+		items.push({
+			text: i18n.ts._agents.imageRecognitionContent,
+			icon: 'ti ti-eye',
+			action: () => {
+				void showImageRecognition();
+			},
+		});
+	}
 	if (!props.isSearchResult && (props.message.role === 'user' || props.message.role === 'assistant')) {
 		items.push({
 			text: i18n.ts.edit,
@@ -375,6 +444,14 @@ function menuItems(): MenuItem[] {
 		},
 	});
 	return items;
+}
+
+async function showImageRecognition() {
+	const description = props.message.imageRecognitionStatus === 'succeeded'
+		? props.message.imageRecognitionDescription?.trim()
+		: null;
+	const text = description ?? i18n.ts._agents.imageRecognitionUnavailable;
+	await os.alert({ type: 'info', title: i18n.ts._agents.imageRecognitionContentTitle, text });
 }
 
 function showMenu(ev: PointerEvent) {
@@ -577,6 +654,13 @@ async function confirmDelete() {
 	box-sizing: border-box;
 }
 
+/* 附图消息不应由短文本决定宽度；媒体列表会继续按图片比例及自身高度上限渲染。 */
+.imageFukidashi {
+	width: 328px;
+	max-width: 100%;
+	box-sizing: border-box;
+}
+
 .drawSegmentContent {
 	width: 300px;
 	max-width: 100%;
@@ -722,6 +806,33 @@ async function confirmDelete() {
 	font-size: 75%;
 }
 
+.proactiveScheduleActionSummary {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 0.35em;
+	margin-top: 0.45em;
+	color: color(from var(--MI_THEME-fg) srgb r g b / 0.58);
+	font-size: 0.78em;
+	line-height: 1.35;
+
+	> i {
+		flex: 0 0 auto;
+	}
+}
+
+.proactiveScheduleActionFailed {
+	padding-left: 0.45em;
+	border-left: 1px solid color(from var(--MI_THEME-error) srgb r g b / 0.42);
+	color: var(--MI_THEME-error);
+	font-weight: 700;
+	white-space: nowrap;
+}
+
+.attachedMedia {
+	margin-bottom: 8px;
+}
+
 .time {
 	opacity: 0.5;
 }
@@ -814,6 +925,15 @@ async function confirmDelete() {
 		font-size: 1.7em;
 		color: var(--MI_THEME-accent);
 	}
+}
+
+.drawErrorDiagnostic {
+	max-width: 100%;
+	color: var(--MI_THEME-fgTransparentWeak);
+	font-size: 0.85em;
+	line-height: 1.45;
+	white-space: pre-wrap;
+	word-break: break-word;
 }
 
 .segmentEnterActive,

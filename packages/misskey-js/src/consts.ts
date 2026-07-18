@@ -45,6 +45,7 @@ export const notificationTypes = [
 	'agentReviewRejected',
 	'agentCharacterBanned',
 	'agentSessionBanned',
+	'agentProactiveMessage',
 ] as const;
 
 export const noteVisibilities = ['public', 'home', 'followers', 'specified'] as const;

@@ -89,6 +89,9 @@ const REPEATABLE_SYSTEM_JOB_DEF = [{
 }, {
 	name: 'decayFeaturedNotesRanking',
 	pattern: '0 * * * *',
+}, {
+	name: 'processAgentProactiveMessages',
+	pattern: '* * * * *',
 }];
 
 function parseRedisInfo(infoText: string): Record<string, string> {

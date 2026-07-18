@@ -34,7 +34,7 @@ export function buildNotificationBridgeContent(notification: Misskey.entities.No
 	const userName: string = n.user?.name ?? n.user?.username ?? i18n.ts.notification;
 	const ts = i18n.ts._notification as unknown as Record<string, string>;
 
-	switch (notification.type) {
+	switch (notification.type as string) {
 		// ── user-triggered, note-backed ──────────────────────────────────────
 		case 'mention':
 		case 'reply':
@@ -128,6 +128,13 @@ export function buildNotificationBridgeContent(notification: Misskey.entities.No
 
 		case 'createToken':
 			return { title: ts.createToken ?? '', body: '', openPath: '/settings/apps' };
+
+		case 'agentProactiveMessage':
+			return {
+				title: String(n.sessionName ?? i18n.ts.notification),
+				body: String(n.messageText ?? ''),
+				openPath: n.sessionId ? `/chat/agent/${n.sessionId}` : INBOX,
+			};
 
 		case 'test':
 			return { title: ts.testNotification ?? '', body: ts.notificationWillBeDisplayedLikeThis ?? '', openPath: INBOX };

@@ -10,6 +10,8 @@ import { Endpoint } from '@/server/api/endpoint-base.js';
 import { DI } from '@/di-symbols.js';
 import { ApiError } from '@/server/api/error.js';
 import { AgentService } from '@/core/AgentService.js';
+import { AgentProactiveScheduleService } from '@/core/AgentProactiveScheduleService.js';
+import { DriveFileEntityService } from '@/core/entities/DriveFileEntityService.js';
 
 export const meta = {
 	tags: ['agents'],
@@ -23,7 +25,10 @@ export const meta = {
 			id: { type: 'string', format: 'misskey:id' },
 			role: { type: 'string', enum: ['user', 'assistant', 'system'] },
 			content: { type: 'string' },
-			createdAt: { type: 'string', format: 'date-time' },
+				createdAt: { type: 'string', format: 'date-time' },
+				file: { type: 'object', ref: 'DriveFile', nullable: true },
+				proactiveScheduleActionTypes: { type: 'array', items: { type: 'string', enum: ['create', 'update', 'cancel'] } },
+				proactiveScheduleControlFailed: { type: 'boolean' },
 		},
 	},
 } as const;
@@ -47,6 +52,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		private agentMessagesRepository: AgentMessagesRepository,
 
 		private agentService: AgentService,
+		private agentProactiveScheduleService: AgentProactiveScheduleService,
+		private driveFileEntityService: DriveFileEntityService,
 	) {
 		super(meta, paramDef, async (ps, me) => {
 			this.agentService.assertAgentsEnabled();
@@ -64,8 +71,15 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			return {
 				id: row.id,
 				role: row.role,
-				content: row.content,
+				// The normal timeline keeps control data private. The editor intentionally exposes
+				// the complete model output and the server's prior rejection result.
+				content: row.role === 'assistant' && row.proactiveScheduleControlRaw
+					? this.agentProactiveScheduleService.privateControlForLlm(row)
+					: row.rawContent ?? row.content,
 				createdAt: row.createdAt.toISOString(),
+				file: row.imageFileId ? await this.driveFileEntityService.pack(row.imageFileId, {}).catch(() => null) : null,
+				proactiveScheduleActionTypes: this.agentProactiveScheduleService.actionTypes(row),
+				proactiveScheduleControlFailed: row.proactiveScheduleControlError != null,
 			};
 		});
 	}

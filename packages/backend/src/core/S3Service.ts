@@ -16,6 +16,11 @@ import { HttpRequestService } from '@/core/HttpRequestService.js';
 import { bindThis } from '@/decorators.js';
 import type { DeleteObjectCommandInput, GetObjectCommandInput, PutObjectAclCommandInput, PutObjectCommandInput } from '@aws-sdk/client-s3';
 
+function trimObjectStorageConfigValue(value: string | null | undefined): string | undefined {
+	const trimmed = value?.trim();
+	return trimmed === '' ? undefined : trimmed;
+}
+
 @Injectable()
 export class S3Service {
 	constructor(
@@ -25,8 +30,13 @@ export class S3Service {
 
 	@bindThis
 	public getS3Client(meta: MiMeta): S3Client {
-		const u = meta.objectStorageEndpoint
-			? `${meta.objectStorageUseSSL ? 'https' : 'http'}://${meta.objectStorageEndpoint}`
+		const endpoint = trimObjectStorageConfigValue(meta.objectStorageEndpoint);
+		const region = trimObjectStorageConfigValue(meta.objectStorageRegion);
+		const accessKeyId = trimObjectStorageConfigValue(meta.objectStorageAccessKey);
+		const secretAccessKey = trimObjectStorageConfigValue(meta.objectStorageSecretKey);
+
+		const u = endpoint
+			? `${meta.objectStorageUseSSL ? 'https' : 'http'}://${endpoint}`
 			: `${meta.objectStorageUseSSL ? 'https' : 'http'}://example.net`; // dummy url to select http(s) agent
 
 		const agent = this.httpRequestService.getAgentByUrl(new URL(u), !meta.objectStorageUseProxy, true);
@@ -38,14 +48,14 @@ export class S3Service {
 		}
 
 		return new S3Client({
-			endpoint: meta.objectStorageEndpoint ? u : undefined,
-			credentials: (meta.objectStorageAccessKey !== null && meta.objectStorageSecretKey !== null) ? {
-				accessKeyId: meta.objectStorageAccessKey,
-				secretAccessKey: meta.objectStorageSecretKey,
+			endpoint: endpoint ? u : undefined,
+			credentials: (accessKeyId !== undefined && secretAccessKey !== undefined) ? {
+				accessKeyId,
+				secretAccessKey,
 			} : undefined,
-			region: meta.objectStorageRegion ? meta.objectStorageRegion : undefined, // 空文字列もundefinedにするため ?? は使わない
+			region,
 			tls: meta.objectStorageUseSSL,
-			forcePathStyle: meta.objectStorageEndpoint ? meta.objectStorageS3ForcePathStyle : false, // AWS with endPoint omitted
+			forcePathStyle: endpoint ? meta.objectStorageS3ForcePathStyle : false, // AWS with endPoint omitted
 			requestHandler: new NodeHttpHandler(handlerOption),
 			requestChecksumCalculation: 'WHEN_REQUIRED',
 			responseChecksumValidation: 'WHEN_REQUIRED',

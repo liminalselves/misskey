@@ -85,6 +85,10 @@ export class MiAgentImageGeneration {
 	@Column('varchar', { length: 128, nullable: true })
 	public errorCode: string | null;
 
+	/** Sanitized upstream diagnostic shown to the requesting user after a generation failure. */
+	@Column('varchar', { length: 768, nullable: true })
+	public errorMessage: string | null;
+
 	@Column('double precision', { default: 0 })
 	public cost: number;
 

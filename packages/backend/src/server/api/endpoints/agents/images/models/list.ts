@@ -20,8 +20,10 @@ export const meta = {
 			properties: {
 				id: { type: 'string' },
 				name: { type: 'string' },
-				provider: { type: 'string', enum: ['aurora'] },
+				description: { type: 'string', nullable: true },
+				provider: { type: 'string', enum: ['aurora', 'openai'] },
 				apiModelName: { type: 'string', nullable: true },
+				supportsReferenceImage: { type: 'boolean' },
 				costPerCall: { type: 'number' },
 				defaultParams: { type: 'object' },
 				defaultArtistPresetId: { type: 'string', nullable: true },
@@ -47,8 +49,10 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			return this.agentImageService.listAvailableImageModels(instance).map(m => ({
 				id: m.id,
 				name: m.name,
+				description: m.description ?? null,
 				provider: m.provider,
 				apiModelName: m.apiModelName ?? null,
+				supportsReferenceImage: m.supportsReferenceImage === true,
 				costPerCall: Math.max(0, Number(m.costPerCall) || 0),
 				defaultParams: m.defaultParams ?? {},
 				defaultArtistPresetId: m.defaultArtistPresetId ?? null,

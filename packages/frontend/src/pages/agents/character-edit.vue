@@ -71,6 +71,24 @@ SPDX-License-Identifier: AGPL-3.0-only
 								<MkButton v-if="form.state.avatarFileId" rounded @click="clearAvatar">{{ i18n.ts._agents.avatarClear }}</MkButton>
 							</div>
 						</div>
+						<div :class="$style.referenceImageRow">
+							<div :class="$style.referenceImagePreviews">
+								<div v-for="preview in referenceImagePreviews" :key="preview.id" :class="$style.referenceImagePreview">
+									<img v-if="preview.url" :src="preview.url" alt="">
+									<div v-else :class="$style.referenceImagePreviewFallback"><i class="ti ti-photo"></i></div>
+									<button class="_button" :class="$style.referenceImageRemove" :title="i18n.ts.delete" @click="removeReferenceImage(preview.id)"><i class="ti ti-x"></i></button>
+								</div>
+								<div v-if="referenceImagePreviews.length === 0" :class="$style.referenceImageEmpty"><i class="ti ti-photo"></i></div>
+							</div>
+							<div class="_gaps_s">
+								<div :class="$style.referenceImageTitle">{{ i18n.ts._agents.characterReferenceImage }}</div>
+								<div :class="$style.referenceImageCaption">{{ i18n.ts._agents.characterReferenceImageCaption }}</div>
+								<div :class="$style.referenceImageActions">
+									<MkButton rounded :disabled="form.state.referenceImageFileIds.length >= 4" @click="pickReferenceImages"><i class="ti ti-upload"></i> {{ i18n.ts._agents.characterReferenceImagePick }}</MkButton>
+									<MkButton v-if="form.state.referenceImageFileIds.length > 0" rounded @click="clearReferenceImages">{{ i18n.ts._agents.characterReferenceImageClear }}</MkButton>
+								</div>
+							</div>
+						</div>
 						<MkInput v-model="form.state.name">
 							<template #label>{{ i18n.ts._agents.fieldName }}</template>
 						</MkInput>
@@ -231,6 +249,60 @@ SPDX-License-Identifier: AGPL-3.0-only
 						</div>
 					</div>
 
+					<!-- Tab: Regex -->
+					<div v-if="activeTab === 'regex'" class="_gaps">
+						<div :class="$style.sectionTitle"><i class="ti ti-filter"></i> {{ agentText('editCharacterRegex', '正则') }}</div>
+						<p :class="$style.captionText">{{ agentText('editCharacterRegexCaption', '对匹配到的用户消息或 AI 输出应用过滤。原始消息仍会保留，编辑消息时显示完整内容。') }}</p>
+						<div :class="$style.card" class="_gaps_s">
+							<div :class="$style.sectionSubtitle"><i class="ti ti-flask"></i> {{ agentText('regexTestPreview', '测试预览') }}</div>
+							<p :class="$style.captionText">{{ agentText('regexTestCaption', '按当前未保存的规则预览用户端显示内容和发送给 AI 的内容。') }}</p>
+							<MkRadios v-model="regexPreviewRole" :options="regexPreviewRoleOptions">
+								<template #label>{{ agentText('regexTestSource', '测试消息类型') }}</template>
+							</MkRadios>
+							<MkTextarea v-model="regexPreviewText" tall>
+								<template #label>{{ agentText('regexTestInput', '测试文本') }}</template>
+							</MkTextarea>
+							<div v-if="regexPreview.invalidRuleCount > 0" :class="$style.regexPreviewWarning">
+								<i class="ti ti-alert-triangle"></i> {{ agentText('regexTestInvalidRules', '存在无效正则，预览已忽略这些规则。') }}
+							</div>
+							<div :class="$style.regexPreviewGrid">
+								<div :class="$style.regexPreviewResult">
+									<div :class="$style.regexPreviewTitle"><i class="ti ti-user"></i> {{ agentText('regexTestUserView', '用户端显示') }}</div>
+									<pre v-if="regexPreview.userVisible !== ''" :class="$style.regexPreviewText">{{ regexPreview.userVisible }}</pre>
+									<div v-else :class="$style.regexPreviewEmpty">{{ agentText('regexTestEmpty', '无内容') }}</div>
+								</div>
+								<div :class="$style.regexPreviewResult">
+									<div :class="$style.regexPreviewTitle"><i class="ti ti-brain"></i> {{ agentText('regexTestAiView', '发送给 AI') }}</div>
+									<pre v-if="regexPreview.aiVisible !== ''" :class="$style.regexPreviewText">{{ regexPreview.aiVisible }}</pre>
+									<div v-else :class="$style.regexPreviewEmpty">{{ agentText('regexTestEmpty', '无内容') }}</div>
+								</div>
+							</div>
+						</div>
+						<div v-for="(rule, i) in form.state.regexRules" :key="rule.id" :class="$style.card" class="_gaps_s">
+							<div :class="$style.cardHeader">
+								<div :class="$style.sectionSubtitle">{{ agentText('regexRule', '正则规则') }} {{ i + 1 }}</div>
+								<MkButton danger inline rounded @click="removeRegexRule(i)"><i class="ti ti-trash"></i></MkButton>
+							</div>
+							<MkTextarea v-model="rule.pattern" tall>
+								<template #label>{{ agentText('regexPattern', '正则表达式') }}</template>
+								<template #caption>{{ agentText('regexPatternCaption', '使用 JavaScript 正则语法；匹配内容会被删除。') }}</template>
+							</MkTextarea>
+							<div :class="$style.regexOptions">
+								<div>
+									<div :class="$style.sectionSubtitle">{{ agentText('regexTargets', '作用对象（可多选）') }}</div>
+									<MkSwitch v-model="rule.targets.user"><template #label>{{ agentText('regexTargetUser', '用户消息') }}</template></MkSwitch>
+									<MkSwitch v-model="rule.targets.assistant"><template #label>{{ agentText('regexTargetAssistant', 'AI 输出') }}</template></MkSwitch>
+								</div>
+								<div>
+									<div :class="$style.sectionSubtitle">{{ agentText('regexEffects', '作用效果（可多选）') }}</div>
+									<MkSwitch v-model="rule.effects.hide"><template #label>{{ agentText('regexEffectHide', '不显示') }}</template></MkSwitch>
+									<MkSwitch v-model="rule.effects.aiInvisible"><template #label>{{ agentText('regexEffectAiInvisible', 'AI 看不见') }}</template></MkSwitch>
+								</div>
+							</div>
+						</div>
+						<div><MkButton rounded inline :disabled="form.state.regexRules.length >= 64" @click="addRegexRule"><i class="ti ti-plus"></i> {{ agentText('addRegexRule', '添加正则') }}</MkButton></div>
+					</div>
+
 					<!-- Tab: Versions -->
 					<div v-if="activeTab === 'versions'" class="_gaps">
 						<div :class="$style.sectionTitle"><i class="ti ti-history"></i> 版本管理</div>
@@ -319,6 +391,7 @@ import MkLoading from '@/components/global/MkLoading.vue';
 import MkTab from '@/components/MkTab.vue';
 import MkFormFooter from '@/components/MkFormFooter.vue';
 import { misskeyApi } from '@/utility/misskey-api.js';
+import { agentI18nText } from '@/utility/agent-i18n.js';
 import { i18n } from '@/i18n.js';
 import { definePage } from '@/page.js';
 import { useForm } from '@/composables/use-form.js';
@@ -333,6 +406,11 @@ const props = defineProps<{
 const router = useRouter();
 const loading = ref(true);
 const avatarUrl = ref<string | null>(null);
+const referenceImagePreviews = ref<Array<{ id: string; url: string | null }>>([]);
+
+function agentText(key: keyof typeof i18n.ts._agents, fallback: string): string {
+	return agentI18nText(`_agents.${key}`, fallback);
+}
 
 const headerActions = computed<PageHeaderItem[]>(() => [{
 	icon: 'ti ti-help-circle',
@@ -342,14 +420,15 @@ const headerActions = computed<PageHeaderItem[]>(() => [{
 	},
 }]);
 
-type TabKey = 'basic' | 'persona' | 'dialogue' | 'worldbook' | 'versions';
+type TabKey = 'basic' | 'persona' | 'dialogue' | 'worldbook' | 'regex' | 'versions';
 const activeTab = ref<TabKey>('basic');
 
 const navTabs: Array<{ key: TabKey; icon: string; label: string }> = [
 		{ key: 'basic', icon: 'ti ti-id', label: '基本信息' },
 		{ key: 'persona', icon: 'ti ti-brain', label: '人设' },
 		{ key: 'dialogue', icon: 'ti ti-message', label: '对话与示例' },
-		{ key: 'worldbook', icon: 'ti ti-book', label: '世界书' },
+	{ key: 'worldbook', icon: 'ti ti-book', label: '世界书' },
+	{ key: 'regex', icon: 'ti ti-filter', label: agentText('editCharacterRegex', '正则') },
 		{ key: 'versions', icon: 'ti ti-history', label: '版本管理' },
 ];
 
@@ -427,6 +506,39 @@ type WorldbookPayload = {
 	revision: number;
 };
 
+type RegexForm = { id: string; pattern: string; targets: { user: boolean; assistant: boolean }; effects: { hide: boolean; aiInvisible: boolean } };
+
+const regexPreviewText = ref('');
+const regexPreviewRole = ref<'user' | 'assistant'>('user');
+const regexPreviewRoleOptions = computed(() => [
+	{ value: 'user' as const, label: agentText('regexTargetUser', '用户消息') },
+	{ value: 'assistant' as const, label: agentText('regexTargetAssistant', 'AI 输出') },
+]);
+const regexPreview = computed(() => {
+	let userVisible = regexPreviewText.value;
+	let aiVisible = regexPreviewText.value;
+	let invalidRuleCount = 0;
+	for (const rule of form.state.regexRules) {
+		if (rule.pattern.trim() === '' || !rule.targets[regexPreviewRole.value]) continue;
+		try {
+			if (rule.effects.hide) userVisible = userVisible.replace(new RegExp(rule.pattern, 'gu'), '');
+			if (rule.effects.aiInvisible) aiVisible = aiVisible.replace(new RegExp(rule.pattern, 'gu'), '');
+		} catch {
+			invalidRuleCount++;
+		}
+	}
+	return { userVisible, aiVisible, invalidRuleCount };
+});
+
+function buildRegexPayload(entries: RegexForm[]) {
+	return entries.map(rule => ({
+		id: rule.id,
+		pattern: rule.pattern,
+		targets: [rule.targets.user ? 'user' : null, rule.targets.assistant ? 'assistant' : null].filter((v): v is 'user' | 'assistant' => v != null),
+		effects: [rule.effects.hide ? 'hide' : null, rule.effects.aiInvisible ? 'aiInvisible' : null].filter((v): v is 'hide' | 'aiInvisible' => v != null),
+	})).filter(rule => rule.pattern.trim().length > 0 && rule.targets.length > 0 && rule.effects.length > 0);
+}
+
 function buildWorldbookPayload(entries: WorldbookForm[]): WorldbookPayload[] {
 	return entries
 		.map(entry => ({
@@ -469,8 +581,10 @@ const empty = () => ({
 	greeting: '',
 	exampleTurns: [] as ExampleTurnForm[],
 	worldbook: [] as WorldbookForm[],
+	regexRules: [] as RegexForm[],
 	forbiddenBehavior: '',
 	avatarFileId: null as string | null,
+	referenceImageFileIds: [] as string[],
 	promptOpenSourced: false,
 	publishedVersion: null as number | null,
 	draftRevision: 1,
@@ -486,6 +600,17 @@ const form = useForm(empty(), async (state) => {
 		return;
 	}
 	const worldbook = buildWorldbookPayload(state.worldbook);
+	for (const rule of state.regexRules) {
+		if (rule.pattern.trim() === '' || (!rule.targets.user && !rule.targets.assistant) || (!rule.effects.hide && !rule.effects.aiInvisible)) {
+			await os.alert({ type: 'error', text: agentText('regexRuleIncomplete', '请填写正则表达式，并至少选择一个作用对象和一个作用效果。') });
+			return;
+		}
+		try { new RegExp(rule.pattern, 'gu'); } catch {
+			await os.alert({ type: 'error', text: agentText('regexPatternInvalid', '正则表达式无效，请检查语法。') });
+			return;
+		}
+	}
+	const regexRules = buildRegexPayload(state.regexRules);
 	await misskeyApi('agents/characters/update', {
 		characterId: props.characterId,
 		name: state.name,
@@ -496,8 +621,10 @@ const form = useForm(empty(), async (state) => {
 		greeting: state.greeting,
 		exampleTurns,
 		worldbook,
+		regexRules,
 		forbiddenBehavior: state.forbiddenBehavior,
 		avatarFileId: state.avatarFileId,
+		referenceImageFileIds: state.referenceImageFileIds,
 		promptOpenSourced: state.promptOpenSourced,
 	});
 	await Promise.all([loadVersions(), loadCharacterDiff()]);
@@ -540,6 +667,15 @@ function removeWorldbook(index: number) {
 	form.state.worldbook.splice(index, 1);
 }
 
+function addRegexRule() {
+	if (form.state.regexRules.length >= 64) return;
+	form.state.regexRules.push({ id: crypto.randomUUID(), pattern: '', targets: { user: true, assistant: true }, effects: { hide: true, aiInvisible: false } });
+}
+
+function removeRegexRule(index: number) {
+	form.state.regexRules.splice(index, 1);
+}
+
 async function refreshAvatarPreview(fileId: string | null) {
 	if (!fileId) {
 		avatarUrl.value = null;
@@ -555,6 +691,10 @@ async function refreshAvatarPreview(fileId: string | null) {
 
 watch(() => form.state.avatarFileId, (id) => {
 	void refreshAvatarPreview(id);
+});
+
+watch(() => form.state.referenceImageFileIds.join('\u0000'), () => {
+	void refreshReferenceImagePreviews(form.state.referenceImageFileIds);
 });
 
 async function load() {
@@ -591,8 +731,17 @@ async function load() {
 				enabled: entry.enabled !== false,
 				revision: Number(entry.revision ?? 1),
 			})),
+			regexRules: (row.regexRules ?? []).map((rule: any) => ({
+				id: rule.id ?? crypto.randomUUID(),
+				pattern: rule.pattern ?? '',
+				targets: { user: Array.isArray(rule.targets) && rule.targets.includes('user'), assistant: Array.isArray(rule.targets) && rule.targets.includes('assistant') },
+				effects: { hide: Array.isArray(rule.effects) && rule.effects.includes('hide'), aiInvisible: Array.isArray(rule.effects) && rule.effects.includes('aiInvisible') },
+			})),
 			forbiddenBehavior: row.forbiddenBehavior ?? '',
 			avatarFileId: row.avatarFileId,
+			referenceImageFileIds: Array.isArray(row.referenceImageFileIds)
+				? row.referenceImageFileIds.filter((id: unknown): id is string => typeof id === 'string').slice(0, 4)
+				: row.referenceImageFileId ? [row.referenceImageFileId] : [],
 			promptOpenSourced: row.promptOpenSourced === true,
 			publishedVersion: row.publishedVersion ?? null,
 			draftRevision: row.draftRevision ?? 1,
@@ -600,6 +749,7 @@ async function load() {
 		Object.assign(form.state, next);
 		Object.assign(form.savedState, JSON.parse(JSON.stringify(next)));
 		await refreshAvatarPreview(row.avatarFileId);
+		await refreshReferenceImagePreviews(next.referenceImageFileIds);
 	} catch {
 		os.alert({ type: 'error', text: i18n.ts.somethingHappened });
 		router.push('/agents');
@@ -653,6 +803,32 @@ function clearAvatar() {
 	form.state.avatarFileId = null;
 }
 
+async function pickReferenceImages() {
+	const remaining = 4 - form.state.referenceImageFileIds.length;
+	if (remaining <= 0) return;
+	const files = await os.chooseFileFromPc({ multiple: true });
+	if (files.length === 0) return;
+	const selected = files.slice(0, remaining);
+	if (selected.some(file => !file.type.startsWith('image/') || file.size > 5 * 1024 * 1024)) {
+		os.alert({ type: 'error', text: i18n.ts._agents.characterReferenceImageInvalid });
+		return;
+	}
+	try {
+		const uploaded = await os.launchUploader(selected, { multiple: true });
+		form.state.referenceImageFileIds = [...new Set([...form.state.referenceImageFileIds, ...uploaded.map(file => file.id)])].slice(0, 4);
+	} catch {
+		// user cancelled uploader
+	}
+}
+
+function removeReferenceImage(fileId: string) {
+	form.state.referenceImageFileIds = form.state.referenceImageFileIds.filter(id => id !== fileId);
+}
+
+function clearReferenceImages() {
+	form.state.referenceImageFileIds = [];
+}
+
 async function rollbackToPublished() {
 	const { canceled } = await os.confirm({
 		type: 'warning',
@@ -685,6 +861,17 @@ async function rollbackToVersion(version: number, isCurrentPublished: boolean) {
 	} finally {
 		rollbackPending.value = false;
 	}
+}
+
+async function refreshReferenceImagePreviews(fileIds: string[]) {
+	referenceImagePreviews.value = await Promise.all(fileIds.slice(0, 4).map(async (fileId) => {
+		try {
+			const file = await misskeyApi('drive/files/show', { fileId });
+			return { id: fileId, url: file.thumbnailUrl ?? file.url };
+		} catch {
+			return { id: fileId, url: null };
+		}
+	}));
 }
 
 const manualWorldbookEntries = computed(() => form.state.worldbook
@@ -756,6 +943,7 @@ const diffFieldLabels: Record<string, string> = {
 	forbiddenBehavior: '',
 	avatarFileId: '头像',
 	worldbook: '世界书',
+	regexRules: '正则',
 };
 
 function diffFieldLabel(key: string): string {
@@ -1031,6 +1219,125 @@ function computeDiffLines(key: string, publishedText: string, draftText: string)
 	flex: 1;
 	min-width: 0;
 }
+
+.referenceImageTitle {
+	font-weight: 600;
+}
+
+.referenceImageRow {
+	display: flex;
+	align-items: center;
+	gap: 16px;
+}
+
+.referenceImagePreviews {
+	display: grid;
+	grid-template-columns: repeat(2, 58px);
+	grid-template-rows: repeat(2, 58px);
+	gap: 6px;
+	flex: 0 0 auto;
+}
+
+.referenceImagePreview,
+.referenceImageEmpty {
+	position: relative;
+	width: 58px;
+	height: 58px;
+	overflow: hidden;
+	border: solid 1px var(--MI_THEME-divider);
+	border-radius: 6px;
+	background: var(--MI_THEME-panel);
+}
+
+.referenceImagePreview > img {
+	display: block;
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+}
+
+.referenceImagePreviewFallback,
+.referenceImageEmpty {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	color: var(--MI_THEME-fgTransparentWeak);
+}
+
+.referenceImageRemove {
+	position: absolute;
+	top: 2px;
+	right: 2px;
+	width: 20px;
+	height: 20px;
+	border-radius: 50%;
+	background: color-mix(in srgb, var(--MI_THEME-panel) 80%, transparent);
+	color: var(--MI_THEME-fg);
+	font-size: 14px;
+	line-height: 1;
+}
+
+.referenceImageCaption {
+	max-width: 32rem;
+	font-size: 0.85em;
+	color: var(--MI_THEME-fgTransparentWeak);
+}
+
+.referenceImageActions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+
+@container (max-width: 500px) {
+	.referenceImageRow {
+		align-items: flex-start;
+		flex-direction: column;
+	}
+}
+.regexOptions {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 24px;
+}
+.regexPreviewGrid {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 12px;
+}
+.regexPreviewResult {
+	min-width: 0;
+	padding: 12px;
+	border: solid 1px var(--MI_THEME-divider);
+	border-radius: 6px;
+	background: color-mix(in srgb, var(--MI_THEME-fg) 3%, var(--MI_THEME-panel));
+}
+.regexPreviewTitle {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	font-size: 0.88rem;
+	font-weight: 700;
+}
+.regexPreviewText {
+	margin: 8px 0 0;
+	white-space: pre-wrap;
+	word-break: break-word;
+	font: inherit;
+	line-height: 1.5;
+}
+.regexPreviewEmpty {
+	margin-top: 8px;
+	font-size: 0.88rem;
+	color: var(--MI_THEME-fgTransparentWeak);
+}
+.regexPreviewWarning {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	font-size: 0.88rem;
+	color: var(--MI_THEME-warn);
+}
 .cardActions {
 	display: flex;
 	gap: 4px;
@@ -1280,6 +1587,10 @@ function computeDiffLines(key: string, publishedText: string, draftText: string)
 	.mobileTabBar::after {
 		content: '';
 		flex: 0 0 12px;
+	}
+	.regexOptions,
+	.regexPreviewGrid {
+		grid-template-columns: 1fr;
 	}
 }
 </style>

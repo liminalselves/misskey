@@ -27,6 +27,7 @@ import { MiChannelMuting } from "@/models/ChannelMuting.js";
 import { MiAgentCharacter } from '@/models/AgentCharacter.js';
 import { MiAgentDialogueStyle } from '@/models/AgentDialogueStyle.js';
 import { MiAgentMessage } from '@/models/AgentMessage.js';
+import { MiAgentProactiveSchedule } from '@/models/AgentProactiveSchedule.js';
 import { MiAgentImageGeneration } from '@/models/AgentImageGeneration.js';
 import { MiAgentExternalAuditLog } from '@/models/AgentExternalAuditLog.js';
 import { MiAgentUserStyleSubscription } from '@/models/AgentUserStyleSubscription.js';
@@ -190,6 +191,7 @@ export {
 	MiAgentSession,
 	MiAgentSessionCompressionSticky,
 	MiAgentMessage,
+	MiAgentProactiveSchedule,
 	MiAgentImageGeneration,
 	MiAgentExternalAuditLog,
 	MiAgentUserStyleSubscription,
@@ -284,6 +286,7 @@ export type AgentCharactersRepository = Repository<MiAgentCharacter> & MiReposit
 export type AgentDialogueStylesRepository = Repository<MiAgentDialogueStyle> & MiRepository<MiAgentDialogueStyle>;
 export type AgentSessionsRepository = Repository<MiAgentSession> & MiRepository<MiAgentSession>;
 export type AgentMessagesRepository = Repository<MiAgentMessage> & MiRepository<MiAgentMessage>;
+export type AgentProactiveSchedulesRepository = Repository<MiAgentProactiveSchedule> & MiRepository<MiAgentProactiveSchedule>;
 export type AgentImageGenerationsRepository = Repository<MiAgentImageGeneration> & MiRepository<MiAgentImageGeneration>;
 export type AgentExternalAuditLogsRepository = Repository<MiAgentExternalAuditLog> & MiRepository<MiAgentExternalAuditLog>;
 export type AgentUserStyleSubscriptionsRepository = Repository<MiAgentUserStyleSubscription> & MiRepository<MiAgentUserStyleSubscription>;

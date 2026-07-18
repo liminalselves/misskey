@@ -51,9 +51,13 @@ export class I18n<T extends ILocale> {
 		if (this.devMode) {
 			class Handler<TTarget extends ILocale> implements ProxyHandler<TTarget> {
 				get(target: TTarget, p: string | symbol): unknown {
+					if (typeof p === 'symbol' || p === 'toJSON' || p.startsWith('__v_')) {
+						return Reflect.get(target, p);
+					}
+
 					const value = target[p as keyof TTarget];
 
-					if (typeof value === 'object') {
+					if (value !== null && typeof value === 'object') {
 						return new Proxy(value, new Handler<TTarget[keyof TTarget] & ILocale>());
 					}
 
@@ -69,7 +73,7 @@ export class I18n<T extends ILocale> {
 
 					console.error(`Unexpected locale key: ${String(p)}`);
 
-					return new Proxy({} as any, new Handler<TTarget[keyof TTarget] & ILocale>());
+					return '';
 				}
 			}
 
@@ -87,9 +91,13 @@ export class I18n<T extends ILocale> {
 
 			class Handler<TTarget extends ILocale> implements ProxyHandler<TTarget> {
 				get(target: TTarget, p: string | symbol): unknown {
+					if (typeof p === 'symbol' || p === 'toJSON' || p.startsWith('__v_')) {
+						return Reflect.get(target, p);
+					}
+
 					const value = target[p as keyof TTarget];
 
-					if (typeof value === 'object') {
+					if (value !== null && typeof value === 'object') {
 						return new Proxy(value, new Handler<TTarget[keyof TTarget] & ILocale>());
 					}
 

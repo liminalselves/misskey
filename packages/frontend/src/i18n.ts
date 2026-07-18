@@ -14,3 +14,7 @@ export const i18n = markRaw(new I18n<Locale>(locale, _DEV_));
 export function updateI18n(newLocale: Locale) {
 	i18n.locale = newLocale;
 }
+
+export function getI18nLocale(): Locale {
+	return i18n.locale;
+}

@@ -11,6 +11,8 @@ import { DI } from '@/di-symbols.js';
 import { ApiError } from '@/server/api/error.js';
 import { QueryService } from '@/core/QueryService.js';
 import { AgentService } from '@/core/AgentService.js';
+import { AgentProactiveScheduleService } from '@/core/AgentProactiveScheduleService.js';
+import { DriveFileEntityService } from '@/core/entities/DriveFileEntityService.js';
 
 export const meta = {
 	tags: ['agents'],
@@ -28,6 +30,11 @@ export const meta = {
 				role: { type: 'string', enum: ['user', 'assistant', 'system'] },
 				content: { type: 'string' },
 				createdAt: { type: 'string', format: 'date-time' },
+				file: { type: 'object', ref: 'DriveFile', nullable: true },
+				imageRecognitionStatus: { type: 'string', nullable: true },
+				imageRecognitionDescription: { type: 'string', nullable: true },
+				proactiveScheduleActionTypes: { type: 'array', items: { type: 'string', enum: ['create', 'update', 'cancel'] } },
+				proactiveScheduleControlFailed: { type: 'boolean' },
 			},
 		},
 	},
@@ -55,6 +62,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 
 		private queryService: QueryService,
 		private agentService: AgentService,
+		private agentProactiveScheduleService: AgentProactiveScheduleService,
+		private driveFileEntityService: DriveFileEntityService,
 	) {
 		super(meta, paramDef, async (ps, me) => {
 			this.agentService.assertAgentsEnabled();
@@ -66,18 +75,24 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			const q = this.queryService.makePaginationQuery(
 				this.agentMessagesRepository.createQueryBuilder('m')
 					.where('m.sessionId = :sessionId', { sessionId: ps.sessionId })
-					.select(['m.id', 'm.role', 'm.content', 'm.createdAt']),
+					.andWhere('m.isInternal = false')
+					.select(['m.id', 'm.role', 'm.content', 'm.createdAt', 'm.imageFileId', 'm.imageRecognitionStatus', 'm.imageRecognitionDescription', 'm.proactiveScheduleControlRaw', 'm.proactiveScheduleControlError']),
 				ps.sinceId ?? null,
 				ps.untilId ?? null,
 			).take(ps.limit ?? 30);
 
 			const rows = await q.getMany();
-			return rows.map(m => ({
+			return await Promise.all(rows.map(async m => ({
 				id: m.id,
 				role: m.role,
 				content: m.content,
 				createdAt: m.createdAt.toISOString(),
-			}));
+				file: m.imageFileId ? await this.driveFileEntityService.pack(m.imageFileId, {}).catch(() => null) : null,
+				imageRecognitionStatus: m.imageRecognitionStatus,
+				imageRecognitionDescription: m.imageRecognitionDescription,
+				proactiveScheduleActionTypes: this.agentProactiveScheduleService.actionTypes(m),
+				proactiveScheduleControlFailed: m.proactiveScheduleControlError != null,
+			})));
 		});
 	}
 }

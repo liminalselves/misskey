@@ -13,6 +13,8 @@ import { AgentService } from '@/core/AgentService.js';
 import { MetaService } from '@/core/MetaService.js';
 import { agentLongMemoryProviderIds } from '@/core/AgentCompressionMemoryService.js';
 import { AgentImageService } from '@/core/AgentImageService.js';
+import { AgentVisionService } from '@/core/AgentVisionService.js';
+import { AgentProactiveScheduleService } from '@/core/AgentProactiveScheduleService.js';
 
 export const meta = {
 	tags: ['agents'],
@@ -37,6 +39,7 @@ export const meta = {
 			agentLongMemoryProvider: { type: 'string' },
 			agentCompressionModelId: { type: 'string', nullable: true },
 			agentImageModelId: { type: 'string', nullable: true },
+			agentVisionModelId: { type: 'string', nullable: true },
 			agentImageSettings: { type: 'object' },
 			segmentedOutputEnabled: { type: 'boolean' },
 			compressionCacheInvalidated: { type: 'boolean' },
@@ -61,12 +64,16 @@ export const paramDef = {
 		agentLongMemoryProvider: { type: 'string', enum: [...agentLongMemoryProviderIds] },
 		agentCompressionModelId: { type: 'string', nullable: true, maxLength: 64 },
 		agentImageModelId: { type: 'string', nullable: true, maxLength: 128 },
+		agentVisionModelId: { type: 'string', nullable: true, maxLength: 128 },
 		agentImageSettings: {
 			type: 'object',
 			nullable: true,
 			additionalProperties: true,
 		},
 		segmentedOutputEnabled: { type: 'boolean' },
+		timeAwarenessEnabled: { type: 'boolean' },
+		randomProactiveEnabled: { type: 'boolean' },
+		scheduledProactiveEnabled: { type: 'boolean' },
 	},
 	required: ['sessionId'],
 } as const;
@@ -83,6 +90,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		private agentService: AgentService,
 		private metaService: MetaService,
 		private agentImageService: AgentImageService,
+		private agentVisionService: AgentVisionService,
+		private agentProactiveScheduleService: AgentProactiveScheduleService,
 	) {
 		super(meta, paramDef, async (ps, me) => {
 			this.agentService.assertAgentsEnabled();
@@ -170,15 +179,52 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				}
 				row.agentImageModelId = mid;
 			}
+			if (ps.agentVisionModelId !== undefined) {
+				const mid = ps.agentVisionModelId == null || ps.agentVisionModelId.trim() === '' ? null : ps.agentVisionModelId.trim();
+				if (mid != null && this.agentVisionService.resolveVisionModel(instanceMeta, mid) == null) {
+					throw new ApiError({ message: 'No such image recognition model.', code: 'NO_SUCH_AGENT_VISION_MODEL', id: '1b2541f8-0cb5-4ef1-b633-7b5c89ad3b3e' });
+				}
+				row.agentVisionModelId = mid;
+			}
 			if (ps.agentImageSettings !== undefined) {
 				row.agentImageSettings = this.normalizeAgentImageSettings(ps.agentImageSettings);
 			}
 			if (ps.segmentedOutputEnabled !== undefined) {
 				row.segmentedOutputEnabled = ps.segmentedOutputEnabled;
 			}
+			const nextTimeAwarenessEnabled = ps.timeAwarenessEnabled ?? row.timeAwarenessEnabled;
+			const nextRandomProactiveEnabled = ps.randomProactiveEnabled ?? row.randomProactiveEnabled;
+			const nextScheduledProactiveEnabled = ps.scheduledProactiveEnabled ?? row.scheduledProactiveEnabled;
+			if (!nextTimeAwarenessEnabled && (nextRandomProactiveEnabled || nextScheduledProactiveEnabled)) {
+				throw new ApiError({
+					message: 'Time awareness must remain enabled while proactive messages are enabled.',
+					code: 'AGENT_TIME_AWARENESS_REQUIRED',
+					id: 'a9e4b3ea-644f-4bd0-924a-592c886369c6',
+					kind: 'client',
+					httpStatusCode: 400,
+				});
+			}
+			if (ps.timeAwarenessEnabled !== undefined) {
+				row.timeAwarenessEnabled = ps.timeAwarenessEnabled;
+			}
+			if (ps.randomProactiveEnabled !== undefined) {
+				row.randomProactiveEnabled = ps.randomProactiveEnabled;
+				if (!ps.randomProactiveEnabled) {
+					row.randomProactiveAt = null;
+					row.randomProactiveNeedsUserMessage = false;
+				}
+			}
+			if (ps.scheduledProactiveEnabled !== undefined) {
+				row.scheduledProactiveEnabled = ps.scheduledProactiveEnabled;
+			}
 
 			row.updatedAt = new Date();
 			await this.agentSessionsRepository.save(row);
+			if (ps.scheduledProactiveEnabled === false) {
+				await this.agentProactiveScheduleService.pauseAll(row.id);
+			} else if (ps.scheduledProactiveEnabled === true) {
+				await this.agentProactiveScheduleService.resumeAll(row.id);
+			}
 			return {
 				id: row.id,
 				name: row.name,
@@ -193,8 +239,12 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				agentLongMemoryProvider: row.agentLongMemoryProvider,
 				agentCompressionModelId: row.agentCompressionModelId,
 				agentImageModelId: row.agentImageModelId,
+				agentVisionModelId: row.agentVisionModelId,
 				agentImageSettings: row.agentImageSettings ?? {},
 				segmentedOutputEnabled: row.segmentedOutputEnabled,
+				timeAwarenessEnabled: row.timeAwarenessEnabled,
+				randomProactiveEnabled: row.randomProactiveEnabled,
+				scheduledProactiveEnabled: row.scheduledProactiveEnabled,
 				compressionCacheInvalidated: false,
 				updatedAt: row.updatedAt.toISOString(),
 			};

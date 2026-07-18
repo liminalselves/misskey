@@ -10,7 +10,7 @@ import { DI } from '@/di-symbols.js';
 import { Endpoint } from '@/server/api/endpoint-base.js';
 import { ApiError } from '@/server/api/error.js';
 import { AgentService } from '@/core/AgentService.js';
-import { AgentImageService, agentImageErrors } from '@/core/AgentImageService.js';
+import { AgentImageService, agentImageErrors, getAgentImageErrorDiagnostic } from '@/core/AgentImageService.js';
 import { AgentExternalAuditService } from '@/core/AgentExternalAuditService.js';
 import { DriveFileEntityService } from '@/core/entities/DriveFileEntityService.js';
 
@@ -112,6 +112,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				fileId: null,
 				url: null,
 				errorCode: null,
+				errorMessage: null,
 				cost: 0,
 				regenerationOfId: null,
 				isBlocked: false,
@@ -146,6 +147,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			} catch (err) {
 				row.status = 'failed';
 				row.errorCode = err instanceof ApiError ? err.code : 'AGENT_IMAGE_FAILED';
+				row.errorMessage = getAgentImageErrorDiagnostic(err);
 				row.updatedAt = new Date();
 				await this.agentImageGenerationsRepository.save(row);
 				throw err;

@@ -45,7 +45,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 								<template #label>关键词</template>
 							</MkInput>
 							<MkInput v-model="reviewFilters.userId" type="text">
-								<template #label>作者 ID</template>
+								<template #label>作者用户名 / acct</template>
 							</MkInput>
 						</FormSplit>
 						<div class="_buttons">
@@ -79,7 +79,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 										<span v-for="tag in row.riskTags" :key="tag">{{ tag }}</span>
 									</div>
 									<div :class="$style.rowMeta">
-										<span><MkUserName v-if="row.user" :user="row.user"/><code v-else>{{ row.userId }}</code></span>
+										<UserAcctInline :user="row.user" :fallback="row.userId" @copy="copyText"/>
 										<time>{{ formatTime(row.updatedAt) }}</time>
 									</div>
 								</button>
@@ -103,7 +103,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<template v-else-if="activeView === 'sessions'">
 					<section :class="$style.filterBand">
 						<FormSplit :minWidth="240">
-							<MkInput v-model="sessionFilters.userId" type="text"><template #label>用户 ID</template></MkInput>
+							<MkInput v-model="sessionFilters.userId" type="text"><template #label>用户名 / acct</template></MkInput>
 							<MkInput v-model="sessionFilters.sessionId" type="text"><template #label>会话 ID</template></MkInput>
 						</FormSplit>
 						<div class="_buttons">
@@ -119,7 +119,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 							</div>
 						</div>
 						<FormSplit :minWidth="220">
-							<MkInput v-model="messageFilters.userId" type="text"><template #label>用户 ID</template></MkInput>
+							<MkInput v-model="messageFilters.userId" type="text"><template #label>用户名 / acct</template></MkInput>
 							<MkInput v-model="messageFilters.sessionId" type="text"><template #label>会话 ID</template></MkInput>
 							<MkInput v-model="messageFilters.characterId" type="text"><template #label>角色 ID</template></MkInput>
 						</FormSplit>
@@ -143,7 +143,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 									<time>{{ formatTime(row.createdAt) }}</time>
 								</div>
 								<div :class="$style.metaGrid">
-									<span>用户：<MkUserName v-if="row.user" :user="row.user"/><code v-else>{{ row.userId }}</code></span>
+									<span>用户：<UserAcctInline :user="row.user" :fallback="row.userId" @copy="copyText"/></span>
 									<span>会话：{{ row.sessionName }}</span>
 									<span>角色：{{ row.characterName || '—' }}</span>
 								</div>
@@ -173,7 +173,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 									</div>
 									<p>{{ row.characterName || '—' }}</p>
 									<div :class="$style.rowMeta">
-										<span><MkUserName v-if="row.user" :user="row.user"/><code v-else>{{ row.userId }}</code></span>
+										<UserAcctInline :user="row.user" :fallback="row.userId" @copy="copyText"/>
 										<time>{{ formatTime(row.lastMessageAt || row.updatedAt) }}</time>
 									</div>
 								</button>
@@ -198,7 +198,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 							<MkInput v-model="externalFilters.blockCode" type="text"><template #label>拦截编码</template></MkInput>
 						</FormSplit>
 						<FormSplit :minWidth="220">
-							<MkInput v-model="externalFilters.userId" type="text"><template #label>用户 ID</template></MkInput>
+							<MkInput v-model="externalFilters.userId" type="text"><template #label>用户名 / acct</template></MkInput>
 							<MkInput v-model="externalFilters.sessionId" type="text"><template #label>会话 ID</template></MkInput>
 							<MkInput v-model="externalFilters.modelId" type="text"><template #label>外审模型 ID</template></MkInput>
 						</FormSplit>
@@ -220,7 +220,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 								<time>{{ formatTime(row.createdAt) }}</time>
 							</div>
 							<div :class="$style.metaGrid">
-								<span>用户：<MkUserName v-if="row.user" :user="row.user"/><code v-else>{{ row.userId || '—' }}</code></span>
+								<span>用户：<UserAcctInline :user="row.user" :fallback="row.userId || '—'" @copy="copyText"/></span>
 								<span>会话：{{ row.sessionName || row.sessionId || '—' }}</span>
 								<span>角色：{{ row.characterName || '—' }}</span>
 								<span>模型：{{ row.modelName || row.modelId || '—' }}</span>
@@ -250,7 +250,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<template v-else-if="activeView === 'images'">
 					<section :class="$style.filterBand">
 						<FormSplit :minWidth="220">
-							<MkInput v-model="imageFilters.userId" type="text"><template #label>用户 ID</template></MkInput>
+							<MkInput v-model="imageFilters.userId" type="text"><template #label>用户名 / acct</template></MkInput>
 							<MkInput v-model="imageFilters.sessionId" type="text"><template #label>会话 ID</template></MkInput>
 							<MkInput v-model="imageFilters.messageId" type="text"><template #label>消息 ID</template></MkInput>
 						</FormSplit>
@@ -284,7 +284,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 								<div :class="$style.metaGrid">
 									<span>尺寸：{{ row.size }}</span>
 									<span>费用：{{ row.cost }}</span>
-									<span>用户：<MkUserName v-if="row.user" :user="row.user"/><code v-else>{{ row.userId }}</code></span>
+									<span>用户：<UserAcctInline :user="row.user" :fallback="row.userId" @copy="copyText"/></span>
 									<code>{{ row.sessionId }}</code>
 								</div>
 								<div class="_buttons">
@@ -316,11 +316,14 @@ SPDX-License-Identifier: AGPL-3.0-only
 								<time>{{ formatTime(log.createdAt) }}</time>
 							</div>
 							<div :class="$style.rowMeta">
-								<span>操作人：<MkUserName :user="log.user"/> <MkAcct :user="log.user"/></span>
-								<code>{{ log.userId }}</code>
+								<span>操作人：<UserAcctInline :user="log.user" :fallback="log.userId" @copy="copyText"/></span>
 							</div>
 							<div :class="$style.metaGrid">
-								<span v-for="row in logRows(log)" :key="row.label">{{ row.label }}：{{ row.value }}</span>
+								<span v-for="row in logRows(log)" :key="row.label">
+									{{ row.label }}：
+									<UserAcctInline v-if="row.copyAsAcct" :fallback="row.value" @copy="copyText"/>
+									<template v-else>{{ row.value }}</template>
+								</span>
 							</div>
 							<div v-if="logNote(log)" :class="$style.decisionBox">
 								<p>{{ logNote(log) }}</p>
@@ -341,14 +344,13 @@ import MkLoading from '@/components/global/MkLoading.vue';
 import MkInfo from '@/components/MkInfo.vue';
 import MkInput from '@/components/MkInput.vue';
 import MkSelect from '@/components/MkSelect.vue';
-import MkUserName from '@/components/global/MkUserName.vue';
-import MkAcct from '@/components/global/MkAcct.vue';
 import MkDriveFileThumbnail from '@/components/MkDriveFileThumbnail.vue';
 import FormSplit from '@/components/form/split.vue';
 import { misskeyApi, formatApiError } from '@/utility/misskey-api.js';
 import { copyToClipboard } from '@/utility/copy-to-clipboard.js';
 import { definePage } from '@/page.js';
 import { formatDateTimeString } from '@/utility/format-time-string.js';
+import { acct as userAcct } from '@/filters/user.js';
 import * as os from '@/os.js';
 
 type ViewKey = 'overview' | 'queue' | 'library' | 'sessions' | 'externalAudit' | 'images' | 'logs';
@@ -395,6 +397,34 @@ type ExternalStatus = 'allow' | 'block' | 'failed' | 'all_failed';
 type ExternalAuditRow = { id: string; createdAt: string; completedAt: string | null; durationMs: number | null; userId: string | null; user: any | null; sessionId: string | null; sessionName: string | null; characterId: string | null; characterName: string; dialogueStyleId: string | null; modelId: string | null; modelName: string | null; apiModelName: string | null; baseUrl: string | null; priority: number; attemptIndex: number; status: ExternalStatus; blockCode: string | null; category: string | null; reason: string | null; confidence: number | null; userText: string | null; assistantText: string | null; responseText: string | null; errorCode: string | null; errorMessage: string | null };
 type ImageRow = { id: string; createdAt: string; updatedAt: string; userId: string; user: any | null; sessionId: string; messageId: string | null; placeholderIndex: number; tag: string; size: string; provider: string; imageModelId: string; status: string; fileId: string | null; url: string | null; errorCode: string | null; cost: number; isBlocked: boolean; blockedReason: string | null; autoCleanedAt: string | null; autoCleanedReason: string | null };
 type AgentLog = { id: string; createdAt: string; type: string; info: Record<string, unknown>; userId: string; user: any };
+
+const UserAcctInline = defineComponent({
+	props: {
+		user: { type: Object, required: false, default: null },
+		fallback: { type: String, required: false, default: null },
+	},
+	emits: ['copy'],
+	setup(props, { emit }) {
+		return () => {
+			const acct = props.user ? `@${userAcct(props.user as any)}` : props.fallback;
+			const canCopy = typeof acct === 'string' && acct !== '' && acct !== '-';
+
+			return h('span', { class: 'agent-user-acct' }, [
+				h('code', acct || '-'),
+				h('button', {
+					type: 'button',
+					class: 'agent-user-acct-copy _button',
+					title: 'Copy username / acct',
+					disabled: !canCopy,
+					onClick: (ev: MouseEvent) => {
+						ev.stopPropagation();
+						if (canCopy) emit('copy', acct);
+					},
+				}, [h('i', { class: 'ti ti-copy' })]),
+			]);
+		};
+	},
+});
 type Summary = { pendingCharacters: number; pendingStyles: number; pendingTotal: number; bannedCharacters: number; bannedSessions: number; blockedExternalAudits: number; blockedImages: number; recentOperations: number };
 
 const api = misskeyApi as unknown as <T>(endpoint: string, data?: Record<string, unknown>) => Promise<T>;
@@ -909,7 +939,7 @@ function logRows(log: AgentLog) {
 			{ label: '对象', value: logInfoString(log, 'name') ?? '—' },
 			{ label: '类型', value: kindLabel(logInfoString(log, 'kind') ?? '') },
 			{ label: '对象 ID', value: logInfoString(log, 'id') ?? '—' },
-			{ label: '作者 ID', value: logInfoString(log, 'ownerUserId') ?? '—' },
+			{ label: '作者用户名 / acct', value: logInfoString(log, 'ownerAcct') ?? logInfoString(log, 'ownerUserId') ?? '-', copyAsAcct: true },
 			{ label: '状态', value: logInfoString(log, 'reviewStatus') ?? '—' },
 		];
 	}
@@ -917,14 +947,14 @@ function logRows(log: AgentLog) {
 		return [
 			{ label: '会话', value: logInfoString(log, 'sessionName') ?? '—' },
 			{ label: '会话 ID', value: logInfoString(log, 'sessionId') ?? '—' },
-			{ label: '用户 ID', value: logInfoString(log, 'userId') ?? '—' },
+			{ label: '用户名 / acct', value: logInfoString(log, 'userAcct') ?? logInfoString(log, 'userId') ?? '-', copyAsAcct: true },
 		];
 	}
 	if (log.type === 'setAgentCharacterModerationBan') {
 		return [
 			{ label: '角色', value: logInfoString(log, 'characterName') ?? '—' },
 			{ label: '角色 ID', value: logInfoString(log, 'characterId') ?? '—' },
-			{ label: '作者 ID', value: logInfoString(log, 'ownerUserId') ?? '—' },
+			{ label: '作者用户名 / acct', value: logInfoString(log, 'ownerAcct') ?? logInfoString(log, 'ownerUserId') ?? '-', copyAsAcct: true },
 		];
 	}
 	return Object.entries(log.info).map(([label, value]) => ({ label, value: String(value) }));
@@ -1472,6 +1502,36 @@ onMounted(() => {
 	word-break: break-word;
 	overflow-wrap: anywhere;
 	line-height: 1.45;
+}
+.agent-user-acct {
+	display: inline-flex;
+	align-items: center;
+	max-width: 100%;
+	gap: 4px;
+	vertical-align: middle;
+}
+.agent-user-acct code {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.agent-user-acct-copy {
+	display: inline-grid;
+	place-items: center;
+	flex: 0 0 auto;
+	width: 24px;
+	height: 24px;
+	border-radius: 6px;
+	color: var(--MI_THEME-fgTransparentWeak);
+}
+.agent-user-acct-copy:hover {
+	color: var(--MI_THEME-accent);
+	background: var(--MI_THEME-accentedBg);
+}
+.agent-user-acct-copy:disabled {
+	opacity: 0.45;
+	cursor: default;
 }
 .diff-row {
 	display: grid;

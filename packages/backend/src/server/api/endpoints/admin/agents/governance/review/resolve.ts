@@ -5,7 +5,7 @@
 
 import ms from 'ms';
 import { Inject, Injectable } from '@nestjs/common';
-import type { AgentCharactersRepository, AgentDialogueStylesRepository, AgentPublishedVersionsRepository } from '@/models/_.js';
+import type { AgentCharactersRepository, AgentDialogueStylesRepository, AgentPublishedVersionsRepository, UsersRepository } from '@/models/_.js';
 import { Endpoint } from '@/server/api/endpoint-base.js';
 import { DI } from '@/di-symbols.js';
 import { ApiError } from '@/server/api/error.js';
@@ -14,6 +14,7 @@ import { ModerationLogService } from '@/core/ModerationLogService.js';
 import { NotificationService } from '@/core/NotificationService.js';
 import { IdService } from '@/core/IdService.js';
 import { MiAgentPublishedVersion } from '@/models/AgentPublishedVersion.js';
+import { getAcctByUserId } from '../_utils.js';
 
 export const meta = {
 	tags: ['admin', 'agents'],
@@ -49,6 +50,9 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 
 		@Inject(DI.agentPublishedVersionsRepository)
 		private agentPublishedVersionsRepository: AgentPublishedVersionsRepository,
+
+		@Inject(DI.usersRepository)
+		private usersRepository: UsersRepository,
 
 		private agentService: AgentService,
 		private moderationLogService: ModerationLogService,
@@ -104,12 +108,14 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 						snapshot: archivedSnapshot,
 					}));
 				}
+				const ownerAcct = await getAcctByUserId(this.usersRepository, row.userId);
 				await this.moderationLogService.log(me, 'resolveAgentReview', {
 					kind: 'character',
 					id: row.id,
 					decision: ps.decision,
 					name: row.name,
 					ownerUserId: row.userId,
+					ownerAcct,
 					reviewStatus: row.reviewStatus,
 					publishedVersion: row.publishedVersion,
 					isPublished: row.isPublished,
@@ -160,12 +166,14 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					snapshot: archivedSnapshot,
 				}));
 			}
+			const ownerAcct = await getAcctByUserId(this.usersRepository, row.userId);
 			await this.moderationLogService.log(me, 'resolveAgentReview', {
 				kind: 'style',
 				id: row.id,
 				decision: ps.decision,
 				name: row.name,
 				ownerUserId: row.userId,
+				ownerAcct,
 				reviewStatus: row.reviewStatus,
 				publishedVersion: row.publishedVersion,
 				isPublished: row.isPublished,

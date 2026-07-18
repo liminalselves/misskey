@@ -59,6 +59,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 							v-if="item.type === 'item'"
 							:sessionId="sessionId"
 							:message="item.data"
+							:regexRules="character?.regexRules ?? []"
 							:assistantName="character?.name ?? null"
 							:assistantAvatarUrl="assistantAvatarUrl"
 							:highlighted="highlightedMessageId === item.data.id"
@@ -100,6 +101,80 @@ SPDX-License-Identifier: AGPL-3.0-only
 			@scrollToMessage="handleScrollToMessageFromSearch"
 			@messageDeleted="onAgentMessageDeleted"
 		/>
+	</div>
+
+	<div v-else-if="tab === 'proactive'" class="_spacer" style="--MI_SPACER-w: 720px;">
+		<div v-if="loading" class="_gaps">
+			<MkLoading/>
+		</div>
+		<div v-else class="_gaps">
+			<MkInfo v-if="session == null">{{ i18n.ts.somethingHappened }}</MkInfo>
+			<template v-else>
+				<MkInfo v-if="moderationLocksSessionWrites" warn>{{ moderationBlockUserMessage }}</MkInfo>
+				<MkInfo v-if="!timeAwarenessEnabled" warn>{{ proactiveTimeAwarenessRequired }}</MkInfo>
+				<MkInfo v-if="session.randomProactiveLastError" warn>{{ randomProactiveLastErrorCaption }}</MkInfo>
+				<MkInfo v-if="session.scheduledProactiveLastError" warn>{{ scheduledProactiveLastErrorCaption }}</MkInfo>
+				<div v-panel :class="$style.proactivePanel">
+					<div :class="$style.proactiveTitle">{{ proactiveMessagesLabel }}</div>
+					<MkSwitch
+						v-model="randomProactiveEnabled"
+						:disabled="proactiveSaving || moderationLocksSessionWrites || !timeAwarenessEnabled"
+						@update:modelValue="saveRandomProactiveSetting"
+					>
+						{{ randomProactiveLabel }}
+						<template #caption>{{ randomProactiveCaption }}</template>
+					</MkSwitch>
+					<MkSwitch
+						v-model="scheduledProactiveEnabled"
+						:disabled="proactiveSaving || moderationLocksSessionWrites || !timeAwarenessEnabled"
+						@update:modelValue="saveScheduledProactiveSetting"
+					>
+						{{ scheduledProactiveLabel }}
+						<template #caption>{{ scheduledProactiveCaption }}</template>
+					</MkSwitch>
+				</div>
+				<div :class="$style.proactiveListHead">
+					<div>
+						<div :class="$style.proactiveTitle">{{ proactiveScheduleListLabel }}</div>
+						<div :class="$style.proactiveCaption">{{ proactiveScheduleListCaption }}</div>
+					</div>
+					<MkButton rounded small :disabled="proactiveSchedulesLoading" @click="loadProactiveSchedules">
+						<i class="ti ti-refresh"></i>
+					</MkButton>
+				</div>
+				<MkLoading v-if="proactiveSchedulesLoading"/>
+				<MkInfo v-else-if="proactiveSchedules.length === 0">{{ proactiveScheduleEmpty }}</MkInfo>
+				<div v-else :class="$style.proactiveScheduleList">
+					<div v-for="schedule in proactiveSchedules" :key="schedule.id" v-panel :class="$style.proactiveScheduleCard">
+						<div :class="$style.proactiveScheduleTop">
+							<div :class="$style.proactiveScheduleDescription">{{ schedule.description }}</div>
+							<span :class="$style.proactiveScheduleStatus">{{ proactiveScheduleStatusLabel(schedule.status) }}</span>
+						</div>
+						<div :class="$style.proactiveScheduleMeta">
+							<span>{{ proactiveScheduleTriggerLabel(schedule) }}</span>
+							<span v-if="schedule.nextRunAt">{{ proactiveNextRunLabel }} {{ formatDateTimeString(new Date(schedule.nextRunAt), 'yyyy-MM-dd HH:mm') }}</span>
+							<span>{{ proactiveRemainingLabel(schedule.remainingRuns) }}</span>
+						</div>
+						<div :class="$style.proactiveScheduleActions">
+							<MkButton
+								v-if="schedule.status === 'active' || schedule.status === 'paused'"
+								rounded
+								small
+								:disabled="proactiveScheduleMutating === schedule.id || moderationLocksSessionWrites || (schedule.status === 'paused' && (!timeAwarenessEnabled || !scheduledProactiveEnabled))"
+								@click="toggleProactiveSchedule(schedule)"
+							>
+								<i :class="schedule.status === 'active' ? 'ti ti-player-pause' : 'ti ti-player-play'"></i>
+								{{ schedule.status === 'active' ? proactivePauseLabel : proactiveResumeLabel }}
+							</MkButton>
+							<MkButton rounded small danger :disabled="proactiveScheduleMutating === schedule.id || moderationLocksSessionWrites" @click="deleteProactiveSchedule(schedule)">
+								<i class="ti ti-trash"></i>
+								{{ i18n.ts.delete }}
+							</MkButton>
+						</div>
+					</div>
+				</div>
+			</template>
+		</div>
 	</div>
 
 	<div v-else-if="tab === 'worldbook'" class="_spacer" style="--MI_SPACER-w: 760px;">
@@ -209,6 +284,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 									<div :class="[$style.selectCardHead, $style.modelSelectCardHead]">
 										<div :class="$style.selectCardTitleWrap">
 											<div :class="$style.modelSelectCardTitle">{{ m.name }}</div>
+											<p v-if="m.description" :class="$style.modelDescClamp">{{ m.description }}</p>
 											<div :class="$style.modelMetaChips" role="list">
 												<span :class="$style.modelMetaChip" role="listitem">
 													<i class="ti ti-server" :class="$style.modelMetaChipIcon" aria-hidden="true"></i>
@@ -237,6 +313,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 													</template>
 													<span v-else :class="[$style.modelMetaChipVal, $style.modelMetaChipValMuted]">{{ i18n.ts._agents.noDataAvailable }}</span>
 												</span>
+												<span v-if="m.supportsReferenceImage" :class="$style.modelMetaChip" role="listitem">
+													<i class="ti ti-photo" :class="$style.modelMetaChipIcon" aria-hidden="true"></i>
+													<span :class="$style.modelMetaChipVal">{{ i18n.ts._agents.imageModelReferenceImage }}</span>
+												</span>
 											</div>
 										</div>
 										<MkButton
@@ -252,11 +332,25 @@ SPDX-License-Identifier: AGPL-3.0-only
 							</div>
 						</div>
 						<p :class="$style.drawCaption">选择“无”时关闭生图；选择模型后会显示该提供商的可配置参数。</p>
+						<div v-if="drawSelectedImageModel?.supportsReferenceImage" :class="$style.drawReferenceImage">
+							<div :class="$style.drawReferenceImageBody">
+								<div :class="$style.drawReferenceImageTitle">{{ i18n.ts._agents.imageReferenceImage }}</div>
+								<div v-if="!character?.referenceImages.length" :class="$style.drawReferenceImageCaption">{{ i18n.ts._agents.imageReferenceImageEmpty }}</div>
+							</div>
+							<div v-if="character?.referenceImages.length" :class="$style.drawReferenceImagePreview">
+								<MkMediaList :mediaList="character.referenceImages"/>
+							</div>
+						</div>
 					</div>
 					<MkInfo v-if="drawImageModels.length === 0">管理员还没有配置可用的生图模型。</MkInfo>
 					<MkInfo v-if="drawSelectedImageModel?.provider === 'aurora'" warn>
 						Naval AI 参数会直接影响出图质量、费用和稳定性。不了解时请保持默认，或使用“恢复默认设置”。
 					</MkInfo>
+					<div v-if="drawSelectedImageModel?.provider === 'openai'" :class="$style.drawSizeRow">
+						<MkSelect v-model="drawSize" :items="drawSizeItems">
+							<template #label>{{ i18n.ts._agents.adminOpenaiImageSize }}</template>
+						</MkSelect>
+					</div>
 					<template v-if="drawSelectedImageModel?.provider === 'aurora'">
 						<div :class="$style.drawSizeRow">
 							<MkSelect v-model="drawSize" :items="drawSizeItems">
@@ -640,6 +734,17 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</MkSwitch>
 			</div>
 			<div v-panel :class="[$style.memContextPorter, $style.memPorterPanel]">
+				<div :class="$style.memContextPorterLabel">{{ timeAwarenessLabel }}</div>
+				<MkSwitch
+					v-model="timeAwarenessEnabled"
+					:disabled="timeAwarenessSaving || moderationLocksSessionWrites || randomProactiveEnabled || scheduledProactiveEnabled"
+					@update:modelValue="saveTimeAwarenessSetting"
+				>
+					{{ timeAwarenessLabel }}
+					<template #caption>{{ timeAwarenessCaption }}</template>
+				</MkSwitch>
+			</div>
+			<div v-panel :class="[$style.memContextPorter, $style.memPorterPanel]">
 				<div :class="$style.memContextPorterLabel">会话导入导出</div>
 				<div :class="$style.memContextPorterActions">
 					<MkButton rounded :wait="contextExporting" :disabled="contextExporting" @click="exportSessionContext">
@@ -799,6 +904,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 								<div :class="[$style.selectCardHead, $style.modelSelectCardHead]">
 									<div :class="$style.selectCardTitleWrap">
 										<div :class="$style.modelSelectCardTitle">{{ m.name }}</div>
+										<p v-if="m.description" :class="$style.modelDescClamp">{{ m.description }}</p>
 										<div :class="$style.modelMetaChips" :aria-label="i18n.ts._agents.sessionModel" role="list">
 											<span
 												:class="$style.modelMetaChip"
@@ -859,12 +965,24 @@ SPDX-License-Identifier: AGPL-3.0-only
 										{{ modelCardSelectionId === m.id ? i18n.ts.enabled : i18n.ts._agents.sessionPickButton }}
 									</MkButton>
 								</div>
-								<p v-if="m.description" :class="$style.modelDescClamp">{{ m.description }}</p>
 							</div>
 						</div>
 					</div>
 				</div>
 				<MkInfo v-else warn>{{ i18n.ts._agents.sessionModelNoModels }}</MkInfo>
+				<div v-if="visionModels.length > 0" v-panel :class="[$style.settingHero, $style.modelHeroCompact]">
+					<MkSelect
+						:modelValue="visionModelSelectionId"
+						:items="visionModelSelectItems"
+						:disabled="savingSettings || moderationLocksSessionWrites"
+						@update:modelValue="selectVisionModel"
+					>
+						<template #label>{{ i18n.ts._agents.visionModel }}</template>
+						<template #caption>
+							{{ i18n.ts._agents.visionModelCost }}: {{ selectedVisionModel?.costPerCall.toLocaleString() ?? '-' }}
+						</template>
+					</MkSelect>
+				</div>
 			</template>
 		</div>
 	</div>
@@ -881,7 +999,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<i class="ti ti-loader-2" :class="$style.memAddHintIcon"></i>
 				<span>{{ i18n.ts._agents.compressionSidecarScheduledHint }}</span>
 			</div>
-			<XForm ref="formRef" :class="$style.form" :disabled="formDisabled" :sending="sending || editSaving" :editing="editingForForm" @submit="onFormSubmit" @cancelEdit="cancelEditingMessage" @abort="onAbortRequest"/>
+			<XForm ref="formRef" :class="$style.form" :disabled="formDisabled" :sending="sending || editSaving" :editing="editingForForm" :attachmentEnabled="visionModels.length > 0" @submit="onFormSubmit" @cancelEdit="cancelEditingMessage" @abort="onAbortRequest"/>
 		</div>
 	</template>
 </PageWithHeader>
@@ -923,6 +1041,8 @@ import { makeDateSeparatedTimelineComputedRef } from '@/utility/timeline-date-se
 import { useMutationObserver } from '@/composables/use-mutation-observer.js';
 import { prefer } from '@/preferences.js';
 import { agentSegmentDelayMs, splitAgentMessageIntoSegments } from '@/utility/agent-message-segments.js';
+import { agentI18nText } from '@/utility/agent-i18n.js';
+import { useStream } from '@/stream.js';
 
 const agentSessionCss = useCssModule();
 
@@ -959,7 +1079,18 @@ function agentAuditFeedbackFromError(err: unknown): Omit<AgentAuditFeedback, 'ti
 	};
 }
 
-type AgentMsg = { id: string; role: string; content: string; createdAt: string };
+type AgentRegexRule = { id: string; pattern: string; targets: ('user' | 'assistant')[]; effects: ('hide' | 'aiInvisible')[] };
+type AgentMsg = {
+	id: string;
+	role: string;
+	content: string;
+	createdAt: string;
+	file?: DriveFile | null;
+	imageRecognitionStatus?: 'succeeded' | 'failed' | null;
+	imageRecognitionDescription?: string | null;
+	proactiveScheduleActionTypes?: ('create' | 'update' | 'cancel')[];
+	proactiveScheduleControlFailed?: boolean;
+};
 type PendingWorldbookMatch = {
 	id: string;
 	title: string;
@@ -981,6 +1112,13 @@ type SessionWorldbookEntry = {
 };
 
 const messages = ref<AgentMsg[]>([]);
+const visionModels = ref<Array<{ id: string; name: string; costPerCall: number; isDefault: boolean }>>([]);
+const visionModelSelectionId = ref('');
+const selectedVisionModel = computed(() => visionModels.value.find(model => model.id === visionModelSelectionId.value) ?? null);
+const visionModelSelectItems = computed((): MkSelectItem[] => visionModels.value.map(model => ({
+	value: model.id,
+	label: model.name,
+})));
 const loading = ref(true);
 const chatInitializing = ref(false);
 const sending = ref(false);
@@ -1006,7 +1144,13 @@ const session = ref<{
 	agentCompressionModelId?: string | null;
 	agentImageModelId?: string | null;
 	agentImageSettings?: Record<string, unknown>;
+	agentVisionModelId?: string | null;
 	segmentedOutputEnabled?: boolean;
+	timeAwarenessEnabled?: boolean;
+	randomProactiveEnabled?: boolean;
+	scheduledProactiveEnabled?: boolean;
+	randomProactiveLastError?: { code: string; occurredAt: string } | null;
+	scheduledProactiveLastError?: { code: string; occurredAt: string } | null;
 	characterId: string;
 	agentLongMemoryEnabled?: boolean;
 	agentLongMemoryTopK?: number;
@@ -1020,7 +1164,7 @@ const session = ref<{
 	characterModerationBanned?: boolean;
 } | null>(null);
 
-const character = ref<{ name: string; avatarFileId: string | null; avatar?: DriveFile | null } | null>(null);
+const character = ref<{ name: string; avatarFileId: string | null; avatar?: DriveFile | null; referenceImageFileIds: string[]; referenceImages: DriveFile[]; regexRules: AgentRegexRule[] } | null>(null);
 const assistantAvatarUrl = ref<string | null>(null);
 
 const timelineEl = useTemplateRef('timelineEl');
@@ -1149,6 +1293,42 @@ useMutationObserver(timelineEl, {
 
 const savingSettings = ref(false);
 const segmentedOutputEnabled = ref(false);
+const timeAwarenessEnabled = ref(true);
+const timeAwarenessSaving = ref(false);
+const agentText = (key: string, fallback: string) => agentI18nText(`_agents.${key}`, fallback);
+const timeAwarenessLabel = computed(() => agentText('timeAwareness', '时间感知'));
+const timeAwarenessCaption = computed(() => agentText('timeAwarenessCaption', '将当前北京时间提供给智能体，默认开启。时间不会显示在聊天消息或编辑框中。'));
+const timeAwarenessSaved = computed(() => agentText('timeAwarenessSaved', '时间感知设置已保存'));
+const randomProactiveEnabled = ref(false);
+const scheduledProactiveEnabled = ref(false);
+const proactiveSaving = ref(false);
+const proactiveSchedulesLoading = ref(false);
+const proactiveScheduleMutating = ref<string | null>(null);
+type ProactiveSchedule = {
+	id: string;
+	description: string;
+	trigger: { type: 'once'; at: string } | { type: 'recurring'; cron: string; repeat: { mode: 'count'; count: number } | { mode: 'unlimited' } };
+	status: 'active' | 'paused' | 'completed' | 'cancelled';
+	createdAt: string;
+	nextRunAt: string | null;
+	lastRunAt: string | null;
+	remainingRuns: number | null;
+};
+const proactiveSchedules = ref<ProactiveSchedule[]>([]);
+const proactiveMessagesLabel = computed(() => agentText('proactiveMessages', '主动消息'));
+const randomProactiveLabel = computed(() => agentText('randomProactiveMessages', '随机主动消息'));
+const randomProactiveCaption = computed(() => agentText('randomProactiveMessagesCaption', '会话静默 30 分钟后，按北京时间昼夜权重随机安排一次主动消息。'));
+const scheduledProactiveLabel = computed(() => agentText('scheduledProactiveMessages', '定时主动消息'));
+const scheduledProactiveCaption = computed(() => agentText('scheduledProactiveMessagesCaption', '智能体可自主创建、调整或取消最多 5 个定时计划。'));
+const proactiveTimeAwarenessRequired = computed(() => agentText('proactiveTimeAwarenessRequired', '开启主动消息前需要先开启时间感知。'));
+const randomProactiveLastErrorCaption = computed(() => agentText('proactiveRandomLastError', '上次随机主动消息执行失败，本次已跳过。'));
+const scheduledProactiveLastErrorCaption = computed(() => agentText('proactiveScheduledLastError', '上次定时主动消息执行失败，本次已跳过。'));
+const proactiveScheduleListLabel = computed(() => agentText('proactiveScheduleList', '当前定时计划'));
+const proactiveScheduleListCaption = computed(() => agentText('proactiveScheduleListCaption', '计划由智能体维护，你可以暂停、恢复或删除。'));
+const proactiveScheduleEmpty = computed(() => agentText('proactiveScheduleEmpty', '当前没有定时计划。'));
+const proactivePauseLabel = computed(() => agentText('proactivePause', '暂停'));
+const proactiveResumeLabel = computed(() => agentText('proactiveResume', '恢复'));
+const proactiveNextRunLabel = computed(() => agentText('proactiveNextRun', '下次执行'));
 const segmentedOutputSaving = ref(false);
 const usableStyles = ref<AgentsStylesListUsableResponse>([]);
 
@@ -1174,7 +1354,9 @@ type AgentImageArtistPreset = {
 type AgentImageModel = {
 	id: string;
 	name: string;
-	provider: 'aurora';
+	description: string | null;
+	provider: 'aurora' | 'openai';
+	supportsReferenceImage: boolean;
 	apiModelName: string | null;
 	costPerCall: number;
 	defaultParams: Record<string, unknown>;
@@ -1202,15 +1384,20 @@ const drawSizeItems: MkSelectItem[] = [
 	{ value: 'square', label: '方图' },
 ];
 const drawSelectedImageModel = computed(() => drawImageModels.value.find(m => m.id === drawImageModelId.value) ?? null);
-const drawCurrentSettings = computed(() => ({
-	size: drawSize.value,
-	artistPresetId: drawArtistPresetId.value,
-	steps: nullableNumberInput(drawSteps.value),
-	scale: nullableNumberInput(drawScale.value),
-	cfgRescale: nullableNumberInput(drawCfgRescale.value),
-	sampler: drawSampler.value.trim() || null,
-	noiseSchedule: drawNoiseSchedule.value.trim() || null,
-}));
+const drawCurrentSettings = computed(() => {
+	if (drawSelectedImageModel.value?.provider !== 'aurora') {
+		return { size: drawSize.value };
+	}
+	return {
+		size: drawSize.value,
+		artistPresetId: drawArtistPresetId.value,
+		steps: nullableNumberInput(drawSteps.value),
+		scale: nullableNumberInput(drawScale.value),
+		cfgRescale: nullableNumberInput(drawCfgRescale.value),
+		sampler: drawSampler.value.trim() || null,
+		noiseSchedule: drawNoiseSchedule.value.trim() || null,
+	};
+});
 const drawConfigDirty = computed(() => {
 	const s = session.value;
 	if (!s) return false;
@@ -1433,18 +1620,28 @@ const editingForForm = computed(() => {
 	return { id: editingMessage.value.id, preview };
 });
 
-function onEditRequested(payload: { id: string; role: string; content: string }) {
+async function onEditRequested(payload: { id: string; role: string; content: string }) {
 	if (moderationLocksSessionWrites.value) {
 		os.alert({ type: 'info', text: moderationBlockUserMessage.value });
 		return;
 	}
+	let originalContent = payload.content;
+	try {
+		const full = await (misskeyApi as unknown as (
+			endpoint: 'agents/messages/show',
+			data: { sessionId: string; messageId: string },
+		) => Promise<{ content: string }>)('agents/messages/show', { sessionId, messageId: payload.id });
+		originalContent = full.content;
+	} catch {
+		// Fall back to the visible timeline content when the full-message fetch fails.
+	}
 	editingMessage.value = {
 		id: payload.id,
 		role: payload.role,
-		originalContent: payload.content,
+		originalContent,
 	};
 	void nextTick(() => {
-		formRef.value?.setText(payload.content);
+		formRef.value?.setText(originalContent);
 		formRef.value?.focus();
 	});
 }
@@ -1488,6 +1685,7 @@ async function onRollbackRequested(payload: { id: string; content: string }) {
 		});
 		if (editingMessage.value != null) cancelEditingMessage();
 		formRef.value?.setText(payload.content);
+		formRef.value?.setAttachment(anchor.file ?? null);
 		void nextTick(() => formRef.value?.focus());
 		os.toast(i18n.ts._agents.rollbackDone);
 		void refreshContextWindow();
@@ -1856,6 +2054,11 @@ const headerTabs = computed(() => {
 		title: '生图',
 		icon: 'ti ti-brush',
 	});
+	tabs.push({
+		key: 'proactive',
+		title: proactiveMessagesLabel.value,
+		icon: 'ti ti-bell-ringing',
+	});
 	if (showLongMemoryTab.value) {
 		tabs.push({
 			key: 'memory',
@@ -1921,6 +2124,9 @@ watch(tab, (v) => {
 	} else if (v === 'model') {
 		void loadModelSuccessRates();
 		void loadAgentCreditBalance();
+	} else if (v === 'proactive') {
+		void loadSession();
+		void loadProactiveSchedules();
 	}
 });
 
@@ -2002,6 +2208,150 @@ async function saveSegmentedOutputSetting(enabled: boolean) {
 	}
 }
 
+async function saveTimeAwarenessSetting(enabled: boolean) {
+	if (!session.value || timeAwarenessSaving.value || moderationLocksSessionWrites.value) return;
+	if (!enabled && (randomProactiveEnabled.value || scheduledProactiveEnabled.value)) {
+		timeAwarenessEnabled.value = true;
+		os.alert({ type: 'warning', text: proactiveTimeAwarenessRequired.value });
+		return;
+	}
+	const previous = session.value.timeAwarenessEnabled !== false;
+	timeAwarenessSaving.value = true;
+	try {
+		await (misskeyApi as unknown as (
+			endpoint: 'agents/sessions/update',
+			data: { sessionId: string; timeAwarenessEnabled: boolean },
+		) => Promise<unknown>)('agents/sessions/update', {
+			sessionId,
+			timeAwarenessEnabled: enabled,
+		});
+		session.value.timeAwarenessEnabled = enabled;
+		os.toast(timeAwarenessSaved.value);
+	} catch (e) {
+		timeAwarenessEnabled.value = previous;
+		os.alert({ type: 'error', text: formatApiError(e) });
+	} finally {
+		timeAwarenessSaving.value = false;
+	}
+}
+
+async function saveRandomProactiveSetting(enabled: boolean) {
+	if (!session.value || proactiveSaving.value || moderationLocksSessionWrites.value || !timeAwarenessEnabled.value) return;
+	const previous = session.value.randomProactiveEnabled === true;
+	proactiveSaving.value = true;
+	try {
+		await (misskeyApi as unknown as (
+			endpoint: 'agents/sessions/update',
+			data: { sessionId: string; randomProactiveEnabled: boolean },
+		) => Promise<unknown>)('agents/sessions/update', { sessionId, randomProactiveEnabled: enabled });
+		session.value.randomProactiveEnabled = enabled;
+	} catch (e) {
+		randomProactiveEnabled.value = previous;
+		os.alert({ type: 'error', text: formatApiError(e) });
+	} finally {
+		proactiveSaving.value = false;
+	}
+}
+
+async function saveScheduledProactiveSetting(enabled: boolean) {
+	if (!session.value || proactiveSaving.value || moderationLocksSessionWrites.value || !timeAwarenessEnabled.value) return;
+	const previous = session.value.scheduledProactiveEnabled === true;
+	proactiveSaving.value = true;
+	try {
+		await (misskeyApi as unknown as (
+			endpoint: 'agents/sessions/update',
+			data: { sessionId: string; scheduledProactiveEnabled: boolean },
+		) => Promise<unknown>)('agents/sessions/update', { sessionId, scheduledProactiveEnabled: enabled });
+		session.value.scheduledProactiveEnabled = enabled;
+		if (enabled) await loadProactiveSchedules();
+	} catch (e) {
+		scheduledProactiveEnabled.value = previous;
+		os.alert({ type: 'error', text: formatApiError(e) });
+	} finally {
+		proactiveSaving.value = false;
+	}
+}
+
+async function loadProactiveSchedules() {
+	if (!session.value || proactiveSchedulesLoading.value) return;
+	proactiveSchedulesLoading.value = true;
+	try {
+		proactiveSchedules.value = await (misskeyApi as unknown as (
+			endpoint: 'agents/proactive-schedules/list',
+			data: { sessionId: string },
+		) => Promise<ProactiveSchedule[]>)('agents/proactive-schedules/list', { sessionId });
+	} catch (e) {
+		proactiveSchedules.value = [];
+		os.alert({ type: 'error', text: formatApiError(e) });
+	} finally {
+		proactiveSchedulesLoading.value = false;
+	}
+}
+
+function proactiveScheduleStatusLabel(status: ProactiveSchedule['status']): string {
+	if (status === 'active') return agentText('proactiveScheduleActive', '执行中');
+	if (status === 'paused') return agentText('proactiveSchedulePaused', '已暂停');
+	if (status === 'completed') return agentText('proactiveScheduleCompleted', '已完成');
+	return agentText('proactiveScheduleCancelled', '已取消');
+}
+
+function proactiveScheduleTriggerLabel(schedule: ProactiveSchedule): string {
+	if (schedule.trigger.type === 'once') {
+		return agentText('proactiveScheduleOnce', '一次性') + ` · ${schedule.trigger.at}`;
+	}
+	const repeat = schedule.trigger.repeat.mode === 'unlimited'
+		? agentText('proactiveScheduleUnlimited', '无限重复')
+		: agentText('proactiveScheduleCount', '重复 {count} 次').replace('{count}', String(schedule.trigger.repeat.count));
+	return `${repeat} · ${schedule.trigger.cron}`;
+}
+
+function proactiveRemainingLabel(remainingRuns: number | null): string {
+	if (remainingRuns == null) return agentText('proactiveScheduleUnlimited', '无限重复');
+	return agentText('proactiveScheduleRemaining', '剩余 {count} 次').replace('{count}', String(remainingRuns));
+}
+
+async function toggleProactiveSchedule(schedule: ProactiveSchedule) {
+	if (proactiveScheduleMutating.value || moderationLocksSessionWrites.value) return;
+	const status = schedule.status === 'active' ? 'paused' : 'active';
+	proactiveScheduleMutating.value = schedule.id;
+	try {
+		const result = await (misskeyApi as unknown as (
+			endpoint: 'agents/proactive-schedules/set-status',
+			data: { sessionId: string; scheduleId: string; status: 'active' | 'paused' },
+		) => Promise<{ ok: boolean; status: 'active' | 'paused' | 'completed' }>)('agents/proactive-schedules/set-status', { sessionId, scheduleId: schedule.id, status });
+		await loadProactiveSchedules();
+		if (result.status === 'completed') {
+			os.toast(agentText('proactiveScheduleExpired', '一次性定时计划已过期，无法恢复。'));
+		}
+	} catch (e) {
+		os.alert({ type: 'error', text: formatApiError(e) });
+	} finally {
+		proactiveScheduleMutating.value = null;
+	}
+}
+
+async function deleteProactiveSchedule(schedule: ProactiveSchedule) {
+	if (proactiveScheduleMutating.value || moderationLocksSessionWrites.value) return;
+	const { canceled } = await os.confirm({
+		type: 'warning',
+		title: i18n.ts.delete,
+		text: schedule.description,
+	});
+	if (canceled) return;
+	proactiveScheduleMutating.value = schedule.id;
+	try {
+		await (misskeyApi as unknown as (
+			endpoint: 'agents/proactive-schedules/delete',
+			data: { sessionId: string; scheduleId: string },
+		) => Promise<unknown>)('agents/proactive-schedules/delete', { sessionId, scheduleId: schedule.id });
+		await loadProactiveSchedules();
+	} catch (e) {
+		os.alert({ type: 'error', text: formatApiError(e) });
+	} finally {
+		proactiveScheduleMutating.value = null;
+	}
+}
+
 async function renameSession() {
 	if (!session.value) return;
 	const { canceled, result } = await os.inputText({
@@ -2058,6 +2408,7 @@ async function loadSession() {
 		session.value = (await misskeyApi('agents/sessions/show', { sessionId })) as typeof session.value;
 		if (session.value) {
 			selectedModelId.value = displayModelIdForSession(session.value.agentModelId);
+			visionModelSelectionId.value = session.value.agentVisionModelId ?? visionModels.value.find(model => model.isDefault)?.id ?? '';
 			selectedStyleId.value = session.value.dialogueStyleId ?? '';
 			memLongMemoryEnabled.value = session.value.agentLongMemoryEnabled ?? false;
 			memTopK.value = String(session.value.agentLongMemoryTopK ?? 8);
@@ -2075,6 +2426,9 @@ async function loadSession() {
 			}
 			memCompressionModelId.value = displayCompressionModelIdForSession(session.value.agentCompressionModelId);
 			segmentedOutputEnabled.value = session.value.segmentedOutputEnabled === true;
+			timeAwarenessEnabled.value = session.value.timeAwarenessEnabled !== false;
+			randomProactiveEnabled.value = session.value.randomProactiveEnabled === true;
+			scheduledProactiveEnabled.value = session.value.scheduledProactiveEnabled === true;
 			hydrateAgentImageSettingsFromSession();
 			compressionOverview.value = null;
 			await loadCharacter(session.value.characterId);
@@ -2097,6 +2451,42 @@ async function loadSession() {
 	}
 }
 
+async function loadVisionModels() {
+	try {
+		const result = await misskeyApi('agents/vision-models/list' as Parameters<typeof misskeyApi>[0], {}) as { defaultModelId: string | null; models: Array<{ id: string; name: string; costPerCall: number; isDefault: boolean }> };
+		visionModels.value = result.models;
+		if (session.value && !session.value.agentVisionModelId) visionModelSelectionId.value = result.defaultModelId ?? '';
+	} catch {
+		visionModels.value = [];
+	}
+}
+
+async function selectVisionModel(value: unknown) {
+	if (typeof value !== 'string') return;
+	const modelId = value.trim();
+	if (!session.value || !modelId || savingSettings.value || moderationLocksSessionWrites) return;
+	const previousModelId = visionModelSelectionId.value;
+	if (modelId === previousModelId) return;
+	savingSettings.value = true;
+	try {
+		const updated = await misskeyApi('agents/sessions/update' as Parameters<typeof misskeyApi>[0], {
+			sessionId,
+			agentVisionModelId: modelId,
+		} as any) as { agentVisionModelId?: string | null };
+		if (updated.agentVisionModelId !== modelId) {
+			throw new Error(i18n.ts._agents.visionModelSaveFailed);
+		}
+		visionModelSelectionId.value = modelId;
+		session.value.agentVisionModelId = modelId;
+	} catch (error) {
+		visionModelSelectionId.value = previousModelId;
+		await loadSession();
+		await os.alert({ type: 'error', text: formatApiError(error) });
+	} finally {
+		savingSettings.value = false;
+	}
+}
+
 function driveFilePreviewUrl(file: DriveFile | null | undefined): string | null {
 	return file?.thumbnailUrl ?? file?.url ?? null;
 }
@@ -2109,12 +2499,24 @@ async function loadCharacter(characterId: string) {
 			name: string;
 			avatarFileId: string | null;
 			avatar?: DriveFile | null;
+			referenceImageFileId?: string | null;
+			referenceImage?: DriveFile | null;
+			referenceImageFileIds?: string[];
+			referenceImages?: DriveFile[];
+			regexRules?: AgentRegexRule[];
 		};
 		const avatar = c.avatar ?? sessionCharacterAvatar;
 		character.value = {
 			name: c.name || sessionCharacterName || '',
 			avatarFileId: c.avatarFileId,
 			avatar,
+			referenceImageFileIds: Array.isArray(c.referenceImageFileIds)
+				? c.referenceImageFileIds.filter((id): id is string => typeof id === 'string').slice(0, 4)
+				: c.referenceImageFileId ? [c.referenceImageFileId] : [],
+			referenceImages: Array.isArray(c.referenceImages)
+				? c.referenceImages.filter((file): file is DriveFile => file != null).slice(0, 4)
+				: c.referenceImage ? [c.referenceImage] : [],
+			regexRules: Array.isArray(c.regexRules) ? c.regexRules : [],
 		};
 		assistantAvatarUrl.value = driveFilePreviewUrl(avatar);
 	} catch {
@@ -2123,6 +2525,9 @@ async function loadCharacter(characterId: string) {
 				name: sessionCharacterName ?? '',
 				avatarFileId: null,
 				avatar: sessionCharacterAvatar,
+				referenceImageFileIds: [],
+				referenceImages: [],
+				regexRules: [],
 			};
 			assistantAvatarUrl.value = driveFilePreviewUrl(sessionCharacterAvatar);
 		} else {
@@ -2200,6 +2605,7 @@ function chooseDrawImageModel(modelId: string) {
 
 function imageProviderLabel(provider: AgentImageModel['provider']): string {
 	if (provider === 'aurora') return 'Aurora';
+	if (provider === 'openai') return i18n.ts._agents.imageProviderOpenai;
 	return provider;
 }
 
@@ -2317,6 +2723,33 @@ async function fetchNewerMessages() {
 		fetchingNewer.value = false;
 	}
 	await refreshContextWindow();
+}
+
+let proactiveNotificationConnection: { dispose: () => void } | null = null;
+let proactiveMessageSyncing = false;
+
+async function onProactiveMessageNotification(notification: unknown): Promise<void> {
+	const data = notification as { type?: unknown; sessionId?: unknown; messageId?: unknown };
+	if (data.type !== 'agentProactiveMessage' || data.sessionId !== sessionId || proactiveMessageSyncing) return;
+
+	proactiveMessageSyncing = true;
+	try {
+		const existingIds = new Set(messages.value.map(message => message.id));
+		if (messages.value.length === 0) {
+			await loadInitialTimeline();
+		} else {
+			await fetchNewerMessages();
+		}
+		const incoming = typeof data.messageId === 'string'
+			? messages.value.find(message => message.id === data.messageId)
+			: null;
+		if (incoming && !existingIds.has(incoming.id) && tab.value === 'chat') {
+			await scrollToLatest();
+			void playSegmentedReply(incoming);
+		}
+	} finally {
+		proactiveMessageSyncing = false;
+	}
 }
 
 function onAgentMessageDeleted(messageId: string) {
@@ -2574,6 +3007,9 @@ async function loadDrawArtistPresets() {
 }
 
 onMounted(async () => {
+	const connection = useStream().useChannel('main');
+	connection.on('notification', onProactiveMessageNotification);
+	proactiveNotificationConnection = connection;
 	try {
 		await fetchInstance(true);
 		await loadUsableStyles();
@@ -2581,6 +3017,7 @@ onMounted(async () => {
 		void loadAgentCreditBalance();
 		void loadDrawArtistPresets();
 		void loadDrawImageModels();
+		await loadVisionModels();
 		await loadSession();
 		if (props.messageId) {
 			await loadContextAround(props.messageId);
@@ -2604,6 +3041,8 @@ onMounted(async () => {
 });
 
 onBeforeUnmount(() => {
+	proactiveNotificationConnection?.dispose();
+	proactiveNotificationConnection = null;
 	stopReplyPendingPoll();
 	finishSegmentPlayback(false);
 	clearContextDividerHighlight();
@@ -3118,6 +3557,9 @@ type SessionExportSettings = {
 	agentImageModelId?: string | null;
 	agentImageSettings?: Record<string, unknown>;
 	segmentedOutputEnabled?: boolean;
+	timeAwarenessEnabled?: boolean;
+	randomProactiveEnabled?: boolean;
+	scheduledProactiveEnabled?: boolean;
 };
 type SessionExportPayload = {
 	format: 'misskey-agent-session-export-v2';
@@ -3173,6 +3615,9 @@ function buildSessionExportSettings(): SessionExportSettings {
 		agentImageModelId: s.agentImageModelId ?? null,
 		agentImageSettings: s.agentImageSettings ?? {},
 		segmentedOutputEnabled: s.segmentedOutputEnabled === true,
+		timeAwarenessEnabled: s.timeAwarenessEnabled !== false,
+		randomProactiveEnabled: s.randomProactiveEnabled === true,
+		scheduledProactiveEnabled: s.scheduledProactiveEnabled === true,
 	};
 }
 
@@ -3316,6 +3761,9 @@ function parseImportedSessionSettings(raw: unknown): SessionExportSettings | nul
 	if ('agentImageModelId' in src) out.agentImageModelId = validateOptionalString(src.agentImageModelId, 'agentImageModelId', 1, 128, true);
 	if ('agentImageSettings' in src) out.agentImageSettings = validateAgentImageSettings(src.agentImageSettings);
 	if ('segmentedOutputEnabled' in src) out.segmentedOutputEnabled = validateBoolean(src.segmentedOutputEnabled, 'segmentedOutputEnabled');
+	if ('timeAwarenessEnabled' in src) out.timeAwarenessEnabled = validateBoolean(src.timeAwarenessEnabled, 'timeAwarenessEnabled');
+	if ('randomProactiveEnabled' in src) out.randomProactiveEnabled = validateBoolean(src.randomProactiveEnabled, 'randomProactiveEnabled');
+	if ('scheduledProactiveEnabled' in src) out.scheduledProactiveEnabled = validateBoolean(src.scheduledProactiveEnabled, 'scheduledProactiveEnabled');
 
 	return out;
 }
@@ -3529,23 +3977,6 @@ async function playSegmentedReply(message: AgentMsg, precomputedSegments?: strin
 	}
 }
 
-/** 与 agents/messages/send 中 assertAgentSessionTurnOrderAllowsUserSend 一致 */
-function agentSendTurnOrderBlockReason(msgs: AgentMsg[]): 'invalidTurns' | 'awaitAssistant' | null {
-	const seq = msgs
-		.filter(m => m.role === 'user' || m.role === 'assistant')
-		.sort((a, b) => {
-			const ta = new Date(a.createdAt).getTime();
-			const tb = new Date(b.createdAt).getTime();
-			if (ta !== tb) return ta - tb;
-			return a.id.localeCompare(b.id);
-		});
-	for (let i = 1; i < seq.length; i++) {
-		if (seq[i]!.role === seq[i - 1]!.role) return 'invalidTurns';
-	}
-	if (seq.length > 0 && seq[seq.length - 1]!.role === 'user') return 'awaitAssistant';
-	return null;
-}
-
 /** 与后端 send 中 safeAgentMemEveryNRounds 一致，用于在缺少 API 字段时推断是否应显示写入提示 */
 function safeMemEveryNForHint(sessionVal: number | null | undefined, metaVal: unknown): number {
 	const raw = sessionVal ?? (typeof metaVal === 'number' && Number.isFinite(metaVal) ? metaVal : null) ?? 1;
@@ -3578,28 +4009,18 @@ async function previewPendingWorldbookMatches(text: string) {
 	}
 }
 
-async function onFormSubmit(text: string) {
+async function onFormSubmit(payload: { text: string; file: DriveFile | null }) {
 	if (editingMessage.value != null) {
-		await saveEditingMessage(text);
+		await saveEditingMessage(payload.text);
 		return;
 	}
 	if (sending.value) return;
 	stopReplyPendingPoll();
-	const trimmed = text.trim();
-	if (!trimmed) return;
+	const trimmed = payload.text.trim();
+	if (!trimmed && payload.file == null) return;
 	if (!session.value?.dialogueStyleId) {
 		os.alert({ type: 'info', text: i18n.ts._agents.needDialogueStyleBeforeSend });
 		tab.value = 'style';
-		return;
-	}
-
-	const turnBlock = agentSendTurnOrderBlockReason(messages.value);
-	if (turnBlock === 'invalidTurns') {
-		os.alert({ type: 'error', text: i18n.ts._agents.invalidTurnOrderCannotSend });
-		return;
-	}
-	if (turnBlock === 'awaitAssistant') {
-		os.alert({ type: 'error', text: i18n.ts._agents.awaitAssistantReplyCannotSend });
 		return;
 	}
 
@@ -3628,18 +4049,23 @@ async function onFormSubmit(text: string) {
 		role: 'user',
 		content: trimmed,
 		createdAt: userCreatedAt,
+		file: payload.file,
 	});
 
 	try {
-		const res = await misskeyApi('agents/messages/send', { sessionId, text: trimmed, clientRequestId }) as {
-			userMessageId: string | null;
-			assistantMessageId: string | null;
-			assistantText: string;
+		const res = await misskeyApi('agents/messages/send', { sessionId, text: trimmed, fileId: payload.file?.id ?? null, clientRequestId } as any) as {
+		userMessageId: string | null;
+		assistantMessageId: string | null;
+		userImageRecognitionStatus?: 'succeeded' | 'failed' | null;
+		userImageRecognitionDescription?: string | null;
+		assistantText: string;
 			longTermMemorySearchUnavailable?: boolean;
 			longTermMemoryAddScheduled?: boolean;
 			compressionLlmPending?: boolean;
-			compressionStickiesBaselineCount?: number;
-			aborted?: boolean;
+		compressionStickiesBaselineCount?: number;
+		proactiveScheduleControlFailed?: boolean;
+		proactiveScheduleActionTypes?: ('create' | 'update' | 'cancel')[];
+		aborted?: boolean;
 			auditBlocked?: boolean;
 			auditBlockCode?: string | null;
 			auditCategory?: string | null;
@@ -3658,7 +4084,7 @@ async function onFormSubmit(text: string) {
 			});
 			return;
 		}
-		if (res.aborted === true || !res.userMessageId || !res.assistantMessageId) {
+		if (res.aborted === true || !res.userMessageId) {
 			// 服务端已回滚用户消息，回填文本到输入框
 			messages.value = messages.value.filter(m => m.id !== optimisticId);
 			formRef.value?.restoreDraft(trimmed);
@@ -3674,17 +4100,26 @@ async function onFormSubmit(text: string) {
 			role: 'user',
 			content: trimmed,
 			createdAt: userCreatedAt,
+			file: payload.file,
+			imageRecognitionStatus: res.userImageRecognitionStatus ?? null,
+			imageRecognitionDescription: res.userImageRecognitionDescription ?? null,
 		};
-		const asstMsg: AgentMsg = {
-			id: res.assistantMessageId,
-			role: 'assistant',
-			content: res.assistantText,
-			createdAt: assistantCreatedAt,
-		};
-		const segments = playableSegmentsFor(asstMsg.content);
-		messages.value = [asstMsg, userMsg, ...withoutOpt];
-		const playbackCompleted = await playSegmentedReply(asstMsg, segments);
-		if (!playbackCompleted) return;
+		if (res.assistantMessageId) {
+			const asstMsg: AgentMsg = {
+				id: res.assistantMessageId,
+				role: 'assistant',
+				content: res.assistantText,
+				createdAt: assistantCreatedAt,
+				proactiveScheduleActionTypes: res.proactiveScheduleActionTypes ?? [],
+				proactiveScheduleControlFailed: res.proactiveScheduleControlFailed === true,
+			};
+			const segments = playableSegmentsFor(asstMsg.content);
+			messages.value = [asstMsg, userMsg, ...withoutOpt];
+			const playbackCompleted = await playSegmentedReply(asstMsg, segments);
+			if (!playbackCompleted) return;
+		} else {
+			messages.value = [userMsg, ...withoutOpt];
+		}
 		const assistantCount = messages.value.filter(m => m.role === 'assistant').length;
 		if (showMemoryAddScheduledHintNow(res, assistantCount)) {
 			if (memoryAddHintTimer != null) {
@@ -3701,6 +4136,9 @@ async function onFormSubmit(text: string) {
 			startCompressionLlmProgressPoll(
 				typeof res.compressionStickiesBaselineCount === 'number' ? res.compressionStickiesBaselineCount : 0,
 			);
+		}
+		if (res.proactiveScheduleControlFailed === true) {
+			await os.alert({ type: 'warning', text: i18n.ts._agents.proactiveScheduleSettingFailed });
 		}
 		await scrollToLatest();
 		await loadSession();
@@ -3729,10 +4167,6 @@ async function onFormSubmit(text: string) {
 			if (e != null && typeof e === 'object' && (e as { code?: string }).code === 'AGENT_DIALOGUE_STYLE_REQUIRED') {
 				os.alert({ type: 'info', text: i18n.ts._agents.needDialogueStyleBeforeSend });
 				tab.value = 'style';
-			} else if (e != null && typeof e === 'object' && (e as { code?: string }).code === 'AGENT_THREAD_INVALID_TURNS') {
-				os.alert({ type: 'error', text: i18n.ts._agents.invalidTurnOrderCannotSend });
-			} else if (e != null && typeof e === 'object' && (e as { code?: string }).code === 'AGENT_AWAIT_ASSISTANT_REPLY') {
-				os.alert({ type: 'error', text: i18n.ts._agents.awaitAssistantReplyCannotSend });
 			} else if (e != null && typeof e === 'object' && (e as { code?: string }).code === 'AGENT_INSUFFICIENT_CREDIT') {
 				os.alert({ type: 'error', text: i18n.ts._agents.insufficientAgentCredit });
 			} else {
@@ -3755,18 +4189,27 @@ function nullableNumberInput(v: string): number | null {
 
 function formatAgentImageError(err: unknown): string {
 	const code = err != null && typeof err === 'object' && 'code' in err ? String((err as { code?: unknown }).code ?? '') : '';
+	const diagnostic = err != null && typeof err === 'object' && typeof (err as { info?: { diagnostic?: unknown } }).info?.diagnostic === 'string'
+		? (err as { info: { diagnostic: string } }).info.diagnostic
+		: null;
+	let message: string;
 	switch (code) {
 		case 'AGENT_IMAGE_NO_FREE_DRIVE_SPACE':
-			return '网盘空间不足，无法保存生成图片。请清理网盘后再试。';
+			message = '网盘空间不足，无法保存生成图片。请清理网盘后再试。';
+			break;
 		case 'AGENT_IMAGE_MAX_FILE_SIZE_EXCEEDED':
-			return '生成图片超过当前账号允许的最大文件大小，无法保存到网盘。';
+			message = '生成图片超过当前账号允许的最大文件大小，无法保存到网盘。';
+			break;
 		case 'AGENT_IMAGE_UNALLOWED_FILE_TYPE':
-			return '生成图片的文件类型不在当前账号允许上传的范围内。';
+			message = '生成图片的文件类型不在当前账号允许上传的范围内。';
+			break;
 		case 'AGENT_IMAGE_INSUFFICIENT_CREDIT':
-			return '智能体额度不足，无法生成图片。';
+			message = '智能体额度不足，无法生成图片。';
+			break;
 		default:
-			return formatApiError(err);
+			message = formatApiError(err);
 	}
+	return diagnostic ? `${message}\n${diagnostic}` : message;
 }
 
 async function generateAgentImage() {
@@ -5070,6 +5513,35 @@ async function onAbortRequest() {
 	font-size: 0.9em;
 	opacity: 0.72;
 }
+.drawReferenceImage {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	margin-top: 12px;
+	padding: 10px;
+	border: solid 1px var(--MI_THEME-divider);
+	border-radius: 8px;
+	background: var(--MI_THEME-panel);
+}
+.drawReferenceImageBody {
+	min-width: 0;
+}
+.drawReferenceImageTitle {
+	font-size: 0.9em;
+	font-weight: 700;
+}
+.drawReferenceImageCaption {
+	margin-top: 4px;
+	font-size: 0.85em;
+	color: var(--MI_THEME-fgTransparentWeak);
+}
+.drawReferenceImagePreview {
+	flex: 0 1 320px;
+	width: min(320px, 45vw);
+	border-radius: 6px;
+	overflow: hidden;
+}
 .drawFieldLabel {
 	font-size: 0.9em;
 	font-weight: 700;
@@ -5110,6 +5582,10 @@ async function onAbortRequest() {
 	.drawSizeRow {
 		grid-template-columns: 1fr;
 		align-items: stretch;
+	}
+
+	.drawReferenceImage {
+		align-items: flex-start;
 	}
 
 	.drawHead {
@@ -5188,5 +5664,86 @@ async function onAbortRequest() {
 
 .drawPreviewMedia {
 	width: min(100%, 280px);
+}
+
+.proactivePanel {
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
+	padding: 16px;
+	border-radius: 8px;
+}
+
+.proactiveTitle {
+	font-weight: 700;
+	font-size: 1em;
+	line-height: 1.35;
+}
+
+.proactiveCaption {
+	margin-top: 3px;
+	font-size: 0.88em;
+	line-height: 1.45;
+	color: var(--MI_THEME-fgTransparentWeak);
+}
+
+.proactiveListHead {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 12px;
+}
+
+.proactiveScheduleList {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.proactiveScheduleCard {
+	padding: 14px;
+	border-radius: 8px;
+}
+
+.proactiveScheduleTop {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 12px;
+}
+
+.proactiveScheduleDescription {
+	min-width: 0;
+	font-weight: 700;
+	line-height: 1.5;
+	word-break: break-word;
+}
+
+.proactiveScheduleStatus {
+	flex: 0 0 auto;
+	padding: 2px 7px;
+	border-radius: 999px;
+	background: color-mix(in srgb, var(--MI_THEME-accent) 13%, var(--MI_THEME-panel));
+	color: var(--MI_THEME-accent);
+	font-size: 0.78em;
+	font-weight: 700;
+}
+
+.proactiveScheduleMeta {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px 12px;
+	margin-top: 9px;
+	font-size: 0.86em;
+	line-height: 1.45;
+	color: var(--MI_THEME-fgTransparentWeak);
+	word-break: break-word;
+}
+
+.proactiveScheduleActions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	margin-top: 12px;
 }
 </style>

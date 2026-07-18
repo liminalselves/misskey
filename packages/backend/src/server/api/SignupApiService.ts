@@ -20,6 +20,8 @@ import { bindThis } from '@/decorators.js';
 import { L_CHARS, secureRndstr } from '@/misc/secure-rndstr.js';
 import { SigninService } from './SigninService.js';
 import type { FastifyRequest, FastifyReply } from 'fastify';
+import { UtilityService } from '@/core/UtilityService.js';
+import { isPreservedUsername } from '@/misc/username-reservation.js';
 
 @Injectable()
 export class SignupApiService {
@@ -51,6 +53,7 @@ export class SignupApiService {
 		private signupService: SignupService,
 		private signinService: SigninService,
 		private emailService: EmailService,
+		private utilityService: UtilityService,
 	) {
 	}
 
@@ -192,8 +195,12 @@ export class SignupApiService {
 				throw new FastifyReplyError(400, 'USED_USERNAME');
 			}
 
-			const isPreserved = this.meta.preservedUsernames.map(x => x.toLowerCase()).includes(username.toLowerCase());
+			const isPreserved = isPreservedUsername(username, this.meta.preservedUsernames);
 			if (isPreserved) {
+				throw new FastifyReplyError(400, 'DENIED_USERNAME');
+			}
+
+			if (this.utilityService.isKeyWordIncluded(username.toLowerCase(), this.meta.prohibitedWordsForNameOfUser)) {
 				throw new FastifyReplyError(400, 'DENIED_USERNAME');
 			}
 

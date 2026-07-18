@@ -46,6 +46,7 @@ import { CleanProcessorService } from './processors/CleanProcessorService.js';
 import { AggregateRetentionProcessorService } from './processors/AggregateRetentionProcessorService.js';
 import { CleanRemoteNotesProcessorService } from './processors/CleanRemoteNotesProcessorService.js';
 import { DecayFeaturedNotesRankingProcessorService } from './processors/DecayFeaturedNotesRankingProcessorService.js';
+import { ProcessAgentProactiveMessagesProcessorService } from './processors/ProcessAgentProactiveMessagesProcessorService.js';
 import { QueueLoggerService } from './QueueLoggerService.js';
 import { QUEUE, baseWorkerOptions } from './const.js';
 
@@ -131,6 +132,7 @@ export class QueueProcessorService implements OnApplicationShutdown {
 		private cleanProcessorService: CleanProcessorService,
 		private cleanRemoteNotesProcessorService: CleanRemoteNotesProcessorService,
 		private decayFeaturedNotesRankingProcessorService: DecayFeaturedNotesRankingProcessorService,
+		private processAgentProactiveMessagesProcessorService: ProcessAgentProactiveMessagesProcessorService,
 	) {
 		this.logger = this.queueLoggerService.logger;
 
@@ -182,6 +184,7 @@ export class QueueProcessorService implements OnApplicationShutdown {
 					case 'clean': return this.cleanProcessorService.process();
 					case 'cleanRemoteNotes': return this.cleanRemoteNotesProcessorService.process(job);
 					case 'decayFeaturedNotesRanking': return this.decayFeaturedNotesRankingProcessorService.process(job);
+					case 'processAgentProactiveMessages': return this.processAgentProactiveMessagesProcessorService.process();
 					default: throw new Error(`unrecognized job type ${job.name} for system`);
 				}
 			};

@@ -22,6 +22,7 @@ import {
 	AGENT_LLM_MEMORY_XML_CLOSE,
 	AGENT_LLM_MEMORY_XML_OPEN,
 	escapeAgentXmlText,
+	normalizeAgentLlmTurns,
 } from '@/core/AgentService.js';
 import { AgentDashscopeMemoryService } from '@/core/AgentDashscopeMemoryService.js';
 import { AgentModelUsageService } from '@/core/AgentModelUsageService.js';
@@ -29,7 +30,9 @@ import { ChatService } from '@/core/ChatService.js';
 import { MetaService } from '@/core/MetaService.js';
 import { AgentCompressionMemoryService } from '@/core/AgentCompressionMemoryService.js';
 import { AgentImageService } from '@/core/AgentImageService.js';
+import { AgentVisionService } from '@/core/AgentVisionService.js';
 import { AgentExternalAuditService } from '@/core/AgentExternalAuditService.js';
+import { AgentProactiveScheduleService } from '@/core/AgentProactiveScheduleService.js';
 import { AGENT_IMAGE_WORLD_PROMPT } from '@/core/agent-image-presets.js';
 
 export const meta = {
@@ -44,11 +47,15 @@ export const meta = {
 		properties: {
 			userMessageId: { type: 'string', format: 'misskey:id', nullable: true },
 			assistantMessageId: { type: 'string', format: 'misskey:id', nullable: true },
+			userImageRecognitionStatus: { type: 'string', nullable: true },
+			userImageRecognitionDescription: { type: 'string', nullable: true },
 			assistantText: { type: 'string' },
 			longTermMemorySearchUnavailable: { type: 'boolean' },
 			longTermMemoryAddScheduled: { type: 'boolean' },
 			compressionLlmPending: { type: 'boolean' },
 			compressionStickiesBaselineCount: { type: 'number' },
+			proactiveScheduleControlFailed: { type: 'boolean' },
+			proactiveScheduleActionTypes: { type: 'array', items: { type: 'string', enum: ['create', 'update', 'cancel'] } },
 			aborted: { type: 'boolean' },
 			auditBlocked: { type: 'boolean' },
 			auditBlockCode: { type: 'string', nullable: true },
@@ -70,11 +77,12 @@ export const paramDef = {
 	type: 'object',
 	properties: {
 		sessionId: { type: 'string', format: 'misskey:id' },
-		text: { type: 'string', minLength: 1, maxLength: 16000 },
+		text: { type: 'string', minLength: 0, maxLength: 16000, nullable: true },
+		fileId: { type: 'string', format: 'misskey:id', nullable: true },
 		/** 前端生成的客户端请求 ID；用于请求幂等与通过 agents/messages/abort 取消本次请求 */
 		clientRequestId: { type: 'string', minLength: 1, maxLength: 64 },
 	},
-	required: ['sessionId', 'text'],
+	required: ['sessionId'],
 } as const;
 
 /** 避免 NaN 传入 % 导致永不为 0、从而永远不触发 add 记忆 */
@@ -90,31 +98,6 @@ function safeAgentMemAddMaxRounds(sessionVal: number | null | undefined, metaVal
 	const t = Math.trunc(Number(raw));
 	if (!Number.isFinite(t)) return 3;
 	return Math.max(1, Math.min(24, t));
-}
-
-/** 用户消息与助手消息须严格交替；末尾不能停留在「已发送的用户消息」上（须先有助手回复） */
-function assertAgentSessionTurnOrderAllowsUserSend(rows: { role: string }[]): void {
-	const seq = rows.filter(m => m.role === 'user' || m.role === 'assistant');
-	for (let i = 1; i < seq.length; i++) {
-		if (seq[i]!.role === seq[i - 1]!.role) {
-			throw new ApiError({
-				message: 'The conversation has consecutive user or assistant messages. Delete or fix messages before sending.',
-				code: 'AGENT_THREAD_INVALID_TURNS',
-				id: 'f4fee7e6-df64-4ec8-867e-d7282bee4fd6',
-				kind: 'client',
-				httpStatusCode: 400,
-			});
-		}
-	}
-	if (seq.length > 0 && seq[seq.length - 1]!.role === 'user') {
-		throw new ApiError({
-			message: 'Wait for the assistant reply before sending another message.',
-			code: 'AGENT_AWAIT_ASSISTANT_REPLY',
-			id: '1ae86b90-37b6-4e4b-ac1c-74833f931c60',
-			kind: 'client',
-			httpStatusCode: 400,
-		});
-	}
 }
 
 @Injectable()
@@ -142,11 +125,18 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 	private metaService: MetaService,
 	private agentCompressionMemoryService: AgentCompressionMemoryService,
 	private agentImageService: AgentImageService,
+	private agentVisionService: AgentVisionService,
 	private agentExternalAuditService: AgentExternalAuditService,
+	private agentProactiveScheduleService: AgentProactiveScheduleService,
 	) {
 		super(meta, paramDef, async (ps, me) => {
 			this.agentService.assertAgentsEnabled();
 			await this.chatService.checkChatAvailability(me.id, 'write');
+			const userText = typeof ps.text === 'string' ? ps.text : '';
+			const imageFileId = typeof ps.fileId === 'string' && ps.fileId.trim() !== '' ? ps.fileId : null;
+			if (userText.trim() === '' && imageFileId == null) {
+				throw new ApiError({ message: 'A message must contain text or one image.', code: 'AGENT_MESSAGE_EMPTY', id: 'bc0ef6d8-644f-4d2e-83f7-a44c06ea3ed2', kind: 'client', httpStatusCode: 400 });
+			}
 
 			const session = await this.agentSessionsRepository.findOneBy({ id: ps.sessionId });
 			if (!session || session.userId !== me.id) {
@@ -161,7 +151,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					role: 'user',
 				});
 				if (priorUserMessage) {
-					if (priorUserMessage.content !== ps.text) {
+					if (priorUserMessage.content !== userText || (priorUserMessage.imageFileId ?? null) !== imageFileId) {
 						throw new ApiError({
 							message: 'This client request ID has already been used with different content.',
 							code: 'AGENT_CLIENT_REQUEST_ID_REUSED',
@@ -179,11 +169,15 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 						return {
 							userMessageId: priorUserMessage.id,
 							assistantMessageId: priorAssistantMessage.id,
+							userImageRecognitionStatus: priorUserMessage.imageRecognitionStatus,
+							userImageRecognitionDescription: priorUserMessage.imageRecognitionDescription,
 							assistantText: priorAssistantMessage.content,
 							longTermMemorySearchUnavailable: false,
 							longTermMemoryAddScheduled: false,
 							compressionLlmPending: false,
 							compressionStickiesBaselineCount: 0,
+							proactiveScheduleControlFailed: priorAssistantMessage.proactiveScheduleControlError != null,
+							proactiveScheduleActionTypes: this.agentProactiveScheduleService.actionTypes(priorAssistantMessage),
 							aborted: false,
 							auditBlocked: false,
 							auditBlockCode: null,
@@ -240,25 +234,31 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			//
 			// 旧实现的两条故障路径：
 			//   (a) 「读 if(agentReplyPending) 抛错」与「save(pending=true)」之间存在非原子窗口，
-			//       并发同会话两路 send 都可能通过预检查，导致：双轮 LLM、双轮扣费、turn 校验脏。
+			//       并发同会话两路 send 都可能通过预检查，导致双轮 LLM 与双轮扣费。
 			//   (b) `insertOne(user)`、`registerAbortable`、`startLog` 均位于 try/catch 之前。
 			//       其中任何一步抛错都会让会话停留在 `agentReplyPending=true`、abort 控制器悬挂、
 			//       用户消息变孤儿，且没有任何路径会清理。
 			//
 			// 新实现做了两件事：
-			//   1) 用一条 UPDATE ... WHERE id=... AND "agentReplyPending"=false 把「检查」与「置位」合一，
+			//   1) 用一条 UPDATE ... WHERE id=... AND "agentReplyPending"=false 把「检查」与「置位」合一；
+			//      包含旧主动消息在内的历史轮次异常由发往模型前的只读规范化处理，不能再阻断用户继续对话。
 			//      affected!==1 即代表已被并发请求占走，直接抛 AGENT_REPLY_PENDING。
 			//   2) 把 userMsg / abortController / usageLog 三个副作用全部纳入同一 try；
 			//      catch 据它们是否为 null 决定清理动作，finally 兜底取消注册 abort。
 
-			const turnOrderRows = await this.agentMessagesRepository.find({
-				where: { sessionId: session.id },
-				select: ['role', 'createdAt', 'id'],
-				order: { createdAt: 'ASC', id: 'ASC' },
-			});
-			assertAgentSessionTurnOrderAllowsUserSend(turnOrderRows);
-
 			const instanceMeta = await this.metaService.fetch(true);
+			let visionModel = null;
+			if (imageFileId != null) {
+				await this.agentVisionService.assertImageFileOwnedByUser(imageFileId, me.id);
+				visionModel = this.agentVisionService.assertConfigured(instanceMeta, session.agentVisionModelId);
+				const visionCost = Math.max(0, Number(visionModel.costPerCall) || 0);
+				if (visionCost > 0) {
+					const profile = await this.userProfilesRepository.findOneBy({ userId: me.id });
+					if ((profile?.agentCreditBalance ?? 0) < visionCost) {
+						throw new ApiError({ message: 'Insufficient agent credit for image recognition.', code: 'AGENT_VISION_INSUFFICIENT_CREDIT', id: 'b3f23fcc-0b08-4400-8cbf-cf2f9a57bc24', kind: 'client', httpStatusCode: 402 });
+					}
+				}
+			}
 			const callCost = this.agentService.getUserFacingModelCostPerCall(instanceMeta, session.agentModelId);
 			if (callCost > 0) {
 				const profile = await this.userProfilesRepository.findOneBy({ userId: me.id });
@@ -302,12 +302,30 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					createdAt: now,
 					sessionId: session.id,
 					role: 'user',
-					content: ps.text,
+					content: userText,
+					imageFileId,
+					imageRecognitionStatus: null,
+					imageRecognitionDescription: null,
 					clientRequestId,
 					statsDialogueStyleId: session.dialogueStyleId,
 					promptTokens: null,
 					completionTokens: null,
 				});
+				if (imageFileId != null && visionModel != null) {
+					const recognition = await this.agentVisionService.recognize({
+						instance: instanceMeta,
+						user: me,
+						session,
+						model: visionModel,
+						fileId: imageFileId,
+					});
+					userMsg.imageRecognitionStatus = recognition.status;
+					userMsg.imageRecognitionDescription = recognition.status === 'succeeded' ? recognition.description : null;
+					await this.agentMessagesRepository.save(userMsg);
+				}
+				// A real user turn invalidates the previously armed random proactive delivery.
+				session.randomProactiveAt = null;
+				session.randomProactiveNeedsUserMessage = false;
 
 				abortController = this.agentService.registerAbortable(session.id, clientRequestId);
 				const modelApiName = (() => {
@@ -339,11 +357,12 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					provider: longMemProvider,
 				});
 				const { maxContextTokens, maxOutputTokensPerCall, historyBudget } = budgets;
-				const selectedWorldbook = this.agentService.selectWorldbookEntriesForPrompt(character, ps.text);
+				const selectedWorldbook = this.agentService.selectWorldbookEntriesForPrompt(character, userText);
 				const systemBase = this.agentService.buildSystemPrompt({
 					globalPrompt: instanceMeta.agentGlobalSystemPrompt,
 					character,
 					style,
+					timeAwarenessEnabled: session.timeAwarenessEnabled === true,
 				});
 
 				let longTermMemorySearchUnavailable = false;
@@ -352,7 +371,15 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				const maxMemChars = Math.max(200, Math.min(50_000, session.agentLongMemoryInjectMaxChars || instanceMeta.agentMem0InjectMaxChars));
 
 				const { messages: history } = await this.agentService.loadRecentMessagesForContextWithMeta(session.id, historyBudget);
-				const historyForApi = history.filter(m => m.role === 'user' || m.role === 'assistant');
+			const historyForApi = history.filter(m => (m.role === 'user' || m.role === 'assistant') && m.id !== userMsg!.id);
+				const regexRules = this.agentService.normalizeRegexRules(character.regexRules);
+				const filterForAi = (text: string, role: 'user' | 'assistant') => this.agentService.applyRegexRules(text, role, 'aiInvisible', regexRules);
+				const filteredUserText = filterForAi(userText, 'user');
+				const aiUserText = imageFileId == null
+					? filteredUserText
+					: userMsg.imageRecognitionStatus === 'succeeded' && userMsg.imageRecognitionDescription
+						? `<image-recognition source="server" not-user-input="true">${escapeAgentXmlText(userMsg.imageRecognitionDescription)}</image-recognition>${filteredUserText.length > 0 ? `\n${filteredUserText}` : ''}`
+						: `<image-recognition source="server" not-user-input="true" status="unavailable" />${filteredUserText.length > 0 ? `\n${filteredUserText}` : ''}`;
 				const cStickies = longMemProvider === 'compression'
 					? await this.agentCompressionMemoryService.listStickies(session.id)
 					: [];
@@ -361,26 +388,24 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					const actives = cStickies.filter(s => s.state === 'active');
 					const bIds = actives.flatMap(s => [s.fromMessageId, s.toMessageId]);
 					const boundaries = await this.agentCompressionMemoryService.loadBoundaryMap(session.id, bIds);
-					pairs = this.agentCompressionMemoryService.buildPairsExcludingActiveCompression(
-						historyForApi,
+						pairs = this.agentCompressionMemoryService.buildPairsExcludingActiveCompression(
+						historyForApi.map(m => ({ ...m, content: filterForAi(m.content, m.role as 'user' | 'assistant') })),
 						actives,
 						boundaries,
 					);
 				} else {
 					for (const m of historyForApi) {
 						if (m.role === 'user' || m.role === 'assistant') {
-							pairs.push({ role: m.role, content: m.content });
+							pairs.push({ role: m.role, content: filterForAi(m.content, m.role) });
 						}
 					}
 				}
-				if (pairs.length > 0 && pairs[pairs.length - 1].role === 'user' && pairs[pairs.length - 1].content === ps.text) {
-					pairs.pop();
-				}
+				pairs = normalizeAgentLlmTurns(pairs);
 
 				let memoryBlock = '';
 				if (memActive) {
 					const topK = Math.max(1, Math.min(100, session.agentLongMemoryTopK || instanceMeta.agentMem0TopK));
-					const searchMsgs: { role: 'user' | 'assistant'; content: string }[] = [...pairs, { role: 'user', content: ps.text }];
+					const searchMsgs: { role: 'user' | 'assistant'; content: string }[] = [...pairs, { role: 'user', content: aiUserText }];
 					const bailianUserId = this.agentDashscopeMemoryService.bailianUserId(me.id, session.id);
 					const retrieved = await this.agentDashscopeMemoryService.searchMemory({
 						meta: instanceMeta,
@@ -398,8 +423,11 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				}
 
 				let system = systemBase;
+				if (session.scheduledProactiveEnabled) {
+					system += `\n${this.agentProactiveScheduleService.systemPromptBlock}`;
+				}
 				const activeImageModel = this.agentImageService.resolveImageModel(instanceMeta, session.agentImageModelId);
-				if (activeImageModel?.provider === 'aurora') {
+				if (activeImageModel != null) {
 					system += '\n\n<agent_image_generation_protocol>\n';
 					system += AGENT_IMAGE_WORLD_PROMPT;
 					system += '\n';
@@ -428,7 +456,12 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				//   压缩侧车（pairs）、UI 时间线均见原始用户文本，不受 directive 污染；
 				// - directive 长度已通过 `buildSendPathBudgets` 预扣到 historyBudget，对应 system 仅保留
 				//   `<dialogue_style_protocol>` 安全网说明，与 `AgentService.buildLatestUserDirectiveBlock` 一一呼应。
-				const wrappedUserText = this.agentService.wrapLatestUserTextWithStyleDirective(ps.text, style, selectedWorldbook);
+				const proactiveUserText = await this.agentProactiveScheduleService.prependScheduleContext(aiUserText, session);
+				const wrappedUserText = this.agentService.wrapLatestUserTextWithStyleDirective(
+					this.agentService.prependCurrentBeijingTime(proactiveUserText, session.timeAwarenessEnabled === true),
+					style,
+					selectedWorldbook,
+				);
 
 				const rawAssistantText = await this.agentService.invokeChatCompletions({
 					system,
@@ -437,13 +470,16 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					sessionModelId: session.agentModelId ?? null,
 					externalAbortSignal: abortController.signal,
 				});
+				const proactiveControl = this.agentProactiveScheduleService.extractControl(rawAssistantText);
+				const assistantText = proactiveControl.visibleContent;
+				const hasVisibleAssistantText = assistantText.trim().length > 0;
 
 				const auditResult = await this.agentExternalAuditService.auditReply({
 					instance: instanceMeta,
 					user: me,
 					session,
-					userText: ps.text,
-					assistantText: rawAssistantText,
+					userText,
+					assistantText,
 				}).catch(() => ({ blocked: false as const, allFailed: true }));
 				if (auditResult.blocked === true) {
 					if (userMsg) {
@@ -462,12 +498,16 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					return {
 						userMessageId: null,
 						assistantMessageId: null,
+						userImageRecognitionStatus: null,
+						userImageRecognitionDescription: null,
 						assistantText: '',
 						longTermMemorySearchUnavailable,
 						longTermMemoryAddScheduled: false,
 						compressionLlmPending: false,
-						compressionStickiesBaselineCount: 0,
-						aborted: false,
+					compressionStickiesBaselineCount: 0,
+					proactiveScheduleControlFailed: false,
+					proactiveScheduleActionTypes: [],
+					aborted: false,
 						auditBlocked: true,
 						auditBlockCode: auditResult.blockCode,
 						auditCategory: auditResult.category,
@@ -480,15 +520,22 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					createdAt: asstNow,
 					sessionId: session.id,
 					role: 'assistant',
-					content: rawAssistantText,
+					content: assistantText,
+					rawContent: proactiveControl.controlRaw ? rawAssistantText : null,
+					proactiveScheduleControlRaw: proactiveControl.controlRaw,
+					proactiveScheduleControlError: null,
+					// Keep control-only replies in private history to preserve turn ordering without
+					// rendering an empty assistant bubble to the user.
+					isInternal: !hasVisibleAssistantText,
 					clientRequestId,
 					statsDialogueStyleId: session.dialogueStyleId,
 					promptTokens: null,
 					completionTokens: null,
 				});
 				assistantPersisted = true;
+				await this.agentProactiveScheduleService.applyAssistantControl(session, assistantMsg, proactiveControl);
 
-				if (memActive) {
+				if (memActive && hasVisibleAssistantText) {
 					const everyN = safeAgentMemEveryNRounds(
 						session.agentLongMemoryAddEveryNRounds,
 						instanceMeta.agentMem0AddMemoryEveryNRounds,
@@ -509,8 +556,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 						);
 						const addMessages = this.agentDashscopeMemoryService.buildMessagesForAddMemory({
 							priorMessages: pairs,
-							currentUserText: ps.text,
-							assistantText: rawAssistantText,
+						currentUserText: userText,
+							assistantText,
 							maxRounds: addRounds,
 						});
 						this.agentDashscopeMemoryService.scheduleAddMemory({
@@ -523,6 +570,9 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				}
 
 				session.lastMessageAt = asstNow;
+				if (hasVisibleAssistantText) {
+					this.agentProactiveScheduleService.armRandomAfterVisibleAssistant(session, asstNow);
+				}
 				session.updatedAt = asstNow;
 				session.agentReplyPending = false;
 				await this.agentSessionsRepository.save(session);
@@ -531,7 +581,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					this.agentCompressionMemoryService.resolveEffectiveProvider(session.agentLongMemoryProvider, instanceMeta) === 'compression';
 				let compressionLlmPending = false;
 				let compressionStickiesBaselineCount = 0;
-				if (compressionProviderOn) {
+				if (compressionProviderOn && hasVisibleAssistantText) {
 					compressionStickiesBaselineCount = await this.agentCompressionMemoryService.countStickies(session.id);
 					compressionLlmPending = await this.agentCompressionMemoryService.peekWillInvokeCompressionLlm(
 						session, character, style, instanceMeta, me.id,
@@ -544,12 +594,16 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 
 				return {
 					userMessageId: userMsg.id,
-					assistantMessageId: assistantMsg.id,
-					assistantText: rawAssistantText,
+					assistantMessageId: hasVisibleAssistantText ? assistantMsg.id : null,
+					userImageRecognitionStatus: userMsg.imageRecognitionStatus,
+					userImageRecognitionDescription: userMsg.imageRecognitionDescription,
+					assistantText,
 					longTermMemorySearchUnavailable,
 					longTermMemoryAddScheduled,
 					compressionLlmPending,
 					compressionStickiesBaselineCount,
+					proactiveScheduleControlFailed: assistantMsg.proactiveScheduleControlError != null,
+					proactiveScheduleActionTypes: this.agentProactiveScheduleService.actionTypes(assistantMsg),
 					aborted: false,
 					auditBlocked: false,
 					auditBlockCode: null,
@@ -592,11 +646,15 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					return {
 						userMessageId: null,
 						assistantMessageId: null,
+						userImageRecognitionStatus: null,
+						userImageRecognitionDescription: null,
 						assistantText: '',
 						longTermMemorySearchUnavailable: false,
 						longTermMemoryAddScheduled: false,
 						compressionLlmPending: false,
 						compressionStickiesBaselineCount: 0,
+						proactiveScheduleControlFailed: false,
+						proactiveScheduleActionTypes: [],
 						aborted: true,
 						auditBlocked: false,
 						auditBlockCode: null,

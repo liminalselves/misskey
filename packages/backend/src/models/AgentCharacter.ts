@@ -66,6 +66,12 @@ export class MiAgentCharacter {
 	})
 	public worldbook: Array<Record<string, unknown>>;
 
+	/** Character-local regular-expression filters applied to chat display and LLM context. */
+	@Column('jsonb', {
+		default: () => "'[]'::jsonb",
+	})
+	public regexRules: Array<Record<string, unknown>>;
+
 	@Column('integer', {
 		default: 1,
 	})
@@ -112,6 +118,18 @@ export class MiAgentCharacter {
 		nullable: true,
 	})
 	public avatarFileId: MiDriveFile['id'] | null;
+
+	@Column({
+		...id(),
+		nullable: true,
+	})
+	public referenceImageFileId: MiDriveFile['id'] | null;
+
+	/** Up to four default reference images used by compatible image-generation models. */
+	@Column('jsonb', {
+		default: () => "'[]'::jsonb",
+	})
+	public referenceImageFileIds: MiDriveFile['id'][];
 
 	/** 管理封禁：无法以此角色新建会话，且其下已有会话均不可用 */
 	@Column('boolean', {

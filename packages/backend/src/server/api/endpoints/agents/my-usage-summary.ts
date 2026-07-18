@@ -15,6 +15,7 @@ import { Endpoint } from '@/server/api/endpoint-base.js';
 import { DI } from '@/di-symbols.js';
 import { AgentService } from '@/core/AgentService.js';
 import { AgentImageService } from '@/core/AgentImageService.js';
+import { AgentVisionService } from '@/core/AgentVisionService.js';
 import { AgentModelUsageService } from '@/core/AgentModelUsageService.js';
 import { MetaService } from '@/core/MetaService.js';
 import { packPublicAgentModels } from '@/misc/agent-llm-models.js';
@@ -41,7 +42,7 @@ export const meta = {
 						modelId: { type: 'string', nullable: true },
 						modelName: { type: 'string', nullable: true },
 						modelApiName: { type: 'string', nullable: true },
-						usageKind: { type: 'string', enum: ['chat', 'compression', 'image_generation'] },
+						usageKind: { type: 'string', enum: ['chat', 'compression', 'image_generation', 'vision', 'proactive_random', 'proactive_scheduled'] },
 						status: { type: 'string' },
 						cost: { type: 'number' },
 						promptTokens: { type: 'integer', nullable: true },
@@ -129,6 +130,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 
 		private agentService: AgentService,
 		private agentImageService: AgentImageService,
+		private agentVisionService: AgentVisionService,
 		private agentModelUsageService: AgentModelUsageService,
 		private metaService: MetaService,
 	) {
@@ -168,6 +170,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			const modelNameMap = new Map<string, string>([
 				...packPublicAgentModels(instanceMeta).map(m => [m.id, m.name] as const),
 				...this.agentImageService.listAvailableImageModels(instanceMeta, true).map(m => [m.id, m.name] as const),
+				...this.agentVisionService.listAvailableVisionModels(instanceMeta).map(m => [m.id, m.name] as const),
 			]);
 			const characterIds = characterStatsRaw.map(r => r.characterId);
 			const dialogueStyleIds = dialogueStyleStatsRaw.map(r => r.dialogueStyleId);

@@ -142,6 +142,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				characterOwnerId: character.userId,
 				sessionKind,
 				agentModelId,
+				agentVisionModelId: instanceMeta.agentVisionDefaultModelId ?? null,
 				agentCompressionModelId,
 				lastMessageAt: null,
 			});

@@ -13,7 +13,7 @@ import { AgentService } from '@/core/AgentService.js';
 import { QueryService } from '@/core/QueryService.js';
 import { UserEntityService } from '@/core/entities/UserEntityService.js';
 import { agentMessageRoles } from '@/models/AgentMessage.js';
-import { escapeIlikePattern, packMessageGovernanceRow } from '../_utils.js';
+import { escapeIlikePattern, packMessageGovernanceRow, resolveUserIdFromAcctOrId } from '../_utils.js';
 
 export const meta = {
 	tags: ['admin', 'agents'],
@@ -28,7 +28,7 @@ export const meta = {
 export const paramDef = {
 	type: 'object',
 	properties: {
-		userId: { type: 'string', minLength: 1, maxLength: 128, nullable: true },
+		userId: { type: 'string', minLength: 1, maxLength: 256, nullable: true },
 		sessionId: { type: 'string', minLength: 1, maxLength: 128, nullable: true },
 		characterId: { type: 'string', minLength: 1, maxLength: 128, nullable: true },
 		role: { type: 'string', enum: [...agentMessageRoles], nullable: true },
@@ -55,11 +55,12 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 	) {
 		super(meta, paramDef, async (ps, me) => {
 			this.agentService.assertAgentsEnabled();
+			const userId = await resolveUserIdFromAcctOrId(this.usersRepository, ps.userId);
 			let q = this.agentMessagesRepository.createQueryBuilder('m')
 				.innerJoinAndSelect('m.session', 's')
 				.leftJoinAndSelect('s.character', 'c')
 				.leftJoin('s.user', 'u');
-			if (ps.userId) q = q.andWhere('s.userId = :userId', { userId: ps.userId });
+			if (userId) q = q.andWhere('s.userId = :userId', { userId });
 			if (ps.sessionId) q = q.andWhere('m.sessionId = :sessionId', { sessionId: ps.sessionId });
 			if (ps.characterId) q = q.andWhere('s.characterId = :characterId', { characterId: ps.characterId });
 			if (ps.role) q = q.andWhere('m.role = :role', { role: ps.role });

@@ -502,6 +502,19 @@ export const meta = {
 					additionalProperties: true,
 				},
 			},
+			agentVisionModels: {
+				type: 'array',
+				optional: false, nullable: false,
+				items: {
+					type: 'object',
+					optional: false, nullable: false,
+					additionalProperties: true,
+				},
+			},
+			agentVisionDefaultModelId: {
+				type: 'string',
+				optional: false, nullable: true,
+			},
 			agentImageDefaultModel: {
 				type: 'string',
 				optional: false, nullable: false,
@@ -1070,6 +1083,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				agentImageBaseUrl: instance.agentImageBaseUrl,
 				agentImageTokens: instance.agentImageTokens ?? [],
 				agentImageModels: instance.agentImageModels ?? [],
+				agentVisionModels: instance.agentVisionModels ?? [],
+				agentVisionDefaultModelId: instance.agentVisionDefaultModelId ?? null,
 				agentImageDefaultModel: instance.agentImageDefaultModel,
 				agentImageDefaultParams: instance.agentImageDefaultParams ?? {},
 				agentImageDefaultNegativePrompt: instance.agentImageDefaultNegativePrompt,

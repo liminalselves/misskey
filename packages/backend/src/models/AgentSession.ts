@@ -103,6 +103,12 @@ export class MiAgentSession {
 	})
 	public agentImageModelId: string | null;
 
+	/** The OpenAI-compatible image-recognition model selected for this session. */
+	@Column('varchar', {
+		length: 128, nullable: true,
+	})
+	public agentVisionModelId: string | null;
+
 	/** 当前会话对所选生图模型的 provider 参数覆盖 */
 	@Column('jsonb', {
 		default: {},
@@ -173,6 +179,48 @@ export class MiAgentSession {
 		default: false,
 	})
 	public segmentedOutputEnabled: boolean;
+
+	/** Whether the current Beijing time is provided to the model before the latest user message. */
+	@Column('boolean', {
+		default: true,
+	})
+	public timeAwarenessEnabled: boolean;
+
+	/** Allow one weighted proactive message after a quiet conversation period. */
+	@Column('boolean', {
+		default: false,
+	})
+	public randomProactiveEnabled: boolean;
+
+	/** Allow the model to manage persisted proactive schedules for this session. */
+	@Column('boolean', {
+		default: false,
+	})
+	public scheduledProactiveEnabled: boolean;
+
+	/** The pending weighted-random proactive delivery time, if one is armed. */
+	@Column('timestamp with time zone', {
+		nullable: true,
+	})
+	public randomProactiveAt: Date | null;
+
+	/** Random delivery is re-armed only after a real user message arrives. */
+	@Column('boolean', {
+		default: false,
+	})
+	public randomProactiveNeedsUserMessage: boolean;
+
+	/** The last skipped random proactive attempt. Raw provider errors are never stored here. */
+	@Column('jsonb', {
+		nullable: true,
+	})
+	public randomProactiveLastError: { code: string; occurredAt: string } | null;
+
+	/** The last skipped scheduled proactive attempt. Raw provider errors are never stored here. */
+	@Column('jsonb', {
+		nullable: true,
+	})
+	public scheduledProactiveLastError: { code: string; occurredAt: string } | null;
 
 	/** 管理封禁：该会话下用户无法继续对话 */
 	@Column('boolean', {

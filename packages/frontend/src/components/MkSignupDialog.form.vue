@@ -23,6 +23,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<span v-if="usernameState === 'wait'" style="color:#999"><MkLoading :em="true"/> {{ i18n.ts.checking }}</span>
 					<span v-else-if="usernameState === 'ok'" style="color: var(--MI_THEME-success)"><i class="ti ti-check ti-fw"></i> {{ i18n.ts.available }}</span>
 					<span v-else-if="usernameState === 'unavailable'" style="color: var(--MI_THEME-error)"><i class="ti ti-alert-triangle ti-fw"></i> {{ i18n.ts.unavailable }}</span>
+					<span v-else-if="usernameState === 'unavailable:preserved'" style="color: var(--MI_THEME-error)"><i class="ti ti-alert-triangle ti-fw"></i> {{ i18n.ts.usernameReserved }}</span>
+					<span v-else-if="usernameState === 'unavailable:prohibited'" style="color: var(--MI_THEME-error)"><i class="ti ti-alert-triangle ti-fw"></i> {{ i18n.ts.yourNameContainsProhibitedWords }}</span>
 					<span v-else-if="usernameState === 'error'" style="color: var(--MI_THEME-error)"><i class="ti ti-alert-triangle ti-fw"></i> {{ i18n.ts.error }}</span>
 					<span v-else-if="usernameState === 'invalid-format'" style="color: var(--MI_THEME-error)"><i class="ti ti-alert-triangle ti-fw"></i> {{ i18n.ts.usernameInvalidFormat }}</span>
 					<span v-else-if="usernameState === 'min-range'" style="color: var(--MI_THEME-error)"><i class="ti ti-alert-triangle ti-fw"></i> {{ i18n.ts.tooShort }}</span>
@@ -119,7 +121,7 @@ const password = ref<string>('');
 const retypedPassword = ref<string>('');
 const invitationCode = ref<string>('');
 const email = ref('');
-const usernameState = ref<null | 'wait' | 'ok' | 'unavailable' | 'error' | 'invalid-format' | 'min-range' | 'max-range'>(null);
+const usernameState = ref<null | 'wait' | 'ok' | 'unavailable' | 'unavailable:preserved' | 'unavailable:prohibited' | 'error' | 'invalid-format' | 'min-range' | 'max-range'>(null);
 const emailState = ref<null | 'wait' | 'ok' | 'unavailable:used' | 'unavailable:format' | 'unavailable:disposable' | 'unavailable:banned' | 'unavailable:mx' | 'unavailable:smtp' | 'unavailable' | 'error'>(null);
 const passwordStrength = ref<'' | 'low' | 'medium' | 'high'>('');
 const passwordRetypeState = ref<null | 'match' | 'not-match'>(null);
@@ -131,6 +133,8 @@ const turnstileResponse = ref<string | null>(null);
 const aliyunCaptchaResponse = ref<string | null>(null);
 const testcaptchaResponse = ref<string | null>(null);
 const usernameAbortController = ref<null | AbortController>(null);
+
+let usernameCheckSequence = 0;
 const emailAbortController = ref<null | AbortController>(null);
 
 const shouldDisableSubmitting = computed((): boolean => {
@@ -172,6 +176,7 @@ function getPasswordStrength(source: string): number {
 }
 
 function onChangeUsername(): void {
+	const sequence = ++usernameCheckSequence;
 	if (username.value === '') {
 		usernameState.value = null;
 		return;
@@ -195,13 +200,19 @@ function onChangeUsername(): void {
 	}
 	usernameState.value = 'wait';
 	usernameAbortController.value = new AbortController();
+	const requestedUsername = username.value;
 
 	misskeyApi('username/available', {
-		username: username.value,
+		username: requestedUsername,
 	}, undefined, usernameAbortController.value.signal).then(result => {
-		usernameState.value = result.available ? 'ok' : 'unavailable';
+		if (sequence !== usernameCheckSequence || username.value !== requestedUsername) return;
+		const availability = result as typeof result & { reason?: 'used' | 'preserved' | 'prohibited' | null };
+		usernameState.value = availability.available ? 'ok' :
+			availability.reason === 'preserved' ? 'unavailable:preserved' :
+			availability.reason === 'prohibited' ? 'unavailable:prohibited' :
+			'unavailable';
 	}).catch((err) => {
-		if (err.name !== 'AbortError') {
+		if (sequence === usernameCheckSequence && username.value === requestedUsername && err.name !== 'AbortError') {
 			usernameState.value = 'error';
 		}
 	});

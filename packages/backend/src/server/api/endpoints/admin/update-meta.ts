@@ -14,8 +14,14 @@ import { assertSafeLlmHttpsUrl, describeUnsafeLlmUrlReason, hrefForStoredLlmBase
 import { getActiveLlmModels, normalizeAgentLlmModelsParam } from '@/misc/agent-llm-models.js';
 import { AgentCompressionMemoryService } from '@/core/AgentCompressionMemoryService.js';
 
+function normalizeObjectStorageConfigValue(value: string | null | undefined): string | null {
+	const trimmed = value?.trim();
+	return trimmed == null || trimmed === '' ? null : trimmed;
+}
+
 function coerceHttpObjectStorageUrlToHttps(url: string | null | undefined, force: boolean): string | null {
-	if (url == null || url === '') return url ?? null;
+	url = normalizeObjectStorageConfigValue(url);
+	if (url == null) return null;
 	if (!force) return url;
 	if (url.startsWith('http://')) return `https://${url.slice(7)}`;
 	return url;
@@ -217,9 +223,13 @@ export const paramDef = {
 				properties: {
 					id: { type: 'string', minLength: 1, maxLength: 128 },
 					name: { type: 'string', minLength: 1, maxLength: 256 },
-					provider: { type: 'string', enum: ['aurora'] },
+					description: { type: 'string', nullable: true, maxLength: 2048 },
+					provider: { type: 'string', enum: ['aurora', 'openai'] },
 					enabled: { type: 'boolean' },
 					apiModelName: { type: 'string', nullable: true, maxLength: 128 },
+					apiUrl: { type: 'string', nullable: true, maxLength: 2048 },
+					apiKey: { type: 'string', nullable: true, maxLength: 8192 },
+					supportsReferenceImage: { type: 'boolean' },
 					costPerCall: { type: 'number', nullable: true, minimum: 0, maximum: 1000000 },
 					defaultParams: { type: 'object', nullable: true, additionalProperties: true },
 					defaultArtistPresetId: { type: 'string', nullable: true, maxLength: 128 },
@@ -227,6 +237,23 @@ export const paramDef = {
 				required: ['id', 'name', 'provider'],
 			},
 		},
+		agentVisionModels: {
+			type: 'array',
+			items: {
+				type: 'object',
+				properties: {
+					id: { type: 'string', minLength: 1, maxLength: 128 },
+					name: { type: 'string', minLength: 1, maxLength: 256 },
+					enabled: { type: 'boolean' },
+					apiUrl: { type: 'string', minLength: 1, maxLength: 2048 },
+					apiKey: { type: 'string', minLength: 1, maxLength: 8192 },
+					apiModelName: { type: 'string', minLength: 1, maxLength: 256 },
+					costPerCall: { type: 'number', nullable: true, minimum: 0, maximum: 1000000 },
+				},
+				required: ['id', 'name', 'apiUrl', 'apiKey', 'apiModelName'],
+			},
+		},
+		agentVisionDefaultModelId: { type: 'string', nullable: true, maxLength: 128 },
 		agentImageArtistPresets: {
 			type: 'array',
 			items: {
@@ -927,7 +954,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			}
 			if (ps.agentImageModels !== undefined) {
 				const seen = new Set<string>();
-				set.agentImageModels = (ps.agentImageModels ?? []).map((m, i) => {
+				set.agentImageModels = await Promise.all((ps.agentImageModels ?? []).map(async (m, i) => {
 					const id = m.id.trim();
 					if (seen.has(id)) {
 						throw new ApiError({
@@ -944,17 +971,77 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 							id: 'b779a54b-01bf-4276-b48b-cff148ad9839',
 						});
 					}
+					let apiUrl: string | null = null;
+					let apiKey: string | null = null;
+					if (m.provider === 'openai') {
+						if (typeof m.apiModelName !== 'string' || m.apiModelName.trim() === ''
+							|| typeof m.apiUrl !== 'string' || m.apiUrl.trim() === ''
+							|| typeof m.apiKey !== 'string' || m.apiKey.trim() === '') {
+							throw new ApiError({
+								message: 'OpenAI image model requires apiModelName, apiUrl, and apiKey.',
+								code: 'INVALID_PARAM',
+								id: '4b9f0af0-aec5-4151-bff6-239b0c639baa',
+							});
+						}
+						try {
+							apiUrl = hrefForStoredLlmBaseUrl(await assertSafeLlmHttpsUrl(m.apiUrl));
+						} catch (err) {
+							const reason = err instanceof UnsafeLlmUrlError ? describeUnsafeLlmUrlReason(err.reason) : 'Invalid URL.';
+							throw new ApiError({
+								message: `OpenAI image model URL is invalid: ${reason}`,
+								code: 'INVALID_PARAM',
+								id: 'd5c7da16-6e40-4f65-90db-996bba9c4aaf',
+							});
+						}
+						apiKey = m.apiKey.trim();
+					}
 					return {
 						id,
 						name: m.name.trim(),
-						provider: 'aurora' as const,
+						description: typeof m.description === 'string' && m.description.trim() !== '' ? m.description.trim() : null,
+						provider: m.provider,
 						enabled: m.enabled !== false,
 						apiModelName: typeof m.apiModelName === 'string' && m.apiModelName.trim() !== '' ? m.apiModelName.trim() : null,
+						apiUrl,
+						apiKey,
+						supportsReferenceImage: m.provider === 'openai' && m.supportsReferenceImage === true,
 						costPerCall: typeof m.costPerCall === 'number' ? Math.max(0, m.costPerCall) : null,
 						defaultParams: m.defaultParams ?? null,
 						defaultArtistPresetId: typeof m.defaultArtistPresetId === 'string' && m.defaultArtistPresetId.trim() !== '' ? m.defaultArtistPresetId.trim() : null,
 					};
-				});
+				}));
+			}
+			if (ps.agentVisionModels !== undefined) {
+				const seen = new Set<string>();
+				set.agentVisionModels = await Promise.all((ps.agentVisionModels ?? []).map(async (m) => {
+					const id = m.id.trim();
+					if (seen.has(id)) {
+						throw new ApiError({ message: `Duplicate image recognition model id: ${id}`, code: 'INVALID_PARAM', id: '4c1b6fd6-67f8-40dd-930d-88e26042db19' });
+					}
+					seen.add(id);
+					try {
+						return {
+							id,
+							name: m.name.trim(),
+							enabled: m.enabled !== false,
+							apiUrl: hrefForStoredLlmBaseUrl(await assertSafeLlmHttpsUrl(m.apiUrl)),
+							apiKey: m.apiKey.trim(),
+							apiModelName: m.apiModelName.trim(),
+							costPerCall: typeof m.costPerCall === 'number' ? Math.max(0, m.costPerCall) : null,
+						};
+					} catch (err) {
+						const reason = err instanceof UnsafeLlmUrlError ? describeUnsafeLlmUrlReason(err.reason) : 'Invalid URL.';
+						throw new ApiError({ message: `Image recognition model URL is invalid: ${reason}`, code: 'INVALID_PARAM', id: '51c2f9a6-0e1e-4b8c-b886-9148774aec8c' });
+					}
+				}));
+			}
+			if (ps.agentVisionDefaultModelId !== undefined) {
+				const id = typeof ps.agentVisionDefaultModelId === 'string' && ps.agentVisionDefaultModelId.trim() !== '' ? ps.agentVisionDefaultModelId.trim() : null;
+				const models = set.agentVisionModels ?? serverSettings.agentVisionModels ?? [];
+				if (id != null && !models.some(model => model.id === id && model.enabled !== false)) {
+					throw new ApiError({ message: 'Image recognition default model must be enabled.', code: 'INVALID_PARAM', id: 'edc23cfd-5338-40cf-a342-e3e6fcf5efb6' });
+				}
+				set.agentVisionDefaultModelId = id ?? models.find(model => model.enabled !== false)?.id ?? null;
 			}
 			if (ps.agentImageArtistPresets !== undefined) {
 				const seen = new Set<string>();
@@ -1136,19 +1223,19 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			}
 
 			if (ps.objectStorageBucket !== undefined) {
-				set.objectStorageBucket = ps.objectStorageBucket;
+				set.objectStorageBucket = normalizeObjectStorageConfigValue(ps.objectStorageBucket);
 			}
 
 			if (ps.objectStoragePrefix !== undefined) {
-				set.objectStoragePrefix = ps.objectStoragePrefix;
+				set.objectStoragePrefix = normalizeObjectStorageConfigValue(ps.objectStoragePrefix);
 			}
 
 			if (ps.objectStorageEndpoint !== undefined) {
-				set.objectStorageEndpoint = ps.objectStorageEndpoint;
+				set.objectStorageEndpoint = normalizeObjectStorageConfigValue(ps.objectStorageEndpoint);
 			}
 
 			if (ps.objectStorageRegion !== undefined) {
-				set.objectStorageRegion = ps.objectStorageRegion;
+				set.objectStorageRegion = normalizeObjectStorageConfigValue(ps.objectStorageRegion);
 			}
 
 			if (ps.objectStoragePort !== undefined) {
@@ -1156,11 +1243,11 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			}
 
 			if (ps.objectStorageAccessKey !== undefined) {
-				set.objectStorageAccessKey = ps.objectStorageAccessKey;
+				set.objectStorageAccessKey = normalizeObjectStorageConfigValue(ps.objectStorageAccessKey);
 			}
 
 			if (ps.objectStorageSecretKey !== undefined) {
-				set.objectStorageSecretKey = ps.objectStorageSecretKey;
+				set.objectStorageSecretKey = normalizeObjectStorageConfigValue(ps.objectStorageSecretKey);
 			}
 
 			if (ps.objectStorageUseSSL !== undefined) {

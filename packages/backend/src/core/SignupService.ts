@@ -22,6 +22,7 @@ import { UtilityService } from '@/core/UtilityService.js';
 import { UserService } from '@/core/UserService.js';
 import { SystemAccountService } from '@/core/SystemAccountService.js';
 import { MetaService } from '@/core/MetaService.js';
+import { isPreservedUsername } from '@/misc/username-reservation.js';
 
 @Injectable()
 export class SignupService {
@@ -89,7 +90,7 @@ export class SignupService {
 		}
 
 		if (!opts.ignorePreservedUsernames && this.meta.rootUserId != null) {
-			const isPreserved = this.meta.preservedUsernames.map(x => x.toLowerCase()).includes(username.toLowerCase());
+			const isPreserved = isPreservedUsername(username, this.meta.preservedUsernames);
 			if (isPreserved) {
 				throw new Error('USED_USERNAME');
 			}
@@ -164,4 +165,3 @@ export class SignupService {
 		return { account, secret };
 	}
 }
-

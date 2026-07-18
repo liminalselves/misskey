@@ -25,6 +25,7 @@ const MSGS: Record<Lang, Record<string, string>> = {
 		pollEnded: 'アンケートが終了しました',
 		scheduledNotePosted: '予約投稿が公開されました',
 		scheduledNotePostFailed: '予約投稿の公開に失敗しました',
+		agentProactiveMessage: 'エージェントからのメッセージ',
 		roleAssigned: 'ロールが付与されました',
 		achievementEarned: '実績を獲得しました',
 		chatRoomInvitationReceived: 'グループチャットに招待されました',
@@ -49,6 +50,7 @@ const MSGS: Record<Lang, Record<string, string>> = {
 		pollEnded: '问卷调查结果已生成。',
 		scheduledNotePosted: '定时帖子已发布',
 		scheduledNotePostFailed: '定时帖子发布失败',
+		agentProactiveMessage: '智能体发来消息',
 		roleAssigned: '授予的角色',
 		achievementEarned: '获得成就',
 		chatRoomInvitationReceived: '您已被邀请加入群聊',
@@ -73,6 +75,7 @@ const MSGS: Record<Lang, Record<string, string>> = {
 		pollEnded: 'A poll has ended',
 		scheduledNotePosted: 'Scheduled note posted',
 		scheduledNotePostFailed: 'Scheduled note failed to post',
+		agentProactiveMessage: 'New agent message',
 		roleAssigned: 'Role assigned',
 		achievementEarned: 'Achievement unlocked',
 		chatRoomInvitationReceived: 'You were invited to a group chat',
@@ -180,6 +183,8 @@ export function buildNativePushFromNotification(
 			return { title: t(lang, 'scheduledNotePosted'), body: getNoteSummary(raw.note), openPath: openPathForNote(raw.note) };
 		case 'scheduledNotePostFailed':
 			return { title: t(lang, 'scheduledNotePostFailed'), body: getNoteSummary(raw.note), openPath: openPathForNote(raw.note) };
+		case 'agentProactiveMessage':
+			return { title: String(raw.sessionName ?? t(lang, 'agentProactiveMessage')), body: String(raw.messageText ?? ''), openPath: `/chat/agent/${String(raw.sessionId ?? '')}` };
 		case 'note':
 			return { title: t(lang, 'newNote'), body: getNoteSummary(raw.note), openPath: openPathForNote(raw.note) };
 		case 'follow':

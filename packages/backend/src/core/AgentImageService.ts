@@ -18,9 +18,10 @@ import { DriveFileEntityService } from '@/core/entities/DriveFileEntityService.j
 import type { MiAgentImageDefaultParams, MiAgentImageModel, MiAgentImageToken, MiMeta } from '@/models/Meta.js';
 import type { MiUser } from '@/models/User.js';
 import { MiDriveFolder } from '@/models/DriveFolder.js';
-import type { AgentImageGenerationsRepository, DriveFilesRepository, DriveFoldersRepository, UserProfilesRepository } from '@/models/_.js';
+import type { AgentCharactersRepository, AgentImageGenerationsRepository, DriveFilesRepository, DriveFoldersRepository, UserProfilesRepository } from '@/models/_.js';
 import { ApiError } from '@/server/api/error.js';
 import { IdentifiableError } from '@/misc/identifiable-error.js';
+import { assertSafeLlmHttpsUrl, describeUnsafeLlmUrlReason, UnsafeLlmUrlError } from '@/misc/validate-llm-endpoint-url.js';
 import { getAgentImagePreset } from './agent-image-presets.js';
 import { resolveAgentImageNegativePrompt } from './agent-image-defaults.js';
 
@@ -35,10 +36,16 @@ type FetchImageParams = {
 	user: MiUser;
 	instance: MiMeta;
 	imageModel: MiAgentImageModel;
-	token: MiAgentImageToken;
+	token?: MiAgentImageToken;
 	tag: string;
 	size: AgentImageSize;
 	imageSettings?: Record<string, unknown> | null;
+	referenceImages?: AgentReferenceImage[];
+};
+
+export type AgentReferenceImage = {
+	contentType: string;
+	data: Buffer;
 };
 
 const AGENT_DRAW_RE = /\[\[agent_draw(?:\s+size=(portrait|landscape|square))?\s+tag=([\s\S]*?)\]\]/g;
@@ -89,8 +96,179 @@ const NON_RETRIABLE_GENERATION_ERROR_CODES = new Set<string>([
 	agentImageErrors.unallowedFileType.code,
 ]);
 
+const AGENT_IMAGE_DIAGNOSTIC_MAX_LENGTH = 600;
+
+function sanitizeAgentImageDiagnostic(raw: string): string {
+	const sanitized = raw
+		.replace(/(["']?(?:x-api-key|api[_-]?key|authorization)["']?\s*[:=]\s*)(?:Bearer\s+)?["']?[^\s,;"'}]+/gi, '$1[redacted]')
+		.replace(/\bBearer\s+[A-Za-z0-9._~+/=-]+/gi, 'Bearer [redacted]')
+		.replace(/\b(?:sk|rk|pk)-[A-Za-z0-9_-]{8,}\b/gi, '[redacted]')
+		.replace(/([?&](?:x-api-key|api[_-]?key|authorization)=)[^&#\s]+/gi, '$1[redacted]')
+		.replace(/https?:\/\/[^\s"'<>]+/gi, '[redacted URL]')
+		.replace(/\s+/g, ' ')
+		.trim();
+	return sanitized.slice(0, AGENT_IMAGE_DIAGNOSTIC_MAX_LENGTH);
+}
+
+function upstreamImageError(diagnostic: string): ApiError {
+	return new ApiError(agentImageErrors.upstreamFailed, { diagnostic: sanitizeAgentImageDiagnostic(diagnostic) });
+}
+
+export function getAgentImageErrorDiagnostic(err: unknown): string | null {
+	if (!(err instanceof ApiError) || typeof err.info?.diagnostic !== 'string') return null;
+	const diagnostic = sanitizeAgentImageDiagnostic(err.info.diagnostic);
+	return diagnostic === '' ? null : diagnostic;
+}
+
+async function describeImageUpstreamHttpError(res: Response): Promise<string> {
+	const raw = await res.text().catch(() => '');
+	let detail = '';
+	if (raw.trim() !== '') {
+		try {
+			const body = JSON.parse(raw) as { error?: { message?: unknown; code?: unknown }; message?: unknown; detail?: unknown };
+			const message = body.error?.message ?? body.message ?? body.detail;
+			const providerCode = body.error?.code;
+			if (typeof message === 'string') detail = message;
+			if (typeof providerCode === 'string' && providerCode.trim() !== '') {
+				detail = detail === '' ? providerCode : `${providerCode}: ${detail}`;
+			}
+		} catch {
+			detail = raw;
+		}
+	}
+	return detail.trim() === '' ? `Upstream returned HTTP ${res.status}.` : `Upstream returned HTTP ${res.status}: ${detail}`;
+}
+
+function describeImageRequestFailure(err: unknown, timedOut: boolean): string {
+	if (timedOut) return 'Upstream request timed out after 180 seconds.';
+	const message = err instanceof Error ? err.message : 'Unknown network error.';
+	return `Upstream request failed: ${message}`;
+}
+
 function normalizeSize(size: string | null | undefined): AgentImageSize {
 	return size === 'landscape' || size === 'square' || size === 'portrait' ? size : 'portrait';
+}
+
+export function openAiImageSize(size: AgentImageSize): string {
+	switch (size) {
+		case 'portrait': return '1024x1536';
+		case 'landscape': return '1536x1024';
+		case 'square': return '1024x1024';
+	}
+}
+
+function referenceImageDataUrl(referenceImage: AgentReferenceImage): string {
+	return `data:${referenceImage.contentType};base64,${referenceImage.data.toString('base64')}`;
+}
+
+function normalizeReferenceImages(referenceImages?: AgentReferenceImage | AgentReferenceImage[] | null): AgentReferenceImage[] {
+	if (referenceImages == null) return [];
+	return (Array.isArray(referenceImages) ? referenceImages : [referenceImages]).slice(0, 4);
+}
+
+export function buildOpenAiImageGenerationRequest(model: string, prompt: string, size: AgentImageSize, referenceImages?: AgentReferenceImage | AgentReferenceImage[] | null): Record<string, unknown> {
+	const images = normalizeReferenceImages(referenceImages).map(referenceImageDataUrl);
+	return {
+		model,
+		prompt,
+		n: 1,
+		size: openAiImageSize(size),
+		...(images.length === 1 ? { image: images[0] } : images.length > 1 ? { image: images } : {}),
+	};
+}
+
+export function buildOpenAiImageGenerationRequestInit(apiKey: string, model: string, prompt: string, size: AgentImageSize, referenceImages?: AgentReferenceImage | AgentReferenceImage[] | null): {
+	method: 'POST';
+	headers: Record<string, string>;
+	body: string;
+} {
+	return {
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/json',
+			Authorization: `Bearer ${apiKey}`,
+		},
+		body: JSON.stringify(buildOpenAiImageGenerationRequest(model, prompt, size, referenceImages)),
+	};
+}
+
+export function buildOpenAiChatImageGenerationRequest(model: string, prompt: string, referenceImages?: AgentReferenceImage | AgentReferenceImage[] | null): Record<string, unknown> {
+	const content: Array<Record<string, unknown>> = [{ type: 'text', text: prompt }];
+	for (const referenceImage of normalizeReferenceImages(referenceImages)) {
+		content.push({ type: 'image_url', image_url: { url: referenceImageDataUrl(referenceImage) } });
+	}
+	return {
+		model,
+		stream: false,
+		messages: [{ role: 'user', content }],
+	};
+}
+
+export function buildOpenAiChatImageGenerationRequestInit(apiKey: string, model: string, prompt: string, referenceImages?: AgentReferenceImage | AgentReferenceImage[] | null): {
+	method: 'POST';
+	headers: Record<string, string>;
+	body: string;
+} {
+	return {
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/json',
+			Authorization: `Bearer ${apiKey}`,
+		},
+		body: JSON.stringify(buildOpenAiChatImageGenerationRequest(model, prompt, referenceImages)),
+	};
+}
+
+export type OpenAiImageResult =
+	| { type: 'base64'; value: string }
+	| { type: 'url'; value: string };
+
+export function parseOpenAiImageResult(value: unknown): OpenAiImageResult {
+	if (value == null || typeof value !== 'object') throw new Error('Invalid OpenAI image response.');
+	const data = (value as { data?: unknown }).data;
+	if (!Array.isArray(data) || data.length === 0 || data[0] == null || typeof data[0] !== 'object') {
+		throw new Error('OpenAI image response has no image data.');
+	}
+	const first = data[0] as { b64_json?: unknown; url?: unknown };
+	if (typeof first.b64_json === 'string' && first.b64_json.trim() !== '') {
+		return { type: 'base64', value: first.b64_json.trim() };
+	}
+	if (typeof first.url === 'string' && first.url.trim() !== '') {
+		return { type: 'url', value: first.url.trim() };
+	}
+	throw new Error('OpenAI image response has no supported image value.');
+}
+
+export function parseOpenAiChatImageResult(value: unknown): OpenAiImageResult {
+	try {
+		return parseOpenAiImageResult(value);
+	} catch {
+		// Some OpenAI-compatible gateways return the generated image in chat content.
+	}
+	const message = (value as { choices?: Array<{ message?: { content?: unknown; image_url?: unknown; images?: unknown } }> })?.choices?.[0]?.message;
+	const content = message?.content;
+	const contentImageUrl = Array.isArray(content)
+		? content.find(item => typeof item === 'object' && item != null && typeof (item as { image_url?: { url?: unknown } }).image_url?.url === 'string') as { image_url: { url: string } } | undefined
+		: undefined;
+	const messageImageUrl = typeof (message?.image_url as { url?: unknown } | undefined)?.url === 'string'
+		? (message?.image_url as { url: string }).url
+		: Array.isArray(message?.images) && typeof (message.images[0] as { url?: unknown } | undefined)?.url === 'string'
+			? (message.images[0] as { url: string }).url
+			: null;
+	const text = typeof content === 'string'
+		? content.trim()
+		: Array.isArray(content)
+			? content.map(item => typeof item === 'object' && item != null ? String((item as { text?: unknown }).text ?? '') : '').join('').trim()
+			: '';
+	const markdownUrl = text.match(/!\[[^\]]*\]\((?:https:\/\/|data:image\/)[^)\s]+\)/)?.[0]?.replace(/^!\[[^\]]*\]\(|\)$/g, '');
+	const candidate = contentImageUrl?.image_url.url ?? messageImageUrl ?? markdownUrl ?? text;
+	const dataUrl = candidate.match(/^data:image\/[^;]+;base64,([A-Za-z0-9+/=\s]+)$/i)?.[1];
+	if (dataUrl) return { type: 'base64', value: dataUrl };
+	if (/^https:\/\//i.test(candidate)) return { type: 'url', value: candidate };
+	if (/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(candidate)) {
+		return { type: 'base64', value: candidate };
+	}
+	throw new Error('OpenAI chat response has no supported image value.');
 }
 
 function safeNumber(v: unknown, fallback: number, min: number, max: number): number {
@@ -135,6 +313,9 @@ export class AgentImageService {
 		@Inject(DI.agentImageGenerationsRepository)
 		private agentImageGenerationsRepository: AgentImageGenerationsRepository,
 
+		@Inject(DI.agentCharactersRepository)
+		private agentCharactersRepository: AgentCharactersRepository,
+
 		private idService: IdService,
 		private driveService: DriveService,
 		private driveFileEntityService: DriveFileEntityService,
@@ -152,13 +333,17 @@ export class AgentImageService {
 	public listAvailableImageModels(instance: MiMeta, includeDisabled = false): MiAgentImageModel[] {
 		const configured = Array.isArray(instance.agentImageModels) ? instance.agentImageModels : [];
 		const models = configured
-			.filter(m => typeof m?.id === 'string' && m.id.trim() !== '' && m.provider === 'aurora')
+			.filter(m => typeof m?.id === 'string' && m.id.trim() !== '' && (m.provider === 'aurora' || m.provider === 'openai'))
 			.map(m => ({
 				id: m.id.trim(),
 				name: typeof m.name === 'string' && m.name.trim() !== '' ? m.name.trim() : m.id.trim(),
-				provider: 'aurora' as const,
+				description: typeof m.description === 'string' && m.description.trim() !== '' ? m.description.trim() : null,
+				provider: m.provider,
 				enabled: m.enabled !== false,
 				apiModelName: typeof m.apiModelName === 'string' && m.apiModelName.trim() !== '' ? m.apiModelName.trim() : instance.agentImageDefaultModel,
+				apiUrl: typeof m.apiUrl === 'string' && m.apiUrl.trim() !== '' ? m.apiUrl.trim() : null,
+				apiKey: typeof m.apiKey === 'string' && m.apiKey.trim() !== '' ? m.apiKey.trim() : null,
+				supportsReferenceImage: m.provider === 'openai' && m.supportsReferenceImage === true,
 				costPerCall: typeof m.costPerCall === 'number' ? m.costPerCall : instance.agentImageCostPerCall,
 				defaultParams: normalizeImageParams(m.defaultParams ?? instance.agentImageDefaultParams),
 				defaultArtistPresetId: typeof m.defaultArtistPresetId === 'string' ? m.defaultArtistPresetId : instance.agentImageDefaultArtistPresetId,
@@ -320,24 +505,31 @@ export class AgentImageService {
 			modelApiName: imageModel.apiModelName ?? instance.agentImageDefaultModel,
 			usageKind: 'image_generation',
 		});
+		const referenceImages = imageModel.supportsReferenceImage === true
+			? await this.resolveCharacterReferenceImages(params.characterId)
+			: [];
 
 		try {
-			const tokens = await this.pickTokenCandidates(instance);
-			if (tokens.length === 0) throw new ApiError(agentImageErrors.notConfigured);
 			let file: Awaited<ReturnType<AgentImageService['fetchAndStoreImage']>> | null = null;
-			let lastError: unknown = null;
-			for (const token of tokens) {
-				try {
-					file = await this.fetchAndStoreImage({ ...params, instance, imageModel, token });
-					break;
-				} catch (err) {
-					if (err instanceof ApiError && NON_RETRIABLE_GENERATION_ERROR_CODES.has(err.code)) throw err;
-					lastError = err;
+			if (imageModel.provider === 'aurora') {
+				const tokens = await this.pickTokenCandidates(instance);
+				if (tokens.length === 0) throw new ApiError(agentImageErrors.notConfigured);
+				let lastError: unknown = null;
+				for (const token of tokens) {
+					try {
+						file = await this.fetchAndStoreImage({ ...params, instance, imageModel, token });
+						break;
+					} catch (err) {
+						if (err instanceof ApiError && NON_RETRIABLE_GENERATION_ERROR_CODES.has(err.code)) throw err;
+						lastError = err;
+					}
 				}
-			}
-			if (!file) {
-				if (lastError instanceof ApiError) throw lastError;
-				throw new ApiError(agentImageErrors.upstreamFailed);
+				if (!file) {
+					if (lastError instanceof ApiError) throw lastError;
+					throw new ApiError(agentImageErrors.upstreamFailed);
+				}
+			} else {
+				file = await this.fetchAndStoreImage({ ...params, instance, imageModel, referenceImages });
 			}
 			await this.agentModelUsageService.finishLog(usageLog, instance, { status: 'success', costOverride: cost });
 			const url = file.webpublicUrl ?? file.url;
@@ -419,6 +611,8 @@ export class AgentImageService {
 		switch (params.imageModel.provider) {
 			case 'aurora':
 				return await this.fetchAuroraAndStoreImage(params);
+			case 'openai':
+				return await this.fetchOpenAiAndStoreImage(params);
 			default:
 				throw new ApiError(agentImageErrors.notConfigured);
 		}
@@ -448,6 +642,7 @@ export class AgentImageService {
 	}
 
 	private async fetchAuroraAndStoreImage(params: FetchImageParams) {
+		if (!params.token) throw new ApiError(agentImageErrors.notConfigured);
 		const providerDefaults = normalizeImageParams(params.imageModel.defaultParams ?? params.instance.agentImageDefaultParams);
 		const sessionSettings = normalizeImageSettings(params.imageSettings);
 		const p = { ...providerDefaults, ...sessionSettings };
@@ -475,17 +670,126 @@ export class AgentImageService {
 
 		const ac = new AbortController();
 		const timeout = setTimeout(() => ac.abort(), 180_000);
-		let res: Response;
 		try {
-			res = await fetch(url, { signal: ac.signal });
+			const res = await fetch(url, { signal: ac.signal });
+			if (!res.ok) throw upstreamImageError(await describeImageUpstreamHttpError(res));
+			const contentType = res.headers.get('content-type');
+			if (!contentType?.toLowerCase().startsWith('image/')) {
+				throw upstreamImageError(`Upstream returned an unsupported content type: ${contentType ?? 'missing Content-Type'}.`);
+			}
+			const buf = Buffer.from(await res.arrayBuffer());
+			return await this.storeGeneratedImage(params, buf, contentType);
+		} catch (err) {
+			if (err instanceof ApiError) throw err;
+			throw upstreamImageError(describeImageRequestFailure(err, ac.signal.aborted));
 		} finally {
 			clearTimeout(timeout);
 		}
-		if (!res.ok) throw new ApiError(agentImageErrors.upstreamFailed);
-		const contentType = res.headers.get('content-type');
-		if (!contentType?.toLowerCase().startsWith('image/')) throw new ApiError(agentImageErrors.upstreamFailed);
-		const buf = Buffer.from(await res.arrayBuffer());
-		if (buf.length <= 0 || buf.length > 20 * 1024 * 1024) throw new ApiError(agentImageErrors.upstreamFailed);
+	}
+
+	private async fetchOpenAiAndStoreImage(params: FetchImageParams) {
+		const apiUrl = params.imageModel.apiUrl?.trim();
+		const apiKey = params.imageModel.apiKey?.trim();
+		const apiModelName = params.imageModel.apiModelName?.trim();
+		if (!apiUrl || !apiKey || !apiModelName) throw new ApiError(agentImageErrors.notConfigured);
+
+		let endpoint: URL;
+		try {
+			endpoint = await assertSafeLlmHttpsUrl(apiUrl);
+		} catch (err) {
+			const diagnostic = err instanceof UnsafeLlmUrlError
+				? describeUnsafeLlmUrlReason(err.reason)
+				: 'The configured OpenAI-compatible endpoint URL is invalid.';
+			throw new ApiError(agentImageErrors.notConfigured, { diagnostic });
+		}
+
+		const ac = new AbortController();
+		const timeout = setTimeout(() => ac.abort(), 180_000);
+		try {
+			const isChatCompletions = endpoint.pathname.replace(/\/+$/, '').endsWith('/chat/completions');
+			const res = await fetch(endpoint, {
+				...(isChatCompletions
+					? buildOpenAiChatImageGenerationRequestInit(apiKey, apiModelName, params.tag, params.referenceImages)
+					: buildOpenAiImageGenerationRequestInit(apiKey, apiModelName, params.tag, params.size, params.referenceImages)),
+				signal: ac.signal,
+			});
+			if (!res.ok) throw upstreamImageError(await describeImageUpstreamHttpError(res));
+
+			let result: OpenAiImageResult;
+			try {
+				const body = JSON.parse(await res.text()) as unknown;
+				result = isChatCompletions ? parseOpenAiChatImageResult(body) : parseOpenAiImageResult(body);
+			} catch (err) {
+				const expected = isChatCompletions
+					? 'choices[0].message content containing a Base64 image or HTTPS image URL'
+					: 'data[0].b64_json or data[0].url';
+				const detail = err instanceof Error ? err.message : 'Unknown response parsing error.';
+				throw upstreamImageError(`Upstream response could not be parsed. Expected ${expected}. ${detail}`);
+			}
+
+			if (result.type === 'base64') {
+				const normalized = result.value.replace(/\s+/g, '');
+				if (!/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(normalized)) {
+					throw upstreamImageError('Upstream response contains invalid Base64 image data.');
+				}
+				const buf = Buffer.from(normalized, 'base64');
+				return await this.storeGeneratedImage(params, buf, 'image/png');
+			}
+
+			let imageUrl: URL;
+			try {
+				imageUrl = await assertSafeLlmHttpsUrl(result.value);
+			} catch (err) {
+				const detail = err instanceof UnsafeLlmUrlError
+					? describeUnsafeLlmUrlReason(err.reason)
+					: 'The image URL returned by the upstream service is invalid.';
+				throw upstreamImageError(detail);
+			}
+			const imageRes = await fetch(imageUrl, { signal: ac.signal });
+			if (!imageRes.ok) throw upstreamImageError(await describeImageUpstreamHttpError(imageRes));
+			const contentType = imageRes.headers.get('content-type');
+			if (!contentType?.toLowerCase().startsWith('image/')) {
+				throw upstreamImageError(`Upstream image URL returned an unsupported content type: ${contentType ?? 'missing Content-Type'}.`);
+			}
+			const buf = Buffer.from(await imageRes.arrayBuffer());
+			return await this.storeGeneratedImage(params, buf, contentType);
+		} catch (err) {
+			if (err instanceof ApiError) throw err;
+			throw upstreamImageError(describeImageRequestFailure(err, ac.signal.aborted));
+		} finally {
+			clearTimeout(timeout);
+		}
+	}
+
+	private async resolveCharacterReferenceImages(characterId: string | null | undefined): Promise<AgentReferenceImage[]> {
+		if (!characterId) return [];
+		const character = await this.agentCharactersRepository.findOneBy({ id: characterId });
+		const ids = [...new Set((Array.isArray(character?.referenceImageFileIds)
+			? character.referenceImageFileIds
+			: character?.referenceImageFileId ? [character.referenceImageFileId] : [])
+			.filter((id): id is string => typeof id === 'string' && id !== ''))].slice(0, 4);
+		return (await Promise.all(ids.map(async (id): Promise<AgentReferenceImage | null> => {
+			const file = await this.driveFilesRepository.findOneBy({ id });
+			if (!file || !file.type.startsWith('image/') || file.size <= 0 || file.size > 5 * 1024 * 1024) return null;
+			const ac = new AbortController();
+			const timeout = setTimeout(() => ac.abort(), 30_000);
+			try {
+				const res = await fetch(this.driveFileEntityService.getPublicUrl(file), { signal: ac.signal });
+				if (!res.ok) return null;
+				const data = Buffer.from(await res.arrayBuffer());
+				if (data.length === 0 || data.length > 5 * 1024 * 1024) return null;
+				return { contentType: file.type, data };
+			} catch {
+				return null;
+			} finally {
+				clearTimeout(timeout);
+			}
+		}))).filter((image): image is AgentReferenceImage => image != null);
+	}
+
+	private async storeGeneratedImage(params: FetchImageParams, buf: Buffer, contentType: string | null) {
+		if (buf.length <= 0) throw upstreamImageError('Upstream returned an empty image file.');
+		if (buf.length > 20 * 1024 * 1024) throw upstreamImageError('Upstream returned an image larger than the 20 MiB limit.');
 		await this.ensureAgentImageDriveSpace(params.user, buf.length);
 
 		const dir = await mkdtemp(join(tmpdir(), 'misskey-agent-image-'));

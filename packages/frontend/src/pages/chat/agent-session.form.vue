@@ -26,6 +26,11 @@ SPDX-License-Identifier: AGPL-3.0-only
 		</button>
 	</div>
 	<div :class="$style.compose">
+		<div v-if="file && !editing" :class="$style.filePreview">
+			<img :src="file.thumbnailUrl ?? file.url" :class="$style.filePreviewImage" alt=""/>
+			<span :class="$style.filePreviewName">{{ file.name }}</span>
+			<button class="_button" :class="$style.fileRemove" type="button" :title="i18n.ts.remove" @click="file = null"><i class="ti ti-x"></i></button>
+		</div>
 		<textarea
 			ref="textareaEl"
 			v-model="text"
@@ -37,6 +42,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		></textarea>
 		<footer :class="$style.footer">
 			<div :class="$style.buttons">
+				<button v-if="!editing" class="_button" :class="$style.button" type="button" :disabled="disabled || sending || !attachmentEnabled" :title="i18n.ts.selectFile" @click="chooseFile"><i class="ti ti-photo-plus"></i></button>
 				<button class="_button" :class="$style.button" type="button" @click="insertEmoji"><i class="ti ti-mood-happy"></i></button>
 				<button
 					v-if="sending"
@@ -72,25 +78,30 @@ import { i18n } from '@/i18n.js';
 import { prefer } from '@/preferences.js';
 import { Autocomplete } from '@/utility/autocomplete.js';
 import { emojiPicker } from '@/utility/emoji-picker.js';
+import type { DriveFile } from 'misskey-js/entities.js';
+import { selectFile } from '@/utility/drive.js';
+import * as os from '@/os.js';
 
 const props = defineProps<{
 	disabled?: boolean;
 	sending?: boolean;
+	attachmentEnabled?: boolean;
 	editing?: { id: string; preview: string } | null;
 }>();
 
 const emit = defineEmits<{
-	(e: 'submit', text: string): void;
+	(e: 'submit', payload: { text: string; file: DriveFile | null }): void;
 	(e: 'cancelEdit'): void;
 	(e: 'abort'): void;
 }>();
 
 const textareaEl = shallowRef<HTMLTextAreaElement>();
 const text = ref('');
+const file = ref<DriveFile | null>(null);
 const textareaReadOnly = ref(false);
 let autocompleteInstance: Autocomplete | null = null;
 
-const sendDisabled = computed(() => props.disabled || props.sending || text.value.trim().length === 0);
+const sendDisabled = computed(() => props.disabled || props.sending || (text.value.trim().length === 0 && file.value == null));
 
 const submitTitle = computed(() => props.editing ? i18n.ts.save : i18n.ts.send);
 
@@ -115,11 +126,21 @@ function onKeydown(ev: KeyboardEvent) {
 
 function submit() {
 	const t = text.value.trim();
-	if (!t || props.sending || props.disabled) return;
-	emit('submit', t);
+	if ((!t && file.value == null) || props.sending || props.disabled) return;
+	emit('submit', { text: t, file: file.value });
 	if (!props.editing) {
 		text.value = '';
+		file.value = null;
 	}
+}
+
+async function chooseFile(ev: PointerEvent) {
+	const selected = await selectFile({ anchorElement: ev.currentTarget ?? ev.target, multiple: false, label: i18n.ts.selectFile });
+	if (!selected.type.startsWith('image/')) {
+		await os.alert({ type: 'error', text: i18n.ts._agents.imageMessageImagesOnly });
+		return;
+	}
+	file.value = selected;
 }
 
 function onCancelEdit() {
@@ -146,7 +167,9 @@ defineExpose({
 	focus: () => textareaEl.value?.focus(),
 	restoreDraft,
 	setText,
+	setAttachment: (next: DriveFile | null) => { file.value = next; },
 	clearText,
+	clearAttachment: () => { file.value = null; },
 });
 
 watch(() => props.editing?.id ?? null, async (id) => {
@@ -214,6 +237,36 @@ onBeforeUnmount(() => {
 	flex-direction: column;
 	width: 100%;
 	min-width: 0;
+}
+
+.filePreview {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 8px 12px;
+	border-bottom: 1px solid var(--MI_THEME-divider);
+	background: var(--MI_THEME-panel);
+}
+
+.filePreviewImage {
+	width: 42px;
+	height: 42px;
+	object-fit: cover;
+	border-radius: 6px;
+}
+
+.filePreviewName {
+	min-width: 0;
+	flex: 1;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.fileRemove {
+	width: 32px;
+	height: 32px;
+	border-radius: 6px;
 }
 
 .textarea {

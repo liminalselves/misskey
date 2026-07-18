@@ -45,6 +45,7 @@ import { AggregateRetentionProcessorService } from './processors/AggregateRetent
 import { ExportFavoritesProcessorService } from './processors/ExportFavoritesProcessorService.js';
 import { DecayFeaturedNotesRankingProcessorService } from './processors/DecayFeaturedNotesRankingProcessorService.js';
 import { RelationshipProcessorService } from './processors/RelationshipProcessorService.js';
+import { ProcessAgentProactiveMessagesProcessorService } from './processors/ProcessAgentProactiveMessagesProcessorService.js';
 
 @Module({
 	imports: [
@@ -81,6 +82,7 @@ import { RelationshipProcessorService } from './processors/RelationshipProcessor
 		DeleteFileProcessorService,
 		CleanRemoteFilesProcessorService,
 		RelationshipProcessorService,
+		ProcessAgentProactiveMessagesProcessorService,
 		UserWebhookDeliverProcessorService,
 		SystemWebhookDeliverProcessorService,
 		EndedPollNotificationProcessorService,

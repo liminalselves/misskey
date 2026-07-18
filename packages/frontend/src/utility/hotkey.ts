@@ -111,6 +111,7 @@ const parseOptions = (rawCallback: Keymap[keyof Keymap]) => {
 const matchPatterns = (ev: KeyboardEvent, action: Action) => {
 	const { patterns, options, callback } = action;
 	if (ev.repeat && !options.allowRepeat) return false;
+	if (typeof ev.key !== 'string') return false;
 	const key = ev.key.toLowerCase();
 	return patterns.some(({ which, ctrl, shift, alt }) => {
 		if (

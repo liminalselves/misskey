@@ -12,7 +12,7 @@ import { DI } from '@/di-symbols.js';
 import { AgentService } from '@/core/AgentService.js';
 import { UserEntityService } from '@/core/entities/UserEntityService.js';
 import { DriveFileEntityService } from '@/core/entities/DriveFileEntityService.js';
-import { escapeIlikePattern, packCharacterGovernanceRow, packStyleGovernanceRow } from '../_utils.js';
+import { escapeIlikePattern, packCharacterGovernanceRow, packStyleGovernanceRow, resolveUserIdFromAcctOrId } from '../_utils.js';
 
 export const meta = {
 	tags: ['admin', 'agents'],
@@ -33,7 +33,7 @@ export const paramDef = {
 	properties: {
 		kind: { type: 'string', enum: ['all', 'character', 'style'], default: 'all' },
 		status: { type: 'string', enum: ['pending', 'published', 'rejected', 'draft', 'all'], default: 'pending' },
-		userId: { type: 'string', format: 'misskey:id', nullable: true },
+		userId: { type: 'string', minLength: 1, maxLength: 256, nullable: true },
 		query: { type: 'string', minLength: 1, maxLength: 256, nullable: true },
 		limit: { type: 'integer', minimum: 1, maximum: 200, default: 50 },
 		untilId: { type: 'string', format: 'misskey:id', nullable: true },
@@ -63,6 +63,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			const status = ps.status ?? 'pending';
 			const limit = ps.limit ?? 50;
 			const query = ps.query?.trim();
+			const userId = await resolveUserIdFromAcctOrId(this.usersRepository, ps.userId);
 			const orderDir = status === 'pending' ? 'ASC' : 'DESC';
 			const cursor = ps.untilId == null ? null : (await this.agentCharactersRepository.findOne({
 				where: { id: ps.untilId },
@@ -84,7 +85,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					.orderBy('c.updatedAt', orderDir)
 					.take(limit);
 				if (status !== 'all') qb.andWhere('c.reviewStatus = :status', { status });
-				if (ps.userId) qb.andWhere('c.userId = :userId', { userId: ps.userId });
+				if (userId) qb.andWhere('c.userId = :userId', { userId });
 				if (cursor) {
 					qb.andWhere(orderDir === 'ASC'
 						? '(c.updatedAt > :cursorUpdatedAt OR (c.updatedAt = :cursorUpdatedAt AND c.id > :cursorId))'
@@ -111,7 +112,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					.orderBy('s.updatedAt', orderDir)
 					.take(limit);
 				if (status !== 'all') qb.andWhere('s.reviewStatus = :status', { status });
-				if (ps.userId) qb.andWhere('s.userId = :userId', { userId: ps.userId });
+				if (userId) qb.andWhere('s.userId = :userId', { userId });
 				if (cursor) {
 					qb.andWhere(orderDir === 'ASC'
 						? '(s.updatedAt > :cursorUpdatedAt OR (s.updatedAt = :cursorUpdatedAt AND s.id > :cursorId))'

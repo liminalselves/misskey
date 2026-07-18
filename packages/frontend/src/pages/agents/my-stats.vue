@@ -303,7 +303,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, onMounted, ref, shallowRef, watch } from 'vue';
 import MkLoading from '@/components/global/MkLoading.vue';
 import MkInfo from '@/components/MkInfo.vue';
 import MkFolder from '@/components/MkFolder.vue';
@@ -311,10 +311,12 @@ import MkNumber from '@/components/MkNumber.vue';
 import MkButton from '@/components/MkButton.vue';
 import MkInput from '@/components/MkInput.vue';
 import { misskeyApi, formatApiError } from '@/utility/misskey-api.js';
-import { i18n } from '@/i18n.js';
+import { i18n, updateI18n } from '@/i18n.js';
 import * as os from '@/os.js';
+import { lang, version } from '@@/js/config.js';
+import type { Locale } from 'i18n';
 
-type UsageKind = 'chat' | 'compression' | 'image_generation';
+type UsageKind = 'chat' | 'compression' | 'image_generation' | 'vision' | 'proactive_random' | 'proactive_scheduled';
 
 type RecentLog = {
 	id: string;
@@ -556,10 +558,69 @@ function toBJT(iso: string): string {
 	return d.toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false });
 }
 
+type AgentUsageLocaleKey =
+	| 'billingKindUsage'
+	| 'billingKindChatUsage'
+	| 'billingKindCompressionUsage'
+	| 'billingKindImageGenerationUsage'
+	| 'billingKindVisionUsage'
+	| 'billingKindProactiveRandomUsage'
+	| 'billingKindProactiveScheduledUsage'
+	| 'usageLogKindChat'
+	| 'usageLogKindCompression'
+	| 'usageLogKindImageGeneration'
+	| 'usageLogKindVision'
+	| 'usageLogKindProactiveRandom'
+	| 'usageLogKindProactiveScheduled';
+
+const agentUsageLocaleLabels = shallowRef<Partial<Record<AgentUsageLocaleKey, unknown>>>(i18n.locale._agents as Partial<Record<AgentUsageLocaleKey, unknown>>);
+const agentUsageLocaleKeys: AgentUsageLocaleKey[] = [
+	'billingKindImageGenerationUsage',
+	'billingKindVisionUsage',
+	'billingKindProactiveRandomUsage',
+	'billingKindProactiveScheduledUsage',
+	'usageLogKindImageGeneration',
+	'usageLogKindVision',
+	'usageLogKindProactiveRandom',
+	'usageLogKindProactiveScheduled',
+];
+
+async function refreshAgentUsageLocaleLabels(): Promise<void> {
+	if (agentUsageLocaleKeys.every(key => typeof agentUsageLocaleLabels.value[key] === 'string')) return;
+
+	try {
+		const response = await window.fetch(`/assets/locales/${lang}.${version}.json`, { cache: 'no-store' });
+		if (!response.ok) return;
+
+		const locale = await response.json() as Locale;
+		const labels = locale._agents as Partial<Record<AgentUsageLocaleKey, unknown>>;
+		if (!agentUsageLocaleKeys.every(key => typeof labels[key] === 'string')) return;
+
+		updateI18n(locale);
+		agentUsageLocaleLabels.value = labels;
+	} catch {
+		// Keep the existing localized fallback when the refreshed locale is unavailable.
+	}
+}
+
+function agentUsageLocaleLabel(key: AgentUsageLocaleKey, fallbackKey: AgentUsageLocaleKey): string {
+	// During a locale hot update, a page can briefly retain an older locale object.
+	// Read it directly so the development i18n proxy cannot turn a missing string into an object.
+	const labels = agentUsageLocaleLabels.value;
+	const value = labels[key];
+	if (typeof value === 'string') return value;
+
+	const fallback = labels[fallbackKey];
+	return typeof fallback === 'string' ? fallback : '';
+}
+
 function usageLogKindLabel(usageKind: UsageKind | undefined): string {
-	if (usageKind === 'image_generation') return '生图';
-	if (usageKind === 'compression') return i18n.ts._agents.usageLogKindCompression;
-	return i18n.ts._agents.usageLogKindChat;
+	if (usageKind === 'image_generation') return agentUsageLocaleLabel('usageLogKindImageGeneration', 'usageLogKindChat');
+	if (usageKind === 'vision') return agentUsageLocaleLabel('usageLogKindVision', 'usageLogKindChat');
+	if (usageKind === 'compression') return agentUsageLocaleLabel('usageLogKindCompression', 'usageLogKindChat');
+	if (usageKind === 'proactive_random') return agentUsageLocaleLabel('usageLogKindProactiveRandom', 'usageLogKindChat');
+	if (usageKind === 'proactive_scheduled') return agentUsageLocaleLabel('usageLogKindProactiveScheduled', 'usageLogKindChat');
+	return agentUsageLocaleLabel('usageLogKindChat', 'billingKindUsage');
 }
 
 function statusLabel(status: 'success' | 'failed' | 'aborted'): string {
@@ -569,10 +630,13 @@ function statusLabel(status: 'success' | 'failed' | 'aborted'): string {
 }
 
 function billingUsageSubkindLabel(item: BillingItem): string {
-	if (item.kind !== 'usage') return i18n.ts._agents.billingKindUsage;
-	if (item.usageKind === 'image_generation') return '生图扣费';
-	if (item.usageKind === 'compression') return i18n.ts._agents.billingKindCompressionUsage;
-	return i18n.ts._agents.billingKindChatUsage;
+	if (item.kind !== 'usage') return agentUsageLocaleLabel('billingKindUsage', 'usageLogKindChat');
+	if (item.usageKind === 'image_generation') return agentUsageLocaleLabel('billingKindImageGenerationUsage', 'billingKindUsage');
+	if (item.usageKind === 'vision') return agentUsageLocaleLabel('billingKindVisionUsage', 'billingKindUsage');
+	if (item.usageKind === 'compression') return agentUsageLocaleLabel('billingKindCompressionUsage', 'billingKindUsage');
+	if (item.usageKind === 'proactive_random') return agentUsageLocaleLabel('billingKindProactiveRandomUsage', 'billingKindUsage');
+	if (item.usageKind === 'proactive_scheduled') return agentUsageLocaleLabel('billingKindProactiveScheduledUsage', 'billingKindUsage');
+	return agentUsageLocaleLabel('billingKindChatUsage', 'billingKindUsage');
 }
 
 function billingUsageRowStatus(status: string | null | undefined): string {
@@ -596,7 +660,8 @@ function formatBillingAmount(item: BillingItem): string {
 
 onMounted(async () => {
 	try {
-		const [summaryRes] = await Promise.all([
+		const [, summaryRes] = await Promise.all([
+			refreshAgentUsageLocaleLabels(),
 			misskeyApi('agents/my-usage-summary' as any, {
 				limit: PAGE_SIZE,
 				recentLogsPage: 1,
@@ -703,6 +768,10 @@ onMounted(async () => {
 	gap: 8px;
 	font-size: 0.9em;
 
+	> * {
+		min-width: 0;
+	}
+
 	&:not(:last-child) {
 		border-bottom: solid 1px var(--MI_THEME-divider);
 	}
@@ -729,7 +798,7 @@ onMounted(async () => {
 }
 
 .billingCols {
-	grid-template-columns: 1.6fr 0.7fr 1.5fr 0.8fr;
+	grid-template-columns: minmax(170px, 1.3fr) minmax(180px, 1.1fr) minmax(120px, 1fr) minmax(80px, 0.55fr);
 }
 
 .modelCols {
@@ -809,6 +878,7 @@ onMounted(async () => {
 	align-items: center;
 	gap: 0.15em;
 	max-width: 100%;
+	overflow: hidden;
 	padding: 2px 8px;
 	border-radius: 999px;
 	font-size: 0.82em;
@@ -819,14 +889,19 @@ onMounted(async () => {
 }
 
 .billingStatusPrefix {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 	font-weight: 500;
 }
 
 .billingStatusSep {
+	flex: none;
 	opacity: 0.5;
 }
 
 .billingStatusValue {
+	flex: none;
 	font-weight: 700;
 }
 

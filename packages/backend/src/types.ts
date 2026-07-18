@@ -50,6 +50,7 @@ export const notificationTypes = [
 	'agentReviewRejected',
 	'agentCharacterBanned',
 	'agentSessionBanned',
+	'agentProactiveMessage',
 ] as const;
 
 export const groupedNotificationTypes = [
@@ -408,6 +409,7 @@ export type ModerationLogPayloads = {
 		decision: 'approve' | 'reject';
 		name: string;
 		ownerUserId: string;
+		ownerAcct?: string | null;
 		reviewStatus: string;
 		publishedVersion: number | null;
 		isPublished: boolean;
@@ -419,6 +421,7 @@ export type ModerationLogPayloads = {
 		sessionId: string;
 		sessionName: string;
 		userId: string;
+		userAcct?: string | null;
 		characterId: string;
 		banned: boolean;
 		before: boolean;
@@ -428,6 +431,7 @@ export type ModerationLogPayloads = {
 		characterId: string;
 		characterName: string;
 		ownerUserId: string;
+		ownerAcct?: string | null;
 		banned: boolean;
 		before: boolean;
 		reason?: string | null;

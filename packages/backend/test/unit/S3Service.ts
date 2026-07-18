@@ -9,6 +9,7 @@ import * as http from 'node:http';
 import {
 	CompleteMultipartUploadCommand,
 	CreateMultipartUploadCommand,
+	GetObjectCommand,
 	PutObjectCommand,
 	PutObjectAclCommand,
 	S3Client,
@@ -92,6 +93,31 @@ describe('S3Service', () => {
 				Key: 'fake',
 				ACL: 'private',
 			});
+		});
+	});
+
+	describe('getSignedDownloadUrl', () => {
+		test('trims object storage credentials before signing', async () => {
+			const url = await s3Service.getSignedDownloadUrl({
+				objectStorageEndpoint: ' example.com ',
+				objectStorageAccessKey: ' test-access-key ',
+				objectStorageSecretKey: ' fake-secret ',
+				objectStorageRegion: ' cn-guangzhou ',
+				objectStorageUseSSL: false,
+				objectStorageUseProxy: false,
+				objectStorageS3ForcePathStyle: true,
+			} as MiMeta, {
+				Bucket: 'fake',
+				Key: 'fake.png',
+			});
+
+			const signedUrl = new URL(url);
+
+			expect(signedUrl.host).toBe('example.com');
+			expect(signedUrl.searchParams.get('X-Amz-Credential')).toContain('test-access-key/');
+			expect(signedUrl.searchParams.get('X-Amz-Credential')).not.toContain(' test-access-key');
+			expect(url).not.toContain('%20test-access-key');
+			expect(s3Mock.commandCalls(GetObjectCommand)).toHaveLength(0);
 		});
 	});
 });

@@ -155,6 +155,7 @@ export class AgentCompressionMemoryService {
 			globalPrompt: instanceMeta.agentGlobalSystemPrompt,
 			character,
 			style,
+			timeAwarenessEnabled: session.timeAwarenessEnabled === true,
 		});
 		const memReserve = this.computeAliyunMemoryXmlReserveIfActive(provider, session, instanceMeta);
 		const maxComp = Math.max(200, Math.min(50_000, session.agentLongMemoryInjectMaxChars));
@@ -164,7 +165,8 @@ export class AgentCompressionMemoryService {
 		// 世界书已从 system 移除、改由 directive 的 <active-worldbook> 交付，这里按「全部已启用条目」保守预扣（上界），
 		// 与世界书曾整段写入 system 时的预留量一致，避免上下文溢出回归。
 		const budgetWorldbook = this.agentService.buildBudgetWorldbookEntries(character);
-		const directiveChars = this.agentService.buildLatestUserDirectiveBlock(style, budgetWorldbook).length;
+		const directiveChars = this.agentService.buildLatestUserDirectiveBlock(style, budgetWorldbook).length
+			+ (session.timeAwarenessEnabled === true ? this.agentService.buildCurrentBeijingTimeBlock().length + 1 : 0);
 		const historyBudget = this.agentService.computeChatHistoryCharBudget({
 			maxContextTokens,
 			maxOutputTokensPerCall,

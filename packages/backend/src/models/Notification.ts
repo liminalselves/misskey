@@ -194,6 +194,15 @@ export type MiNotification = {
 	sessionId: string;
 	sessionName: string;
 	banned: boolean;
+} | {
+	type: 'agentProactiveMessage';
+	id: string;
+	createdAt: string;
+	sessionId: string;
+	sessionName: string;
+	agentAvatarUrl: string | null;
+	messageId: string;
+	messageText: string;
 };
 
 export type MiGroupedNotification = MiNotification | {
