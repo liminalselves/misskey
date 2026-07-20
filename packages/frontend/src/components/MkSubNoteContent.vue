@@ -5,12 +5,17 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <template>
 <div :class="[$style.root, { [$style.collapsed]: collapsed }]">
-	<div>
-		<span v-if="note.isHidden" style="opacity: 0.5">({{ i18n.ts.private }})</span>
-		<span v-if="note.deletedAt" style="opacity: 0.5">({{ i18n.ts.deletedNote }})</span>
-		<MkA v-if="note.replyId" :class="$style.reply" :to="`/notes/${note.replyId}`"><i class="ti ti-arrow-back-up"></i></MkA>
-		<Mfm v-if="note.text" :text="note.text" :author="note.user" :nyaize="'respect'" :emojiUrls="note.emojis"/>
-		<MkA v-if="note.renoteId" :class="$style.rp" :to="`/notes/${note.renoteId}`">RN: ...</MkA>
+	<div :class="$style.contentLine">
+		<div :class="$style.contentBody">
+			<span v-if="note.isHidden" style="opacity: 0.5">({{ i18n.ts.private }})</span>
+			<span v-if="note.deletedAt" style="opacity: 0.5">({{ i18n.ts.deletedNote }})</span>
+			<MkA v-if="note.replyId" :class="$style.reply" :to="`/notes/${note.replyId}`"><i class="ti ti-arrow-back-up"></i></MkA>
+			<Mfm v-if="note.text" :text="note.text" :author="note.user" :nyaize="'respect'" :emojiUrls="note.emojis"/>
+			<MkA v-if="note.renoteId" :class="$style.rp" :to="`/notes/${note.renoteId}`">RN: ...</MkA>
+		</div>
+		<div v-if="$slots.tail" :class="$style.tail">
+			<slot name="tail"></slot>
+		</div>
 	</div>
 	<details v-if="note.files && note.files.length > 0">
 		<summary>({{ i18n.tsx.withNFiles({ n: note.files.length }) }})</summary>
@@ -88,6 +93,25 @@ const collapsed = ref(isLong);
 			}
 		}
 	}
+}
+
+.contentLine {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	min-width: 0;
+}
+
+.contentBody {
+	flex: 1 1 auto;
+	min-width: 0;
+	text-align: left;
+}
+
+.tail {
+	flex: 0 0 auto;
+	margin-left: auto;
+	text-align: right;
 }
 
 .reply {

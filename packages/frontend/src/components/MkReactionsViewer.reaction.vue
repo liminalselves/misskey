@@ -8,7 +8,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 	ref="buttonEl"
 	v-ripple="canToggle"
 	class="_button"
-	:class="[$style.root, { [$style.reacted]: myReaction == reaction, [$style.canToggle]: canToggle, [$style.small]: prefer.s.reactionsDisplaySize === 'small', [$style.large]: prefer.s.reactionsDisplaySize === 'large' }]"
+	:class="[$style.root, { [$style.reacted]: myReaction == reaction, [$style.canToggle]: canToggle, [$style.small]: prefer.s.reactionsDisplaySize === 'small', [$style.large]: prefer.s.reactionsDisplaySize === 'large', [$style.compact]: compact }]"
 	@click="toggleReaction()"
 	@contextmenu.prevent.stop="menu"
 >
@@ -47,6 +47,7 @@ const props = defineProps<{
 	myReaction: Misskey.entities.Note['myReaction'];
 	count: number;
 	isInitial: boolean;
+	compact?: boolean;
 }>();
 
 const mock = inject(DI.mock, false);
@@ -291,6 +292,17 @@ if (!mock) {
 		> .count {
 			font-size: 0.6em;
 			line-height: 52px;
+		}
+	}
+
+	&.compact {
+		height: 28px;
+		font-size: 1em;
+		border-radius: 5px;
+
+		> .count {
+			font-size: 0.8em;
+			line-height: 28px;
 		}
 	}
 

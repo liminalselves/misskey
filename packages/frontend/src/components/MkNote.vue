@@ -45,7 +45,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<MkAvatar :class="$style.collapsedRenoteTargetAvatar" :user="appearNote.user" link preview/>
 		<Mfm :text="getNoteSummary(appearNote)" :plain="true" :nowrap="true" :author="appearNote.user" :nyaize="'respect'" :class="$style.collapsedRenoteTargetText" @click="renoteCollapsed = false"/>
 	</div>
-	<article v-else :class="$style.article" @contextmenu.stop="onContextmenu">
+	<article v-else :class="$style.article" @click="openDetail" @contextmenu.stop="onContextmenu">
 		<div v-if="appearNote.channel" :class="$style.colorBar" :style="{ background: appearNote.channel.color }"></div>
 		<MkAvatar :class="[$style.avatar, prefer.s.useStickyIcons ? $style.useSticky : null]" :user="appearNote.user" :link="!mock" :preview="!mock"/>
 		<div :class="$style.main">
@@ -87,23 +87,24 @@ SPDX-License-Identifier: AGPL-3.0-only
 							</div>
 						</div>
 					</div>
-					<div v-if="appearNote.files && appearNote.files.length > 0" style="margin-top: 8px;">
+					<div v-if="appearNote.files && appearNote.files.length > 0" data-note-interactive style="margin-top: 8px;">
 						<MkMediaList ref="galleryEl" :mediaList="appearNote.files"/>
 					</div>
-					<MkPoll
-						v-if="appearNote.poll"
-						:noteId="appearNote.id"
-						:multiple="appearNote.poll.multiple"
-						:expiresAt="appearNote.poll.expiresAt"
-						:choices="$appearNote.pollChoices"
-						:author="appearNote.user"
-						:emojiUrls="appearNote.emojis"
-						:class="$style.poll"
-					/>
-					<div v-if="isEnabledUrlPreview">
+					<div v-if="appearNote.poll" data-note-interactive>
+						<MkPoll
+							:noteId="appearNote.id"
+							:multiple="appearNote.poll.multiple"
+							:expiresAt="appearNote.poll.expiresAt"
+							:choices="$appearNote.pollChoices"
+							:author="appearNote.user"
+							:emojiUrls="appearNote.emojis"
+							:class="$style.poll"
+						/>
+					</div>
+					<div v-if="isEnabledUrlPreview" data-note-interactive>
 						<MkUrlPreview v-for="url in urls" :key="url" :url="url" :compact="true" :detail="false" :class="$style.urlPreview"/>
 					</div>
-					<div v-if="appearNote.renoteId" :class="$style.quote"><MkNoteSimple :note="appearNote?.renote ?? null" :class="$style.quoteNote"/></div>
+					<div v-if="appearNote.renoteId" data-note-interactive :class="$style.quote"><MkNoteSimple :note="appearNote?.renote ?? null" :class="$style.quoteNote"/></div>
 					<button v-if="isLong && collapsed" :class="$style.collapsed" class="_button" @click="collapsed = false">
 						<span :class="$style.collapsedLabel">{{ i18n.ts.showMore }}</span>
 					</button>
@@ -113,20 +114,20 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</div>
 				<MkA v-if="appearNote.channel && !inChannel" :class="$style.channel" :to="`/channels/${appearNote.channel.id}`"><i class="ti ti-device-tv"></i> {{ appearNote.channel.name }}</MkA>
 			</div>
-			<MkReactionsViewer
-				v-if="appearNote.reactionAcceptance !== 'likeOnly'"
-				style="margin-top: 6px;"
-				:reactions="$appearNote.reactions"
-				:reactionEmojis="$appearNote.reactionEmojis"
-				:myReaction="$appearNote.myReaction"
-				:noteId="appearNote.id"
-				:maxNumber="16"
-				@mockUpdateMyReaction="emitUpdReaction"
-			>
-				<template #more>
-					<MkA :to="`/notes/${appearNote.id}/reactions`" :class="[$style.reactionOmitted]">{{ i18n.ts.more }}</MkA>
-				</template>
-			</MkReactionsViewer>
+			<div v-if="appearNote.reactionAcceptance !== 'likeOnly'" data-note-interactive style="margin-top: 6px;">
+				<MkReactionsViewer
+					:reactions="$appearNote.reactions"
+					:reactionEmojis="$appearNote.reactionEmojis"
+					:myReaction="$appearNote.myReaction"
+					:noteId="appearNote.id"
+					:maxNumber="16"
+					@mockUpdateMyReaction="emitUpdReaction"
+				>
+					<template #more>
+						<MkA :to="`/notes/${appearNote.id}/reactions`" :class="[$style.reactionOmitted]">{{ i18n.ts.more }}</MkA>
+					</template>
+				</MkReactionsViewer>
+			</div>
 			<footer :class="$style.footer">
 				<button :class="$style.footerButton" class="_button" @click="reply()">
 					<i class="ti ti-arrow-back-up"></i>
@@ -247,6 +248,7 @@ import { prefer } from '@/preferences.js';
 import { getPluginHandlers } from '@/plugin.js';
 import { DI } from '@/di.js';
 import { globalEvents } from '@/events.js';
+import { useRouter } from '@/router.js';
 
 const props = withDefaults(defineProps<{
 	note: Misskey.entities.Note;
@@ -265,6 +267,7 @@ const emit = defineEmits<{
 }>();
 
 const inTimeline = inject<boolean>('inTimeline', false);
+const router = useRouter();
 const tl_withSensitive = inject<Ref<boolean>>('tl_withSensitive', ref(true));
 const inChannel = inject('inChannel', null);
 const currentClip = inject<Ref<Misskey.entities.Clip> | null>('currentClip', null);
@@ -392,7 +395,7 @@ const keymap = {
 		if (renoteCollapsed.value) return;
 		galleryEl.value?.openGallery();
 	},
-	'v|enter': () => {
+	'v': () => {
 		if (renoteCollapsed.value) {
 			renoteCollapsed.value = false;
 		} else if (appearNote.cw != null) {
@@ -401,6 +404,7 @@ const keymap = {
 			collapsed.value = !collapsed.value;
 		}
 	},
+	'enter': () => openDetail(),
 	'esc': {
 		allowRepeat: true,
 		callback: () => blur(),
@@ -486,6 +490,20 @@ async function renote() {
 	os.popupMenu(menu, renoteButton.value);
 
 	subscribeManuallyToNoteCapture();
+}
+
+function openDetail(ev?: MouseEvent): void {
+	if (props.mock) return;
+	if (ev != null) {
+		if (ev.defaultPrevented || window.getSelection()?.toString() !== '') return;
+		if (isInteractiveTarget(ev.target)) return;
+	}
+
+	router.pushByPath(notePage(appearNote), 'forcePage');
+}
+
+function isInteractiveTarget(target: EventTarget | null): boolean {
+	return target instanceof Element && target.closest('a, button, input, select, textarea, option, label, summary, video, audio, [contenteditable], [data-note-interactive]') != null;
 }
 
 async function reply() {
@@ -890,6 +908,7 @@ function emitUpdReaction(emoji: string, delta: number) {
 	position: relative;
 	display: flex;
 	padding: 28px 32px;
+	cursor: pointer;
 }
 
 .colorBar {
@@ -1022,6 +1041,8 @@ function emitUpdReaction(emoji: string, delta: number) {
 .footerButton {
 	margin: 0;
 	padding: 8px;
+	min-width: 44px;
+	min-height: 44px;
 	color: color-mix(in srgb, var(--MI_THEME-panel), var(--MI_THEME-fg) 70%); // opacityなど不透明度で表現するとレンダリングパフォーマンスに影響するので通常の色の混合で代用
 
 	&:not(:last-child) {

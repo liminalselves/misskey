@@ -49,6 +49,16 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 	<!-- デスクトップおよび通常のモバイルヘッダー -->
 	<div v-else :class="[$style.upper, { [$style.slim]: narrow, [$style.thin]: thin_ }]">
+		<button
+			v-if="!thin_ && showBack"
+			v-tooltip.noDelay="i18n.ts.goBack"
+			type="button"
+			class="_button"
+			:class="$style.leadingBack"
+			@click="goBack"
+		>
+			<i class="ti ti-chevron-left ti-fw"></i>
+		</button>
 		<div v-if="!thin_ && narrow && props.displayMyAvatar && $i" class="_button" @click="openAccountMenu">
 			<MkAvatar :class="$style.avatar" :user="$i"/>
 		</div>
@@ -99,8 +109,10 @@ export type PageHeaderProps = {
 	displayMyAvatar?: boolean;
 	/** チャットルーム等：狭い幅では1行に戻る・タイトル・タブ・操作。デスクトップは通常ヘッダー */
 	narrowMergedRow?: boolean;
-	/** narrowMergedRow かつ狭い幅のとき先頭に戻る */
+	/** 先頭に戻る操作を表示する */
 	showBack?: boolean;
+	/** 戻る履歴がない場合の遷移先 */
+	backPath?: string;
 };
 </script>
 
@@ -119,6 +131,7 @@ const props = withDefaults(defineProps<PageHeaderProps>(), {
 	tabs: () => ([] as Tab[]),
 	narrowMergedRow: false,
 	showBack: false,
+	backPath: '/chat',
 });
 
 const emit = defineEmits<{
@@ -143,11 +156,12 @@ const showLowerTabs = computed(() =>
 const router = useRouter();
 
 function goBack() {
-	// Nirax の Router に .back() は無い。popstate で mainRouter と同期するため history を使う
-	if (window.history.length > 1) {
+	// Nirax の Router に .back() は無い。アプリ内遷移では pushState により state が設定されるため、
+	// アドレスバー等から直接開いたページでブラウザ外へ戻ることを避ける。
+	if (window.history.state != null && window.history.length > 1) {
 		window.history.back();
 	} else {
-		router.push('/chat');
+		router.pushByPath(props.backPath, 'forcePage');
 	}
 }
 

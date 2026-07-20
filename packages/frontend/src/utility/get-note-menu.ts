@@ -25,6 +25,7 @@ import { genEmbedCode } from '@/utility/get-embed-code.js';
 import { prefer } from '@/preferences.js';
 import { getPluginHandlers } from '@/plugin.js';
 import { globalEvents } from '@/events.js';
+import { mainRouter } from '@/router.js';
 
 const isInBrowserTranslationAvailable = (
 	'LanguageDetector' in window &&
@@ -284,6 +285,10 @@ export function getNoteMenu(props: {
 	}
 
 	function openDetail(): void {
+		mainRouter.pushByPath(`/notes/${appearNote.id}`, 'forcePage');
+	}
+
+	function openInWindow(): void {
 		os.pageWindow(`/notes/${appearNote.id}`);
 	}
 
@@ -353,6 +358,10 @@ export function getNoteMenu(props: {
 			icon: 'ti ti-info-circle',
 			text: i18n.ts.details,
 			action: openDetail,
+		}, {
+			icon: 'ti ti-app-window',
+			text: i18n.ts.openInWindow,
+			action: openInWindow,
 		}, {
 			icon: 'ti ti-copy',
 			text: i18n.ts.copyContent,
@@ -514,6 +523,10 @@ export function getNoteMenu(props: {
 			icon: 'ti ti-info-circle',
 			text: i18n.ts.details,
 			action: openDetail,
+		}, {
+			icon: 'ti ti-app-window',
+			text: i18n.ts.openInWindow,
+			action: openInWindow,
 		}, {
 			icon: 'ti ti-copy',
 			text: i18n.ts.copyContent,

@@ -11,13 +11,13 @@ SPDX-License-Identifier: AGPL-3.0-only
 	:class="$style.root"
 	tabindex="0"
 >
-	<div v-if="appearNote.reply && appearNote.reply.replyId">
-		<div v-if="!conversationLoaded" style="padding: 16px">
-			<MkButton style="margin: 0 auto;" primary rounded @click="loadConversation">{{ i18n.ts.loadConversation }}</MkButton>
+	<div v-if="appearNote.replyId" :class="$style.conversation">
+		<div v-if="conversationLoading" :class="$style.loadState"><MkLoading mini/></div>
+		<div v-else-if="conversationError" :class="$style.loadState">
+			<MkButton inline @click="loadConversation">{{ i18n.ts.retry }}</MkButton>
 		</div>
-		<MkNoteSub v-for="note in conversation" :key="note.id" :class="$style.replyToMore" :note="note"/>
+		<MkNoteSub v-for="conversationNote in conversation" :key="conversationNote.id" :class="$style.replyTo" :note="conversationNote" :navigate="true"/>
 	</div>
-	<MkNoteSub v-if="appearNote.replyId" :note="appearNote?.reply ?? null" :class="$style.replyTo"/>
 	<div v-if="isRenote" :class="$style.renote">
 		<MkAvatar :class="$style.renoteAvatar" :user="note.user" link preview/>
 		<i class="ti ti-repeat" style="margin-right: 4px;"></i>
@@ -185,10 +185,20 @@ SPDX-License-Identifier: AGPL-3.0-only
 		</div>
 		<div>
 			<div v-if="tab === 'replies'">
-				<div v-if="!repliesLoaded" style="padding: 16px">
-					<MkButton style="margin: 0 auto;" primary rounded @click="loadReplies">{{ i18n.ts.loadReplies }}</MkButton>
+				<div v-if="repliesLoading && replies.length === 0" :class="$style.loadState"><MkLoading/></div>
+				<div v-else-if="repliesError && replies.length === 0" :class="$style.loadState">
+					<MkButton primary rounded @click="loadReplies">{{ i18n.ts.retry }}</MkButton>
 				</div>
-				<MkNoteSub v-for="note in replies" :key="note.id" :note="note" :class="$style.reply" :detail="true"/>
+				<MkNoteSub v-for="replyNote in replies" :key="replyNote.id" :note="replyNote" :class="$style.reply" :navigate="true" :expandReplies="true"/>
+				<div v-if="repliesError && replies.length > 0" :class="$style.loadState">
+					<MkButton inline @click="loadReplies">{{ i18n.ts.retry }}</MkButton>
+				</div>
+				<div v-else-if="hasMoreReplies" :class="$style.loadState">
+					<MkButton :disabled="repliesLoading" rounded @click="loadReplies">
+						<MkLoading v-if="repliesLoading" mini/>
+						<span v-else>{{ i18n.ts.loadMore }}</span>
+					</MkButton>
+				</div>
 			</div>
 			<div v-else-if="tab === 'renotes'" :class="$style.tab_renotes">
 				<MkPagination :paginator="renotesPaginator" :forceDisableInfiniteScroll="true">
@@ -233,7 +243,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { computed, inject, markRaw, provide, ref, useTemplateRef } from 'vue';
+import { computed, inject, markRaw, provide, ref, useTemplateRef, watch } from 'vue';
 import * as mfm from 'mfm-js';
 import * as Misskey from 'misskey-js';
 import { isLink } from '@@/js/is-link.js';
@@ -338,7 +348,12 @@ const parsed = appearNote.text ? mfm.parse(appearNote.text) : null;
 const urls = parsed ? extractUrlFromMfm(parsed).filter((url) => appearNote.renote?.url !== url && appearNote.renote?.uri !== url) : null;
 const showTicker = (prefer.s.instanceTicker === 'always') || (prefer.s.instanceTicker === 'remote' && appearNote.user.instance);
 const conversation = ref<Misskey.entities.Note[]>([]);
+const conversationLoading = ref(false);
+const conversationError = ref(false);
 const replies = ref<Misskey.entities.Note[]>([]);
+const repliesLoading = ref(false);
+const repliesError = ref(false);
+const hasMoreReplies = ref(true);
 const canRenote = computed(() => ['public', 'home'].includes(appearNote.visibility) || appearNote.userId === $i?.id);
 
 useGlobalEvent('noteDeleted', (noteId) => {
@@ -608,28 +623,54 @@ function blur() {
 	rootEl.value?.blur();
 }
 
-const repliesLoaded = ref(false);
+const REPLIES_PAGE_SIZE = 10;
 
-function loadReplies() {
-	repliesLoaded.value = true;
-	misskeyApi('notes/children', {
-		noteId: appearNote.id,
-		limit: 30,
-	}).then(res => {
-		replies.value = res;
-	});
+async function loadReplies() {
+	if (repliesLoading.value || !hasMoreReplies.value) return;
+
+	repliesLoading.value = true;
+	repliesError.value = false;
+	try {
+		const res = await misskeyApi('notes/children', {
+			noteId: appearNote.id,
+			limit: REPLIES_PAGE_SIZE,
+			...(replies.value.length > 0 ? { untilId: replies.value.at(-1)!.id } : {}),
+		});
+		const existingIds = new Set(replies.value.map(reply => reply.id));
+		replies.value.push(...res.filter(reply => !existingIds.has(reply.id)));
+		hasMoreReplies.value = res.length === REPLIES_PAGE_SIZE;
+	} catch (err) {
+		console.error('Failed to load note replies:', err);
+		repliesError.value = true;
+	} finally {
+		repliesLoading.value = false;
+	}
 }
 
-const conversationLoaded = ref(false);
+async function loadConversation() {
+	if (appearNote.replyId == null || conversationLoading.value) return;
 
-function loadConversation() {
-	conversationLoaded.value = true;
-	if (appearNote.replyId == null) return;
-	misskeyApi('notes/conversation', {
-		noteId: appearNote.replyId,
-	}).then(res => {
+	conversationLoading.value = true;
+	conversationError.value = false;
+	try {
+		const res = await misskeyApi('notes/conversation', {
+			noteId: appearNote.id,
+		});
 		conversation.value = res.reverse();
-	});
+	} catch (err) {
+		console.error('Failed to load note conversation:', err);
+		conversationError.value = true;
+	} finally {
+		conversationLoading.value = false;
+	}
+}
+
+watch(tab, (newTab) => {
+	if (newTab === 'replies') void loadReplies();
+}, { immediate: true });
+
+if (appearNote.replyId != null) {
+	void loadConversation();
 }
 </script>
 
@@ -668,8 +709,8 @@ function loadConversation() {
 	padding-bottom: 0;
 }
 
-.replyToMore {
-	opacity: 0.7;
+.conversation {
+	border-bottom: solid 0.5px var(--MI_THEME-divider);
 }
 
 .renote {
@@ -850,6 +891,8 @@ function loadConversation() {
 .noteFooterButton {
 	margin: 0;
 	padding: 8px;
+	min-width: 44px;
+	min-height: 44px;
 	opacity: 0.7;
 
 	&:not(:last-child) {
@@ -873,6 +916,12 @@ function loadConversation() {
 
 .reply:not(:first-child) {
 	border-top: solid 0.5px var(--MI_THEME-divider);
+}
+
+.loadState {
+	display: flex;
+	justify-content: center;
+	padding: 16px;
 }
 
 .tabs {

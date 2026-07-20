@@ -22,6 +22,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		:isInitial="initialReactions.has(reaction)"
 		:noteId="props.noteId"
 		:myReaction="props.myReaction"
+		:compact="props.compact"
 		@reactionToggled="onMockToggleReaction"
 	/>
 	<slot v-if="hasMoreReactions" name="more"></slot>
@@ -45,8 +46,10 @@ const props = withDefaults(defineProps<{
 	reactionEmojis: Misskey.entities.Note['reactionEmojis'];
 	myReaction: Misskey.entities.Note['myReaction'];
 	maxNumber?: number;
+	compact?: boolean;
 }>(), {
 	maxNumber: Infinity,
+	compact: false,
 });
 
 const mock = inject(DI.mock, false);
