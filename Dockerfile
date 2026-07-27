@@ -44,6 +44,12 @@ RUN git submodule update --init
 RUN pnpm build
 RUN rm -rf .git/
 
+# 预下载 Gemini gemma3 分词器词表，供生产环境离线使用（生产服务器无法访问 raw.githubusercontent.com）。
+# 缓存路径与 @google/genai LocalTokenizer 一致：${TMPDIR:-/tmp}/vertexai_tokenizer_model/sha1(modelUrl)。
+# 下载后校验 sha256，失败则中断构建，避免生成损坏缓存。
+RUN mkdir -p /tmp/vertexai_tokenizer_model \
+	&& node -e "const fs=require('fs');const crypto=require('crypto');fetch('https://raw.githubusercontent.com/google/gemma_pytorch/014acb7ac4563a5f77c76d7ff98f31b568c16508/tokenizer/gemma3_cleaned_262144_v2.spiece.model').then(r=>{if(!r.ok)throw new Error('HTTP '+r.status);return r.arrayBuffer()}).then(b=>{const buf=Buffer.from(b);const h=crypto.createHash('sha256').update(buf).digest('hex');if(h!=='1299c11d7cf632ef3b4e11937501358ada021bbdf7c47638d13c0ee982f2e79c')throw new Error('gemma3 vocab sha256 mismatch: '+h);fs.writeFileSync('/tmp/vertexai_tokenizer_model/df5c78e8def68e67515aeca297169a4f6c7f5920',buf);console.log('gemma3 tokenizer vocab pre-downloaded OK')})"
+
 # build native dependencies for target platform
 
 FROM --platform=$TARGETPLATFORM node:${NODE_VERSION} AS target-builder
@@ -105,6 +111,8 @@ COPY --chown=misskey:misskey --from=native-builder /misskey/packages/backend/bui
 COPY --chown=misskey:misskey --from=native-builder /misskey/packages/backend/src-js ./packages/backend/src-js
 COPY --chown=misskey:misskey --from=native-builder /misskey/packages/i18n/built ./packages/i18n/built
 COPY --chown=misskey:misskey --from=native-builder /misskey/fluent-emojis /misskey/fluent-emojis
+# 预下载的 Gemini 分词器词表缓存（让 LocalTokenizer 无需联网即可精确计数）
+COPY --chown=misskey:misskey --from=native-builder /tmp/vertexai_tokenizer_model /tmp/vertexai_tokenizer_model
 COPY --chown=misskey:misskey . ./
 
 ENV LD_PRELOAD=/usr/local/lib/libjemalloc.so
