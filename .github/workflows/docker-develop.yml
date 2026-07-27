@@ -5,6 +5,11 @@ on:
     branches:
       - develop
   workflow_dispatch:
+    inputs:
+      no_cache:
+        description: '禁用构建缓存强制全量重建（修复 GHA 缓存导致 develop 镜像不更新）'
+        type: boolean
+        default: false
 
 env:
   REGISTRY_IMAGE: ghcr.io/${{ github.repository }}
@@ -52,6 +57,7 @@ jobs:
           platforms: ${{ matrix.platform }}
           provenance: false
           labels: develop
+          no-cache: ${{ inputs.no_cache }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           outputs: type=image,name=${{ env.REGISTRY_IMAGE }},push-by-digest=true,name-canonical=true,push=true
