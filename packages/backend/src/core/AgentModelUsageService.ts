@@ -175,6 +175,16 @@ export class AgentModelUsageService {
 		return v == null ? 0 : Number(v) || 0;
 	}
 
+	/** 判断用户某模型当日是否仍有剩余免费额度（供调用前余额预检查豁免） */
+	@bindThis
+	public async hasFreeQuotaRemaining(userId: string, modelId: string | null, instance: MiMeta): Promise<boolean> {
+		if (!modelId) return false;
+		const quota = this.resolveDailyFreeQuota(instance, modelId);
+		if (quota <= 0) return false;
+		const used = await this.getFreeQuotaUsed(userId, modelId);
+		return used < quota;
+	}
+
 	// #endregion
 
 	/**

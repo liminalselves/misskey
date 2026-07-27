@@ -491,7 +491,7 @@ export class AgentImageService {
 		const imageModel = this.resolveImageModel(instance, params.imageModelId);
 		if (!imageModel) throw new ApiError(agentImageErrors.disabled);
 		const cost = Math.max(0, Number(imageModel.costPerCall ?? instance.agentImageCostPerCall) || 0);
-		if (cost > 0) {
+		if (cost > 0 && !await this.agentModelUsageService.hasFreeQuotaRemaining(params.user.id, imageModel.id, instance)) {
 			const profile = await this.userProfilesRepository.findOneBy({ userId: params.user.id });
 			if ((profile?.agentCreditBalance ?? 0) < cost) throw new ApiError(agentImageErrors.insufficientCredit);
 		}

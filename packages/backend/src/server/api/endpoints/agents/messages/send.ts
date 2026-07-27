@@ -264,7 +264,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				}
 			}
 			const callCost = this.agentService.getUserFacingModelCostPerCall(instanceMeta, session.agentModelId);
-			if (callCost > 0) {
+			if (callCost > 0 && !await this.agentModelUsageService.hasFreeQuotaRemaining(me.id, session.agentModelId, instanceMeta)) {
 				const profile = await this.userProfilesRepository.findOneBy({ userId: me.id });
 				if ((profile?.agentCreditBalance ?? 0) < callCost) {
 					throw new ApiError({

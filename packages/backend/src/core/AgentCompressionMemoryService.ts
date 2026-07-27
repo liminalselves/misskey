@@ -466,7 +466,7 @@ export class AgentCompressionMemoryService {
 			return false;
 		}
 		const compCost = this.agentService.getUserFacingModelCostPerCall(instanceMeta, compModelId);
-		if (compCost > 0) {
+		if (compCost > 0 && !await this.agentModelUsageService.hasFreeQuotaRemaining(userId, compModelId, instanceMeta)) {
 			const profile = await this.userProfilesRepository.findOneBy({ userId });
 			if ((profile?.agentCreditBalance ?? 0) < compCost) return false;
 		}
@@ -883,7 +883,7 @@ export class AgentCompressionMemoryService {
 			return;
 		}
 		const compCost = this.agentService.getUserFacingModelCostPerCall(instanceMeta, compModelId);
-		if (compCost > 0) {
+		if (compCost > 0 && !await this.agentModelUsageService.hasFreeQuotaRemaining(userId, compModelId, instanceMeta)) {
 			const profile = await this.userProfilesRepository.findOneBy({ userId });
 			if ((profile?.agentCreditBalance ?? 0) < compCost) {
 				await this.reconcileStickyStates(session.id, hSend, dMap);
