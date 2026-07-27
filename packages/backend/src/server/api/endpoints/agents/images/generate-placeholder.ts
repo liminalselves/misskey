@@ -60,7 +60,7 @@ export const paramDef = {
 	properties: {
 		sessionId: { type: 'string', format: 'misskey:id' },
 		messageId: { type: 'string', format: 'misskey:id' },
-		placeholderIndex: { type: 'integer', minimum: 0, maximum: 11 },
+		placeholderIndex: { type: 'integer', minimum: 0, maximum: 99 },
 		regenerate: { type: 'boolean', default: false },
 		regenerationOfId: { type: 'string', nullable: true, format: 'misskey:id' },
 	},

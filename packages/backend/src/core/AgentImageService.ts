@@ -345,6 +345,7 @@ export class AgentImageService {
 				apiKey: typeof m.apiKey === 'string' && m.apiKey.trim() !== '' ? m.apiKey.trim() : null,
 				supportsReferenceImage: m.provider === 'openai' && m.supportsReferenceImage === true,
 				costPerCall: typeof m.costPerCall === 'number' ? m.costPerCall : instance.agentImageCostPerCall,
+				dailyFreeQuota: typeof m.dailyFreeQuota === 'number' && m.dailyFreeQuota > 0 ? Math.trunc(m.dailyFreeQuota) : null,
 				defaultParams: normalizeImageParams(m.defaultParams ?? instance.agentImageDefaultParams),
 				defaultArtistPresetId: typeof m.defaultArtistPresetId === 'string' ? m.defaultArtistPresetId : instance.agentImageDefaultArtistPresetId,
 			}));

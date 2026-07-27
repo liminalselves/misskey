@@ -4,7 +4,27 @@ SPDX-License-Identifier: AGPL-3.0-only
 -->
 
 <template>
-<PageWithHeader v-model:tab="tab" :reversed="tab === 'chat'" :tabs="headerTabs" narrowMergedRow showBack :actions="headerActions">
+<!-- 会话被管理员封禁：专用处置页面（仅导出/删除两个入口） -->
+<div v-if="isSessionBannedPage" :class="$style.bannedRoot">
+	<div :class="$style.bannedCard">
+		<div :class="$style.bannedIcon"><i class="ti ti-shield-x"></i></div>
+		<h1 :class="$style.bannedTitle">{{ i18n.ts._agents.sessionBannedTitle }}</h1>
+		<p :class="$style.bannedDesc">{{ i18n.ts._agents.sessionBannedDesc }}</p>
+		<div :class="$style.bannedReasonBlock">
+			<div :class="$style.bannedReasonLabel">{{ i18n.ts._agents.sessionBannedReasonLabel }}</div>
+			<div :class="$style.bannedReasonText">{{ bannedReasonDisplay }}</div>
+		</div>
+		<div :class="$style.bannedActions">
+			<MkButton rounded :wait="contextExporting" :disabled="contextExporting" @click="exportSessionContext">
+				<i class="ti ti-download"></i> {{ i18n.ts._agents.sessionBannedExport }}
+			</MkButton>
+			<MkButton rounded danger @click="deleteAgentSession">
+				<i class="ti ti-trash"></i> {{ i18n.ts._agents.deleteSession }}
+			</MkButton>
+		</div>
+	</div>
+</div>
+<PageWithHeader v-else v-model:tab="tab" :reversed="tab === 'chat'" :tabs="headerTabs" narrowMergedRow showBack :actions="headerActions">
 	<div v-if="tab === 'chat'" :class="['_spacer', $style.chatSpacer]" style="--MI_SPACER-w: 700px;">
 		<div
 			v-if="showWorldbookHitHint && sending && pendingWorldbookMatches.length > 0"
@@ -65,6 +85,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 							:highlighted="highlightedMessageId === item.data.id"
 							:segmentedOutputEnabled="session?.segmentedOutputEnabled === true"
 							:visibleSegmentCount="segmentPlayback?.messageId === item.data.id ? segmentPlayback.visibleCount : undefined"
+							:autoDrawEnabled="session?.agentImageSettings?.autoDraw !== false"
+							:autoDrawCount="effectiveAutoDrawCount"
 							@deleted="onAgentMessageDeleted"
 							@editRequested="onEditRequested"
 							@rollbackRequested="onRollbackRequested"
@@ -317,6 +339,11 @@ SPDX-License-Identifier: AGPL-3.0-only
 													<i class="ti ti-photo" :class="$style.modelMetaChipIcon" aria-hidden="true"></i>
 													<span :class="$style.modelMetaChipVal">{{ i18n.ts._agents.imageModelReferenceImage }}</span>
 												</span>
+												<span v-if="(m.freeQuotaTotal ?? 0) > 0" :class="$style.modelMetaChip" role="listitem">
+													<i class="ti ti-gift" :class="$style.modelMetaChipIcon" aria-hidden="true"></i>
+													<span :class="$style.modelMetaChipKicker">今日免费</span>
+													<span :class="$style.modelMetaChipVal">已用 {{ m.freeQuotaUsed ?? 0 }} / 共 {{ m.freeQuotaTotal }} 次</span>
+												</span>
 											</div>
 										</div>
 										<MkButton
@@ -341,6 +368,15 @@ SPDX-License-Identifier: AGPL-3.0-only
 								<MkMediaList :mediaList="character.referenceImages"/>
 							</div>
 						</div>
+					</div>
+					<div :class="$style.drawAutoDraw">
+						<MkSwitch v-model="drawAutoDraw" :disabled="drawSaving">
+							<template #label>{{ i18n.ts._agents.imageAutoDrawLabel }}</template>
+						</MkSwitch>
+						<MkInput v-model="drawAutoDrawCount" type="text" :disabled="drawSaving || !drawAutoDraw">
+							<template #label>{{ i18n.ts._agents.imageAutoDrawCountLabel }}</template>
+							<template #caption>{{ i18n.ts._agents.imageAutoDrawCountCaption }}</template>
+						</MkInput>
 					</div>
 					<MkInfo v-if="drawImageModels.length === 0">管理员还没有配置可用的生图模型。</MkInfo>
 					<MkInfo v-if="drawSelectedImageModel?.provider === 'aurora'" warn>
@@ -438,6 +474,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 							<template #caption>{{ i18n.ts._agents.sessionLongMemoryProviderCaption }}</template>
 						</MkSelect>
 					</FormSplit>
+					<p :class="$style.memProviderDesc">{{ memProviderDescription }}</p>
 					<div v-if="memoryProviderSelectionDirty" :class="$style.memProviderSaveRow">
 						<MkButton primary rounded :disabled="memSaving || moderationLocksSessionWrites" @click="saveSessionLongMemoryMode">
 							<template v-if="memSaving"><MkLoading :em="true"/></template>
@@ -573,145 +610,30 @@ SPDX-License-Identifier: AGPL-3.0-only
 							</MkSelect>
 						</FormSplit>
 						<p v-if="instance.agentLlmConfigured" :class="$style.compressionBillingNote">{{ i18n.ts._agents.compressionModelSessionBillingLine }}</p>
-						<MkInfo v-if="compressionOverview && compressionOverview.historyBudgetTokens === 0" warn :class="$style.compressionMemoryNote">{{ i18n.ts._agents.compressionOverviewZeroHistoryBudget }}</MkInfo>
-						<MkFolder :defaultOpen="false">
-							<template #icon><i class="ti ti-bookmarks"></i></template>
-							<template #label>
-								<span>{{ i18n.ts._agents.compressionStickyTitle }}</span>
-								<template v-if="compressionOverview"><span :class="$style.compressionCountMuted"> · {{ compressionOverview.stickies.length }}</span></template>
-							</template>
-							<template #caption>{{ i18n.ts._agents.compressionStickyFolderCaption }}</template>
-							<template #suffix>
-								<button type="button" class="_button" :disabled="compressionOverviewLoading" :title="i18n.ts.reload" @click.stop="() => { void loadCompressionOverview(); }">
-									<i class="ti ti-refresh"></i>
-								</button>
-							</template>
-							<div v-if="compressionOverviewLoading" class="_gaps">
-								<MkLoading/>
-							</div>
-							<template v-else-if="compressionOverview">
-								<div v-if="compressionOverview.stickies.length === 0" :class="$style.compressionEmptyHint">{{ i18n.ts._agents.compressionStickyEmpty }}</div>
-								<div v-else :class="$style.compressionStickyList">
-									<div
-										v-for="(st, stIdx) in compressionOverview.stickies"
-										:key="st.id"
-										:class="$style.compressionStickyCard"
-									>
-										<div :class="$style.compressionStickyCardHead">
-											<span :class="$style.compressionStatePill" :data-state="st.state">{{ compressionStateLabel(st.state) }}</span>
-											<span v-if="st.userOverridden" :class="$style.compressionUserTag">{{ i18n.ts._agents.compressionStickyUserEdited }}</span>
-										</div>
-										<div :class="$style.compressionRangeRow">
-											<button type="button" :class="$style.compressionEndChip" @click="jumpToChatMessage(st.fromMessageId)">
-												<span :class="$style.compressionEndLabel">{{ i18n.ts._agents.compressionStickyFrom }}</span>
-												<span :class="$style.compressionEndText">{{ messageBandPlainPreview(st.fromMessagePreview ?? '') }}</span>
-											</button>
-											<span :class="$style.compressionRangeArrow" aria-hidden="true">→</span>
-											<button type="button" :class="$style.compressionEndChip" @click="jumpToChatMessage(st.toMessageId)">
-												<span :class="$style.compressionEndLabel">{{ i18n.ts._agents.compressionStickyTo }}</span>
-												<span :class="$style.compressionEndText">{{ messageBandPlainPreview(st.toMessagePreview ?? '') }}</span>
-											</button>
-										</div>
-										<div v-if="compressionStickyErrorText(st.errorMessage)" :class="$style.compressionError">{{ compressionStickyErrorText(st.errorMessage) }}</div>
-										<div v-if="editingCompressionStickyId === st.id" class="_gaps">
-											<MkTextarea v-model="editingCompressionStickyText" :disabled="compressionStickyMutating || moderationLocksSessionWrites" tall pre/>
-											<div :class="$style.compressionStickyToolbar">
-												<MkButton rounded small :disabled="compressionStickyMutating || moderationLocksSessionWrites" @click="cancelEditCompressionSticky">{{ i18n.ts.cancel }}</MkButton>
-												<MkButton primary rounded small :disabled="compressionStickyMutating || moderationLocksSessionWrites" @click="submitEditCompressionSticky(st.id)">
-													<template v-if="compressionStickyMutating"><MkLoading :em="true"/></template>
-													<template v-else>{{ i18n.ts.save }}</template>
-												</MkButton>
-											</div>
-										</div>
-										<template v-else>
-											<div :class="$style.compressionStickySummary">{{ st.summaryText }}</div>
-											<div :class="$style.compressionStickyToolbar">
-												<MkButton rounded small :disabled="compressionStickyMutating || moderationLocksSessionWrites || stIdx === 0" :title="i18n.ts._agents.compressionStickyMoveUp" @click="moveCompressionSticky(st.id, -1)">
-													<i class="ti ti-chevron-up"></i>
-												</MkButton>
-												<MkButton rounded small :disabled="compressionStickyMutating || moderationLocksSessionWrites || stIdx >= compressionOverview.stickies.length - 1" :title="i18n.ts._agents.compressionStickyMoveDown" @click="moveCompressionSticky(st.id, 1)">
-													<i class="ti ti-chevron-down"></i>
-												</MkButton>
-												<MkButton rounded small danger :disabled="compressionStickyMutating || moderationLocksSessionWrites" @click="confirmDeleteCompressionSticky(st.id)">
-													{{ i18n.ts.delete }}
-												</MkButton>
-												<MkButton rounded small :disabled="compressionStickyMutating || moderationLocksSessionWrites" @click="startEditCompressionSticky(st)">
-													{{ i18n.ts.edit }}
-												</MkButton>
-											</div>
-										</template>
-									</div>
-								</div>
-							</template>
-							<div v-else-if="!compressionOverviewLoading" :class="$style.compressionOverviewFail">
-								<span>{{ i18n.ts._agents.compressionOverviewLoadFailed }}</span>
-								<MkButton rounded small @click="loadCompressionOverview">{{ i18n.ts._agents.compressionOverviewRetry }}</MkButton>
-							</div>
-						</MkFolder>
-						<template v-if="compressionOverview && compressionOverview.messages.length">
-							<div :class="$style.compressionBandsSection">
-								<button
-									type="button"
-									:class="$style.compressionBandsHeader"
-									:aria-expanded="compressionBandsOpen"
-									@click="compressionBandsOpen = !compressionBandsOpen"
-								>
-									<i :class="['ti', compressionBandsOpen ? 'ti-chevron-up' : 'ti-chevron-down', $style.compressionBandsChevron]" aria-hidden="true"></i>
-									<span :class="$style.compressionBandsTitleBlock">
-										<span :class="$style.compressionBandsTitle">{{ i18n.ts._agents.compressionMessageBands }}</span>
-										<span :class="$style.compressionBandsSubtitle">{{ i18n.ts._agents.compressionMessageBandsSubtitle }}</span>
-									</span>
-								</button>
-								<div v-if="compressionBandsOpen && compressionBandScaleCaption" :class="$style.compressionBandScaleInline">{{ compressionBandScaleCaption }}</div>
-								<p v-if="compressionBandsOpen && compressionBandLegendLine" :class="$style.compressionBandsFootnote">{{ compressionBandLegendLine }}</p>
-								<div v-show="compressionBandsOpen" :class="$style.compressionBandGroups">
-									<div
-										v-for="block in compressionMessageBandBlocks"
-										:key="block.band"
-										:class="$style.compressionBandGroup"
-									>
-										<div :class="$style.compressionBandGroupTitle">{{ block.title }}</div>
-										<div :class="$style.compressionMessageTable">
-											<template v-for="(row, ridx) in block.rows" :key="row.kind === 'msg' ? row.m.id : `omit-${block.band}-${ridx}`">
-												<div
-													v-if="row.kind === 'msg'"
-													:class="[$style.compressionMsgRow, $style.compressionMsgRowClickable]"
-													role="button"
-													tabindex="0"
-													@click="jumpToChatMessage(row.m.id)"
-													@keydown.enter.prevent="jumpToChatMessage(row.m.id)"
-													@keydown.space.prevent="jumpToChatMessage(row.m.id)"
-												>
-													<div :class="$style.compressionMsgRowTop">
-														<span :class="[$style.compressionMsgRolePill, row.m.role === 'user' ? $style.compressionMsgRoleUser : $style.compressionMsgRoleAsst]">{{ messageRoleLabel(row.m.role) }}</span>
-														<span v-if="row.m.compressed" :class="$style.compressionMsgBadgeCompressed">{{ i18n.ts._agents.compressionMessageCompressed }}</span>
-													</div>
-													<div :class="$style.compressionMsgPreview">{{ messageBandPlainPreview(row.m.contentPreview) }}</div>
-													<div :class="$style.compressionMsgTokenMeta">{{ compressionMsgTokensLabel(row.m) }}</div>
-												</div>
-												<div v-else :class="$style.compressionMsgOmitRow">
-													<span :class="$style.compressionOmitDots">···</span>
-													<span :class="$style.compressionOmitHint">{{ i18n.ts._agents.compressionBandOmitted.replace('{n}', String(row.hidden)) }}</span>
-												</div>
-											</template>
-										</div>
-									</div>
-								</div>
-							</div>
-						</template>
+						<XCompression
+							ref="compressionRef"
+							:sessionId="sessionId"
+							:memProviderDirty="memoryProviderSelectionDirty"
+							:moderationLocked="moderationLocksSessionWrites"
+							@jumpToMessage="jumpToChatMessage"
+						/>
 					</div>
 				</template>
 				<MkInfo v-else-if="memProvider === 'compression'" warn>{{ i18n.ts._agents.compressionNeedDialogueStyle }}</MkInfo>
 
-				<div :class="[$style.memContextDividerRow, $style.memToolbar, $style.memContextDividerBeforePorter]">
+				<div :class="$style.memDividerLocate">
+					<span :class="$style.memDividerLocateText">
+						<i class="ti ti-scissors" :class="$style.memDividerLocateIcon"></i>
+						<span>{{ i18n.ts._agents.sessionMemoryContextDividerDesc }}</span>
+					</span>
 					<MkButton
 						v-tooltip="contextDividerButtonTooltip"
 						rounded
-						:primary="canLocateContextDivider"
+						small
 						:disabled="!canLocateContextDivider"
 						@click="scrollToContextWindowDivider"
 					>
-						<i class="ti ti-messages"></i>
+						<i class="ti ti-focus-2"></i>
 						{{ i18n.ts._agents.sessionMemoryLocateContextDivider }}
 					</MkButton>
 				</div>
@@ -797,7 +719,25 @@ SPDX-License-Identifier: AGPL-3.0-only
 							<span :class="$style.settingValue">{{ selectedStyleMeta?.name ?? (session.dialogueStyleId ? '-' : i18n.ts._agents.sessionStyleNotSelected) }}</span>
 						</div>
 					</div>
-					<MkInfo v-if="usableStyles.length === 0">{{ i18n.ts._agents.sessionNoUsableStyles }}</MkInfo>
+					<div v-if="usableStyles.length === 0" v-panel :class="$style.styleEmpty">
+						<div :class="$style.styleEmptyTitle">{{ i18n.ts._agents.sessionNoStylesTitle }}</div>
+						<p :class="$style.styleEmptyDesc">{{ i18n.ts._agents.sessionNoStylesDesc }}</p>
+						<div :class="$style.styleEmptyWays">
+							<div :class="$style.styleEmptyWay">
+								<i class="ti ti-pencil-plus" :class="$style.styleEmptyWayIcon"></i>
+								<span>{{ i18n.ts._agents.sessionNoStylesCreate }}</span>
+							</div>
+							<div :class="$style.styleEmptyWay">
+								<i class="ti ti-layout-grid" :class="$style.styleEmptyWayIcon"></i>
+								<span>{{ i18n.ts._agents.sessionNoStylesPlaza }}</span>
+							</div>
+						</div>
+						<div>
+							<MkButton rounded @click="goStylePlaza">
+								<i class="ti ti-arrow-right"></i> {{ i18n.ts._agents.sessionNoStylesGoPlaza }}
+							</MkButton>
+						</div>
+					</div>
 					<div v-else :class="$style.selectCardList">
 						<div
 							v-for="s in usableStyles"
@@ -954,6 +894,11 @@ SPDX-License-Identifier: AGPL-3.0-only
 												</template>
 												<span v-else :class="[$style.modelMetaChipVal, $style.modelMetaChipValMuted]">{{ i18n.ts._agents.noDataAvailable }}</span>
 											</span>
+											<span v-if="modelFreeQuota[m.id] && modelFreeQuota[m.id].total > 0" :class="$style.modelMetaChip" role="listitem">
+												<i class="ti ti-gift" :class="$style.modelMetaChipIcon" aria-hidden="true"></i>
+												<span :class="$style.modelMetaChipKicker">今日免费</span>
+												<span :class="$style.modelMetaChipVal">已用 {{ modelFreeQuota[m.id].used }} / 共 {{ modelFreeQuota[m.id].total }} 次</span>
+											</span>
 										</div>
 									</div>
 									<MkButton
@@ -1011,6 +956,7 @@ import { getScrollContainer } from '@@/js/scroll.js';
 import XAgentMessage from './agent-session.message.vue';
 import XForm from './agent-session.form.vue';
 import XAgentSearch from './agent-session.search.vue';
+import XCompression from './agent-session.compression.vue';
 import type { PageHeaderItem } from '@/types/page-header.js';
 import type { DateSeparetedTimelineItem } from '@/utility/timeline-date-separate.js';
 import type { AgentsStylesListUsableResponse, DriveFile } from 'misskey-js/entities.js';
@@ -1029,7 +975,6 @@ import MkSelect from '@/components/MkSelect.vue';
 import MkMediaList from '@/components/MkMediaList.vue';
 import MkAgentAuditFeedbackDialog from '@/components/MkAgentAuditFeedbackDialog.vue';
 import FormSplit from '@/components/form/split.vue';
-import MkFolder from '@/components/MkFolder.vue';
 import { formatDateTimeString } from '@/utility/format-time-string.js';
 import { misskeyApi, formatApiError } from '@/utility/misskey-api.js';
 import { i18n } from '@/i18n.js';
@@ -1162,6 +1107,7 @@ const session = ref<{
 	agentReplyPending?: boolean;
 	sessionModerationBanned?: boolean;
 	characterModerationBanned?: boolean;
+	sessionModerationBannedReason?: string | null;
 } | null>(null);
 
 const character = ref<{ name: string; avatarFileId: string | null; avatar?: DriveFile | null; referenceImageFileIds: string[]; referenceImages: DriveFile[]; regexRules: AgentRegexRule[] } | null>(null);
@@ -1359,6 +1305,8 @@ type AgentImageModel = {
 	supportsReferenceImage: boolean;
 	apiModelName: string | null;
 	costPerCall: number;
+	freeQuotaUsed?: number;
+	freeQuotaTotal?: number;
 	defaultParams: Record<string, unknown>;
 	defaultArtistPresetId: string | null;
 };
@@ -1377,6 +1325,8 @@ const drawLastUrl = ref<string | null>(null);
 const drawLastFile = ref<DriveFile | null>(null);
 const drawArtistPresets = ref<AgentImageArtistPreset[]>([]);
 const drawArtistPresetId = ref<string | null>(null);
+const drawAutoDraw = ref(true);
+const drawAutoDrawCount = ref('');
 
 const drawSizeItems: MkSelectItem[] = [
 	{ value: 'portrait', label: '竖图' },
@@ -1385,17 +1335,23 @@ const drawSizeItems: MkSelectItem[] = [
 ];
 const drawSelectedImageModel = computed(() => drawImageModels.value.find(m => m.id === drawImageModelId.value) ?? null);
 const drawCurrentSettings = computed(() => {
-	if (drawSelectedImageModel.value?.provider !== 'aurora') {
-		return { size: drawSize.value };
-	}
+	const base = drawSelectedImageModel.value?.provider !== 'aurora'
+		? { size: drawSize.value }
+		: {
+			size: drawSize.value,
+			artistPresetId: drawArtistPresetId.value,
+			steps: nullableNumberInput(drawSteps.value),
+			scale: nullableNumberInput(drawScale.value),
+			cfgRescale: nullableNumberInput(drawCfgRescale.value),
+			sampler: drawSampler.value.trim() || null,
+			noiseSchedule: drawNoiseSchedule.value.trim() || null,
+		};
+	// 会话级自动生图开关与张数（与提供商无关，无条件携带）；张数留空时不写入，后端回退管理后台默认值
+	const autoDrawCount = Number(drawAutoDrawCount.value);
 	return {
-		size: drawSize.value,
-		artistPresetId: drawArtistPresetId.value,
-		steps: nullableNumberInput(drawSteps.value),
-		scale: nullableNumberInput(drawScale.value),
-		cfgRescale: nullableNumberInput(drawCfgRescale.value),
-		sampler: drawSampler.value.trim() || null,
-		noiseSchedule: drawNoiseSchedule.value.trim() || null,
+		...base,
+		autoDraw: drawAutoDraw.value,
+		...(Number.isFinite(autoDrawCount) ? { autoDrawCount } : {}),
 	};
 });
 const drawConfigDirty = computed(() => {
@@ -1403,6 +1359,11 @@ const drawConfigDirty = computed(() => {
 	if (!s) return false;
 	if ((s.agentImageModelId ?? '') !== drawImageModelId.value) return true;
 	return JSON.stringify(normalizeAgentImageSettingsForCompare(s.agentImageSettings ?? {})) !== JSON.stringify(normalizeAgentImageSettingsForCompare(drawCurrentSettings.value));
+});
+/** 传递给消息组件的自动生图张数生效值：show 已合并管理后台默认值；缺失时 Infinity（全部自动） */
+const effectiveAutoDrawCount = computed(() => {
+	const n = Number(session.value?.agentImageSettings?.autoDrawCount);
+	return Number.isFinite(n) && n >= 0 ? n : Infinity;
 });
 const settingsHydrating = ref(false);
 const memSaving = ref(false);
@@ -1454,88 +1415,15 @@ const memoryProviderSelectionDirty = computed(() => {
 	return memProvider.value !== saved;
 });
 
-type CompressionOverviewPayload = {
-	historyBudgetTokens: number;
-	t1Tokens: number;
-	t2Tokens: number;
-	t1Ratio: number;
-	t2Ratio: number;
-	messages: { id: string; role: string; messageTokens?: number; dFromNewTokens: number; band: string; contentPreview: string; compressed: boolean }[];
-	stickies: {
-		id: string;
-		createdAt: string;
-		updatedAt: string;
-		fromMessageId: string;
-		toMessageId: string;
-		fromMessagePreview?: string;
-		toMessagePreview?: string;
-		summaryText: string;
-		state: string;
-		userOverridden: boolean;
-		sourceFingerprint: string | null;
-		errorMessage: string | null;
-		lastModelId: string | null;
-		sortIndex: number;
-	}[];
-};
-
-const compressionOverview = ref<CompressionOverviewPayload | null>(null);
-const compressionOverviewLoading = ref(false);
-const compressionBandsOpen = ref(false);
-
-type CompressionBandRow =
-	| { kind: 'msg'; m: CompressionOverviewPayload['messages'][0] }
-	| { kind: 'ellipsis'; hidden: number };
-
-/** 消息区带过长时首尾各保留的条数（各 2 轮对话 ≈ 4 条 user+assistant） */
-const COMPRESSION_BAND_EDGE_COUNT = 4;
-
-const compressionMessageBandBlocks = computed((): { band: string; title: string; rows: CompressionBandRow[] }[] => {
-	const o = compressionOverview.value;
-	if (o == null) return [];
-	const order = ['new', 'prep', 'staged', 'out'] as const;
-	const by: Record<string, typeof o.messages> = { new: [], prep: [], staged: [], out: [] };
-	for (const m of o.messages) {
-		if (m.band in by) by[m.band]!.push(m);
-	}
-	const edge = COMPRESSION_BAND_EDGE_COUNT;
-	const fullMax = edge * 2;
-	const blocks: { band: string; title: string; rows: CompressionBandRow[] }[] = [];
-	for (const band of order) {
-		const list = by[band] ?? [];
-		if (list.length === 0) continue;
-		const title = compressionBandGroupTitle(band);
-		const rows: CompressionBandRow[] = [];
-		if (list.length <= fullMax) {
-			for (const m of list) rows.push({ kind: 'msg', m });
-		} else {
-			for (const m of list.slice(0, edge)) rows.push({ kind: 'msg', m });
-			rows.push({ kind: 'ellipsis', hidden: list.length - fullMax });
-			for (const m of list.slice(list.length - edge, list.length)) rows.push({ kind: 'msg', m });
-		}
-		blocks.push({ band, title, rows });
-	}
-	return blocks;
-});
-const editingCompressionStickyId = ref<string | null>(null);
-const editingCompressionStickyText = ref('');
-const compressionStickyMutating = ref(false);
-
-const compressionBandLegendLine = computed((): string => {
-	const o = compressionOverview.value;
-	if (o == null || o.historyBudgetTokens === 0) return '';
-	return i18n.ts._agents.compressionBandLegend;
+const memProviderDescription = computed((): string => {
+	if (memProvider.value === 'compression') return i18n.ts._agents.sessionLongMemoryProviderDescCompression;
+	if (memProvider.value === 'aliyun') return i18n.ts._agents.sessionLongMemoryProviderDescAliyun;
+	return i18n.ts._agents.sessionLongMemoryProviderDescNone;
 });
 
-const compressionBandScaleCaption = computed((): string => {
-	const o = compressionOverview.value;
-	if (o == null || o.historyBudgetTokens === 0) return '';
-	return i18n.tsx._agents.compressionBandScaleCaption({
-		h: String(o.historyBudgetTokens),
-		t1: String(o.t1Tokens),
-		t2: String(o.t2Tokens),
-	});
-});
+import type { CompressionOverviewPayload } from './agent-session.compression.vue';
+
+const compressionRef = useTemplateRef<InstanceType<typeof XCompression>>('compressionRef');
 
 const addMemRoundsCaption = computed(() => {
 	const raw = instance.agentMem0AddMemoryMaxRounds;
@@ -1583,6 +1471,15 @@ const moderationBlockUserMessage = computed((): string => {
 	return '';
 });
 
+/** 会话被管理员封禁：进入专用封禁页，不再展示普通会话内容 */
+const isSessionBannedPage = computed(() => session.value?.sessionModerationBanned === true);
+
+/** 封禁原因展示：管理员未填写时使用平台默认文案 */
+const bannedReasonDisplay = computed((): string => {
+	const r = session.value?.sessionModerationBannedReason;
+	return typeof r === 'string' && r.trim() !== '' ? r.trim() : i18n.ts._agents.sessionBannedReasonDefault;
+});
+
 const chatComposeDisabled = computed(() => {
 	if (loading.value || chatInitializing.value || session.value == null) return true;
 	if (moderationLocksSessionWrites.value) return true;
@@ -1613,6 +1510,7 @@ const editingMessage = ref<{ id: string; role: string; originalContent: string }
 const editSaving = ref(false);
 
 const modelSuccessRates = ref<Record<string, { success: number; total: number }>>({});
+const modelFreeQuota = ref<Record<string, { used: number; total: number }>>({});
 
 const editingForForm = computed(() => {
 	if (editingMessage.value == null) return null;
@@ -2123,6 +2021,7 @@ watch(tab, (v) => {
 		void loadWorldbookEntries();
 	} else if (v === 'model') {
 		void loadModelSuccessRates();
+		void loadModelFreeQuota();
 		void loadAgentCreditBalance();
 	} else if (v === 'proactive') {
 		void loadSession();
@@ -2430,7 +2329,6 @@ async function loadSession() {
 			randomProactiveEnabled.value = session.value.randomProactiveEnabled === true;
 			scheduledProactiveEnabled.value = session.value.scheduledProactiveEnabled === true;
 			hydrateAgentImageSettingsFromSession();
-			compressionOverview.value = null;
 			await loadCharacter(session.value.characterId);
 			if (tab.value === 'worldbook') {
 				await loadWorldbookEntries();
@@ -2579,6 +2477,22 @@ async function loadModelSuccessRates() {
 	}
 }
 
+async function loadModelFreeQuota() {
+	try {
+		const res = await misskeyApi(
+			'agents/models/free-quota' as Parameters<typeof misskeyApi>[0],
+			{} as any,
+		) as { modelId: string; freeQuotaUsed: number; freeQuotaTotal: number }[];
+		const quotas: Record<string, { used: number; total: number }> = {};
+		for (const q of res) {
+			quotas[q.modelId] = { used: q.freeQuotaUsed, total: q.freeQuotaTotal };
+		}
+		modelFreeQuota.value = quotas;
+	} catch {
+		modelFreeQuota.value = {};
+	}
+}
+
 function onModelSelect() {
 	if (settingsHydrating.value || !session.value || savingSettings.value || moderationLocksSessionWrites.value) return;
 	void applyModel();
@@ -2592,6 +2506,11 @@ function onStyleSelect() {
 function chooseStyle(styleId: string) {
 	selectedStyleId.value = styleId;
 	void onStyleSelect();
+}
+
+/** 跳转到智能体广场的「对话风格」子标签（风格广场） */
+function goStylePlaza() {
+	router.push('/agents', { query: { view: 'square', sub: 'stylesPlaza' } });
 }
 
 function chooseModel(modelId: string) {
@@ -2906,6 +2825,9 @@ function normalizeAgentImageSettingsForCompare(raw: Record<string, unknown>): Re
 	for (const key of ['sampler', 'noiseSchedule'] as const) {
 		if (typeof raw[key] === 'string' && raw[key] !== '') out[key] = raw[key];
 	}
+	if (typeof raw.autoDraw === 'boolean') out.autoDraw = raw.autoDraw;
+	const autoDrawCount = Number(raw.autoDrawCount);
+	if (Number.isFinite(autoDrawCount)) out.autoDrawCount = autoDrawCount;
 	return out;
 }
 
@@ -2945,6 +2867,11 @@ function hydrateAgentImageSettingsFromSession() {
 		} else {
 			applyAgentImageSettings(session.value.agentImageSettings ?? {});
 		}
+		// 自动生图开关/张数为会话级配置（不随模型切换重置），仅从会话水合；show 已合并管理后台默认值
+		const autoDrawSettings = session.value.agentImageSettings ?? {};
+		drawAutoDraw.value = autoDrawSettings.autoDraw !== false;
+		const autoDrawCount = Number(autoDrawSettings.autoDrawCount);
+		drawAutoDrawCount.value = Number.isFinite(autoDrawCount) ? String(autoDrawCount) : '';
 	} finally {
 		settingsHydrating.value = false;
 	}
@@ -3014,18 +2941,22 @@ onMounted(async () => {
 		await fetchInstance(true);
 		await loadUsableStyles();
 		void loadModelSuccessRates();
+		void loadModelFreeQuota();
 		void loadAgentCreditBalance();
 		void loadDrawArtistPresets();
 		void loadDrawImageModels();
 		await loadVisionModels();
 		await loadSession();
-		if (props.messageId) {
-			await loadContextAround(props.messageId);
-			await nextTick();
-			await new Promise(r => window.setTimeout(r, 300));
-			await scrollToMessage(props.messageId);
-		} else {
-			await loadInitialTimeline();
+		// 被封禁会话：不加载聊天记录与会话内容，仅展示专用封禁页
+		if (!isSessionBannedPage.value) {
+			if (props.messageId) {
+				await loadContextAround(props.messageId);
+				await nextTick();
+				await new Promise(r => window.setTimeout(r, 300));
+				await scrollToMessage(props.messageId);
+			} else {
+				await loadInitialTimeline();
+			}
 		}
 	} catch (e) {
 		os.alert({ type: 'error', text: formatApiError(e) });
@@ -3264,21 +3195,8 @@ async function saveMemorySessionSettings() {
 
 async function loadCompressionOverview() {
 	if (!session.value?.dialogueStyleId) return;
-	if (memProvider.value !== 'compression') {
-		compressionOverview.value = null;
-		return;
-	}
-	compressionOverviewLoading.value = true;
-	try {
-		compressionOverview.value = await misskeyApi(
-			'agents/sessions/compression-overview' as Parameters<typeof misskeyApi>[0],
-			{ sessionId } as any,
-		) as CompressionOverviewPayload;
-	} catch {
-		compressionOverview.value = null;
-	} finally {
-		compressionOverviewLoading.value = false;
-	}
+	if (memProvider.value !== 'compression') return;
+	await compressionRef.value?.refresh();
 }
 
 async function persistMemCompressionModelId() {
@@ -3335,14 +3253,8 @@ function scheduleCompressionOverviewAfterSidecar() {
 	}
 }
 
-function compressionStickyErrorText(raw: string | null | undefined): string {
-	if (raw == null || raw === '') return '';
-	if (raw === 'COMPRESSION_LLM_FAILED') return i18n.ts._agents.compressionStickyLlmFailedStored;
-	return raw;
-}
-
 /** 在即将调用压缩模型后轮询总览，直到便签条数变化或超时，并在私信区给出进行中的提示 */
-function startCompressionLlmProgressPoll(baselineCount: number) {
+function startCompressionLlmProgressPoll(baselineCount: number, baselineMaxUpdatedAt: string | null) {
 	compressionLlmPollGen++;
 	if (compressionLlmPollTimeout != null) {
 		window.clearTimeout(compressionLlmPollTimeout);
@@ -3367,15 +3279,21 @@ function startCompressionLlmProgressPoll(baselineCount: number) {
 				{ sessionId } as any,
 			) as CompressionOverviewPayload;
 			if (myGen !== compressionLlmPollGen) return;
-			if (ov.stickies.length > baselineCount) {
+			// 落定判定分两路：
+			// - 成功：出现新增/更新的非失败便签（条数增加或 max(updatedAt) 超基线）；
+			// - 失败：失败便签不加入列表，据 compressionSidecarFailedAt 超过基线检出。
+			const baselineMs = baselineMaxUpdatedAt ? Date.parse(baselineMaxUpdatedAt) : 0;
+			const maxUpdatedMs = ov.stickies.reduce((mx, s) => Math.max(mx, Date.parse(s.updatedAt)), 0);
+			const failedAtMs = ov.compressionSidecarFailedAt ? Date.parse(ov.compressionSidecarFailedAt) : 0;
+			const successSettled = ov.stickies.length > baselineCount || maxUpdatedMs > baselineMs;
+			const failedSettled = failedAtMs > baselineMs;
+			if (successSettled || failedSettled) {
 				compressionSidecarHintVisible.value = false;
-				const newest = [...ov.stickies].sort((a, b) =>
-					b.sortIndex - a.sortIndex || b.id.localeCompare(a.id))[0];
-				if (newest != null && newest.errorMessage != null && String(newest.errorMessage).trim() !== '') {
+				if (failedSettled && !successSettled) {
 					os.alert({ type: 'error', text: i18n.ts._agents.compressionSidecarLlmFailed });
 				}
 				if (memProvider.value === 'compression' && session.value?.dialogueStyleId) {
-					compressionOverview.value = ov;
+					compressionRef.value?.setOverview(ov);
 				}
 				return;
 			}
@@ -3393,149 +3311,12 @@ function startCompressionLlmProgressPoll(baselineCount: number) {
 	void tick();
 }
 
-function compressionMsgTokensLabel(m: CompressionOverviewPayload['messages'][0]): string {
-	const cum = m.dFromNewTokens;
-	const raw = m.messageTokens;
-	const msg = typeof raw === 'number' && Number.isFinite(raw) ? Math.max(0, Math.round(raw)) : null;
-	if (msg != null) {
-		return i18n.tsx._agents.compressionBandMsgTokens({ msg: String(msg), cum: String(Math.max(0, Math.round(cum))) });
-	}
-	return i18n.tsx._agents.compressionBandMsgTokensCumulativeOnly({ cum: String(Math.max(0, Math.round(cum))) });
-}
-
-function compressionBandGroupTitle(band: string): string {
-	if (band === 'new') return i18n.ts._agents.compressionBandNew;
-	if (band === 'prep') return i18n.ts._agents.compressionBandPrep;
-	if (band === 'staged') return i18n.ts._agents.compressionBandStaged;
-	if (band === 'out') return i18n.ts._agents.compressionBandOut;
-	return band;
-}
-
-function compressionStateLabel(state: string): string {
-	if (state === 'active') return i18n.ts._agents.compressionStateActive;
-	if (state === 'dormant') return i18n.ts._agents.compressionStateDormant;
-	return i18n.ts._agents.compressionStateOther;
-}
-
-function messageRoleLabel(role: string): string {
-	if (role === 'user') return i18n.ts._agents.compressionMessageRoleUser;
-	if (role === 'assistant' || role === 'model') return i18n.ts._agents.compressionMessageRoleAssistant;
-	return role;
-}
-
-function messageZonePreview(raw: string | null | undefined): string {
-	if (raw == null || raw === '') return '…';
-	const t = raw.replace(/\s+/g, ' ').trim();
-	if (t.length === 0) return '…';
-	return t.length <= 140 ? t : `${t.slice(0, 140)}…`;
-}
-
-/** 消息区带列表用：去掉常见 Markdown 噪声后再截断，便于阅读 */
-function messageBandPlainPreview(raw: string | null | undefined): string {
-	if (raw == null || raw === '') return '…';
-	let t = String(raw).replace(/\r\n?/g, '\n');
-	t = t
-		.split('\n')
-		.map((line) =>
-			line
-				.replace(/^#{1,6}\s+/, '')
-				.replace(/^\s*[-*+]\s+/, '')
-				.replace(/^\s*\d+\.\s+/, ''))
-		.join(' ');
-	t = t.replace(/\*\*([^*]+)\*\*/g, '$1');
-	t = t.replace(/\*([^*]+)\*/g, '$1');
-	t = t.replace(/`{1,3}[^`]*`{1,3}/g, ' ');
-	t = t.replace(/`+/g, '');
-	t = t.replace(/\s+/g, ' ').trim();
-	if (t.length === 0) return '…';
-	return t.length <= 168 ? t : `${t.slice(0, 168)}…`;
-}
-
 async function jumpToChatMessage(messageId: string) {
 	tab.value = 'chat';
 	await nextTick();
 	await nextTick();
 	await new Promise(r => window.setTimeout(r, 50));
 	await scrollToMessage(messageId);
-}
-
-function startEditCompressionSticky(st: { id: string; summaryText: string }) {
-	editingCompressionStickyId.value = st.id;
-	editingCompressionStickyText.value = st.summaryText;
-}
-
-function cancelEditCompressionSticky() {
-	editingCompressionStickyId.value = null;
-	editingCompressionStickyText.value = '';
-}
-
-async function moveCompressionSticky(stickyId: string, delta: -1 | 1) {
-	if (!compressionOverview.value || compressionStickyMutating.value || moderationLocksSessionWrites.value) return;
-	const list = compressionOverview.value.stickies;
-	const i = list.findIndex(s => s.id === stickyId);
-	if (i < 0) return;
-	const j = i + delta;
-	if (j < 0 || j >= list.length) return;
-	const next = [...list];
-	const t = next[i]!;
-	next[i] = next[j]!;
-	next[j] = t;
-	const stickyIds = next.map(s => s.id);
-	compressionStickyMutating.value = true;
-	try {
-		await misskeyApi(
-			'agents/compression-sticky/reorder' as Parameters<typeof misskeyApi>[0],
-			{ sessionId, stickyIds } as any,
-		);
-		await loadCompressionOverview();
-	} catch (e) {
-		os.alert({ type: 'error', text: formatApiError(e) });
-	} finally {
-		compressionStickyMutating.value = false;
-	}
-}
-
-async function submitEditCompressionSticky(stickyId: string) {
-	if (!session.value || compressionStickyMutating.value || moderationLocksSessionWrites.value) return;
-	const t = editingCompressionStickyText.value.trim();
-	if (t.length === 0) return;
-	compressionStickyMutating.value = true;
-	try {
-		await misskeyApi(
-			'agents/compression-sticky/update' as Parameters<typeof misskeyApi>[0],
-			{ sessionId, stickyId, summaryText: t } as any,
-		);
-		os.toast(i18n.ts._agents.compressionStickyUpdated);
-		cancelEditCompressionSticky();
-		await loadCompressionOverview();
-	} catch (e) {
-		os.alert({ type: 'error', text: formatApiError(e) });
-	} finally {
-		compressionStickyMutating.value = false;
-	}
-}
-
-async function confirmDeleteCompressionSticky(stickyId: string) {
-	const { canceled } = await os.confirm({
-		type: 'warning',
-		text: i18n.ts._agents.compressionStickyDeleteConfirm,
-	});
-	if (canceled) return;
-	if (!session.value || compressionStickyMutating.value || moderationLocksSessionWrites.value) return;
-	compressionStickyMutating.value = true;
-	try {
-		await misskeyApi(
-			'agents/compression-sticky/delete' as Parameters<typeof misskeyApi>[0],
-			{ sessionId, stickyId } as any,
-		);
-		os.toast(i18n.ts._agents.compressionStickyDeleted);
-		if (editingCompressionStickyId.value === stickyId) cancelEditCompressionSticky();
-		await loadCompressionOverview();
-	} catch (e) {
-		os.alert({ type: 'error', text: formatApiError(e) });
-	} finally {
-		compressionStickyMutating.value = false;
-	}
 }
 
 type SessionContextRole = 'user' | 'assistant';
@@ -3546,6 +3327,7 @@ type SessionExportSettings = {
 	name?: string;
 	dialogueStyleId?: string | null;
 	agentModelId?: string | null;
+	agentVisionModelId?: string | null;
 	agentLongMemoryEnabled?: boolean;
 	agentLongMemoryTopK?: number;
 	agentLongMemoryMinScore?: number | null;
@@ -3561,9 +3343,15 @@ type SessionExportSettings = {
 	randomProactiveEnabled?: boolean;
 	scheduledProactiveEnabled?: boolean;
 };
+/** v3 导出的定时主动消息计划（仅保留可重建所需字段，id/nextRunAt 等由导入端重新计算） */
+type SessionExportProactiveSchedule = {
+	description: string;
+	status: 'active' | 'paused';
+	trigger: { type: 'once'; at: string } | { type: 'recurring'; cron: string; repeat: { mode: 'count'; count: number } | { mode: 'unlimited' } };
+};
 type SessionExportPayload = {
-	format: 'misskey-agent-session-export-v2';
-	version: 2;
+	format: 'misskey-agent-session-export-v3';
+	version: 3;
 	sessionId: string;
 	exportedAt: string;
 	source: {
@@ -3571,11 +3359,13 @@ type SessionExportPayload = {
 		sessionKind: 'draft_test' | 'community' | null;
 	};
 	settings: SessionExportSettings;
+	proactiveSchedules: SessionExportProactiveSchedule[];
 	messages: SessionContextRow[];
 };
 type ParsedSessionImportPayload = {
 	messages: SessionContextRow[];
 	settings: SessionExportSettings | null;
+	proactiveSchedules: SessionExportProactiveSchedule[];
 	legacy: boolean;
 };
 
@@ -3604,6 +3394,7 @@ function buildSessionExportSettings(): SessionExportSettings {
 		name: s.name,
 		dialogueStyleId: s.dialogueStyleId ?? null,
 		agentModelId: s.agentModelId ?? null,
+		agentVisionModelId: s.agentVisionModelId ?? null,
 		agentLongMemoryEnabled: s.agentLongMemoryEnabled ?? false,
 		agentLongMemoryTopK: s.agentLongMemoryTopK ?? 8,
 		agentLongMemoryMinScore: s.agentLongMemoryMinScore ?? null,
@@ -3651,15 +3442,36 @@ function downloadJsonFile(filename: string, content: string) {
 	}, 0);
 }
 
+async function buildSessionExportProactiveSchedules(): Promise<SessionExportProactiveSchedule[]> {
+	try {
+		const list = await (misskeyApi as unknown as (
+			endpoint: 'agents/proactive-schedules/list',
+			data: { sessionId: string },
+		) => Promise<ProactiveSchedule[]>)('agents/proactive-schedules/list', { sessionId });
+		return list
+			.filter(s => s.status === 'active' || s.status === 'paused')
+			.map(s => ({
+				description: s.description,
+				status: s.status as 'active' | 'paused',
+				trigger: s.trigger,
+			}));
+	} catch {
+		return [];
+	}
+}
+
 async function exportSessionContext() {
 	if (contextExporting.value) return;
 	contextExporting.value = true;
 	try {
-		const all = await fetchAllSessionMessages();
+		const [all, proactiveSchedulesForExport] = await Promise.all([
+			fetchAllSessionMessages(),
+			buildSessionExportProactiveSchedules(),
+		]);
 		const messagesForContext = normalizeSessionContextRows(all);
 		const payload: SessionExportPayload = {
-			format: 'misskey-agent-session-export-v2',
-			version: 2,
+			format: 'misskey-agent-session-export-v3',
+			version: 3,
 			sessionId,
 			exportedAt: new Date().toISOString(),
 			source: {
@@ -3667,6 +3479,7 @@ async function exportSessionContext() {
 				sessionKind: session.value?.sessionKind ?? null,
 			},
 			settings: buildSessionExportSettings(),
+			proactiveSchedules: proactiveSchedulesForExport,
 			messages: messagesForContext,
 		};
 		const json = JSON.stringify(payload, null, 2);
@@ -3721,8 +3534,13 @@ function parseImportedContext(text: string): ParsedSessionImportPayload {
 		out.push({ role, content });
 	}
 	const settings = parseImportedSessionSettings((parsed as { settings?: unknown }).settings);
+	const proactiveSchedules = parseImportedProactiveSchedules((parsed as { proactiveSchedules?: unknown }).proactiveSchedules);
 	const format = (parsed as { format?: unknown }).format;
-	const isSessionExport = format === 'misskey-agent-session-export-v1' || format === 'misskey-agent-session-export-v2';
+	const version = (parsed as { version?: unknown }).version;
+	const isSessionExport = format === 'misskey-agent-session-export-v1'
+		|| format === 'misskey-agent-session-export-v2'
+		|| format === 'misskey-agent-session-export-v3'
+		|| version === 1 || version === 2 || version === 3;
 	const legacy = !isSessionExport;
 	if (out.length === 0 && (legacy || settings == null || Object.keys(settings).length === 0)) {
 		throw new Error(i18n.ts._agents.sessionMemoryImportContextInvalidFormat);
@@ -3730,8 +3548,40 @@ function parseImportedContext(text: string): ParsedSessionImportPayload {
 	return {
 		messages: out,
 		settings,
+		proactiveSchedules,
 		legacy,
 	};
+}
+
+/** 解析导入文件中的定时主动消息计划；无效条目安全忽略（不报错），仅保留可重建的字段。 */
+function parseImportedProactiveSchedules(raw: unknown): SessionExportProactiveSchedule[] {
+	if (raw == null || !Array.isArray(raw)) return [];
+	const out: SessionExportProactiveSchedule[] = [];
+	for (const item of raw) {
+		if (item == null || typeof item !== 'object' || Array.isArray(item)) continue;
+		const rec = item as Record<string, unknown>;
+		if (typeof rec.description !== 'string' || rec.description.trim() === '') continue;
+		if (rec.status !== 'active' && rec.status !== 'paused') continue;
+		const trigger = rec.trigger;
+		if (trigger == null || typeof trigger !== 'object' || Array.isArray(trigger)) continue;
+		const t = trigger as Record<string, unknown>;
+		const description = rec.description.trim();
+		const status = rec.status;
+		if (t.type === 'once' && typeof t.at === 'string') {
+			out.push({ description, status, trigger: { type: 'once', at: t.at } });
+		} else if (t.type === 'recurring' && typeof t.cron === 'string') {
+			const repeat = t.repeat;
+			if (repeat != null && typeof repeat === 'object' && !Array.isArray(repeat)) {
+				const r = repeat as Record<string, unknown>;
+				if (r.mode === 'unlimited') {
+					out.push({ description, status, trigger: { type: 'recurring', cron: t.cron, repeat: { mode: 'unlimited' } } });
+				} else if (r.mode === 'count' && typeof r.count === 'number' && Number.isInteger(r.count)) {
+					out.push({ description, status, trigger: { type: 'recurring', cron: t.cron, repeat: { mode: 'count', count: r.count } } });
+				}
+			}
+		}
+	}
+	return out;
 }
 
 function parseImportedSessionSettings(raw: unknown): SessionExportSettings | null {
@@ -3745,6 +3595,7 @@ function parseImportedSessionSettings(raw: unknown): SessionExportSettings | nul
 	if ('name' in src) out.name = validateOptionalString(src.name, 'name', 1, 256, false) ?? undefined;
 	if ('dialogueStyleId' in src) out.dialogueStyleId = validateOptionalString(src.dialogueStyleId, 'dialogueStyleId', 1, 128, true);
 	if ('agentModelId' in src) out.agentModelId = validateOptionalString(src.agentModelId, 'agentModelId', 1, 64, true);
+	if ('agentVisionModelId' in src) out.agentVisionModelId = validateOptionalString(src.agentVisionModelId, 'agentVisionModelId', 1, 128, true);
 	if ('agentLongMemoryEnabled' in src) out.agentLongMemoryEnabled = validateBoolean(src.agentLongMemoryEnabled, 'agentLongMemoryEnabled');
 	if ('agentLongMemoryTopK' in src) out.agentLongMemoryTopK = validateInteger(src.agentLongMemoryTopK, 'agentLongMemoryTopK', 1, 100);
 	if ('agentLongMemoryMinScore' in src) out.agentLongMemoryMinScore = validateNullableNumber(src.agentLongMemoryMinScore, 'agentLongMemoryMinScore', 0, 1);
@@ -3832,6 +3683,23 @@ async function applyImportedSessionSettings(settings: SessionExportSettings | nu
 	return true;
 }
 
+/** v3 导入：重建定时主动消息计划；失败时安全忽略（不影响消息与配置导入），返回实际导入数。 */
+async function applyImportedProactiveSchedules(schedules: SessionExportProactiveSchedule[]): Promise<number> {
+	if (schedules.length === 0) return 0;
+	try {
+		const res = await (misskeyApi as unknown as (
+			endpoint: 'agents/proactive-schedules/import',
+			data: { sessionId: string; schedules: SessionExportProactiveSchedule[] },
+		) => Promise<{ importedCount: number }>)('agents/proactive-schedules/import', {
+			sessionId,
+			schedules,
+		});
+		return res.importedCount;
+	} catch {
+		return 0;
+	}
+}
+
 async function onContextImportFileChange(ev: Event) {
 	const input = ev.target as HTMLInputElement | null;
 	if (input == null || input.files == null || input.files.length === 0) return;
@@ -3851,6 +3719,7 @@ async function onContextImportFileChange(ev: Event) {
 		});
 		if (canceled) return;
 		const settingsApplied = await applyImportedSessionSettings(importedPayload.settings);
+		const schedulesImported = await applyImportedProactiveSchedules(importedPayload.proactiveSchedules);
 		if (importedMessages.length > 0) {
 			await (misskeyApi as unknown as (
 				endpoint: 'agents/messages/import-context',
@@ -3862,6 +3731,9 @@ async function onContextImportFileChange(ev: Event) {
 		}
 		await loadInitialTimeline();
 		await loadSession();
+		if (schedulesImported > 0) {
+			await loadProactiveSchedules();
+		}
 		os.toast(settingsApplied
 			? `已导入会话配置并覆盖 ${importedMessages.length} 条消息`
 			: i18n.tsx._agents.sessionMemoryImportContextDone({ n: importedMessages.length }));
@@ -4063,6 +3935,7 @@ async function onFormSubmit(payload: { text: string; file: DriveFile | null }) {
 			longTermMemoryAddScheduled?: boolean;
 			compressionLlmPending?: boolean;
 		compressionStickiesBaselineCount?: number;
+		compressionStickiesBaselineMaxUpdatedAt?: string | null;
 		proactiveScheduleControlFailed?: boolean;
 		proactiveScheduleActionTypes?: ('create' | 'update' | 'cancel')[];
 		aborted?: boolean;
@@ -4135,6 +4008,7 @@ async function onFormSubmit(payload: { text: string; file: DriveFile | null }) {
 		if (res.compressionLlmPending === true) {
 			startCompressionLlmProgressPoll(
 				typeof res.compressionStickiesBaselineCount === 'number' ? res.compressionStickiesBaselineCount : 0,
+				typeof res.compressionStickiesBaselineMaxUpdatedAt === 'string' ? res.compressionStickiesBaselineMaxUpdatedAt : null,
 			);
 		}
 		if (res.proactiveScheduleControlFailed === true) {
@@ -4174,11 +4048,16 @@ async function onFormSubmit(payload: { text: string; file: DriveFile | null }) {
 			}
 		}
 	} finally {
-		currentClientRequestId = null;
-		pendingWorldbookMatches.value = [];
-		if (!leaveSendingSpinner) {
-			sending.value = false;
+		// 仅当本请求仍是「当前请求」时才复位全局状态：
+		// 避免看门狗提前复位后，旧请求慢速 settle 时误清已发起的新请求状态。
+		// 正常路径下 currentClientRequestId 恒等于 clientRequestId，行为与原先完全一致。
+		if (currentClientRequestId === clientRequestId) {
+			currentClientRequestId = null;
+			if (!leaveSendingSpinner) {
+				sending.value = false;
+			}
 		}
+		pendingWorldbookMatches.value = [];
 	}
 }
 
@@ -4266,7 +4145,16 @@ async function onAbortRequest() {
 	}
 
 	const reqId = currentClientRequestId;
-	if (!reqId) return;
+	if (!reqId) {
+		// 无 clientRequestId 的两种恢复路径：
+		//  (a) 页面在「回复生成中」时重新进入，sending 被置 true 但从未设定 clientRequestId；
+		//  (b) 发送遭遇 AGENT_REPLY_PENDING 后转入回复轮询，finally 已将 clientRequestId 清空。
+		// 此时无法调用 abort 端点；若不止血，X 按钮会静默失效、sending 永久为 true（死锁）。
+		stopReplyPendingPoll();
+		sending.value = false;
+		return;
+	}
+
 	try {
 		await misskeyApi(
 			'agents/messages/abort' as Parameters<typeof misskeyApi>[0],
@@ -4275,6 +4163,17 @@ async function onAbortRequest() {
 	} catch {
 		// 中断请求本身失败时静默处理（服务端可能已经完成了）
 	}
+
+	// 看门狗：正常路径下原 send 请求被中断后会 reject，并由 onFormSubmit 的 finally 复位 sending。
+	// 但若请求卡在 registerAbortable 之前（abort 无法触发 reject），sending 会永久卡住。
+	// 此处超时后兑底复位；仅当仍处于同一请求（未发起新请求）时才复位，避免误清新请求状态。
+	window.setTimeout(() => {
+		if (currentClientRequestId === reqId && sending.value) {
+			stopReplyPendingPoll();
+			currentClientRequestId = null;
+			sending.value = false;
+		}
+	}, 8000);
 }
 </script>
 
@@ -4532,6 +4431,87 @@ async function onAbortRequest() {
 	color: var(--MI_THEME-fgTransparentWeak);
 }
 
+/* 会话封禁专用页：系统公告/平台处置风格，严肃端庄 */
+.bannedRoot {
+	min-height: 100cqh;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 24px 16px;
+	box-sizing: border-box;
+}
+
+.bannedCard {
+	width: 100%;
+	max-width: 560px;
+	padding: 40px 32px 32px;
+	box-sizing: border-box;
+	text-align: center;
+	background: var(--MI_THEME-panel);
+	border: solid 1px var(--MI_THEME-divider);
+	border-radius: 12px;
+}
+
+.bannedIcon {
+	width: 64px;
+	height: 64px;
+	margin: 0 auto 20px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	border-radius: 50%;
+	font-size: 1.9em;
+	color: var(--MI_THEME-error);
+	background: color-mix(in srgb, var(--MI_THEME-error) 12%, transparent);
+}
+
+.bannedTitle {
+	margin: 0 0 12px;
+	font-size: 1.35em;
+	font-weight: 700;
+	color: var(--MI_THEME-fg);
+}
+
+.bannedDesc {
+	margin: 0 0 24px;
+	font-size: 0.92em;
+	line-height: 1.7;
+	color: var(--MI_THEME-fgTransparentWeak);
+}
+
+.bannedReasonBlock {
+	margin: 0 0 28px;
+	padding: 14px 16px;
+	text-align: left;
+	background: var(--MI_THEME-bg);
+	border: solid 1px var(--MI_THEME-divider);
+	border-radius: 8px;
+}
+
+.bannedReasonLabel {
+	margin-bottom: 6px;
+	font-size: 0.78em;
+	font-weight: 600;
+	letter-spacing: 0.05em;
+	color: var(--MI_THEME-fgTransparentWeak);
+}
+
+.bannedReasonText {
+	font-size: 0.92em;
+	line-height: 1.7;
+	color: var(--MI_THEME-fg);
+	word-break: break-word;
+	white-space: pre-wrap;
+}
+
+.bannedActions {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex-wrap: wrap;
+	gap: 12px;
+}
+
 .footer {
 	width: 100%;
 	padding-top: 8px;
@@ -4545,7 +4525,10 @@ async function onAbortRequest() {
 	margin: 0 auto;
 	width: 100%;
 	max-width: 700px;
+	box-sizing: border-box;
 	font-size: 0.9em;
+	line-height: 1.5;
+	white-space: normal;
 }
 
 .form {
@@ -4609,9 +4592,16 @@ async function onAbortRequest() {
 	}
 }
 
-.memContextDividerRow {
+.memDividerLocate {
 	display: flex;
-	justify-content: flex-start;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: 0.5em 0.75em;
+	padding: 0.65em 0.85em;
+	border-radius: 12px;
+	border: solid 1px var(--MI_THEME-divider);
+	background: var(--MI_THEME-panel);
 }
 
 .memPage {
@@ -4619,14 +4609,6 @@ async function onAbortRequest() {
 	max-width: min(100%, 720px);
 	margin-inline: auto;
 	padding-bottom: 0.15em;
-}
-
-.memToolbar {
-	padding: 0.65em 0.9em;
-	border-radius: 12px;
-	border: solid 1px var(--MI_THEME-divider);
-	background: color-mix(in srgb, var(--MI_THEME-panel) 94%, var(--MI_THEME-accent) 2%);
-	box-shadow: 0 1px 2px color-mix(in srgb, var(--MI_THEME-fg) 3%, transparent);
 }
 
 .memAddPanel {
@@ -4688,6 +4670,30 @@ async function onAbortRequest() {
 	margin-top: 0.85em;
 }
 
+.memProviderDesc {
+	margin: 0.4em 0 0;
+	font-size: 0.82em;
+	line-height: 1.45;
+	color: var(--MI_THEME-fgTransparentWeak);
+}
+
+.memDividerLocateText {
+	display: flex;
+	align-items: flex-start;
+	gap: 0.5em;
+	min-width: 0;
+	flex: 1 1 14em;
+	font-size: 0.84em;
+	line-height: 1.45;
+	color: var(--MI_THEME-fgTransparentWeak);
+}
+
+.memDividerLocateIcon {
+	flex-shrink: 0;
+	margin-top: 0.12em;
+	color: var(--MI_THEME-accent);
+}
+
 .settingValue {
 	font-size: 0.9em;
 	font-weight: 700;
@@ -4702,6 +4708,56 @@ async function onAbortRequest() {
 .selectCardList {
 	display: grid;
 	gap: 0.75em;
+}
+
+/* 对话风格空状态引导 */
+.styleEmpty {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 0.9em;
+	padding: 1.6em 1.2em;
+	border: solid 1px var(--MI_THEME-divider);
+	border-radius: 12px;
+	text-align: center;
+}
+
+.styleEmptyTitle {
+	font-size: 1.05em;
+	font-weight: 700;
+	color: var(--MI_THEME-fg);
+}
+
+.styleEmptyDesc {
+	margin: 0;
+	max-width: 34em;
+	font-size: 0.88em;
+	line-height: 1.6;
+	color: var(--MI_THEME-fgTransparentWeak);
+}
+
+.styleEmptyWays {
+	display: flex;
+	flex-direction: column;
+	gap: 0.5em;
+	width: 100%;
+	max-width: 26em;
+	text-align: start;
+}
+
+.styleEmptyWay {
+	display: flex;
+	align-items: flex-start;
+	gap: 0.6em;
+	font-size: 0.88em;
+	line-height: 1.5;
+	color: var(--MI_THEME-fg);
+}
+
+.styleEmptyWayIcon {
+	flex-shrink: 0;
+	margin-top: 0.15em;
+	color: var(--MI_THEME-accent);
 }
 
 .selectCard {
@@ -4993,69 +5049,6 @@ async function onAbortRequest() {
 	color: var(--MI_THEME-fgTransparentWeak);
 }
 
-.compressionCountMuted {
-	font-weight: 600;
-	opacity: 0.58;
-	font-size: 0.92em;
-}
-
-.compressionStickyList {
-	display: flex;
-	flex-direction: column;
-	gap: 0.5em;
-}
-
-.compressionStickyCard {
-	padding: 0.55em 0.65em 0.6em;
-	border-radius: 10px;
-	border: solid 1px color-mix(in srgb, var(--MI_THEME-divider) 92%, var(--MI_THEME-accent) 5%);
-	background: var(--MI_THEME-panel);
-}
-
-.compressionStickyCardHead {
-	display: flex;
-	flex-wrap: wrap;
-	align-items: center;
-	gap: 0.35em 0.5em;
-	margin-bottom: 0.35em;
-}
-
-.compressionStickySummary {
-	white-space: pre-wrap;
-	word-break: break-word;
-	font-size: 0.9em;
-	line-height: 1.42;
-	margin-top: 0.15em;
-}
-
-.compressionStickyToolbar {
-	display: flex;
-	flex-wrap: wrap;
-	align-items: center;
-	gap: 0.35em;
-	justify-content: flex-end;
-	margin-top: 0.45em;
-}
-
-.compressionEmptyHint {
-	margin: 0;
-	padding: 0.35em 0 0.15em;
-	font-size: 0.88em;
-	color: var(--MI_THEME-fgTransparentWeak);
-}
-
-.compressionOverviewFail {
-	display: flex;
-	flex-wrap: wrap;
-	align-items: center;
-	gap: 0.5em 0.75em;
-	font-size: 0.88em;
-	color: var(--MI_THEME-fgTransparentWeak);
-}
-
-.memContextDividerBeforePorter {
-	margin-top: 0.35em;
-}
 
 .memDivider {
 	margin: 0.85em 0 1.15em;
@@ -5205,283 +5198,6 @@ async function onAbortRequest() {
 	margin: -0.15em 0 0.35em;
 }
 
-.compressionStatePill {
-	display: inline-flex;
-	align-items: center;
-	font-size: 0.78em;
-	font-weight: 700;
-	padding: 0.25em 0.55em;
-	border-radius: 999px;
-	letter-spacing: 0.02em;
-	background: color-mix(in srgb, var(--MI_THEME-fg) 6%, var(--MI_THEME-buttonBg));
-	border: solid 1px color-mix(in srgb, var(--MI_THEME-divider) 55%, transparent);
-	&[data-state="dormant"] {
-		color: var(--MI_THEME-fg);
-		background: color-mix(in srgb, var(--MI_THEME-fg) 5%, var(--MI_THEME-panel));
-		border-color: color-mix(in srgb, var(--MI_THEME-divider) 70%, transparent);
-	}
-	&[data-state="active"] {
-		color: var(--MI_THEME-success, #16a34a);
-		background: color-mix(in srgb, var(--MI_THEME-success) 18%, var(--MI_THEME-panel));
-		border-color: color-mix(in srgb, var(--MI_THEME-success) 32%, var(--MI_THEME-divider));
-	}
-}
-.compressionUserTag {
-	margin-inline-start: 0.15em;
-	font-size: 0.75em;
-	font-weight: 600;
-	opacity: 0.82;
-	padding: 0.2em 0.45em;
-	border-radius: 6px;
-	background: color-mix(in srgb, var(--MI_THEME-accent) 10%, var(--MI_THEME-panel));
-}
-.compressionRangeRow {
-	display: flex;
-	flex-wrap: wrap;
-	align-items: flex-start;
-	gap: 0.35em 0.45em;
-	margin: 0.3em 0 0.45em;
-}
-.compressionEndChip {
-	display: flex;
-	flex-direction: column;
-	align-items: flex-start;
-	gap: 0.12em;
-	flex: 1 1 0;
-	min-width: min(100%, 9.5rem);
-	max-width: min(100%, 13rem);
-	padding: 0.3em 0.45em;
-	border-radius: 8px;
-	text-align: start;
-	font: inherit;
-	font-size: 0.92em;
-	color: inherit;
-	cursor: pointer;
-	border: solid 1px color-mix(in srgb, var(--MI_THEME-divider) 78%, transparent);
-	background: color-mix(in srgb, var(--MI_THEME-fg) 2.8%, var(--MI_THEME-panel));
-	transition: background 0.12s ease, border-color 0.12s ease;
-	@media (hover: hover) {
-		&:hover {
-			background: color-mix(in srgb, var(--MI_THEME-accent) 8%, var(--MI_THEME-panel));
-			border-color: color-mix(in srgb, var(--MI_THEME-accent) 28%, var(--MI_THEME-divider));
-		}
-	}
-}
-.compressionEndLabel {
-	font-size: 0.65em;
-	font-weight: 700;
-	opacity: 0.68;
-	text-transform: none;
-	letter-spacing: 0.02em;
-}
-.compressionEndText {
-	font-size: 0.88em;
-	line-height: 1.38;
-	width: 100%;
-	overflow: hidden;
-	display: -webkit-box;
-	-webkit-line-clamp: 2;
-	line-clamp: 2;
-	-webkit-box-orient: vertical;
-	word-break: break-word;
-}
-.compressionRangeArrow {
-	align-self: center;
-	margin-top: 0.65em;
-	opacity: 0.5;
-	font-size: 0.85em;
-	user-select: none;
-}
-.compressionError {
-	color: var(--MI_THEME-error);
-	font-size: 0.9em;
-	margin: 0.2em 0 0.4em;
-}
-.compressionBandScaleInline {
-	padding: 0.35em 0.75em 0.5em;
-	font-size: 0.82em;
-	line-height: 1.42;
-	color: var(--MI_THEME-fgTransparentWeak);
-	border-bottom: solid 1px color-mix(in srgb, var(--MI_THEME-divider) 55%, transparent);
-}
-.compressionBandsSection {
-	margin-top: 0.35em;
-	font-size: 0.98em;
-	border-radius: 10px;
-	border: solid 1px color-mix(in srgb, var(--MI_THEME-divider) 88%, transparent);
-	background: var(--MI_THEME-panel);
-	overflow: hidden;
-}
-.compressionBandsHeader {
-	display: flex;
-	align-items: flex-start;
-	gap: 0.45em;
-	width: 100%;
-	padding: 0.55em 0.7em;
-	margin: 0;
-	border: none;
-	background: color-mix(in srgb, var(--MI_THEME-fg) 1.8%, var(--MI_THEME-panel));
-	font: inherit;
-	color: inherit;
-	cursor: pointer;
-	text-align: start;
-	@media (hover: hover) {
-		&:hover {
-			background: color-mix(in srgb, var(--MI_THEME-fg) 2.8%, var(--MI_THEME-panel));
-		}
-	}
-}
-.compressionBandsChevron {
-	flex-shrink: 0;
-	margin-top: 0.12em;
-	font-size: 1.05em;
-	opacity: 0.72;
-}
-.compressionBandsTitleBlock {
-	display: flex;
-	flex-direction: column;
-	gap: 0.12em;
-	min-width: 0;
-}
-.compressionBandsTitle {
-	font-weight: 700;
-	font-size: 0.98em;
-	letter-spacing: 0.01em;
-	line-height: 1.25;
-}
-.compressionBandsSubtitle {
-	font-size: 0.78em;
-	font-weight: 500;
-	line-height: 1.35;
-	color: var(--MI_THEME-fgTransparentWeak);
-}
-.compressionBandsFootnote {
-	margin: 0;
-	padding: 0 0.75em 0.45em;
-	font-size: 0.78em;
-	line-height: 1.45;
-	color: var(--MI_THEME-fgTransparentWeak);
-}
-.compressionBandGroups {
-	padding: 0.4em 0.45em 0.55em;
-	display: flex;
-	flex-direction: column;
-	gap: 0.65em;
-}
-.compressionBandGroup {
-	display: flex;
-	flex-direction: column;
-	gap: 0.28em;
-	padding: 0;
-	border-radius: 0;
-	border: none;
-	background: transparent;
-	box-shadow: none;
-}
-.compressionBandGroupTitle {
-	font-size: 0.78em;
-	font-weight: 700;
-	letter-spacing: 0.04em;
-	text-transform: uppercase;
-	color: var(--MI_THEME-fgTransparentWeak);
-	padding: 0.15em 0.1em 0.2em;
-	margin: 0;
-	border-bottom: none;
-}
-.compressionMessageTable {
-	display: flex;
-	flex-direction: column;
-	gap: 0;
-	border-radius: 8px;
-	overflow: hidden;
-	border: solid 1px color-mix(in srgb, var(--MI_THEME-divider) 50%, transparent);
-}
-.compressionMsgTokenMeta {
-	display: block;
-	font-size: 0.82em;
-	font-variant-numeric: tabular-nums;
-	color: var(--MI_THEME-fgTransparentWeak);
-	margin-top: 0.38em;
-	letter-spacing: 0.01em;
-}
-.compressionMsgRow {
-	border-bottom: solid 1px color-mix(in srgb, var(--MI_THEME-divider) 45%, transparent);
-	&:last-child {
-		border-bottom: none;
-	}
-}
-.compressionMsgRowClickable {
-	font-size: 1em;
-	padding: 0.6em 0.7em;
-	min-height: 2.9em;
-	cursor: pointer;
-	text-align: start;
-	border-radius: 0;
-	color: inherit;
-	background: color-mix(in srgb, var(--MI_THEME-fg) 1.2%, var(--MI_THEME-bg));
-	border-left: solid 3px transparent;
-	transition: background 0.1s ease, border-color 0.1s ease;
-	@media (hover: hover) {
-		&:hover {
-			background: color-mix(in srgb, var(--MI_THEME-fg) 3.5%, var(--MI_THEME-panel));
-			border-left-color: color-mix(in srgb, var(--MI_THEME-accent) 55%, var(--MI_THEME-panel));
-		}
-	}
-	&:focus-visible {
-		outline: 2px solid var(--MI_THEME-focus, var(--MI_THEME-accent));
-		outline-offset: -1px;
-	}
-}
-.compressionMsgRowTop {
-	display: flex;
-	align-items: center;
-	gap: 0.45em 0.6em;
-	flex-wrap: wrap;
-	margin-bottom: 0.28em;
-}
-.compressionMsgRolePill {
-	font-size: 0.82em;
-	font-weight: 800;
-	padding: 0.15em 0.5em;
-	border-radius: 999px;
-}
-.compressionMsgRoleUser {
-	background: color-mix(in srgb, var(--MI_THEME-accent) 20%, var(--MI_THEME-panel));
-	color: var(--MI_THEME-accent);
-}
-.compressionMsgRoleAsst {
-	background: color-mix(in srgb, var(--MI_THEME-fg) 9%, var(--MI_THEME-panel));
-}
-.compressionMsgBadgeCompressed {
-	font-size: 0.8em;
-	font-weight: 700;
-	color: var(--MI_THEME-warn, #c27803);
-}
-.compressionMsgPreview {
-	font-size: 0.98em;
-	line-height: 1.5;
-	color: var(--MI_THEME-fg);
-	opacity: 0.95;
-}
-.compressionMsgOmitRow {
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	gap: 0.5em;
-	padding: 0.55em 0.5em;
-	font-size: 0.88em;
-	color: var(--MI_THEME-fg);
-	opacity: 0.6;
-	font-weight: 600;
-	border-bottom: solid 1px color-mix(in srgb, var(--MI_THEME-divider) 40%, transparent);
-}
-.compressionOmitDots {
-	letter-spacing: 0.12em;
-	font-weight: 700;
-}
-.compressionOmitHint {
-	font-size: 0.9em;
-}
 .drawPanel {
 	padding: 16px;
 	border-radius: 8px;
@@ -5512,6 +5228,12 @@ async function onAbortRequest() {
 	margin-top: 4px;
 	font-size: 0.9em;
 	opacity: 0.72;
+}
+.drawAutoDraw {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	margin-top: 12px;
 }
 .drawReferenceImage {
 	display: flex;

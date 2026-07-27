@@ -11,7 +11,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<div :class="[$style.card, $style.cardBalance]">
 				<div :class="$style.cardIcon"><i class="ti ti-wallet"></i></div>
 				<div :class="$style.cardBody">
-					<div :class="$style.cardValue"><MkNumber :value="summary.creditBalance" :tween="false"/></div>
+					<div :class="$style.cardValue">{{ summary.creditBalance.toFixed(2) }}</div>
 					<div :class="$style.cardLabel">{{ i18n.ts._agents.myStatsCreditBalance }}</div>
 				</div>
 			</div>
@@ -48,6 +48,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<i class="ti ti-ticket"></i> {{ i18n.ts._agents.redeemCodeSubmit }}
 				</MkButton>
 			</div>
+			<div v-if="redeemPurchaseUrl" :class="$style.redeemPurchaseHint">
+				{{ i18n.ts._agents.redeemPurchaseHint }}
+				<a :href="redeemPurchaseUrl" target="_blank" rel="noopener noreferrer" :class="$style.redeemPurchaseLink">{{ i18n.ts._agents.redeemPurchaseLink }}<i class="ti ti-external-link" :class="$style.redeemPurchaseLinkIcon"></i></a>
+			</div>
 		</div>
 
 		<!-- 消费日志 -->
@@ -67,8 +71,15 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<div v-for="item in billingItems" :key="item.id" :class="[$style.row, $style.rowData, $style.billingCols]">
 						<span :class="$style.name">{{ toBJT(item.createdAt) }}</span>
 						<span :class="$style.billingTypeCell">
+							<!-- 签到/补签：专属芯片，不带“· 成功”状态，不用模型扣费颜色 -->
 							<span
-								v-if="item.kind === 'usage'"
+								v-if="item.kind === 'usage' && item.usageKind === 'checkin'"
+								:class="[$style.billingStatusChip, item.amount > 0 ? $style.badgeCheckinReward : $style.badgeCheckinMakeup]"
+							>
+								<span :class="$style.billingStatusPrefix">{{ billingUsageSubkindLabel(item) }}</span>
+							</span>
+							<span
+								v-else-if="item.kind === 'usage'"
 								:class="[$style.billingStatusChip, item.status === 'success' ? $style.badgeOk : item.status === 'failed' ? $style.badgeErr : $style.badgeWarn]"
 								:title="billingUsageRowTitle(item.status)"
 							>
@@ -82,7 +93,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 							</span>
 						</span>
 						<span :class="$style.name">{{ item.kind === 'usage' ? (item.modelName ?? '—') : (item.redeemCode ?? '') }}</span>
-						<span :class="[$style.num, item.kind === 'usage' ? $style.colorErr : $style.colorOk]">{{ formatBillingAmount(item) }}</span>
+						<span :class="[$style.num, item.usedFreeQuota === true ? null : (item.usageKind === 'checkin' ? (item.amount > 0 ? $style.colorOk : $style.colorErr) : item.kind === 'usage' ? $style.colorErr : $style.colorOk)]">
+							<template v-if="item.usedFreeQuota === true">免费次数 {{ item.freeQuotaUsedAtCall }}/{{ item.freeQuotaTotalAtCall }}</template>
+							<template v-else>{{ formatBillingAmount(item) }}</template>
+						</span>
 					</div>
 				</div>
 				<div :class="$style.pagerBar" role="navigation" :aria-label="i18n.ts._agents.billingLog">
@@ -162,6 +176,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<span :class="$style.num">{{ i18n.ts._agents.myStatsStatusAborted }}</span>
 					<span :class="$style.num">{{ i18n.ts._agents.successRate }}</span>
 					<span :class="$style.num">{{ i18n.ts._agents.myStatsCost }}</span>
+					<span :class="$style.num">免费次数</span>
 				</div>
 				<div v-for="ms in summary.modelStats" :key="ms.modelId ?? '__null__'" :class="[$style.row, $style.rowData, $style.modelCols]">
 					<span :class="$style.name" :title="ms.modelName ?? undefined">{{ ms.modelName ?? '—' }}</span>
@@ -170,6 +185,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<span :class="[$style.num, ms.aborted > 0 ? $style.colorWarn : null]">{{ ms.aborted }}</span>
 					<span :class="$style.num">{{ ms.total > 0 ? ((ms.success / ms.total) * 100).toFixed(1) + '%' : '—' }}</span>
 					<span :class="$style.num">{{ ms.totalCost.toFixed(4) }}</span>
+					<span :class="$style.num">{{ (ms.freeQuotaUsed ?? 0) > 0 ? `${ms.freeQuotaUsed} 次` : '—' }}</span>
 				</div>
 			</div>
 		</MkFolder>
@@ -196,7 +212,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 							<span :class="[$style.badge, log.status === 'success' ? $style.badgeOk : log.status === 'failed' ? $style.badgeErr : $style.badgeWarn]">{{ statusLabel(log.status) }}</span>
 						</span>
 						<span :class="$style.num">{{ log.durationMs != null ? (log.durationMs / 1000).toFixed(1) + 's' : '—' }}</span>
-						<span :class="$style.num">{{ log.cost.toFixed(4) }}</span>
+						<span :class="$style.num">
+							<template v-if="log.usedFreeQuota === true">免费次数 {{ log.freeQuotaUsedAtCall }}/{{ log.freeQuotaTotalAtCall }}</template>
+							<template v-else>{{ log.cost.toFixed(4) }}</template>
+						</span>
 					</div>
 				</div>
 				<div :class="$style.pagerBar" role="navigation" :aria-label="i18n.ts._agents.myStatsRecentLogs">
@@ -311,12 +330,13 @@ import MkNumber from '@/components/MkNumber.vue';
 import MkButton from '@/components/MkButton.vue';
 import MkInput from '@/components/MkInput.vue';
 import { misskeyApi, formatApiError } from '@/utility/misskey-api.js';
+import { instance } from '@/instance.js';
 import { i18n, updateI18n } from '@/i18n.js';
 import * as os from '@/os.js';
 import { lang, version } from '@@/js/config.js';
 import type { Locale } from 'i18n';
 
-type UsageKind = 'chat' | 'compression' | 'image_generation' | 'vision' | 'proactive_random' | 'proactive_scheduled';
+type UsageKind = 'chat' | 'compression' | 'image_generation' | 'vision' | 'proactive_random' | 'proactive_scheduled' | 'checkin';
 
 type RecentLog = {
 	id: string;
@@ -331,6 +351,9 @@ type RecentLog = {
 	cost: number;
 	promptTokens: number | null;
 	completionTokens: number | null;
+	usedFreeQuota?: boolean | null;
+	freeQuotaUsedAtCall?: number | null;
+	freeQuotaTotalAtCall?: number | null;
 };
 
 type CharacterStat = { characterId: string; characterName: string | null; total: number };
@@ -343,7 +366,7 @@ type UsageSummary = {
 	recentLogsTotal: number;
 	recentLogsPage: number;
 	recentLogsPageSize: number;
-	modelStats: { modelId: string | null; modelName: string | null; total: number; success: number; failed: number; aborted: number; totalCost: number }[];
+	modelStats: { modelId: string | null; modelName: string | null; total: number; success: number; failed: number; aborted: number; totalCost: number; freeQuotaUsed?: number; freeQuotaTotal?: number }[];
 	characterStats: CharacterStat[];
 	characterStatsTotal: number;
 	dialogueStyleStats: StyleStat[];
@@ -360,6 +383,9 @@ type BillingItem = {
 	status: string | null;
 	durationMs: number | null;
 	redeemCode: string | null;
+	usedFreeQuota?: boolean | null;
+	freeQuotaUsedAtCall?: number | null;
+	freeQuotaTotalAtCall?: number | null;
 };
 type BillingResponse = {
 	items: BillingItem[];
@@ -381,6 +407,12 @@ const overallCost = computed(() => summary.value?.modelStats.reduce((s, m) => s 
 
 const redeemCode = ref('');
 const redeeming = ref(false);
+
+// 管理员配置的卡密购买链接；未配置时不展示购买入口
+const redeemPurchaseUrl = computed(() => {
+	const u = (instance as Record<string, unknown>).agentRedeemPurchaseUrl;
+	return typeof u === 'string' && u.trim() !== '' ? u.trim() : null;
+});
 
 // --- 消费日志 ---
 const billingItems = ref<BillingItem[]>([]);
@@ -636,6 +668,7 @@ function billingUsageSubkindLabel(item: BillingItem): string {
 	if (item.usageKind === 'compression') return agentUsageLocaleLabel('billingKindCompressionUsage', 'billingKindUsage');
 	if (item.usageKind === 'proactive_random') return agentUsageLocaleLabel('billingKindProactiveRandomUsage', 'billingKindUsage');
 	if (item.usageKind === 'proactive_scheduled') return agentUsageLocaleLabel('billingKindProactiveScheduledUsage', 'billingKindUsage');
+	if (item.usageKind === 'checkin') return item.amount > 0 ? '签到奖励' : '补签消耗';
 	return agentUsageLocaleLabel('billingKindChatUsage', 'billingKindUsage');
 }
 
@@ -655,6 +688,8 @@ function billingUsageRowTitle(status: string | null | undefined): string {
 
 function formatBillingAmount(item: BillingItem): string {
 	const abs = Math.abs(item.amount).toFixed(4);
+	// 签到奖励（billing amount>0 表示收入）显示为 +X；补签消耗（amount<0）显示为 -X
+	if (item.usageKind === 'checkin') return item.amount > 0 ? `+${abs}` : `-${abs}`;
 	return item.kind === 'usage' ? `-${abs}` : `+${abs}`;
 }
 
@@ -802,7 +837,7 @@ onMounted(async () => {
 }
 
 .modelCols {
-	grid-template-columns: 2.4fr 0.7fr 0.7fr 0.7fr 0.9fr 1fr;
+	grid-template-columns: 2.4fr 0.7fr 0.7fr 0.7fr 0.9fr 1fr 0.9fr;
 }
 
 .logCols {
@@ -865,6 +900,16 @@ onMounted(async () => {
 .badgeRedeem {
 	color: #3da2ff;
 	background: #3da2ff26;
+}
+
+.badgeCheckinReward {
+	color: var(--MI_THEME-accent);
+	background: color-mix(in srgb, var(--MI_THEME-accent) 16%, transparent);
+}
+
+.badgeCheckinMakeup {
+	color: var(--MI_THEME-warn);
+	background: color-mix(in srgb, var(--MI_THEME-warn) 16%, transparent);
 }
 
 .billingTypeCell {
@@ -1141,7 +1186,7 @@ onMounted(async () => {
 	}
 
 	.modelCols {
-		grid-template-columns: 1.4fr 0.7fr 0.7fr 0.9fr;
+		grid-template-columns: 1.4fr 0.7fr 0.7fr 0.9fr 0.8fr;
 
 		> :nth-child(4),
 		> :nth-child(5) {
@@ -1195,5 +1240,26 @@ onMounted(async () => {
 .redeemInput {
 	flex: 1;
 	min-width: 0;
+}
+.redeemPurchaseHint {
+	margin-top: 10px;
+	font-size: 0.85em;
+	color: var(--MI_THEME-fgTransparentWeak);
+}
+.redeemPurchaseLink {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.25em;
+	margin-left: 0.4em;
+	color: var(--MI_THEME-accent);
+	font-weight: 600;
+	text-decoration: none;
+
+	&:hover {
+		text-decoration: underline;
+	}
+}
+.redeemPurchaseLinkIcon {
+	font-size: 0.85em;
 }
 </style>

@@ -62,8 +62,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 						<div v-if="part.type === 'text'" v-html="part.html"></div>
 						<div v-else :class="$style.drawCard">
 							<div :class="$style.drawCardHead">
-								<span><i class="ti ti-brush"></i> AI生成图片</span>
+								<span><i class="ti ti-brush"></i> 配图</span>
 								<button
+									v-if="!isManualPending(part.index)"
 									class="_button"
 									:class="$style.drawRetry"
 									:title="drawState(part.index)?.status === 'generating' ? '生成中' : '重新生成'"
@@ -75,7 +76,14 @@ SPDX-License-Identifier: AGPL-3.0-only
 							</div>
 							<div v-if="drawState(part.index)?.status === 'succeeded' && drawState(part.index)?.url && !isDrawBlocked(part.index)" :class="$style.drawImageWrap">
 								<MkMediaList v-if="drawFileList(part.index).length > 0" :key="drawState(part.index)?.fileId ?? part.index" :class="$style.drawMediaList" :mediaList="drawFileList(part.index)"/>
-								<img v-else :src="drawState(part.index)?.url ?? ''" :class="$style.drawImage" alt="AI生成图片"/>
+								<img v-else :src="drawState(part.index)?.url ?? ''" :class="$style.drawImage" alt="配图"/>
+							</div>
+							<div v-else-if="isManualPending(part.index)" :class="$style.drawManual">
+								<i class="ti ti-brush" :class="$style.drawManualIcon"></i>
+								<span :class="$style.drawManualText">{{ i18n.ts._agents.imageDrawManualPending }}</span>
+								<MkButton rounded small primary :class="$style.drawManualBtn" @click.stop="manualGenerate(part.index)">
+									{{ i18n.ts._agents.imageDrawManualGenerate }}
+								</MkButton>
 							</div>
 							<div v-else :class="$style.drawPending">
 								<MkLoading v-if="!drawState(part.index) || drawState(part.index)?.status === 'generating' || drawState(part.index)?.status === 'pending'"/>
@@ -117,6 +125,7 @@ import { copyToClipboard } from '@/utility/copy-to-clipboard.js';
 import { prefer } from '@/preferences.js';
 import { misskeyApi, formatApiError } from '@/utility/misskey-api.js';
 import MkLoading from '@/components/global/MkLoading.vue';
+import MkButton from '@/components/MkButton.vue';
 import MkMediaList from '@/components/MkMediaList.vue';
 import { splitAgentMessageIntoSegments } from '@/utility/agent-message-segments.js';
 
@@ -145,6 +154,10 @@ const props = defineProps<{
 	visibleSegmentCount?: number;
 	/** 与私信 XMessage 搜索结果一致：点击行跳转到该条消息 */
 	isSearchResult?: boolean;
+	/** 自动生图开关（默认开）；关闭后所有占位符进入待手动生成 */
+	autoDrawEnabled?: boolean;
+	/** 单轮自动生图张数上限；超出索引的占位符进入待手动生成 */
+	autoDrawCount?: number;
 }>();
 
 const emit = defineEmits<{
@@ -212,6 +225,8 @@ type RenderPart =
 	| { type: 'draw'; key: string; index: number; tag: string; size: 'portrait' | 'landscape' | 'square' };
 
 const drawResults = reactive<Record<number, DrawResult | undefined>>({});
+/** 待手动生成的占位符索引（超出自动生图上限或自动生图关闭） */
+const manualPending = reactive<Record<number, boolean>>({});
 
 const displaySegmentContents = computed(() => {
 	const content = displayContent.value;
@@ -264,6 +279,10 @@ function renderParts(text: string, drawOffset: number): RenderPart[] {
 
 function drawState(index: number): DrawResult | undefined {
 	return drawResults[index];
+}
+
+function isAutoDrawn(index: number): boolean {
+	return props.autoDrawEnabled !== false && index < (props.autoDrawCount ?? Infinity);
 }
 
 function shouldRefreshDrawState(current: DrawResult | undefined): boolean {
@@ -364,11 +383,31 @@ function regenerateDraw(index: number) {
 	void generateDraw(index, true);
 }
 
+function isManualPending(index: number): boolean {
+	const s = drawResults[index];
+	return manualPending[index] === true && (s == null || s.status === 'pending');
+}
+
+function manualGenerate(index: number) {
+	delete manualPending[index];
+	void generateDraw(index, false);
+}
+
 function startDraws() {
 	if (props.message.role !== 'assistant' || props.isSearchResult) return;
 	for (const segment of renderedSegments.value) {
 		for (const part of segment.parts) {
-			if (part.type === 'draw') void generateDraw(part.index, false);
+			if (part.type !== 'draw') continue;
+			if (isAutoDrawn(part.index)) {
+				delete manualPending[part.index];
+				void generateDraw(part.index, false);
+			} else {
+				// 超出自动生图上限（或自动生图关闭）：仅当尚未生成时标记为待手动生成
+				const cur = drawResults[part.index];
+				if (cur == null || cur.status === 'pending') {
+					manualPending[part.index] = true;
+				}
+			}
 		}
 	}
 }
@@ -376,9 +415,12 @@ function startDraws() {
 onMounted(startDraws);
 watch(() => `${props.message.id}:${props.message.content}`, () => {
 	for (const key of Object.keys(drawResults)) delete drawResults[Number(key)];
+	for (const key of Object.keys(manualPending)) delete manualPending[Number(key)];
 	startDraws();
 });
 watch(() => props.visibleSegmentCount, startDraws);
+// 自动生图开关/张数变更后重新分流（generateDraw 对已成功项幂等，不会重复生成）
+watch([() => props.autoDrawEnabled, () => props.autoDrawCount], startDraws);
 watch(
 	() => renderedSegments.value.flatMap(segment => segment.parts.filter(part => part.type === 'draw').map(part => part.index)).join(','),
 	startDraws,
@@ -925,6 +967,32 @@ async function confirmDelete() {
 		font-size: 1.7em;
 		color: var(--MI_THEME-accent);
 	}
+}
+
+.drawManual {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex-direction: column;
+	gap: 10px;
+	min-height: 180px;
+	padding: 52px 18px 24px;
+	color: var(--MI_THEME-fgTransparentWeak);
+	text-align: center;
+}
+
+.drawManualIcon {
+	font-size: 1.7em;
+	color: var(--MI_THEME-accent);
+}
+
+.drawManualText {
+	font-size: 0.9em;
+	line-height: 1.45;
+}
+
+.drawManualBtn {
+	margin-top: 4px;
 }
 
 .drawErrorDiagnostic {

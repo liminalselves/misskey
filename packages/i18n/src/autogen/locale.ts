@@ -13986,6 +13986,26 @@ export interface Locale extends ILocale {
          */
         "chatModerationBlockedSession": string;
         /**
+         * セッションは停止されました
+         */
+        "sessionBannedTitle": string;
+        /**
+         * このセッションはプラットフォームにより処分されました。チャット履歴の閲覧や会話の続行はできません。データを保存する必要がある場合は、削除する前にセッションをエクスポートしてください。
+         */
+        "sessionBannedDesc": string;
+        /**
+         * 処分理由
+         */
+        "sessionBannedReasonLabel": string;
+        /**
+         * このセッションはプラットフォームにより処分されました
+         */
+        "sessionBannedReasonDefault": string;
+        /**
+         * セッションをエクスポート
+         */
+        "sessionBannedExport": string;
+        /**
          * 停止
          */
         "modlogAgentBanOn": string;
@@ -14229,6 +14249,26 @@ export interface Locale extends ILocale {
          * この画像には利用可能な画像認識の内容が生成されていません。
          */
         "imageRecognitionUnavailable": string;
+        /**
+         * 自動生図
+         */
+        "imageAutoDrawLabel": string;
+        /**
+         * 自動生図枚数
+         */
+        "imageAutoDrawCountLabel": string;
+        /**
+         * 管理画面の「1回の最大画像数」に従います。自動生成の上限を超えた画像指示は手動で生成する必要があります。
+         */
+        "imageAutoDrawCountCaption": string;
+        /**
+         * この画像はまだ自動生成されていません
+         */
+        "imageDrawManualPending": string;
+        /**
+         * 手動生成
+         */
+        "imageDrawManualGenerate": string;
         /**
          * スケジュールメッセージを追加しました
          */
@@ -14886,9 +14926,25 @@ export interface Locale extends ILocale {
          */
         "chatComposeNeedStyleHint": string;
         /**
-         * 利用できる会話スタイルがありません。作成ページで自分用を作成するか、スタイル広場から追加してください。
+         * 利用可能な会話スタイルがありません
          */
-        "sessionNoUsableStyles": string;
+        "sessionNoStylesTitle": string;
+        /**
+         * 会話スタイルは、エージェントの話し方——口調・口癖・返答の雰囲気——を決めるものです。
+         */
+        "sessionNoStylesDesc": string;
+        /**
+         * 「創造」ページで自分のスタイルを作成
+         */
+        "sessionNoStylesCreate": string;
+        /**
+         * スタイル広場で他の人が公開しているスタイルを追加
+         */
+        "sessionNoStylesPlaza": string;
+        /**
+         * スタイル広場を見てみる
+         */
+        "sessionNoStylesGoPlaza": string;
         /**
          * 未選択
          */
@@ -15214,7 +15270,7 @@ export interface Locale extends ILocale {
          */
         "compressionSidecarScheduledHint": string;
         /**
-         * 便箋の圧縮に失敗しました。「記憶」で該当便箋を確認するか、後でもう一度お試しください。
+         * 便箋の圧縮に失敗しました。「記憶」で確認できます。古いメッセージは未圧縮のまま、次回の送信時に自動で再試行します。
          */
         "compressionSidecarLlmFailed": string;
         /**
@@ -15222,7 +15278,7 @@ export interface Locale extends ILocale {
          */
         "compressionSidecarLlmTimeout": string;
         /**
-         * 圧縮モデルの呼び出しに失敗しました（抜粋が表示されている場合があります。便箋を編集できます）。
+         * 圧縮モデルの呼び出しに失敗したため、要約は生成されませんでした。便箋を編集して記入するか、削除して再試行できます。
          */
         "compressionStickyLlmFailedStored": string;
         /**
@@ -15322,6 +15378,22 @@ export interface Locale extends ILocale {
          */
         "sessionLongMemoryProviderCompression": string;
         /**
+         * 長期記憶を使用せず、会話はウィンドウ内の最近のメッセージのみに依存します。
+         */
+        "sessionLongMemoryProviderDescNone": string;
+        /**
+         * 古い会話を自動的に便箋要約に圧縮し、重要情報を保持しながら原文の占有を減らします。
+         */
+        "sessionLongMemoryProviderDescCompression": string;
+        /**
+         * Alibaba Cloud Bailianサービスで意味記憶を抽出・検索し、長期的な関係維持に適しています。
+         */
+        "sessionLongMemoryProviderDescAliyun": string;
+        /**
+         * 会話でコンテキストウィンドウの区切り線を定位し、モデルに送信されるメッセージを確認します。
+         */
+        "sessionMemoryContextDividerDesc": string;
+        /**
          * 便箋圧縮（会話用モデルが無効です。切り替えするか管理者に依頼）
          */
         "sessionLongMemoryProviderCompressionSavedButUnavailable": string;
@@ -15378,6 +15450,14 @@ export interface Locale extends ILocale {
          */
         "compressionStickyTo": string;
         /**
+         * 対応するメッセージ区間
+         */
+        "compressionStickyRangeToggle": string;
+        /**
+         * 折りたたむ
+         */
+        "compressionStickyRangeCollapse": string;
+        /**
          * 手動編集
          */
         "compressionStickyUserEdited": string;
@@ -15393,6 +15473,10 @@ export interface Locale extends ILocale {
          * 処理中
          */
         "compressionStateOther": string;
+        /**
+         * 圧縮失敗
+         */
+        "compressionStateFailed": string;
         /**
          * 便箋を更新しました
          */
@@ -15417,6 +15501,42 @@ export interface Locale extends ILocale {
          * この便箋を下へ
          */
         "compressionStickyMoveDown": string;
+        /**
+         * 要約を生成中です。完了すると自動的に更新されます。
+         */
+        "compressionStickyProcessingHint": string;
+        /**
+         * もっと会話をすると、システムが自動的に古い会話を便箋に圧縮し、原文の繰り返し送信を減らします。
+         */
+        "compressionStickyEmptyGuide": string;
+        /**
+         * 現在モデルに送信されるメッセージ（ウィンドウ内）
+         */
+        "compressionBandTooltipNew": string;
+        /**
+         * キューの前方、ウィンドウに空きができると優先的に入る
+         */
+        "compressionBandTooltipPrep": string;
+        /**
+         * キューの後方、短期的にはウィンドウに入らない
+         */
+        "compressionBandTooltipStaged": string;
+        /**
+         * ウィンドウを超えた、原文としてモデルに送信されない
+         */
+        "compressionBandTooltipOut": string;
+        /**
+         * ≈ 付きの数字はヒューリスティック推定値です。正確なカウントはウィンドウ内のメッセージにのみ適用されます。
+         */
+        "compressionTokensApproxTooltip": string;
+        /**
+         * 圧縮を再試行
+         */
+        "compressionStickyRetry": string;
+        /**
+         * AIリクエストに失敗しました。モデル設定とアップストリームサービスの状態を確認してから再試行してください。
+         */
+        "llmRequestFailedHint": string;
         /**
          * 文脈上の位置
          */
@@ -15458,13 +15578,9 @@ export interface Locale extends ILocale {
          */
         "compressionBandOut": string;
         /**
-         * 数字は目安で上のスケールと同じ換算です。「当メッセージ」は本文の長さの目安、「累計」は最新から遡る合計。「要約済み」は便箋に置き換えられた印。「ウィンドウ外」は原文として今回のリクエストに載りません。
+         * 「会話中のウィンドウ」は {t1} 以内、「キュー前方」は {t1}～{t2}、「キュー後方」は {t2}～{h}（ウィンドウ上限）、{h} を超えると「ウィンドウ外」です。
          */
-        "compressionBandLegend": string;
-        /**
-         * スケール（最新からの累計、表の「累計」と同じ）：ウィンドウ上限 {h}；第1境目 {t1}；第2境目 {t2}。
-         */
-        "compressionBandScaleCaption": ParameterizedString<"h" | "t1" | "t2">;
+        "compressionBandScaleCaption": ParameterizedString<"t1" | "t1" | "t2" | "t2" | "h" | "h">;
         /**
          * 当メッセージ {msg} · 累計 {cum}
          */
@@ -15891,6 +16007,18 @@ export interface Locale extends ILocale {
          */
         "billingKindRedeem": string;
         /**
+         * チェックイン明細
+         */
+        "checkinLog": string;
+        /**
+         * チェックイン報酬
+         */
+        "checkinKindReward": string;
+        /**
+         * 再チェックイン消費
+         */
+        "checkinKindMakeup": string;
+        /**
          * 会話
          */
         "usageLogKindChat": string;
@@ -16142,6 +16270,22 @@ export interface Locale extends ILocale {
          * 引き換え成功、{amount}クレジットを獲得しました
          */
         "redeemCodeSuccess": ParameterizedString<"amount">;
+        /**
+         * 引き換えコード購入リンク
+         */
+        "redeemPurchaseUrl": string;
+        /**
+         * 入力すると、ユーザーが「自分の利用状況」ページで購入入口を確認できます。空欄の場合は表示されません。
+         */
+        "redeemPurchaseUrlCaption": string;
+        /**
+         * 引き換えコードがまだない？
+         */
+        "redeemPurchaseHint": string;
+        /**
+         * 購入する
+         */
+        "redeemPurchaseLink": string;
         /**
          * 引き換えコードが無効です。入力を確認してください
          */

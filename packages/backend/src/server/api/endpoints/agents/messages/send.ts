@@ -28,7 +28,8 @@ import { AgentDashscopeMemoryService } from '@/core/AgentDashscopeMemoryService.
 import { AgentModelUsageService } from '@/core/AgentModelUsageService.js';
 import { ChatService } from '@/core/ChatService.js';
 import { MetaService } from '@/core/MetaService.js';
-import { AgentCompressionMemoryService } from '@/core/AgentCompressionMemoryService.js';
+import { AgentCompressionMemoryService, AGENT_OVERVIEW_SCAN_LIMIT, type CompressionSidecarTokenD } from '@/core/AgentCompressionMemoryService.js';
+import { AgentTokenService } from '@/core/AgentTokenService.js';
 import { AgentImageService } from '@/core/AgentImageService.js';
 import { AgentVisionService } from '@/core/AgentVisionService.js';
 import { AgentExternalAuditService } from '@/core/AgentExternalAuditService.js';
@@ -54,6 +55,7 @@ export const meta = {
 			longTermMemoryAddScheduled: { type: 'boolean' },
 			compressionLlmPending: { type: 'boolean' },
 			compressionStickiesBaselineCount: { type: 'number' },
+			compressionStickiesBaselineMaxUpdatedAt: { type: 'string', nullable: true },
 			proactiveScheduleControlFailed: { type: 'boolean' },
 			proactiveScheduleActionTypes: { type: 'array', items: { type: 'string', enum: ['create', 'update', 'cancel'] } },
 			aborted: { type: 'boolean' },
@@ -128,6 +130,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 	private agentVisionService: AgentVisionService,
 	private agentExternalAuditService: AgentExternalAuditService,
 	private agentProactiveScheduleService: AgentProactiveScheduleService,
+	private agentTokenService: AgentTokenService,
 	) {
 		super(meta, paramDef, async (ps, me) => {
 			this.agentService.assertAgentsEnabled();
@@ -176,6 +179,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 							longTermMemoryAddScheduled: false,
 							compressionLlmPending: false,
 							compressionStickiesBaselineCount: 0,
+							compressionStickiesBaselineMaxUpdatedAt: null,
 							proactiveScheduleControlFailed: priorAssistantMessage.proactiveScheduleControlError != null,
 							proactiveScheduleActionTypes: this.agentProactiveScheduleService.actionTypes(priorAssistantMessage),
 							aborted: false,
@@ -356,7 +360,10 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					style,
 					provider: longMemProvider,
 				});
-				const { maxContextTokens, maxOutputTokensPerCall, historyBudget } = budgets;
+				const { maxContextTokens, maxOutputTokensPerCall, historyBudget, historyBudgetTokens, charsPerToken } = budgets;
+				// 统一经 AgentTokenService 解析计数器；发信滑窗按 token 口径截断（exact 或 estimate），与分割线/区带同源
+				const sendTokenConfig = this.agentTokenService.resolveTokenConfig(instanceMeta, session.agentModelId ?? instanceMeta.agentDefaultModelId);
+				const sendExactCounter = this.agentTokenService.makeCounter(sendTokenConfig);
 				const selectedWorldbook = this.agentService.selectWorldbookEntriesForPrompt(character, userText);
 				const systemBase = this.agentService.buildSystemPrompt({
 					globalPrompt: instanceMeta.agentGlobalSystemPrompt,
@@ -370,7 +377,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				const memActive = this.agentCompressionMemoryService.isAliyunPathActive(longMemProvider, session, instanceMeta);
 				const maxMemChars = Math.max(200, Math.min(50_000, session.agentLongMemoryInjectMaxChars || instanceMeta.agentMem0InjectMaxChars));
 
-				const { messages: history } = await this.agentService.loadRecentMessagesForContextWithMeta(session.id, historyBudget);
+				const { messages: history, scannedRows: historyScannedRows, dMap: historyDMap } = await this.agentService.loadRecentMessagesForContextWithMeta(session.id, historyBudget, AGENT_OVERVIEW_SCAN_LIMIT, { exactTokenCounter: sendExactCounter, tokenBudget: historyBudgetTokens, charsPerToken });
 			const historyForApi = history.filter(m => (m.role === 'user' || m.role === 'assistant') && m.id !== userMsg!.id);
 				const regexRules = this.agentService.normalizeRegexRules(character.regexRules);
 				const filterForAi = (text: string, role: 'user' | 'assistant') => this.agentService.applyRegexRules(text, role, 'aiInvisible', regexRules);
@@ -441,7 +448,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 						.filter(s => s.state === 'active')
 						.flatMap(s => [s.fromMessageId, s.toMessageId]);
 					const cBound = await this.agentCompressionMemoryService.loadBoundaryMap(session.id, cIds);
-					const comp = this.agentCompressionMemoryService.buildCompressionSystemBlock(cStickies, cBound);
+					const compMaxInject = Math.max(200, Math.min(50_000, session.agentLongMemoryInjectMaxChars));
+					const comp = this.agentCompressionMemoryService.buildCompressionSystemBlock(cStickies, cBound, compMaxInject);
 					if (comp.length > 0) {
 						system += comp;
 					}
@@ -505,6 +513,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 						longTermMemoryAddScheduled: false,
 						compressionLlmPending: false,
 					compressionStickiesBaselineCount: 0,
+					compressionStickiesBaselineMaxUpdatedAt: null,
 					proactiveScheduleControlFailed: false,
 					proactiveScheduleActionTypes: [],
 					aborted: false,
@@ -581,12 +590,40 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					this.agentCompressionMemoryService.resolveEffectiveProvider(session.agentLongMemoryProvider, instanceMeta) === 'compression';
 				let compressionLlmPending = false;
 				let compressionStickiesBaselineCount = 0;
+				let compressionStickiesBaselineMaxUpdatedAt: string | null = null;
 				if (compressionProviderOn && hasVisibleAssistantText) {
-					compressionStickiesBaselineCount = await this.agentCompressionMemoryService.countStickies(session.id);
+					// 基线同时记录条数与最新 updatedAt：压缩侧车「新建」或「重试更新」便签都会使
+					// max(updatedAt) 超过基线，供前端轮询据此判定本轮压缩已落定（重试不增加条数，仅靠条数会漏判）
+					const baselineStickies = await this.agentCompressionMemoryService.listStickies(session.id);
+					compressionStickiesBaselineCount = baselineStickies.length;
+					let baselineMaxMs = 0;
+					for (const s of baselineStickies) baselineMaxMs = Math.max(baselineMaxMs, s.updatedAt.getTime());
+					compressionStickiesBaselineMaxUpdatedAt = baselineMaxMs > 0 ? new Date(baselineMaxMs).toISOString() : null;
+					// 复用主路径已加载的全量扫描行与 D 累计（AGENT_OVERVIEW_SCAN_LIMIT 口径）：
+					// 既避免侧车另查 DB 与重复分词，更修复了侧车旧实现仅扫 500 条、
+					// 在大上下文窗口（staged 区带位于 500 条之外）下永远触达不到而压缩不触发的问题。
+					const { t1Ratio, t2Ratio } = this.agentCompressionMemoryService.resolveCompressionBandRatios(instanceMeta);
+					let compressionRows: Pick<MiAgentMessage, 'id' | 'role' | 'content' | 'createdAt' | 'imageFileId' | 'imageRecognitionStatus' | 'imageRecognitionDescription' | 'proactiveScheduleControlRaw' | 'proactiveScheduleControlError'>[];
+					let compressionSidecar: CompressionSidecarTokenD;
+					if (historyScannedRows && historyDMap) {
+						compressionRows = historyScannedRows;
+						compressionSidecar = { dMap: historyDMap, hSend: historyBudgetTokens, t1: t1Ratio * historyBudgetTokens, t2: t2Ratio * historyBudgetTokens };
+					} else {
+						// 字符口径等非常规路径的兑底：仍按发信扫描上限加载并现算 D
+						compressionRows = await this.agentMessagesRepository.find({
+							where: { sessionId: session.id },
+							order: { createdAt: 'DESC', id: 'DESC' },
+							take: AGENT_OVERVIEW_SCAN_LIMIT,
+							select: ['id', 'role', 'content', 'createdAt', 'imageFileId', 'imageRecognitionStatus', 'imageRecognitionDescription', 'proactiveScheduleControlRaw', 'proactiveScheduleControlError'],
+						});
+						compressionSidecar = await this.agentCompressionMemoryService.computeSidecarTokenD({
+							session, character, style, instanceMeta, rows: compressionRows,
+						});
+					}
 					compressionLlmPending = await this.agentCompressionMemoryService.peekWillInvokeCompressionLlm(
-						session, character, style, instanceMeta, me.id,
+						session, character, style, instanceMeta, me.id, compressionRows, compressionSidecar,
 					);
-					void this.agentCompressionMemoryService.afterAssistantForCompression(session, character, style, instanceMeta, me.id)
+					void this.agentCompressionMemoryService.afterAssistantForCompression(session, character, style, instanceMeta, me.id, compressionRows, compressionSidecar)
 						.catch(() => { /* 压缩为侧车，不阻断主回复 */ });
 				}
 
@@ -602,6 +639,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					longTermMemoryAddScheduled,
 					compressionLlmPending,
 					compressionStickiesBaselineCount,
+					compressionStickiesBaselineMaxUpdatedAt,
 					proactiveScheduleControlFailed: assistantMsg.proactiveScheduleControlError != null,
 					proactiveScheduleActionTypes: this.agentProactiveScheduleService.actionTypes(assistantMsg),
 					aborted: false,
@@ -653,6 +691,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 						longTermMemoryAddScheduled: false,
 						compressionLlmPending: false,
 						compressionStickiesBaselineCount: 0,
+						compressionStickiesBaselineMaxUpdatedAt: null,
 						proactiveScheduleControlFailed: false,
 						proactiveScheduleActionTypes: [],
 						aborted: true,

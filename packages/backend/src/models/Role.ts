@@ -264,6 +264,13 @@ export class MiRole {
 	})
 	public displayOrder: number;
 
+	/** 签到奖励倍率（null/1 = 无加成） */
+	@Column('double precision', {
+		nullable: true,
+		default: null,
+	})
+	public checkinMultiplier: number | null;
+
 	@Column('jsonb', {
 		default: { },
 	})

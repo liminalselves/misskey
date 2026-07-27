@@ -4,6 +4,7 @@
  */
 
 import { Inject, Injectable } from '@nestjs/common';
+import Redis from 'ioredis';
 import { bindThis } from '@/decorators.js';
 import { DI } from '@/di-symbols.js';
 import { IdService } from '@/core/IdService.js';
@@ -15,6 +16,7 @@ import type { MiAgentModelUsageLog, AgentModelUsageStatus, AgentModelUsageKind }
 import type { MiMeta } from '@/models/Meta.js';
 import type { MiUser } from '@/models/User.js';
 import { AgentService } from '@/core/AgentService.js';
+import { getEffectiveLlmModels } from '@/misc/agent-llm-models.js';
 
 export type StartLogParams = {
 	userId: MiUser['id'];
@@ -50,6 +52,9 @@ export class AgentModelUsageService {
 		@Inject(DI.userProfilesRepository)
 		private userProfilesRepository: UserProfilesRepository,
 
+		@Inject(DI.redis)
+		private redisClient: Redis.Redis,
+
 		private idService: IdService,
 		private agentService: AgentService,
 	) {}
@@ -80,6 +85,7 @@ export class AgentModelUsageService {
 	/**
 	 * 结算一条使用日志：按状态扣费并写入 completedAt。
 	 * cost 与用户对会话解析出的模型及 LLM 调用一致（含默认模型）；失败（status=failed）不扣费。
+	 * 每日免费额度：仅 success 消耗，所有 usageKind 共享同一模型的免费计数器。
 	 */
 	@bindThis
 	public async finishLog(log: MiAgentModelUsageLog, instance: MiMeta, params: FinishLogParams): Promise<void> {
@@ -92,6 +98,26 @@ export class AgentModelUsageService {
 				: log.usageKind === 'image_generation'
 				? Math.max(0, Number(instance.agentImageCostPerCall) || 0)
 				: this.agentService.getUserFacingModelCostPerCall(instance, log.modelId);
+		}
+
+		// 每日免费额度：仅 success 消耗（aborted 不消耗），所有 usageKind 共享
+		if (params.status === 'success' && cost > 0 && log.modelId) {
+			const quota = this.resolveDailyFreeQuota(instance, log.modelId);
+			if (quota > 0) {
+				const dateKey = this.beijingDateKey(completedAt);
+				const key = this.freeQuotaKey(log.userId, log.modelId, dateKey);
+				const current = Number(await this.redisClient.get(key)) || 0;
+				if (current < quota) {
+					const ttl = this.secondsUntilNextBeijingMidnight(completedAt);
+					const afterIncr = current + 1;
+					await this.redisClient.set(key, String(afterIncr), 'EX', ttl);
+					cost = 0;
+					// 快照写入：记录调用时刻的免费额度使用情况，后续管理员修改配额不影响已有日志
+					log.usedFreeQuota = true;
+					log.freeQuotaUsedAtCall = afterIncr;
+					log.freeQuotaTotalAtCall = quota;
+				}
+			}
 		}
 
 		log.completedAt = completedAt;
@@ -108,6 +134,48 @@ export class AgentModelUsageService {
 			await this.userProfilesRepository.decrement({ userId: log.userId }, 'agentCreditBalance', cost);
 		}
 	}
+
+	// #region 每日免费额度辅助方法
+
+	/** 北京时间 yyyyMMdd */
+	@bindThis
+	private beijingDateKey(d: Date): string {
+		const bj = new Date(d.getTime() + 8 * 3600_000);
+		return bj.toISOString().slice(0, 10).replace(/-/g, '');
+	}
+
+	/** 当日剩余秒数（到次日 0:00 北京时间） */
+	@bindThis
+	private secondsUntilNextBeijingMidnight(now: Date): number {
+		const bj = new Date(now.getTime() + 8 * 3600_000);
+		const nextMidnightUtc = Date.UTC(bj.getUTCFullYear(), bj.getUTCMonth(), bj.getUTCDate() + 1) - 8 * 3600_000;
+		return Math.max(1, Math.ceil((nextMidnightUtc - now.getTime()) / 1000));
+	}
+
+	@bindThis
+	private freeQuotaKey(userId: string, modelId: string, dateKey: string): string {
+		return `agent:freeQuota:${userId}:${modelId}:${dateKey}`;
+	}
+
+	/** 从 LLM / 生图模型配置中解析指定模型的每日免费额度 */
+	@bindThis
+	private resolveDailyFreeQuota(instance: MiMeta, modelId: string): number {
+		const llm = getEffectiveLlmModels(instance).find(m => m.id === modelId);
+		if (llm) return llm.dailyFreeQuota ?? 0;
+		const img = (Array.isArray(instance.agentImageModels) ? instance.agentImageModels : []).find(m => m.id === modelId);
+		if (img && typeof img.dailyFreeQuota === 'number') return Math.trunc(img.dailyFreeQuota);
+		return 0;
+	}
+
+	/** 查询用户某模型当日已用免费次数（供 API 端点展示） */
+	@bindThis
+	public async getFreeQuotaUsed(userId: string, modelId: string): Promise<number> {
+		const key = this.freeQuotaKey(userId, modelId, this.beijingDateKey(new Date()));
+		const v = await this.redisClient.get(key);
+		return v == null ? 0 : Number(v) || 0;
+	}
+
+	// #endregion
 
 	/**
 	 * 返回指定用户最近 N 毫秒内的成功率与样本数。
@@ -143,6 +211,7 @@ export class AgentModelUsageService {
 
 	/**
 	 * 按单一用户的最近请求，查询分页使用记录。
+	 * 仅统计模型调用请求（对话/压缩/生图/识图/主动消息），不含签到/补签流水。
 	 */
 	@bindThis
 	public async listUserRecent(
@@ -151,6 +220,7 @@ export class AgentModelUsageService {
 	): Promise<MiAgentModelUsageLog[]> {
 		const qb = this.agentModelUsageLogsRepository.createQueryBuilder('log')
 			.where('log.userId = :userId', { userId })
+			.andWhere('log.usageKind != :checkinKind', { checkinKind: 'checkin' })
 			.orderBy('log.requestedAt', 'DESC')
 			.take(opts.limit)
 			.offset(opts.offset ?? 0);
@@ -160,9 +230,13 @@ export class AgentModelUsageService {
 		return qb.getMany();
 	}
 
+	/** 统计用户请求日志总数（与 listUserRecent 一致，不含签到/补签），供分页使用 */
 	@bindThis
 	public async countUserLogs(userId: MiUser['id']): Promise<number> {
-		return this.agentModelUsageLogsRepository.countBy({ userId });
+		return this.agentModelUsageLogsRepository.createQueryBuilder('log')
+			.where('log.userId = :userId', { userId })
+			.andWhere('log.usageKind != :checkinKind', { checkinKind: 'checkin' })
+			.getCount();
 	}
 
 	/**
@@ -185,6 +259,10 @@ export class AgentModelUsageService {
 			.addSelect('SUM(CASE WHEN log.status = \'aborted\' THEN 1 ELSE 0 END)::int', 'aborted')
 			.addSelect('COALESCE(SUM(log.cost), 0)', 'totalCost')
 			.where('log.requestedAt >= :since', { since: opts.since })
+			// 签到奖励/补签消耗不属于模型费用，不计入费用汇总与模型统计
+			.andWhere('log.usageKind != :checkinKind', { checkinKind: 'checkin' })
+			// 按模型维度的聚合只统计有关联模型的记录，避免出现“—”行
+			.andWhere('log.modelId IS NOT NULL')
 			.groupBy('log.modelId');
 		if (opts.userId != null) {
 			qb.andWhere('log.userId = :uid', { uid: opts.userId });
@@ -208,6 +286,29 @@ export class AgentModelUsageService {
 			aborted: Number(r.aborted) || 0,
 			totalCost: Number(r.totalCost) || 0,
 		}));
+	}
+
+	/**
+	 * 按模型维度统计时间窗内消耗每日免费额度的调用次数（usedFreeQuota=true）。
+	 * 用于“近 30 天”跨度的免费次数报表，区别于 Redis 的当日计数。
+	 */
+	@bindThis
+	public async countFreeQuotaByModel(opts: { userId?: MiUser['id']; since: Date; until?: Date }): Promise<Map<string, number>> {
+		const qb = this.agentModelUsageLogsRepository.createQueryBuilder('log')
+			.select('log.modelId', 'modelId')
+			.addSelect('COUNT(*)::int', 'count')
+			.where('log.requestedAt >= :since', { since: opts.since })
+			.andWhere('log.usedFreeQuota = :used', { used: true })
+			.andWhere('log.modelId IS NOT NULL')
+			.groupBy('log.modelId');
+		if (opts.userId != null) {
+			qb.andWhere('log.userId = :uid', { uid: opts.userId });
+		}
+		if (opts.until != null) {
+			qb.andWhere('log.requestedAt < :until', { until: opts.until });
+		}
+		const rows = await qb.getRawMany<{ modelId: string; count: number }>();
+		return new Map(rows.map(r => [r.modelId, Number(r.count) || 0]));
 	}
 
 	/**

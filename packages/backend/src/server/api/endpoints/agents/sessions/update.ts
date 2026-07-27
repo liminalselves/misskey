@@ -263,6 +263,10 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		for (const key of ['sampler', 'noiseSchedule']) {
 			if (typeof raw[key] === 'string' && raw[key].length <= 128) out[key] = raw[key];
 		}
+		// 会话级自动生图开关与张数（张数 clamp 到 0..12，与管理后台「每轮最多图片」取值范围一致）
+		if (typeof raw.autoDraw === 'boolean') out.autoDraw = raw.autoDraw;
+		const autoDrawCount = Number(raw.autoDrawCount);
+		if (Number.isFinite(autoDrawCount)) out.autoDrawCount = Math.max(0, Math.min(12, Math.trunc(autoDrawCount)));
 		return out;
 	}
 }

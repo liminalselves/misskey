@@ -98,6 +98,7 @@ import { MiAgentExternalAuditLog } from '@/models/AgentExternalAuditLog.js';
 import { MiAgentUserStyleSubscription } from '@/models/AgentUserStyleSubscription.js';
 import { MiAgentPlazaReview } from '@/models/AgentPlazaReview.js';
 import { MiAgentModelUsageLog } from '@/models/AgentModelUsageLog.js';
+import { MiAgentCheckinRecord } from '@/models/AgentCheckinRecord.js';
 import { MiAgentRedeemCode } from '@/models/AgentRedeemCode.js';
 import { MiAgentPublishedVersion } from '@/models/AgentPublishedVersion.js';
 import { MiSystemAccount } from '@/models/SystemAccount.js';
@@ -278,6 +279,7 @@ export const entities = [
 	MiAgentUserStyleSubscription,
 	MiAgentPlazaReview,
 	MiAgentModelUsageLog,
+	MiAgentCheckinRecord,
 	MiAgentRedeemCode,
 	MiAgentPublishedVersion,
 	MiBubbleGameRecord,

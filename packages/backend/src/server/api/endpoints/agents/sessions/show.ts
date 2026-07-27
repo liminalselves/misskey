@@ -10,6 +10,7 @@ import { Endpoint } from '@/server/api/endpoint-base.js';
 import { DI } from '@/di-symbols.js';
 import { ApiError } from '@/server/api/error.js';
 import { AgentService } from '@/core/AgentService.js';
+import { MetaService } from '@/core/MetaService.js';
 import { DriveFileEntityService } from '@/core/entities/DriveFileEntityService.js';
 import type { MiAgentCharacter } from '@/models/AgentCharacter.js';
 
@@ -52,6 +53,7 @@ export const meta = {
 			scheduledProactiveLastError: { type: 'object', nullable: true },
 			sessionModerationBanned: { type: 'boolean' },
 			characterModerationBanned: { type: 'boolean' },
+			sessionModerationBannedReason: { type: 'string', nullable: true },
 		},
 	},
 } as const;
@@ -61,6 +63,15 @@ export const paramDef = {
 	properties: { sessionId: { type: 'string', format: 'misskey:id' } },
 	required: ['sessionId'],
 } as const;
+
+/**
+ * pending 标志位的「孤儿」判定阈值。
+ * LLM 调用本身硬上限 120s（超时即 abort），加上图像识别/审核等环节也远小于此值；
+ * 若 agentReplyPending=true 但 updatedAt 超过该阈值无任何变化，基本可判定为
+ * 后端热重启/崩溃杀死了在途请求而遗留的孤儿标志位，需主动清除，
+ * 否则会话将永久无法再发送（原子 occupy 的 WHERE "agentReplyPending"=false 永远失败）。
+ */
+const AGENT_REPLY_PENDING_STALE_MS = ms('5min');
 
 @Injectable()
 export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-disable-line import/no-default-export
@@ -73,9 +84,11 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 
 		private agentService: AgentService,
 		private driveFileEntityService: DriveFileEntityService,
+		private metaService: MetaService,
 	) {
 		super(meta, paramDef, async (ps, me) => {
 			this.agentService.assertAgentsEnabled();
+			const instance = await this.metaService.fetch(true);
 			const row = await this.agentSessionsRepository.findOneBy({ id: ps.sessionId });
 			if (!row || row.userId !== me.id) {
 				throw new ApiError({ message: 'No such session.', code: 'NO_SUCH_SESSION', id: 'a5b6c7d8-e9f0-1234-8901-345678901234' });
@@ -85,7 +98,11 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					where: { sessionId: row.id },
 					order: { createdAt: 'DESC', id: 'DESC' },
 				});
-				if (latest?.role === 'assistant') {
+				// 自愈①：最新一条已是助手回复，说明回复其实已落库，仅标志位未清。
+				const healedByLatestAssistant = latest?.role === 'assistant';
+				// 自愈②：标志位卡死超时（典型为后端热重启杀死在途请求遗留的孤儿 pending）。
+				const healedByStale = Date.now() - row.updatedAt.getTime() > AGENT_REPLY_PENDING_STALE_MS;
+				if (healedByLatestAssistant || healedByStale) {
 					row.agentReplyPending = false;
 					await this.agentSessionsRepository.save(row);
 				}
@@ -112,7 +129,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				agentCompressionModelId: row.agentCompressionModelId,
 				agentImageModelId: row.agentImageModelId,
 				agentVisionModelId: row.agentVisionModelId,
-				agentImageSettings: row.agentImageSettings ?? {},
+				agentImageSettings: { autoDraw: true, autoDrawCount: instance.agentImageMaxPerReply, ...(row.agentImageSettings ?? {}) },
 				agentLongMemoryEnabled: row.agentLongMemoryEnabled,
 				agentLongMemoryTopK: row.agentLongMemoryTopK,
 				agentLongMemoryMinScore: row.agentLongMemoryMinScore,
@@ -129,6 +146,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				scheduledProactiveLastError: row.scheduledProactiveLastError,
 				sessionModerationBanned: row.moderationBanned,
 				characterModerationBanned: characterRow.moderationBanned,
+				sessionModerationBannedReason: row.moderationBannedReason ?? null,
 			};
 		});
 	}

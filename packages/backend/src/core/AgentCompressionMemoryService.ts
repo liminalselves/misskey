@@ -20,8 +20,12 @@ import { MiAgentSessionCompressionSticky, type AgentCompressionStickyState } fro
 import { MiMeta } from '@/models/Meta.js';
 import { ApiError } from '@/server/api/error.js';
 import { AgentService, escapeAgentXmlText, AGENT_LLM_MEMORY_XML_OPEN, AGENT_LLM_MEMORY_XML_CLOSE } from '@/core/AgentService.js';
+import { AgentTokenService, AGENT_LLM_APPROX_CHARS_PER_TOKEN, AGENT_OVERVIEW_SCAN_LIMIT, AGENT_SEND_PATH_SCAN_LIMIT, type TokenBand } from '@/core/AgentTokenService.js';
+import { agentPreviewText } from '@/core/agent-preview-text.js';
 import { AgentDashscopeMemoryService } from '@/core/AgentDashscopeMemoryService.js';
 import { bindThis } from '@/decorators.js';
+
+export { AGENT_OVERVIEW_SCAN_LIMIT, AGENT_SEND_PATH_SCAN_LIMIT };
 
 export const AGENT_COMPRESSION_MEMORY_XML_OPEN = '<compression_memory>\n';
 export const AGENT_COMPRESSION_MEMORY_XML_CLOSE = '\n</compression_memory>';
@@ -31,7 +35,7 @@ export type AgentLongMemoryProviderId = typeof agentLongMemoryProviderIds[number
 
 /** 与 Meta 中未配置时一致；可经管理端覆盖 */
 export const DEFAULT_AGENT_COMPRESSION_SYSTEM_PROMPT =
-	'将用户给出的对话节录压缩为一条简洁的中文要点，保留人名/数字/决定；不要复述全文；不要加开场白。输出纯文本一段。';
+	'将用户给出的对话节录压缩为一条简洁的中文要点，保留人名、数字/决定；不要复述全文；不要加开场白。输出纯文本一段。';
 
 /** 与 `AgentService.loadRecentMessagesForContextWithMeta` 相同：仅 user/assistant 计入滑窗 D */
 function filterRowsForChatHistoryD<T extends { role: string }>(rows: T[]): T[] {
@@ -48,6 +52,27 @@ export type MessageWithD = {
 	band: 'new' | 'prep' | 'staged' | 'out';
 };
 
+/** 侧车 token 口径 D 累计与阈值（peek/afterAssistant 共用，避免同批发信内重复精确分词） */
+export type CompressionSidecarTokenD = {
+	dMap: Map<string, number>;
+	hSend: number;
+	t1: number;
+	t2: number;
+};
+
+/** 侧车/总览扫描的消息行投影（与 send 主路径 select 字段一致） */
+export type CompressionScanRow = {
+	id: string;
+	role: string;
+	content: string;
+	createdAt: Date;
+	imageFileId?: string | null;
+	imageRecognitionStatus?: string | null;
+	imageRecognitionDescription?: string | null;
+	proactiveScheduleControlRaw?: string | null;
+	proactiveScheduleControlError?: unknown;
+};
+
 @Injectable()
 export class AgentCompressionMemoryService {
 	constructor(
@@ -62,12 +87,12 @@ export class AgentCompressionMemoryService {
 		private agentService: AgentService,
 		private agentDashscopeMemoryService: AgentDashscopeMemoryService,
 		private agentModelUsageService: AgentModelUsageService,
+		private agentTokenService: AgentTokenService,
 	) {
 	}
 
 	/**
-	 * 压缩便签：本会话列优先（创建会话时写入当时的默认）；空则 meta 压缩默认 → 全站对话默认。
-	 */
+	 * 压缩便签：本会话列优先（创建会话时写入当时的默认）；空则 meta 压缩默认 → 全站对话默认）	 */
 	@bindThis
 	public resolveEffectiveCompressionModelId(
 		session: MiAgentSession,
@@ -109,8 +134,7 @@ export class AgentCompressionMemoryService {
 	}
 
 	/**
-	 * 与 `buildSendPathBudgets`、`buildContextDividerAlignedBudgets` 共用：仅在实际走阿里云语义记忆时预留 `<memory>` 上限，否则 0。
-	 */
+	 * 与 `buildSendPathBudgets`、`buildContextDividerAlignedBudgets` 共用：仅在实际走阿里云语义记忆时预留 `<memory>` 上限，否则 0）	 */
 	@bindThis
 	public computeAliyunMemoryXmlReserveIfActive(
 		provider: AgentLongMemoryProviderId,
@@ -129,9 +153,7 @@ export class AgentCompressionMemoryService {
 	}
 
 	/**
-	 * 与 `agents/messages/send` 一致，用于**真实进 LLM** 的 history 上界、`reconcileStickyStates`（区间两端 D 取大者与 H 比较）、压缩总览区带（provider 为 compression 时）。
-	 * 字符池：`max(4000, maxContextTokens×3)` 减 `systemChars`（含 comp 全段、百炼 `memory` 等）与当轮 `maxOut×3` 预留。Token 约数见 `AgentService.approxLlmTokensFromCharEstimate`（÷3，四舍五入）。
-	 */
+	 * 与 `agents/messages/send` 一致，用于**真实进 LLM** 的 history 上界、`reconcileStickyStates`（区间两端 D 取大者与 H 比较）、压缩总览区带（provider 为 compression 时）。	 * 字符池：`max(4000, maxContextTokens×3)` 减 `systemChars`（含 comp 全段、百科 / `memory` 等）与当期 `maxOut×3` 预留。Token 约数同 `AgentService.approxLlmTokensFromCharEstimate`（即，四舍五入）。	 */
 	@bindThis
 	public buildSendPathBudgets(params: {
 		instanceMeta: MiMeta;
@@ -145,12 +167,17 @@ export class AgentCompressionMemoryService {
 		maxOutputTokensPerCall: number;
 		memReserveChars: number;
 		compReserveChars: number;
+		charsPerToken: number;
+		/** 精确编码器下的历史 token 预算（无编码器时与 historyBudget/charsPerToken 一致） */
+		historyBudgetTokens: number;
 	} {
 		const { instanceMeta, session, character, style, provider } = params;
 		const { maxContextTokens, maxOutputTokensPerCall } = this.agentService.resolveModelConnection(
 			instanceMeta,
 			session.agentModelId ?? null,
 		);
+		const tokenConfig = this.agentTokenService.resolveTokenConfig(instanceMeta, session.agentModelId ?? null);
+		const charsPerToken = tokenConfig.charsPerToken;
 		const systemBase = this.agentService.buildSystemPrompt({
 			globalPrompt: instanceMeta.agentGlobalSystemPrompt,
 			character,
@@ -161,29 +188,30 @@ export class AgentCompressionMemoryService {
 		const maxComp = Math.max(200, Math.min(50_000, session.agentLongMemoryInjectMaxChars));
 		const compReserve = provider === 'compression' ? this.computeCompressionReserveChars(maxComp) : 0;
 		const systemChars = systemBase.length + memReserve + compReserve;
-		// 与 `send.ts` 注入到最新 user 的 directive 同步预扣，避免历史填到上限后叠加 directive 溢出上下文窗。
-		// 世界书已从 system 移除、改由 directive 的 <active-worldbook> 交付，这里按「全部已启用条目」保守预扣（上界），
+		// 与 `send.ts` 注入到最末 user 的 directive 同步预扣，避免历史填到上限后叠加 directive 溢出上下文窗口		// 世界书已从 system 移除、改由 directive 的 <active-worldbook> 交付，这里按「全部已启用条目」保守预扣（上界），
 		// 与世界书曾整段写入 system 时的预留量一致，避免上下文溢出回归。
 		const budgetWorldbook = this.agentService.buildBudgetWorldbookEntries(character);
 		const directiveChars = this.agentService.buildLatestUserDirectiveBlock(style, budgetWorldbook).length
 			+ (session.timeAwarenessEnabled === true ? this.agentService.buildCurrentBeijingTimeBlock().length + 1 : 0);
-		const historyBudget = this.agentService.computeChatHistoryCharBudget({
+		// 预算数学统一委托 AgentTokenService：字符 / token 双视图由同一 overhead 一致导出
+		const budget = this.agentTokenService.resolveHistoryBudgets({
 			maxContextTokens,
 			maxOutputTokensPerCall,
+			charsPerToken,
 			systemChars,
-			prefixMessages: [],
-			runtimeDirectiveChars: directiveChars,
+			directiveChars,
+			prefixChars: 0,
+			tokenMode: tokenConfig.tokenMode,
 		});
-		return { historyBudget, maxContextTokens, maxOutputTokensPerCall, memReserveChars: memReserve, compReserveChars: compReserve };
+		return { historyBudget: budget.historyBudgetChars, maxContextTokens, maxOutputTokensPerCall, memReserveChars: memReserve, compReserveChars: compReserve, charsPerToken, historyBudgetTokens: budget.historyBudgetTokens };
 	}
 
-	/** 未配置 meta 时区带 T1、T2 相对 H 的比例；可通过 `resolveCompressionBandRatios` 覆盖。 */
+	/** 未配置 meta 时区间 T1、T2 相对 H 的比例；可通过 `resolveCompressionBandRatios` 覆盖。*/
 	public static readonly DEFAULT_COMPRESSION_BAND_T1_RATIO = 0.8;
 	public static readonly DEFAULT_COMPRESSION_BAND_T2_RATIO = 0.9;
 
 	/**
-	 * 自 Meta 读压缩区带 t1/t2 比例，非法或缺失时回退默认，并保证 0 &lt; t1 &lt; t2 &lt; 1。
-	 */
+	 * 从 Meta 读压缩区间 t1/t2 比例，非法或缺失时回退默认，并保证 0 &lt; t1 &lt; t2 &lt; 1。	 */
 	@bindThis
 	public resolveCompressionBandRatios(instanceMeta: MiMeta): { t1Ratio: number; t2Ratio: number } {
 		const raw1 = instanceMeta.agentCompressionBandT1Ratio;
@@ -201,41 +229,6 @@ export class AgentCompressionMemoryService {
 		return { t1Ratio: t1, t2Ratio: t2 };
 	}
 
-	/**
-	 * `context-window` 分割线及 `loadRecentMessagesForContextWithMeta` 的 `max`：不预扣 `compression_memory` 占位，故 `historyBudgetChars` 大于启用压缩便签时的发信 history 上界。
-	 * `agents/sessions/compression-overview` 在压缩模式下须传入 `buildSendPathBudgets(..., provider: 'compression')` 的 history，使区带与 `reconcileStickyStates`、自动压条一致；勿与分割线预算混用。
-	 */
-	@bindThis
-	public buildContextDividerAlignedBudgets(params: {
-		instanceMeta: MiMeta;
-		session: MiAgentSession;
-		character: ReturnType<AgentService['effectiveCharacterForLlm']>;
-		style: ReturnType<AgentService['effectiveStyleForLlm']>;
-	}): { maxContextTokens: number; maxOutputTokensPerCall: number; historyBudgetChars: number } {
-		const { instanceMeta, session, character, style } = params;
-		const { maxContextTokens, maxOutputTokensPerCall } = this.agentService.resolveModelConnection(
-			instanceMeta,
-			session.agentModelId ?? null,
-		);
-		const systemBase = this.agentService.buildSystemPrompt({
-			globalPrompt: instanceMeta.agentGlobalSystemPrompt,
-			character,
-			style,
-		});
-		const prov = this.resolveEffectiveProvider(session.agentLongMemoryProvider, instanceMeta);
-		const memReserveChars = this.computeAliyunMemoryXmlReserveIfActive(prov, session, instanceMeta);
-		// 与 send 路径一致预扣最新 user 风格 directive 占位（不预扣压缩段，故 H 仍大于发信 H）。
-		const directiveChars = this.agentService.buildLatestUserDirectiveBlock(style).length;
-		const historyBudgetChars = this.agentService.computeChatHistoryCharBudget({
-			maxContextTokens,
-			maxOutputTokensPerCall,
-			systemChars: systemBase.length + memReserveChars,
-			prefixMessages: [],
-			runtimeDirectiveChars: directiveChars,
-		});
-		return { maxContextTokens, maxOutputTokensPerCall, historyBudgetChars };
-	}
-
 	@bindThis
 	public compareMessageOrder(
 		x: { createdAt: Date; id: string },
@@ -246,7 +239,7 @@ export class AgentCompressionMemoryService {
 		return x.id.localeCompare(y.id);
 	}
 
-	/** 时间序 a 在 [b,c] 内（含端点，b 不晚于 c） */
+	/** 时间序 a 在 [b,c] 内（含端点，b 不晚于 c）*/
 	@bindThis
 	public inChronoRange(
 		a: { createdAt: Date; id: string },
@@ -289,21 +282,6 @@ export class AgentCompressionMemoryService {
 		return m;
 	}
 
-	/**
-	 * 自最新向旧，累加 content.length 得到 D(m)。传入行须先按与滑窗相同口径筛出 user/assistant，见 `filterRowsForChatHistoryD`。
-	 * rows 顺序须为同 session 下 createdAt DESC, id DESC 取用的子序列。
-	 */
-	@bindThis
-	public dMapFromRowsNewestFirst(rows: { id: string; content: string }[]): Map<string, number> {
-		const d = new Map<string, number>();
-		let acc = 0;
-		for (const m of rows) {
-			acc += m.content.length;
-			d.set(m.id, acc);
-		}
-		return d;
-	}
-
 	@bindThis
 	public buildPairsExcludingActiveCompression(
 		pickedOldestFirst: { id: string; role: string; content: string; createdAt: Date }[],
@@ -311,16 +289,24 @@ export class AgentCompressionMemoryService {
 		boundaries: Map<string, { createdAt: Date; id: string }>,
 	): { role: 'user' | 'assistant'; content: string }[] {
 		const pairs: { role: 'user' | 'assistant'; content: string }[] = [];
+		// 预计算参与排除的便签时间区间（归一化 [lo,hi]），避免逐消息重复 boundaries.get 与 from/to 排序
+		const intervals: { lo: { createdAt: Date; id: string }; hi: { createdAt: Date; id: string } }[] = [];
+		for (const s of activeStickies) {
+			if (s.state !== 'active') continue;
+			// 与 buildCompressionSystemBlock 对称：压缩失败且未被用户修正的便签不排除消息
+			if (s.errorMessage != null && !s.userOverridden) continue;
+			const f = boundaries.get(s.fromMessageId);
+			const t = boundaries.get(s.toMessageId);
+			if (!f || !t) continue;
+			if (this.compareMessageOrder(f, t) > 0) intervals.push({ lo: t, hi: f });
+			else intervals.push({ lo: f, hi: t });
+		}
 		for (const m of pickedOldestFirst) {
 			if (m.role !== 'user' && m.role !== 'assistant') continue;
+			const mm = { createdAt: m.createdAt, id: m.id };
 			let inside = false;
-			for (const s of activeStickies) {
-				if (s.state !== 'active') continue;
-				if (this.messageInStickyRange(
-					{ id: m.id, createdAt: m.createdAt },
-					s,
-					boundaries,
-				)) {
+			for (const iv of intervals) {
+				if (this.compareMessageOrder(iv.lo, mm) <= 0 && this.compareMessageOrder(mm, iv.hi) <= 0) {
 					inside = true;
 					break;
 				}
@@ -336,22 +322,38 @@ export class AgentCompressionMemoryService {
 	public buildCompressionSystemBlock(
 		actives: MiAgentSessionCompressionSticky[],
 		boundaries: Map<string, { createdAt: Date; id: string }>,
+		maxInjectChars = 50_000,
 	): string {
 		const sorted = [...actives]
 			.filter(s => s.state === 'active')
+			// 跳过 LLM 压缩失败且用户未手动修正的便签，避免将原始截断文本当作摘要注入			.filter(s => s.userOverridden || s.errorMessage == null)
 			.filter(s => boundaries.has(s.fromMessageId) && boundaries.has(s.toMessageId))
 			.sort((a, b) => (a.sortIndex !== b.sortIndex
 				? a.sortIndex - b.sortIndex
 				: a.id.localeCompare(b.id)));
 		const parts: string[] = [];
+		let totalLen = 0;
+		const cap = Math.max(200, Math.min(50_000, maxInjectChars));
 		for (const s of sorted) {
-			parts.push(s.summaryText.trim());
+			// 先转义再计量，确保实际注入长度不超出预留预算
+			const escaped = escapeAgentXmlText(s.summaryText.trim());
+			if (totalLen + escaped.length + 2 > cap) {
+				const remaining = cap - totalLen - 2;
+				if (remaining > 0) {
+					// 回退到最后一个完整字符边界，避免切断 &amp; 等实体
+					let cut = escaped.slice(0, remaining);
+					const ampIdx = cut.lastIndexOf('&');
+					if (ampIdx > remaining - 6) cut = cut.slice(0, ampIdx);
+					parts.push(cut);
+				}
+				break;
+			}
+			parts.push(escaped);
+			totalLen += escaped.length + 2; // +2 for '\n\n' separator
 		}
-		const raw = parts.join('\n\n');
-		if (raw.length === 0) return '';
-		return AGENT_COMPRESSION_MEMORY_XML_OPEN
-			+ escapeAgentXmlText(raw)
-			+ AGENT_COMPRESSION_MEMORY_XML_CLOSE;
+		const body = parts.join('\n\n');
+		if (body.length === 0) return '';
+		return AGENT_COMPRESSION_MEMORY_XML_OPEN + body + AGENT_COMPRESSION_MEMORY_XML_CLOSE;
 	}
 
 	@bindThis
@@ -368,38 +370,33 @@ export class AgentCompressionMemoryService {
 	}
 
 	/**
-	 * 与 `afterAssistantForCompression` 在调用 `invokeChatCompletions` 之前的前置条件一致（含：须已有未压内容进入 (t2,hSend]）；为真时才向客户端展示「压缩进行中」。
-	 * 若修改侧车逻辑，须与此处同步。
+	 * peek 与 afterAssistant 共用的候选收集 + 去重前置逻辑（消除两处重复，从结构上避免判定漂移）。
+	 * 返回 null 表示无需压缩（无未压 staged / 候选为空 / 已存在同区间 / 已有等价成功便签）；
+	 * 否则返回候选区间与指纹，`existingByFp` 非 null 表示走重试路径。
+	 * 顺带优化：无便签时跳过 boundary 查询（此时覆盖判定恒为 false）。
 	 */
 	@bindThis
-	public async peekWillInvokeCompressionLlm(
-		session: MiAgentSession,
-		character: ReturnType<AgentService['effectiveCharacterForLlm']>,
-		style: ReturnType<AgentService['effectiveStyleForLlm']>,
-		instanceMeta: MiMeta,
-		userId: string,
-	): Promise<boolean> {
-		if (this.resolveEffectiveProvider(session.agentLongMemoryProvider, instanceMeta) !== 'compression') return false;
-
-		const { historyBudget: hSend } = this.buildSendPathBudgets({
-			instanceMeta, session, character, style,
-			provider: 'compression',
-		});
-		const rows = await this.agentMessagesRepository.find({
-			where: { sessionId: session.id },
-			order: { createdAt: 'DESC', id: 'DESC' },
-			take: 500,
-			select: ['id', 'role', 'content', 'createdAt'],
-		});
-		const dMap = this.dMapFromRowsNewestFirst(filterRowsForChatHistoryD(rows));
-		const { t1Ratio, t2Ratio } = this.resolveCompressionBandRatios(instanceMeta);
-		const t1 = t1Ratio * hSend;
-		const t2 = t2Ratio * hSend;
-		const stickies = await this.listStickies(session.id);
-		const bIds: string[] = [];
-		for (const s of stickies) { bIds.push(s.fromMessageId, s.toMessageId); }
-		const b = await this.loadBoundaryMap(session.id, bIds);
-		const uncoveredT1H: typeof rows = [];
+	private async gatherCompressionCandidates(params: {
+		sessionId: string;
+		rows: CompressionScanRow[];
+		dMap: Map<string, number>;
+		hSend: number;
+		t1: number;
+		t2: number;
+	}): Promise<null | {
+		candidates: CompressionScanRow[];
+		fromId: string;
+		toId: string;
+		textBlob: string;
+		fingerprint: string;
+		existingByFp: MiAgentSessionCompressionSticky | null;
+	}> {
+		const { sessionId, rows, dMap, hSend, t1, t2 } = params;
+		const stickies = await this.listStickies(sessionId);
+		const b = stickies.length === 0
+			? new Map<string, { createdAt: Date; id: string }>()
+			: await this.loadBoundaryMap(sessionId, stickies.flatMap(s => [s.fromMessageId, s.toMessageId]));
+		const uncoveredT1H: CompressionScanRow[] = [];
 		let hasUncoveredStaged = false;
 		for (const m of rows) {
 			if (m.role !== 'user' && m.role !== 'assistant') continue;
@@ -408,12 +405,10 @@ export class AgentCompressionMemoryService {
 			if (m.content.length === 0) continue;
 			let covered = false;
 			for (const s of stickies) {
-				if (s.state === 'stale') continue;
-				if (this.messageInStickyRange(
-					{ id: m.id, createdAt: m.createdAt },
-					s,
-					b,
-				)) {
+				// stale 不参与；failed 便签未压缩成功，其区间消息视为「未覆盖」，
+				// 从而下一次发信仍会命中未压 staged 消息、自动重试压缩（与 buildPairs 失败不排除原文的语义对称）
+				if (s.state === 'stale' || s.state === 'failed') continue;
+				if (this.messageInStickyRange({ id: m.id, createdAt: m.createdAt }, s, b)) {
 					covered = true;
 					break;
 				}
@@ -422,18 +417,48 @@ export class AgentCompressionMemoryService {
 			uncoveredT1H.push(m);
 			if (d > t2) hasUncoveredStaged = true;
 		}
-		if (!hasUncoveredStaged) return false;
-		const candidates: typeof rows = uncoveredT1H;
-		if (candidates.length === 0) return false;
+		if (!hasUncoveredStaged || uncoveredT1H.length === 0) return null;
+		const candidates = uncoveredT1H;
 		candidates.sort((a, c) => this.compareMessageOrder(a, c));
 		const fromId = candidates[0]!.id;
 		const toId = candidates[candidates.length - 1]!.id;
-		if (await this.stickyRepository.findOne({
-			where: { sessionId: session.id, fromMessageId: fromId, toMessageId: toId },
-		})) return false;
+		const existingByRange = await this.stickyRepository.findOne({
+			where: { sessionId, fromMessageId: fromId, toMessageId: toId },
+		});
+		// 同区间已有「非失败」便签才视为重复；失败便签不拦截，交由下方指纹路径重试
+		if (existingByRange && existingByRange.state !== 'failed') return null;
 		const textBlob = candidates.map(m => `${m.role}: ${m.content}`).join('\n\n');
-		const fp = createHash('sha256').update(textBlob, 'utf8').digest('hex');
-		if (await this.stickyRepository.findOne({ where: { sessionId: session.id, sourceFingerprint: fp } })) return false;
+		const fingerprint = createHash('sha256').update(textBlob, 'utf8').digest('hex');
+		const existingByFp = await this.stickyRepository.findOne({ where: { sessionId, sourceFingerprint: fingerprint } });
+		// 已有等价便签（成功/用户已修正）→ 视为已覆盖，无需再压；
+		// 失败便签不设重试上限——每轮发信持续重试直至成功，避免压缩永久失败导致旧消息丢失上下文
+		if (existingByFp && (existingByFp.errorMessage == null || existingByFp.userOverridden)) return null;
+		return { candidates, fromId, toId, textBlob, fingerprint, existingByFp };
+	}
+
+	/**
+	 * 与 `afterAssistantForCompression` 共用 `gatherCompressionCandidates` 前置判定（须已有未压内容进入 (t2,hSend]）；为真时才向客户端展示「压缩进行中」。	 */
+	@bindThis
+	public async peekWillInvokeCompressionLlm(
+		session: MiAgentSession,
+		character: ReturnType<AgentService['effectiveCharacterForLlm']>,
+		style: ReturnType<AgentService['effectiveStyleForLlm']>,
+		instanceMeta: MiMeta,
+		userId: string,
+		preloadedRows?: CompressionScanRow[],
+		precomputedSidecar?: CompressionSidecarTokenD,
+	): Promise<boolean> {
+		if (this.resolveEffectiveProvider(session.agentLongMemoryProvider, instanceMeta) !== 'compression') return false;
+
+		const rows = preloadedRows ?? await this.agentMessagesRepository.find({
+			where: { sessionId: session.id },
+			order: { createdAt: 'DESC', id: 'DESC' },
+			take: AGENT_SEND_PATH_SCAN_LIMIT,
+			select: ['id', 'role', 'content', 'createdAt', 'imageFileId', 'imageRecognitionStatus', 'imageRecognitionDescription', 'proactiveScheduleControlRaw', 'proactiveScheduleControlError'],
+		});
+		const { dMap, hSend, t1, t2 } = precomputedSidecar ?? await this.computeSidecarTokenD({ session, character, style, instanceMeta, rows });
+		const gathered = await this.gatherCompressionCandidates({ sessionId: session.id, rows, dMap, hSend, t1, t2 });
+		if (!gathered) return false;
 		const compModelId = this.resolveEffectiveCompressionModelId(session, instanceMeta);
 		try {
 			this.agentService.resolveModelApiName(instanceMeta, compModelId);
@@ -449,10 +474,7 @@ export class AgentCompressionMemoryService {
 	}
 
 	/**
-	 * D/区带划分：`historyBudget` 在压缩便签会话下应与 `buildSendPathBudgets` 发信 history 一致（见 compression-overview）。
-	 * messages 为近 500 条内、仅 user/assistant，自新向旧，D 累计口径与 `dMapFromRowsNewestFirst` 一致。
-	 * `reconcileDormantActive`：为真时在读取便签前按当前对话刷新 dormant/active（与仅依赖上次助理侧车写入相比，可避免前端长期看到「休眠中」）。
-	 */
+	 * D/区带划分：`historyBudget` 在压缩便签会话下应与 `buildSendPathBudgets` 发信 history 一致（见 compression-overview）。	 * messages 为近 `AGENT_OVERVIEW_SCAN_LIMIT`（50 000）条内、仅 user/assistant，自新向旧，D 累计口径与 `dMapFromRowsNewestFirst` 一致。	 * `reconcileDormantActive`：为真时在读取便签前按当前对话刷新 dormant/active（与仅依赖上次助理侧车写入相比，可避免前端长期看到「休眠中」）。	 */
 	@bindThis
 	public async getCompressionOverviewData(
 		sessionId: string,
@@ -460,6 +482,9 @@ export class AgentCompressionMemoryService {
 		t1Ratio: number,
 		t2Ratio: number,
 		reconcileDormantActive = false,
+		exactTokenCounter?: (text: string) => Promise<number | null> | number | null,
+		charsPerToken?: number,
+		historyBudgetTokens?: number,
 	): Promise<{
 		historyBudgetTokens: number;
 		t1Tokens: number;
@@ -467,42 +492,52 @@ export class AgentCompressionMemoryService {
 		messages: Array<{
 			id: string;
 			role: string;
-			/** 本条正文长度换算的约 token（与 D 累计同口径：`approxLlmTokensFromCharEstimate`） */
+			/** 本条正文长度换算的约 token（与 D 累计同口径：`approxLlmTokensFromCharEstimate`）*/
 			messageTokens: number;
 			dFromNewTokens: number;
 			band: MessageWithD['band'];
 			contentPreview: string;
+			/** 本条 token 数（含累计 D）是否为启发式近似：精确模式下超出窗口预算的部分会回退估算，此时为 true，前端应加 ≈ 前缀 */
+			tokensEstimated: boolean;
 			/** 落在 state 为 dormant/active 的侧车 [from,to] 内，轮文中由摘要替代 */
 			compressed: boolean;
 		}>;
 		stickies: (MiAgentSessionCompressionSticky & { fromMessagePreview: string; toMessagePreview: string })[];
+		/** 最近一次压缩侧车失败的时间（ISO）；无失败便签则为 null。供前端轮询据此弹失败提示；失败便签本身不在 stickies 列表展示 */
+		compressionSidecarFailedAt: string | null;
 	}> {
 		const rows = await this.agentMessagesRepository.find({
 			where: { sessionId },
 			order: { createdAt: 'DESC', id: 'DESC' },
-			take: 500,
-			select: ['id', 'role', 'content', 'createdAt'],
+			take: AGENT_OVERVIEW_SCAN_LIMIT,
+			select: ['id', 'role', 'content', 'createdAt', 'imageFileId', 'imageRecognitionStatus', 'imageRecognitionDescription', 'proactiveScheduleControlRaw', 'proactiveScheduleControlError'],
+		});
+		const rowsD = filterRowsForChatHistoryD(rows);
+		const formatFn = (m: (typeof rowsD)[number]): string => this.agentService.formatMessageForLlmHistory(m as Parameters<AgentService['formatMessageForLlmHistory']>[0]);
+		const cpt = charsPerToken ?? AGENT_LLM_APPROX_CHARS_PER_TOKEN;
+		const budgetTokens = historyBudgetTokens ?? this.agentTokenService.estimateTokens(historyBudget, cpt);
+		// 统一委托 AgentTokenService：D 累计（token 口径，分块并发 + 超预算提前终止）+ 窗口/区带划分。
+		// 与 context-window 分割线、send 滑窗共享同一计算路径，结构性保证一致。
+		const weights = await this.agentTokenService.computeMessageWeights(rowsD, {
+			formatFn,
+			counter: exactTokenCounter,
+			charsPerToken: cpt,
+			budgetForExact: exactTokenCounter ? budgetTokens : undefined,
 		});
 		if (reconcileDormantActive) {
-			await this.reconcileStickyStates(sessionId, historyBudget, rows);
+			await this.reconcileStickyStates(sessionId, budgetTokens, weights.dMap);
 		}
-		const rowsD = filterRowsForChatHistoryD(rows);
-		const dMap = this.dMapFromRowsNewestFirst(rowsD);
-		/** 当 H<1 时 d>0 即被判为 out，会连「最新一条」也成滑窗外；总览只读展示时改用与最新条对齐的合成预算，不改变 send/便签用的真实 H。 */
-		const dNewest = rowsD.length > 0 ? (dMap.get(rowsD[0]!.id) ?? 0) : 0;
-		const bandHistBudget = historyBudget >= 1
-			? historyBudget
-			: Math.max(1, dNewest / t1Ratio);
-		const t1Band = t1Ratio * bandHistBudget;
-		const t2Band = t2Ratio * bandHistBudget;
-		const toTok = (charLen: number) => this.agentService.approxLlmTokensFromCharEstimate(charLen);
+		const bands = this.agentTokenService.computeWindowAndBands(rowsD, weights.dMap, {
+			historyBudgetTokens: budgetTokens,
+			t1Ratio,
+			t2Ratio,
+		});
 		const stickies = await this.listStickies(sessionId);
-		/** 便签端点消息在对话中的短预览（供总览页展示，非 ID） */
+		/** 便签端点消息在对话中的短预览（供总览页展示，非 ID）——经 agentPreviewText 过滤 MD/MFM/XML 语法 */
 		const formatStickyMsgPreview = (raw: string | null | undefined): string => {
 			if (raw == null || raw === '') return '…';
-			const one = raw.replace(/\s+/g, ' ').trim();
-			if (one.length === 0) return '…';
-			return one.length <= 160 ? one : `${one.slice(0, 160)}…`;
+			const one = agentPreviewText(raw, { maxLength: 160 });
+			return one.length > 0 ? one : '…';
 		};
 		const boundaryIdSet = new Set<string>();
 		for (const s of stickies) {
@@ -510,52 +545,99 @@ export class AgentCompressionMemoryService {
 			boundaryIdSet.add(s.toMessageId);
 		}
 		const bIds = [...boundaryIdSet];
+		// 单次查询同时取回 content（便签端点预览）与 createdAt（区间判定），避免对同一 ID 集合发起两次 DB 往返
 		const boundaryRows = bIds.length === 0
 			? []
 			: await this.agentMessagesRepository.find({
 				where: { sessionId, id: In(bIds) },
-				select: ['id', 'content'],
+				select: ['id', 'content', 'createdAt'],
 			});
 		const msgPreviewById = new Map(boundaryRows.map(m => [m.id, formatStickyMsgPreview(m.content)]));
-		const boundaries = await this.loadBoundaryMap(sessionId, bIds);
-		const inStickyDormantOrActive = (m: { id: string; createdAt: Date }): boolean => {
-			for (const s of stickies) {
-				if (s.state !== 'dormant' && s.state !== 'active') continue;
-				if (this.messageInStickyRange({ id: m.id, createdAt: m.createdAt }, s, boundaries)) {
-					return true;
+		const boundaries = new Map<string, { createdAt: Date; id: string }>();
+		for (const r of boundaryRows) {
+			boundaries.set(r.id, { createdAt: r.createdAt, id: r.id });
+		}
+		// 预计算「已压缩」判定所需的便签时间区间：仅 dormant/active 便签参与，并提前归一化 [lo,hi]，
+		// 避免在下方 5 万条消息的 map 里逐条重复 boundaries.get 与 from/to 排序（原 O(N×M) 含重复解析）
+		const stickyIntervals: { lo: { createdAt: Date; id: string }; hi: { createdAt: Date; id: string } }[] = [];
+		for (const s of stickies) {
+			if (s.state !== 'dormant' && s.state !== 'active') continue;
+			const f = boundaries.get(s.fromMessageId);
+			const t = boundaries.get(s.toMessageId);
+			if (!f || !t) continue;
+			if (this.compareMessageOrder(f, t) > 0) stickyIntervals.push({ lo: t, hi: f });
+			else stickyIntervals.push({ lo: f, hi: t });
+		}
+		let anyEstimated = false;
+		// 仅对前端实际可见的消息执行完整预览过滤（mfm-js 解析开销大，禁止逐条全量执行）：
+		// 与前端 compressionMessageBandBlocks 的折叠策略一致——每个区带按响应顺序（自新向旧）保留首尾各 4 条
+		const BAND_VISIBLE_EDGE = 4;
+		const visiblePreviewIds = new Set<string>();
+		{
+			const idsByBand: Record<string, string[]> = { new: [], prep: [], staged: [], out: [] };
+			for (const m of rowsD) {
+				const b = bands.bandById.get(m.id) ?? 'new';
+				(idsByBand[b] ??= []).push(m.id);
+			}
+			for (const ids of Object.values(idsByBand)) {
+				if (ids.length <= BAND_VISIBLE_EDGE * 2) {
+					for (const id of ids) visiblePreviewIds.add(id);
+				} else {
+					for (const id of ids.slice(0, BAND_VISIBLE_EDGE)) visiblePreviewIds.add(id);
+					for (const id of ids.slice(ids.length - BAND_VISIBLE_EDGE)) visiblePreviewIds.add(id);
 				}
 			}
-			return false;
-		};
+		}
 		const messages = rowsD.map(m => {
-			const d = dMap.get(m.id) ?? 0;
-			let band: MessageWithD['band'] = 'new';
-			if (d > bandHistBudget) band = 'out';
-			else if (d > t2Band) band = 'staged';
-			else if (d > t1Band) band = 'prep';
+			const d = weights.dMap.get(m.id) ?? 0;
+			const band: MessageWithD['band'] = bands.bandById.get(m.id) ?? 'new';
 			// 已压缩只标在已滑出「窗内」的条上（d>t1Band），与区带名一致，避免发信 H 与总览 t1 历史错位时出现「窗内·新 + 已压缩」
-			const compressed = inStickyDormantOrActive(m) && d > t1Band;
+			// 先做廉价的 d 判定短路：窗内（d≤t1）消息永不压缩；仅对滑出窗内且存在 dormant/active 便签的消息做区间命中检查
+			let compressed = false;
+			if (d > bands.t1Band && stickyIntervals.length > 0) {
+				const mm = { createdAt: m.createdAt, id: m.id };
+				for (const iv of stickyIntervals) {
+					if (this.compareMessageOrder(iv.lo, mm) <= 0 && this.compareMessageOrder(mm, iv.hi) <= 0) {
+						compressed = true;
+						break;
+					}
+				}
+			}
+			// 自最新条向旧传递：一旦某条为估算（精确模式超预算回退），其后（更旧）的累计 D 均为近似
+			anyEstimated = anyEstimated || (weights.estimatedById.get(m.id) ?? false);
 			return {
 				id: m.id,
 				role: m.role,
-				messageTokens: toTok(m.content.length),
-				dFromNewTokens: toTok(d),
+				messageTokens: weights.tokensById.get(m.id) ?? 0,
+				dFromNewTokens: d,
 				band,
-				contentPreview: m.content.slice(0, 200),
+				contentPreview: visiblePreviewIds.has(m.id) ? agentPreviewText(m.content, { maxLength: 200 }) : '',
+				tokensEstimated: anyEstimated,
 				compressed,
 			};
 		});
-		const stickiesWithPreview = stickies.map(s => ({
-			...s,
-			fromMessagePreview: msgPreviewById.get(s.fromMessageId) ?? '…',
-			toMessagePreview: msgPreviewById.get(s.toMessageId) ?? '…',
-		}));
+		// 失败便签不进入用户可见列表（压缩失败不往便签列表加内容，仅自动重试）；
+		// 但其 updatedAt 作为弹窗信号经 compressionSidecarFailedAt 暴露给前端轮询
+		let failedAtMs = 0;
+		const stickiesWithPreview: (MiAgentSessionCompressionSticky & { fromMessagePreview: string; toMessagePreview: string })[] = [];
+		for (const s of stickies) {
+			if (s.state === 'failed') {
+				failedAtMs = Math.max(failedAtMs, s.updatedAt.getTime());
+				continue;
+			}
+			stickiesWithPreview.push({
+				...s,
+				fromMessagePreview: msgPreviewById.get(s.fromMessageId) ?? '…',
+				toMessagePreview: msgPreviewById.get(s.toMessageId) ?? '…',
+			});
+		}
 		return {
-			historyBudgetTokens: toTok(historyBudget),
-			t1Tokens: toTok(t1Band),
-			t2Tokens: toTok(t2Band),
+			historyBudgetTokens: bands.bandBudget,
+			t1Tokens: bands.t1Band,
+			t2Tokens: bands.t2Band,
 			messages,
 			stickies: stickiesWithPreview,
+			compressionSidecarFailedAt: failedAtMs > 0 ? new Date(failedAtMs).toISOString() : null,
 		};
 	}
 
@@ -612,6 +694,10 @@ export class AgentCompressionMemoryService {
 		if (sessionUserId !== userId) {
 			throw new ApiError({ message: 'Access denied.', code: 'ACCESS_DENIED', id: '0a0b0c0d-1e2f-3a4b-5c6d-7e8f9a0b1c2d' });
 		}
+		// 校验无重复 ID，防止同一便签被赋值多个 sortIndex 导致排序数据损坏
+		if (new Set(orderedIds).size !== orderedIds.length) {
+			throw new ApiError({ message: 'Duplicate sticky IDs in reorder list.', code: 'INVALID_PARAM', id: '3d4e5f6a-7b8c-9d0e-1f2a-3b4c5d6e7f8a' });
+		}
 		const existing = await this.stickyRepository.find({
 			where: { sessionId },
 			order: { sortIndex: 'ASC', id: 'ASC' },
@@ -625,15 +711,18 @@ export class AgentCompressionMemoryService {
 				throw new ApiError({ message: 'Invalid sticky list.', code: 'INVALID_PARAM', id: '2c3d4e5f-6a7b-8c9d-0e1f-2a3b4c5d6e7f' });
 			}
 		}
+		const byId = new Map(existing.map(e => [e.id, e]));
 		const now = new Date();
+		const changed: MiAgentSessionCompressionSticky[] = [];
 		for (let i = 0; i < orderedIds.length; i++) {
-			const row = existing.find(e => e.id === orderedIds[i]!)!;
+			const row = byId.get(orderedIds[i]!)!;
 			if (row.sortIndex !== i) {
 				row.sortIndex = i;
 				row.updatedAt = now;
-				await this.stickyRepository.save(row);
+				changed.push(row);
 			}
 		}
+		if (changed.length > 0) await this.stickyRepository.save(changed);
 	}
 
 	@bindThis
@@ -647,6 +736,8 @@ export class AgentCompressionMemoryService {
 		willInvalidateCompression: boolean;
 		historyBudgetBefore: number;
 		historyBudgetAfter: number;
+		charsPerTokenBefore: number;
+		charsPerTokenAfter: number;
 		stickyCount: number;
 		compressionProvider: boolean;
 	}> {
@@ -666,49 +757,77 @@ export class AgentCompressionMemoryService {
 			willInvalidateCompression: false,
 			historyBudgetBefore: beforeB.historyBudget,
 			historyBudgetAfter: afterB.historyBudget,
+			charsPerTokenBefore: beforeB.charsPerToken,
+			charsPerTokenAfter: afterB.charsPerToken,
 			stickyCount: n,
 			compressionProvider: provider,
 		};
 	}
 
 	/**
-	 * 以区间两端点中 **D 较大者**（时间较旧侧，自最新累加字符和更大）与 H 比较。
-	 * **max(D) > H** 时区间内已有内容滑出发信滑窗，须 **active**；与 `from/to` 字段谁存旧端无关，兼容历史颠倒。
-	 * 任一端点不在近 500 条取样内（`dMap` 无值）视为已足够旧，**active**。
-	 */
+	 * 以区间两端点的 **D 较大者*（时间较旧侧，自最新累加更大）与预算比较。	 * **max(D) > budget** 时区间内已有内容滑出发信滑窗，须 **active**；与 `from/to` 字段谁存旧端无关，兼容历史颠倒。	 * 任一端点不在 `dMap` 内（无值）视为已足够旧， **active**。	 * `dMap` 与 `budget` 须同口径（统一为 token：与发信滑窗/消息分段区带一致，修复侧车态与界面区带漂移）。	 */
 	@bindThis
 	public async reconcileStickyStates(
 		sessionId: string,
-		historyBudget: number,
-		rowsForDNewestFirst: { id: string; content: string; createdAt: Date; role: string }[],
+		budget: number,
+		dMap: Map<string, number>,
 	): Promise<void> {
-		const dMap = this.dMapFromRowsNewestFirst(filterRowsForChatHistoryD(rowsForDNewestFirst));
 		const stickies = await this.listStickies(sessionId);
+		const now = new Date();
+		const changed: MiAgentSessionCompressionSticky[] = [];
 		for (const s of stickies) {
-			// 仅收束侧车“休眠/可注入”两态，避免误覆写 stale / failed 等
+			// 仅收束侧车“休眠/可注入”两态，避免误覆盖 stale / failed 态
 			if (s.state !== 'dormant' && s.state !== 'active') continue;
 			const dEnd1 = dMap.get(s.fromMessageId);
 			const dEnd2 = dMap.get(s.toMessageId);
 			let newState: AgentCompressionStickyState;
 			if (dEnd1 == null || dEnd2 == null) {
 				newState = 'active';
-			} else if (Math.max(dEnd1, dEnd2) > historyBudget) {
+			} else if (Math.max(dEnd1, dEnd2) > budget) {
 				newState = 'active';
 			} else {
 				newState = 'dormant';
 			}
 			if (s.state !== newState) {
 				s.state = newState;
-				s.updatedAt = new Date();
-				await this.stickyRepository.save(s);
+				s.updatedAt = now;
+				changed.push(s);
 			}
 		}
+		if (changed.length > 0) await this.stickyRepository.save(changed);
 	}
 
 	/**
-	 * 在助理消息已落库后调用；D 与候选区间在**含本轮 assistant** 的近 500 条上累计，与「回复后再算」一致。
-	 * **自动压缩 LLM**：仅当未压消息已进入「排队较后」带 (t2,hSend]（界面「排队较后」，即预备进入压条的下段）时才成条并调用模型；未压仅在「排队较前」(t1,t2]（上段）时只做 reconcile。`t1/t2` 与发信 H 见 `buildSendPathBudgets`。
-	 */
+	 * 侧车（peek/afterAssistant/reconcile）共用的 token 口径 D 累计与阈值，
+	 * 与发信滑窗、消息分段区带同源（修复根因 E：侧车态与界面区带漂移）。
+	 * 公开以便发信路径一次计算后同时传给 peek 与 afterAssistant，避免重复精确分词。 */
+	public async computeSidecarTokenD(params: {
+		session: MiAgentSession;
+		character: ReturnType<AgentService['effectiveCharacterForLlm']>;
+		style: ReturnType<AgentService['effectiveStyleForLlm']>;
+		instanceMeta: MiMeta;
+		rows: { id: string; role: string; content: string }[];
+	}): Promise<CompressionSidecarTokenD> {
+		const budgets = this.buildSendPathBudgets({
+			instanceMeta: params.instanceMeta, session: params.session, character: params.character, style: params.style,
+			provider: 'compression',
+		});
+		const hSend = budgets.historyBudgetTokens;
+		const tokenConfig = this.agentTokenService.resolveTokenConfig(params.instanceMeta, params.session.agentModelId ?? null);
+		const counter = this.agentTokenService.makeCounter(tokenConfig);
+		const rowsD = filterRowsForChatHistoryD(params.rows);
+		const weights = await this.agentTokenService.computeMessageWeights(rowsD, {
+			formatFn: (m) => this.agentService.formatMessageForLlmHistory(m as unknown as Parameters<AgentService['formatMessageForLlmHistory']>[0]),
+			counter,
+			charsPerToken: budgets.charsPerToken,
+			budgetForExact: counter ? hSend : undefined,
+		});
+		const { t1Ratio, t2Ratio } = this.resolveCompressionBandRatios(params.instanceMeta);
+		return { dMap: weights.dMap, hSend, t1: t1Ratio * hSend, t2: t2Ratio * hSend };
+	}
+
+	/**
+	 * 在助理消息已落库后调用；D 与候选区间在**含本条 assistant** 的近 500 条上累计，与「回复后再算」一致。	 * **自动压缩 LLM**：仅当未压消息已进入「排队较后」带 (t2,hSend]（界面「排队较后」，即预备进入压条的下段）时才成条并调用模型；未压仅在「排队较前」 t1,t2]（上段）时只调 reconcile。`t1/t2` 与发信 H 同 `buildSendPathBudgets`。	 */
 	@bindThis
 	public async afterAssistantForCompression(
 		session: MiAgentSession,
@@ -716,76 +835,30 @@ export class AgentCompressionMemoryService {
 		style: ReturnType<AgentService['effectiveStyleForLlm']>,
 		instanceMeta: MiMeta,
 		userId: string,
+		preloadedRows?: CompressionScanRow[],
+		precomputedSidecar?: CompressionSidecarTokenD,
 	): Promise<void> {
 		if (this.resolveEffectiveProvider(session.agentLongMemoryProvider, instanceMeta) !== 'compression') return;
 
-		const { historyBudget: hSend } = this.buildSendPathBudgets({
-			instanceMeta, session, character, style,
-			provider: 'compression',
-		});
-		const rows = await this.agentMessagesRepository.find({
+		const rows = preloadedRows ?? await this.agentMessagesRepository.find({
 			where: { sessionId: session.id },
 			order: { createdAt: 'DESC', id: 'DESC' },
-			take: 500,
-			select: ['id', 'role', 'content', 'createdAt'],
+			take: AGENT_SEND_PATH_SCAN_LIMIT,
+			select: ['id', 'role', 'content', 'createdAt', 'imageFileId', 'imageRecognitionStatus', 'imageRecognitionDescription', 'proactiveScheduleControlRaw', 'proactiveScheduleControlError'],
 		});
-		const dMap = this.dMapFromRowsNewestFirst(filterRowsForChatHistoryD(rows));
-		const { t1Ratio, t2Ratio } = this.resolveCompressionBandRatios(instanceMeta);
-		const t1 = t1Ratio * hSend;
-		const t2 = t2Ratio * hSend;
+		const { dMap, hSend, t1, t2 } = precomputedSidecar ?? await this.computeSidecarTokenD({ session, character, style, instanceMeta, rows });
 		// 仅在「排队较后」(t2,hSend]（预备下段）出现未压 raw 时触发 LLM；未压若只在「排队较前」(t1,t2]（上段）则仅 reconcile。
-		const stickies = await this.listStickies(session.id);
-		const bIds: string[] = [];
-		for (const s of stickies) { bIds.push(s.fromMessageId, s.toMessageId); }
-		const b = await this.loadBoundaryMap(session.id, bIds);
-		const uncoveredT1H: typeof rows = [];
-		let hasUncoveredStaged = false; // 未压 raw 已落入 (t2, hSend]
-		for (const m of rows) {
-			if (m.role !== 'user' && m.role !== 'assistant') continue;
-			const d = dMap.get(m.id) ?? 0;
-			if (d <= t1 || d > hSend) continue;
-			if (m.content.length === 0) continue;
-			let covered = false;
-			for (const s of stickies) {
-				if (s.state === 'stale') continue;
-				if (this.messageInStickyRange(
-					{ id: m.id, createdAt: m.createdAt },
-					s,
-					b,
-				)) {
-					covered = true;
-					break;
-				}
-			}
-			if (covered) continue;
-			uncoveredT1H.push(m);
-			if (d > t2) hasUncoveredStaged = true;
-		}
-		if (!hasUncoveredStaged) {
-			await this.reconcileStickyStates(session.id, hSend, rows);
+		const gathered = await this.gatherCompressionCandidates({ sessionId: session.id, rows, dMap, hSend, t1, t2 });
+		if (!gathered) {
+			await this.reconcileStickyStates(session.id, hSend, dMap);
 			return;
 		}
-		const candidates: typeof rows = uncoveredT1H;
-		if (candidates.length === 0) {
-			await this.reconcileStickyStates(session.id, hSend, rows);
-			return;
-		}
-		// 时间序最老到最新
-		candidates.sort((a, c) => this.compareMessageOrder(a, c));
-		const fromId = candidates[0]!.id;
-		const toId = candidates[candidates.length - 1]!.id;
-		// 已有同一区间
-		if (await this.stickyRepository.findOne({
-			where: { sessionId: session.id, fromMessageId: fromId, toMessageId: toId },
-		})) {
-			await this.reconcileStickyStates(session.id, hSend, rows);
-			return;
-		}
-		const textBlob = candidates.map(m => `${m.role}: ${m.content}`).join('\n\n');
-		const fp = createHash('sha256').update(textBlob, 'utf8').digest('hex');
-		if (await this.stickyRepository.findOne({ where: { sessionId: session.id, sourceFingerprint: fp } })) {
-			await this.reconcileStickyStates(session.id, hSend, rows);
-			return;
+		const { fromId, toId, textBlob, fingerprint, existingByFp } = gathered;
+		if (existingByFp) {
+			// 重试：递增计数，清除错误，后续复用此行更新摘要
+			existingByFp.retryCount += 1;
+			existingByFp.errorMessage = null;
+			await this.stickyRepository.save(existingByFp);
 		}
 		const rawMax = await this.stickyRepository
 			.createQueryBuilder('s')
@@ -806,14 +879,14 @@ export class AgentCompressionMemoryService {
 		try {
 			modelApiName = this.agentService.resolveModelApiName(instanceMeta, compModelId);
 		} catch {
-			await this.reconcileStickyStates(session.id, hSend, rows);
+			await this.reconcileStickyStates(session.id, hSend, dMap);
 			return;
 		}
 		const compCost = this.agentService.getUserFacingModelCostPerCall(instanceMeta, compModelId);
 		if (compCost > 0) {
 			const profile = await this.userProfilesRepository.findOneBy({ userId });
 			if ((profile?.agentCreditBalance ?? 0) < compCost) {
-				await this.reconcileStickyStates(session.id, hSend, rows);
+				await this.reconcileStickyStates(session.id, hSend, dMap);
 				return;
 			}
 		}
@@ -826,7 +899,8 @@ export class AgentCompressionMemoryService {
 			modelApiName,
 			usageKind: 'compression',
 		});
-		let summary = textBlob.slice(0, 4000);
+		// 失败时不存原文节录：summaryText 留空，状态置 failed，由前端显式提示用户压缩失败
+		let summary = '';
 		let compressionError: string | null = null;
 		try {
 			summary = await this.agentService.invokeChatCompletions({
@@ -845,21 +919,39 @@ export class AgentCompressionMemoryService {
 				// 忽略结算错误
 			}
 		}
-		await this.stickyRepository.insertOne({
-			id: this.agentService.newId(),
-			createdAt: now,
-			updatedAt: now,
-			sessionId: session.id,
-			fromMessageId: fromId,
-			toMessageId: toId,
-			summaryText: summary,
-			state: 'dormant',
-			userOverridden: false,
-			sourceFingerprint: fp,
-			errorMessage: compressionError,
-			lastModelId: compModelId,
-			sortIndex: nextSort,
-		});
-		await this.reconcileStickyStates(session.id, hSend, rows);
+		// 成功 → dormant（可注入）；失败 → failed（前端显式提示，不注入、不排除原文）
+		const finalState: AgentCompressionStickyState = compressionError == null ? 'dormant' : 'failed';
+		try {
+			if (existingByFp) {
+				// 重试路径：更新已有便签的摘要/状态
+				existingByFp.summaryText = summary;
+				existingByFp.state = finalState;
+				existingByFp.errorMessage = compressionError;
+				existingByFp.lastModelId = compModelId;
+				existingByFp.updatedAt = new Date();
+				await this.stickyRepository.save(existingByFp);
+			} else {
+				await this.stickyRepository.insertOne({
+					id: this.agentService.newId(),
+					createdAt: now,
+					updatedAt: now,
+					sessionId: session.id,
+					fromMessageId: fromId,
+					toMessageId: toId,
+					summaryText: summary,
+					state: finalState,
+					userOverridden: false,
+					sourceFingerprint: fingerprint,
+					errorMessage: compressionError,
+					lastModelId: compModelId,
+					sortIndex: nextSort,
+				});
+			}
+		} catch (e: unknown) {
+			// 并发下可能触发 (sessionId, sourceFingerprint) 唯一索引冲突，此时已有等价便签，跳过即可
+			const code = (e as { code?: string })?.code;
+			if (code !== '23505') throw e; // 23505 = unique_violation
+		}
+		await this.reconcileStickyStates(session.id, hSend, dMap);
 	}
 }

@@ -20,6 +20,12 @@ export type AgentLlmModelJson = {
 	unlisted: boolean;
 	/** 每次成功或中断调用扣费金额；失败不扣费。0 表示免费 */
 	costPerCall: number;
+	/** 每 token 对应字符数的估算比率，默认 3（中文为主时偏保守） */
+	charsPerToken?: number;
+	/** tiktoken 编码名称，如 "cl100k_base"；为空则使用字符估算 */
+	tokenizerEncoding?: string;
+	/** 每日免费调用次数（所有 usageKind 共享）；0/undefined 表示无免费额度 */
+	dailyFreeQuota?: number;
 };
 
 const DEFAULT_CTX = 8192;
@@ -91,6 +97,13 @@ export function getEffectiveLlmModels(meta: MiMeta): AgentLlmModelJson[] {
 		const unlisted = o.unlisted === true;
 		const costRaw = typeof o.costPerCall === 'number' ? o.costPerCall : Number(o.costPerCall);
 		const costPerCall = Number.isFinite(costRaw) && costRaw >= 0 ? costRaw : 0;
+		const charsPerTokenRaw = typeof o.charsPerToken === 'number' ? o.charsPerToken : undefined;
+		const charsPerToken = charsPerTokenRaw != null && Number.isFinite(charsPerTokenRaw) && charsPerTokenRaw >= 1 && charsPerTokenRaw <= 10
+			? charsPerTokenRaw : undefined;
+		const tokenizerEncoding = typeof o.tokenizerEncoding === 'string' && o.tokenizerEncoding.trim().length > 0 && o.tokenizerEncoding.trim().length <= 64
+			? o.tokenizerEncoding.trim() : undefined;
+		const dailyFreeQuotaRaw = typeof o.dailyFreeQuota === 'number' ? o.dailyFreeQuota : Number(o.dailyFreeQuota);
+		const dailyFreeQuota = Number.isFinite(dailyFreeQuotaRaw) && dailyFreeQuotaRaw > 0 ? Math.trunc(dailyFreeQuotaRaw) : undefined;
 		out.push({
 			id,
 			name,
@@ -102,6 +115,9 @@ export function getEffectiveLlmModels(meta: MiMeta): AgentLlmModelJson[] {
 			maxOutputTokensPerCall,
 			unlisted,
 			costPerCall,
+			charsPerToken,
+			tokenizerEncoding,
+			dailyFreeQuota,
 		});
 	}
 	return out;
@@ -115,7 +131,7 @@ export function getActiveLlmModels(meta: MiMeta): AgentLlmModelJson[] {
 	return getEffectiveLlmModels(meta).filter(m => !m.unlisted);
 }
 
-export function packPublicAgentModels(meta: MiMeta): { id: string; name: string; description: string | null; maxContextTokens: number; maxOutputTokensPerCall: number; costPerCall: number }[] {
+export function packPublicAgentModels(meta: MiMeta): { id: string; name: string; description: string | null; maxContextTokens: number; maxOutputTokensPerCall: number; costPerCall: number; dailyFreeQuota: number }[] {
 	return getActiveLlmModels(meta).map(m => ({
 		id: m.id,
 		name: m.name,
@@ -123,6 +139,7 @@ export function packPublicAgentModels(meta: MiMeta): { id: string; name: string;
 		maxContextTokens: m.maxContextTokens,
 		maxOutputTokensPerCall: m.maxOutputTokensPerCall,
 		costPerCall: m.costPerCall,
+		dailyFreeQuota: m.dailyFreeQuota ?? 0,
 	}));
 }
 
@@ -196,6 +213,33 @@ export function normalizeAgentLlmModelsParam(input: unknown): { ok: true; value:
 			}
 			costPerCall = c;
 		}
+		let charsPerToken: number | undefined;
+		if (o.charsPerToken != null) {
+			const cpt = typeof o.charsPerToken === 'number' ? o.charsPerToken : Number(o.charsPerToken);
+			if (!Number.isFinite(cpt) || cpt < 1 || cpt > 10) {
+				return { ok: false };
+			}
+			charsPerToken = cpt;
+		}
+		let tokenizerEncoding: string | undefined;
+		if (o.tokenizerEncoding != null) {
+			if (typeof o.tokenizerEncoding !== 'string') {
+				return { ok: false };
+			}
+			const te = o.tokenizerEncoding.trim();
+			if (te.length > 64) {
+				return { ok: false };
+			}
+			tokenizerEncoding = te === '' ? undefined : te;
+		}
+		let dailyFreeQuota: number | undefined;
+		if (o.dailyFreeQuota != null) {
+			const dfq = typeof o.dailyFreeQuota === 'number' ? o.dailyFreeQuota : Number(o.dailyFreeQuota);
+			if (!Number.isFinite(dfq) || dfq < 0 || dfq > 100000) {
+				return { ok: false };
+			}
+			dailyFreeQuota = Math.trunc(dfq) === 0 ? undefined : Math.trunc(dfq);
+		}
 		out.push({
 			id,
 			name,
@@ -207,6 +251,9 @@ export function normalizeAgentLlmModelsParam(input: unknown): { ok: true; value:
 			maxOutputTokensPerCall: Math.trunc(maxOutputTokensPerCall),
 			unlisted,
 			costPerCall,
+			charsPerToken,
+			tokenizerEncoding,
+			dailyFreeQuota,
 		});
 	}
 	return { ok: true, value: out };

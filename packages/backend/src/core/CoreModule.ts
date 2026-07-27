@@ -84,8 +84,10 @@ import { AgentImageService } from './AgentImageService.js';
 import { AgentVisionService } from './AgentVisionService.js';
 import { AgentExternalAuditService } from './AgentExternalAuditService.js';
 import { AgentCompressionMemoryService } from './AgentCompressionMemoryService.js';
+import { AgentTokenService } from './AgentTokenService.js';
 import { AgentPlazaReviewService } from './AgentPlazaReviewService.js';
 import { AgentModelUsageService } from './AgentModelUsageService.js';
+import { AgentCheckinService } from './AgentCheckinService.js';
 import { AgentDashscopeMemoryService } from './AgentDashscopeMemoryService.js';
 import { ChatService } from './ChatService.js';
 import { RegistryApiService } from './RegistryApiService.js';
@@ -245,6 +247,7 @@ const $AgentVisionService: Provider = { provide: 'AgentVisionService', useExisti
 const $AgentExternalAuditService: Provider = { provide: 'AgentExternalAuditService', useExisting: AgentExternalAuditService };
 const $AgentPlazaReviewService: Provider = { provide: 'AgentPlazaReviewService', useExisting: AgentPlazaReviewService };
 const $AgentModelUsageService: Provider = { provide: 'AgentModelUsageService', useExisting: AgentModelUsageService };
+const $AgentCheckinService: Provider = { provide: 'AgentCheckinService', useExisting: AgentCheckinService };
 const $AgentDashscopeMemoryService: Provider = { provide: 'AgentDashscopeMemoryService', useExisting: AgentDashscopeMemoryService };
 const $ChatService: Provider = { provide: 'ChatService', useExisting: ChatService };
 const $RegistryApiService: Provider = { provide: 'RegistryApiService', useExisting: RegistryApiService };
@@ -408,8 +411,10 @@ const $ApQuestionService: Provider = { provide: 'ApQuestionService', useExisting
 		AgentVisionService,
 		AgentExternalAuditService,
 		AgentCompressionMemoryService,
+		AgentTokenService,
 		AgentPlazaReviewService,
 		AgentModelUsageService,
+		AgentCheckinService,
 		AgentDashscopeMemoryService,
 		ChatService,
 		RegistryApiService,
@@ -569,6 +574,7 @@ const $ApQuestionService: Provider = { provide: 'ApQuestionService', useExisting
 		$AgentExternalAuditService,
 		$AgentPlazaReviewService,
 		$AgentModelUsageService,
+		$AgentCheckinService,
 		$AgentDashscopeMemoryService,
 		$ChatService,
 		$RegistryApiService,
@@ -729,8 +735,10 @@ const $ApQuestionService: Provider = { provide: 'ApQuestionService', useExisting
 		AgentVisionService,
 		AgentExternalAuditService,
 		AgentCompressionMemoryService,
+		AgentTokenService,
 		AgentPlazaReviewService,
 		AgentModelUsageService,
+		AgentCheckinService,
 		AgentDashscopeMemoryService,
 		ChatService,
 		RegistryApiService,
@@ -887,6 +895,7 @@ const $ApQuestionService: Provider = { provide: 'ApQuestionService', useExisting
 		$AgentExternalAuditService,
 		$AgentPlazaReviewService,
 		$AgentModelUsageService,
+		$AgentCheckinService,
 		$AgentDashscopeMemoryService,
 		$ChatService,
 		$RegistryApiService,

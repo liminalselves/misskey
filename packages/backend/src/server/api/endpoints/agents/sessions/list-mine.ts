@@ -12,12 +12,11 @@ import { Endpoint } from '@/server/api/endpoint-base.js';
 import { DI } from '@/di-symbols.js';
 import { AgentService } from '@/core/AgentService.js';
 import { DriveFileEntityService } from '@/core/entities/DriveFileEntityService.js';
+import { agentPreviewText } from '@/core/agent-preview-text.js';
 import { IsNull, Not } from 'typeorm';
 
 function previewText(s: string, max = 220): string {
-	const t = s.replace(/\s+/g, ' ').trim();
-	if (t.length <= max) return t;
-	return `${t.slice(0, max)}…`;
+	return agentPreviewText(s, { maxLength: max });
 }
 
 export const meta = {

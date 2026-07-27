@@ -119,6 +119,20 @@ SPDX-License-Identifier: AGPL-3.0-only
 							<template #caption>{{ i18n.ts._agents.modelCostPerCallCaption }}</template>
 							<template #prefix><i class="ti ti-coin"></i></template>
 						</MkInput>
+						<MkInput v-model="row.dailyFreeQuota" type="text" :readonly="row.unlisted">
+							<template #label>每日免费次数</template>
+							<template #caption>设为 0 则无免费额度；每日 0 点（北京时间）重置</template>
+						</MkInput>
+						<FormSplit :minWidth="260">
+							<MkSelect v-model="row.tokenizerEncoding" :items="tokenizerEncodingItems" :readonly="row.unlisted">
+								<template #label>Token 编码器</template>
+								<template #caption>选择后使用精确 token 计数，否则使用字符估算</template>
+							</MkSelect>
+							<MkSelect v-model="row.charsPerToken" :items="charsPerTokenItems" :readonly="row.unlisted">
+								<template #label>字符/Token 比率</template>
+								<template #caption>未使用精确编码器时的估算比率</template>
+							</MkSelect>
+						</FormSplit>
 					</div>
 
 					<div>
@@ -314,6 +328,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 								<MkInput v-model="row.apiModelName"><template #label>Aurora 上游模型名</template></MkInput>
 								<MkInput v-model="row.costPerCall" type="text"><template #label>每张扣费</template></MkInput>
 							</FormSplit>
+							<MkInput v-model="row.dailyFreeQuota" type="text">
+								<template #label>每日免费次数</template>
+								<template #caption>设为 0 则无免费额度；每日 0 点（北京时间）重置</template>
+							</MkInput>
 							<MkInput v-model="row.defaultArtistPresetId"><template #label>默认画师串 ID</template></MkInput>
 							<MkInfo warn>以下是 Aurora 参数。不了解时保持默认；会话页可在此基础上个性化覆盖。</MkInfo>
 							<FormSplit :minWidth="180">
@@ -340,6 +358,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 								<MkInput v-model="row.apiModelName"><template #label>{{ i18n.ts._agents.adminOpenaiImageModelName }}</template></MkInput>
 								<MkInput v-model="row.costPerCall" type="text"><template #label>{{ i18n.ts._agents.adminImageModelCost }}</template></MkInput>
 							</FormSplit>
+							<MkInput v-model="row.dailyFreeQuota" type="text">
+								<template #label>每日免费次数</template>
+								<template #caption>设为 0 则无免费额度；每日 0 点（北京时间）重置</template>
+							</MkInput>
 							<MkSwitch v-model="row.supportsReferenceImage">
 								<template #label>{{ i18n.ts._agents.adminImageModelReferenceImage }}</template>
 								<template #caption>{{ i18n.ts._agents.adminImageModelReferenceImageCaption }}</template>
@@ -419,6 +441,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<FormSplit :minWidth="180">
 						<MkInput v-model="form.state.agentImageMaxPerReply" type="text">
 							<template #label>每轮最多图片</template>
+							<template #caption>作为会话「自动生图张数」的默认值。每轮解析图片指令的数量不设上限，超出自动生成上限的指令将进入待手动生成状态。</template>
 						</MkInput>
 						<MkInput v-if="hasAuroraImageModel" v-model="form.state.agentImageTokenMinPoints" type="text"><template #label>最低可用点数</template></MkInput>
 						<MkInput v-if="hasAuroraImageModel" v-model="form.state.agentImageTokenBalanceTtlSeconds" type="text"><template #label>余额缓存秒数</template></MkInput>
@@ -444,6 +467,68 @@ SPDX-License-Identifier: AGPL-3.0-only
 					</div>
 					<MkButton rounded @click="addVisionModel"><i class="ti ti-plus"></i> {{ i18n.ts._agents.adminVisionAddModel }}</MkButton>
 				</div>
+			</MkFolder>
+
+			<MkFolder v-if="activeTab === 'checkin'" :defaultOpen="true">
+				<template #icon><i class="ti ti-calendar-check"></i></template>
+				<template #label>每日签到</template>
+				<div class="_gaps">
+					<MkSwitch v-model="form.state.checkinEnabled">
+						<template #label>启用每日签到</template>
+						<template #caption>用户每日首次打开站点时自动签到，获得智能体额度</template>
+					</MkSwitch>
+					<FormSplit :minWidth="220">
+						<MkInput v-model="form.state.checkinStreakMaxDays" type="text">
+							<template #label>连续达标天数</template>
+							<template #caption>连续签到多少天达到最大倍率（默认 365）</template>
+						</MkInput>
+						<MkInput v-model="form.state.checkinStreakMaxMultiplier" type="text">
+							<template #label>连续最大倍率</template>
+							<template #caption>达标时的倍率（默认 2.0 = 翻倍）</template>
+						</MkInput>
+					</FormSplit>
+					<FormSplit :minWidth="220">
+						<MkInput v-model="form.state.checkinSpecialDayMultiplier" type="text">
+							<template #label>节日倍率</template>
+							<template #caption>特殊日子的奖励倍率（默认 2.0）</template>
+						</MkInput>
+						<MkInput v-model="form.state.checkinSpecialDays" type="text">
+							<template #label>特殊日子</template>
+							<template #caption>MM-DD 格式，逗号分隔（如 01-01,05-01,10-01）</template>
+						</MkInput>
+					</FormSplit>
+					<hr>
+					<MkSwitch v-model="form.state.checkinMakeupEnabled">
+						<template #label>启用补签</template>
+					</MkSwitch>
+					<FormSplit :minWidth="220">
+						<MkInput v-model="form.state.checkinMakeupMaxPerMonth" type="text">
+							<template #label>每月补签上限</template>
+						</MkInput>
+						<MkInput v-model="form.state.checkinMakeupBaseCost" type="text">
+							<template #label>补签基础消耗</template>
+							<template #caption>第 1 次补签消耗的额度</template>
+						</MkInput>
+					</FormSplit>
+					<FormSplit :minWidth="220">
+						<MkInput v-model="form.state.checkinMakeupCostIncrement" type="text">
+							<template #label>补签消耗递增</template>
+							<template #caption>第 N 次 = 基础 + (N-1) × 递增</template>
+						</MkInput>
+						<MkInput v-model="form.state.checkinMakeupAllowedWindowDays" type="text">
+							<template #label>可补签回溯天数</template>
+							<template #caption>只能补最近 N 天（默认 7）</template>
+						</MkInput>
+					</FormSplit>
+					<hr>
+					<MkButton danger rounded @click="revokeTodayCheckin"><i class="ti ti-rotate-back"></i> 撤销当日签到（测试用）</MkButton>
+				</div>
+			</MkFolder>
+
+			<MkFolder v-if="activeTab === 'checkin'" :defaultOpen="false">
+				<template #icon><i class="ti ti-report-analytics"></i></template>
+				<template #label>签到报表</template>
+				<XCheckinReports/>
 			</MkFolder>
 
 			<template v-if="activeTab === 'credits'">
@@ -476,6 +561,17 @@ SPDX-License-Identifier: AGPL-3.0-only
 							</div>
 							<code v-for="c in generatedCodes" :key="c.id" :class="$style.generatedCode">{{ c.code }} · {{ c.creditAmount }}</code>
 						</div>
+					</div>
+				</MkFolder>
+
+				<MkFolder :defaultOpen="true">
+					<template #icon><i class="ti ti-link"></i></template>
+					<template #label>{{ i18n.ts._agents.redeemPurchaseUrl }}</template>
+					<div class="_gaps">
+						<MkInput v-model="form.state.agentRedeemPurchaseUrl" type="url">
+							<template #label>{{ i18n.ts._agents.redeemPurchaseUrl }}</template>
+							<template #caption>{{ i18n.ts._agents.redeemPurchaseUrlCaption }}</template>
+						</MkInput>
 					</div>
 				</MkFolder>
 
@@ -550,7 +646,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</template>
 			</template>
 
-			<div v-if="form.modified.value && ['basic', 'models', 'memory', 'compression', 'externalAudit', 'images', 'vision'].includes(activeTab)" :class="$style.saveBar">
+			<div v-if="form.modified.value && ['basic', 'models', 'memory', 'compression', 'externalAudit', 'images', 'vision', 'credits'].includes(activeTab)" :class="$style.saveBar">
 				<MkFormFooter :form="form"/>
 			</div>
 		</div>
@@ -572,6 +668,7 @@ import MkSelect from '@/components/MkSelect.vue';
 import MkLoading from '@/components/global/MkLoading.vue';
 import MkUserName from '@/components/global/MkUserName.vue';
 import FormSplit from '@/components/form/split.vue';
+import XCheckinReports from './agents-checkin-reports.vue';
 import * as os from '@/os.js';
 import { misskeyApi, formatApiError } from '@/utility/misskey-api.js';
 import { fetchInstance } from '@/instance.js';
@@ -618,6 +715,9 @@ type AgentLlmModelRow = {
 	maxOutputTokensPerCall: string;
 	unlisted: boolean;
 	costPerCall: string;
+	charsPerToken: string;
+	tokenizerEncoding: string;
+	dailyFreeQuota: string;
 };
 
 type AgentImageTokenRow = {
@@ -643,6 +743,7 @@ type AgentImageModelRow = {
 	apiKey: string;
 	supportsReferenceImage: boolean;
 	costPerCall: string;
+	dailyFreeQuota: string;
 	defaultArtistPresetId: string;
 	steps: string;
 	scale: string;
@@ -695,6 +796,29 @@ const agentImageProviderItems: MkSelectItem[] = [
 	{ value: 'openai', label: i18n.ts._agents.imageProviderOpenai },
 ];
 
+const tokenizerEncodingItems: MkSelectItem[] = [
+	{ value: '', label: '不使用（字符估算）' },
+	{ value: 'cl100k_base', label: 'cl100k_base（GPT-4 / GPT-3.5-turbo）' },
+	{ value: 'o200k_base', label: 'o200k_base（GPT-4o / GPT-4o-mini）' },
+	{ value: 'p50k_base', label: 'p50k_base（text-davinci-003）' },
+	{ value: 'r50k_base', label: 'r50k_base（text-davinci-002）' },
+	{ value: 'gpt2', label: 'gpt2（GPT-2）' },
+	{ value: 'gemini:gemini-3-pro-preview', label: 'Gemini 3' },
+	{ value: 'gemini:gemini-2.5-pro', label: 'Gemini 2.5 Pro' },
+	{ value: 'gemini:gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
+	{ value: 'gemini:gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash Lite' },
+	{ value: 'gemini:gemini-2.0-flash-001', label: 'Gemini 2.0 Flash' },
+	{ value: 'gemini:gemini-2.0-flash-lite-001', label: 'Gemini 2.0 Flash Lite' },
+];
+
+const charsPerTokenItems: MkSelectItem[] = [
+	{ value: '', label: '默认（3 字符/token）' },
+	{ value: '2', label: '2（英文为主）' },
+	{ value: '3', label: '3（中英混合）' },
+	{ value: '4', label: '4（中文为主）' },
+	{ value: '6', label: '6（代码/日文）' },
+];
+
 
 function numFromMeta(v: unknown, fallback: number): number {
 	if (typeof v === 'number' && Number.isFinite(v)) return Math.trunc(v);
@@ -733,6 +857,9 @@ function initAgentLlmModelRows(): AgentLlmModelRow[] {
 			maxOutputTokensPerCall: String(numFromMeta(o.maxOutputTokensPerCall, 2048)),
 			unlisted: o.unlisted === true,
 			costPerCall: typeof o.costPerCall === 'number' && Number.isFinite(o.costPerCall) ? String(o.costPerCall) : '0',
+			charsPerToken: typeof o.charsPerToken === 'number' && Number.isFinite(o.charsPerToken) ? String(o.charsPerToken) : '',
+			tokenizerEncoding: typeof o.tokenizerEncoding === 'string' ? o.tokenizerEncoding : '',
+			dailyFreeQuota: typeof o.dailyFreeQuota === 'number' && Number.isFinite(o.dailyFreeQuota) ? String(o.dailyFreeQuota) : '0',
 		});
 	}
 	return rows;
@@ -779,6 +906,7 @@ function initAgentImageModelRows(): AgentImageModelRow[] {
 			apiKey: typeof o.apiKey === 'string' ? o.apiKey : '',
 			supportsReferenceImage: o.provider === 'openai' && o.supportsReferenceImage === true,
 			costPerCall: typeof o.costPerCall === 'number' ? String(o.costPerCall) : '',
+			dailyFreeQuota: typeof o.dailyFreeQuota === 'number' ? String(o.dailyFreeQuota) : '0',
 			defaultArtistPresetId: typeof o.defaultArtistPresetId === 'string' ? o.defaultArtistPresetId : '',
 			steps: String(numFromMeta(p.steps, 28)),
 			scale: typeof p.scale === 'number' ? String(p.scale) : '5',
@@ -896,6 +1024,17 @@ const form = useForm({
 	agentExternalAuditSystemPrompt: typeof meta.agentExternalAuditSystemPrompt === 'string'
 		? meta.agentExternalAuditSystemPrompt
 		: (typeof meta.agentExternalAuditSystemPromptResolved === 'string' ? meta.agentExternalAuditSystemPromptResolved : ''),
+	checkinEnabled: Boolean((meta as any).agentCheckinSettings?.enabled ?? true),
+	checkinStreakMaxDays: String((meta as any).agentCheckinSettings?.streakMaxDays ?? 365),
+	checkinStreakMaxMultiplier: String((meta as any).agentCheckinSettings?.streakMaxMultiplier ?? 2.0),
+	checkinSpecialDayMultiplier: String((meta as any).agentCheckinSettings?.specialDayMultiplier ?? 2.0),
+	checkinSpecialDays: Array.isArray((meta as any).agentCheckinSettings?.specialDays) ? ((meta as any).agentCheckinSettings.specialDays as string[]).join(',') : '01-01,02-14,05-01,10-01,12-25',
+	checkinMakeupEnabled: Boolean((meta as any).agentCheckinSettings?.makeupEnabled ?? true),
+	checkinMakeupMaxPerMonth: String((meta as any).agentCheckinSettings?.makeupMaxPerMonth ?? 3),
+	checkinMakeupBaseCost: String((meta as any).agentCheckinSettings?.makeupBaseCost ?? 20),
+	checkinMakeupCostIncrement: String((meta as any).agentCheckinSettings?.makeupCostIncrement ?? 10),
+	checkinMakeupAllowedWindowDays: String((meta as any).agentCheckinSettings?.makeupAllowedWindowDays ?? 7),
+	agentRedeemPurchaseUrl: typeof meta.agentRedeemPurchaseUrl === 'string' ? meta.agentRedeemPurchaseUrl : '',
 }, async (state) => {
 	type Normalized = {
 		id: string;
@@ -908,6 +1047,9 @@ const form = useForm({
 		maxOutputTokensPerCall: number;
 		unlisted: boolean;
 		costPerCall: number;
+		charsPerToken?: number;
+		tokenizerEncoding?: string;
+		dailyFreeQuota?: number;
 	};
 	const normalized: Normalized[] = [];
 	const seen = new Set<string>();
@@ -959,6 +1101,9 @@ const form = useForm({
 			maxOutputTokensPerCall: maxOut,
 			unlisted: row.unlisted === true,
 			costPerCall: cost,
+			charsPerToken: row.charsPerToken.trim() !== '' ? Number(row.charsPerToken) : undefined,
+			tokenizerEncoding: row.tokenizerEncoding.trim() !== '' ? row.tokenizerEncoding.trim() : undefined,
+			dailyFreeQuota: row.dailyFreeQuota.trim() !== '' && Number(row.dailyFreeQuota) > 0 ? Number(row.dailyFreeQuota) : undefined,
 		});
 	}
 	if (normalized.length === 0) {
@@ -1007,6 +1152,7 @@ const form = useForm({
 				apiKey: row.provider === 'openai' && row.apiKey.trim() !== '' ? row.apiKey.trim() : null,
 				supportsReferenceImage: row.provider === 'openai' && row.supportsReferenceImage,
 				costPerCall: row.costPerCall.trim() === '' ? null : Number(row.costPerCall),
+				dailyFreeQuota: row.dailyFreeQuota.trim() !== '' && Number(row.dailyFreeQuota) > 0 ? Number(row.dailyFreeQuota) : null,
 				defaultArtistPresetId: row.defaultArtistPresetId.trim() === '' ? null : row.defaultArtistPresetId.trim(),
 				defaultParams: row.provider === 'aurora' ? {
 					steps,
@@ -1234,6 +1380,20 @@ const form = useForm({
 		agentExternalAuditFailureMinRequests: externalAuditFailureMinRequests,
 		agentExternalAuditNotifyEmails: state.agentExternalAuditNotifyEmails.trim() === '' ? null : state.agentExternalAuditNotifyEmails,
 		agentExternalAuditSystemPrompt: state.agentExternalAuditSystemPrompt.trim() === '' ? null : state.agentExternalAuditSystemPrompt,
+		agentCheckinSettings: {
+			enabled: state.checkinEnabled,
+			streakMaxDays: Number(state.checkinStreakMaxDays) || 365,
+			streakMaxMultiplier: Number(state.checkinStreakMaxMultiplier) || 2.0,
+			specialDayMultiplier: Number(state.checkinSpecialDayMultiplier) || 2.0,
+			specialDays: state.checkinSpecialDays.split(',').map(s => s.trim()).filter(s => /^\d{2}-\d{2}$/.test(s)),
+			roleMultipliers: {},
+			makeupEnabled: state.checkinMakeupEnabled,
+			makeupMaxPerMonth: Number(state.checkinMakeupMaxPerMonth) || 3,
+			makeupBaseCost: Number(state.checkinMakeupBaseCost) || 20,
+			makeupCostIncrement: Number(state.checkinMakeupCostIncrement) || 10,
+			makeupAllowedWindowDays: Number(state.checkinMakeupAllowedWindowDays) || 7,
+		},
+		agentRedeemPurchaseUrl: state.agentRedeemPurchaseUrl.trim() === '' ? null : state.agentRedeemPurchaseUrl.trim(),
 	} as Record<string, unknown>);
 	fetchInstance(true);
 });
@@ -1272,6 +1432,40 @@ const selectedDefaultModelName = computed(() => {
 	if (!id) return '未设置';
 	return form.state.agentLlmModelRows.find(r => r.id.trim() === id)?.name || id;
 });
+
+// 签到身份组倍率配置
+const checkinRoleRows = reactive<{ roleId: string; multiplier: string }[]>([]);
+const roleItems = ref<MkSelectItem[]>([]);
+
+async function loadRolesForCheckin() {
+	try {
+		const roles = await misskeyApi('admin/roles/list' as any, {}) as { id: string; name: string }[];
+		roleItems.value = roles.map(r => ({ value: r.id, label: r.name }));
+	} catch { /* ignore */ }
+}
+
+function initCheckinRoleRows(meta: Record<string, any>) {
+	const rm = meta.agentCheckinSettings?.roleMultipliers ?? {};
+	checkinRoleRows.length = 0;
+	for (const [roleId, mul] of Object.entries(rm)) {
+		checkinRoleRows.push({ roleId, multiplier: String(mul) });
+	}
+}
+
+async function revokeTodayCheckin() {
+	const confirm = await os.confirm({
+		type: 'warning',
+		title: '撤销当日签到',
+		text: '将删除今日所有用户的签到记录并回收已发放额度（消费日志保留）。确定继续？',
+	});
+	if (confirm.canceled) return;
+	try {
+		const res = await misskeyApi('admin/agents-checkin-revoke-today' as any, {}) as { revokedCount: number; totalRewardReversed: number };
+		os.alert({ type: 'success', text: `已撤销 ${res.revokedCount} 条签到，回收 ${res.totalRewardReversed.toFixed(2)} 额度` });
+	} catch (err) {
+		os.alert({ type: 'error', text: formatApiError(err) });
+	}
+}
 
 const redeemForm = reactive({
 	amount: 10,
@@ -1466,6 +1660,9 @@ function addRow() {
 		maxOutputTokensPerCall: '2048',
 		unlisted: false,
 		costPerCall: '0',
+		charsPerToken: '',
+		tokenizerEncoding: '',
+		dailyFreeQuota: '0',
 	});
 }
 
@@ -1519,6 +1716,7 @@ function addImageModel() {
 		apiKey: '',
 		supportsReferenceImage: false,
 		costPerCall: form.state.agentImageCostPerCall || '',
+		dailyFreeQuota: '0',
 		defaultArtistPresetId: form.state.agentImageDefaultArtistPresetId || '',
 		steps: form.state.agentImageSteps || '28',
 		scale: form.state.agentImageScale || '5',
@@ -1629,6 +1827,10 @@ const headerTabs = computed(() => [{
 	title: '额度',
 	icon: 'ti ti-ticket',
 }, {
+	key: 'checkin',
+	title: '签到',
+	icon: 'ti ti-calendar-check',
+}, {
 	key: 'reports',
 	title: '报表',
 	icon: 'ti ti-report-analytics',
@@ -1650,7 +1852,10 @@ watch(activeTab, tab => {
 	if (tab === 'externalAudit' && externalAuditStats.value.length === 0) void loadExternalAuditStats();
 	if (tab === 'credits' && redeemCodes.value.length === 0) void loadRedeemCodes();
 	if (tab === 'reports' && reportsData.value == null) void loadReports();
+	if (tab === 'checkin' && roleItems.value.length === 0) void loadRolesForCheckin();
 });
+
+initCheckinRoleRows(meta);
 
 onMounted(() => {
 	void loadReports();
@@ -1989,5 +2194,24 @@ onMounted(() => {
 		align-items: flex-start;
 		flex-direction: column;
 	}
+}
+
+.roleMulSection {
+	padding: 4px 0;
+}
+
+.roleMulRow {
+	display: flex;
+	align-items: flex-end;
+	gap: 10px;
+	margin-bottom: 10px;
+}
+
+.roleMulDel {
+	padding: 8px 10px;
+	border-radius: 8px;
+	color: var(--MI_THEME-error);
+	cursor: pointer;
+	&:hover { background: color-mix(in srgb, var(--MI_THEME-error) 10%, transparent); }
 }
 </style>

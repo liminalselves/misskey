@@ -337,6 +337,44 @@ export class AgentProactiveScheduleService {
 		}
 	}
 
+	/**
+	 * 会话导入（v3）时重建定时主动消息计划。
+	 * 逐条规范化触发器并重新计算 nextRunAt；无效或超出上限的计划安全跳过，不抛错。
+	 * 返回实际导入的计划数。
+	 */
+	public async importSchedules(
+		sessionId: string,
+		schedules: Array<{ description: string; trigger: AgentProactiveScheduleTrigger; status: 'active' | 'paused' }>,
+	): Promise<number> {
+		const now = new Date();
+		const existing = await this.listForUser(sessionId);
+		let imported = 0;
+		for (const item of schedules) {
+			if (existing.length + imported >= MAX_ACTIVE_SCHEDULES) break;
+			const description = item.description.trim().slice(0, 80);
+			if (description.length === 0) continue;
+			try {
+				const normalized = this.normalizeTrigger(item.trigger, now);
+				await this.schedulesRepository.insert({
+					id: this.agentService.newId(),
+					sessionId,
+					createdAt: now,
+					updatedAt: now,
+					status: item.status,
+					description,
+					trigger: normalized.trigger,
+					nextRunAt: normalized.nextRunAt,
+					lastRunAt: null,
+					remainingRuns: normalized.remainingRuns,
+				});
+				imported++;
+			} catch {
+				// 单条计划无效（如非法 cron / 重复间隔过短）时跳过，不中断整体导入
+			}
+		}
+		return imported;
+	}
+
 	public armRandomAfterVisibleAssistant(session: MiAgentSession, endedAt: Date): void {
 		if (!session.randomProactiveEnabled || !session.timeAwarenessEnabled) {
 			session.randomProactiveAt = null;
@@ -437,10 +475,18 @@ export class AgentProactiveScheduleService {
 	private normalizeTrigger(trigger: AgentProactiveScheduleTrigger, now: Date): { trigger: AgentProactiveScheduleTrigger; nextRunAt: Date; remainingRuns: number | null } {
 		if (trigger.type === 'once') {
 			const at = parseBeijingLocalDate(trigger.at);
-			if (!at || at.getTime() < now.getTime() + MIN_ONCE_DELAY_MS) {
-				throw new ScheduleControlError('INVALID_TIME', 'A one-time schedule must be at least five minutes in the future, using YYYY-MM-DD HH:mm Beijing time.');
+			if (!at) {
+				throw new ScheduleControlError('INVALID_TIME', 'A one-time schedule must use the YYYY-MM-DD HH:mm Beijing time format.');
 			}
-			return { trigger: { type: 'once', at: trigger.at }, nextRunAt: at, remainingRuns: 1 };
+			// AI 是基于「请求开始时注入的 <time>」计算目标时间的，而 LLM 响应存在延迟（可达数分钟）：
+			// 例如 0:00 用户说「5 分钟后叫我」，AI 设 0:05；若响应耗时 2 分钟，创建时刻已是 0:02。
+			// 此时若以创建时刻为基准要求「至少 5 分钟后」（0:07），会错误拒绝 AI 正确设定的 0:05。
+			// 正确语义：目标时间仍在未来则尊重 AI 的设定；若已过期（响应延迟超过了设定的延时），
+			// 钳制到 now+5min 以保留「提醒」意图，而非报错丢弃。
+			const nextRunAt = at.getTime() > now.getTime()
+				? at
+				: new Date(now.getTime() + MIN_ONCE_DELAY_MS);
+			return { trigger: { type: 'once', at: trigger.at }, nextRunAt, remainingRuns: 1 };
 		}
 		if (trigger.repeat.mode === 'count' && (trigger.repeat.count < 1 || trigger.repeat.count > 1000)) {
 			throw new ScheduleControlError('INVALID_REPEAT_COUNT', 'A recurring schedule count must be between 1 and 1000, or use unlimited.');

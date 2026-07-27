@@ -83,4 +83,9 @@ export class MiAgentSessionCompressionSticky {
 		default: 0,
 	})
 	public sortIndex: number;
+
+	@Column('integer', {
+		default: 0,
+	})
+	public retryCount: number;
 }

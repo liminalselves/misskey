@@ -21,7 +21,7 @@ const _rootPackage = JSON.parse(fs.readFileSync(resolve(_rootPackageDir, 'packag
 const _frontendLocalesDir = resolve(_dirname, '../../built/_frontend_dist_/locales');
 const _localesDir = resolve(_rootPackageDir, 'locales');
 
-const entryPoints = fs.globSync('./src/**/**.{ts,tsx}');
+const entryPoints = fs.globSync('./src/**/**.{ts,tsx}').filter(f => !f.includes('_locale'));
 
 const options: BuildOptions = {
 	entryPoints,
@@ -82,7 +82,8 @@ async function buildSrc(): Promise<void> {
 			console.log(`[${_package.name}] build succeeded.`);
 		})
 		.catch((err) => {
-			process.stderr.write(err.stderr);
+			if (err.stderr) process.stderr.write(err.stderr);
+			else console.error(err);
 			process.exit(1);
 		});
 

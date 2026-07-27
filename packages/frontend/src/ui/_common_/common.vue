@@ -108,9 +108,11 @@ import { isSafeMode } from '@@/js/config.js';
 import { swInject } from './sw-inject.js';
 import XNotification from './notification.vue';
 import { popups } from '@/os.js';
+import * as os from '@/os.js';
 import { unisonReload } from '@/utility/unison-reload.js';
 import { miLocalStorage } from '@/local-storage.js';
 import { pendingApiRequestsCount } from '@/utility/misskey-api.js';
+import { misskeyApi } from '@/utility/misskey-api.js';
 import * as sound from '@/utility/sound.js';
 import { $i } from '@/i.js';
 import { useStream } from '@/stream.js';
@@ -188,6 +190,22 @@ if ($i) {
 	if ('serviceWorker' in navigator) {
 		swInject();
 	}
+
+	// 每日签到：每次加载均调用后端（幂等），确保管理员撤销后用户可重新签到
+	misskeyApi('agents/checkin' as any, {}).then((res: any) => {
+		if (res && !res.alreadyCheckedIn && res.reward > 0) {
+			const { dispose } = os.popup(defineAsyncComponent(() => import('@/components/CheckinPopup.vue')), {
+				reward: res.reward,
+				streak: res.streak,
+				baseValue: res.baseValue,
+				streakMultiplier: res.streakMultiplier,
+				roleMultiplier: res.roleMultiplier,
+				dayMultiplier: res.dayMultiplier,
+			}, {
+				closed: () => dispose(),
+			});
+		}
+	}).catch(() => {});
 }
 </script>
 

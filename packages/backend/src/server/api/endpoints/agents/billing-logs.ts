@@ -32,10 +32,13 @@ export const meta = {
 						createdAt: { type: 'string', format: 'date-time' },
 						amount: { type: 'number' },
 						modelName: { type: 'string', nullable: true },
-						usageKind: { type: 'string', enum: ['chat', 'compression', 'image_generation', 'vision', 'proactive_random', 'proactive_scheduled'], nullable: true },
+						usageKind: { type: 'string', enum: ['chat', 'compression', 'image_generation', 'vision', 'proactive_random', 'proactive_scheduled', 'checkin'], nullable: true },
 						status: { type: 'string', nullable: true },
 						durationMs: { type: 'integer', nullable: true },
 						redeemCode: { type: 'string', nullable: true },
+						usedFreeQuota: { type: 'boolean', nullable: true },
+						freeQuotaUsedAtCall: { type: 'integer', nullable: true },
+						freeQuotaTotalAtCall: { type: 'integer', nullable: true },
 					},
 				},
 			},
@@ -64,10 +67,13 @@ type BillingItem = {
 	createdAt: string;
 	amount: number;
 	modelName: string | null;
-	usageKind: 'chat' | 'compression' | 'image_generation' | 'vision' | 'proactive_random' | 'proactive_scheduled' | null;
+	usageKind: 'chat' | 'compression' | 'image_generation' | 'vision' | 'proactive_random' | 'proactive_scheduled' | 'checkin' | null;
 	status: string | null;
 	durationMs: number | null;
 	redeemCode: string | null;
+	usedFreeQuota: boolean | null;
+	freeQuotaUsedAtCall: number | null;
+	freeQuotaTotalAtCall: number | null;
 };
 
 @Injectable()
@@ -139,6 +145,9 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					status: log.status,
 					durationMs: log.durationMs,
 					redeemCode: null,
+					usedFreeQuota: log.usedFreeQuota ?? null,
+					freeQuotaUsedAtCall: log.freeQuotaUsedAtCall ?? null,
+					freeQuotaTotalAtCall: log.freeQuotaTotalAtCall ?? null,
 				});
 			}
 
@@ -153,6 +162,9 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					status: null,
 					durationMs: null,
 					redeemCode: rc.code.slice(0, 4) + '****',
+					usedFreeQuota: null,
+					freeQuotaUsedAtCall: null,
+					freeQuotaTotalAtCall: null,
 				});
 			}
 

@@ -60,6 +60,7 @@ export type MiAgentImageModel = {
 	/** Whether this model accepts the character's default reference image. */
 	supportsReferenceImage?: boolean;
 	costPerCall?: number | null;
+	dailyFreeQuota?: number | null;
 	defaultParams?: MiAgentImageDefaultParams | null;
 	defaultArtistPresetId?: string | null;
 };
@@ -938,6 +939,12 @@ export class MiMeta {
 		unlisted?: boolean;
 		/** 每次成功或中断调用扣费金额，默认 0；失败不扣费 */
 		costPerCall?: number;
+		/** 每 token 对应字符数的估算比率，默认 3 */
+		charsPerToken?: number;
+		/** tiktoken 编码名称，如 "cl100k_base"；为空则使用字符估算 */
+		tokenizerEncoding?: string;
+		/** 每日免费调用次数；0/无则无免费额度 */
+		dailyFreeQuota?: number;
 	}> | null;
 
 	@Column('varchar', {
@@ -1165,7 +1172,34 @@ export class MiMeta {
 		nullable: true,
 	})
 	public agentExternalAuditSystemPrompt: string | null;
+
+	@Column('jsonb', {
+		nullable: true,
+		default: null,
+	})
+	public agentCheckinSettings: AgentCheckinSettings | null;
+
+	/** 卡密购买链接；未配置时前端不展示购买入口 */
+	@Column('varchar', {
+		length: 1024, nullable: true,
+		default: null,
+	})
+	public agentRedeemPurchaseUrl: string | null;
 }
+
+export type AgentCheckinSettings = {
+	enabled: boolean;
+	streakMaxDays: number;
+	streakMaxMultiplier: number;
+	specialDayMultiplier: number;
+	specialDays: string[];
+	roleMultipliers: Record<string, number>;
+	makeupEnabled: boolean;
+	makeupMaxPerMonth: number;
+	makeupBaseCost: number;
+	makeupCostIncrement: number;
+	makeupAllowedWindowDays: number;
+};
 
 export type SoftwareSuspension = {
 	software: string,

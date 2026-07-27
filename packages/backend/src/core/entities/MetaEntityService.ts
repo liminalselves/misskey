@@ -171,6 +171,7 @@ export class MetaEntityService {
 				}
 				return null;
 			})(),
+			agentRedeemPurchaseUrl: instance.agentRedeemPurchaseUrl ?? null,
 			agentLlmConfigured: isAgentLlmRunnable(instance),
 			agentImageGenerationEnabled: instance.agentImageGenerationEnabled === true,
 			agentImageConfigured: instance.agentImageGenerationEnabled === true && Array.isArray(instance.agentImageTokens) && instance.agentImageTokens.some(t => t.enabled !== false && typeof t.token === 'string' && t.token.trim().length > 0),

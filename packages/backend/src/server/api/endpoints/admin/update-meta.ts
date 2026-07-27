@@ -231,6 +231,7 @@ export const paramDef = {
 					apiKey: { type: 'string', nullable: true, maxLength: 8192 },
 					supportsReferenceImage: { type: 'boolean' },
 					costPerCall: { type: 'number', nullable: true, minimum: 0, maximum: 1000000 },
+					dailyFreeQuota: { type: 'number', nullable: true, minimum: 0, maximum: 100000 },
 					defaultParams: { type: 'object', nullable: true, additionalProperties: true },
 					defaultArtistPresetId: { type: 'string', nullable: true, maxLength: 128 },
 				},
@@ -306,6 +307,8 @@ export const paramDef = {
 		agentExternalAuditFailureMinRequests: { type: 'integer', minimum: 1, maximum: 100000 },
 		agentExternalAuditNotifyEmails: { type: 'string', nullable: true, maxLength: 4000 },
 		agentExternalAuditSystemPrompt: { type: 'string', nullable: true, maxLength: 20000 },
+		agentCheckinSettings: { type: 'object', nullable: true, additionalProperties: true },
+		agentRedeemPurchaseUrl: { type: 'string', nullable: true, maxLength: 1024 },
 		nativeClientAppInfo: {
 			type: 'object', nullable: false,
 			properties: {
@@ -1006,6 +1009,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 						apiKey,
 						supportsReferenceImage: m.provider === 'openai' && m.supportsReferenceImage === true,
 						costPerCall: typeof m.costPerCall === 'number' ? Math.max(0, m.costPerCall) : null,
+						dailyFreeQuota: typeof m.dailyFreeQuota === 'number' && m.dailyFreeQuota > 0 ? Math.trunc(m.dailyFreeQuota) : null,
 						defaultParams: m.defaultParams ?? null,
 						defaultArtistPresetId: typeof m.defaultArtistPresetId === 'string' && m.defaultArtistPresetId.trim() !== '' ? m.defaultArtistPresetId.trim() : null,
 					};
@@ -1156,6 +1160,16 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				set.agentExternalAuditSystemPrompt = ps.agentExternalAuditSystemPrompt === null || String(ps.agentExternalAuditSystemPrompt).trim() === ''
 					? null
 					: String(ps.agentExternalAuditSystemPrompt).trim();
+			}
+
+			if (ps.agentCheckinSettings !== undefined) {
+				set.agentCheckinSettings = ps.agentCheckinSettings as any;
+			}
+			
+			if (ps.agentRedeemPurchaseUrl !== undefined) {
+				set.agentRedeemPurchaseUrl = ps.agentRedeemPurchaseUrl === null || String(ps.agentRedeemPurchaseUrl).trim() === ''
+					? null
+					: String(ps.agentRedeemPurchaseUrl).trim();
 			}
 
 			if (ps.nativeClientAppInfo !== undefined) {

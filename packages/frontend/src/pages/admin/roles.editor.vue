@@ -30,6 +30,11 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<template #caption>{{ i18n.ts._role.descriptionOfDisplayOrder }}</template>
 	</MkInput>
 
+	<MkInput :modelValue="role.checkinMultiplier ?? null" type="number" :min="0" :step="0.1" @update:modelValue="v => role.checkinMultiplier = v">
+		<template #label>签到倍率</template>
+		<template #caption>签到奖励乘以此倍率。留空或 1 = 无加成，如 1.5 表示 ×1.5</template>
+	</MkInput>
+
 	<MkSelect v-model="rolePermission" :items="rolePermissionDef" :readonly="readonly">
 		<template #label><i class="ti ti-shield-lock"></i> {{ i18n.ts._role.permission }}</template>
 		<template #caption><div v-html="i18n.ts._role.descriptionOfPermission.replaceAll('\n', '<br>')"></div></template>
@@ -932,6 +937,7 @@ type RoleLike = Pick<Misskey.entities.Role, 'name' | 'description' | 'isAdminist
 	id?: Misskey.entities.Role['id'] | null;
 	condFormula: any;
 	policies: any;
+	checkinMultiplier?: number | null;
 };
 
 const emit = defineEmits<{
@@ -996,6 +1002,7 @@ const save = throttle(100, () => {
 		color: role.value.color === '' ? null : role.value.color,
 		iconUrl: role.value.iconUrl === '' ? null : role.value.iconUrl,
 		displayOrder: role.value.displayOrder,
+		checkinMultiplier: role.value.checkinMultiplier || null,
 		target: role.value.target,
 		condFormula: role.value.condFormula,
 		isAdministrator: role.value.isAdministrator,

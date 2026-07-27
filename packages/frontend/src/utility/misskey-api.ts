@@ -7,6 +7,7 @@ import * as Misskey from 'misskey-js';
 import { ref } from 'vue';
 import { apiUrl } from '@@/js/config.js';
 import { $i } from '@/i.js';
+import { i18n } from '@/i18n.js';
 export const pendingApiRequestsCount = ref(0);
 
 let handlingSuspendedAccount = false;
@@ -29,10 +30,23 @@ async function handleSuspendedAccount(error: { code?: string; info?: unknown }):
 /** Use in catch() when misskeyApi rejects with `{ message, code, id, info? }` — avoid String(err) → "[object Object]". */
 export function formatApiError(err: unknown): string {
 	if (err != null && typeof err === 'object' && 'message' in err) {
-		const o = err as { message?: unknown; code?: string; info?: unknown };
+		const o = err as { message?: unknown; code?: string; info?: { reason?: string; status?: number; detail?: string } | null };
 		if (typeof o.message === 'string') {
-			const code = o.code ? ` (${o.code})` : '';
-			return o.message + code;
+			// 已知错误码映射为用户友好的中文提示
+			const head = o.code === 'AGENTS_LLM_FAILED'
+				? i18n.ts._agents.llmRequestFailedHint
+				: o.message;
+			// 附加脱敏诊断信息：错误码 · 原因 · HTTP状态 · 详情
+			const parts: string[] = [];
+			if (o.code) parts.push(o.code);
+			const info = o.info;
+			if (info != null && typeof info === 'object') {
+				if (info.reason) parts.push(String(info.reason));
+				if (info.status != null) parts.push(`HTTP ${info.status}`);
+				if (info.detail) parts.push(String(info.detail));
+			}
+			const codeLine = parts.length > 0 ? `\n[${parts.join(' · ')}]` : '';
+			return head + codeLine;
 		}
 	}
 	return String(err);

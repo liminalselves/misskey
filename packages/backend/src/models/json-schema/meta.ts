@@ -453,6 +453,10 @@ export const packedMetaLiteSchema = {
 			type: 'string',
 			optional: false, nullable: true,
 		},
+		agentRedeemPurchaseUrl: {
+			type: 'string',
+			optional: false, nullable: true,
+		},
 	},
 } as const;
 

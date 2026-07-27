@@ -10,7 +10,7 @@ import { MiUser } from './User.js';
 export const agentModelUsageStatuses = ['success', 'failed', 'aborted'] as const;
 export type AgentModelUsageStatus = typeof agentModelUsageStatuses[number];
 
-export const agentModelUsageKinds = ['chat', 'compression', 'image_generation', 'vision', 'proactive_random', 'proactive_scheduled'] as const;
+export const agentModelUsageKinds = ['chat', 'compression', 'image_generation', 'vision', 'proactive_random', 'proactive_scheduled', 'checkin'] as const;
 export type AgentModelUsageKind = typeof agentModelUsageKinds[number];
 
 @Entity('agent_model_usage_log')
@@ -71,4 +71,16 @@ export class MiAgentModelUsageLog {
 
 	@Column('integer', { nullable: true })
 	public completionTokens: number | null;
+
+	/** 本条调用是否消耗了每日免费额度（快照，入库后不可变） */
+	@Column('boolean', { nullable: true, default: null })
+	public usedFreeQuota: boolean | null;
+
+	/** 截至本条调用（含）该用户对该模型当日已消耗的免费次数（最小 1） */
+	@Column('integer', { nullable: true, default: null })
+	public freeQuotaUsedAtCall: number | null;
+
+	/** 调用时刻模型配置的每日免费总次数快照 */
+	@Column('integer', { nullable: true, default: null })
+	public freeQuotaTotalAtCall: number | null;
 }

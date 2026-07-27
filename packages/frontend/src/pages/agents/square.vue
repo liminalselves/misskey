@@ -195,8 +195,15 @@ import * as os from '@/os.js';
 import { useRouter } from '@/router.js';
 import { $i } from '@/i.js';
 
+const props = withDefaults(defineProps<{
+	/** 初始子标签（由路由 query 传入），支持直达风格广场 */
+	initialSub?: string;
+}>(), {
+	initialSub: 'characters',
+});
+
 const router = useRouter();
-const sub = ref<'characters' | 'stylesPlaza'>('characters');
+const sub = ref<'characters' | 'stylesPlaza'>(props.initialSub === 'stylesPlaza' ? 'stylesPlaza' : 'characters');
 const subTabs = computed(() => [
 	{ key: 'characters', label: i18n.ts._agents.exploreSubCharacters },
 	{ key: 'stylesPlaza', label: i18n.ts._agents.stylesTab },

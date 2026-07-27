@@ -53,6 +53,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			if (!row) throw new ApiError({ message: 'No such session.', code: 'NO_SUCH_SESSION', id: 'e0a5f341-171e-4ce8-8305-7af29e167477' });
 			const before = row.moderationBanned;
 			row.moderationBanned = ps.banned;
+			// 封禁时持久化原因供用户侧展示；解封时清空
+			row.moderationBannedReason = ps.banned ? (ps.reason?.trim() || null) : null;
 			row.updatedAt = new Date();
 			await this.agentSessionsRepository.save(row);
 			const userAcct = await getAcctByUserId(this.usersRepository, row.userId);

@@ -227,4 +227,10 @@ export class MiAgentSession {
 		default: false,
 	})
 	public moderationBanned: boolean;
+
+	/** 管理封禁原因（管理员填写）；为空时用户侧展示默认文案 */
+	@Column('varchar', {
+		length: 1000, nullable: true,
+	})
+	public moderationBannedReason: string | null;
 }

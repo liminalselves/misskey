@@ -83,12 +83,15 @@ export class ApiCallService implements OnApplicationShutdown {
 				this.logger.warn(`rate limit information has unexpected type ${typeof(err.info?.reset)}`);
 			}
 		} else if (err.kind === 'client') {
-			reply.header('WWW-Authenticate', `Bearer realm="Misskey", error="invalid_request", error_description="${err.message}"`);
+			// HTTP ヘッダーには ASCII のみ含められるため、非 ASCII 文字をエスケープする
+			const safeDescription = err.message.replace(/[^\x20-\x7E]/g, c => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`);
+			reply.header('WWW-Authenticate', `Bearer realm="Misskey", error="invalid_request", error_description="${safeDescription}"`);
 			statusCode = statusCode ?? 400;
 		} else if (err.kind === 'permission') {
 			// (ROLE_PERMISSION_DENIEDは関係ない)
 			if (err.code === 'PERMISSION_DENIED') {
-				reply.header('WWW-Authenticate', `Bearer realm="Misskey", error="insufficient_scope", error_description="${err.message}"`);
+				const safeDescription = err.message.replace(/[^\x20-\x7E]/g, c => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`);
+				reply.header('WWW-Authenticate', `Bearer realm="Misskey", error="insufficient_scope", error_description="${safeDescription}"`);
 			}
 			statusCode = statusCode ?? 403;
 		} else if (!statusCode) {

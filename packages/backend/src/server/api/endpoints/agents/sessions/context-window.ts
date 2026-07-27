@@ -14,7 +14,8 @@ import { Endpoint } from '@/server/api/endpoint-base.js';
 import { DI } from '@/di-symbols.js';
 import { ApiError } from '@/server/api/error.js';
 import { AgentService } from '@/core/AgentService.js';
-import { AgentCompressionMemoryService } from '@/core/AgentCompressionMemoryService.js';
+import { AgentCompressionMemoryService, AGENT_OVERVIEW_SCAN_LIMIT } from '@/core/AgentCompressionMemoryService.js';
+import { AgentTokenService } from '@/core/AgentTokenService.js';
 import { MetaService } from '@/core/MetaService.js';
 
 export const meta = {
@@ -30,6 +31,7 @@ export const meta = {
 			historyBudgetTokens: { type: 'number' },
 			truncated: { type: 'boolean' },
 			oldestIncludedMessageId: { type: 'string', format: 'misskey:id', nullable: true },
+			tokenMode: { type: 'string', optional: true, nullable: false },
 		},
 	},
 } as const;
@@ -54,6 +56,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 
 		private agentService: AgentService,
 		private agentCompressionMemoryService: AgentCompressionMemoryService,
+		private agentTokenService: AgentTokenService,
 		private metaService: MetaService,
 	) {
 		super(meta, paramDef, async (ps, me) => {
@@ -70,6 +73,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					historyBudgetTokens: this.agentService.approxLlmTokensFromCharEstimate(200_000),
 					truncated: false,
 					oldestIncludedMessageId: null,
+					tokenMode: 'estimate' as const,
 				};
 			}
 			const styleRow = await this.agentDialogueStylesRepository.findOneByOrFail({ id: session.dialogueStyleId });
@@ -102,20 +106,35 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			const character = this.agentService.effectiveCharacterForLlm(characterRow, usePublishedFace);
 			const style = this.agentService.effectiveStyleForLlm(styleRow, usePublishedFace);
 
-			const { maxContextTokens, historyBudgetChars } = this.agentCompressionMemoryService.buildContextDividerAlignedBudgets({
+			// 与发信路径、压缩区带使用同一 H，确保分割线位置与实际上下文窗口完全对齐
+			const longMemProvider = this.agentCompressionMemoryService.resolveEffectiveProvider(
+				session.agentLongMemoryProvider,
+				instanceMeta,
+			);
+			const { maxContextTokens, historyBudget: historyBudgetChars, charsPerToken, historyBudgetTokens } = this.agentCompressionMemoryService.buildSendPathBudgets({
 				instanceMeta,
 				session,
 				character,
 				style,
+				provider: longMemProvider,
 			});
 
-			const { truncated, oldestIncludedId } = await this.agentService.loadRecentMessagesForContextWithMeta(session.id, historyBudgetChars);
+			// 统一经 AgentTokenService 解析编码与计数器；分割线按 token 口径截断，与消息分段区带同源
+			const tokenConfig = this.agentTokenService.resolveTokenConfig(instanceMeta, session.agentModelId ?? instanceMeta.agentDefaultModelId);
+			const counter = this.agentTokenService.makeCounter(tokenConfig);
+			const { truncated, oldestIncludedId } = await this.agentService.loadRecentMessagesForContextWithMeta(
+				session.id,
+				historyBudgetChars,
+				AGENT_OVERVIEW_SCAN_LIMIT,
+				{ exactTokenCounter: counter, tokenBudget: historyBudgetTokens, charsPerToken },
+			);
 
 			return {
 				maxContextTokens,
-				historyBudgetTokens: this.agentService.approxLlmTokensFromCharEstimate(historyBudgetChars),
+				historyBudgetTokens,
 				truncated,
 				oldestIncludedMessageId: oldestIncludedId,
+				tokenMode: tokenConfig.tokenMode,
 			};
 		});
 	}

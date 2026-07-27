@@ -16,7 +16,10 @@ import { assertSafeLlmHttpsUrl, describeUnsafeLlmUrlReason, UnsafeLlmUrlError } 
 import { getActiveLlmModels, getEffectiveLlmModels, isAgentLlmRunnable, type AgentLlmModelJson } from '@/misc/agent-llm-models.js';
 import { MetaService } from '@/core/MetaService.js';
 import { IdService } from '@/core/IdService.js';
+import { AgentTokenService, AGENT_LLM_APPROX_CHARS_PER_TOKEN } from '@/core/AgentTokenService.js';
 import { ApiError } from '@/server/api/error.js';
+
+export { AGENT_LLM_APPROX_CHARS_PER_TOKEN };
 
 /** Maximum length for a single agent text field. */
 export const AGENT_TEXT_FIELD_MAX = 100_000;
@@ -127,8 +130,7 @@ export const AGENT_LLM_MEMORY_XML_CLOSE = '\n</long_term_memory>';
 export const AGENT_LLM_RUNTIME_DIRECTIVE_OPEN = '<runtime-directive source="server" not-user-input="true">';
 export const AGENT_LLM_RUNTIME_DIRECTIVE_CLOSE = '</runtime-directive>';
 
-/** Same rough ratio used by history budgeting and token display. */
-export const AGENT_LLM_APPROX_CHARS_PER_TOKEN = 3;
+/** Same rough ratio used by history budgeting and token display. 定义已迁至 AgentTokenService（此处 re-export 保持向后兼容）。 */
 
 const STORED_EXAMPLE_DIALOGUE_VERSION = 1 as const;
 
@@ -167,6 +169,16 @@ export const agentsErrors = {
 	},
 } as const;
 
+/** 脱敏上游错误详情：剥离凭据/密钥、压缩空白、截断长度，供 ApiError.info 返回前端辅助诊断 */
+function sanitizeLlmErrorDetail(raw: unknown): string {
+	let s = raw instanceof Error ? (raw.message || raw.name) : String(raw ?? '');
+	s = s.replace(/Bearer\s+[A-Za-z0-9_\-.=+\/]+/gi, 'Bearer [REDACTED]');
+	s = s.replace(/(?:sk|ak|pk|api[_-]?key|token|secret)["']?\s*[:=]\s*["']?[A-Za-z0-9_\-.]{8,}/gi, '[REDACTED]');
+	s = s.replace(/\b(?:sk|ak)-[A-Za-z0-9_\-]{10,}/g, '[REDACTED]');
+	s = s.replace(/\s+/g, ' ').trim();
+	return s.length > 200 ? `${s.slice(0, 200)}…` : s;
+}
+
 @Injectable()
 export class AgentService {
 	constructor(
@@ -184,6 +196,7 @@ export class AgentService {
 
 		private metaService: MetaService,
 		private idService: IdService,
+		private agentTokenService: AgentTokenService,
 	) {}
 
 	@bindThis
@@ -293,6 +306,7 @@ export class AgentService {
 		apiKeyRaw: string;
 		maxContextTokens: number;
 		maxOutputTokensPerCall: number;
+		charsPerToken: number;
 	} {
 		this.assertLlmConfigured(instance);
 		const pick = this.pickModelOrThrow(instance, modelId);
@@ -307,6 +321,7 @@ export class AgentService {
 			apiKeyRaw,
 			maxContextTokens: pick.maxContextTokens,
 			maxOutputTokensPerCall: pick.maxOutputTokensPerCall,
+			charsPerToken: Number.isFinite(pick.charsPerToken) && pick.charsPerToken! >= 1 ? pick.charsPerToken! : AGENT_LLM_APPROX_CHARS_PER_TOKEN,
 		};
 	}
 
@@ -782,63 +797,91 @@ export class AgentService {
 	}
 
 	/**
-	 * Estimate how much room is left for historical messages after system,
-	 * prefix messages, runtime directives, and reply budget.
-	 */
-	@bindThis
-	public computeChatHistoryCharBudget(params: {
-		maxContextTokens: number;
-		maxOutputTokensPerCall: number;
-		systemChars: number;
-		prefixMessages: AgentExampleTurn[];
-		/** Runtime directive length prepended to the latest user text. */
-		runtimeDirectiveChars?: number;
-	}): number {
-		const c = AGENT_LLM_APPROX_CHARS_PER_TOKEN;
-		const maxContextChars = Math.max(4000, params.maxContextTokens * c);
-		const prefixChars = this.estimatePrefixMessagesChars(params.prefixMessages);
-		const reserveReply = Math.max(256, Math.min(384_000, params.maxOutputTokensPerCall * c));
-		const directiveChars = Math.max(0, params.runtimeDirectiveChars ?? 0);
-		return Math.max(0, maxContextChars - params.systemChars - prefixChars - directiveChars - reserveReply);
-	}
-
-	/**
 	 * Convert character-budget estimates to approximate tokens for UI display.
+	 * @deprecated 委托至 {@link AgentTokenService.estimateTokens}；保留签名以兼容现有调用方。
 	 */
 	@bindThis
-	public approxLlmTokensFromCharEstimate(chars: number): number {
-		if (!Number.isFinite(chars) || chars <= 0) return 0;
-		return Math.max(0, Math.round(chars / AGENT_LLM_APPROX_CHARS_PER_TOKEN));
+	public approxLlmTokensFromCharEstimate(chars: number, charsPerToken: number = AGENT_LLM_APPROX_CHARS_PER_TOKEN): number {
+		return this.agentTokenService.estimateTokens(chars, charsPerToken);
 	}
 
 	@bindThis
 	public async loadRecentMessagesForContextWithMeta(
 		sessionId: string,
 		maxContextChars: number,
+		takeLimit = 500,
+		options?: {
+			/** 精确 token 计数器（配置了 tokenizerEncoding 时提供）；与 tokenBudget 同时存在时按精确 token 截断 */
+			exactTokenCounter?: (text: string) => Promise<number | null> | number | null;
+			/** token 口径历史预算；提供时按 token 口径截断（与消息分段区带同源），否则回退字符口径 */
+			tokenBudget?: number;
+			/** 估算回退用的每 token 字符数（默认 AGENT_LLM_APPROX_CHARS_PER_TOKEN） */
+			charsPerToken?: number;
+		},
 	): Promise<{
 		/** createdAt is used by compression windows; LLM history uses role/content. */
 		messages: Pick<MiAgentMessage, 'id' | 'role' | 'content' | 'createdAt' | 'imageFileId' | 'imageRecognitionStatus' | 'imageRecognitionDescription' | 'proactiveScheduleControlRaw' | 'proactiveScheduleControlError'>[];
 		truncated: boolean;
 		oldestIncludedId: string | null;
+		/** token 口径下：自新向旧的全量扫描行（仅 user/assistant，原始 content）与累计 D，供压缩侧车复用，避免重复加载/分词 */
+		scannedRows?: Pick<MiAgentMessage, 'id' | 'role' | 'content' | 'createdAt' | 'imageFileId' | 'imageRecognitionStatus' | 'imageRecognitionDescription' | 'proactiveScheduleControlRaw' | 'proactiveScheduleControlError'>[];
+		dMap?: Map<string, number>;
 	}> {
 		const rows = await this.agentMessagesRepository.find({
 			where: { sessionId },
 			// Match AgentCompressionMemoryService ordering for same-timestamp rows.
 			order: { createdAt: 'DESC', id: 'DESC' },
-			take: 500,
+			take: takeLimit,
 			select: ['id', 'role', 'content', 'createdAt', 'imageFileId', 'imageRecognitionStatus', 'imageRecognitionDescription', 'proactiveScheduleControlRaw', 'proactiveScheduleControlError'],
 		});
-		const picked: Pick<MiAgentMessage, 'id' | 'role' | 'content' | 'createdAt' | 'imageFileId' | 'imageRecognitionStatus' | 'imageRecognitionDescription' | 'proactiveScheduleControlRaw' | 'proactiveScheduleControlError'>[] = [];
+		type PickedMsg = Pick<MiAgentMessage, 'id' | 'role' | 'content' | 'createdAt' | 'imageFileId' | 'imageRecognitionStatus' | 'imageRecognitionDescription' | 'proactiveScheduleControlRaw' | 'proactiveScheduleControlError'>;
+		const useTokenMode = options?.tokenBudget != null && options.tokenBudget > 0;
+		// token 口径：经 AgentTokenService 统一 D 累计 + 窗口边界，与消息分段区带结构性一致
+		if (useTokenMode) {
+			const rowsD = this.agentTokenService.filterRowsForChatHistoryD(rows);
+			const formatFn = (m: MiAgentMessage): string => this.formatMessageForLlmHistory(m);
+			const weights = await this.agentTokenService.computeMessageWeights(rowsD, {
+				formatFn,
+				counter: options!.exactTokenCounter,
+				charsPerToken: options!.charsPerToken ?? AGENT_LLM_APPROX_CHARS_PER_TOKEN,
+				budgetForExact: options!.exactTokenCounter ? options!.tokenBudget : undefined,
+			});
+			// t1=t2=1 收数为 new/out 两态：仅用于滑窗截断（边界仍由 bandBudget 决定）
+			const bands = this.agentTokenService.computeWindowAndBands(rowsD, weights.dMap, {
+				historyBudgetTokens: options!.tokenBudget!,
+				t1Ratio: 1,
+				t2Ratio: 1,
+			});
+			const picked: PickedMsg[] = rowsD
+				.filter(m => bands.bandById.get(m.id) !== 'out')
+				.reverse()
+				.map(m => ({
+					id: m.id,
+					role: m.role,
+					content: formatFn(m),
+					createdAt: m.createdAt,
+					imageFileId: m.imageFileId,
+					imageRecognitionStatus: m.imageRecognitionStatus,
+					imageRecognitionDescription: m.imageRecognitionDescription,
+					proactiveScheduleControlRaw: m.proactiveScheduleControlRaw,
+					proactiveScheduleControlError: m.proactiveScheduleControlError,
+				}));
+			const truncated = bands.truncated || rows.length >= takeLimit;
+			return { messages: picked, truncated, oldestIncludedId: bands.windowBoundaryId, scannedRows: rowsD, dMap: weights.dMap };
+		}
+		// 字符口径（遗留路径，如主动消息的小预算场景）
+		const picked: PickedMsg[] = [];
 		let used = 0;
 		let truncated = false;
 		for (const m of rows) {
-			if (m.role === 'system') continue;
+			if (m.role !== 'user' && m.role !== 'assistant') continue;
 			const content = this.formatMessageForLlmHistory(m);
 			const len = content.length;
 			if (used + len > maxContextChars) {
 				truncated = true;
 				break;
 			}
+			used += len;
 			picked.unshift({
 				id: m.id,
 				role: m.role,
@@ -850,17 +893,20 @@ export class AgentService {
 				proactiveScheduleControlRaw: m.proactiveScheduleControlRaw,
 				proactiveScheduleControlError: m.proactiveScheduleControlError,
 			});
-			used += len;
 		}
-		if (!truncated && rows.length >= 500) {
+		if (!truncated && rows.length >= takeLimit) {
 			truncated = true;
 		}
 		const oldestIncludedId = picked.length > 0 ? picked[0]!.id : null;
 		return { messages: picked, truncated, oldestIncludedId };
 	}
 
+	/**
+	 * 将消息格式化为实际进入 LLM history 的文本（含图片识别 XML、主动调度控制块等）。
+	 * 公开供 `AgentCompressionMemoryService` 计算 D 累计时使用，确保与发信滑窗口径一致。
+	 */
 	@bindThis
-	private formatMessageForLlmHistory(message: Pick<MiAgentMessage, 'role' | 'content' | 'imageFileId' | 'imageRecognitionStatus' | 'imageRecognitionDescription' | 'proactiveScheduleControlRaw' | 'proactiveScheduleControlError'>): string {
+	public formatMessageForLlmHistory(message: Pick<MiAgentMessage, 'role' | 'content' | 'imageFileId' | 'imageRecognitionStatus' | 'imageRecognitionDescription' | 'proactiveScheduleControlRaw' | 'proactiveScheduleControlError'>): string {
 		if (message.role === 'user' && message.imageFileId) {
 			const recognition = message.imageRecognitionStatus === 'succeeded' && message.imageRecognitionDescription
 				? `<image-recognition source="server" not-user-input="true">${escapeAgentXmlText(message.imageRecognitionDescription)}</image-recognition>`
@@ -876,12 +922,6 @@ export class AgentService {
 			? `\n<proactive_schedule_result status="rejected" code="${escapeAgentXmlText(result.code)}" processed_at="${escapeAgentXmlText(result.processedAt)}">${escapeAgentXmlText(result.message)}</proactive_schedule_result>`
 			: '';
 		return `${message.content}\n${controlRaw}${failure}`;
-	}
-
-	@bindThis
-	public async loadRecentMessagesForContext(sessionId: string, maxContextChars: number): Promise<Pick<MiAgentMessage, 'role' | 'content'>[]> {
-		const { messages } = await this.loadRecentMessagesForContextWithMeta(sessionId, maxContextChars);
-		return messages.map(({ role, content }) => ({ role, content }));
 	}
 
 	@bindThis
@@ -973,27 +1013,29 @@ export class AgentService {
 			if (external && external.aborted) {
 				throw new ApiError(agentsErrors.llmAborted);
 			}
-			throw new ApiError(agentsErrors.llmRequestFailed);
+			throw new ApiError(agentsErrors.llmRequestFailed, { reason: 'NETWORK_ERROR', detail: sanitizeLlmErrorDetail(e) });
 		} finally {
 			clearTimeout(t);
 			if (external) external.removeEventListener('abort', onExternalAbort);
 		}
 
 		if (!res.ok) {
-			throw new ApiError(agentsErrors.llmRequestFailed);
+			let upstreamBody = '';
+			try { upstreamBody = await res.text(); } catch { /* ignore */ }
+			throw new ApiError(agentsErrors.llmRequestFailed, { reason: 'UPSTREAM_HTTP_ERROR', status: res.status, detail: sanitizeLlmErrorDetail(upstreamBody) });
 		}
 
 		let json: unknown;
 		try {
 			json = await res.json();
 		} catch {
-			throw new ApiError(agentsErrors.llmRequestFailed);
+			throw new ApiError(agentsErrors.llmRequestFailed, { reason: 'RESPONSE_NOT_JSON' });
 		}
 
 		const choices = (json as { choices?: { message?: { content?: string } }[] }).choices;
 		const text = choices?.[0]?.message?.content;
 		if (typeof text !== 'string') {
-			throw new ApiError(agentsErrors.llmRequestFailed);
+			throw new ApiError(agentsErrors.llmRequestFailed, { reason: 'RESPONSE_MISSING_CONTENT' });
 		}
 		return text;
 	}

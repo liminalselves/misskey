@@ -44,6 +44,7 @@ export const paramDef = {
 		preserveAssignmentOnMoveAccount: { type: 'boolean' },
 		canEditMembersByModerator: { type: 'boolean' },
 		displayOrder: { type: 'number' },
+		checkinMultiplier: { type: 'number', nullable: true },
 		policies: {
 			type: 'object',
 		},
@@ -82,6 +83,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				preserveAssignmentOnMoveAccount: ps.preserveAssignmentOnMoveAccount,
 				canEditMembersByModerator: ps.canEditMembersByModerator,
 				displayOrder: ps.displayOrder,
+				checkinMultiplier: ps.checkinMultiplier,
 				policies: ps.policies,
 			}, me);
 		});

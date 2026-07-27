@@ -392,6 +392,7 @@ onBeforeUnmount(() => {
 
 	.compose {
 		flex-direction: row;
+		flex-wrap: wrap;
 		align-items: flex-end;
 		gap: 8px;
 		box-sizing: border-box;
@@ -400,6 +401,14 @@ onBeforeUnmount(() => {
 		max-width: 100%;
 		padding: 8px max(12px, env(safe-area-inset-right, 0px)) max(8px, env(safe-area-inset-bottom, 0px)) max(12px, env(safe-area-inset-left, 0px));
 		background: var(--MI_THEME-panel);
+	}
+
+	/* 附件预览独占一整行，避免长文件名把输入框/发送按钮挤出屏幕；
+	   文件名获得全宽并由 text-overflow: ellipsis 截断 */
+	.filePreview {
+		flex: 0 0 100%;
+		min-width: 0;
+		padding: 6px 4px;
 	}
 
 	.textarea:global(._acrylic) {

@@ -683,6 +683,7 @@ export class RoleService implements OnApplicationShutdown, OnModuleInit {
 			preserveAssignmentOnMoveAccount: values.preserveAssignmentOnMoveAccount,
 			canEditMembersByModerator: values.canEditMembersByModerator,
 			displayOrder: values.displayOrder,
+			checkinMultiplier: values.checkinMultiplier,
 			policies: values.policies,
 		});
 

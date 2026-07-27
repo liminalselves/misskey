@@ -6,7 +6,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 <template>
 <PageWithHeader :tab="mainTab" :tabs="mainHeaderTabs" :swipable="false" @update:tab="onMainTabChange">
 	<div v-if="mainTab === 'square'" class="_spacer" style="--MI_SPACER-w: 700px;">
-		<XSquare/>
+		<XSquare :initial-sub="props.sub"/>
 	</div>
 	<div v-else-if="mainTab === 'create'" class="_spacer" style="--MI_SPACER-w: 700px;">
 		<div style="display: flex; align-items: center; gap: 10px; margin-bottom: var(--MI-margin);">
@@ -138,6 +138,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 	<div v-else-if="mainTab === 'my-stats'" class="_spacer" style="--MI_SPACER-w: 700px;">
 		<XMyStats/>
 	</div>
+	<div v-else-if="mainTab === 'checkin'" class="_spacer" style="--MI_SPACER-w: 700px;">
+		<XCheckin/>
+	</div>
 </PageWithHeader>
 </template>
 
@@ -145,6 +148,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 import { computed, onMounted, ref, watch } from 'vue';
 import XSquare from './square.vue';
 import XMyStats from './my-stats.vue';
+import XCheckin from './checkin.vue';
 import type { AgentsCharactersListMineResponse, AgentsStylesListMineResponse } from 'misskey-js/entities.js';
 import MkButton from '@/components/MkButton.vue';
 import MkLoading from '@/components/global/MkLoading.vue';
@@ -170,7 +174,7 @@ const props = withDefaults(defineProps<{
 
 const router = useRouter();
 
-type MainTab = 'square' | 'create' | 'my-stats';
+type MainTab = 'square' | 'create' | 'my-stats' | 'checkin';
 type CreateSub = 'characters' | 'styles';
 
 const mainTab = ref<MainTab>('square');
@@ -192,6 +196,7 @@ const mainHeaderTabs = computed(() => [
 	{ key: 'square', icon: 'ti ti-layout-grid', title: i18n.ts._agents.navSquare },
 	{ key: 'create', icon: 'ti ti-pencil-plus', title: i18n.ts._agents.navCreate },
 	{ key: 'my-stats', icon: 'ti ti-chart-line', title: i18n.ts._agents.myStats },
+	{ key: 'checkin', icon: 'ti ti-calendar-check', title: '签到' },
 ]);
 
 const createTabs = computed(() => [
@@ -205,7 +210,7 @@ definePage(() => ({
 }));
 
 function normalizeMainTab(view: string | undefined): MainTab {
-	if (view === 'create' || view === 'my-stats') return view;
+	if (view === 'create' || view === 'my-stats' || view === 'checkin') return view;
 	return 'square';
 }
 

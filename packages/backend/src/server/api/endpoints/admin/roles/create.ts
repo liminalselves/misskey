@@ -39,6 +39,7 @@ export const paramDef = {
 		preserveAssignmentOnMoveAccount: { type: 'boolean' },
 		canEditMembersByModerator: { type: 'boolean' },
 		displayOrder: { type: 'number' },
+		checkinMultiplier: { type: 'number', nullable: true },
 		policies: {
 			type: 'object',
 		},

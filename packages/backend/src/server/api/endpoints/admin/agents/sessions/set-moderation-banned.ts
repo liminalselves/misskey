@@ -58,6 +58,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			}
 			const before = row.moderationBanned;
 			row.moderationBanned = ps.banned;
+			// 封禁时持久化原因供用户侧展示；解封时清空
+			row.moderationBannedReason = ps.banned ? (ps.reason?.trim() || null) : null;
 			row.updatedAt = new Date();
 			await this.agentSessionsRepository.save(row);
 			await this.moderationLogService.log(me, 'setAgentSessionModerationBan', {

@@ -12,6 +12,7 @@ import { ApiError } from '@/server/api/error.js';
 import { AgentService } from '@/core/AgentService.js';
 import { MetaService } from '@/core/MetaService.js';
 import { AgentCompressionMemoryService } from '@/core/AgentCompressionMemoryService.js';
+import { AgentTokenService } from '@/core/AgentTokenService.js';
 
 export const meta = {
 	tags: ['agents'],
@@ -27,6 +28,7 @@ export const meta = {
 			t2Tokens: { type: 'number' },
 			t1Ratio: { type: 'number' },
 			t2Ratio: { type: 'number' },
+			tokenMode: { type: 'string', optional: true, nullable: false },
 			messages: {
 				type: 'array',
 				items: {
@@ -38,6 +40,7 @@ export const meta = {
 						dFromNewTokens: { type: 'number' },
 						band: { type: 'string' },
 						contentPreview: { type: 'string' },
+						tokensEstimated: { type: 'boolean' },
 						compressed: { type: 'boolean' },
 					},
 				},
@@ -64,6 +67,7 @@ export const meta = {
 					},
 				},
 			},
+			compressionSidecarFailedAt: { type: 'string', nullable: true },
 		},
 	},
 } as const;
@@ -86,6 +90,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		private agentService: AgentService,
 		private metaService: MetaService,
 		private agentCompressionMemoryService: AgentCompressionMemoryService,
+		private agentTokenService: AgentTokenService,
 	) {
 		super(meta, paramDef, async (ps, me) => {
 			this.agentService.assertAgentsEnabled();
@@ -102,6 +107,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					t2Ratio: AgentCompressionMemoryService.DEFAULT_COMPRESSION_BAND_T2_RATIO,
 					messages: [],
 					stickies: [],
+					compressionSidecarFailedAt: null,
 				};
 			}
 			const characterRow = await this.agentCharactersRepository.findOneByOrFail({ id: row.characterId });
@@ -116,34 +122,34 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				instanceMeta,
 			);
 			/** 与 `agents/messages/send`、`reconcileStickyStates` 同一 H，避免总览区带与便签态/自动压条错位 */
-			const historyBudgetChars = longMemProvider === 'compression'
-				? this.agentCompressionMemoryService.buildSendPathBudgets({
-					instanceMeta,
-					session: row,
-					character,
-					style,
-					provider: 'compression',
-				}).historyBudget
-				: this.agentCompressionMemoryService.buildContextDividerAlignedBudgets({
-					instanceMeta,
-					session: row,
-					character,
-					style,
-				}).historyBudgetChars;
+			const { historyBudget: historyBudgetChars, charsPerToken, historyBudgetTokens } = this.agentCompressionMemoryService.buildSendPathBudgets({
+				instanceMeta,
+				session: row,
+				character,
+				style,
+				provider: longMemProvider,
+			});
 			const { t1Ratio, t2Ratio } = this.agentCompressionMemoryService.resolveCompressionBandRatios(instanceMeta);
-			const { historyBudgetTokens, t1Tokens, t2Tokens, messages, stickies } = await this.agentCompressionMemoryService.getCompressionOverviewData(
+			// 统一经 AgentTokenService 解析编码与计数器（收敛此前重复的 getEffectiveLlmModels().find() 逻辑）
+			const tokenConfig = this.agentTokenService.resolveTokenConfig(instanceMeta, row.agentModelId ?? instanceMeta.agentDefaultModelId);
+			const exactCounter = this.agentTokenService.makeCounter(tokenConfig);
+			const { historyBudgetTokens: hbt, t1Tokens, t2Tokens, messages, stickies, compressionSidecarFailedAt } = await this.agentCompressionMemoryService.getCompressionOverviewData(
 				row.id,
 				historyBudgetChars,
 				t1Ratio,
 				t2Ratio,
 				longMemProvider === 'compression',
+				exactCounter,
+				charsPerToken,
+				historyBudgetTokens,
 			);
 			return {
-				historyBudgetTokens,
+				historyBudgetTokens: hbt,
 				t1Tokens,
 				t2Tokens,
 				t1Ratio,
 				t2Ratio,
+				tokenMode: tokenConfig.tokenMode,
 				messages,
 				stickies: stickies.map(r => ({
 					id: r.id,
@@ -161,6 +167,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					fromMessagePreview: (r as { fromMessagePreview?: string }).fromMessagePreview ?? '…',
 					toMessagePreview: (r as { toMessagePreview?: string }).toMessagePreview ?? '…',
 				})),
+				compressionSidecarFailedAt,
 			};
 		});
 	}
