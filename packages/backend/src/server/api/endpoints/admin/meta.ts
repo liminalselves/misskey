@@ -605,6 +605,15 @@ export const meta = {
 				type: 'string',
 				optional: false, nullable: false,
 			},
+			agentCheckinSettings: {
+				type: 'object',
+				optional: false, nullable: true,
+				additionalProperties: true,
+			},
+			agentRedeemPurchaseUrl: {
+				type: 'string',
+				optional: false, nullable: true,
+			},
 			useObjectStorage: {
 				type: 'boolean',
 				optional: false, nullable: false,
@@ -1106,6 +1115,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				agentExternalAuditSystemPromptResolved: typeof instance.agentExternalAuditSystemPrompt === 'string' && instance.agentExternalAuditSystemPrompt.trim() !== ''
 					? instance.agentExternalAuditSystemPrompt
 					: DEFAULT_AGENT_EXTERNAL_AUDIT_SYSTEM_PROMPT,
+				agentCheckinSettings: instance.agentCheckinSettings ?? null,
+				agentRedeemPurchaseUrl: instance.agentRedeemPurchaseUrl ?? null,
 				useObjectStorage: instance.useObjectStorage,
 				objectStorageBaseUrl: instance.objectStorageBaseUrl,
 				objectStorageBucket: instance.objectStorageBucket,
