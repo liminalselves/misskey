@@ -51,28 +51,40 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<span v-if="cell.reward != null && cell.reward > 0" :class="$style.calVal">{{ cell.reward.toFixed(1) }}</span>
 				</div>
 			</div>
+			<!-- 选中日期统计：纯本地数据即时展示，无请求无闪烁 -->
+			<div v-if="selectedDayStats" :class="$style.dayDetail">
+				<span :class="$style.dayDetailDate"><i class="ti ti-calendar-check"></i> {{ selectedDayStats.date }}</span>
+				<span>签发额度 <b :class="$style.rewardColor">{{ selectedDayStats.totalReward.toFixed(2) }}</b></span>
+				<span>签到人数 <b>{{ selectedDayStats.userCount }}</b></span>
+				<button class="_button" :class="$style.dayDetailClear" @click="clearSelectedDate"><i class="ti ti-x"></i> 取消选择</button>
+			</div>
 		</MkFolder>
 
 		<!-- 趋势图 -->
 		<MkFolder :defaultOpen="true">
 			<template #icon><i class="ti ti-chart-line"></i></template>
 			<template #label>最近 30 天趋势</template>
-			<div class="_gaps_s">
+			<div v-if="hasTrendData" class="_gaps_s">
+				<div :class="$style.lineChart">
+					<div v-for="(t, idx) in trendData" :key="t.date" :class="$style.lineBarItem" :title="`${t.date}：${t.totalReward.toFixed(2)} 额度`">
+						<div :class="$style.barArea">
+							<div :class="[$style.lineBar, $style.barReward]" :style="{ height: barPct(t.totalReward, maxTrendReward) }"></div>
+						</div>
+						<div :class="$style.lineLabel">{{ idx % 3 === 0 ? t.date.slice(5) : '' }}</div>
+					</div>
+				</div>
 				<div :class="$style.chartTitle">每日签发额度</div>
 				<div :class="$style.lineChart">
-					<div v-for="t in data.trend" :key="t.date" :class="$style.lineBarItem" :title="`${t.date}：${t.totalReward.toFixed(2)} 额度`">
-						<div :class="[$style.lineBar, $style.barReward]" :style="{ height: barPct(t.totalReward, maxTrendReward) }"></div>
-						<div :class="$style.lineLabel">{{ t.date.slice(8) }}</div>
+					<div v-for="(t, idx) in trendData" :key="'u'+t.date" :class="$style.lineBarItem" :title="`${t.date}：${t.userCount} 人`">
+						<div :class="$style.barArea">
+							<div :class="[$style.lineBar, $style.barUsers]" :style="{ height: barPct(t.userCount, maxTrendUsers) }"></div>
+						</div>
+						<div :class="$style.lineLabel">{{ idx % 3 === 0 ? t.date.slice(5) : '' }}</div>
 					</div>
 				</div>
 				<div :class="$style.chartTitle">每日签到用户数</div>
-				<div :class="$style.lineChart">
-					<div v-for="t in data.trend" :key="'u'+t.date" :class="$style.lineBarItem" :title="`${t.date}：${t.userCount} 人`">
-						<div :class="[$style.lineBar, $style.barUsers]" :style="{ height: barPct(t.userCount, maxTrendUsers) }"></div>
-						<div :class="$style.lineLabel">{{ t.date.slice(8) }}</div>
-					</div>
-				</div>
 			</div>
+			<MkInfo v-else>最近 30 天暂无签到数据</MkInfo>
 		</MkFolder>
 
 		<!-- TOP 10 用户 -->
@@ -111,30 +123,33 @@ SPDX-License-Identifier: AGPL-3.0-only
 					</MkInput>
 					<MkButton small rounded @click="loadRecords"><i class="ti ti-search"></i> 查询</MkButton>
 				</div>
-				<!-- 表格 -->
-				<div :class="$style.recTable">
-					<div :class="$style.recHeader">
-						<span>用户</span>
-						<span>日期</span>
-						<span>公式</span>
-						<span>额度</span>
-						<span>类型</span>
+				<!-- 表格（独立局部loading，不影响页面其他区域） -->
+				<div v-if="recordsLoading" :class="$style.recordsLoading"><MkLoading/></div>
+				<template v-else>
+					<div :class="$style.recTable">
+						<div :class="$style.recHeader">
+							<span>用户</span>
+							<span>日期</span>
+							<span>公式</span>
+							<span>额度</span>
+							<span>类型</span>
+						</div>
+						<div v-for="r in records" :key="r.userId + r.date + r.createdAt" :class="$style.recRow">
+							<span :class="$style.recUser">{{ r.username }}</span>
+							<span>{{ r.date }}</span>
+							<span :class="$style.recFormula">{{ formatFormula(r) }}</span>
+							<span :class="r.isMakeup ? $style.makeupColor : $style.rewardColor">{{ r.isMakeup ? `-${(r.makeupCost ?? 0).toFixed(2)}` : `+${r.reward.toFixed(2)}` }}</span>
+							<span>{{ r.isMakeup ? '补签' : '签到' }}</span>
+						</div>
+						<MkInfo v-if="records.length === 0">暂无记录</MkInfo>
 					</div>
-					<div v-for="r in data.records" :key="r.userId + r.date + r.createdAt" :class="$style.recRow">
-						<span :class="$style.recUser">{{ r.username }}</span>
-						<span>{{ r.date }}</span>
-						<span :class="$style.recFormula">{{ formatFormula(r) }}</span>
-						<span :class="r.isMakeup ? $style.makeupColor : $style.rewardColor">{{ r.isMakeup ? `-${(r.makeupCost ?? 0).toFixed(2)}` : `+${r.reward.toFixed(2)}` }}</span>
-						<span>{{ r.isMakeup ? '补签' : '签到' }}</span>
+					<!-- 分页 -->
+					<div v-if="totalPages > 1" :class="$style.pagination">
+						<button class="_button" :class="$style.pageBtn" :disabled="currentPage <= 1" @click="goPage(currentPage - 1)"><i class="ti ti-chevron-left"></i></button>
+						<span :class="$style.pageInfo">{{ currentPage }} / {{ totalPages }}</span>
+						<button class="_button" :class="$style.pageBtn" :disabled="currentPage >= totalPages" @click="goPage(currentPage + 1)"><i class="ti ti-chevron-right"></i></button>
 					</div>
-					<MkInfo v-if="data.records.length === 0">暂无记录</MkInfo>
-				</div>
-				<!-- 分页 -->
-				<div v-if="totalPages > 1" :class="$style.pagination">
-					<button class="_button" :class="$style.pageBtn" :disabled="currentPage <= 1" @click="goPage(currentPage - 1)"><i class="ti ti-chevron-left"></i></button>
-					<span :class="$style.pageInfo">{{ currentPage }} / {{ totalPages }}</span>
-					<button class="_button" :class="$style.pageBtn" :disabled="currentPage >= totalPages" @click="goPage(currentPage + 1)"><i class="ti ti-chevron-right"></i></button>
-				</div>
+				</template>
 			</div>
 		</MkFolder>
 	</template>
@@ -167,6 +182,11 @@ const pageSize = ref(20);
 const filterUserId = ref('');
 const filterDateFrom = ref('');
 const filterDateTo = ref('');
+
+// 明细记录独立状态：点击日期/筛选/翻页时仅局部更新，不触发全局loading
+const records = ref<ReportData['records']>([]);
+const totalCount = ref(0);
+const recordsLoading = ref(false);
 
 // 日历
 const bjNow = new Date(Date.now() + 8 * 3600_000);
@@ -213,13 +233,40 @@ const calCells = computed(() => {
 	return cells;
 });
 
-const maxTrendReward = computed(() => Math.max(0.01, ...data.value?.trend.map(t => t.totalReward) ?? [1]));
-const maxTrendUsers = computed(() => Math.max(1, ...data.value?.trend.map(t => t.userCount) ?? [1]));
+// 前端兜底：始终构建连续30天窗口，防御性处理后端返回空数组、部分日期缺失或字段为null的场景
+const trendData = computed(() => {
+	const raw = data.value?.trend ?? [];
+	const now = new Date(Date.now() + 8 * 3600_000);
+	const map = new Map(raw.filter(t => t && t.date).map(t => [t.date, t]));
+	const filled: { date: string; totalReward: number; userCount: number }[] = [];
+	for (let i = 29; i >= 0; i--) {
+		const dStr = new Date(now.getTime() - i * 86400_000).toISOString().slice(0, 10);
+		const existing = map.get(dStr);
+		filled.push({ date: dStr, totalReward: Number(existing?.totalReward ?? 0) || 0, userCount: Number(existing?.userCount ?? 0) || 0 });
+	}
+	return filled;
+});
+
+const hasTrendData = computed(() => trendData.value.some(t => t.totalReward > 0 || t.userCount > 0));
+const maxTrendReward = computed(() => Math.max(0.01, ...trendData.value.map(t => t.totalReward)));
+const maxTrendUsers = computed(() => Math.max(1, ...trendData.value.map(t => t.userCount)));
 const maxTopReward = computed(() => Math.max(0.01, ...data.value?.topUsers.map(u => u.totalReward) ?? [1]));
-const totalPages = computed(() => Math.max(1, Math.ceil((data.value?.totalCount ?? 0) / pageSize.value)));
+const totalPages = computed(() => Math.max(1, Math.ceil(totalCount.value / pageSize.value)));
+
+// 选中日期的统计（纯本地数据，点击即时展示，无需请求）
+const selectedDayStats = computed(() => {
+	if (!selectedDate.value || !data.value) return null;
+	const stat = data.value.dailyStats.find(d => d.date === selectedDate.value);
+	return {
+		date: selectedDate.value,
+		totalReward: stat?.totalReward ?? 0,
+		userCount: stat?.userCount ?? 0,
+	};
+});
 
 function barPct(val: number, max: number): string {
-	return `${Math.max(3, Math.round((val / max) * 100))}%`;
+	if (val <= 0) return '0%';
+	return `${Math.round((val / max) * 100)}%`;
 }
 
 function heatColor(ratio: number): string {
@@ -238,16 +285,36 @@ function formatFormula(r: ReportData['records'][0]): string {
 
 function prevMonth() {
 	if (calMonth.value === 1) { calYear.value--; calMonth.value = 12; } else { calMonth.value--; }
+	resetDateSelection();
 	load();
 }
 function nextMonth() {
 	if (calMonth.value === 12) { calYear.value++; calMonth.value = 1; } else { calMonth.value++; }
+	resetDateSelection();
 	load();
 }
+function resetDateSelection() {
+	selectedDate.value = null;
+	filterDateFrom.value = '';
+	filterDateTo.value = '';
+	currentPage.value = 1;
+}
 function selectDate(date: string) {
+	// 点击日期：仅局部加载该日明细，不重新请求整页数据，不出现全局loading
+	if (selectedDate.value === date) {
+		clearSelectedDate();
+		return;
+	}
 	selectedDate.value = date;
 	filterDateFrom.value = date;
 	filterDateTo.value = date;
+	currentPage.value = 1;
+	loadRecords();
+}
+function clearSelectedDate() {
+	selectedDate.value = null;
+	filterDateFrom.value = '';
+	filterDateTo.value = '';
 	currentPage.value = 1;
 	loadRecords();
 }
@@ -260,7 +327,7 @@ async function load() {
 	loading.value = true;
 	data.value = null;
 	try {
-		data.value = await misskeyApi('admin/agents-checkin-reports' as any, {
+		const res = await misskeyApi('admin/agents-checkin-reports' as any, {
 			yearMonth: calYearMonth.value,
 			page: currentPage.value,
 			limit: pageSize.value,
@@ -268,15 +335,19 @@ async function load() {
 			dateFrom: filterDateFrom.value || undefined,
 			dateTo: filterDateTo.value || undefined,
 		}) as ReportData;
+		data.value = res;
+		records.value = res.records;
+		totalCount.value = res.totalCount;
 	} catch { /* handled by template */ } finally {
 		loading.value = false;
 	}
 }
 
 async function loadRecords() {
-	loading.value = true;
+	// 局部加载：仅更新明细记录区域，不影响页面其他区域（无全局loading、无布局抖动）
+	recordsLoading.value = true;
 	try {
-		data.value = await misskeyApi('admin/agents-checkin-reports' as any, {
+		const res = await misskeyApi('admin/agents-checkin-reports' as any, {
 			yearMonth: calYearMonth.value,
 			page: currentPage.value,
 			limit: pageSize.value,
@@ -284,8 +355,10 @@ async function loadRecords() {
 			dateFrom: filterDateFrom.value || undefined,
 			dateTo: filterDateTo.value || undefined,
 		}) as ReportData;
+		records.value = res.records;
+		totalCount.value = res.totalCount;
 	} catch { /* */ } finally {
-		loading.value = false;
+		recordsLoading.value = false;
 	}
 }
 
@@ -375,6 +448,47 @@ onMounted(() => { load(); });
 .calToday { border-color: var(--MI_THEME-accent); border-width: 2px; }
 .calSelected { outline: 2px solid var(--MI_THEME-accent); outline-offset: 1px; }
 
+.dayDetail {
+	display: flex;
+	align-items: center;
+	gap: 14px;
+	flex-wrap: wrap;
+	margin-top: 10px;
+	padding: 10px 14px;
+	border-radius: var(--MI-radius);
+	background: color-mix(in srgb, var(--MI_THEME-accent) 8%, var(--MI_THEME-panel));
+	border: solid 1px color-mix(in srgb, var(--MI_THEME-accent) 30%, transparent);
+	font-size: 0.88em;
+}
+
+.dayDetailDate {
+	font-weight: 700;
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+}
+
+.dayDetailClear {
+	margin-left: auto;
+	padding: 4px 10px;
+	border-radius: 6px;
+	font-size: 0.82em;
+	opacity: 0.72;
+	cursor: pointer;
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+
+	&:hover { opacity: 1; background: var(--MI_THEME-panelHighlight); }
+}
+
+.recordsLoading {
+	display: flex;
+	justify-content: center;
+	align-items: center;
+	min-height: 80px;
+}
+
 .calDayNum {
 	font-size: 0.78em;
 	font-weight: 600;
@@ -392,29 +506,42 @@ onMounted(() => { load(); });
 	font-size: 0.82em;
 	font-weight: 600;
 	opacity: 0.72;
-	margin-top: 8px;
+	text-align: center;
+	padding-bottom: 4px;
+	border-bottom: 2px solid color-mix(in srgb, var(--MI_THEME-accent) 30%, transparent);
 }
 
 .lineChart {
 	display: flex;
-	align-items: flex-end;
+	align-items: stretch;
 	gap: 2px;
-	height: 100px;
+	height: 120px;
 	overflow-x: auto;
-	padding: 4px 0;
+	padding: 4px 0 0;
 }
 
 .lineBarItem {
 	display: flex;
 	flex-direction: column;
 	align-items: center;
-	gap: 2px;
 	flex-shrink: 0;
-	width: 16px;
+	flex-grow: 1;
+	min-width: 14px;
+	max-width: 26px;
+}
+
+.barArea {
+	flex: 1;
+	width: 100%;
+	display: flex;
+	align-items: flex-end;
+	justify-content: center;
+	min-height: 0;
 }
 
 .lineBar {
-	width: 100%;
+	width: 70%;
+	max-width: 16px;
 	min-height: 2px;
 	border-radius: 2px 2px 0 0;
 	transition: height 0.3s;
@@ -424,10 +551,12 @@ onMounted(() => { load(); });
 .barUsers { background: var(--MI_THEME-success); }
 
 .lineLabel {
-	font-size: 0.58em;
-	opacity: 0.5;
-	writing-mode: vertical-rl;
+	height: 18px;
+	line-height: 18px;
+	font-size: 0.62em;
+	opacity: 0.56;
 	white-space: nowrap;
+	font-variant-numeric: tabular-nums;
 }
 
 // Top users

@@ -3712,7 +3712,7 @@ _agents:
   imageRecognitionUnavailable: "该图片未生成可用的识图内容。"
   imageAutoDrawLabel: "自动生图"
   imageAutoDrawCountLabel: "自动生图张数"
-  imageAutoDrawCountCaption: "默认跟随管理后台「每轮最多图片」；超出自动生成上限的图片指令需手动生成。"
+  imageAutoDrawCountCaption: "超出自动生成上限的图片指令需手动生成。"
   imageDrawManualPending: "该图片尚未自动生成"
   imageDrawManualGenerate: "手动生成"
   proactiveScheduleActionCreate: "添加了日程消息"

@@ -174,7 +174,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				userCount: Number(d.userCount),
 			}));
 
-			// === Trend (最近30天) ===
+			// === Trend (最近30天，补全所有日期) ===
 			const trendStart = new Date(bjNow.getTime() - 29 * 86400_000).toISOString().slice(0, 10);
 			const trendRaw = await this.agentCheckinRecordsRepository
 				.createQueryBuilder('r')
@@ -186,11 +186,20 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				.groupBy('r.date')
 				.orderBy('r.date', 'ASC')
 				.getRawMany();
-			const trend = trendRaw.map(d => ({
-				date: d.date,
-				totalReward: Math.round(Number(d.totalReward) * 100) / 100,
-				userCount: Number(d.userCount),
-			}));
+			const trendMap = new Map<string, { totalReward: number; userCount: number }>();
+			for (const d of trendRaw) {
+				trendMap.set(d.date, {
+					totalReward: Math.round(Number(d.totalReward) * 100) / 100,
+					userCount: Number(d.userCount),
+				});
+			}
+			// 补全30天中无数据的日期为0，确保图表连续完整
+			const trend: { date: string; totalReward: number; userCount: number }[] = [];
+			for (let i = 29; i >= 0; i--) {
+				const dStr = new Date(bjNow.getTime() - i * 86400_000).toISOString().slice(0, 10);
+				const stat = trendMap.get(dStr);
+				trend.push({ date: dStr, totalReward: stat?.totalReward ?? 0, userCount: stat?.userCount ?? 0 });
+			}
 
 			// === Top users (累计 TOP 10) ===
 			const topUsersRaw = await this.agentCheckinRecordsRepository

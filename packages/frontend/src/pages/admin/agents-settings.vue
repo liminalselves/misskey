@@ -7,7 +7,6 @@ SPDX-License-Identifier: AGPL-3.0-only
 <PageWithHeader v-model:tab="activeTab" :actions="headerActions" :tabs="headerTabs">
 	<div class="_spacer" style="--MI_SPACER-w: 1000px; --MI_SPACER-min: 16px; --MI_SPACER-max: 32px;">
 		<div class="_gaps_m">
-			<MkInfo>{{ i18n.ts._agents.adminSettingsDescription }}</MkInfo>
 
 			<template v-if="activeTab === 'overview'">
 				<div :class="$style.overviewGrid">
@@ -525,12 +524,6 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</div>
 			</MkFolder>
 
-			<MkFolder v-if="activeTab === 'checkin'" :defaultOpen="false">
-				<template #icon><i class="ti ti-report-analytics"></i></template>
-				<template #label>签到报表</template>
-				<XCheckinReports/>
-			</MkFolder>
-
 			<template v-if="activeTab === 'credits'">
 				<MkFolder :defaultOpen="true">
 					<template #icon><i class="ti ti-plus"></i></template>
@@ -612,6 +605,21 @@ SPDX-License-Identifier: AGPL-3.0-only
 			</template>
 
 			<template v-if="activeTab === 'reports'">
+				<!-- 报表分类切换：仅切换视图区域，不触发路由跳转 -->
+				<div :class="$style.reportTabRow">
+					<button
+						v-for="t in reportTypeTabs"
+						:key="t.value"
+						type="button"
+						:class="[$style.reportTabBtn, reportType === t.value ? $style.reportTabBtnActive : null]"
+						@click="reportType = t.value"
+					>
+						<i :class="t.icon"></i> {{ t.label }}
+					</button>
+				</div>
+
+				<!-- 模型报表（v-show保留状态，切换不重新加载） -->
+				<div v-show="reportType === 'model'" class="_gaps_m">
 				<section :class="$style.reportToolbar">
 					<div class="_buttons">
 						<MkButton v-for="w in reportWindows" :key="w.value" rounded :primary="reportHours === w.value" @click="setReportWindow(w.value)">{{ w.label }}</MkButton>
@@ -644,6 +652,12 @@ SPDX-License-Identifier: AGPL-3.0-only
 						</div>
 					</MkFolder>
 				</template>
+				</div>
+
+				<!-- 签到报表（KeepAlive缓存，切换回来不重新加载） -->
+				<KeepAlive>
+					<XCheckinReports v-if="reportType === 'checkin'"/>
+				</KeepAlive>
 			</template>
 
 			<div v-if="form.modified.value && ['basic', 'models', 'memory', 'compression', 'externalAudit', 'images', 'vision', 'credits'].includes(activeTab)" :class="$style.saveBar">
@@ -1507,6 +1521,13 @@ const reportWindows = [
 	{ label: '7 天', value: 168 },
 	{ label: '30 天', value: 720 },
 ];
+
+// 报表分类切换：模型报表 / 签到报表
+const reportTypeTabs = [
+	{ label: '模型报表', value: 'model' as const, icon: 'ti ti-cpu' },
+	{ label: '签到报表', value: 'checkin' as const, icon: 'ti ti-calendar-check' },
+];
+const reportType = ref<'model' | 'checkin'>('model');
 const reportHours = ref(24);
 const reportsLoading = ref(false);
 const reportsData = ref<ReportsOverview | null>(null);
@@ -2096,6 +2117,36 @@ onMounted(() => {
 	margin-top: 2px;
 	color: var(--MI_THEME-fgTransparentWeak);
 	font-size: 0.85em;
+}
+
+.reportTabRow {
+	display: flex;
+	gap: 8px;
+}
+
+.reportTabBtn {
+	padding: 8px 20px;
+	border-radius: 999px;
+	border: solid 1px var(--MI_THEME-divider);
+	background: var(--MI_THEME-panel);
+	color: var(--MI_THEME-fg);
+	font-size: 0.92em;
+	font-weight: 600;
+	cursor: pointer;
+	transition: background 0.15s, border-color 0.15s;
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+
+	&:hover {
+		border-color: var(--MI_THEME-accent);
+	}
+}
+
+.reportTabBtnActive {
+	background: var(--MI_THEME-accent);
+	border-color: var(--MI_THEME-accent);
+	color: var(--MI_THEME-fgOnAccent, #fff);
 }
 
 .reportToolbar {

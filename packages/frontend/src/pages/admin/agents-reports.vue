@@ -7,121 +7,142 @@ SPDX-License-Identifier: AGPL-3.0-only
 <PageWithHeader :tabs="headerTabs">
 	<div class="_spacer" style="--MI_SPACER-w: 900px; --MI_SPACER-min: 16px; --MI_SPACER-max: 32px;">
 		<div class="_gaps_m">
-			<div :class="$style.timeWindowRow">
-				<span :class="$style.timeWindowLabel"><i class="ti ti-clock"></i> 时间窗口</span>
-				<div :class="$style.timeWindowBtns">
-					<button
-						v-for="w in timeWindows"
-						:key="w.value"
-						type="button"
-						:class="[$style.twBtn, selectedHours === w.value ? $style.twBtnActive : null]"
-						@click="setWindow(w.value)"
-					>
-						{{ w.label }}
-					</button>
-				</div>
+			<!-- 报表分类切换 -->
+			<div :class="$style.reportTabRow">
+				<button
+					v-for="t in reportTabs"
+					:key="t.value"
+					type="button"
+					:class="[$style.reportTab, activeReportTab === t.value ? $style.reportTabActive : null]"
+					@click="activeReportTab = t.value"
+				>
+					<i :class="t.icon"></i> {{ t.label }}
+				</button>
 			</div>
 
-			<MkLoading v-if="loading"/>
-			<template v-else-if="data">
-				<div :class="$style.summaryGrid">
-					<div v-panel :class="$style.summaryCard">
-						<div :class="$style.summaryCardLabel">总请求</div>
-						<div :class="$style.summaryCardValue">{{ data.overall.total }}</div>
-					</div>
-					<div v-panel :class="$style.summaryCard">
-						<div :class="$style.summaryCardLabel">成功率</div>
-						<div :class="[$style.summaryCardValue, $style.success]">
-							{{ data.overall.total > 0 ? ((data.overall.success / data.overall.total) * 100).toFixed(1) : '—' }}%
-						</div>
-					</div>
-					<div v-panel :class="$style.summaryCard">
-						<div :class="$style.summaryCardLabel">失败数</div>
-						<div :class="[$style.summaryCardValue, data.overall.failed > 0 ? $style.failed : null]">{{ data.overall.failed }}</div>
-					</div>
-					<div v-panel :class="$style.summaryCard">
-						<div :class="$style.summaryCardLabel">中断数</div>
-						<div :class="[$style.summaryCardValue, data.overall.aborted > 0 ? $style.aborted : null]">{{ data.overall.aborted }}</div>
-					</div>
-					<div v-panel :class="$style.summaryCard">
-						<div :class="$style.summaryCardLabel">总费用</div>
-						<div :class="$style.summaryCardValue">{{ data.overall.totalCost.toFixed(4) }}</div>
-					</div>
-					<div v-panel :class="$style.summaryCard">
-						<div :class="$style.summaryCardLabel">活跃用户</div>
-						<div :class="$style.summaryCardValue">{{ data.overall.uniqueUsers }}</div>
+			<!-- 模型报表（v-show保留状态，切换不重新加载） -->
+			<div v-show="activeReportTab === 'model'" class="_gaps_m">
+				<div :class="$style.timeWindowRow">
+					<span :class="$style.timeWindowLabel"><i class="ti ti-clock"></i> 时间窗口</span>
+					<div :class="$style.timeWindowBtns">
+						<button
+							v-for="w in timeWindows"
+							:key="w.value"
+							type="button"
+							:class="[$style.twBtn, selectedHours === w.value ? $style.twBtnActive : null]"
+							@click="setWindow(w.value)"
+						>
+							{{ w.label }}
+						</button>
 					</div>
 				</div>
 
-				<MkFolder :defaultOpen="true">
-					<template #icon><i class="ti ti-cpu"></i></template>
-					<template #label>按模型统计</template>
-					<div class="_gaps_s">
-						<MkInfo v-if="data.byModel.length === 0">暂无数据。</MkInfo>
-						<div v-else :class="$style.modelTable">
-							<div :class="$style.modelHeader">
-								<span>模型名称</span>
-								<span>成功</span>
-								<span>失败</span>
-								<span>中断</span>
-								<span>成功率</span>
-								<span>费用</span>
-							</div>
-							<div v-for="m in data.byModel" :key="m.modelId ?? '__null__'" :class="[$style.modelRow, m.unlisted ? $style.modelRowUnlisted : null]">
-								<span :class="$style.modelName">
-									{{ m.modelName ?? m.modelId ?? '未知' }}
-									<span v-if="m.unlisted" :class="$style.unlistedBadge">已下架</span>
-								</span>
-								<span :class="$style.success">{{ m.success }}</span>
-								<span :class="m.failed > 0 ? $style.failed : ''">{{ m.failed }}</span>
-								<span :class="m.aborted > 0 ? $style.aborted : ''">{{ m.aborted }}</span>
-								<span>{{ m.total > 0 ? ((m.success / m.total) * 100).toFixed(1) + '%' : '—' }}</span>
-								<span>{{ m.totalCost.toFixed(4) }}</span>
+				<MkLoading v-if="loading"/>
+				<template v-else-if="data">
+					<div :class="$style.summaryGrid">
+						<div v-panel :class="$style.summaryCard">
+							<div :class="$style.summaryCardLabel">总请求</div>
+							<div :class="$style.summaryCardValue">{{ data.overall.total }}</div>
+						</div>
+						<div v-panel :class="$style.summaryCard">
+							<div :class="$style.summaryCardLabel">成功率</div>
+							<div :class="[$style.summaryCardValue, $style.success]">
+								{{ data.overall.total > 0 ? ((data.overall.success / data.overall.total) * 100).toFixed(1) : '—' }}%
 							</div>
 						</div>
+						<div v-panel :class="$style.summaryCard">
+							<div :class="$style.summaryCardLabel">失败数</div>
+							<div :class="[$style.summaryCardValue, data.overall.failed > 0 ? $style.failed : null]">{{ data.overall.failed }}</div>
+						</div>
+						<div v-panel :class="$style.summaryCard">
+							<div :class="$style.summaryCardLabel">中断数</div>
+							<div :class="[$style.summaryCardValue, data.overall.aborted > 0 ? $style.aborted : null]">{{ data.overall.aborted }}</div>
+						</div>
+						<div v-panel :class="$style.summaryCard">
+							<div :class="$style.summaryCardLabel">总费用</div>
+							<div :class="$style.summaryCardValue">{{ data.overall.totalCost.toFixed(4) }}</div>
+						</div>
+						<div v-panel :class="$style.summaryCard">
+							<div :class="$style.summaryCardLabel">活跃用户</div>
+							<div :class="$style.summaryCardValue">{{ data.overall.uniqueUsers }}</div>
+						</div>
 					</div>
-				</MkFolder>
 
-				<MkFolder :defaultOpen="true">
-					<template #icon><i class="ti ti-timeline"></i></template>
-					<template #label>按小时请求趋势</template>
-					<div class="_gaps_s">
-						<MkInfo v-if="data.hourlyBuckets.length === 0">暂无数据。</MkInfo>
-						<div v-else :class="$style.chartWrap">
-							<div
-								v-for="bucket in chartBuckets"
-								:key="bucket.bucketStart"
-								:class="$style.chartItem"
-							>
-								<div :class="$style.chartBarGroup">
-									<div
-										:class="[$style.chartBar, $style.barSuccess]"
-										:style="{ height: barHeight(bucket.success, maxBucketTotal) }"
-										:title="`成功: ${bucket.success}`"
-									></div>
-									<div
-										:class="[$style.chartBar, $style.barFailed]"
-										:style="{ height: barHeight(bucket.failed, maxBucketTotal) }"
-										:title="`失败: ${bucket.failed}`"
-									></div>
-									<div
-										:class="[$style.chartBar, $style.barAborted]"
-										:style="{ height: barHeight(bucket.aborted, maxBucketTotal) }"
-										:title="`中断: ${bucket.aborted}`"
-									></div>
+					<MkFolder :defaultOpen="true">
+						<template #icon><i class="ti ti-cpu"></i></template>
+						<template #label>按模型统计</template>
+						<div class="_gaps_s">
+							<MkInfo v-if="data.byModel.length === 0">暂无数据。</MkInfo>
+							<div v-else :class="$style.modelTable">
+								<div :class="$style.modelHeader">
+									<span>模型名称</span>
+									<span>成功</span>
+									<span>失败</span>
+									<span>中断</span>
+									<span>成功率</span>
+									<span>费用</span>
 								</div>
-								<div :class="$style.chartLabel">{{ bucketLabel(bucket.bucketStart) }}</div>
+								<div v-for="m in data.byModel" :key="m.modelId ?? '__null__'" :class="[$style.modelRow, m.unlisted ? $style.modelRowUnlisted : null]">
+									<span :class="$style.modelName">
+										{{ m.modelName ?? m.modelId ?? '未知' }}
+										<span v-if="m.unlisted" :class="$style.unlistedBadge">已下架</span>
+									</span>
+									<span :class="$style.success">{{ m.success }}</span>
+									<span :class="m.failed > 0 ? $style.failed : ''">{{ m.failed }}</span>
+									<span :class="m.aborted > 0 ? $style.aborted : ''">{{ m.aborted }}</span>
+									<span>{{ m.total > 0 ? ((m.success / m.total) * 100).toFixed(1) + '%' : '—' }}</span>
+									<span>{{ m.totalCost.toFixed(4) }}</span>
+								</div>
 							</div>
 						</div>
-						<div :class="$style.chartLegend">
-							<span :class="[$style.legendDot, $style.barSuccess]"></span> 成功
-							<span :class="[$style.legendDot, $style.barFailed]"></span> 失败
-							<span :class="[$style.legendDot, $style.barAborted]"></span> 中断
+					</MkFolder>
+
+					<MkFolder :defaultOpen="true">
+						<template #icon><i class="ti ti-timeline"></i></template>
+						<template #label>按小时请求趋势</template>
+						<div class="_gaps_s">
+							<MkInfo v-if="data.hourlyBuckets.length === 0">暂无数据。</MkInfo>
+							<div v-else :class="$style.chartWrap">
+								<div
+									v-for="bucket in chartBuckets"
+									:key="bucket.bucketStart"
+									:class="$style.chartItem"
+								>
+									<div :class="$style.chartBarGroup">
+										<div
+											:class="[$style.chartBar, $style.barSuccess]"
+											:style="{ height: barHeight(bucket.success, maxBucketTotal) }"
+											:title="`成功: ${bucket.success}`"
+										></div>
+										<div
+											:class="[$style.chartBar, $style.barFailed]"
+											:style="{ height: barHeight(bucket.failed, maxBucketTotal) }"
+											:title="`失败: ${bucket.failed}`"
+										></div>
+										<div
+											:class="[$style.chartBar, $style.barAborted]"
+											:style="{ height: barHeight(bucket.aborted, maxBucketTotal) }"
+											:title="`中断: ${bucket.aborted}`"
+										></div>
+									</div>
+									<div :class="$style.chartLabel">{{ bucketLabel(bucket.bucketStart) }}</div>
+								</div>
+							</div>
+							<div :class="$style.chartLegend">
+								<span :class="[$style.legendDot, $style.barSuccess]"></span> 成功
+								<span :class="[$style.legendDot, $style.barFailed]"></span> 失败
+								<span :class="[$style.legendDot, $style.barAborted]"></span> 中断
+							</div>
 						</div>
-					</div>
-				</MkFolder>
-			</template>
-			<MkInfo v-else-if="!loading">加载失败，请稍后重试。</MkInfo>
+					</MkFolder>
+				</template>
+				<MkInfo v-else-if="!loading">加载失败，请稍后重试。</MkInfo>
+			</div>
+
+			<!-- 签到报表（KeepAlive缓存，切换回来不重新加载） -->
+			<KeepAlive>
+				<XCheckinReports v-if="activeReportTab === 'checkin'"/>
+			</KeepAlive>
 		</div>
 	</div>
 </PageWithHeader>
@@ -132,10 +153,18 @@ import { computed, onMounted, ref } from 'vue';
 import MkLoading from '@/components/global/MkLoading.vue';
 import MkInfo from '@/components/MkInfo.vue';
 import MkFolder from '@/components/MkFolder.vue';
+import XCheckinReports from './agents-checkin-reports.vue';
 import { misskeyApi, formatApiError } from '@/utility/misskey-api.js';
 import { i18n } from '@/i18n.js';
 import { definePage } from '@/page.js';
 import * as os from '@/os.js';
+
+// 报表分类切换：仅切换视图区域，不触发路由跳转
+const reportTabs = [
+	{ label: '模型报表', value: 'model' as const, icon: 'ti ti-cpu' },
+	{ label: '签到报表', value: 'checkin' as const, icon: 'ti ti-calendar-check' },
+];
+const activeReportTab = ref<'model' | 'checkin'>('model');
 
 type ReportsOverview = {
 	overall: { total: number; success: number; failed: number; aborted: number; totalCost: number; uniqueUsers: number };
@@ -202,12 +231,42 @@ function bucketLabel(iso: string): string {
 const headerTabs = computed(() => []);
 
 definePage(() => ({
-	title: '智能体请求报表',
+	title: '智能体报表',
 	icon: 'ti ti-report-analytics',
 }));
 </script>
 
 <style lang="scss" module>
+.reportTabRow {
+	display: flex;
+	gap: 8px;
+}
+
+.reportTab {
+	padding: 8px 20px;
+	border-radius: 999px;
+	border: solid 1px var(--MI_THEME-divider);
+	background: var(--MI_THEME-panel);
+	color: var(--MI_THEME-fg);
+	font-size: 0.92em;
+	font-weight: 600;
+	cursor: pointer;
+	transition: background 0.15s, border-color 0.15s;
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+
+	&:hover {
+		border-color: var(--MI_THEME-accent);
+	}
+}
+
+.reportTabActive {
+	background: var(--MI_THEME-accent);
+	border-color: var(--MI_THEME-accent);
+	color: var(--MI_THEME-fgOnAccent, #fff);
+}
+
 .timeWindowRow {
 	display: flex;
 	align-items: center;
