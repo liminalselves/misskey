@@ -6,8 +6,11 @@
 import { lang, version } from '@@/js/config.js';
 import type { Locale } from 'i18n';
 
-// ここはビルド時に const locale = JSON.parse("...") みたいな感じで置き換えられるので top-level await は消える
-export let locale: Locale = await window.fetch(`/assets/locales/${lang}.${version}.json`, { cache: 'no-store' }).then(r => r.json(), () => null);
+// locale JSON は常にランタイムで取得する。
+// ビルド時の locale-inliner は TemplateLiteral の fetch を置換するため、
+// minifier が静的に畳み込めないよう配列 join で URL を構築し、インライン化を回避する。
+const localeUrl = ['', 'assets', 'locales', `${lang}.${version}.json`].join('/');
+export let locale: Locale = await window.fetch(localeUrl, { cache: 'no-store' }).then(r => r.json(), () => null);
 
 export function updateLocale(newLocale: Locale): void {
 	locale = newLocale;

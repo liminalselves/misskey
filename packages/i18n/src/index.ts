@@ -9,13 +9,11 @@
 
 import * as fs from 'node:fs';
 import * as yaml from 'js-yaml';
-import { languages, primaries } from './const.js';
+import { languages } from './const.js';
 import type { Locale } from './autogen/locale.js';
 import type { ILocale, ParameterizedString } from './types.js';
 
 type Language = typeof languages[number];
-
-type PrimaryLang = keyof typeof primaries;
 
 type Locales = Record<Language, ILocale>;
 
@@ -69,24 +67,18 @@ function build(): Record<Language, Locale> {
 	removeEmpty(locales);
 
 	return Object.entries(locales).reduce<Record<Language, Locale>>((a, [k, v]) => {
-		const lang = k.split('-')[0];
 		const key = k as Language;
 
 		switch (key) {
 			case 'ja-JP':
 				a[key] = v as Locale;
 				break;
-			case 'ja-KS':
-			case 'en-US':
-				a[key] = merge<Locale>(locales['ja-JP'] as Locale, v);
-				break;
 			default: {
-				const primaryLang = lang as PrimaryLang;
-				const primaryKey = (lang in primaries ? `${lang}-${primaries[primaryLang]}` : undefined) as Language | undefined;
+				// 全ての非 ja-JP ロケールは同一のマージ経路: ja-JP(基底) → en-US → 自身
+				// ※ en-US や zh-CN を特別扱いすると _agents 等のセクションが欠落する問題があったため統一
 				a[key] = merge<Locale>(
 					locales['ja-JP'] as Locale,
 					locales['en-US'],
-					primaryKey ? locales[primaryKey] : {},
 					v,
 				);
 				break;
