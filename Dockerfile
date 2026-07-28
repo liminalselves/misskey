@@ -42,6 +42,8 @@ COPY --link . ./
 
 RUN git submodule update --init
 RUN pnpm build
+# 重新生成前端运行时 locale JSON，确保与源码 YAML 一致（防止构建环境差异导致内联 chunk 与运行时 JSON 不同步）
+RUN node --input-type=module -e "import{writeFrontendLocalesJson}from'./packages/i18n/built/index.js';import{readFileSync}from'fs';const v=JSON.parse(readFileSync('./package.json','utf-8')).version;await writeFrontendLocalesJson('./built/_frontend_dist_/locales',v);console.log('frontend locale JSONs regenerated for version '+v)"
 RUN rm -rf .git/
 
 # 预下载 Gemini gemma3 分词器词表，供生产环境离线使用（生产服务器无法访问 raw.githubusercontent.com）。
