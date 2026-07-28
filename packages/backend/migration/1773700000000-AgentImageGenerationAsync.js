@@ -1,3 +1,8 @@
+/*
+ * SPDX-FileCopyrightText: syuilo and misskey-project
+ * SPDX-License-Identifier: AGPL-3.0-only
+ */
+
 export class AgentImageGenerationAsync1773700000000 {
 	name = 'AgentImageGenerationAsync1773700000000'
 

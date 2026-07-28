@@ -1,3 +1,8 @@
+/*
+ * SPDX-FileCopyrightText: syuilo and misskey-project
+ * SPDX-License-Identifier: AGPL-3.0-only
+ */
+
 export class AgentImageGenerationInitialPlaceholderUnique1774100000000 {
 	name = 'AgentImageGenerationInitialPlaceholderUnique1774100000000';
 

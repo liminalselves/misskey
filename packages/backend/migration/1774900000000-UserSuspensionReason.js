@@ -1,3 +1,8 @@
+/*
+ * SPDX-FileCopyrightText: syuilo and misskey-project
+ * SPDX-License-Identifier: AGPL-3.0-only
+ */
+
 export class UserSuspensionReason1774900000000 {
 	name = 'UserSuspensionReason1774900000000'
 

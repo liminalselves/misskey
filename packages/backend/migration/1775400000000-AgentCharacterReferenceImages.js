@@ -1,3 +1,8 @@
+/*
+ * SPDX-FileCopyrightText: syuilo and misskey-project
+ * SPDX-License-Identifier: AGPL-3.0-only
+ */
+
 export class AgentCharacterReferenceImages1775400000000 {
 	name = 'AgentCharacterReferenceImages1775400000000';
 

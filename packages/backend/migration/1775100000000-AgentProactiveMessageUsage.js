@@ -1,3 +1,8 @@
+/*
+ * SPDX-FileCopyrightText: syuilo and misskey-project
+ * SPDX-License-Identifier: AGPL-3.0-only
+ */
+
 export class AgentProactiveMessageUsage1775100000000 {
 	name = 'AgentProactiveMessageUsage1775100000000';
 

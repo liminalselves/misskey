@@ -1,3 +1,8 @@
+/*
+ * SPDX-FileCopyrightText: syuilo and misskey-project
+ * SPDX-License-Identifier: AGPL-3.0-only
+ */
+
 export class AgentSessionTimeAwareness1774700000000 {
 	name = 'AgentSessionTimeAwareness1774700000000';
 

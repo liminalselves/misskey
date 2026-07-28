@@ -1,3 +1,8 @@
+/*
+ * SPDX-FileCopyrightText: syuilo and misskey-project
+ * SPDX-License-Identifier: AGPL-3.0-only
+ */
+
 export class AgentSegmentedOutput1774600000000 {
 	name = 'AgentSegmentedOutput1774600000000'
 

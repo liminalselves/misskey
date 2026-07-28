@@ -1,3 +1,8 @@
+/*
+ * SPDX-FileCopyrightText: syuilo and misskey-project
+ * SPDX-License-Identifier: AGPL-3.0-only
+ */
+
 // 智能体模块 ApiError UUID 体检脚本
 //
 // 用途：扫描 packages/backend/src/(core|server/api/endpoints/agents|server/api/endpoints/admin/agents|daemons)

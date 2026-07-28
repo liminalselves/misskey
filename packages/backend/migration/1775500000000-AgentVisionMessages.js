@@ -1,3 +1,8 @@
+/*
+ * SPDX-FileCopyrightText: syuilo and misskey-project
+ * SPDX-License-Identifier: AGPL-3.0-only
+ */
+
 export class AgentVisionMessages1775500000000 {
 	name = 'AgentVisionMessages1775500000000';
 

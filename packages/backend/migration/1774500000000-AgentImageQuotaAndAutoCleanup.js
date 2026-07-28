@@ -1,3 +1,8 @@
+/*
+ * SPDX-FileCopyrightText: syuilo and misskey-project
+ * SPDX-License-Identifier: AGPL-3.0-only
+ */
+
 export class AgentImageQuotaAndAutoCleanup1774500000000 {
     name = 'AgentImageQuotaAndAutoCleanup1774500000000'
 
