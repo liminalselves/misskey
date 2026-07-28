@@ -13,7 +13,7 @@ export const agentSessionKinds = ['draft_test', 'community'] as const;
 export type AgentSessionKind = typeof agentSessionKinds[number];
 
 @Entity('agent_session')
-@Index(['userId', 'lastMessageAt'])
+@Index('IDX_agent_session_userId_lastMessage', ['lastMessageAt', 'userId'])
 export class MiAgentSession {
 	@PrimaryColumn(id())
 	public id: string;
@@ -41,7 +41,7 @@ export class MiAgentSession {
 	})
 	public name: string;
 
-	@Index()
+	@Index('IDX_agent_session_characterId')
 	@Column({
 		...id(),
 	})

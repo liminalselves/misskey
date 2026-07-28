@@ -3,33 +3,39 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
-import { Entity, Index, Column, PrimaryColumn } from 'typeorm';
+import { Entity, Index, Column, PrimaryColumn, Check, Unique, ManyToOne, JoinColumn } from 'typeorm';
 import { id } from './util/id.js';
 import type { MiUser } from './User.js';
-import type { MiNote } from './Note.js';
+import { MiNote } from './Note.js';
 import type { MiAgentCharacter } from './AgentCharacter.js';
 import type { MiAgentDialogueStyle } from './AgentDialogueStyle.js';
 
 /** 广场评价：绑定一条普通 Note（留言）与星级；删除 Note 时级联删除本行。 */
 @Entity('agent_plaza_review')
-@Index(['characterId'])
-@Index(['styleId'])
+@Index('IDX_agent_plaza_review_character', ['characterId'])
+@Index('IDX_agent_plaza_review_style', ['styleId'])
+@Index('UQ_agent_plaza_review_user_character', ['characterId', 'userId'], { unique: true, where: '("characterId" IS NOT NULL)' })
+@Index('UQ_agent_plaza_review_user_style', ['styleId', 'userId'], { unique: true, where: '("styleId" IS NOT NULL)' })
+@Unique('UQ_agent_plaza_review_noteId', ['noteId'])
+@Check('CHK_agent_plaza_review_target', `(("characterId" IS NOT NULL) AND ("styleId" IS NULL)) OR (("characterId" IS NULL) AND ("styleId" IS NOT NULL))`)
+@Check('CHK_agent_plaza_review_stars', `("stars" >= 0) AND ("stars" <= 5)`)
 export class MiAgentPlazaReview {
 	@PrimaryColumn({
 		...id(),
 	})
 	public id: string;
 
-	@Index({ unique: true })
 	@Column({
 		...id(),
-		comment: 'Linked Misskey note (review comment body).',
 	})
 	public noteId: MiNote['id'];
 
+	@ManyToOne(() => MiNote, { onDelete: 'CASCADE' })
+	@JoinColumn({ foreignKeyConstraintName: 'FK_agent_plaza_review_note' })
+	public note: MiNote | null;
+
 	@Column({
 		...id(),
-		comment: 'Author of the review (denormalized from note.userId).',
 	})
 	public userId: MiUser['id'];
 
@@ -45,9 +51,7 @@ export class MiAgentPlazaReview {
 	})
 	public styleId: MiAgentDialogueStyle['id'] | null;
 
-	@Column('smallint', {
-		comment: '0–5 stars.',
-	})
+	@Column('smallint')
 	public stars: number;
 
 	constructor(data: Partial<MiAgentPlazaReview>) {

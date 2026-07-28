@@ -13,7 +13,8 @@ export const agentMessageRoles = ['user', 'assistant', 'system'] as const;
 export type AgentMessageRole = typeof agentMessageRoles[number];
 
 @Entity('agent_message')
-@Index(['sessionId', 'createdAt'])
+@Index('IDX_agent_message_session_created', ['createdAt', 'sessionId'])
+@Index('IDX_agent_message_session_id', ['id', 'sessionId'])
 @Index('IDX_agent_message_session_client_request_role', ['sessionId', 'clientRequestId', 'role'], {
 	unique: true,
 	where: '"clientRequestId" IS NOT NULL',
@@ -34,7 +35,7 @@ export class MiAgentMessage {
 	@ManyToOne(() => MiAgentSession, {
 		onDelete: 'CASCADE',
 	})
-	@JoinColumn()
+	@JoinColumn({ foreignKeyConstraintName: 'FK_agent_message_session' })
 	public session: MiAgentSession | null;
 
 	@Column('varchar', {
@@ -46,8 +47,8 @@ export class MiAgentMessage {
 	public content: string;
 
 	/** Optional image attached by the user. The Drive file remains owned by the user. */
-	@Column({
-		...id(),
+	@Column('varchar', {
+		length: 128,
 		nullable: true,
 	})
 	public imageFileId: MiDriveFile['id'] | null;

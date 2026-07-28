@@ -22,7 +22,7 @@ export type AgentProactiveScheduleTrigger =
 	};
 
 @Entity('agent_proactive_schedule')
-@Index(['sessionId', 'status', 'nextRunAt'])
+@Index('IDX_agent_proactive_schedule_session_status_next_run', ['nextRunAt', 'sessionId', 'status'])
 export class MiAgentProactiveSchedule {
 	@PrimaryColumn(id())
 	public id: string;
@@ -36,7 +36,7 @@ export class MiAgentProactiveSchedule {
 	@ManyToOne(() => MiAgentSession, {
 		onDelete: 'CASCADE',
 	})
-	@JoinColumn()
+	@JoinColumn({ foreignKeyConstraintName: 'FK_agent_proactive_schedule_session' })
 	public session: MiAgentSession | null;
 
 	@Column('timestamp with time zone')

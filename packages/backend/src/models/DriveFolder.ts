@@ -8,6 +8,7 @@ import { id } from './util/id.js';
 import { MiUser } from './User.js';
 
 @Entity('drive_folder')
+@Index('IDX_drive_folder_user_system_type', ['systemType', 'userId'], { unique: true, where: '("systemType" IS NOT NULL)' })
 export class MiDriveFolder {
 	@PrimaryColumn(id())
 	public id: string;
@@ -21,7 +22,6 @@ export class MiDriveFolder {
 	@Column('varchar', {
 		length: 32,
 		nullable: true,
-		comment: 'The system-managed folder type. Null for normal user folders.',
 	})
 	public systemType: 'agentGeneratedImages' | null;
 

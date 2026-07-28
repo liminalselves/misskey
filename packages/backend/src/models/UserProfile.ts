@@ -272,7 +272,6 @@ export class MiUserProfile {
 
 	@Column('boolean', {
 		default: false,
-		comment: 'Enable in-app push notification via WebSocket',
 	})
 	public enableAppPush: boolean;
 

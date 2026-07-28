@@ -170,16 +170,15 @@ export class MiUser {
 	})
 	public isSuspended: boolean;
 
+	@Index('IDX_user_suspendedUntil', { where: '("suspendedUntil" IS NOT NULL)' })
 	@Column('timestamp with time zone', {
 		nullable: true,
-		comment: 'When set with isSuspended, local suspension ends at this time (null means indefinite).',
 	})
 	public suspendedUntil: Date | null;
 
 	@Column('varchar', {
 		length: 2048,
 		nullable: true,
-		comment: 'User-facing suspension reason.',
 	})
 	public suspensionReason: string | null;
 

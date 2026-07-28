@@ -18,7 +18,8 @@ export const agentCompressionStickyStates = [
 export type AgentCompressionStickyState = typeof agentCompressionStickyStates[number];
 
 @Entity('agent_session_compression_sticky')
-@Index(['sessionId', 'sortIndex'])
+@Index('IDX_acs_sticky_session_sort', ['sessionId', 'sortIndex'])
+@Index('IDX_acs_sticky_session_fingerprint', ['sessionId', 'sourceFingerprint'], { unique: true, where: '("sourceFingerprint" IS NOT NULL)' })
 export class MiAgentSessionCompressionSticky {
 	@PrimaryColumn(id())
 	public id: string;
@@ -29,7 +30,7 @@ export class MiAgentSessionCompressionSticky {
 	@Column('timestamp with time zone')
 	public updatedAt: Date;
 
-	@Index()
+	@Index('IDX_acs_sticky_session')
 	@Column({
 		...id(),
 	})
@@ -38,7 +39,7 @@ export class MiAgentSessionCompressionSticky {
 	@ManyToOne(() => MiAgentSession, {
 		onDelete: 'CASCADE',
 	})
-	@JoinColumn()
+	@JoinColumn({ foreignKeyConstraintName: 'FK_acs_sticky_session' })
 	public session: MiAgentSession | null;
 
 	@Column({

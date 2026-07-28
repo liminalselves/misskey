@@ -8,7 +8,7 @@ import { id } from './util/id.js';
 import { MiUser } from './User.js';
 
 @Entity('agent_dialogue_style')
-@Index(['isPublished', 'updatedAt'])
+@Index('IDX_agent_dialogue_style_published_updated', ['isPublished', 'updatedAt'])
 export class MiAgentDialogueStyle {
 	@PrimaryColumn(id())
 	public id: string;
@@ -19,7 +19,7 @@ export class MiAgentDialogueStyle {
 	@Column('timestamp with time zone')
 	public updatedAt: Date;
 
-	@Index()
+	@Index('IDX_agent_dialogue_style_userId')
 	@Column({
 		...id(),
 	})

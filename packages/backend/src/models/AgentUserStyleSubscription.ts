@@ -9,7 +9,7 @@ import { MiUser } from './User.js';
 import { MiAgentDialogueStyle } from './AgentDialogueStyle.js';
 
 @Entity('agent_user_style_subscription')
-@Index(['styleId'])
+@Index('IDX_agent_style_sub_style', ['styleId'])
 export class MiAgentUserStyleSubscription {
 	@PrimaryColumn({
 		...id(),

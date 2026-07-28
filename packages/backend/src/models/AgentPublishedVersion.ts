@@ -12,8 +12,8 @@ import type { MiUser } from './User.js';
  * 写入一条不可变的版本快照，用于查看历史版本与回滚到任意历史版本（而不仅是最新发布版）。
  */
 @Entity('agent_published_version')
-@Index(['kind', 'targetId', 'version'], { unique: true })
-@Index(['kind', 'targetId', 'createdAt'])
+@Index('IDX_agent_published_version_kind_target_version', ['kind', 'targetId', 'version'], { unique: true })
+@Index('IDX_agent_published_version_kind_target_created', ['createdAt', 'kind', 'targetId'])
 export class MiAgentPublishedVersion {
 	@PrimaryColumn({
 		...id(),
@@ -25,19 +25,16 @@ export class MiAgentPublishedVersion {
 
 	@Column('varchar', {
 		length: 32,
-		comment: 'character | style',
 	})
 	public kind: string;
 
 	@Column('varchar', {
 		length: 32,
-		comment: 'AgentCharacter.id or AgentDialogueStyle.id',
 	})
 	public targetId: string;
 
 	@Column({
 		...id(),
-		comment: 'Owner user id (denormalized for ownership checks).',
 	})
 	public userId: MiUser['id'];
 

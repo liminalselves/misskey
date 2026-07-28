@@ -9,7 +9,7 @@ import { MiUser } from './User.js';
 import type { MiDriveFile } from './DriveFile.js';
 
 @Entity('agent_character')
-@Index(['isPublished', 'updatedAt'])
+@Index('IDX_agent_character_published_updated', ['isPublished', 'updatedAt'])
 export class MiAgentCharacter {
 	@PrimaryColumn(id())
 	public id: string;
@@ -20,7 +20,7 @@ export class MiAgentCharacter {
 	@Column('timestamp with time zone')
 	public updatedAt: Date;
 
-	@Index()
+	@Index('IDX_agent_character_userId')
 	@Column({
 		...id(),
 	})
@@ -62,13 +62,13 @@ export class MiAgentCharacter {
 
 	/** 角色专属世界书与版本元数据的统一存储，第一版先用 JSON 承载，后续可拆表。 */
 	@Column('jsonb', {
-		default: () => "'[]'::jsonb",
+		default: '[]',
 	})
 	public worldbook: Array<Record<string, unknown>>;
 
 	/** Character-local regular-expression filters applied to chat display and LLM context. */
 	@Column('jsonb', {
-		default: () => "'[]'::jsonb",
+		default: '[]',
 	})
 	public regexRules: Array<Record<string, unknown>>;
 
@@ -119,15 +119,15 @@ export class MiAgentCharacter {
 	})
 	public avatarFileId: MiDriveFile['id'] | null;
 
-	@Column({
-		...id(),
+	@Column('varchar', {
+		length: 128,
 		nullable: true,
 	})
 	public referenceImageFileId: MiDriveFile['id'] | null;
 
 	/** Up to four default reference images used by compatible image-generation models. */
 	@Column('jsonb', {
-		default: () => "'[]'::jsonb",
+		default: '[]',
 	})
 	public referenceImageFileIds: MiDriveFile['id'][];
 

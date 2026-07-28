@@ -8,8 +8,8 @@ import { id } from './util/id.js';
 import { MiUser } from './User.js';
 
 @Entity('agent_checkin_record')
-@Index(['userId', 'date'])
-@Index(['userId', 'date'], { unique: true })
+@Index('IDX_agent_checkin_record_userId_date', ['date', 'userId'])
+@Index('IDX_agent_checkin_record_userId_date_unique', ['date', 'userId'], { unique: true })
 export class MiAgentCheckinRecord {
 	@PrimaryColumn(id())
 	public id: string;
@@ -18,7 +18,7 @@ export class MiAgentCheckinRecord {
 	public userId: MiUser['id'];
 
 	@ManyToOne(() => MiUser, { onDelete: 'CASCADE' })
-	@JoinColumn()
+	@JoinColumn({ foreignKeyConstraintName: 'FK_agent_checkin_record_user' })
 	public user: MiUser | null;
 
 	/** 北京时间 yyyy-MM-dd */

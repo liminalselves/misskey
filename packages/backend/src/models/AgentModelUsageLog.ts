@@ -14,10 +14,10 @@ export const agentModelUsageKinds = ['chat', 'compression', 'image_generation', 
 export type AgentModelUsageKind = typeof agentModelUsageKinds[number];
 
 @Entity('agent_model_usage_log')
-@Index(['userId', 'requestedAt'])
-@Index(['requestedAt'])
-@Index(['modelId', 'requestedAt'])
-@Index(['status', 'requestedAt'])
+@Index('IDX_agent_model_usage_log_user_time', ['requestedAt', 'userId'])
+@Index('IDX_agent_model_usage_log_time', ['requestedAt'])
+@Index('IDX_agent_model_usage_log_model_time', ['modelId', 'requestedAt'])
+@Index('IDX_agent_model_usage_log_status_time', ['requestedAt', 'status'])
 export class MiAgentModelUsageLog {
 	@PrimaryColumn(id())
 	public id: string;

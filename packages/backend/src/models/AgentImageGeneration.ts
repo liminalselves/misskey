@@ -17,10 +17,14 @@ export const agentImageGenerationStatuses = ['pending', 'generating', 'succeeded
 export type AgentImageGenerationStatus = typeof agentImageGenerationStatuses[number];
 
 @Entity('agent_image_generation')
-@Index(['messageId', 'placeholderIndex'])
-@Index(['userId', 'createdAt'])
-@Index(['status', 'createdAt'])
-@Index(['isBlocked', 'createdAt'])
+@Index('IDX_agent_image_generation_message_placeholder', ['messageId', 'placeholderIndex'])
+@Index('IDX_agent_image_generation_user_created', ['createdAt', 'userId'])
+@Index('IDX_agent_image_generation_status_created', ['createdAt', 'status'])
+@Index('IDX_agent_image_generation_blocked_created', ['createdAt', 'isBlocked'])
+@Index('IDX_agent_image_generation_initial_placeholder', ['messageId', 'placeholderIndex'], {
+	unique: true,
+	where: '(("messageId" IS NOT NULL) AND ("regenerationOfId" IS NULL))',
+})
 export class MiAgentImageGeneration {
 	@PrimaryColumn(id())
 	public id: string;
@@ -35,21 +39,21 @@ export class MiAgentImageGeneration {
 	public userId: MiUser['id'];
 
 	@ManyToOne(() => MiUser, { onDelete: 'CASCADE' })
-	@JoinColumn()
+	@JoinColumn({ foreignKeyConstraintName: 'FK_agent_image_generation_user' })
 	public user: MiUser | null;
 
 	@Column({ ...id() })
 	public sessionId: MiAgentSession['id'];
 
 	@ManyToOne(() => MiAgentSession, { onDelete: 'CASCADE' })
-	@JoinColumn()
+	@JoinColumn({ foreignKeyConstraintName: 'FK_agent_image_generation_session' })
 	public session: MiAgentSession | null;
 
 	@Column({ ...id(), nullable: true })
 	public messageId: MiAgentMessage['id'] | null;
 
 	@ManyToOne(() => MiAgentMessage, { onDelete: 'CASCADE', nullable: true })
-	@JoinColumn()
+	@JoinColumn({ foreignKeyConstraintName: 'FK_agent_image_generation_message' })
 	public message: MiAgentMessage | null;
 
 	@Column({ ...id(), nullable: true })

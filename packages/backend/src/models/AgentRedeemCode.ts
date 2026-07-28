@@ -8,7 +8,7 @@ import { id } from './util/id.js';
 import { MiUser } from './User.js';
 
 @Entity('agent_redeem_code')
-@Index(['createdAt'])
+@Index('IDX_agent_redeem_code_created', ['createdAt'])
 export class MiAgentRedeemCode {
 	@PrimaryColumn(id())
 	public id: string;
@@ -16,7 +16,7 @@ export class MiAgentRedeemCode {
 	@Column('timestamp with time zone')
 	public createdAt: Date;
 
-	@Index({ unique: true })
+	@Index('IDX_agent_redeem_code_code', { unique: true })
 	@Column('varchar', { length: 32 })
 	public code: string;
 
@@ -39,7 +39,7 @@ export class MiAgentRedeemCode {
 	@Column('timestamp with time zone', { nullable: true })
 	public redeemedAt: Date | null;
 
-	@Index()
+	@Index('IDX_agent_redeem_code_redeemed')
 	@Column({ ...id(), nullable: true })
 	public redeemedById: MiUser['id'] | null;
 

@@ -14,12 +14,12 @@ export const agentExternalAuditStatuses = ['allow', 'block', 'failed', 'all_fail
 export type AgentExternalAuditStatus = typeof agentExternalAuditStatuses[number];
 
 @Entity('agent_external_audit_log')
-@Index(['createdAt'])
-@Index(['modelId', 'createdAt'])
-@Index(['status', 'createdAt'])
-@Index(['blockCode'])
-@Index(['userId', 'createdAt'])
-@Index(['sessionId', 'createdAt'])
+@Index('IDX_agent_external_audit_log_created_at', ['createdAt'])
+@Index('IDX_agent_external_audit_log_model_created_at', ['createdAt', 'modelId'])
+@Index('IDX_agent_external_audit_log_status_created_at', ['createdAt', 'status'])
+@Index('IDX_agent_external_audit_log_block_code', ['blockCode'])
+@Index('IDX_agent_external_audit_log_user_created_at', ['createdAt', 'userId'])
+@Index('IDX_agent_external_audit_log_session_created_at', ['createdAt', 'sessionId'])
 export class MiAgentExternalAuditLog {
 	@PrimaryColumn(id())
 	public id: string;
@@ -37,28 +37,28 @@ export class MiAgentExternalAuditLog {
 	public userId: MiUser['id'] | null;
 
 	@ManyToOne(() => MiUser, { onDelete: 'SET NULL', nullable: true })
-	@JoinColumn()
+	@JoinColumn({ foreignKeyConstraintName: 'FK_agent_external_audit_log_user' })
 	public user: MiUser | null;
 
 	@Column({ ...id(), nullable: true })
 	public sessionId: MiAgentSession['id'] | null;
 
 	@ManyToOne(() => MiAgentSession, { onDelete: 'SET NULL', nullable: true })
-	@JoinColumn()
+	@JoinColumn({ foreignKeyConstraintName: 'FK_agent_external_audit_log_session' })
 	public session: MiAgentSession | null;
 
 	@Column({ ...id(), nullable: true })
 	public characterId: MiAgentCharacter['id'] | null;
 
 	@ManyToOne(() => MiAgentCharacter, { onDelete: 'SET NULL', nullable: true })
-	@JoinColumn()
+	@JoinColumn({ foreignKeyConstraintName: 'FK_agent_external_audit_log_character' })
 	public character: MiAgentCharacter | null;
 
 	@Column({ ...id(), nullable: true })
 	public dialogueStyleId: MiAgentDialogueStyle['id'] | null;
 
 	@ManyToOne(() => MiAgentDialogueStyle, { onDelete: 'SET NULL', nullable: true })
-	@JoinColumn()
+	@JoinColumn({ foreignKeyConstraintName: 'FK_agent_external_audit_log_dialogue_style' })
 	public dialogueStyle: MiAgentDialogueStyle | null;
 
 	@Column('varchar', { length: 64, nullable: true })
