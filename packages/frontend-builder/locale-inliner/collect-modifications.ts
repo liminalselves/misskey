@@ -353,7 +353,8 @@ function isAwaitFetchLocaleThenJson(awaitNode: Node): boolean {
 
 	const fetchCall = thenFunction.object;
 	if (fetchCall.type !== 'CallExpression') return false;
-	if (fetchCall.arguments.length !== 1) return false;
+	// fetch 可能带第二个 options 参数（如 { cache: 'no-store' }），允许 1~2 个参数
+	if (fetchCall.arguments.length < 1 || fetchCall.arguments.length > 2) return false;
 
 	// `/assets/locales/${d}.${x}.json`
 	const assetLocaleTemplate = fetchCall.arguments[0];
