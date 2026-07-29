@@ -153,7 +153,7 @@ export function openInstanceMenu(ev: PointerEvent) {
 		type: 'a',
 		text: i18n.ts.document,
 		icon: 'ti ti-bulb',
-		href: 'https://misskey-hub.net/docs/for-users/',
+		href: 'https://docs.liminalselves.top/',
 		target: '_blank',
 	});
 

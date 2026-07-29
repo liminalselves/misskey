@@ -23,6 +23,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<div style="text-align: center;">
 					{{ i18n.ts._aboutMisskey.about }}<br><a href="https://misskey-hub.net/docs/about-misskey/" target="_blank" class="_link">{{ i18n.ts.learnMore }}</a>
 				</div>
+				<MkInfo :class="$style.identityNote">
+					<div :class="$style.identityTitle">阈界人格官方实例</div>
+					<div>该 Misskey 归属于阈界人格，并由阈界人格项目组持续维护与运营。</div>
+				</MkInfo>
 				<div v-if="$i != null" style="text-align: center;">
 					<MkButton primary rounded inline @click="iLoveMisskey">I <Mfm text="$[jelly ❤]"/> #Misskey</MkButton>
 				</div>
@@ -616,5 +620,14 @@ definePage(() => ({
 
 .patronName {
 	margin-left: 12px;
+}
+
+.identityNote {
+	border: 1px solid color-mix(in srgb, var(--MI_THEME-accent), transparent 70%);
+}
+
+.identityTitle {
+	font-weight: 700;
+	margin-bottom: 4px;
 }
 </style>
