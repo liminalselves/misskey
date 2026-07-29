@@ -226,6 +226,7 @@ export * as 'agents/styles/unsubscribe' from './endpoints/agents/styles/unsubscr
 export * as 'agents/styles/plaza-detail' from './endpoints/agents/styles/plaza-detail.js';
 export * as 'agents/plaza-reviews/create' from './endpoints/agents/plaza-reviews/create.js';
 export * as 'agents/plaza-reviews/list' from './endpoints/agents/plaza-reviews/list.js';
+export * as 'agents/plaza-search' from './endpoints/agents/plaza-search.js';
 export * as 'antennas/create' from './endpoints/antennas/create.js';
 export * as 'antennas/delete' from './endpoints/antennas/delete.js';
 export * as 'antennas/list' from './endpoints/antennas/list.js';

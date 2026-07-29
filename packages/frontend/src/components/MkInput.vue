@@ -31,6 +31,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 			@blur="focused = false"
 			@keydown="onKeydown($event)"
 			@input="onInput"
+			@search="onSearch"
 		>
 		<datalist v-if="datalist" :id="id">
 			<option v-for="data in datalist" :key="data" :value="data"></option>
@@ -115,6 +116,10 @@ const focus = () => inputEl.value?.focus();
 const onInput = (event: InputEvent) => {
 	changed.value = true;
 	emit('change', event);
+};
+const onSearch = () => {
+	// type="search" 原生清除按钮触发 search 事件时，确保 v-model 同步
+	updated();
 };
 const onKeydown = (ev: KeyboardEvent) => {
 	if (ev.isComposing || ev.key === 'Process' || ev.keyCode === 229) return;

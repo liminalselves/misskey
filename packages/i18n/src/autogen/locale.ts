@@ -14958,6 +14958,22 @@ export interface Locale extends ILocale {
          */
         "exploreSubCharacters": string;
         /**
+         * エージェントを検索（名前・概要・作者、スペースでキーワード区切り）
+         */
+        "plazaSearchPlaceholder": string;
+        /**
+         * 一致するエージェントが見つかりません
+         */
+        "plazaSearchNoResults": string;
+        /**
+         * キャラ
+         */
+        "plazaSearchResultsCharacters": string;
+        /**
+         * スタイル
+         */
+        "plazaSearchResultsStyles": string;
+        /**
          * 作成者
          */
         "cardCreator": string;

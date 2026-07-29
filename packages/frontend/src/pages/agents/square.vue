@@ -5,13 +5,115 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <template>
 <div class="_gaps">
+	<MkInput v-model="searchQuery" type="search" :placeholder="i18n.ts._agents.plazaSearchPlaceholder" @enter="onSearchEnter">
+		<template #prefix><i class="ti ti-search"></i></template>
+	</MkInput>
+
 	<MkTab
 		v-model="sub"
 		:tabs="subTabs"
 		style="margin-bottom: var(--MI-margin);"
 	/>
 
-	<template v-if="sub === 'characters'">
+	<!-- Search results (filtered by active tab) -->
+	<template v-if="searchActive && sub === 'characters'">
+		<MkLoading v-if="searchLoading"/>
+		<MkInfo v-else-if="searchCharacters.length === 0">{{ i18n.ts._agents.plazaSearchNoResults }}</MkInfo>
+		<div v-else :class="$style.grid">
+						<div v-for="a in searchCharacters" :key="a.id" v-panel :class="$style.card">
+							<div :class="$style.cardMain">
+								<div :class="$style.charAvatarWrap">
+									<MkDriveFileThumbnail v-if="a.avatar" :file="a.avatar" fit="cover" :class="$style.charThumb"/>
+									<div v-else :class="$style.charAvatarFallback"><i class="ti ti-user"></i></div>
+								</div>
+								<div :class="$style.cardBody">
+									<div :class="$style.cardTitleRow">
+										<span :class="$style.cardTitle">{{ a.name }}</span>
+										<div :class="$style.badgeRow">
+											<span v-if="a.publishedVersion != null" :class="$style.metaBadge">V{{ a.publishedVersion }}</span>
+											<span v-if="a.hasWorldbook" :class="[$style.metaBadge, $style.worldbookBadge]"><i class="ti ti-book"></i> 世界书</span>
+										</div>
+									</div>
+									<p v-if="a.summary" :class="$style.cardSummary">{{ a.summary }}</p>
+									<div :class="$style.cardMeta">
+										<span :class="$style.metaLabel"><i class="ti ti-user-heart"></i> {{ i18n.ts._agents.cardCreator }}</span>
+										<div :class="$style.metaAuthor">
+											<MkAvatar :user="a.user" class="_noSelect" link preview/>
+											<MkUserName :user="a.user" :nowrap="false" :class="$style.metaUserName"/>
+										</div>
+									</div>
+									<div :class="$style.plazaRow">
+										<span :class="$style.plazaLabel"><i class="ti ti-star"></i> {{ i18n.ts._agents.plazaMetricRating }}</span>
+										<template v-if="a.rating.count === 0">
+											<span :class="$style.plazaMuted">{{ i18n.ts._agents.plazaRatingNone }}</span>
+										</template>
+										<template v-else>
+											<span :class="$style.plazaStars" aria-hidden="true">{{ plazaStarVisual(a.rating.average) }}</span>
+											<span :class="$style.plazaVal">{{ plazaAverageText(a.rating.average) }} · {{ a.rating.count }} {{ i18n.ts._agents.plazaRatingCountSuffix }}</span>
+										</template>
+										<span :class="$style.plazaSep">·</span>
+										<span :class="$style.plazaLabel"><i class="ti ti-message-cog"></i> {{ i18n.ts._agents.plazaMetricAiReplies }}</span>
+										<span :class="$style.plazaVal">{{ a.aiReplyCount }}</span>
+									</div>
+								</div>
+							</div>
+							<div :class="$style.cardActions">
+								<MkButton rounded @click="goCharacterDetail(a.id)"><i class="ti ti-eye"></i> {{ i18n.ts._agents.plazaViewDetails }}</MkButton>
+								<MkButton primary rounded @click="startPlay(a)"><i class="ti ti-message"></i> {{ i18n.ts._agents.play }}</MkButton>
+							</div>
+						</div>
+		</div>
+	</template>
+
+	<template v-if="searchActive && sub === 'stylesPlaza'">
+		<MkLoading v-if="searchLoading"/>
+		<MkInfo v-else-if="searchStyles.length === 0">{{ i18n.ts._agents.plazaSearchNoResults }}</MkInfo>
+		<div v-else :class="$style.grid">
+						<div v-for="s in searchStyles" :key="s.id" v-panel :class="$style.card">
+							<div :class="$style.cardMain">
+								<div :class="$style.styleIconWrap">
+									<i class="ti ti-message-cog"></i>
+								</div>
+								<div :class="$style.cardBody">
+									<div :class="$style.cardTitleRow">
+										<span :class="$style.cardTitle">{{ s.name }}</span>
+										<div :class="$style.badgeRow">
+											<span v-if="s.publishedVersion != null" :class="$style.metaBadge">V{{ s.publishedVersion }}</span>
+										</div>
+									</div>
+									<p v-if="s.summary" :class="$style.cardSummary">{{ s.summary }}</p>
+									<p v-else-if="s.bodyPreview" :class="$style.cardSummary">{{ s.bodyPreview }}</p>
+									<div :class="$style.cardMeta">
+										<span :class="$style.metaLabel"><i class="ti ti-user-heart"></i> {{ i18n.ts._agents.cardCreator }}</span>
+										<div :class="$style.metaAuthor">
+											<MkAvatar :user="s.user" class="_noSelect" link preview/>
+											<MkUserName :user="s.user" :nowrap="false" :class="$style.metaUserName"/>
+										</div>
+									</div>
+									<div :class="$style.plazaRow">
+										<span :class="$style.plazaLabel"><i class="ti ti-star"></i> {{ i18n.ts._agents.plazaMetricRating }}</span>
+										<template v-if="s.rating.count === 0">
+											<span :class="$style.plazaMuted">{{ i18n.ts._agents.plazaRatingNone }}</span>
+										</template>
+										<template v-else>
+											<span :class="$style.plazaStars" aria-hidden="true">{{ plazaStarVisual(s.rating.average) }}</span>
+											<span :class="$style.plazaVal">{{ plazaAverageText(s.rating.average) }} · {{ s.rating.count }} {{ i18n.ts._agents.plazaRatingCountSuffix }}</span>
+										</template>
+										<span :class="$style.plazaSep">·</span>
+										<span :class="$style.plazaLabel"><i class="ti ti-message-cog"></i> {{ i18n.ts._agents.plazaMetricAiReplies }}</span>
+										<span :class="$style.plazaVal">{{ s.aiReplyCount }}</span>
+									</div>
+								</div>
+							</div>
+							<div :class="$style.cardActions">
+								<MkButton rounded @click="goStyleDetail(s.id)"><i class="ti ti-eye"></i> {{ i18n.ts._agents.plazaViewDetails }}</MkButton>
+							</div>
+						</div>
+		</div>
+	</template>
+
+	<!-- Normal browse mode -->
+	<template v-if="!searchActive && sub === 'characters'">
 		<div :class="$style.sortBar">
 			<div :class="$style.sortInfo">{{ i18n.ts._agents.exploreSubCharacters }} · {{ list.length }}</div>
 			<div :class="$style.sortControls">
@@ -94,7 +196,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		</div>
 	</template>
 
-	<template v-else>
+	<template v-if="!searchActive && sub === 'stylesPlaza'">
 		<div :class="$style.sortBar">
 			<div :class="$style.sortInfo">{{ i18n.ts._agents.stylesTab }} · {{ plazaStyles.length }}</div>
 			<div :class="$style.sortControls">
@@ -181,6 +283,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import type { AgentsCharactersPublicListResponse, AgentsStylesPublicListResponse } from 'misskey-js/entities.js';
 import MkButton from '@/components/MkButton.vue';
+import MkInput from '@/components/MkInput.vue';
 import MkLoading from '@/components/global/MkLoading.vue';
 import MkInfo from '@/components/MkInfo.vue';
 import MkTab from '@/components/MkTab.vue';
@@ -208,6 +311,79 @@ const subTabs = computed(() => [
 	{ key: 'characters', label: i18n.ts._agents.exploreSubCharacters },
 	{ key: 'stylesPlaza', label: i18n.ts._agents.stylesTab },
 ]);
+
+// --- Search state ---
+const searchQuery = ref('');
+const searchActive = ref(false);
+const searchLoading = ref(false);
+const searchCharacters = ref<any[]>([]);
+const searchStyles = ref<any[]>([]);
+let searchSeq = 0; // 竞态控制：每次请求递增序号，仅接受最新请求的结果
+let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+
+async function execSearch(query: string) {
+	const q = query.trim();
+	if (!q) {
+		exitSearch();
+		return;
+	}
+	const seq = ++searchSeq;
+	searchActive.value = true;
+	searchLoading.value = true;
+	try {
+		const res = await misskeyApi('agents/plaza-search' as any, { query: q, limit: 30 }) as any;
+		// 丢弃过期响应
+		if (seq !== searchSeq) return;
+		searchCharacters.value = res.characters ?? [];
+		searchStyles.value = res.styles ?? [];
+	} catch (e) {
+		if (seq !== searchSeq) return;
+		searchCharacters.value = [];
+		searchStyles.value = [];
+		os.alert({ type: 'error', text: formatApiError(e) });
+	} finally {
+		if (seq === searchSeq) searchLoading.value = false;
+	}
+}
+
+function scheduleSearch(q: string) {
+	if (searchDebounceTimer != null) clearTimeout(searchDebounceTimer);
+	searchDebounceTimer = setTimeout(() => {
+		searchDebounceTimer = null;
+		void execSearch(q);
+	}, 400);
+}
+
+function cancelPendingSearch() {
+	if (searchDebounceTimer != null) {
+		clearTimeout(searchDebounceTimer);
+		searchDebounceTimer = null;
+	}
+}
+
+function onSearchEnter() {
+	// Enter 立即搜索，取消防抖等待
+	cancelPendingSearch();
+	void execSearch(searchQuery.value);
+}
+
+function exitSearch() {
+	searchSeq++;
+	cancelPendingSearch();
+	searchActive.value = false;
+	searchLoading.value = false;
+	searchCharacters.value = [];
+	searchStyles.value = [];
+}
+
+// 键入式搜索：监听输入变化，空则退出，非空则防抖搜索
+watch(searchQuery, (val) => {
+	if (!val.trim()) {
+		exitSearch();
+	} else {
+		scheduleSearch(val);
+	}
+});
 
 type SortKey = 'recommended' | 'heat' | 'rating' | 'latest';
 
