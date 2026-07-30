@@ -26,13 +26,13 @@ const observer = new IntersectionObserver(
 
 onMounted(() => {
 	nextTick(() => {
-		observer.observe(rootEl.value!);
+		if (rootEl.value) observer.observe(rootEl.value);
 	});
 });
 
 onActivated(() => {
 	nextTick(() => {
-		observer.observe(rootEl.value!);
+		if (rootEl.value) observer.observe(rootEl.value);
 	});
 });
 

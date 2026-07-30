@@ -37,7 +37,7 @@ const omitObserver = new ResizeObserver((entries, observer) => {
 
 onMounted(() => {
 	calcOmit();
-	omitObserver.observe(content.value as HTMLElement);
+	if (content.value) omitObserver.observe(content.value);
 });
 
 onUnmounted(() => {

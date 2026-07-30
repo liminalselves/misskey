@@ -342,7 +342,7 @@ onMounted(() => {
 	}, { immediate: true });
 
 	nextTick(() => {
-		alignObserver.observe(content.value!);
+		if (content.value) alignObserver.observe(content.value);
 	});
 });
 
