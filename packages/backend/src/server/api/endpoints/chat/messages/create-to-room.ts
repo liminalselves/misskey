@@ -56,6 +56,12 @@ export const meta = {
 			code: 'ROOM_SUSPENDED',
 			id: '5b4c6a6a-6f1e-4b6f-b0e7-4f7d4a9e3c21',
 		},
+
+		notAMember: {
+			message: 'You are not a member of this room.',
+			code: 'NOT_A_MEMBER',
+			id: 'f8a2c3d4-7e5b-4a9f-b1c6-8d0e2f4a6b8c',
+		},
 	},
 } as const;
 
@@ -115,6 +121,9 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				if (e?.message === 'user has been suspended from this room') {
 					// Remaining time information is attached from ChatService via e.info when available
 					throw new ApiError(meta.errors.roomSuspended, e?.info);
+				}
+				if (e?.message === 'you are not a member of the room') {
+					throw new ApiError(meta.errors.notAMember);
 				}
 				throw e;
 			}

@@ -62,6 +62,36 @@ export const meta = {
 			code: 'YOU_HAVE_BEEN_BLOCKED',
 			id: 'c15a5199-7422-4968-941a-2a462c478f7d',
 		},
+
+		recipientChatScopeNone: {
+			message: 'This user does not accept chat messages from anyone.',
+			code: 'RECIPIENT_CHAT_SCOPE_NONE',
+			id: 'a3f1c8e2-9b4d-4e7f-a6c1-2d5e8f0a1b3c',
+		},
+
+		recipientChatScopeFollowers: {
+			message: 'This user only accepts chat messages from their followers.',
+			code: 'RECIPIENT_CHAT_SCOPE_FOLLOWERS',
+			id: 'b4e2d9f3-0c5e-4f8a-b7d2-3e6f9a1b2c4d',
+		},
+
+		recipientChatScopeFollowing: {
+			message: 'This user only accepts chat messages from users they follow.',
+			code: 'RECIPIENT_CHAT_SCOPE_FOLLOWING',
+			id: 'c5f3e0a4-1d6f-4a9b-c8e3-4f7a0b2c3d5e',
+		},
+
+		recipientChatScopeMutual: {
+			message: 'This user only accepts chat messages from mutual followers.',
+			code: 'RECIPIENT_CHAT_SCOPE_MUTUAL',
+			id: 'd6a4f1b5-2e7a-4b0c-d9f4-5a8b1c3d4e6f',
+		},
+
+		recipientChatUnavailable: {
+			message: 'This user cannot use chat due to server policy.',
+			code: 'RECIPIENT_CHAT_UNAVAILABLE',
+			id: 'e7b5a2c6-3f8b-4c1d-e0a5-6b9c2d4e5f7a',
+		},
 	},
 } as const;
 
@@ -115,11 +145,21 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				throw err;
 			});
 
-			return await this.chatService.createMessageToUser(me, toUser, {
-				text: ps.text,
-				file: file,
-				replyId: ps.replyId,
-			});
+			try {
+				return await this.chatService.createMessageToUser(me, toUser, {
+					text: ps.text,
+					file: file,
+					replyId: ps.replyId,
+				});
+			} catch (e: any) {
+				if (e.message === 'recipient is cannot chat (none)') throw new ApiError(meta.errors.recipientChatScopeNone);
+				if (e.message === 'recipient is cannot chat (followers)') throw new ApiError(meta.errors.recipientChatScopeFollowers);
+				if (e.message === 'recipient is cannot chat (following)') throw new ApiError(meta.errors.recipientChatScopeFollowing);
+				if (e.message === 'recipient is cannot chat (mutual)') throw new ApiError(meta.errors.recipientChatScopeMutual);
+				if (e.message === 'recipient is cannot chat (policy)') throw new ApiError(meta.errors.recipientChatUnavailable);
+				if (e.message === 'blocked') throw new ApiError(meta.errors.youHaveBeenBlocked);
+				throw e;
+			}
 		});
 	}
 }

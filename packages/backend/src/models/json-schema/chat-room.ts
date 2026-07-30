@@ -36,6 +36,10 @@ export const packedChatRoomSchema = {
 			type: 'boolean',
 			optional: false, nullable: false,
 		},
+		isMember: {
+			type: 'boolean',
+			optional: false, nullable: false,
+		},
 		isMuted: {
 			type: 'boolean',
 			optional: true, nullable: false,

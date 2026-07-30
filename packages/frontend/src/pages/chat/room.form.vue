@@ -224,6 +224,20 @@ function send() {
 			emit('sent');
 		}).catch(err => {
 			console.error(err);
+
+			const chatScopeErrorMessages: Record<string, string> = {
+				RECIPIENT_CHAT_SCOPE_NONE: i18n.ts._chat.thisUserNotAllowedChatAnyone,
+				RECIPIENT_CHAT_SCOPE_FOLLOWERS: i18n.ts._chat.thisUserAllowsChatOnlyFromFollowers,
+				RECIPIENT_CHAT_SCOPE_FOLLOWING: i18n.ts._chat.thisUserAllowsChatOnlyFromFollowing,
+				RECIPIENT_CHAT_SCOPE_MUTUAL: i18n.ts._chat.thisUserAllowsChatOnlyFromMutualFollowing,
+				RECIPIENT_CHAT_UNAVAILABLE: i18n.ts._chat.chatNotAvailableInOtherAccount,
+				YOU_HAVE_BEEN_BLOCKED: i18n.ts._chat.youHaveBeenBlockedByThisUser,
+			};
+
+			const message = chatScopeErrorMessages[err?.code];
+			if (message) {
+				os.alert({ type: 'error', text: message });
+			}
 		}).then(() => {
 			sending.value = false;
 		});

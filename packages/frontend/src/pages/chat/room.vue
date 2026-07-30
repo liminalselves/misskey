@@ -11,6 +11,15 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<MkLoading/>
 			</div>
 
+			<!-- 非成员：显示加入群组界面 -->
+			<div v-else-if="notMember && room" :class="$style.joinPanel">
+				<div :class="$style.joinIcon"><i class="ti ti-users"></i></div>
+				<div :class="$style.joinName">{{ room.name }}</div>
+				<div v-if="room.description" :class="$style.joinDesc">{{ room.description }}</div>
+				<div :class="$style.joinHint">{{ i18n.ts._chat.youAreNotAMemberOfThisRoom }}</div>
+				<MkButton :wait="joining" primary rounded :class="$style.joinButton" @click="joinRoom"><i class="ti ti-user-plus"></i> {{ i18n.ts._chat.joinThisRoom }}</MkButton>
+			</div>
+
 			<div v-else-if="messages.length === 0">
 				<div class="_gaps" style="text-align: center;">
 					<div>{{ i18n.ts._chat.noMessagesYet }}</div>
@@ -75,7 +84,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 	</div>
 
 	<template #footer>
-		<div v-if="tab === 'chat'" :class="$style.footer">
+		<div v-if="tab === 'chat' && !notMember" :class="$style.footer">
 			<div class="_gaps">
 				<Transition name="fade">
 					<div v-show="showIndicator" :class="$style.new">
@@ -134,6 +143,8 @@ export type NormalizedChatMessage = Omit<Misskey.entities.ChatMessageLite, 'from
 
 const initializing = ref(false);
 const initialized = ref(false);
+const notMember = ref(false);
+const joining = ref(false);
 const moreFetching = ref(false);
 const fetchingNewer = ref(false);
 const messages = ref<NormalizedChatMessage[]>([]);
@@ -305,19 +316,16 @@ async function initialize() {
 		(connection.value as any).send('read', {});
 		markAsRead(); // 调用 API 强制标记已读
 	} else if (props.roomId) {
-		const [rResult, mResult] = await Promise.allSettled([
-			misskeyApi('chat/rooms/show', { roomId: props.roomId }),
-			misskeyApi('chat/messages/room-timeline', { roomId: props.roomId, limit: LIMIT }),
-		]);
-
-		if (rResult.status === 'rejected') {
-			const error = rResult.reason as any;
-			if (error?.code === 'ACCESS_DENIED') {
+		let r: Misskey.entities.ChatRoomsShowResponse;
+		try {
+			r = await misskeyApi('chat/rooms/show', { roomId: props.roomId });
+		} catch (err: any) {
+			if (err?.code === 'ACCESS_DENIED') {
 				os.alert({
 					type: 'error',
 					text: i18n.ts.permissionDeniedError as string,
 				});
-			} else if (error?.code === 'NO_SUCH_ROOM') {
+			} else if (err?.code === 'NO_SUCH_ROOM') {
 				os.alert({
 					type: 'error',
 					text: i18n.ts.noSuchRoom as string ?? 'No such room',
@@ -332,8 +340,6 @@ async function initialize() {
 			router.push('/chat');
 			return;
 		}
-
-		const r = rResult.value as Misskey.entities.ChatRoomsShowResponse;
 
 		if (r.invitationExists) {
 			const confirm = await os.confirm({
@@ -353,7 +359,17 @@ async function initialize() {
 			}
 		}
 
-		const m = mResult.status === 'fulfilled' ? mResult.value as Misskey.entities.ChatMessagesRoomTimelineResponse : [];
+		// 非成员（公开群组通过链接访问）：显示加入界面，不加载消息
+		if (!(r as any).isMember) {
+			room.value = r;
+			notMember.value = true;
+			initialized.value = true;
+			initializing.value = false;
+			return;
+		}
+
+		// 已是成员：加载消息时间线
+		const m = await misskeyApi('chat/messages/room-timeline', { roomId: props.roomId, limit: LIMIT });
 
 		room.value = r;
 		messages.value = m.map(x => normalizeMessage(x));
@@ -670,6 +686,19 @@ async function inviteUser() {
 	});
 }
 
+async function joinRoom() {
+	if (room.value == null) return;
+	joining.value = true;
+	try {
+		await os.apiWithDialog('chat/rooms/join', { roomId: room.value.id });
+		notMember.value = false;
+		initialized.value = false;
+		initialize();
+	} finally {
+		joining.value = false;
+	}
+}
+
 async function leaveRoom() {
 	if (room.value == null) return;
 
@@ -713,7 +742,7 @@ function showMenu(ev: PointerEvent) {
 
 const tab = ref('chat');
 
-const headerTabs = computed(() => room.value ? [{
+const headerTabs = computed(() => notMember.value ? [] : room.value ? [{
 	key: 'chat',
 	title: i18n.ts._chat.messages,
 	icon: 'ti ti-messages',
@@ -739,7 +768,7 @@ const headerTabs = computed(() => room.value ? [{
 	icon: 'ti ti-search',
 }]);
 
-const headerActions = computed<PageHeaderItem[]>(() => [{
+const headerActions = computed<PageHeaderItem[]>(() => notMember.value ? [] : [{
 	icon: 'ti ti-dots',
 	handler: showMenu,
 }]);
@@ -854,5 +883,53 @@ definePage(computed(() => {
 	width: fit-content;
 	padding: 0.5em 1em;
 	margin: 0 auto;
+}
+
+.joinPanel {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	text-align: center;
+	max-width: 400px;
+	margin: 48px auto 0;
+	padding: 40px 32px;
+	background: var(--MI_THEME-panel);
+	border-radius: var(--MI-radius);
+	border: solid 0.5px var(--MI_THEME-divider);
+}
+
+.joinIcon {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 72px;
+	height: 72px;
+	font-size: 32px;
+	color: var(--MI_THEME-accent);
+	background: color-mix(in srgb, var(--MI_THEME-accent) 12%, transparent);
+	border-radius: 50%;
+}
+
+.joinName {
+	margin-top: 20px;
+	font-size: 1.4em;
+	font-weight: bold;
+}
+
+.joinDesc {
+	margin-top: 8px;
+	font-size: 0.95em;
+	opacity: 0.7;
+}
+
+.joinHint {
+	margin-top: 16px;
+	font-size: 0.9em;
+	opacity: 0.6;
+}
+
+.joinButton {
+	margin-top: 24px;
+	padding: 8px 24px;
 }
 </style>

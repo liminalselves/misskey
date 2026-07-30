@@ -11,7 +11,12 @@ SPDX-License-Identifier: AGPL-3.0-only
 >
 	<MkAvatar :class="[$style.avatar, prefer.s.useStickyIcons ? $style.useSticky : null]" :user="message.fromUser!" :link="!isMe" :preview="false"/>
 	<div :class="[$style.body, message.file != null ? $style.fullWidth : null]" @contextmenu.stop="onContextmenu">
-		<div :class="$style.header"><MkUserName v-if="!isMe && prefer.s['chat.showSenderName'] && message.fromUser != null" :user="message.fromUser"/></div>
+		<div :class="$style.header">
+			<template v-if="message.fromUser != null && (prefer.s['chat.showSenderName'] || isRoomMessage)">
+				<MkUserName :class="$style.headerName" :user="message.fromUser"/>
+				<MkAcct v-if="isRoomMessage" :class="$style.headerAcct" :user="message.fromUser"/>
+			</template>
+		</div>
 		<!-- 引用消息预览 -->
 		<div v-if="'reply' in message && message.reply" :class="$style.replyPreview" @click.stop.prevent="scrollToReply">
 			<div :class="$style.replyBar"></div>
@@ -103,6 +108,7 @@ const emit = defineEmits<{
 
 const isMe = computed(() => props.message.fromUserId === $i.id);
 const isRoomOwner = computed(() => props.roomOwnerId != null && props.roomOwnerId === $i.id);
+const isRoomMessage = computed(() => props.roomOwnerId != null);
 const urls = computed(() => props.message.text ? extractUrlFromMfm(mfm.parse(props.message.text)) : []);
 
 // 点击搜索结果时触发导航
@@ -395,8 +401,21 @@ function showMenu(ev: PointerEvent, contextmenu = false) {
 }
 
 .header {
+	display: flex;
+	align-items: baseline;
 	min-height: 4px; // fukidashiの位置調整も兼ねるため
 	font-size: 80%;
+	white-space: nowrap;
+}
+
+.headerName {
+	font-weight: bold;
+}
+
+.headerAcct {
+	margin-left: 0.5em;
+	font-size: 0.9em;
+	opacity: 0.6;
 }
 
 .fukidashi {

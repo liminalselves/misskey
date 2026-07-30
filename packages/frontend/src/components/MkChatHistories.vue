@@ -24,7 +24,15 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<MkAcct :class="$style.messageHeaderUsername" :user="item.other!"/>
 				<MkTime :time="item.message.createdAt" :class="$style.messageHeaderTime"/>
 			</header>
-			<div :class="$style.messageBodyText"><span v-if="item.isMe" :class="$style.youSaid">{{ i18n.ts.you }}:</span>{{ item.message.text }}</div>
+			<div v-if="item.message.toRoom" :class="[$style.messageBodyText, $style.inlineLayout]">
+				<template v-if="!item.isMe">
+					<MkUserName :class="$style.inlineSenderName" :user="item.message.fromUser"/>
+					<MkAcct :class="$style.inlineSenderAcct" :user="item.message.fromUser"/>
+				</template>
+				<span v-if="item.isMe" :class="$style.youSaid">{{ i18n.ts.you }}:</span>
+				<span :class="$style.messageText">{{ item.message.text }}</span>
+			</div>
+			<div v-else :class="$style.messageBodyText"><span v-if="item.isMe" :class="$style.youSaid">{{ i18n.ts.you }}:</span>{{ item.message.text }}</div>
 		</div>
 	</MkA>
 </div>
@@ -220,8 +228,15 @@ onMounted(() => {
 	font-weight: bold;
 }
 
+.messageHeaderSender {
+	margin: 0 8px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
 .messageHeaderUsername {
 	margin: 0 8px;
+	opacity: 0.7;
 }
 
 .messageHeaderTime {
@@ -232,6 +247,30 @@ onMounted(() => {
 	overflow: hidden;
 	overflow-wrap: break-word;
 	font-size: 1.1em;
+}
+
+.inlineLayout {
+	display: flex;
+	align-items: baseline;
+	gap: 0.5em;
+	white-space: nowrap;
+}
+
+.inlineSenderName {
+	font-weight: bold;
+	flex-shrink: 0;
+}
+
+.inlineSenderAcct {
+	flex-shrink: 0;
+	font-size: 0.85em;
+	opacity: 0.6;
+}
+
+.messageText {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	min-width: 0;
 }
 
 .youSaid {
