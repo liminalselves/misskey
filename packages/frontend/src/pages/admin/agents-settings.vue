@@ -526,6 +526,28 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 			<template v-if="activeTab === 'credits'">
 				<MkFolder :defaultOpen="true">
+					<template #icon><i class="ti ti-gift"></i></template>
+					<template #label>签发奖励</template>
+					<div class="_gaps">
+						<MkInfo>向指定用户发放奖励额度，入账后用户会收到通知，并在消费日志中显示。</MkInfo>
+						<MkInput v-model="rewardForm.userId" type="text">
+							<template #label>指定用户</template>
+							<template #caption>用户 ID 或 @username / @username@host</template>
+						</MkInput>
+						<MkInput v-model="rewardForm.reason" type="text" :maxlength="200">
+							<template #label>奖励原因（选填）</template>
+						</MkInput>
+						<MkInput v-model="rewardForm.amount" type="number" :min="0.01" :max="100000" :step="0.01">
+							<template #label>额度数量</template>
+							<template #prefix><i class="ti ti-coin"></i></template>
+						</MkInput>
+						<MkButton primary rounded :disabled="rewardIssuing || !rewardForm.userId.trim() || !rewardForm.amount || Number(rewardForm.amount) <= 0" @click="issueReward">
+							<i class="ti ti-gift"></i> 签发
+						</MkButton>
+					</div>
+				</MkFolder>
+
+				<MkFolder :defaultOpen="true">
 					<template #icon><i class="ti ti-plus"></i></template>
 					<template #label>{{ i18n.ts._agents.redeemCodesGenerate }}</template>
 					<div class="_gaps">
@@ -1487,6 +1509,40 @@ const redeemForm = reactive({
 	note: '',
 	expiresAt: '',
 });
+
+const rewardForm = reactive({
+	userId: '',
+	reason: '',
+	amount: null as number | null,
+});
+const rewardIssuing = ref(false);
+
+async function issueReward() {
+	const amount = Number(rewardForm.amount);
+	if (!rewardForm.userId.trim() || !Number.isFinite(amount) || amount <= 0) return;
+	const { canceled } = await os.confirm({
+		type: 'question',
+		title: '签发奖励',
+		text: `确认向 ${rewardForm.userId.trim()} 发放 ${amount.toFixed(2)} 额度？`,
+	});
+	if (canceled) return;
+	rewardIssuing.value = true;
+	try {
+		const res = await misskeyApi('admin/agents/credits/issue-reward' as any, {
+			userId: rewardForm.userId.trim(),
+			amount,
+			reason: rewardForm.reason.trim() || null,
+		}) as { userId: string; amount: number; newBalance: number };
+		os.alert({ type: 'success', text: `已向 ${rewardForm.userId.trim()} 签发 ${res.amount.toFixed(2)} 额度` });
+		rewardForm.userId = '';
+		rewardForm.reason = '';
+		rewardForm.amount = null;
+	} catch (err) {
+		os.alert({ type: 'error', text: formatApiError(err) });
+	} finally {
+		rewardIssuing.value = false;
+	}
+}
 const redeemGenerating = ref(false);
 const generatedCodes = ref<{ id: string; code: string; creditAmount: number }[]>([]);
 const redeemLoading = ref(false);

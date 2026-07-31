@@ -32,7 +32,7 @@ export const meta = {
 						createdAt: { type: 'string', format: 'date-time' },
 						amount: { type: 'number' },
 						modelName: { type: 'string', nullable: true },
-						usageKind: { type: 'string', enum: ['chat', 'compression', 'image_generation', 'vision', 'proactive_random', 'proactive_scheduled', 'checkin'], nullable: true },
+						usageKind: { type: 'string', enum: ['chat', 'compression', 'image_generation', 'vision', 'proactive_random', 'proactive_scheduled', 'checkin', 'admin_reward'], nullable: true },
 						status: { type: 'string', nullable: true },
 						durationMs: { type: 'integer', nullable: true },
 						redeemCode: { type: 'string', nullable: true },
@@ -67,7 +67,7 @@ type BillingItem = {
 	createdAt: string;
 	amount: number;
 	modelName: string | null;
-	usageKind: 'chat' | 'compression' | 'image_generation' | 'vision' | 'proactive_random' | 'proactive_scheduled' | 'checkin' | null;
+	usageKind: 'chat' | 'compression' | 'image_generation' | 'vision' | 'proactive_random' | 'proactive_scheduled' | 'checkin' | 'admin_reward' | null;
 	status: string | null;
 	durationMs: number | null;
 	redeemCode: string | null;
@@ -140,7 +140,9 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					kind: 'usage',
 					createdAt: log.requestedAt.toISOString(),
 					amount: -log.cost,
-					modelName: log.modelId ? (modelNameMap.get(log.modelId) ?? log.modelApiName) : null,
+					modelName: log.usageKind === 'admin_reward'
+						? (log.errorCode ?? '管理员签发')
+						: (log.modelId ? (modelNameMap.get(log.modelId) ?? log.modelApiName) : null),
 					usageKind: log.usageKind,
 					status: log.status,
 					durationMs: log.durationMs,

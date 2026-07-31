@@ -79,6 +79,12 @@ SPDX-License-Identifier: AGPL-3.0-only
 								<span :class="$style.billingStatusPrefix">{{ billingUsageSubkindLabel(item) }}</span>
 							</span>
 							<span
+								v-else-if="item.kind === 'usage' && item.usageKind === 'admin_reward'"
+								:class="[$style.billingStatusChip, $style.badgeAdminReward]"
+							>
+								<span :class="$style.billingStatusPrefix">{{ billingUsageSubkindLabel(item) }}</span>
+							</span>
+							<span
 								v-else-if="item.kind === 'usage'"
 								:class="[$style.billingStatusChip, item.status === 'success' ? $style.badgeOk : item.status === 'failed' ? $style.badgeErr : $style.badgeWarn]"
 								:title="billingUsageRowTitle(item.status)"
@@ -93,7 +99,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 							</span>
 						</span>
 						<span :class="$style.name">{{ item.kind === 'usage' ? (item.modelName ?? '—') : (item.redeemCode ?? '') }}</span>
-						<span :class="[$style.num, item.usedFreeQuota === true ? null : (item.usageKind === 'checkin' ? (item.amount > 0 ? $style.colorOk : $style.colorErr) : item.kind === 'usage' ? $style.colorErr : $style.colorOk)]">
+						<span :class="[$style.num, item.usedFreeQuota === true ? null : (item.usageKind === 'checkin' || item.usageKind === 'admin_reward' ? (item.amount > 0 ? $style.colorOk : $style.colorErr) : item.kind === 'usage' ? $style.colorErr : $style.colorOk)]">
 							<template v-if="item.usedFreeQuota === true">免费次数 {{ item.freeQuotaUsedAtCall }}/{{ item.freeQuotaTotalAtCall }}</template>
 							<template v-else>{{ formatBillingAmount(item) }}</template>
 						</span>
@@ -336,7 +342,7 @@ import * as os from '@/os.js';
 import { lang, version } from '@@/js/config.js';
 import type { Locale } from 'i18n';
 
-type UsageKind = 'chat' | 'compression' | 'image_generation' | 'vision' | 'proactive_random' | 'proactive_scheduled' | 'checkin';
+type UsageKind = 'chat' | 'compression' | 'image_generation' | 'vision' | 'proactive_random' | 'proactive_scheduled' | 'checkin' | 'admin_reward';
 
 type RecentLog = {
 	id: string;
@@ -669,6 +675,7 @@ function billingUsageSubkindLabel(item: BillingItem): string {
 	if (item.usageKind === 'proactive_random') return agentUsageLocaleLabel('billingKindProactiveRandomUsage', 'billingKindUsage');
 	if (item.usageKind === 'proactive_scheduled') return agentUsageLocaleLabel('billingKindProactiveScheduledUsage', 'billingKindUsage');
 	if (item.usageKind === 'checkin') return item.amount > 0 ? '签到奖励' : '补签消耗';
+	if (item.usageKind === 'admin_reward') return '奖励签发';
 	return agentUsageLocaleLabel('billingKindChatUsage', 'billingKindUsage');
 }
 
@@ -690,6 +697,7 @@ function formatBillingAmount(item: BillingItem): string {
 	const abs = Math.abs(item.amount).toFixed(4);
 	// 签到奖励（billing amount>0 表示收入）显示为 +X；补签消耗（amount<0）显示为 -X
 	if (item.usageKind === 'checkin') return item.amount > 0 ? `+${abs}` : `-${abs}`;
+	if (item.usageKind === 'admin_reward') return `+${abs}`;
 	return item.kind === 'usage' ? `-${abs}` : `+${abs}`;
 }
 
@@ -910,6 +918,11 @@ onMounted(async () => {
 .badgeCheckinMakeup {
 	color: var(--MI_THEME-warn);
 	background: color-mix(in srgb, var(--MI_THEME-warn) 16%, transparent);
+}
+
+.badgeAdminReward {
+	color: #a855f7;
+	background: color-mix(in srgb, #a855f7 16%, transparent);
 }
 
 .billingTypeCell {
