@@ -475,27 +475,40 @@ export class ChatService {
 
 	@bindThis
 	public async userHistory(meId: MiUser['id'], limit: number): Promise<MiChatMessage[]> {
-		const mutingQuery = this.mutingsRepository.createQueryBuilder('muting')
-			.select('muting.muteeId')
-			.where('muting.muterId = :muterId', { muterId: meId });
+		// Optimization: pre-load muted user IDs once to avoid repeated correlated subqueries.
+		const mutedIds = await this.mutingsRepository.find({
+			where: { muterId: meId },
+			select: ['muteeId'],
+		}).then(xs => xs.map(x => x.muteeId));
 
-		const otherIdExpr = 'CASE WHEN "message"."fromUserId" = :meId THEN "message"."toUserId" ELSE "message"."fromUserId" END';
-		const rows = await this.chatMessagesRepository.createQueryBuilder('message')
-			.select(otherIdExpr, 'otherId')
-			.addSelect('MAX("message"."id")', 'messageId')
-			.where(new Brackets(qb => {
-				qb
-					.where('message.fromUserId = :meId', { meId })
-					.orWhere('message.toUserId = :meId', { meId });
-			}))
-			.andWhere('message.toRoomId IS NULL')
-			.andWhere(`message.fromUserId NOT IN (${mutingQuery.getQuery()})`)
-			.andWhere(`message.toUserId NOT IN (${mutingQuery.getQuery()})`)
-			.setParameters(mutingQuery.getParameters())
-			.groupBy(otherIdExpr)
-			.orderBy('"messageId"', 'DESC')
-			.limit(limit)
-			.getRawMany<{ otherId: MiUser['id']; messageId: MiChatMessage['id'] }>();
+		// Optimization: use UNION ALL instead of OR so each branch can leverage its
+		// partial index (IDX_chat_message_1on1_from / IDX_chat_message_1on1_to).
+		// Each branch scans only one side (sent / received) with index-ordered id DESC.
+		const hasMuting = mutedIds.length > 0;
+		// When muting exists: $1=meId, $2=mutedIds(varchar[]), $3=limit
+		// Otherwise:          $1=meId, $2=limit
+		const limitParam = hasMuting ? '$3' : '$2';
+		const muteClauseSent = hasMuting ? ' AND "toUserId" <> ALL($2::varchar[])' : '';
+		const muteClauseRecv = hasMuting ? ' AND "fromUserId" <> ALL($2::varchar[])' : '';
+
+		// Branch 1: messages I sent → conversation partner is toUserId
+		const sentSql = `SELECT "toUserId" AS "otherId", MAX("id") AS "messageId"`
+			+ ` FROM "chat_message"`
+			+ ` WHERE "fromUserId" = $1 AND "toRoomId" IS NULL${muteClauseSent}`
+			+ ` GROUP BY "toUserId"`;
+
+		// Branch 2: messages I received → conversation partner is fromUserId
+		const recvSql = `SELECT "fromUserId" AS "otherId", MAX("id") AS "messageId"`
+			+ ` FROM "chat_message"`
+			+ ` WHERE "toUserId" = $1 AND "toRoomId" IS NULL${muteClauseRecv}`
+			+ ` GROUP BY "fromUserId"`;
+
+		const sql = `SELECT "otherId", MAX("messageId") AS "messageId"`
+			+ ` FROM (${sentSql} UNION ALL ${recvSql}) AS combined`
+			+ ` GROUP BY "otherId" ORDER BY "messageId" DESC LIMIT ${limitParam}`;
+
+		const params = hasMuting ? [meId, mutedIds, limit] : [meId, limit];
+		const rows = await this.chatMessagesRepository.query(sql, params) as { otherId: string; messageId: string }[];
 
 		return this.findMessagesPreservingOrder(rows.map(row => row.messageId));
 	}
