@@ -196,6 +196,7 @@ export * as 'agents/messages/rollback' from './endpoints/agents/messages/rollbac
 export * as 'agents/messages/import-context' from './endpoints/agents/messages/import-context.js';
 export * as 'agents/images/generate' from './endpoints/agents/images/generate.js';
 export * as 'agents/images/generate-placeholder' from './endpoints/agents/images/generate-placeholder.js';
+export * as 'agents/images/placeholder-status' from './endpoints/agents/images/placeholder-status.js';
 export * as 'agents/images/models/list' from './endpoints/agents/images/models/list.js';
 export * as 'agents/vision-models/list' from './endpoints/agents/vision-models/list.js';
 export * as 'agents/images/presets/list' from './endpoints/agents/images/presets/list.js';

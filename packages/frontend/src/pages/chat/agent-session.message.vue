@@ -393,6 +393,39 @@ function manualGenerate(index: number) {
 	void generateDraw(index, false);
 }
 
+/** 正在查询服务端已有生图记录的占位符索引（防止并发重复查询） */
+const statusChecking = reactive<Record<number, boolean>>({});
+/** 状态检查代：消息内容变更时递增，使旧的异步查询结果被丢弃 */
+let drawCheckGeneration = 0;
+
+async function checkExistingDrawResult(index: number) {
+	const token = drawCheckGeneration;
+	statusChecking[index] = true;
+	try {
+		const res = await misskeyApi(
+			'agents/images/placeholder-status' as Parameters<typeof misskeyApi>[0],
+			{
+				sessionId: props.sessionId,
+				messageId: props.message.id,
+				placeholderIndex: index,
+			} as any,
+		) as DrawResult | null;
+		// 竞态保护：消息内容已变更或状态已被其他流程写入（如手动生图）时不覆盖
+		if (token !== drawCheckGeneration || drawResults[index] != null) return;
+		if (res) {
+			drawResults[index] = res;
+		} else {
+			manualPending[index] = true;
+		}
+	} catch {
+		if (token === drawCheckGeneration && drawResults[index] == null) {
+			manualPending[index] = true;
+		}
+	} finally {
+		if (token === drawCheckGeneration) delete statusChecking[index];
+	}
+}
+
 function startDraws() {
 	if (props.message.role !== 'assistant' || props.isSearchResult) return;
 	for (const segment of renderedSegments.value) {
@@ -404,7 +437,10 @@ function startDraws() {
 			} else {
 				// 超出自动生图上限（或自动生图关闭）：仅当尚未生成时标记为待手动生成
 				const cur = drawResults[part.index];
-				if (cur == null || cur.status === 'pending') {
+				if (cur == null) {
+					// 本地无记录（如组件重新挂载）：先查询服务端是否已有生成记录，避免已生成的图片被误标为"尚未自动生成"
+					if (!statusChecking[part.index]) void checkExistingDrawResult(part.index);
+				} else if (cur.status === 'pending') {
 					manualPending[part.index] = true;
 				}
 			}
@@ -414,6 +450,8 @@ function startDraws() {
 
 onMounted(startDraws);
 watch(() => `${props.message.id}:${props.message.content}`, () => {
+	drawCheckGeneration++;
+	for (const key of Object.keys(statusChecking)) delete statusChecking[Number(key)];
 	for (const key of Object.keys(drawResults)) delete drawResults[Number(key)];
 	for (const key of Object.keys(manualPending)) delete manualPending[Number(key)];
 	startDraws();
