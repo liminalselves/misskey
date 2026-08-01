@@ -10,6 +10,7 @@ import type {
 	AgentMessagesRepository,
 	AgentProactiveSchedulesRepository,
 	AgentSessionsRepository,
+	UserProfilesRepository,
 	UsersRepository,
 } from '@/models/_.js';
 import { DI } from '@/di-symbols.js';
@@ -60,6 +61,9 @@ export class AgentProactiveMessageService {
 
 		@Inject(DI.usersRepository)
 		private usersRepository: UsersRepository,
+
+		@Inject(DI.userProfilesRepository)
+		private userProfilesRepository: UserProfilesRepository,
 
 		private agentService: AgentService,
 		private agentProactiveScheduleService: AgentProactiveScheduleService,
@@ -127,10 +131,8 @@ export class AgentProactiveMessageService {
 		].join('\n');
 		const result = await this.generateProactiveReply(session, trigger, 'proactive_random');
 		if (!result.claimed) return;
-		// Once a worker has claimed this delivery, it is consumed even on failure.
-		// Re-arming it here would retry the same provider request every minute.
-		session.randomProactiveAt = null;
-		session.randomProactiveNeedsUserMessage = true;
+		// The delivery was already consumed by the atomic claim inside generateProactiveReply;
+		// record the outcome so the UI can surface skipped attempts.
 		session.randomProactiveLastError = result.errorCode
 			? { code: result.errorCode, occurredAt: new Date().toISOString() }
 			: null;
@@ -145,13 +147,27 @@ export class AgentProactiveMessageService {
 		onClaim?: () => Promise<void>,
 	): Promise<ProactiveAttemptResult> {
 		const now = new Date();
+		// The random path merges its delivery consumption into this atomic claim so that no
+		// concurrent tick can observe an armed past-due delivery after the reply lock is
+		// released; the scheduled path instead consumes its schedule row via onClaim.
+		const isRandom = usageKind === 'proactive_random';
 		const occupied = await this.sessionsRepository.createQueryBuilder()
 			.update()
-			.set({ agentReplyPending: true, updatedAt: now })
-			.where('id = :id AND "agentReplyPending" = false', { id: session.id })
+			.set(isRandom
+				? { agentReplyPending: true, randomProactiveAt: null, randomProactiveNeedsUserMessage: true, updatedAt: now }
+				: { agentReplyPending: true, updatedAt: now })
+			.where(isRandom
+				? 'id = :id AND "agentReplyPending" = false AND "randomProactiveAt" IS NOT NULL'
+				: 'id = :id AND "agentReplyPending" = false', { id: session.id })
 			.execute();
 		if ((occupied.affected ?? 0) !== 1) {
 			return { claimed: false, delivered: false, errorCode: null };
+		}
+		if (isRandom) {
+			session.agentReplyPending = true;
+			session.randomProactiveAt = null;
+			session.randomProactiveNeedsUserMessage = true;
+			session.updatedAt = now;
 		}
 
 		let internalMessageId: string | null = null;
@@ -192,6 +208,16 @@ export class AgentProactiveMessageService {
 			internalMessageId = internal.id;
 
 			instance = await this.metaService.fetch(true);
+			// Proactive delivery is system-initiated: mirror the send path's pre-call check so
+			// the system never spends provider quota that would drive the user's balance
+			// negative without their action.
+			const callCost = this.agentService.getUserFacingModelCostPerCall(instance, session.agentModelId);
+			if (callCost > 0 && !await this.agentModelUsageService.hasFreeQuotaRemaining(session.userId, session.agentModelId, instance)) {
+				const profile = await this.userProfilesRepository.findOneBy({ userId: session.userId });
+				if ((profile?.agentCreditBalance ?? 0) < callCost) {
+					throw new ProactiveAttemptError('PROACTIVE_INSUFFICIENT_CREDIT');
+				}
+			}
 			const systemBase = this.agentService.buildSystemPrompt({
 				globalPrompt: instance.agentGlobalSystemPrompt,
 				character,

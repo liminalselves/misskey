@@ -11,7 +11,7 @@ type ProactivePrivate = {
 	processScheduled: (schedule: Record<string, unknown>, now: Date) => Promise<void>;
 };
 
-function createHarness(opts: { reply?: string; imageModelEnabled?: boolean } = {}) {
+function createHarness(opts: { reply?: string; imageModelEnabled?: boolean; modelCost?: number; hasFreeQuota?: boolean; creditBalance?: number } = {}) {
 	const session = {
 		id: 'session-id',
 		userId: 'user-id',
@@ -54,6 +54,7 @@ function createHarness(opts: { reply?: string; imageModelEnabled?: boolean } = {
 	const usage = {
 		startLog: jest.fn(async (params: Record<string, unknown>) => ({ ...params, requestedAt: new Date() })),
 		finishLog: jest.fn(async () => undefined),
+		hasFreeQuotaRemaining: jest.fn(async () => opts.hasFreeQuota ?? true),
 	};
 	const agentService = {
 		newId: jest.fn(() => 'message-id'),
@@ -69,6 +70,7 @@ function createHarness(opts: { reply?: string; imageModelEnabled?: boolean } = {
 		wrapLatestUserTextWithStyleDirective: jest.fn((text: string) => text),
 		prependCurrentBeijingTime: jest.fn((text: string) => text),
 		resolveModelApiName: jest.fn(() => 'provider-model'),
+		getUserFacingModelCostPerCall: jest.fn(() => opts.modelCost ?? 0),
 		invokeChatCompletions: jest.fn(async () => {
 			if (opts.reply != null) return opts.reply;
 			throw new Error('provider unavailable');
@@ -89,6 +91,7 @@ function createHarness(opts: { reply?: string; imageModelEnabled?: boolean } = {
 		{} as never,
 		{ findOneBy: jest.fn(async () => ({ id: 'style-id' })) } as never,
 		{ findOneBy: jest.fn(async () => ({ id: 'user-id' })) } as never,
+		{ findOneBy: jest.fn(async () => ({ agentCreditBalance: opts.creditBalance ?? 100 })) } as never,
 		agentService as never,
 		schedules as never,
 		{ auditReply: jest.fn(async () => ({ blocked: false })) } as never,
@@ -161,5 +164,22 @@ describe('AgentProactiveMessageService failed attempts', () => {
 		expect(agentService.invokeChatCompletions).toHaveBeenCalledWith(expect.objectContaining({
 			system: expect.stringContaining('<agent_image_generation_protocol>\nImage generation protocol:'),
 		}));
+	});
+
+	test('skips a random proactive delivery when the user has no free quota and insufficient credit', async () => {
+		const { service, session, usage, agentService } = createHarness({
+			reply: 'A proactive reply.',
+			modelCost: 10,
+			hasFreeQuota: false,
+			creditBalance: 5,
+		});
+
+		await service.processRandom(session);
+
+		expect(agentService.invokeChatCompletions).not.toHaveBeenCalled();
+		expect(usage.startLog).not.toHaveBeenCalled();
+		expect(session.randomProactiveAt).toBeNull();
+		expect(session.randomProactiveNeedsUserMessage).toBe(true);
+		expect(session.randomProactiveLastError).toEqual(expect.objectContaining({ code: 'PROACTIVE_INSUFFICIENT_CREDIT' }));
 	});
 });

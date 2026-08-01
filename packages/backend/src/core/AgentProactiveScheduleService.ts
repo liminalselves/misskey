@@ -386,10 +386,13 @@ export class AgentProactiveScheduleService {
 		const daytimeWeight = Math.max(1, opts?.daytimeWeight ?? 3);
 		const recencyBias = Math.max(1, Math.min(10, opts?.recencyBias ?? 1));
 		const start = new Date(endedAt.getTime() + minSilence * 60 * 1000);
+		// Constructing an Intl.DateTimeFormat is expensive; reuse one instance across all
+		// candidate slots instead of rebuilding it per slot on the synchronous send path.
+		const hourFormatter = new Intl.DateTimeFormat('en-US', { timeZone: BEIJING_TIME_ZONE, hour: '2-digit', hourCycle: 'h23' });
 		const candidateMinutes: { at: Date; weight: number }[] = [];
 		for (let minute = 0; minute <= maxWindow; minute += 5) {
 			const at = new Date(start.getTime() + minute * 60 * 1000);
-			const hour = Number(new Intl.DateTimeFormat('en-US', { timeZone: BEIJING_TIME_ZONE, hour: '2-digit', hourCycle: 'h23' }).format(at));
+			const hour = Number(hourFormatter.format(at));
 			const dayWeight = hour >= 8 && hour <= 22 ? daytimeWeight : 1;
 			// Exponential decay: position 0 (nearest) has full weight, position 1 (farthest) decays.
 			// When recencyBias=1 the exponent is 0 → uniform; higher values bias toward nearer slots.
@@ -408,25 +411,43 @@ export class AgentProactiveScheduleService {
 	}
 
 	public async consumeScheduleRun(schedule: MiAgentProactiveSchedule, now: Date): Promise<void> {
+		const trigger = schedule.trigger;
+		const isFinal = trigger.type === 'once' || schedule.remainingRuns === 1;
+		let nextRunAt: Date | null = null;
+		let status = schedule.status;
+		let remainingRuns = schedule.remainingRuns;
+		if (isFinal) {
+			remainingRuns = 0;
+			status = 'completed';
+		} else if (trigger.type === 'recurring') {
+			if (remainingRuns != null) remainingRuns--;
+			try {
+				const interval = cronParser.parseExpression(trigger.cron, { currentDate: now, tz: BEIJING_TIME_ZONE });
+				nextRunAt = interval.next().toDate();
+			} catch {
+				status = 'paused';
+				nextRunAt = null;
+			}
+		}
+		// Consume atomically, guarded by the state this worker read. A concurrent worker that
+		// read the same due schedule will match zero rows and abort instead of consuming twice.
+		const result = await this.schedulesRepository.createQueryBuilder()
+			.update()
+			.set({ lastRunAt: now, updatedAt: now, status, nextRunAt, remainingRuns })
+			.where('id = :id AND status = :active AND "nextRunAt" = :expectedNextRunAt', {
+				id: schedule.id,
+				active: 'active',
+				expectedNextRunAt: schedule.nextRunAt,
+			})
+			.execute();
+		if ((result.affected ?? 0) !== 1) {
+			throw new ScheduleControlError('SCHEDULE_ALREADY_CONSUMED', 'The schedule run was already consumed by another worker.');
+		}
 		schedule.lastRunAt = now;
 		schedule.updatedAt = now;
-		if (schedule.trigger.type === 'once' || schedule.remainingRuns === 1) {
-			schedule.remainingRuns = 0;
-			schedule.nextRunAt = null;
-			schedule.status = 'completed';
-			await this.schedulesRepository.save(schedule);
-			return;
-		}
-		if (schedule.remainingRuns != null) schedule.remainingRuns--;
-		try {
-			const interval = cronParser.parseExpression(schedule.trigger.cron, { currentDate: now, tz: BEIJING_TIME_ZONE });
-			schedule.nextRunAt = interval.next().toDate();
-			await this.schedulesRepository.save(schedule);
-		} catch {
-			schedule.status = 'paused';
-			schedule.nextRunAt = null;
-			await this.schedulesRepository.save(schedule);
-		}
+		schedule.status = status;
+		schedule.nextRunAt = nextRunAt;
+		schedule.remainingRuns = remainingRuns;
 	}
 
 	public formatBeijing(date: Date | null): string {
