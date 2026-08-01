@@ -39,6 +39,7 @@ export const paramDef = {
 		name: { type: 'string', maxLength: 256 },
 		description: { type: 'string', maxLength: 1024 },
 		isPublic: { type: 'boolean' },
+		iconUrl: { type: 'string', nullable: true, maxLength: 1024 },
 	},
 	required: ['roomId'],
 } as const;
@@ -61,6 +62,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				name: ps.name,
 				description: ps.description,
 				isPublic: ps.isPublic,
+				iconUrl: ps.iconUrl,
 			});
 
 			return this.chatEntityService.packRoom(updated, me);

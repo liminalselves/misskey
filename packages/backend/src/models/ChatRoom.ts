@@ -34,6 +34,11 @@ export class MiChatRoom {
 	})
 	public description: string;
 
+	@Column('varchar', {
+		length: 1024, nullable: true,
+	})
+	public iconUrl: string | null;
+
 	@Column('boolean', {
 		default: false,
 	})

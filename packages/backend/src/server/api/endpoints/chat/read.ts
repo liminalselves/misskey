@@ -26,12 +26,10 @@ export const paramDef = {
 	properties: {
 		userId: {
 			type: 'string',
-			optional: true,
 			format: 'misskey:id',
 		},
 		roomId: {
 			type: 'string',
-			optional: true,
 			format: 'misskey:id',
 		},
 	},

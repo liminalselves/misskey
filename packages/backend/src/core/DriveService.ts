@@ -335,9 +335,9 @@ export class DriveService {
 
 			try {
 				if (['image/jpeg', 'image/webp', 'image/avif'].includes(type)) {
-					webpublic = await this.imageProcessingService.convertSharpToWebp(img, 2048, 2048);
+					webpublic = await this.imageProcessingService.convertSharpToWebp(img.clone(), 2048, 2048);
 				} else if (['image/png', 'image/bmp', 'image/svg+xml'].includes(type)) {
-					webpublic = await this.imageProcessingService.convertSharpToPng(img, 2048, 2048);
+					webpublic = await this.imageProcessingService.convertSharpToPng(img.clone(), 2048, 2048);
 				} else {
 					this.registerLogger.debug('web image not created (not an required image)');
 				}
@@ -358,7 +358,7 @@ export class DriveService {
 			if (isAnimated) {
 				thumbnail = await this.imageProcessingService.convertSharpToWebp(sharp(path, { animated: true }), 374, 317, { alphaQuality: 70 });
 			} else {
-				thumbnail = await this.imageProcessingService.convertSharpToWebp(img, 498, 422);
+				thumbnail = await this.imageProcessingService.convertSharpToWebp(img.clone(), 498, 422);
 			}
 		} catch (err) {
 			this.registerLogger.warn('thumbnail not created (an error occurred)', err as Error);

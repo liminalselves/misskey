@@ -607,6 +607,7 @@ export class ChatService {
 		name: string;
 		description: string;
 		isPublic: boolean;
+		iconUrl: string | null;
 	}>) {
 		const room = {
 			id: this.idService.gen(),
@@ -614,6 +615,7 @@ export class ChatService {
 			description: params.description,
 			ownerId: owner.id,
 			isPublic: params.isPublic,
+			iconUrl: params.iconUrl,
 		} satisfies Partial<MiChatRoom>;
 
 		const created = await this.chatRoomsRepository.insertOne(room);
@@ -941,6 +943,7 @@ export class ChatService {
 		name?: string;
 		description?: string;
 		isPublic?: boolean;
+		iconUrl?: string | null;
 	}): Promise<MiChatRoom> {
 		return this.chatRoomsRepository.createQueryBuilder().update()
 			.set(params)

@@ -32,6 +32,10 @@ export const packedChatRoomSchema = {
 			type: 'string',
 			optional: false, nullable: false,
 		},
+		iconUrl: {
+			type: 'string',
+			optional: true, nullable: true,
+		},
 		isPublic: {
 			type: 'boolean',
 			optional: false, nullable: false,

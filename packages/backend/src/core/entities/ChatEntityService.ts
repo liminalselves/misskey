@@ -304,6 +304,7 @@ export class ChatEntityService {
 			createdAt: this.idService.parse(room.id).date.toISOString(),
 			name: room.name,
 			description: room.description,
+			iconUrl: room.iconUrl ?? null,
 			ownerId: room.ownerId,
 			owner: options?._hint_?.packedOwners.get(room.ownerId) ?? await this.userEntityService.pack(room.owner ?? room.ownerId, me),
 			isPublic: room.isPublic,

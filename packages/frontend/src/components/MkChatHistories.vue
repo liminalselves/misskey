@@ -12,7 +12,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 		class="_panel"
 		:to="item.message.toRoomId ? `/chat/room/${item.message.toRoomId}` : `/chat/user/${item.other!.id}`"
 	>
-		<MkAvatar v-if="item.message.toRoomId" :class="$style.messageAvatar" :user="item.message.fromUser" indicator :preview="false"/>
+		<template v-if="item.message.toRoomId">
+			<img v-if="(item.message.toRoom as any)?.iconUrl" :src="(item.message.toRoom as any).iconUrl" :class="[$style.messageAvatar, $style.roomIcon]"/>
+			<div v-else :class="[$style.messageAvatar, $style.roomIconPlaceholder]"><i class="ti ti-users"></i></div>
+		</template>
 		<MkAvatar v-else-if="item.other" :class="$style.messageAvatar" :user="item.other" indicator :preview="false"/>
 		<div :class="$style.messageBody">
 			<header v-if="item.message.toRoom" :class="$style.messageHeader">
@@ -190,6 +193,21 @@ onMounted(() => {
 	width: 50px;
 	height: 50px;
 	margin: 0 16px 0 0;
+}
+
+.roomIcon {
+	object-fit: cover;
+	border-radius: 50%;
+}
+
+.roomIconPlaceholder {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	font-size: 24px;
+	color: var(--MI_THEME-accent);
+	background: color-mix(in srgb, var(--MI_THEME-accent) 12%, transparent);
+	border-radius: 50%;
 }
 
 @container (max-width: 500px) {

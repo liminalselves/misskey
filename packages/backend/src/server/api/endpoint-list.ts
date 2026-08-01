@@ -566,5 +566,6 @@ export * as 'chat/rooms/suspend' from './endpoints/chat/rooms/suspend.js';
 export * as 'chat/rooms/unsuspend' from './endpoints/chat/rooms/unsuspend.js';
 export * as 'chat/rooms/search' from './endpoints/chat/rooms/search.js';
 export * as 'chat/history' from './endpoints/chat/history.js';
+export * as 'chat/read' from './endpoints/chat/read.js';
 export * as 'chat/read-all' from './endpoints/chat/read-all.js';
 export * as 'v2/admin/emoji/list' from './endpoints/v2/admin/emoji/list.js';
