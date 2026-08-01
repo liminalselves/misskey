@@ -375,18 +375,27 @@ export class AgentProactiveScheduleService {
 		return imported;
 	}
 
-	public armRandomAfterVisibleAssistant(session: MiAgentSession, endedAt: Date): void {
+	public armRandomAfterVisibleAssistant(session: MiAgentSession, endedAt: Date, opts?: { minSilenceMinutes?: number; maxWindowMinutes?: number; daytimeWeight?: number; recencyBias?: number }): void {
 		if (!session.randomProactiveEnabled || !session.timeAwarenessEnabled) {
 			session.randomProactiveAt = null;
 			session.randomProactiveNeedsUserMessage = false;
 			return;
 		}
-		const start = new Date(endedAt.getTime() + 30 * 60 * 1000);
+		const minSilence = Math.max(5, opts?.minSilenceMinutes ?? 30);
+		const maxWindow = Math.max(30, opts?.maxWindowMinutes ?? 1410);
+		const daytimeWeight = Math.max(1, opts?.daytimeWeight ?? 3);
+		const recencyBias = Math.max(1, Math.min(10, opts?.recencyBias ?? 1));
+		const start = new Date(endedAt.getTime() + minSilence * 60 * 1000);
 		const candidateMinutes: { at: Date; weight: number }[] = [];
-		for (let minute = 0; minute <= 23 * 60 + 30; minute += 5) {
+		for (let minute = 0; minute <= maxWindow; minute += 5) {
 			const at = new Date(start.getTime() + minute * 60 * 1000);
 			const hour = Number(new Intl.DateTimeFormat('en-US', { timeZone: BEIJING_TIME_ZONE, hour: '2-digit', hourCycle: 'h23' }).format(at));
-			candidateMinutes.push({ at, weight: hour >= 8 && hour <= 22 ? 3 : 1 });
+			const dayWeight = hour >= 8 && hour <= 22 ? daytimeWeight : 1;
+			// Exponential decay: position 0 (nearest) has full weight, position 1 (farthest) decays.
+			// When recencyBias=1 the exponent is 0 → uniform; higher values bias toward nearer slots.
+			const position = maxWindow > 0 ? minute / maxWindow : 0;
+			const decayWeight = Math.exp(-(recencyBias - 1) * position);
+			candidateMinutes.push({ at, weight: dayWeight * decayWeight });
 		}
 		const totalWeight = candidateMinutes.reduce((sum, candidate) => sum + candidate.weight, 0);
 		let cursor = Math.random() * totalWeight;

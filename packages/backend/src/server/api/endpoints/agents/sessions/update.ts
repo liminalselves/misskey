@@ -74,6 +74,10 @@ export const paramDef = {
 		timeAwarenessEnabled: { type: 'boolean' },
 		randomProactiveEnabled: { type: 'boolean' },
 		scheduledProactiveEnabled: { type: 'boolean' },
+		randomProactiveMinSilenceMinutes: { type: 'integer', nullable: true, minimum: 5, maximum: 1440 },
+		randomProactiveMaxWindowMinutes: { type: 'integer', nullable: true, minimum: 30, maximum: 10080 },
+		randomProactiveDaytimeWeight: { type: 'integer', nullable: true, minimum: 1, maximum: 10 },
+		randomProactiveRecencyBias: { type: 'integer', nullable: true, minimum: 1, maximum: 10 },
 	},
 	required: ['sessionId'],
 } as const;
@@ -216,6 +220,26 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			}
 			if (ps.scheduledProactiveEnabled !== undefined) {
 				row.scheduledProactiveEnabled = ps.scheduledProactiveEnabled;
+			}
+			if (ps.randomProactiveMinSilenceMinutes !== undefined) {
+				row.randomProactiveMinSilenceMinutes = ps.randomProactiveMinSilenceMinutes === null
+					? null
+					: Math.max(5, Math.min(1440, ps.randomProactiveMinSilenceMinutes));
+			}
+			if (ps.randomProactiveMaxWindowMinutes !== undefined) {
+				row.randomProactiveMaxWindowMinutes = ps.randomProactiveMaxWindowMinutes === null
+					? null
+					: Math.max(30, Math.min(10080, ps.randomProactiveMaxWindowMinutes));
+			}
+			if (ps.randomProactiveDaytimeWeight !== undefined) {
+				row.randomProactiveDaytimeWeight = ps.randomProactiveDaytimeWeight === null
+					? null
+					: Math.max(1, Math.min(10, ps.randomProactiveDaytimeWeight));
+			}
+			if (ps.randomProactiveRecencyBias !== undefined) {
+				row.randomProactiveRecencyBias = ps.randomProactiveRecencyBias === null
+					? null
+					: Math.max(1, Math.min(10, ps.randomProactiveRecencyBias));
 			}
 
 			row.updatedAt = new Date();

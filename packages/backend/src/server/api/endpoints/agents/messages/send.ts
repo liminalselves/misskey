@@ -580,7 +580,12 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 
 				session.lastMessageAt = asstNow;
 				if (hasVisibleAssistantText) {
-					this.agentProactiveScheduleService.armRandomAfterVisibleAssistant(session, asstNow);
+					this.agentProactiveScheduleService.armRandomAfterVisibleAssistant(session, asstNow, {
+						minSilenceMinutes: session.randomProactiveMinSilenceMinutes ?? instanceMeta.agentProactiveMinSilenceMinutes,
+						maxWindowMinutes: session.randomProactiveMaxWindowMinutes ?? instanceMeta.agentProactiveMaxWindowMinutes,
+						daytimeWeight: session.randomProactiveDaytimeWeight ?? instanceMeta.agentProactiveDaytimeWeight,
+						recencyBias: session.randomProactiveRecencyBias ?? instanceMeta.agentProactiveRecencyBias,
+					});
 				}
 				session.updatedAt = asstNow;
 				session.agentReplyPending = false;

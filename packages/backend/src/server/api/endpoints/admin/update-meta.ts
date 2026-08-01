@@ -309,6 +309,12 @@ export const paramDef = {
 		agentExternalAuditSystemPrompt: { type: 'string', nullable: true, maxLength: 20000 },
 		agentCheckinSettings: { type: 'object', nullable: true, additionalProperties: true },
 		agentRedeemPurchaseUrl: { type: 'string', nullable: true, maxLength: 1024 },
+		agentProactiveRandomDefaultEnabled: { type: 'boolean' },
+		agentProactiveScheduledDefaultEnabled: { type: 'boolean' },
+		agentProactiveMinSilenceMinutes: { type: 'integer', minimum: 5, maximum: 1440 },
+		agentProactiveMaxWindowMinutes: { type: 'integer', minimum: 30, maximum: 10080 },
+		agentProactiveDaytimeWeight: { type: 'integer', minimum: 1, maximum: 10 },
+		agentProactiveRecencyBias: { type: 'integer', minimum: 1, maximum: 10 },
 		nativeClientAppInfo: {
 			type: 'object', nullable: false,
 			properties: {
@@ -1170,6 +1176,25 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				set.agentRedeemPurchaseUrl = ps.agentRedeemPurchaseUrl === null || String(ps.agentRedeemPurchaseUrl).trim() === ''
 					? null
 					: String(ps.agentRedeemPurchaseUrl).trim();
+			}
+
+			if (ps.agentProactiveRandomDefaultEnabled !== undefined) {
+				set.agentProactiveRandomDefaultEnabled = ps.agentProactiveRandomDefaultEnabled;
+			}
+			if (ps.agentProactiveScheduledDefaultEnabled !== undefined) {
+				set.agentProactiveScheduledDefaultEnabled = ps.agentProactiveScheduledDefaultEnabled;
+			}
+			if (ps.agentProactiveMinSilenceMinutes !== undefined) {
+				set.agentProactiveMinSilenceMinutes = Math.max(5, Math.min(1440, ps.agentProactiveMinSilenceMinutes));
+			}
+			if (ps.agentProactiveMaxWindowMinutes !== undefined) {
+				set.agentProactiveMaxWindowMinutes = Math.max(30, Math.min(10080, ps.agentProactiveMaxWindowMinutes));
+			}
+			if (ps.agentProactiveDaytimeWeight !== undefined) {
+				set.agentProactiveDaytimeWeight = Math.max(1, Math.min(10, ps.agentProactiveDaytimeWeight));
+			}
+			if (ps.agentProactiveRecencyBias !== undefined) {
+				set.agentProactiveRecencyBias = Math.max(1, Math.min(10, ps.agentProactiveRecencyBias));
 			}
 
 			if (ps.nativeClientAppInfo !== undefined) {

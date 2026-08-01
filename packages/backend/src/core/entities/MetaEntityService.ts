@@ -189,6 +189,26 @@ export class MetaEntityService {
 				if (!Number.isFinite(v)) return 1;
 				return Math.max(1, Math.min(48, v));
 			})(),
+			agentProactiveMinSilenceMinutes: (() => {
+				const v = Math.trunc(Number(instance.agentProactiveMinSilenceMinutes));
+				if (!Number.isFinite(v)) return 30;
+				return Math.max(5, Math.min(1440, v));
+			})(),
+			agentProactiveMaxWindowMinutes: (() => {
+				const v = Math.trunc(Number(instance.agentProactiveMaxWindowMinutes));
+				if (!Number.isFinite(v)) return 1410;
+				return Math.max(30, Math.min(10080, v));
+			})(),
+			agentProactiveDaytimeWeight: (() => {
+				const v = Math.trunc(Number(instance.agentProactiveDaytimeWeight));
+				if (!Number.isFinite(v)) return 3;
+				return Math.max(1, Math.min(10, v));
+			})(),
+			agentProactiveRecencyBias: (() => {
+				const v = Math.trunc(Number(instance.agentProactiveRecencyBias));
+				if (!Number.isFinite(v)) return 1;
+				return Math.max(1, Math.min(10, v));
+			})(),
 		};
 
 		return packed;

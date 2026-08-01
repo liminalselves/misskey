@@ -144,6 +144,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				agentModelId,
 				agentVisionModelId: instanceMeta.agentVisionDefaultModelId ?? null,
 				agentCompressionModelId,
+				randomProactiveEnabled: instanceMeta.agentProactiveRandomDefaultEnabled,
+				scheduledProactiveEnabled: instanceMeta.agentProactiveScheduledDefaultEnabled,
 				lastMessageAt: null,
 			});
 

@@ -222,6 +222,30 @@ export class MiAgentSession {
 	})
 	public scheduledProactiveLastError: { code: string; occurredAt: string } | null;
 
+	/** 会话级最小静默时间覆盖（分钟）；null 表示使用站点默认 */
+	@Column('integer', {
+		nullable: true,
+	})
+	public randomProactiveMinSilenceMinutes: number | null;
+
+	/** 会话级最大等待窗口覆盖（分钟）；null 表示使用站点默认 */
+	@Column('integer', {
+		nullable: true,
+	})
+	public randomProactiveMaxWindowMinutes: number | null;
+
+	/** 会话级白天权重倍率覆盖；null 表示使用站点默认 */
+	@Column('integer', {
+		nullable: true,
+	})
+	public randomProactiveDaytimeWeight: number | null;
+
+	/** 会话级近期偏好系数覆盖；null 表示使用站点默认 */
+	@Column('integer', {
+		nullable: true,
+	})
+	public randomProactiveRecencyBias: number | null;
+
 	/** 管理封禁：该会话下用户无法继续对话 */
 	@Column('boolean', {
 		default: false,

@@ -429,6 +429,22 @@ export const packedMetaLiteSchema = {
 			type: 'number',
 			optional: false, nullable: false,
 		},
+		agentProactiveMinSilenceMinutes: {
+			type: 'number',
+			optional: false, nullable: false,
+		},
+		agentProactiveMaxWindowMinutes: {
+			type: 'number',
+			optional: false, nullable: false,
+		},
+		agentProactiveDaytimeWeight: {
+			type: 'number',
+			optional: false, nullable: false,
+		},
+		agentProactiveRecencyBias: {
+			type: 'number',
+			optional: false, nullable: false,
+		},
 		agentModels: {
 			type: 'array',
 			optional: false, nullable: false,

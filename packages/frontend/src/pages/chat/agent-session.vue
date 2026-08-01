@@ -154,6 +154,35 @@ SPDX-License-Identifier: AGPL-3.0-only
 						{{ scheduledProactiveLabel }}
 						<template #caption>{{ scheduledProactiveCaption }}</template>
 					</MkSwitch>
+					<div :class="$style.proactiveParamsGroup">
+						<div :class="$style.proactiveParamsHead">
+							<span :class="$style.proactiveParamsTitle">随机主动消息参数</span>
+							<MkButton small rounded :disabled="proactiveParamsSaving || moderationLocksSessionWrites" @click="resetProactiveParams">
+								<i class="ti ti-rotate-back"></i> 恢复默认
+							</MkButton>
+						</div>
+						<div :class="$style.proactiveParamsGrid">
+							<MkInput v-model="proactiveMinSilence" type="number" :min="5" :max="1440" small>
+								<template #label>最小静默时间（分钟）</template>
+								<template #caption>助手回复后至少等待多久才发送。取值 5–1440</template>
+							</MkInput>
+							<MkInput v-model="proactiveMaxWindow" type="number" :min="30" :max="10080" small>
+								<template #label>最大等待窗口（分钟）</template>
+								<template #caption>从静默时间起，在多大窗口内随机选取发送时刻。取值 30–10080</template>
+							</MkInput>
+							<MkInput v-model="proactiveDaytimeWeight" type="number" :min="1" :max="10" small>
+								<template #label>白天权重倍率</template>
+								<template #caption>取值 1–10。1 = 白天与夜间概率相同；3 = 白天概率为夜间 3 倍</template>
+							</MkInput>
+							<MkInput v-model="proactiveRecencyBias" type="number" :min="1" :max="10" small>
+								<template #label>近期偏好系数</template>
+								<template #caption>取值 1–10。1 = 窗口内均匀分布；值越大越偏向近期时间点发送</template>
+							</MkInput>
+						</div>
+						<MkButton small rounded :primary="proactiveParamsDirty" :disabled="proactiveParamsSaving || moderationLocksSessionWrites || !proactiveParamsDirty" @click="saveProactiveParams">
+							<i class="ti ti-check"></i> 保存参数
+						</MkButton>
+					</div>
 				</div>
 				<div :class="$style.proactiveListHead">
 					<div>
@@ -1094,6 +1123,10 @@ const session = ref<{
 	timeAwarenessEnabled?: boolean;
 	randomProactiveEnabled?: boolean;
 	scheduledProactiveEnabled?: boolean;
+	randomProactiveMinSilenceMinutes?: number | null;
+	randomProactiveMaxWindowMinutes?: number | null;
+	randomProactiveDaytimeWeight?: number | null;
+	randomProactiveRecencyBias?: number | null;
 	randomProactiveLastError?: { code: string; occurredAt: string } | null;
 	scheduledProactiveLastError?: { code: string; occurredAt: string } | null;
 	characterId: string;
@@ -1248,6 +1281,32 @@ const timeAwarenessSaved = computed(() => agentText('timeAwarenessSaved', '时�
 const randomProactiveEnabled = ref(false);
 const scheduledProactiveEnabled = ref(false);
 const proactiveSaving = ref(false);
+const proactiveParamsSaving = ref(false);
+const proactiveMinSilence = ref<number | null>(null);
+const proactiveMaxWindow = ref<number | null>(null);
+const proactiveDaytimeWeight = ref<number | null>(null);
+const proactiveRecencyBias = ref<number | null>(null);
+const proactiveSavedMinSilence = ref<number | null>(null);
+const proactiveSavedMaxWindow = ref<number | null>(null);
+const proactiveSavedDaytimeWeight = ref<number | null>(null);
+const proactiveSavedRecencyBias = ref<number | null>(null);
+const siteProactiveMinSilence = computed(() => Number((instance as any).agentProactiveMinSilenceMinutes) || 30);
+const siteProactiveMaxWindow = computed(() => Number((instance as any).agentProactiveMaxWindowMinutes) || 1410);
+const siteProactiveDaytimeWeight = computed(() => Number((instance as any).agentProactiveDaytimeWeight) || 3);
+const siteProactiveRecencyBias = computed(() => Number((instance as any).agentProactiveRecencyBias) || 1);
+const proactiveHasOverride = computed(() => {
+	if (!session.value) return false;
+	return session.value.randomProactiveMinSilenceMinutes != null
+		|| session.value.randomProactiveMaxWindowMinutes != null
+		|| session.value.randomProactiveDaytimeWeight != null
+		|| session.value.randomProactiveRecencyBias != null;
+});
+const proactiveParamsDirty = computed(() => {
+	return proactiveMinSilence.value !== proactiveSavedMinSilence.value
+		|| proactiveMaxWindow.value !== proactiveSavedMaxWindow.value
+		|| proactiveDaytimeWeight.value !== proactiveSavedDaytimeWeight.value
+		|| proactiveRecencyBias.value !== proactiveSavedRecencyBias.value;
+});
 const proactiveSchedulesLoading = ref(false);
 const proactiveScheduleMutating = ref<string | null>(null);
 type ProactiveSchedule = {
@@ -2171,6 +2230,82 @@ async function saveScheduledProactiveSetting(enabled: boolean) {
 	}
 }
 
+async function saveProactiveParams() {
+	if (!session.value || proactiveParamsSaving.value || moderationLocksSessionWrites.value) return;
+	proactiveParamsSaving.value = true;
+	try {
+		const minSilence = Math.max(5, Math.min(1440, proactiveMinSilence.value ?? siteProactiveMinSilence.value));
+		const maxWindow = Math.max(30, Math.min(10080, proactiveMaxWindow.value ?? siteProactiveMaxWindow.value));
+		const daytimeWeight = Math.max(1, Math.min(10, proactiveDaytimeWeight.value ?? siteProactiveDaytimeWeight.value));
+		const recencyBias = Math.max(1, Math.min(10, proactiveRecencyBias.value ?? siteProactiveRecencyBias.value));
+		const payload: Record<string, unknown> = { sessionId };
+		payload.randomProactiveMinSilenceMinutes = minSilence === siteProactiveMinSilence.value ? null : minSilence;
+		payload.randomProactiveMaxWindowMinutes = maxWindow === siteProactiveMaxWindow.value ? null : maxWindow;
+		payload.randomProactiveDaytimeWeight = daytimeWeight === siteProactiveDaytimeWeight.value ? null : daytimeWeight;
+		payload.randomProactiveRecencyBias = recencyBias === siteProactiveRecencyBias.value ? null : recencyBias;
+		await (misskeyApi as unknown as (
+			endpoint: 'agents/sessions/update',
+			data: Record<string, unknown>,
+		) => Promise<unknown>)('agents/sessions/update', payload);
+		if (session.value) {
+			session.value.randomProactiveMinSilenceMinutes = payload.randomProactiveMinSilenceMinutes as number | null;
+			session.value.randomProactiveMaxWindowMinutes = payload.randomProactiveMaxWindowMinutes as number | null;
+			session.value.randomProactiveDaytimeWeight = payload.randomProactiveDaytimeWeight as number | null;
+			session.value.randomProactiveRecencyBias = payload.randomProactiveRecencyBias as number | null;
+		}
+		// 同步输入框为实际保存的 clamp 值，避免显示超限值与实际存储不一致
+		proactiveMinSilence.value = minSilence;
+		proactiveMaxWindow.value = maxWindow;
+		proactiveDaytimeWeight.value = daytimeWeight;
+		proactiveRecencyBias.value = recencyBias;
+		proactiveSavedMinSilence.value = minSilence;
+		proactiveSavedMaxWindow.value = maxWindow;
+		proactiveSavedDaytimeWeight.value = daytimeWeight;
+		proactiveSavedRecencyBias.value = recencyBias;
+		os.alert({ type: 'success', text: '主动消息参数已保存' });
+	} catch (e) {
+		os.alert({ type: 'error', text: formatApiError(e) });
+	} finally {
+		proactiveParamsSaving.value = false;
+	}
+}
+
+async function resetProactiveParams() {
+	if (!session.value || proactiveParamsSaving.value || moderationLocksSessionWrites.value) return;
+	proactiveParamsSaving.value = true;
+	try {
+		await (misskeyApi as unknown as (
+			endpoint: 'agents/sessions/update',
+			data: Record<string, unknown>,
+		) => Promise<unknown>)('agents/sessions/update', {
+			sessionId,
+			randomProactiveMinSilenceMinutes: null,
+			randomProactiveMaxWindowMinutes: null,
+			randomProactiveDaytimeWeight: null,
+			randomProactiveRecencyBias: null,
+		});
+		if (session.value) {
+			session.value.randomProactiveMinSilenceMinutes = null;
+			session.value.randomProactiveMaxWindowMinutes = null;
+			session.value.randomProactiveDaytimeWeight = null;
+			session.value.randomProactiveRecencyBias = null;
+		}
+		proactiveMinSilence.value = siteProactiveMinSilence.value;
+		proactiveMaxWindow.value = siteProactiveMaxWindow.value;
+		proactiveDaytimeWeight.value = siteProactiveDaytimeWeight.value;
+		proactiveRecencyBias.value = siteProactiveRecencyBias.value;
+		proactiveSavedMinSilence.value = siteProactiveMinSilence.value;
+		proactiveSavedMaxWindow.value = siteProactiveMaxWindow.value;
+		proactiveSavedDaytimeWeight.value = siteProactiveDaytimeWeight.value;
+		proactiveSavedRecencyBias.value = siteProactiveRecencyBias.value;
+		os.alert({ type: 'success', text: '已恢复为站点默认参数' });
+	} catch (e) {
+		os.alert({ type: 'error', text: formatApiError(e) });
+	} finally {
+		proactiveParamsSaving.value = false;
+	}
+}
+
 async function loadProactiveSchedules() {
 	if (!session.value || proactiveSchedulesLoading.value) return;
 	proactiveSchedulesLoading.value = true;
@@ -2328,6 +2463,14 @@ async function loadSession() {
 			timeAwarenessEnabled.value = session.value.timeAwarenessEnabled !== false;
 			randomProactiveEnabled.value = session.value.randomProactiveEnabled === true;
 			scheduledProactiveEnabled.value = session.value.scheduledProactiveEnabled === true;
+			proactiveMinSilence.value = session.value.randomProactiveMinSilenceMinutes ?? siteProactiveMinSilence.value;
+			proactiveMaxWindow.value = session.value.randomProactiveMaxWindowMinutes ?? siteProactiveMaxWindow.value;
+			proactiveDaytimeWeight.value = session.value.randomProactiveDaytimeWeight ?? siteProactiveDaytimeWeight.value;
+			proactiveRecencyBias.value = session.value.randomProactiveRecencyBias ?? siteProactiveRecencyBias.value;
+			proactiveSavedMinSilence.value = proactiveMinSilence.value;
+			proactiveSavedMaxWindow.value = proactiveMaxWindow.value;
+			proactiveSavedDaytimeWeight.value = proactiveDaytimeWeight.value;
+			proactiveSavedRecencyBias.value = proactiveRecencyBias.value;
 			hydrateAgentImageSettingsFromSession();
 			await loadCharacter(session.value.characterId);
 			if (tab.value === 'worldbook') {
@@ -5407,6 +5550,36 @@ async function onAbortRequest() {
 	font-size: 0.88em;
 	line-height: 1.45;
 	color: var(--MI_THEME-fgTransparentWeak);
+}
+
+.proactiveParamsGroup {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	margin-top: 4px;
+	padding: 14px;
+	border-radius: 8px;
+	background: var(--MI_THEME-bg);
+	border: 1px solid var(--MI_THEME-divider);
+}
+
+.proactiveParamsHead {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+}
+
+.proactiveParamsTitle {
+	font-weight: 600;
+	font-size: 0.92em;
+	color: var(--MI_THEME-fg);
+}
+
+.proactiveParamsGrid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+	gap: 10px;
 }
 
 .proactiveListHead {
