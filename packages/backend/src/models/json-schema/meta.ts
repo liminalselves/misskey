@@ -473,6 +473,14 @@ export const packedMetaLiteSchema = {
 			type: 'string',
 			optional: false, nullable: true,
 		},
+		agentAliyaCharacterId: {
+			type: 'string',
+			optional: false, nullable: true,
+		},
+		agentAliyaWebUrl: {
+			type: 'string',
+			optional: false, nullable: true,
+		},
 	},
 } as const;
 

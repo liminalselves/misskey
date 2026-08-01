@@ -1222,6 +1222,20 @@ export class MiMeta {
 	})
 	public agentProactiveRecencyBias: number;
 
+	/** Aliya 智能体角色 ID；配置后对应会话会展示 Aliya Web 推荐横幅与常驻板块 */
+	@Column('varchar', {
+		length: 256, nullable: true,
+		default: null,
+	})
+	public agentAliyaCharacterId: string | null;
+
+	/** Aliya Web 跳转地址 */
+	@Column('varchar', {
+		length: 1024, nullable: true,
+		default: null,
+	})
+	public agentAliyaWebUrl: string | null;
+
 	/** 额度迁移系统授权 Key 的 SHA-256 哈希 */
 	@Column('varchar', {
 		length: 128, nullable: true,

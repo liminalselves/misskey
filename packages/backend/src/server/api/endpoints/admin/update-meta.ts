@@ -309,6 +309,8 @@ export const paramDef = {
 		agentExternalAuditSystemPrompt: { type: 'string', nullable: true, maxLength: 20000 },
 		agentCheckinSettings: { type: 'object', nullable: true, additionalProperties: true },
 		agentRedeemPurchaseUrl: { type: 'string', nullable: true, maxLength: 1024 },
+		agentAliyaCharacterId: { type: 'string', nullable: true, maxLength: 256 },
+		agentAliyaWebUrl: { type: 'string', nullable: true, maxLength: 1024 },
 		agentProactiveRandomDefaultEnabled: { type: 'boolean' },
 		agentProactiveScheduledDefaultEnabled: { type: 'boolean' },
 		agentProactiveMinSilenceMinutes: { type: 'integer', minimum: 5, maximum: 1440 },
@@ -1176,6 +1178,18 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				set.agentRedeemPurchaseUrl = ps.agentRedeemPurchaseUrl === null || String(ps.agentRedeemPurchaseUrl).trim() === ''
 					? null
 					: String(ps.agentRedeemPurchaseUrl).trim();
+			}
+
+			if (ps.agentAliyaCharacterId !== undefined) {
+				set.agentAliyaCharacterId = ps.agentAliyaCharacterId === null || String(ps.agentAliyaCharacterId).trim() === ''
+					? null
+					: String(ps.agentAliyaCharacterId).trim();
+			}
+
+			if (ps.agentAliyaWebUrl !== undefined) {
+				set.agentAliyaWebUrl = ps.agentAliyaWebUrl === null || String(ps.agentAliyaWebUrl).trim() === ''
+					? null
+					: String(ps.agentAliyaWebUrl).trim();
 			}
 
 			if (ps.agentProactiveRandomDefaultEnabled !== undefined) {

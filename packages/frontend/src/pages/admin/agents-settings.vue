@@ -54,6 +54,22 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<MkTextarea v-model="form.state.agentGlobalSystemPrompt">
 						<template #label>{{ i18n.ts._agents.globalPrompt }}</template>
 					</MkTextarea>
+					<MkFolder>
+						<template #icon><i class="ti ti-brand-telegram"></i></template>
+						<template #label>Aliya Web 推荐</template>
+						<template #caption>配置后，对应角色的会话将展示 Aliya Web 跳转推荐</template>
+						<div class="_gaps">
+							<MkInput v-model="form.state.agentAliyaCharacterId" type="text">
+								<template #label>Aliya 智能体角色 ID</template>
+								<template #caption>填写该角色的 ID 后，用户打开该角色的会话时会看到 Aliya Web 推荐横幅与常驻板块；留空则关闭该功能</template>
+							</MkInput>
+							<MkInput v-model="form.state.agentAliyaWebUrl" type="url">
+								<template #label>Aliya Web 地址</template>
+								<template #caption>横幅与板块中“前往 Aliya Web”链接的跳转地址</template>
+								<template #prefix><i class="ti ti-link"></i></template>
+							</MkInput>
+						</div>
+					</MkFolder>
 				</div>
 			</MkFolder>
 
@@ -1152,6 +1168,8 @@ const form = useForm({
 	checkinMakeupCostIncrement: String((meta as any).agentCheckinSettings?.makeupCostIncrement ?? 10),
 	checkinMakeupAllowedWindowDays: String((meta as any).agentCheckinSettings?.makeupAllowedWindowDays ?? 7),
 	agentRedeemPurchaseUrl: typeof meta.agentRedeemPurchaseUrl === 'string' ? meta.agentRedeemPurchaseUrl : '',
+	agentAliyaCharacterId: typeof (meta as any).agentAliyaCharacterId === 'string' ? (meta as any).agentAliyaCharacterId : '',
+	agentAliyaWebUrl: typeof (meta as any).agentAliyaWebUrl === 'string' ? (meta as any).agentAliyaWebUrl : '',
 	agentProactiveRandomDefaultEnabled: Boolean(meta.agentProactiveRandomDefaultEnabled ?? false),
 	agentProactiveScheduledDefaultEnabled: Boolean(meta.agentProactiveScheduledDefaultEnabled ?? false),
 	agentProactiveMinSilenceMinutes: String(numFromMeta(meta.agentProactiveMinSilenceMinutes, 30)),
@@ -1517,6 +1535,8 @@ const form = useForm({
 			makeupAllowedWindowDays: Number(state.checkinMakeupAllowedWindowDays) || 7,
 		},
 		agentRedeemPurchaseUrl: state.agentRedeemPurchaseUrl.trim() === '' ? null : state.agentRedeemPurchaseUrl.trim(),
+		agentAliyaCharacterId: state.agentAliyaCharacterId.trim() === '' ? null : state.agentAliyaCharacterId.trim(),
+		agentAliyaWebUrl: state.agentAliyaWebUrl.trim() === '' ? null : state.agentAliyaWebUrl.trim(),
 		agentProactiveRandomDefaultEnabled: state.agentProactiveRandomDefaultEnabled,
 		agentProactiveScheduledDefaultEnabled: state.agentProactiveScheduledDefaultEnabled,
 		agentProactiveMinSilenceMinutes: Math.max(5, Math.min(1440, Number(state.agentProactiveMinSilenceMinutes) || 30)),

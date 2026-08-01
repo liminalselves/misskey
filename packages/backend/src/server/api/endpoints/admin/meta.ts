@@ -614,6 +614,14 @@ export const meta = {
 				type: 'string',
 				optional: false, nullable: true,
 			},
+			agentAliyaCharacterId: {
+				type: 'string',
+				optional: false, nullable: true,
+			},
+			agentAliyaWebUrl: {
+				type: 'string',
+				optional: false, nullable: true,
+			},
 			agentProactiveRandomDefaultEnabled: {
 				type: 'boolean',
 				optional: false, nullable: false,
@@ -1145,6 +1153,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					: DEFAULT_AGENT_EXTERNAL_AUDIT_SYSTEM_PROMPT,
 				agentCheckinSettings: instance.agentCheckinSettings ?? null,
 				agentRedeemPurchaseUrl: instance.agentRedeemPurchaseUrl ?? null,
+				agentAliyaCharacterId: instance.agentAliyaCharacterId ?? null,
+				agentAliyaWebUrl: instance.agentAliyaWebUrl ?? null,
 				agentProactiveRandomDefaultEnabled: instance.agentProactiveRandomDefaultEnabled,
 				agentProactiveScheduledDefaultEnabled: instance.agentProactiveScheduledDefaultEnabled,
 				agentProactiveMinSilenceMinutes: instance.agentProactiveMinSilenceMinutes,

@@ -14450,6 +14450,22 @@ export interface Locale extends ILocale {
          */
         "timeAwarenessSaved": string;
         /**
+         * Aliya Webに対応しました。よりネイティブな会話体験を
+         */
+        "aliyaWebBanner": string;
+        /**
+         * Aliya Webで会話を続ける
+         */
+        "aliyaWebPanelTitle": string;
+        /**
+         * Aliya Webはゲームスタイルのインターフェースを採用しており、{name} との会話体験がよりネイティブになります。
+         */
+        "aliyaWebPanelDesc": ParameterizedString<"name">;
+        /**
+         * Aliya Webへ
+         */
+        "aliyaWebGo": string;
+        /**
          * 自発メッセージ
          */
         "proactiveMessages": string;

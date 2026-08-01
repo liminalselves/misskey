@@ -26,6 +26,21 @@ SPDX-License-Identifier: AGPL-3.0-only
 </div>
 <PageWithHeader v-else v-model:tab="tab" :reversed="tab === 'chat'" :tabs="headerTabs" narrowMergedRow showBack :actions="headerActions">
 	<div v-if="tab === 'chat'" :class="['_spacer', $style.chatSpacer]" style="--MI_SPACER-w: 700px;">
+		<!-- Aliya Web 推荐横幅：每个会话仅首次打开时显示，状态存 cookie -->
+		<Transition :name="prefer.s.animation ? 'fade' : ''">
+			<div v-if="showAliyaBanner" :class="$style.aliyaBanner">
+				<div :class="$style.aliyaBannerBody">
+					<i :class="['ti ti-sparkles', $style.aliyaBannerIcon]"></i>
+					<span :class="$style.aliyaBannerText"><b>{{ character?.name || 'Aliya' }}</b> {{ i18n.ts._agents.aliyaWebBanner }}</span>
+					<a :class="$style.aliyaBannerLink" :href="aliyAWebUrl" target="_blank" rel="noopener noreferrer">
+						{{ i18n.ts._agents.aliyaWebGo }} <i class="ti ti-arrow-up-right"></i>
+					</a>
+				</div>
+				<button type="button" :class="$style.aliyaBannerClose" class="_button" aria-label="关闭" @click="dismissAliyaBanner">
+					<i class="ti ti-x"></i>
+				</button>
+			</div>
+		</Transition>
 		<div
 			v-if="showWorldbookHitHint && sending && pendingWorldbookMatches.length > 0"
 			:class="[$style.worldbookHitHint, worldbookHitPopoverOpen && $style.worldbookHitHintActive]"
@@ -672,6 +687,17 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 	<div v-else-if="tab === 'operations'" class="_spacer" style="--MI_SPACER-w: 720px;">
 		<div class="_gaps">
+			<!-- Aliya Web 常驻推荐板块：不可关闭 -->
+			<div v-if="isAliyaSession" :class="$style.aliyaPanel">
+				<div :class="$style.aliyaPanelIcon"><i class="ti ti-world"></i></div>
+				<div :class="$style.aliyaPanelContent">
+					<div :class="$style.aliyaPanelTitle">{{ i18n.ts._agents.aliyaWebPanelTitle }}</div>
+					<div :class="$style.aliyaPanelDesc">{{ i18n.tsx._agents.aliyaWebPanelDesc({ name: character?.name || 'Aliya' }) }}</div>
+					<a :class="$style.aliyaPanelLink" :href="aliyAWebUrl" target="_blank" rel="noopener noreferrer">
+						<i class="ti ti-external-link"></i> {{ i18n.ts._agents.aliyaWebGo }}
+					</a>
+				</div>
+			</div>
 			<MkInfo v-if="moderationLocksSessionWrites" warn>{{ moderationBlockUserMessage }}</MkInfo>
 			<div v-panel :class="[$style.memContextPorter, $style.memPorterPanel]">
 				<div :class="$style.memContextPorterLabel">消息显示</div>
@@ -1145,6 +1171,50 @@ const session = ref<{
 
 const character = ref<{ name: string; avatarFileId: string | null; avatar?: DriveFile | null; referenceImageFileIds: string[]; referenceImages: DriveFile[]; regexRules: AgentRegexRule[] } | null>(null);
 const assistantAvatarUrl = ref<string | null>(null);
+
+// ---- Aliya Web 推荐横幅 & 常驻板块 ----
+const aliyAConfiguredId = computed(() => {
+	const id = (instance as any).agentAliyaCharacterId;
+	return typeof id === 'string' && id.trim() !== '' ? id.trim() : null;
+});
+const aliyAWebUrl = computed(() => {
+	const u = (instance as any).agentAliyaWebUrl;
+	return typeof u === 'string' && u.trim() !== '' ? u.trim() : 'https://aliya.chat';
+});
+/** 当前会话是否为管理员配置的 Aliya 智能体 */
+const isAliyaSession = computed(() => aliyAConfiguredId.value != null && session.value?.characterId === aliyAConfiguredId.value);
+
+const aliyASeenCookieKey = computed(() => `aliya_web_promo_${sessionId}`);
+const aliyABannerDismissed = ref(false);
+
+/** 可关闭横幅：每个会话仅首次打开时显示，状态存 cookie（365 天） */
+const showAliyaBanner = computed(() => isAliyaSession.value && !aliyABannerDismissed.value);
+
+function readAliyaSeenCookie(): boolean {
+	try {
+		return document.cookie.split(';').some(c => c.trim().startsWith(`${aliyASeenCookieKey.value}=`));
+	} catch {
+		return false;
+	}
+}
+
+function writeAliyaSeenCookie() {
+	try {
+		document.cookie = `${aliyASeenCookieKey.value}=1; path=/; max-age=${365 * 24 * 3600}; SameSite=Lax`;
+	} catch { /* ignore */ }
+}
+
+function dismissAliyaBanner() {
+	aliyABannerDismissed.value = true;
+	writeAliyaSeenCookie();
+}
+
+aliyABannerDismissed.value = readAliyaSeenCookie();
+// 首次打开时写入 cookie，确保每个会话横幅只出现一次
+if (isAliyaSession.value && !aliyABannerDismissed.value) {
+	writeAliyaSeenCookie();
+}
+// ---- Aliya Web 推荐 END ----
 
 const timelineEl = useTemplateRef('timelineEl');
 const formRef = useTemplateRef<InstanceType<typeof XForm>>('formRef');
@@ -5640,5 +5710,150 @@ async function onAbortRequest() {
 	flex-wrap: wrap;
 	gap: 8px;
 	margin-top: 12px;
+}
+
+/* ---- Aliya Web 推荐横幅 ---- */
+.aliyaBanner {
+	position: sticky;
+	top: calc(var(--MI-stickyTop, 0px) + 8px);
+	z-index: 2;
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 7px 8px 7px 14px;
+	border-radius: var(--MI-radius);
+	border: 1px solid color-mix(in srgb, var(--MI_THEME-accent) 16%, var(--MI_THEME-divider));
+	background: color(from var(--MI_THEME-panel) srgb r g b / 0.82);
+	-webkit-backdrop-filter: var(--MI-blur, blur(15px));
+	backdrop-filter: var(--MI-blur, blur(15px));
+	box-shadow: 0 2px 10px color-mix(in srgb, var(--MI_THEME-shadow, #000) 25%, transparent);
+	font-size: 0.85em;
+	margin-bottom: 12px;
+}
+
+.aliyaBannerBody {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 4px 10px;
+	flex: 1;
+	min-width: 0;
+}
+
+.aliyaBannerIcon {
+	color: var(--MI_THEME-accent);
+	font-size: 1.05em;
+	flex-shrink: 0;
+	opacity: 0.9;
+}
+
+.aliyaBannerText {
+	min-width: 0;
+	line-height: 1.45;
+	color: var(--MI_THEME-fgTransparentWeak);
+
+	> b {
+		color: var(--MI_THEME-fg);
+		font-weight: 600;
+	}
+}
+
+.aliyaBannerLink {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	flex-shrink: 0;
+	padding: 4px 12px;
+	border-radius: 999px;
+	background: color-mix(in srgb, var(--MI_THEME-accent) 13%, transparent);
+	color: var(--MI_THEME-accent);
+	font-size: 0.85em;
+	font-weight: 700;
+	text-decoration: none;
+	transition: background 0.15s, color 0.15s;
+
+	&:hover {
+		background: var(--MI_THEME-accent);
+		color: var(--MI_THEME-fgOnAccent, #fff);
+	}
+}
+
+.aliyaBannerClose {
+	flex-shrink: 0;
+	display: grid;
+	place-items: center;
+	width: 26px;
+	height: 26px;
+	border-radius: 999px;
+	color: var(--MI_THEME-fgTransparentWeak);
+	font-size: 0.85em;
+	opacity: 0.7;
+
+	&:hover {
+		opacity: 1;
+		color: var(--MI_THEME-fg);
+		background: color-mix(in srgb, var(--MI_THEME-fg) 8%, transparent);
+	}
+}
+
+/* ---- Aliya Web 常驻推荐板块 ---- */
+.aliyaPanel {
+	display: flex;
+	align-items: flex-start;
+	gap: 14px;
+	padding: 14px 16px;
+	border-radius: var(--MI-radius);
+	border: 1px solid color-mix(in srgb, var(--MI_THEME-accent) 14%, var(--MI_THEME-divider));
+	background: color-mix(in srgb, var(--MI_THEME-accent) 4%, var(--MI_THEME-panel));
+}
+
+.aliyaPanelIcon {
+	display: grid;
+	place-items: center;
+	width: 40px;
+	height: 40px;
+	flex-shrink: 0;
+	border-radius: 12px;
+	background: color-mix(in srgb, var(--MI_THEME-accent) 14%, transparent);
+	color: var(--MI_THEME-accent);
+	font-size: 1.25em;
+}
+
+.aliyaPanelContent {
+	flex: 1;
+	min-width: 0;
+}
+
+.aliyaPanelTitle {
+	font-weight: 700;
+	font-size: 0.95em;
+	line-height: 1.4;
+}
+
+.aliyaPanelDesc {
+	margin-top: 3px;
+	font-size: 0.82em;
+	line-height: 1.55;
+	color: var(--MI_THEME-fgTransparentWeak);
+}
+
+.aliyaPanelLink {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	margin-top: 10px;
+	padding: 5px 14px;
+	border-radius: 999px;
+	border: 1px solid color-mix(in srgb, var(--MI_THEME-accent) 45%, transparent);
+	color: var(--MI_THEME-accent);
+	font-size: 0.84em;
+	font-weight: 700;
+	text-decoration: none;
+	transition: background 0.15s, color 0.15s;
+
+	&:hover {
+		background: var(--MI_THEME-accent);
+		color: var(--MI_THEME-fgOnAccent, #fff);
+	}
 }
 </style>
