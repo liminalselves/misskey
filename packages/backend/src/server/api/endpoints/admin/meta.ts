@@ -614,6 +614,34 @@ export const meta = {
 				type: 'string',
 				optional: false, nullable: true,
 			},
+			agentProactiveRandomDefaultEnabled: {
+				type: 'boolean',
+				optional: false, nullable: false,
+			},
+			agentProactiveScheduledDefaultEnabled: {
+				type: 'boolean',
+				optional: false, nullable: false,
+			},
+			agentProactiveMinSilenceMinutes: {
+				type: 'number',
+				optional: false, nullable: false,
+			},
+			agentProactiveMaxWindowMinutes: {
+				type: 'number',
+				optional: false, nullable: false,
+			},
+			agentProactiveDaytimeWeight: {
+				type: 'number',
+				optional: false, nullable: false,
+			},
+			agentProactiveRecencyBias: {
+				type: 'number',
+				optional: false, nullable: false,
+			},
+			agentMigrationKeyConfigured: {
+				type: 'boolean',
+				optional: false, nullable: false,
+			},
 			useObjectStorage: {
 				type: 'boolean',
 				optional: false, nullable: false,
@@ -1117,6 +1145,13 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					: DEFAULT_AGENT_EXTERNAL_AUDIT_SYSTEM_PROMPT,
 				agentCheckinSettings: instance.agentCheckinSettings ?? null,
 				agentRedeemPurchaseUrl: instance.agentRedeemPurchaseUrl ?? null,
+				agentProactiveRandomDefaultEnabled: instance.agentProactiveRandomDefaultEnabled,
+				agentProactiveScheduledDefaultEnabled: instance.agentProactiveScheduledDefaultEnabled,
+				agentProactiveMinSilenceMinutes: instance.agentProactiveMinSilenceMinutes,
+				agentProactiveMaxWindowMinutes: instance.agentProactiveMaxWindowMinutes,
+				agentProactiveDaytimeWeight: instance.agentProactiveDaytimeWeight,
+				agentProactiveRecencyBias: instance.agentProactiveRecencyBias,
+				agentMigrationKeyConfigured: instance.agentMigrationKeyHash != null,
 				useObjectStorage: instance.useObjectStorage,
 				objectStorageBaseUrl: instance.objectStorageBaseUrl,
 				objectStorageBucket: instance.objectStorageBucket,

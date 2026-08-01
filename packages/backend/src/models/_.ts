@@ -38,6 +38,7 @@ import { MiAgentRedeemCode } from '@/models/AgentRedeemCode.js';
 import { MiAgentSession } from '@/models/AgentSession.js';
 import { MiAgentSessionCompressionSticky } from '@/models/AgentSessionCompressionSticky.js';
 import { MiAgentPublishedVersion } from '@/models/AgentPublishedVersion.js';
+import { MiAgentCreditMigration } from '@/models/AgentCreditMigration.js';
 import { MiChatApproval } from '@/models/ChatApproval.js';
 import { MiChatMessage } from '@/models/ChatMessage.js';
 import { MiChatRoom } from '@/models/ChatRoom.js';
@@ -201,6 +202,7 @@ export {
 	MiAgentCheckinRecord,
 	MiAgentRedeemCode,
 	MiAgentPublishedVersion,
+	MiAgentCreditMigration,
 	MiBubbleGameRecord,
 	MiReversiGame,
 };
@@ -298,3 +300,4 @@ export type AgentCheckinRecordsRepository = Repository<MiAgentCheckinRecord> & M
 export type AgentRedeemCodesRepository = Repository<MiAgentRedeemCode> & MiRepository<MiAgentRedeemCode>;
 export type AgentSessionCompressionStickyRepository = Repository<MiAgentSessionCompressionSticky> & MiRepository<MiAgentSessionCompressionSticky>;
 export type AgentPublishedVersionsRepository = Repository<MiAgentPublishedVersion> & MiRepository<MiAgentPublishedVersion>;
+export type AgentCreditMigrationsRepository = Repository<MiAgentCreditMigration> & MiRepository<MiAgentCreditMigration>;

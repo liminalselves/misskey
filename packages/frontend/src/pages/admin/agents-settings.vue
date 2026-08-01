@@ -626,6 +626,54 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</MkFolder>
 			</template>
 
+			<template v-if="activeTab === 'migration'">
+				<MkFolder :defaultOpen="true">
+					<template #icon><i class="ti ti-key"></i></template>
+					<template #label>系统授权 Key</template>
+					<div class="_gaps">
+						<MkInfo>用于旧版服务调用额度迁移接口时的身份验证。Key 生成后仅展示一次，请妥善保存。重新生成将使旧 Key 立即失效。</MkInfo>
+						<div :class="$style.migrationKeyStatus">
+							<span :class="[$style.migrationKeyDot, migrationKeyExists ? $style.migrationKeyDotActive : null]"></span>
+							<span>{{ migrationKeyExists ? '已生成' : '未生成' }}</span>
+						</div>
+						<MkButton primary rounded :disabled="migrationKeyGenerating" @click="generateMigrationKey">
+							<i class="ti ti-refresh"></i> {{ migrationKeyExists ? '重新生成' : '生成 Key' }}
+						</MkButton>
+					</div>
+				</MkFolder>
+
+				<MkFolder :defaultOpen="true">
+					<template #icon><i class="ti ti-history"></i></template>
+					<template #label>迁移日志</template>
+					<div class="_gaps">
+						<div class="_buttons">
+							<MkButton rounded :disabled="migrationLogsLoading" @click="loadMigrationLogs"><i class="ti ti-refresh"></i> 刷新</MkButton>
+						</div>
+						<MkLoading v-if="migrationLogsLoading"/>
+						<div v-else-if="migrationLogs.length === 0" :class="$style.emptyModels">暂无迁移记录</div>
+						<div v-else :class="$style.simpleTable">
+							<div :class="[$style.simpleRow, $style.simpleHeadRow]">
+								<span>时间</span>
+								<span>目标用户</span>
+								<span>金额</span>
+								<span>状态</span>
+								<span>来源</span>
+								<span>操作者</span>
+							</div>
+							<div v-for="row in migrationLogs" :key="row.id" :class="$style.simpleRow">
+								<span>{{ new Date(row.createdAt).toLocaleString() }}</span>
+								<span><MkUserName v-if="row.targetUser" :user="row.targetUser"/><template v-else>—</template></span>
+								<span :class="$style.migrationAmount">+{{ row.amount.toFixed(2) }}</span>
+								<span>{{ row.status === 'success' ? '成功' : '失败' }}</span>
+								<span>{{ row.sourceInfo || '—' }}</span>
+								<span><MkUserName v-if="row.operator" :user="row.operator"/><template v-else>—</template></span>
+							</div>
+						</div>
+						<MkButton v-if="migrationLogs.length > 0 && migrationLogs.length % 30 === 0" rounded @click="loadMoreMigrationLogs"><i class="ti ti-chevron-down"></i> 加载更多</MkButton>
+					</div>
+				</MkFolder>
+			</template>
+
 			<template v-if="activeTab === 'reports'">
 				<!-- 报表分类切换：仅切换视图区域，不触发路由跳转 -->
 				<div :class="$style.reportTabRow">
@@ -682,7 +730,40 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</KeepAlive>
 			</template>
 
-			<div v-if="form.modified.value && ['basic', 'models', 'memory', 'compression', 'externalAudit', 'images', 'vision', 'credits'].includes(activeTab)" :class="$style.saveBar">
+			<MkFolder v-if="activeTab === 'proactive'" :defaultOpen="true">
+				<template #icon><i class="ti ti-message-chatbot"></i></template>
+				<template #label>主动消息默认设置</template>
+				<div class="_gaps">
+					<MkInfo>以下设置作为新建智能体会话的默认值。用户可在各会话中单独覆盖。</MkInfo>
+					<MkSwitch v-model="form.state.agentProactiveRandomDefaultEnabled">
+						<template #label>随机主动消息默认开启</template>
+						<template #caption>新建会话时是否默认启用随机主动消息（需同时开启时间感知）</template>
+					</MkSwitch>
+					<MkSwitch v-model="form.state.agentProactiveScheduledDefaultEnabled">
+						<template #label>定时主动消息默认开启</template>
+						<template #caption>新建会话时是否默认启用定时主动消息（需同时开启时间感知）</template>
+					</MkSwitch>
+					<hr>
+					<MkInput v-model="form.state.agentProactiveMinSilenceMinutes" type="text">
+						<template #label>最小静默时间（分钟）</template>
+						<template #caption>助手回复后至少等待多久才可能发送随机主动消息，范围 5–1440</template>
+					</MkInput>
+					<MkInput v-model="form.state.agentProactiveMaxWindowMinutes" type="text">
+						<template #label>最大等待窗口（分钟）</template>
+						<template #caption>从最小静默时间起，在多大的时间窗口内随机选取发送时刻，范围 30–10080（7 天）</template>
+					</MkInput>
+					<MkInput v-model="form.state.agentProactiveDaytimeWeight" type="text">
+						<template #label>白天权重倍率</template>
+						<template #caption>北京时间 08:00–22:00 时段被选中的权重相对于夜间的倍数，范围 1–10</template>
+					</MkInput>
+					<MkInput v-model="form.state.agentProactiveRecencyBias" type="text">
+						<template #label>近期偏好系数</template>
+						<template #caption>取值 1–10。1 = 窗口内均匀分布；值越大越偏向近期时间点发送</template>
+					</MkInput>
+				</div>
+			</MkFolder>
+
+			<div v-if="form.modified.value && ['basic', 'models', 'memory', 'compression', 'externalAudit', 'images', 'vision', 'credits', 'proactive'].includes(activeTab)" :class="$style.saveBar">
 				<MkFormFooter :form="form"/>
 			</div>
 		</div>
@@ -1071,6 +1152,12 @@ const form = useForm({
 	checkinMakeupCostIncrement: String((meta as any).agentCheckinSettings?.makeupCostIncrement ?? 10),
 	checkinMakeupAllowedWindowDays: String((meta as any).agentCheckinSettings?.makeupAllowedWindowDays ?? 7),
 	agentRedeemPurchaseUrl: typeof meta.agentRedeemPurchaseUrl === 'string' ? meta.agentRedeemPurchaseUrl : '',
+	agentProactiveRandomDefaultEnabled: Boolean(meta.agentProactiveRandomDefaultEnabled ?? false),
+	agentProactiveScheduledDefaultEnabled: Boolean(meta.agentProactiveScheduledDefaultEnabled ?? false),
+	agentProactiveMinSilenceMinutes: String(numFromMeta(meta.agentProactiveMinSilenceMinutes, 30)),
+	agentProactiveMaxWindowMinutes: String(numFromMeta(meta.agentProactiveMaxWindowMinutes, 1410)),
+	agentProactiveDaytimeWeight: String(numFromMeta(meta.agentProactiveDaytimeWeight, 3)),
+	agentProactiveRecencyBias: String(numFromMeta(meta.agentProactiveRecencyBias, 1)),
 }, async (state) => {
 	type Normalized = {
 		id: string;
@@ -1430,6 +1517,12 @@ const form = useForm({
 			makeupAllowedWindowDays: Number(state.checkinMakeupAllowedWindowDays) || 7,
 		},
 		agentRedeemPurchaseUrl: state.agentRedeemPurchaseUrl.trim() === '' ? null : state.agentRedeemPurchaseUrl.trim(),
+		agentProactiveRandomDefaultEnabled: state.agentProactiveRandomDefaultEnabled,
+		agentProactiveScheduledDefaultEnabled: state.agentProactiveScheduledDefaultEnabled,
+		agentProactiveMinSilenceMinutes: Math.max(5, Math.min(1440, Number(state.agentProactiveMinSilenceMinutes) || 30)),
+		agentProactiveMaxWindowMinutes: Math.max(30, Math.min(10080, Number(state.agentProactiveMaxWindowMinutes) || 1410)),
+		agentProactiveDaytimeWeight: Math.max(1, Math.min(10, Number(state.agentProactiveDaytimeWeight) || 3)),
+		agentProactiveRecencyBias: Math.max(1, Math.min(10, Number(state.agentProactiveRecencyBias) || 1)),
 	} as Record<string, unknown>);
 	fetchInstance(true);
 });
@@ -1548,6 +1641,73 @@ const generatedCodes = ref<{ id: string; code: string; creditAmount: number }[]>
 const redeemLoading = ref(false);
 const redeemCodes = ref<RedeemCodeRow[]>([]);
 const redeemStatus = ref<'available' | 'redeemed' | 'expired' | 'revoked' | 'all'>('available');
+
+// === 迁移 Tab ===
+const migrationKeyExists = ref(Boolean(meta.agentMigrationKeyConfigured));
+const migrationKeyGenerating = ref(false);
+const migrationLogsLoading = ref(false);
+const migrationLogs = ref<{
+	id: string;
+	createdAt: string;
+	targetUser: any | null;
+	amount: number;
+	requestId: string | null;
+	sourceInfo: string | null;
+	operator: any | null;
+	status: string;
+	failReason: string | null;
+}[]>([]);
+
+async function generateMigrationKey() {
+	const { canceled } = await os.confirm({
+		type: 'warning',
+		title: migrationKeyExists.value ? '重新生成系统授权 Key' : '生成系统授权 Key',
+		text: migrationKeyExists.value
+			? '重新生成将使旧 Key 立即失效，旧版服务将无法继续使用旧 Key 进行迁移。确认继续？'
+			: '生成后 Key 仅展示一次，请妥善保存。确认继续？',
+	});
+	if (canceled) return;
+	migrationKeyGenerating.value = true;
+	try {
+		const res = await misskeyApi('admin/agents/credits/migration/generate-key' as any, {}) as { key: string };
+		migrationKeyExists.value = true;
+		await os.alert({
+			type: 'success',
+			title: '系统授权 Key 已生成',
+			text: `请立即复制保存，关闭后将无法再次查看：\n\n${res.key}`,
+		});
+		await copyToClipboard(res.key);
+		os.alert({ type: 'info', text: 'Key 已复制到剪贴板' });
+	} catch (err) {
+		os.alert({ type: 'error', text: formatApiError(err) });
+	}
+	migrationKeyGenerating.value = false;
+}
+
+async function loadMigrationLogs(append = false) {
+	migrationLogsLoading.value = true;
+	try {
+		const untilId = append && migrationLogs.value.length > 0
+			? migrationLogs.value[migrationLogs.value.length - 1].id
+			: undefined;
+		const res = await misskeyApi('admin/agents/credits/migration/logs' as any, {
+			limit: 30,
+			untilId,
+		}) as typeof migrationLogs.value;
+		if (append) {
+			migrationLogs.value.push(...res);
+		} else {
+			migrationLogs.value = res;
+		}
+	} catch (err) {
+		os.alert({ type: 'error', text: formatApiError(err) });
+	}
+	migrationLogsLoading.value = false;
+}
+
+function loadMoreMigrationLogs() {
+	void loadMigrationLogs(true);
+}
 
 const agentVisionDefaultItems = computed(() => [
 	{ value: '', label: i18n.ts.none },
@@ -1904,9 +2064,17 @@ const headerTabs = computed(() => [{
 	title: '额度',
 	icon: 'ti ti-ticket',
 }, {
+	key: 'migration',
+	title: '迁移',
+	icon: 'ti ti-transfer',
+}, {
 	key: 'checkin',
 	title: '签到',
 	icon: 'ti ti-calendar-check',
+}, {
+	key: 'proactive',
+	title: '主动消息',
+	icon: 'ti ti-message-chatbot',
 }, {
 	key: 'reports',
 	title: '报表',
@@ -1928,6 +2096,7 @@ watch(activeTab, tab => {
 	if (tab === 'overview' && reportsData.value == null) void loadReports();
 	if (tab === 'externalAudit' && externalAuditStats.value.length === 0) void loadExternalAuditStats();
 	if (tab === 'credits' && redeemCodes.value.length === 0) void loadRedeemCodes();
+	if (tab === 'migration' && migrationLogs.value.length === 0) void loadMigrationLogs();
 	if (tab === 'reports' && reportsData.value == null) void loadReports();
 	if (tab === 'checkin' && roleItems.value.length === 0) void loadRolesForCheckin();
 });
@@ -2320,5 +2489,31 @@ onMounted(() => {
 	color: var(--MI_THEME-error);
 	cursor: pointer;
 	&:hover { background: color-mix(in srgb, var(--MI_THEME-error) 10%, transparent); }
+}
+
+.migrationKeyStatus {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	font-size: 0.95em;
+	color: var(--MI_THEME-fg);
+}
+
+.migrationKeyDot {
+	width: 10px;
+	height: 10px;
+	border-radius: 50%;
+	background: var(--MI_THEME-fgTransparentWeak);
+}
+
+.migrationKeyDotActive {
+	background: var(--MI_THEME-success);
+	box-shadow: 0 0 6px color-mix(in srgb, var(--MI_THEME-success) 50%, transparent);
+}
+
+.migrationAmount {
+	color: var(--MI_THEME-success);
+	font-weight: 600;
+	font-variant-numeric: tabular-nums;
 }
 </style>

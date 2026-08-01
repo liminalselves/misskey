@@ -1185,6 +1185,49 @@ export class MiMeta {
 		default: null,
 	})
 	public agentRedeemPurchaseUrl: string | null;
+
+	/** 新建会话时随机主动消息是否默认开启 */
+	@Column('boolean', {
+		default: false,
+	})
+	public agentProactiveRandomDefaultEnabled: boolean;
+
+	/** 新建会话时定时主动消息是否默认开启 */
+	@Column('boolean', {
+		default: false,
+	})
+	public agentProactiveScheduledDefaultEnabled: boolean;
+
+	/** 随机主动消息最小静默时间（分钟），默认 30 */
+	@Column('integer', {
+		default: 30,
+	})
+	public agentProactiveMinSilenceMinutes: number;
+
+	/** 随机主动消息最大等待窗口（分钟），默认 1410（23.5 小时） */
+	@Column('integer', {
+		default: 1410,
+	})
+	public agentProactiveMaxWindowMinutes: number;
+
+	/** 随机主动消息白天权重倍率（08:00–22:00 北京时间），默认 3 */
+	@Column('integer', {
+		default: 3,
+	})
+	public agentProactiveDaytimeWeight: number;
+
+	/** 随机主动消息近期偏好系数，1=均匀分布，越大越偏向近期，默认 1 */
+	@Column('integer', {
+		default: 1,
+	})
+	public agentProactiveRecencyBias: number;
+
+	/** 额度迁移系统授权 Key 的 SHA-256 哈希 */
+	@Column('varchar', {
+		length: 128, nullable: true,
+		default: null,
+	})
+	public agentMigrationKeyHash: string | null;
 }
 
 export type AgentCheckinSettings = {
