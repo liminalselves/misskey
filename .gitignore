@@ -85,3 +85,4 @@ vite.config.local-dev.ts.timestamp-*
 .favorites.json
 .cursor
 .kilo
+.qoder

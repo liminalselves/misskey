@@ -263,18 +263,15 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					}
 				}
 			}
-			const callCost = this.agentService.getUserFacingModelCostPerCall(instanceMeta, session.agentModelId);
-			if (callCost > 0 && !await this.agentModelUsageService.hasFreeQuotaRemaining(me.id, session.agentModelId, instanceMeta)) {
-				const profile = await this.userProfilesRepository.findOneBy({ userId: me.id });
-				if ((profile?.agentCreditBalance ?? 0) < callCost) {
-					throw new ApiError({
-						message: 'Insufficient agent model credit for this call.',
-						code: 'AGENT_INSUFFICIENT_CREDIT',
-						id: 'd7e8f9a0-b1c2-4567-8901-123456789abc',
-						kind: 'client',
-						httpStatusCode: 402,
-					});
-				}
+			// 余额预检（发信/压缩侧车/主动消息共用口径）：usage 按量模式要求余额 > 0；per_call 要求余额 >= 按次价；免费额度剩余时放行
+			if (!await this.agentModelUsageService.canAffordModelCall(instanceMeta, session.agentModelId, me.id)) {
+				throw new ApiError({
+					message: 'Insufficient agent model credit for this call.',
+					code: 'AGENT_INSUFFICIENT_CREDIT',
+					id: 'd7e8f9a0-b1c2-4567-8901-123456789abc',
+					kind: 'client',
+					httpStatusCode: 402,
+				});
 			}
 
 			const now = new Date();
@@ -471,13 +468,21 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					selectedWorldbook,
 				);
 
-				const rawAssistantText = await this.agentService.invokeChatCompletions({
+				const llmResult = await this.agentService.invokeChatCompletions({
 					system,
 					messages: pairs,
 					userText: wrappedUserText,
 					sessionModelId: session.agentModelId ?? null,
 					externalAbortSignal: abortController.signal,
 				});
+				const rawAssistantText = llmResult.text;
+				// 计费 token 数一律取自响应 usage（禁止本地估算）；缺失时由 finishLog 按策略兜底
+				const llmUsageFields = llmResult.usage ? {
+					promptTokens: llmResult.usage.promptTokens,
+					completionTokens: llmResult.usage.completionTokens,
+					promptCacheHitTokens: llmResult.usage.promptCacheHitTokens ?? null,
+					promptCacheMissTokens: llmResult.usage.promptCacheMissTokens ?? null,
+				} : {};
 				const proactiveControl = this.agentProactiveScheduleService.extractControl(rawAssistantText);
 				const assistantText = proactiveControl.visibleContent;
 				const hasVisibleAssistantText = assistantText.trim().length > 0;
@@ -502,7 +507,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					session.updatedAt = blockedAt;
 					session.agentReplyPending = false;
 					await this.agentSessionsRepository.save(session);
-					await this.agentModelUsageService.finishLog(usageLog, instanceMeta, { status: 'success' });
+					await this.agentModelUsageService.finishLog(usageLog, instanceMeta, { status: 'success', ...llmUsageFields });
 					return {
 						userMessageId: null,
 						assistantMessageId: null,
@@ -632,7 +637,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 						.catch(() => { /* 压缩为侧车，不阻断主回复 */ });
 				}
 
-				await this.agentModelUsageService.finishLog(usageLog, instanceMeta, { status: 'success' });
+				await this.agentModelUsageService.finishLog(usageLog, instanceMeta, { status: 'success', ...llmUsageFields });
 
 				return {
 					userMessageId: userMsg.id,

@@ -7,6 +7,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { getEncoding, type Tiktoken, type TiktokenEncoding } from 'js-tiktoken';
 import { bindThis } from '@/decorators.js';
 import { getEffectiveLlmModels } from '@/misc/agent-llm-models.js';
+import { loadCustomTiktokenTokenizer, resolveTokenizerDirs, GLM_DEFAULT_PAT_STR, type CustomTokenizerFamily } from '@/misc/agent-custom-tokenizers.js';
 import type { MiMeta } from '@/models/Meta.js';
 
 // ─────────────────────────────────────────────────────────────
@@ -29,11 +30,50 @@ export const AGENT_SEND_PATH_SCAN_LIMIT = 500;
 /** Gemini tokenizer 前缀标识 */
 export const GEMINI_ENCODING_PREFIX = 'gemini:';
 
+/** GLM 系列（智谱 ChatGLM / GLM）前缀标识 */
+export const GLM_ENCODING_PREFIX = 'glm:';
+/** DeepSeek 系列前缀标识 */
+export const DEEPSEEK_ENCODING_PREFIX = 'deepseek:';
+/** Claude 系列（Anthropic）前缀标识 */
+export const CLAUDE_ENCODING_PREFIX = 'claude:';
+
+/**
+ * 兼容近似编码注册表（回退用）：原生分词器不可用时，改用词表分布最接近的 cl100k_base 做 BPE 近似计数。
+ *
+ * - GLM / DeepSeek：优先走真分词器（见 {@link REAL_TOKENIZER_FAMILIES}）；词表缺失时降级到本表 cl100k 近似；
+ * - Claude（Anthropic 专有、词表未公开）：无真分词器，恒走 cl100k 近似。
+ * approx 模式计数结果展示层标注 ≈（区别于真精确的 exact）。cl100k_base 对中文略偏保守
+ * （计数偏高），用于预算口径时偏安全（宁可少填历史、预留余量）。
+ * 前缀后的型号名仅作管理端标识用途，近似计数只依据前缀映射。
+ */
+const APPROX_FAMILY_ENCODINGS: readonly { prefix: string; tiktoken: TiktokenEncoding }[] = [
+	{ prefix: GLM_ENCODING_PREFIX, tiktoken: 'cl100k_base' },
+	{ prefix: DEEPSEEK_ENCODING_PREFIX, tiktoken: 'cl100k_base' },
+	{ prefix: CLAUDE_ENCODING_PREFIX, tiktoken: 'cl100k_base' },
+];
+
+/**
+ * 支持「真本地分词器」的模型系列（js-tiktoken 加载自定义 BPE 词表，精确计数）。
+ * 词表文件在镜像构建期预置（见 Dockerfile）或放入 data/tokenizers；缺失时计数自动
+ * 降级到 {@link APPROX_FAMILY_ENCODINGS} 的兼容近似（模式由 exact 降为 approx）。
+ * fallbackPatStr 仅在侧车配置未提供 pat_str 时生效（GLM 本身即 cl100k 正则；DeepSeek 由其 .json 提供）。
+ */
+const REAL_TOKENIZER_FAMILIES: readonly { prefix: string; family: CustomTokenizerFamily; fallbackPatStr: string }[] = [
+	{ prefix: GLM_ENCODING_PREFIX, family: 'glm', fallbackPatStr: GLM_DEFAULT_PAT_STR },
+	{ prefix: DEEPSEEK_ENCODING_PREFIX, family: 'deepseek', fallbackPatStr: GLM_DEFAULT_PAT_STR },
+];
+
 // ─────────────────────────────────────────────────────────────
 // 共享类型
 // ─────────────────────────────────────────────────────────────
 
-export type TokenMode = 'exact' | 'estimate';
+/**
+ * token 计数模式：
+ * - exact：本地真分词器（js-tiktoken 内置编码 / Gemini LocalTokenizer / GLM・DeepSeek 自定义词表）；
+ * - approx：模型系列无可用真分词器，用兼容 tiktoken 编码近似计数（展示 ≈）；
+ * - estimate：纯字符估算（chars ÷ charsPerToken）。
+ */
+export type TokenMode = 'exact' | 'approx' | 'estimate';
 
 /** 上下文区带：窗内·新 / 排队较前 / 排队较后 / 窗户外 */
 export type TokenBand = 'new' | 'prep' | 'staged' | 'out';
@@ -93,7 +133,7 @@ export interface WindowBands {
  * 以保证「上下文边界分割线」与「消息分段区带」结构性一致（同一 D 累计 + 同一预算阈值）。
  *
  * 分层：
- * 1. 计数层：estimateTokens（O(1) 估算）/ countTokensExact（tiktoken / Gemini LocalTokenizer）
+ * 1. 计数层：estimateTokens（O(1) 估算）/ countTokensExact（tiktoken / Gemini LocalTokenizer / GLM・DeepSeek・Claude 兼容近似）
  * 2. 配置解析：resolveTokenConfig（统一模型编码解析）
  * 3. 计数器工厂：makeCounter
  * 4. 预算求解：resolveHistoryBudgets（字符/token 双视图同源导出）
@@ -104,6 +144,8 @@ export interface WindowBands {
 export class AgentTokenService {
 	private readonly logger = new Logger(AgentTokenService.name);
 	private encodingCache = new Map<string, Tiktoken>();
+	/** 自定义真分词器记忆化：undefined=尚未解析；null=词表缺失/失败（回退 approx）；Tiktoken=已加载 */
+	private customTokenizerCache = new Map<CustomTokenizerFamily, Tiktoken | null>();
 	private geminiTokenizerCache = new Map<string, { countTokens: (text: string) => Promise<{ totalTokens: number }> }>();
 	private geminiInitPromises = new Map<string, Promise<void>>();
 	/** 初始化失败的模型（如不受支持的型号），避免逐条重试与日志洪泛 */
@@ -123,7 +165,9 @@ export class AgentTokenService {
 
 	/**
 	 * 精确 token 计数。
-	 * @param encoding tiktoken 编码名（如 "cl100k_base"）或 Gemini 模型（如 "gemini:gemini-2.0-flash-001"）
+	 * @param encoding tiktoken 编码名（如 "cl100k_base"）、Gemini 模型（如 "gemini:gemini-2.0-flash-001"），
+	 *                 或 GLM/DeepSeek/Claude 前缀（如 "glm:glm-4-plus"：GLM/DeepSeek 词表存在时真精确，
+	 *                 否则与 Claude 一道按 cl100k_base 近似）
 	 * @returns token 数，或 null（编码不可用时回退估算）
 	 */
 	@bindThis
@@ -131,6 +175,23 @@ export class AgentTokenService {
 		if (!encoding) return null;
 		if (encoding.startsWith(GEMINI_ENCODING_PREFIX)) {
 			return this.countTokensGemini(text, encoding.slice(GEMINI_ENCODING_PREFIX.length));
+		}
+		const real = this.resolveRealTokenizer(encoding);
+		if (real) {
+			try {
+				// 允许全部特殊 token、不禁任何特殊 token，避免消息正文偶含特殊串时抛错
+				return real.encode(text, 'all', []).length;
+			} catch {
+				// 真分词器偶发异常：降级到下方兼容近似，而非直接 null
+			}
+		}
+		const approxTiktoken = this.resolveApproxTiktoken(encoding);
+		if (approxTiktoken) {
+			try {
+				return this.getTiktokenEncoding(approxTiktoken).encode(text).length;
+			} catch {
+				return null;
+			}
 		}
 		try {
 			const enc = this.getTiktokenEncoding(encoding);
@@ -140,13 +201,14 @@ export class AgentTokenService {
 		}
 	}
 
-	/** 判断编码是否可用（tiktoken 与 gemini: 前缀）。 */
+	/** 判断编码是否可用（tiktoken 内置、gemini: 前缀，以及 glm:/deepseek:/claude: 兼容近似前缀）。 */
 	@bindThis
 	public isEncodingAvailable(encoding?: string | null): boolean {
 		if (!encoding) return false;
 		if (encoding.startsWith(GEMINI_ENCODING_PREFIX)) {
 			return encoding.length > GEMINI_ENCODING_PREFIX.length;
 		}
+		if (this.resolveApproxTiktoken(encoding)) return true;
 		try {
 			this.getTiktokenEncoding(encoding);
 			return true;
@@ -177,16 +239,16 @@ export class AgentTokenService {
 			? pick.charsPerToken!
 			: AGENT_LLM_APPROX_CHARS_PER_TOKEN;
 		const encoding = pick?.tokenizerEncoding;
-		const tokenMode: TokenMode = this.isEncodingAvailable(encoding) ? 'exact' : 'estimate';
+		const tokenMode = this.resolveTokenMode(encoding);
 		return { charsPerToken, encoding, tokenMode };
 	}
 
 	// ── 3. 计数器工厂 ──────────────────────────────────────
 
-	/** exact 模式返回精确计数器；estimate 模式返回 undefined。 */
+	/** exact / approx 模式返回计数器（approx 为兼容编码近似）；estimate 模式返回 undefined。 */
 	@bindThis
 	public makeCounter(config: TokenConfig): TokenCounter | undefined {
-		if (config.tokenMode !== 'exact' || !config.encoding) return undefined;
+		if ((config.tokenMode !== 'exact' && config.tokenMode !== 'approx') || !config.encoding) return undefined;
 		const encoding = config.encoding;
 		return (text: string) => this.countTokensExact(text, encoding);
 	}
@@ -383,6 +445,68 @@ export class AgentTokenService {
 	}
 
 	// ── 私有：tokenizer 缓存 ───────────────────────────────
+
+	/** 解析 approx 系列前缀对应的兼容 tiktoken 编码；非 approx 前缀或型号名为空时返回 null */
+	private resolveApproxTiktoken(encoding: string): TiktokenEncoding | null {
+		for (const family of APPROX_FAMILY_ENCODINGS) {
+			if (encoding.startsWith(family.prefix) && encoding.length > family.prefix.length) {
+				return family.tiktoken;
+			}
+		}
+		return null;
+	}
+
+	/** 匹配真分词器系列前缀；不匹配或型号名为空时返回 null */
+	private matchRealFamily(encoding: string): { family: CustomTokenizerFamily; fallbackPatStr: string } | null {
+		for (const entry of REAL_TOKENIZER_FAMILIES) {
+			if (encoding.startsWith(entry.prefix) && encoding.length > entry.prefix.length) {
+				return { family: entry.family, fallbackPatStr: entry.fallbackPatStr };
+			}
+		}
+		return null;
+	}
+
+	/** 解析编码对应的真分词器（加载自定义词表）；不匹配或词表缺失时返回 null（调用方回退兼容近似） */
+	private resolveRealTokenizer(encoding: string): Tiktoken | null {
+		const matched = this.matchRealFamily(encoding);
+		if (!matched) return null;
+		return this.getCustomTokenizer(matched.family, matched.fallbackPatStr);
+	}
+
+	/** 懒加载并记忆化某系列真分词器（同步读词表文件）；词表缺失返回 null */
+	private getCustomTokenizer(family: CustomTokenizerFamily, fallbackPatStr: string): Tiktoken | null {
+		const cached = this.customTokenizerCache.get(family);
+		if (cached !== undefined) return cached;
+		const loaded = loadCustomTiktokenTokenizer(family, fallbackPatStr);
+		if (loaded) {
+			this.customTokenizerCache.set(family, loaded.tokenizer);
+			this.logger.log(`Custom tokenizer for "${family}" loaded from ${loaded.sourcePath}`);
+			return loaded.tokenizer;
+		}
+		this.customTokenizerCache.set(family, null);
+		this.logger.warn(`Custom tokenizer vocab for "${family}" not found (searched: ${resolveTokenizerDirs().join(', ')}); falling back to cl100k_base approximation`);
+		return null;
+	}
+
+	/** 由编码解析计数模式：exact（本地真分词器）/ approx（兼容编码近似）/ estimate（字符估算） */
+	private resolveTokenMode(encoding?: string): TokenMode {
+		if (!encoding) return 'estimate';
+		if (encoding.startsWith(GEMINI_ENCODING_PREFIX)) {
+			return encoding.length > GEMINI_ENCODING_PREFIX.length ? 'exact' : 'estimate';
+		}
+		const realFamily = this.matchRealFamily(encoding);
+		if (realFamily) {
+			// GLM/DeepSeek：词表已预置 → 真精确；缺失 → 降级 cl100k 近似
+			return this.getCustomTokenizer(realFamily.family, realFamily.fallbackPatStr) ? 'exact' : 'approx';
+		}
+		if (this.resolveApproxTiktoken(encoding)) return 'approx';
+		try {
+			this.getTiktokenEncoding(encoding);
+			return 'exact';
+		} catch {
+			return 'estimate';
+		}
+	}
 
 	private async countTokensGemini(text: string, modelName: string): Promise<number | null> {
 		if (this.geminiFailedModels.has(modelName)) return null;

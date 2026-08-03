@@ -35,6 +35,17 @@ SPDX-License-Identifier: AGPL-3.0-only
 						<b>{{ reportSuccessRate }}</b>
 					</div>
 				</div>
+
+				<!-- 词表缺失告警 -->
+				<div v-if="missingTokenizers.length > 0" class="_gaps_s">
+					<MkInfo v-for="t in missingTokenizers" :key="t.family" warn>
+						<i class="ti ti-alert-triangle"></i>
+						<strong>{{ tokenizerFamilyLabel(t.family) }}</strong> 分词器词表缺失，将回退到兼容近似计数（≈）。
+						<br>
+						<small>请将词表文件放入 <code>data/tokenizers/</code> 目录（开发环境）或通过 Docker 构建时自动下载。</small>
+					</MkInfo>
+				</div>
+
 				<div :class="$style.quickGrid">
 					<MkButton rounded @click="activeTab = 'models'"><i class="ti ti-cpu"></i> 模型管理</MkButton>
 					<MkButton rounded @click="activeTab = 'credits'"><i class="ti ti-ticket"></i> 额度与卡密</MkButton>
@@ -129,7 +140,40 @@ SPDX-License-Identifier: AGPL-3.0-only
 								<template #label>{{ i18n.ts._agents.maxOutputTokens }}</template>
 							</MkInput>
 						</FormSplit>
-						<MkInput v-model="row.costPerCall" type="text" :readonly="row.unlisted">
+						<MkSelect v-model="row.billingMode" :items="billingModeItems" :readonly="row.unlisted">
+							<template #label>{{ i18n.ts._agents.billingMode }}</template>
+							<template #caption>{{ i18n.ts._agents.billingModeCaption }}</template>
+						</MkSelect>
+						<template v-if="row.billingMode === 'usage'">
+							<FormSplit :minWidth="200">
+								<MkInput v-model="row.pricePerMillionInputCacheHitTokens" type="text" :readonly="row.unlisted">
+									<template #label>{{ i18n.ts._agents.billingInputCacheHit }}</template>
+									<template #caption>{{ i18n.ts._agents.billingPerMillionTokens }}</template>
+									<template #prefix><i class="ti ti-coin"></i></template>
+								</MkInput>
+								<MkInput v-model="row.pricePerMillionInputCacheMissTokens" type="text" :readonly="row.unlisted">
+									<template #label>{{ i18n.ts._agents.billingInputCacheMiss }}</template>
+									<template #caption>{{ i18n.ts._agents.billingPerMillionTokens }}</template>
+									<template #prefix><i class="ti ti-coin"></i></template>
+								</MkInput>
+								<MkInput v-model="row.pricePerMillionOutputTokens" type="text" :readonly="row.unlisted">
+									<template #label>{{ i18n.ts._agents.billingOutput }}</template>
+									<template #caption>{{ i18n.ts._agents.billingPerMillionTokens }}</template>
+									<template #prefix><i class="ti ti-coin"></i></template>
+								</MkInput>
+							</FormSplit>
+							<MkInput v-model="row.costPerCall" type="text" :readonly="row.unlisted">
+								<template #label>{{ i18n.ts._agents.modelCostPerCall }}</template>
+								<template #caption>{{ i18n.ts._agents.billingFallbackCostCaption }}</template>
+								<template #prefix><i class="ti ti-coin"></i></template>
+							</MkInput>
+							<MkInput v-model="row.peakPriceMultiplier" type="text" :readonly="row.unlisted">
+								<template #label>{{ i18n.ts._agents.billingPeakMultiplier }}</template>
+								<template #caption>{{ i18n.ts._agents.billingPeakMultiplierCaption }}</template>
+								<template #prefix><i class="ti ti-chart-line"></i></template>
+							</MkInput>
+						</template>
+						<MkInput v-else v-model="row.costPerCall" type="text" :readonly="row.unlisted">
 							<template #label>{{ i18n.ts._agents.modelCostPerCall }}</template>
 							<template #caption>{{ i18n.ts._agents.modelCostPerCallCaption }}</template>
 							<template #prefix><i class="ti ti-coin"></i></template>
@@ -141,7 +185,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 						<FormSplit :minWidth="260">
 							<MkSelect v-model="row.tokenizerEncoding" :items="tokenizerEncodingItems" :readonly="row.unlisted">
 								<template #label>Token 编码器</template>
-								<template #caption>选择后使用精确 token 计数，否则使用字符估算</template>
+								<template #caption>tiktoken/Gemini/GLM/DeepSeek 为精确计数（GLM/DeepSeek 需镜像预置词表，缺失时自动降级近似）；Claude 为兼容近似（≈）；不选则字符估算</template>
 							</MkSelect>
 							<MkSelect v-model="row.charsPerToken" :items="charsPerTokenItems" :readonly="row.unlisted">
 								<template #label>字符/Token 比率</template>
@@ -151,7 +195,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 					</div>
 
 					<div>
-						<MkButton rounded @click="addRow"><i class="ti ti-plus"></i> {{ i18n.ts._agents.addAgentModel }}</MkButton>
+						<MkButton rounded @click="onAddModelMenu"><i class="ti ti-plus"></i> {{ i18n.ts._agents.addAgentModel }}</MkButton>
 					</div>
 
 					<MkSelect v-model="form.state.agentDefaultModelId" :items="defaultModelItems">
@@ -790,6 +834,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 <script lang="ts" setup>
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import type { MkSelectItem } from '@/components/MkSelect.vue';
+import type { MenuItem } from '@/types/menu.js';
 import MkInput from '@/components/MkInput.vue';
 import MkTextarea from '@/components/MkTextarea.vue';
 import MkInfo from '@/components/MkInfo.vue';
@@ -848,6 +893,13 @@ type AgentLlmModelRow = {
 	maxOutputTokensPerCall: string;
 	unlisted: boolean;
 	costPerCall: string;
+	/** 计费方式：per_call 按次；usage 按量（token 单价） */
+	billingMode: 'per_call' | 'usage';
+	pricePerMillionInputCacheHitTokens: string;
+	pricePerMillionInputCacheMissTokens: string;
+	pricePerMillionOutputTokens: string;
+	/** 高峰时段价格倍率（留空/1 不启用） */
+	peakPriceMultiplier: string;
 	charsPerToken: string;
 	tokenizerEncoding: string;
 	dailyFreeQuota: string;
@@ -929,6 +981,11 @@ const agentImageProviderItems: MkSelectItem[] = [
 	{ value: 'openai', label: i18n.ts._agents.imageProviderOpenai },
 ];
 
+const billingModeItems: MkSelectItem[] = [
+	{ value: 'per_call', label: i18n.ts._agents.billingModePerCall },
+	{ value: 'usage', label: i18n.ts._agents.billingModeUsage },
+];
+
 const tokenizerEncodingItems: MkSelectItem[] = [
 	{ value: '', label: '不使用（字符估算）' },
 	{ value: 'cl100k_base', label: 'cl100k_base（GPT-4 / GPT-3.5-turbo）' },
@@ -942,6 +999,20 @@ const tokenizerEncodingItems: MkSelectItem[] = [
 	{ value: 'gemini:gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash Lite' },
 	{ value: 'gemini:gemini-2.0-flash-001', label: 'Gemini 2.0 Flash' },
 	{ value: 'gemini:gemini-2.0-flash-lite-001', label: 'Gemini 2.0 Flash Lite' },
+	{ value: 'glm:glm-5.5', label: 'GLM-5.5（智谱，真分词器）' },
+	{ value: 'glm:glm-5.2', label: 'GLM-5.2（智谱，真分词器）' },
+	{ value: 'glm:glm-4.7', label: 'GLM-4.7（智谱，真分词器）' },
+	{ value: 'glm:glm-4.5', label: 'GLM-4.5（智谱，真分词器）' },
+	{ value: 'glm:glm-4-plus', label: 'GLM-4 Plus（智谱，真分词器）' },
+	{ value: 'glm:glm-4-flash', label: 'GLM-4 Flash（智谱，真分词器）' },
+	{ value: 'deepseek:deepseek-v4-pro', label: 'DeepSeek-V4 Pro（真分词器）' },
+	{ value: 'deepseek:deepseek-v4-flash', label: 'DeepSeek-V4 Flash（真分词器）' },
+	{ value: 'deepseek:deepseek-v3', label: 'DeepSeek-V3（真分词器）' },
+	{ value: 'deepseek:deepseek-r1', label: 'DeepSeek-R1（真分词器）' },
+	{ value: 'claude:claude-fable-5', label: 'Claude Fable 5（兼容近似）' },
+	{ value: 'claude:claude-opus-4-8', label: 'Claude Opus 4.8（兼容近似）' },
+	{ value: 'claude:claude-opus-4-7', label: 'Claude Opus 4.7（兼容近似）' },
+	{ value: 'claude:claude-sonnet-4-5', label: 'Claude Sonnet 4.5（兼容近似）' },
 ];
 
 const charsPerTokenItems: MkSelectItem[] = [
@@ -951,7 +1022,6 @@ const charsPerTokenItems: MkSelectItem[] = [
 	{ value: '4', label: '4（中文为主）' },
 	{ value: '6', label: '6（代码/日文）' },
 ];
-
 
 function numFromMeta(v: unknown, fallback: number): number {
 	if (typeof v === 'number' && Number.isFinite(v)) return Math.trunc(v);
@@ -990,6 +1060,11 @@ function initAgentLlmModelRows(): AgentLlmModelRow[] {
 			maxOutputTokensPerCall: String(numFromMeta(o.maxOutputTokensPerCall, 2048)),
 			unlisted: o.unlisted === true,
 			costPerCall: typeof o.costPerCall === 'number' && Number.isFinite(o.costPerCall) ? String(o.costPerCall) : '0',
+			billingMode: o.billingMode === 'usage' ? 'usage' : 'per_call',
+			pricePerMillionInputCacheHitTokens: typeof o.pricePerMillionInputCacheHitTokens === 'number' && Number.isFinite(o.pricePerMillionInputCacheHitTokens) ? String(o.pricePerMillionInputCacheHitTokens) : '',
+			pricePerMillionInputCacheMissTokens: typeof o.pricePerMillionInputCacheMissTokens === 'number' && Number.isFinite(o.pricePerMillionInputCacheMissTokens) ? String(o.pricePerMillionInputCacheMissTokens) : '',
+			pricePerMillionOutputTokens: typeof o.pricePerMillionOutputTokens === 'number' && Number.isFinite(o.pricePerMillionOutputTokens) ? String(o.pricePerMillionOutputTokens) : '',
+			peakPriceMultiplier: typeof o.peakPriceMultiplier === 'number' && Number.isFinite(o.peakPriceMultiplier) ? String(o.peakPriceMultiplier) : '',
 			charsPerToken: typeof o.charsPerToken === 'number' && Number.isFinite(o.charsPerToken) ? String(o.charsPerToken) : '',
 			tokenizerEncoding: typeof o.tokenizerEncoding === 'string' ? o.tokenizerEncoding : '',
 			dailyFreeQuota: typeof o.dailyFreeQuota === 'number' && Number.isFinite(o.dailyFreeQuota) ? String(o.dailyFreeQuota) : '0',
@@ -1188,6 +1263,11 @@ const form = useForm({
 		maxOutputTokensPerCall: number;
 		unlisted: boolean;
 		costPerCall: number;
+		billingMode: 'per_call' | 'usage';
+		pricePerMillionInputCacheHitTokens: number;
+		pricePerMillionInputCacheMissTokens: number;
+		pricePerMillionOutputTokens: number;
+		peakPriceMultiplier?: number;
 		charsPerToken?: number;
 		tokenizerEncoding?: string;
 		dailyFreeQuota?: number;
@@ -1231,6 +1311,25 @@ const form = useForm({
 			os.alert({ type: 'error', text: i18n.ts._agents.agentLlmModelsInvalidCost });
 			throw new Error('invalid cost');
 		}
+		const parseMillionTokenPrice = (raw: string, label: string): number => {
+			const t = raw.trim();
+			const v = t === '' ? 0 : Number(t);
+			if (!Number.isFinite(v) || v < 0 || v > 1_000_000) {
+				os.alert({ type: 'error', text: `${name}：${label}单价需为 0~1000000 的数字` });
+				throw new Error('invalid million token price');
+			}
+			return v;
+		};
+		const parsePeakMultiplier = (raw: string): number | undefined => {
+			const t = raw.trim();
+			if (t === '') return undefined;
+			const v = Number(t);
+			if (!Number.isFinite(v) || v < 1 || v > 10) {
+				os.alert({ type: 'error', text: i18n.tsx._agents.billingPeakMultiplierInvalid({ name }) });
+				throw new Error('invalid peak price multiplier');
+			}
+			return v <= 1 ? undefined : v;
+		};
 		normalized.push({
 			id,
 			name,
@@ -1242,6 +1341,11 @@ const form = useForm({
 			maxOutputTokensPerCall: maxOut,
 			unlisted: row.unlisted === true,
 			costPerCall: cost,
+			billingMode: row.billingMode === 'usage' ? 'usage' : 'per_call',
+			pricePerMillionInputCacheHitTokens: parseMillionTokenPrice(row.pricePerMillionInputCacheHitTokens, i18n.ts._agents.billingInputCacheHit),
+			pricePerMillionInputCacheMissTokens: parseMillionTokenPrice(row.pricePerMillionInputCacheMissTokens, i18n.ts._agents.billingInputCacheMiss),
+			pricePerMillionOutputTokens: parseMillionTokenPrice(row.pricePerMillionOutputTokens, i18n.ts._agents.billingOutput),
+			peakPriceMultiplier: parsePeakMultiplier(row.peakPriceMultiplier),
 			charsPerToken: row.charsPerToken.trim() !== '' ? Number(row.charsPerToken) : undefined,
 			tokenizerEncoding: row.tokenizerEncoding.trim() !== '' ? row.tokenizerEncoding.trim() : undefined,
 			dailyFreeQuota: row.dailyFreeQuota.trim() !== '' && Number(row.dailyFreeQuota) > 0 ? Number(row.dailyFreeQuota) : undefined,
@@ -1656,6 +1760,7 @@ async function issueReward() {
 		rewardIssuing.value = false;
 	}
 }
+
 const redeemGenerating = ref(false);
 const generatedCodes = ref<{ id: string; code: string; creditAmount: number }[]>([]);
 const redeemLoading = ref(false);
@@ -1742,6 +1847,7 @@ function removeVisionModel(index: number) {
 	const [removed] = form.state.agentVisionModelRows.splice(index, 1);
 	if (removed && form.state.agentVisionDefaultModelId === removed.id) form.state.agentVisionDefaultModelId = '';
 }
+
 const redeemPageSize = ref(30);
 const redeemStatusItems: MkSelectItem[] = [
 	{ value: 'all', label: '全部' },
@@ -1767,6 +1873,37 @@ const reportType = ref<'model' | 'checkin'>('model');
 const reportHours = ref(24);
 const reportsLoading = ref(false);
 const reportsData = ref<ReportsOverview | null>(null);
+
+interface TokenizerStatus {
+	family: string;
+	available: boolean;
+	vocabPath?: string;
+	configPath?: string;
+}
+
+const tokenizerStatuses = ref<TokenizerStatus[] | null>(null);
+
+async function loadTokenizerStatus() {
+	try {
+		const res = await misskeyApi('admin/agents/tokenizer-status' as any, {});
+		tokenizerStatuses.value = res.tokenizers;
+	} catch (err) {
+		console.error('Failed to load tokenizer status:', err);
+	}
+}
+
+const missingTokenizers = computed(() => {
+	return (tokenizerStatuses.value ?? []).filter(t => !t.available);
+});
+
+function tokenizerFamilyLabel(family: string): string {
+	const labels: Record<string, string> = {
+		glm: 'GLM（智谱）',
+		deepseek: 'DeepSeek',
+	};
+	return labels[family] ?? family;
+}
+
 const externalAuditStatsLoading = ref(false);
 const externalAuditStats = ref<AgentExternalAuditModelStat[]>([]);
 const reportSuccessRate = computed(() => {
@@ -1905,6 +2042,19 @@ function externalAuditStatStatus(row: AgentExternalAuditModelStat) {
 	return '启用';
 }
 
+/** 添加模型：先选择模型类型，再创建对应预置行 */
+function onAddModelMenu(ev: MouseEvent) {
+	const t = i18n.ts._agents;
+	const items: MenuItem[] = [
+		{ type: 'button', icon: 'ti ti-plus', text: t.billingAddCustomModel, caption: t.billingAddCustomModelCaption, action: () => addRow() },
+		{ type: 'divider' },
+		{ type: 'label', text: t.billingAddOfficialDeepseek },
+		{ type: 'button', icon: 'ti ti-bolt', text: 'DeepSeek-V4-Flash', caption: t.billingAddOfficialDeepseekCaption, action: () => addDeepSeekOfficialRow('flash') },
+		{ type: 'button', icon: 'ti ti-bolt', text: 'DeepSeek-V4-Pro', caption: t.billingAddOfficialDeepseekCaption, action: () => addDeepSeekOfficialRow('pro') },
+	];
+	os.popupMenu(items, ev.currentTarget ?? ev.target);
+}
+
 function addRow() {
 	form.state.agentLlmModelRows.push({
 		id: genId(),
@@ -1917,8 +2067,40 @@ function addRow() {
 		maxOutputTokensPerCall: '2048',
 		unlisted: false,
 		costPerCall: '0',
+		billingMode: 'per_call',
+		pricePerMillionInputCacheHitTokens: '',
+		pricePerMillionInputCacheMissTokens: '',
+		pricePerMillionOutputTokens: '',
+		peakPriceMultiplier: '',
 		charsPerToken: '',
 		tokenizerEncoding: '',
+		dailyFreeQuota: '0',
+	});
+}
+
+/** 官方 DeepSeek 渠道预置：单价取自官方文档（元/百万 tokens），管理员仅需补 API Key */
+function addDeepSeekOfficialRow(variant: 'flash' | 'pro') {
+	const preset = variant === 'flash'
+		? { name: 'DeepSeek-V4-Flash（官方）', apiModelName: 'deepseek-v4-flash', tokenizerEncoding: 'deepseek:deepseek-v4-flash', hit: '0.02', miss: '1', output: '2' }
+		: { name: 'DeepSeek-V4-Pro（官方）', apiModelName: 'deepseek-v4-pro', tokenizerEncoding: 'deepseek:deepseek-v4-pro', hit: '0.025', miss: '3', output: '6' };
+	form.state.agentLlmModelRows.push({
+		id: genId(),
+		name: preset.name,
+		description: i18n.ts._agents.billingDeepseekPresetDesc,
+		baseUrl: 'https://api.deepseek.com',
+		apiKey: '',
+		apiModelName: preset.apiModelName,
+		maxContextTokens: '1000000',
+		maxOutputTokensPerCall: '32768',
+		unlisted: false,
+		costPerCall: '0.1',
+		billingMode: 'usage',
+		pricePerMillionInputCacheHitTokens: preset.hit,
+		pricePerMillionInputCacheMissTokens: preset.miss,
+		pricePerMillionOutputTokens: preset.output,
+		peakPriceMultiplier: '2',
+		charsPerToken: '',
+		tokenizerEncoding: preset.tokenizerEncoding,
 		dailyFreeQuota: '0',
 	});
 }
@@ -2125,6 +2307,7 @@ initCheckinRoleRows(meta);
 
 onMounted(() => {
 	void loadReports();
+	void loadTokenizerStatus();
 });
 </script>
 

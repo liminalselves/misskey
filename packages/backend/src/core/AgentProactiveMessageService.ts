@@ -210,13 +210,9 @@ export class AgentProactiveMessageService {
 			instance = await this.metaService.fetch(true);
 			// Proactive delivery is system-initiated: mirror the send path's pre-call check so
 			// the system never spends provider quota that would drive the user's balance
-			// negative without their action.
-			const callCost = this.agentService.getUserFacingModelCostPerCall(instance, session.agentModelId);
-			if (callCost > 0 && !await this.agentModelUsageService.hasFreeQuotaRemaining(session.userId, session.agentModelId, instance)) {
-				const profile = await this.userProfilesRepository.findOneBy({ userId: session.userId });
-				if ((profile?.agentCreditBalance ?? 0) < callCost) {
-					throw new ProactiveAttemptError('PROACTIVE_INSUFFICIENT_CREDIT');
-				}
+			// negative without their action. usage 按量模式下要求余额 > 0。
+			if (!await this.agentModelUsageService.canAffordModelCall(instance, session.agentModelId, session.userId)) {
+				throw new ProactiveAttemptError('PROACTIVE_INSUFFICIENT_CREDIT');
 			}
 			const systemBase = this.agentService.buildSystemPrompt({
 				globalPrompt: instance.agentGlobalSystemPrompt,
@@ -265,13 +261,29 @@ export class AgentProactiveMessageService {
 			});
 
 			let rawAssistantText: string;
+			let proactiveUsageFields: {
+				promptTokens?: number;
+				completionTokens?: number;
+				promptCacheHitTokens?: number | null;
+				promptCacheMissTokens?: number | null;
+			} = {};
 			try {
-				rawAssistantText = await this.agentService.invokeChatCompletions({
+				const llmResult = await this.agentService.invokeChatCompletions({
 					system,
 					messages: history,
 					userText,
 					sessionModelId: session.agentModelId,
 				});
+				rawAssistantText = llmResult.text;
+				// 计费 token 数一律取自响应 usage（禁止本地估算）；缺失时由 finishLog 按策略兜底
+				if (llmResult.usage) {
+					proactiveUsageFields = {
+						promptTokens: llmResult.usage.promptTokens,
+						completionTokens: llmResult.usage.completionTokens,
+						promptCacheHitTokens: llmResult.usage.promptCacheHitTokens ?? null,
+						promptCacheMissTokens: llmResult.usage.promptCacheMissTokens ?? null,
+					};
+				}
 			} catch {
 				await this.agentModelUsageService.finishLog(usageLog, instance, {
 					status: 'failed',
@@ -281,7 +293,7 @@ export class AgentProactiveMessageService {
 				throw new ProactiveAttemptError('PROACTIVE_LLM_FAILED');
 			}
 			try {
-				await this.agentModelUsageService.finishLog(usageLog, instance, { status: 'success' });
+				await this.agentModelUsageService.finishLog(usageLog, instance, { status: 'success', ...proactiveUsageFields });
 				usageLogSettled = true;
 			} catch {
 				// A completed provider request must never be retried merely because its

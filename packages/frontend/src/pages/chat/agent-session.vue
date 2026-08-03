@@ -920,6 +920,21 @@ SPDX-License-Identifier: AGPL-3.0-only
 												<span :class="$style.modelMetaChipVal">{{ formatTokenCountCompact(m.maxOutputTokensPerCall) }}</span>
 											</span>
 											<span
+												v-if="m.billingMode === 'usage'"
+												:class="[$style.modelMetaChip, $style.modelMetaChipInteractive]"
+												:title="i18n.ts._agents.billingUsageDetailTooltip"
+												role="listitem"
+												tabindex="0"
+												@click.stop="openUsagePricingMenu(m, $event)"
+												@keydown.enter.stop="openUsagePricingMenu(m, $event)"
+											>
+												<i class="ti ti-coin" :class="$style.modelMetaChipIcon" aria-hidden="true"></i>
+												<span :class="$style.modelMetaChipKicker">{{ i18n.ts._agents.modelRowLabelCost }}</span>
+												<span :class="[$style.modelMetaChipVal, $style.modelMetaChipValHighlight]">{{ i18n.ts._agents.billingUsageLabel }}</span>
+												<i class="ti ti-chevron-down" :class="$style.modelMetaChipIcon" aria-hidden="true"></i>
+											</span>
+											<span
+												v-else
 												:class="$style.modelMetaChip"
 												:title="i18n.ts._agents.modelCostPerCall"
 												role="listitem"
@@ -1035,6 +1050,7 @@ import { misskeyApi, formatApiError } from '@/utility/misskey-api.js';
 import { i18n } from '@/i18n.js';
 import { definePage } from '@/page.js';
 import * as os from '@/os.js';
+import type { MenuItem } from '@/types/menu.js';
 import { fetchInstance, instance } from '@/instance.js';
 import { useRouter } from '@/router.js';
 import { makeDateSeparatedTimelineComputedRef } from '@/utility/timeline-date-separate.js';
@@ -1858,24 +1874,25 @@ const contextImportInputEl = useTemplateRef<HTMLInputElement>('contextImportInpu
 const contextExporting = ref(false);
 const contextImporting = ref(false);
 
+/** 用户侧可见的模型摘要（来自 MetaLite agentModels，含按量计费展示字段） */
+type AgentModelLite = {
+	id: string;
+	name: string;
+	description: string | null;
+	maxContextTokens: number;
+	maxOutputTokensPerCall: number;
+	costPerCall: number;
+	billingMode?: 'per_call' | 'usage';
+	pricePerMillionInputCacheHitTokens?: number;
+	pricePerMillionInputCacheMissTokens?: number;
+	pricePerMillionOutputTokens?: number;
+	peakPriceMultiplier?: number | null;
+};
+
 const agentModels = computed(() => {
 	const raw = (instance as Record<string, unknown>).agentModels;
-	if (!raw || !Array.isArray(raw)) return [] as {
-		id: string;
-		name: string;
-		description: string | null;
-		maxContextTokens: number;
-		maxOutputTokensPerCall: number;
-		costPerCall: number;
-	}[];
-	return raw as {
-		id: string;
-		name: string;
-		description: string | null;
-		maxContextTokens: number;
-		maxOutputTokensPerCall: number;
-		costPerCall: number;
-	}[];
+	if (!raw || !Array.isArray(raw)) return [] as AgentModelLite[];
+	return raw as AgentModelLite[];
 });
 
 /** Matches server MetaLite: site default id, or first configured model. */
@@ -1948,12 +1965,13 @@ const styleCardSelectionId = computed(() => {
 const selectedStyleMeta = computed(() => usableStyles.value.find(s => s.id === selectedStyleId.value) ?? null);
 const selectedModelMeta = computed(() => agentModels.value.find(m => m.id === selectedModelId.value) ?? null);
 
-/** 主对话单次扣点示意：按会话当前模型单价换算 */
+/** 主对话单次扣点示意：按会话当前模型单价换算；按量计费模型无法预知单次费用，不显示 */
 const expectedCallCostForSession = computed(() => {
 	if (!session.value) return 0;
 	const id = displayModelIdForSession(session.value.agentModelId);
 	if (!id) return 0;
 	const m = agentModels.value.find(x => x.id === id);
+	if (m?.billingMode === 'usage') return 0;
 	const c = m?.costPerCall;
 	if (typeof c === 'number' && Number.isFinite(c)) return Math.max(0, c);
 	if (c != null && Number.isFinite(Number(c))) return Math.max(0, Number(c));
@@ -2035,6 +2053,44 @@ function formatModelCostPerCall(value: unknown): string {
 		return i18n.ts._agents.modelCostPerCallValueFree;
 	}
 	return n.toLocaleString();
+}
+
+/** 高峰时段判定（仅展示提示用，与后端结算口径一致：北京时间 9:00～12:00、14:00～18:00） */
+function isBeijingPeakTimeNow(): boolean {
+	const h = (new Date().getUTCHours() + 8) % 24;
+	return (h >= 9 && h < 12) || (h >= 14 && h < 18);
+}
+
+/** 按量计费明细弹窗：三档单价 + 峰谷与当前状态 + 兜底（均为展示项） */
+function openUsagePricingMenu(m: AgentModelLite, ev: MouseEvent | KeyboardEvent) {
+	if (m.billingMode !== 'usage') return;
+	const price = (v: number | undefined): string => (typeof v === 'number' && Number.isFinite(v) ? v : 0).toLocaleString();
+	const peak = typeof m.peakPriceMultiplier === 'number' && m.peakPriceMultiplier > 1 ? m.peakPriceMultiplier : null;
+	const inPeak = peak != null && isBeijingPeakTimeNow();
+	const noop = () => {};
+	const t = i18n.ts._agents;
+	const items: MenuItem[] = [
+		{ type: 'label', text: t.billingUsageDetailTitle },
+		{ type: 'button', text: `${t.billingInputCacheHit} ${price(m.pricePerMillionInputCacheHitTokens)}`, action: noop },
+		{ type: 'button', text: `${t.billingInputCacheMiss} ${price(m.pricePerMillionInputCacheMissTokens)}`, action: noop },
+		{ type: 'button', text: `${t.billingOutput} ${price(m.pricePerMillionOutputTokens)}`, action: noop },
+	];
+	if (peak != null) {
+		items.push(
+			{ type: 'divider' },
+			{
+				type: 'button',
+				icon: inPeak ? 'ti ti-sun' : 'ti ti-moon',
+				text: i18n.tsx._agents.billingPeakShort({ mult: peak, state: inPeak ? t.billingPeakState : t.billingOffPeakState }),
+				caption: t.billingPeakCaption,
+				action: noop,
+			},
+		);
+	}
+	if (typeof m.costPerCall === 'number' && m.costPerCall > 0) {
+		items.push({ type: 'button', icon: 'ti ti-shield', text: `${t.billingFallbackPerCall} ${m.costPerCall.toLocaleString()}`, caption: t.billingFallbackCaption, action: noop });
+	}
+	os.popupMenu(items, ev.currentTarget ?? ev.target);
 }
 
 function getSuccessRatePercentage(success: number, total: number): string {
@@ -5200,6 +5256,14 @@ async function onAbortRequest() {
 	color: color-mix(in srgb, var(--MI_THEME-success, #22c55e) 88%, var(--MI_THEME-fg) 12%);
 }
 
+.modelMetaChipInteractive {
+	cursor: pointer;
+}
+
+.modelMetaChipInteractive:hover {
+	opacity: 0.8;
+}
+
 .modelMetaChipValMuted {
 	font-weight: 600;
 	opacity: 0.52;
@@ -5261,7 +5325,6 @@ async function onAbortRequest() {
 	line-height: 1.45;
 	color: var(--MI_THEME-fgTransparentWeak);
 }
-
 
 .memDivider {
 	margin: 0.85em 0 1.15em;

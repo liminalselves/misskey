@@ -15943,6 +15943,110 @@ export interface Locale extends ILocale {
          */
         "agentLlmModelsInvalidCost": string;
         /**
+         * 課金方式
+         */
+        "billingMode": string;
+        /**
+         * 回数課金：呼び出しごとに固定額を控除。従量課金：サーバーが返す usage トークン数に単価をかけて課金（DeepSeek 公式チャネルなど）
+         */
+        "billingModeCaption": string;
+        /**
+         * 回数課金
+         */
+        "billingModePerCall": string;
+        /**
+         * 従量課金（トークン単価）
+         */
+        "billingModeUsage": string;
+        /**
+         * 入力（キャッシュヒット）
+         */
+        "billingInputCacheHit": string;
+        /**
+         * 入力（キャッシュミス）
+         */
+        "billingInputCacheMiss": string;
+        /**
+         * 出力
+         */
+        "billingOutput": string;
+        /**
+         * 100万トークンあたりの単価
+         */
+        "billingPerMillionTokens": string;
+        /**
+         * usage が返されない場合の回数課金フォールバック（少額の非0値を推奨）
+         */
+        "billingFallbackCostCaption": string;
+        /**
+         * ピーク時間帯の価格倍率
+         */
+        "billingPeakMultiplier": string;
+        /**
+         * ピーク時間帯（北京時間 9:00～12:00、14:00～18:00）は全課金項目にこの倍率を適用。空欄または1で無効、DeepSeek 公式は既定で2
+         */
+        "billingPeakMultiplierCaption": string;
+        /**
+         * {name}：ピーク価格倍率は 1~10 の数値である必要があります
+         */
+        "billingPeakMultiplierInvalid": ParameterizedString<"name">;
+        /**
+         * カスタムモデル
+         */
+        "billingAddCustomModel": string;
+        /**
+         * 接続情報と課金設定を手動入力
+         */
+        "billingAddCustomModelCaption": string;
+        /**
+         * 公式 DeepSeek（従量課金）
+         */
+        "billingAddOfficialDeepseek": string;
+        /**
+         * 公式単価とピークオフピーク戦略を事前入力済み、API Key のみ追記
+         */
+        "billingAddOfficialDeepseekCaption": string;
+        /**
+         * DeepSeek 公式チャネル、従量課金（単価は公式ドキュメントで事前入力、調整可能）
+         */
+        "billingDeepseekPresetDesc": string;
+        /**
+         * 従量課金
+         */
+        "billingUsageLabel": string;
+        /**
+         * 従量課金 · クレジット / 100万トークン
+         */
+        "billingUsageDetailTitle": string;
+        /**
+         * クリックで従量課金の詳細を表示（ピークオフピーク時間帯を含む）
+         */
+        "billingUsageDetailTooltip": string;
+        /**
+         * ピーク ×{mult}（現在{state}）
+         */
+        "billingPeakShort": ParameterizedString<"mult" | "state">;
+        /**
+         * ピーク
+         */
+        "billingPeakState": string;
+        /**
+         * オフピーク
+         */
+        "billingOffPeakState": string;
+        /**
+         * 北京時間 9:00~12:00、14:00~18:00 はピーク価格
+         */
+        "billingPeakCaption": string;
+        /**
+         * フォールバック回数課金
+         */
+        "billingFallbackPerCall": string;
+        /**
+         * サービスが使用量を返さない場合に回数課金
+         */
+        "billingFallbackCaption": string;
+        /**
          * Abort this request
          */
         "abortRequestTooltip": string;

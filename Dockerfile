@@ -50,6 +50,27 @@ RUN rm -rf .git/
 RUN mkdir -p /tmp/vertexai_tokenizer_model \
 	&& node -e "const fs=require('fs');const crypto=require('crypto');fetch('https://raw.githubusercontent.com/google/gemma_pytorch/014acb7ac4563a5f77c76d7ff98f31b568c16508/tokenizer/gemma3_cleaned_262144_v2.spiece.model').then(r=>{if(!r.ok)throw new Error('HTTP '+r.status);return r.arrayBuffer()}).then(b=>{const buf=Buffer.from(b);const h=crypto.createHash('sha256').update(buf).digest('hex');if(h!=='1299c11d7cf632ef3b4e11937501358ada021bbdf7c47638d13c0ee982f2e79c')throw new Error('gemma3 vocab sha256 mismatch: '+h);fs.writeFileSync('/tmp/vertexai_tokenizer_model/df5c78e8def68e67515aeca297169a4f6c7f5920',buf);console.log('gemma3 tokenizer vocab pre-downloaded OK')})"
 
+# 预置 GLM / DeepSeek 真分词器词表（与上方 Gemini 词表同思路），供 AgentTokenService 精确计数、生产离线可用。
+# 运行时若词表缺失会自动回退 cl100k 兼容近似（approx），故此处获取/转换失败不阻断构建。
+# 国内构建可以 --build-arg HF_ENDPOINT=https://hf-mirror.com 覆盖下载源。
+# 同系列词表同源（GLM 全系 tiktoken 格式 ~151k 词表；DeepSeek 全系 byte-level BPE 129280 词表），
+# 新型号（如 GLM-5.x / DeepSeek-V4）若确认词表格式不变，可用 build-arg 切换词表仓库：
+#   --build-arg GLM_TOKENIZER_REPO=THUDM/glm-5.5 --build-arg DEEPSEEK_TOKENIZER_REPO=deepseek-ai/DeepSeek-V4
+# - GLM 的 tokenizer.model 原生即 tiktoken 格式（每行 "base64 rank"），直接用作 glm.tiktoken；
+# - DeepSeek 的 tokenizer.json 为 HF BPE，用随附脚本转换为 deepseek.tiktoken + deepseek.json。
+ARG HF_ENDPOINT=https://huggingface.co
+ARG GLM_TOKENIZER_REPO=THUDM/glm-4-9b-chat
+ARG DEEPSEEK_TOKENIZER_REPO=deepseek-ai/DeepSeek-V3
+RUN mkdir -p /tmp/agent_tokenizers \
+	&& node -e "(async()=>{const fs=require('fs');try{const r=await fetch('${HF_ENDPOINT}/${GLM_TOKENIZER_REPO}/resolve/main/tokenizer.model');if(!r.ok)throw new Error('HTTP '+r.status);const t=await r.text();const n=t.split('\n').filter(l=>l.trim());if(n.length<100000)throw new Error('glm vocab too small: '+n.length);if(!/^[A-Za-z0-9+/=]+ \d+\s*$/.test(n[0]))throw new Error('glm vocab bad format');fs.writeFileSync('/tmp/agent_tokenizers/glm.tiktoken',t);console.log('GLM tokenizer vocab pre-provisioned ('+n.length+' tokens)')}catch(e){console.warn('WARN: GLM vocab skipped (runtime falls back to cl100k approx): '+e.message)}})()" \
+	&& node -e "(async()=>{const fs=require('fs');try{const r=await fetch('${HF_ENDPOINT}/${DEEPSEEK_TOKENIZER_REPO}/resolve/main/tokenizer.json');if(!r.ok)throw new Error('HTTP '+r.status);fs.writeFileSync('/tmp/agent_tokenizers/deepseek_src.json',Buffer.from(await r.arrayBuffer()));console.log('DeepSeek tokenizer.json downloaded')}catch(e){console.warn('WARN: DeepSeek vocab download skipped (runtime falls back to cl100k approx): '+e.message)}})()" \
+	&& if [ -f /tmp/agent_tokenizers/deepseek_src.json ]; then \
+		node scripts/convert-hf-tokenizer-to-tiktoken.mjs /tmp/agent_tokenizers/deepseek_src.json /tmp/agent_tokenizers/deepseek \
+		|| { echo 'WARN: DeepSeek vocab convert failed (runtime falls back to cl100k approx)'; rm -f /tmp/agent_tokenizers/deepseek.tiktoken /tmp/agent_tokenizers/deepseek.json; }; \
+		rm -f /tmp/agent_tokenizers/deepseek_src.json; \
+	fi \
+	&& ls -la /tmp/agent_tokenizers || true
+
 # build native dependencies for target platform
 
 FROM --platform=$TARGETPLATFORM node:${NODE_VERSION} AS target-builder
@@ -113,6 +134,8 @@ COPY --chown=misskey:misskey --from=native-builder /misskey/packages/i18n/built 
 COPY --chown=misskey:misskey --from=native-builder /misskey/fluent-emojis /misskey/fluent-emojis
 # 预下载的 Gemini 分词器词表缓存（让 LocalTokenizer 无需联网即可精确计数）
 COPY --chown=misskey:misskey --from=native-builder /tmp/vertexai_tokenizer_model /tmp/vertexai_tokenizer_model
+# 预置的 GLM/DeepSeek 真分词器词表（让 AgentTokenService 离线精确计数；缺失时运行期回退 cl100k 近似）
+COPY --chown=misskey:misskey --from=native-builder /tmp/agent_tokenizers /tmp/agent_tokenizers
 COPY --chown=misskey:misskey . ./
 
 ENV LD_PRELOAD=/usr/local/lib/libjemalloc.so

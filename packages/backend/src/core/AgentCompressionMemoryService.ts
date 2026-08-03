@@ -465,11 +465,7 @@ export class AgentCompressionMemoryService {
 		} catch {
 			return false;
 		}
-		const compCost = this.agentService.getUserFacingModelCostPerCall(instanceMeta, compModelId);
-		if (compCost > 0 && !await this.agentModelUsageService.hasFreeQuotaRemaining(userId, compModelId, instanceMeta)) {
-			const profile = await this.userProfilesRepository.findOneBy({ userId });
-			if ((profile?.agentCreditBalance ?? 0) < compCost) return false;
-		}
+		if (!await this.agentModelUsageService.canAffordModelCall(instanceMeta, compModelId, userId)) return false;
 		return true;
 	}
 
@@ -882,13 +878,9 @@ export class AgentCompressionMemoryService {
 			await this.reconcileStickyStates(session.id, hSend, dMap);
 			return;
 		}
-		const compCost = this.agentService.getUserFacingModelCostPerCall(instanceMeta, compModelId);
-		if (compCost > 0 && !await this.agentModelUsageService.hasFreeQuotaRemaining(userId, compModelId, instanceMeta)) {
-			const profile = await this.userProfilesRepository.findOneBy({ userId });
-			if ((profile?.agentCreditBalance ?? 0) < compCost) {
-				await this.reconcileStickyStates(session.id, hSend, dMap);
-				return;
-			}
+		if (!await this.agentModelUsageService.canAffordModelCall(instanceMeta, compModelId, userId)) {
+			await this.reconcileStickyStates(session.id, hSend, dMap);
+			return;
 		}
 		const usageLog = await this.agentModelUsageService.startLog({
 			userId,
@@ -903,14 +895,22 @@ export class AgentCompressionMemoryService {
 		let summary = '';
 		let compressionError: string | null = null;
 		try {
-			summary = await this.agentService.invokeChatCompletions({
+			const llmResult = await this.agentService.invokeChatCompletions({
 				system: systemPrompt,
 				messages: [],
 				userText: textBlob.length > maxInput ? textBlob.slice(0, maxInput) : textBlob,
 				sessionModelId: compModelId,
 				maxTokens: maxOut,
 			});
-			await this.agentModelUsageService.finishLog(usageLog, instanceMeta, { status: 'success' });
+			summary = llmResult.text;
+			// 计费 token 数一律取自响应 usage（禁止本地估算）；缺失时由 finishLog 按策略兜底
+			const usageFields = llmResult.usage ? {
+				promptTokens: llmResult.usage.promptTokens,
+				completionTokens: llmResult.usage.completionTokens,
+				promptCacheHitTokens: llmResult.usage.promptCacheHitTokens ?? null,
+				promptCacheMissTokens: llmResult.usage.promptCacheMissTokens ?? null,
+			} : {};
+			await this.agentModelUsageService.finishLog(usageLog, instanceMeta, { status: 'success', ...usageFields });
 		} catch {
 			compressionError = 'COMPRESSION_LLM_FAILED';
 			try {

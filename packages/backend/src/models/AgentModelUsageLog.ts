@@ -72,6 +72,14 @@ export class MiAgentModelUsageLog {
 	@Column('integer', { nullable: true })
 	public completionTokens: number | null;
 
+	/** 输入 token 中命中缓存的部分（取自响应 usage.prompt_cache_hit_tokens，DeepSeek 等支持） */
+	@Column('integer', { nullable: true })
+	public promptCacheHitTokens: number | null;
+
+	/** 输入 token 中未命中缓存的部分（取自响应 usage.prompt_cache_miss_tokens） */
+	@Column('integer', { nullable: true })
+	public promptCacheMissTokens: number | null;
+
 	/** 本条调用是否消耗了每日免费额度（快照，入库后不可变） */
 	@Column('boolean', { nullable: true, default: null })
 	public usedFreeQuota: boolean | null;

@@ -132,6 +132,37 @@ export const AGENT_LLM_RUNTIME_DIRECTIVE_CLOSE = '</runtime-directive>';
 
 /** Same rough ratio used by history budgeting and token display. 定义已迁至 AgentTokenService（此处 re-export 保持向后兼容）。 */
 
+/**
+ * OpenAI 协议响应中的 usage 字段（计费权威来源，禁止本地估算替代）。
+ * DeepSeek 额外返回 prompt_cache_hit_tokens / prompt_cache_miss_tokens 用于缓存分档计价。
+ */
+export type AgentLlmUsage = {
+	promptTokens: number;
+	completionTokens: number;
+	promptCacheHitTokens?: number;
+	promptCacheMissTokens?: number;
+};
+
+/** 安全解析响应 usage：字段缺失/非法时返回 null（调用方按策略兜底） */
+function parseLlmUsageFromResponse(json: unknown): AgentLlmUsage | null {
+	const usage = (json as { usage?: unknown })?.usage;
+	if (usage == null || typeof usage !== 'object') return null;
+	const u = usage as Record<string, unknown>;
+	const toInt = (v: unknown): number | null => {
+		const n = typeof v === 'number' ? v : Number(v);
+		return Number.isFinite(n) && n >= 0 ? Math.trunc(n) : null;
+	};
+	const promptTokens = toInt(u.prompt_tokens);
+	const completionTokens = toInt(u.completion_tokens);
+	if (promptTokens == null || completionTokens == null) return null;
+	const result: AgentLlmUsage = { promptTokens, completionTokens };
+	const cacheHit = toInt(u.prompt_cache_hit_tokens);
+	const cacheMiss = toInt(u.prompt_cache_miss_tokens);
+	if (cacheHit != null) result.promptCacheHitTokens = cacheHit;
+	if (cacheMiss != null) result.promptCacheMissTokens = cacheMiss;
+	return result;
+}
+
 const STORED_EXAMPLE_DIALOGUE_VERSION = 1 as const;
 
 /** Debug flag for logging OpenAI-style LLM request payloads. */
@@ -291,6 +322,16 @@ export class AgentService {
 	public lookupAnyModelById(instance: MiMeta, modelId: string | null): AgentLlmModelJson | null {
 		if (!modelId) return null;
 		return getEffectiveLlmModels(instance).find(m => m.id === modelId) ?? null;
+	}
+
+	/** 解析模型计费模式；模型未配置/解析失败时回退 per_call（与现有按次行为一致） */
+	@bindThis
+	public resolveModelBillingMode(instance: MiMeta, modelId: string | null): 'per_call' | 'usage' {
+		try {
+			return this.pickModelOrThrow(instance, modelId).billingMode ?? 'per_call';
+		} catch {
+			return 'per_call';
+		}
 	}
 
 	@bindThis
@@ -943,7 +984,7 @@ export class AgentService {
 		externalAbortSignal?: AbortSignal;
 		/** Per-call max_tokens override, capped by model/site settings. */
 		maxTokens?: number;
-	}): Promise<string> {
+	}): Promise<{ text: string; usage: AgentLlmUsage | null }> {
 		const instance = await this.metaService.fetch(true);
 		this.assertLlmConfigured(instance);
 		const { apiModelName, baseUrlRaw, apiKeyRaw, maxOutputTokensPerCall } = this.resolveModelConnection(instance, params.sessionModelId);
@@ -1037,7 +1078,7 @@ export class AgentService {
 		if (typeof text !== 'string') {
 			throw new ApiError(agentsErrors.llmRequestFailed, { reason: 'RESPONSE_MISSING_CONTENT' });
 		}
-		return text;
+		return { text, usage: parseLlmUsageFromResponse(json) };
 	}
 
 	/**

@@ -16,7 +16,7 @@ import type { MiAgentModelUsageLog, AgentModelUsageStatus, AgentModelUsageKind }
 import type { MiMeta } from '@/models/Meta.js';
 import type { MiUser } from '@/models/User.js';
 import { AgentService } from '@/core/AgentService.js';
-import { getEffectiveLlmModels } from '@/misc/agent-llm-models.js';
+import { getEffectiveLlmModels, isAgentLlmPeakTimeBeijing } from '@/misc/agent-llm-models.js';
 
 export type StartLogParams = {
 	userId: MiUser['id'];
@@ -32,10 +32,22 @@ export type StartLogParams = {
 export type FinishLogParams = {
 	status: AgentModelUsageStatus;
 	errorCode?: string | null;
+	/** 以下 token 数一律取自 OpenAI 协议响应 usage 字段（计费权威来源，禁止本地估算） */
 	promptTokens?: number | null;
 	completionTokens?: number | null;
+	promptCacheHitTokens?: number | null;
+	promptCacheMissTokens?: number | null;
 	costOverride?: number | null;
 };
+
+/**
+ * 成本精度规则：保留 4 位小数，第 5 位起一律进一（ceil），保证扣费不会少扣（平台不亏本）。
+ * 先 toFixed(9) 消除浮点尾噪，避免恰好 4 位小数的金额（如 0.0001）被浮点表示误差误进一。
+ */
+function ceilCostTo4Decimals(x: number): number {
+	if (!Number.isFinite(x) || x <= 0) return 0;
+	return Math.ceil(Number((x * 10_000).toFixed(9))) / 10_000;
+}
 
 /**
  * 统一维护智能体模型调用的使用日志：
@@ -93,11 +105,13 @@ export class AgentModelUsageService {
 		const durationMs = Math.max(0, completedAt.getTime() - log.requestedAt.getTime());
 		let cost = 0;
 		if (params.status === 'success' || params.status === 'aborted') {
-			cost = typeof params.costOverride === 'number'
-				? Math.max(0, params.costOverride)
-				: log.usageKind === 'image_generation'
-				? Math.max(0, Number(instance.agentImageCostPerCall) || 0)
-				: this.agentService.getUserFacingModelCostPerCall(instance, log.modelId);
+			if (typeof params.costOverride === 'number') {
+				cost = Math.max(0, params.costOverride);
+			} else if (log.usageKind === 'image_generation') {
+				cost = Math.max(0, Number(instance.agentImageCostPerCall) || 0);
+			} else {
+				cost = this.resolveLlmCallCost(instance, log.modelId, params);
+			}
 		}
 
 		// 每日免费额度：仅 success 消耗（aborted 不消耗），所有 usageKind 共享
@@ -127,6 +141,8 @@ export class AgentModelUsageService {
 		log.cost = cost;
 		if (params.promptTokens != null) log.promptTokens = params.promptTokens;
 		if (params.completionTokens != null) log.completionTokens = params.completionTokens;
+		if (params.promptCacheHitTokens != null) log.promptCacheHitTokens = params.promptCacheHitTokens;
+		if (params.promptCacheMissTokens != null) log.promptCacheMissTokens = params.promptCacheMissTokens;
 		await this.agentModelUsageLogsRepository.save(log);
 
 		if (cost > 0) {
@@ -134,6 +150,66 @@ export class AgentModelUsageService {
 			await this.userProfilesRepository.decrement({ userId: log.userId }, 'agentCreditBalance', cost);
 		}
 	}
+
+	/**
+	 * 模型调用可负担性预检（发信/压缩侧车/主动消息共用口径）：
+	 * - 有剩余免费额度 → 可负担；
+	 * - usage 按量模式：无法预知精确费用，仅要求余额 > 0（已欠费拒绝，单次结算允许扣成负数）；
+	 * - per_call 按次模式：余额 >= 按次价。
+	 */
+	@bindThis
+	public async canAffordModelCall(instance: MiMeta, modelId: string | null, userId: string): Promise<boolean> {
+		if (await this.hasFreeQuotaRemaining(userId, modelId, instance)) return true;
+		const billingMode = this.agentService.resolveModelBillingMode(instance, modelId);
+		if (billingMode === 'usage') {
+			const model = this.agentService.lookupAnyModelById(instance, modelId);
+			const priced = model != null && (
+				model.pricePerMillionInputCacheHitTokens > 0
+				|| model.pricePerMillionInputCacheMissTokens > 0
+				|| model.pricePerMillionOutputTokens > 0
+				|| model.costPerCall > 0
+			);
+			if (!priced) return true;
+			const profile = await this.userProfilesRepository.findOneBy({ userId });
+			return (profile?.agentCreditBalance ?? 0) > 0;
+		}
+		const cost = this.agentService.getUserFacingModelCostPerCall(instance, modelId);
+		if (cost <= 0) return true;
+		const profile = await this.userProfilesRepository.findOneBy({ userId });
+		return (profile?.agentCreditBalance ?? 0) >= cost;
+	}
+
+	// #region 计费解析
+
+	/**
+	 * 解析一次 LLM 调用的费用（不含免费额度与 costOverride，由 finishLog 统一处理）：
+	 * - usage 模式且 usage 存在：三档单价 × token 数 ÷ 1e6（无缓存分段时全部输入按未命中价）；
+	 * - usage 模式但 usage 缺失：回退 costPerCall 兜底；
+	 * - per_call 模式：按次价格；
+	 * - 峰谷定价：结算时刻处于高峰时段（北京时间 9:00～12:00 / 14:00～18:00）且模型配置了 peakPriceMultiplier 时，
+	 *   所有计费项统一乘以倍率（与 DeepSeek 官方口径一致）。
+	 */
+	@bindThis
+	private resolveLlmCallCost(instance: MiMeta, modelId: string | null, params: FinishLogParams): number {
+		const model = modelId ? getEffectiveLlmModels(instance).find(m => m.id === modelId) : undefined;
+		// 高峰倍率：仅当模型显式配置（>1）且结算时刻处于高峰时段时生效
+		const peakMultiplier = model?.peakPriceMultiplier != null && model.peakPriceMultiplier > 1 && isAgentLlmPeakTimeBeijing()
+			? model.peakPriceMultiplier
+			: 1;
+		if (model && model.billingMode === 'usage' && params.promptTokens != null && params.completionTokens != null) {
+			const cacheHit = params.promptCacheHitTokens ?? 0;
+			const cacheMiss = params.promptCacheMissTokens ?? Math.max(0, params.promptTokens - cacheHit);
+			const raw = (cacheHit * model.pricePerMillionInputCacheHitTokens
+				+ cacheMiss * model.pricePerMillionInputCacheMissTokens
+				+ params.completionTokens * model.pricePerMillionOutputTokens) / 1_000_000;
+			// 4 位小数进一法：第 5 位向上取整，保证不少扣
+			return ceilCostTo4Decimals(raw * peakMultiplier);
+		}
+		const fallbackCost = this.agentService.getUserFacingModelCostPerCall(instance, modelId);
+		return ceilCostTo4Decimals(fallbackCost * peakMultiplier);
+	}
+
+	// #endregion
 
 	// #region 每日免费额度辅助方法
 

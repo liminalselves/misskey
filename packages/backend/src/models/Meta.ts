@@ -943,11 +943,22 @@ export class MiMeta {
 		maxOutputTokensPerCall: number;
 		/** 下架后仅保留在控制面板；对用户侧与新会话不可见 */
 		unlisted?: boolean;
-		/** 每次成功或中断调用扣费金额，默认 0；失败不扣费 */
+		/** 每次成功或中断调用扣费金额，默认 0；失败不扣费。usage 模式下为 usage 缺失时的兜底按次价 */
 		costPerCall?: number;
+		/** 计费模式：per_call 按次（缺省）；usage 按量（token 数取自响应 usage 字段） */
+		billingMode?: 'per_call' | 'usage';
+		/** 每百万输入 token（缓存命中）单价（usage 模式） */
+		pricePerMillionInputCacheHitTokens?: number;
+		/** 每百万输入 token（缓存未命中）单价（usage 模式） */
+		pricePerMillionInputCacheMissTokens?: number;
+		/** 每百万输出 token 单价（usage 模式） */
+		pricePerMillionOutputTokens?: number;
+		/** 高峰时段价格倍率（DeepSeek 峰谷定价：高峰时段所有计费项 ×N）；undefined/1 不启用，官方默认 2，取值 [1, 10] */
+		peakPriceMultiplier?: number;
 		/** 每 token 对应字符数的估算比率，默认 3 */
 		charsPerToken?: number;
-		/** tiktoken 编码名称，如 "cl100k_base"；为空则使用字符估算 */
+		/** token 编码器标识：tiktoken 内置编码名（如 "cl100k_base"）、"gemini:<型号>" 精确分词，
+		 * 或 "glm:/deepseek:/claude:<型号>" 兼容近似；为空则使用字符估算 */
 		tokenizerEncoding?: string;
 		/** 每日免费调用次数；0/无则无免费额度 */
 		dailyFreeQuota?: number;

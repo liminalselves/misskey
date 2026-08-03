@@ -231,7 +231,7 @@ export type CompressionOverviewPayload = {
 	t2Tokens: number;
 	t1Ratio: number;
 	t2Ratio: number;
-	tokenMode?: 'exact' | 'estimate';
+	tokenMode?: 'exact' | 'approx' | 'estimate';
 	messages: { id: string; role: string; messageTokens?: number; dFromNewTokens: number; band: string; contentPreview: string; tokensEstimated?: boolean; compressed: boolean }[];
 	stickies: {
 		id: string;
@@ -412,7 +412,8 @@ function tokensLabel(m: CompressionOverviewPayload['messages'][0]): string {
 	const cum = m.dFromNewTokens;
 	const raw = m.messageTokens;
 	const msg = typeof raw === 'number' && Number.isFinite(raw) ? Math.max(0, Math.round(raw)) : null;
-	const estimated = m.tokensEstimated ?? (overview.value?.tokenMode !== 'exact');
+	// approx（兼容近似）与 estimate（字符估算）均标注 ≈；exact 下仅对计数器回退估算的条目标注
+	const estimated = overview.value?.tokenMode !== 'exact' || (m.tokensEstimated ?? false);
 	const approx = estimated ? '≈' : '';
 	if (msg != null) {
 		return `${approx}${msg} / ${approx}${Math.max(0, Math.round(cum))}`;
