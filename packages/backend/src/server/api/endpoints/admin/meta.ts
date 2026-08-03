@@ -310,6 +310,10 @@ export const meta = {
 				type: 'string',
 				optional: false, nullable: true,
 			},
+			enableAliyunMobilePush: {
+				type: 'boolean',
+				optional: false, nullable: false,
+			},
 			nativeClientAppInfo: {
 				type: 'object',
 				optional: false, nullable: false,
@@ -1086,6 +1090,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				aliyunMobilePushAccessKeyId: instance.aliyunMobilePushAccessKeyId,
 				aliyunMobilePushAccessKeySecret: instance.aliyunMobilePushAccessKeySecret,
 				aliyunMobilePushAppKey: instance.aliyunMobilePushAppKey,
+				enableAliyunMobilePush: instance.enableAliyunMobilePush,
 				nativeClientAppInfo: (() => {
 					const n = instance.nativeClientAppInfo ?? {};
 					return {

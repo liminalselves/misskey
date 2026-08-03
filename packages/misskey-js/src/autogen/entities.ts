@@ -100,6 +100,7 @@ export type AdminInviteListRequest = operations['admin___invite___list']['reques
 export type AdminInviteListResponse = operations['admin___invite___list']['responses']['200']['content']['application/json'];
 export type AdminMetaResponse = operations['admin___meta']['responses']['200']['content']['application/json'];
 export type AdminMigrateFeaturedRankingResponse = operations['admin___migrate-featured-ranking']['responses']['200']['content']['application/json'];
+export type AdminMobilePushClearDevicesResponse = operations['admin___mobile-push___clear-devices']['responses']['200']['content']['application/json'];
 export type AdminPromoCreateRequest = operations['admin___promo___create']['requestBody']['content']['application/json'];
 export type AdminQueueClearRequest = operations['admin___queue___clear']['requestBody']['content']['application/json'];
 export type AdminQueueDeliverDelayedResponse = operations['admin___queue___deliver-delayed']['responses']['200']['content']['application/json'];

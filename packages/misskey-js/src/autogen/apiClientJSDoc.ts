@@ -748,6 +748,17 @@ declare module '../api.js' {
     ): Promise<SwitchCaseResponseType<E, P>>;
 
     /**
+     * Delete all registered Aliyun mobile push device records.
+     * 
+     * **Credential required**: *Yes* / **Permission**: *write:admin*
+     */
+    request<E extends 'admin/mobile-push/clear-devices', P extends Endpoints[E]['req']>(
+      endpoint: E,
+      params: P,
+      credential?: string | null,
+    ): Promise<SwitchCaseResponseType<E, P>>;
+
+    /**
      * No description provided.
      * 
      * **Credential required**: *Yes* / **Permission**: *write:admin:promo*

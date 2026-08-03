@@ -2661,6 +2661,30 @@ export interface Locale extends ILocale {
      */
     "aliyunMobilePushAppKeyCaption": string;
     /**
+     * Aliyun モバイルプッシュを有効化
+     */
+    "aliyunMobilePushEnabled": string;
+    /**
+     * 無効にすると、サーバーは Aliyun チャネル経由のオフラインプッシュを送信せず、新しいデバイス登録も拒否します（新版クライアントはアプリ内常駐接続を使うため無効化できます）。
+     */
+    "aliyunMobilePushEnabledCaption": string;
+    /**
+     * 登録済みのプッシュデバイスデータを削除
+     */
+    "aliyunMobilePushClearDevices": string;
+    /**
+     * 登録済みの Aliyun モバイルプッシュデバイス記録（mobile_push_devices）をすべて削除します。削除後、対象デバイスは Aliyun オフラインプッシュを受信できなくなります。
+     */
+    "aliyunMobilePushClearDevicesCaption": string;
+    /**
+     * 登録済みの Aliyun モバイルプッシュデバイスデータをすべて削除しますか？この操作は取り消せません。
+     */
+    "aliyunMobilePushClearDevicesConfirm": string;
+    /**
+     * {count} 件の登録済みプッシュデバイスデータを削除しました。
+     */
+    "aliyunMobilePushClearDevicesDone": ParameterizedString<"count">;
+    /**
      * アプリ
      */
     "adminAppSettings": string;
@@ -4393,7 +4417,7 @@ export interface Locale extends ILocale {
      */
     "nativePushAndroidOnlyTitle": string;
     /**
-     * ネイティブプッシュ（ベンダー SDK とサーバー登録）は現状 Android 版シェルでのみ実装されています。iOS やデスクトップ版シェルではこのボタンで登録できません。Android 版を使うか、今後のリリースをお待ちください。
+     * ネイティブプッシュ（バックグラウンド常駐メッセージ接続）は現状 Android 版シェルでのみ実装されています。iOS やデスクトップ版シェルではこのボタンで登録できません。Android 版を使うか、今後のリリースをお待ちください。
      */
     "nativePushAndroidOnlyDescription": string;
     /**
@@ -4401,11 +4425,11 @@ export interface Locale extends ILocale {
      */
     "nativePushEnableFailedTitle": string;
     /**
-     * 通知の許可がありません。端末の設定でこのアプリの通知を許可してから、もう一度お試しください。
+     * 権限の設定が完了していません（途中でキャンセルしたか、一部の権限が未許可の可能性があります）。もう一度有効にして、ガイドに従いすべての権限設定を完了してください。
      */
     "nativePushEnableFailedPermission": string;
     /**
-     * 通知の許可はありますが、プッシュサービスを開始できませんでした。Aliyun Mobile Push の設定（assets の aliyun-emas-services.json）を確認し、端末ログの AliyunPush 出力を参照してください。
+     * サーバー側の設定同期に失敗しました（ネットワークが不安定な可能性があります）。ネットワーク接続を確認してから、もう一度お試しください。
      */
     "nativePushEnableFailedPushSetup": string;
     /**

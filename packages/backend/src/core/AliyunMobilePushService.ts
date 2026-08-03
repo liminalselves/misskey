@@ -68,6 +68,10 @@ export class AliyunMobilePushService {
 
 	@bindThis
 	public async deliver<T extends keyof PushNotificationsTypes>(userId: string, type: T, body: PushNotificationsTypes[T]): Promise<void> {
+		if (this.meta.enableAliyunMobilePush === false) {
+			this.logger.debug(`deliver skipped: enableAliyunMobilePush is off (userId=${userId} type=${String(type)})`);
+			return;
+		}
 		const client = this.createClient();
 		if (!client) {
 			const id = this.meta.aliyunMobilePushAccessKeyId;

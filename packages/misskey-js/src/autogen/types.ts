@@ -614,6 +614,15 @@ export type paths = {
          */
         post: operations['admin___migrate-featured-ranking'];
     };
+    '/admin/mobile-push/clear-devices': {
+        /**
+         * admin/mobile-push/clear-devices
+         * @description Delete all registered Aliyun mobile push device records.
+         *
+         *     **Credential required**: *Yes* / **Permission**: *write:admin*
+         */
+        post: operations['admin___mobile-push___clear-devices'];
+    };
     '/admin/promo/create': {
         /**
          * admin/promo/create
@@ -11579,6 +11588,66 @@ export interface operations {
                 content: {
                     'application/json': {
                         migratedCount: number;
+                    };
+                };
+            };
+            /** @description Client error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Authentication error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Forbidden error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description I'm Ai */
+            418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+        };
+    };
+    'admin___mobile-push___clear-devices': {
+        responses: {
+            /** @description OK (with results) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': {
+                        deletedCount: number;
                     };
                 };
             };

@@ -39,6 +39,23 @@ SPDX-License-Identifier: AGPL-3.0-only
 									<template #prefix><i class="ti ti-apps"></i></template>
 								</MkInput>
 							</SearchMarker>
+							<SearchMarker>
+								<MkSwitch v-model="aliyunMobilePushForm.state.enableAliyunMobilePush">
+									<template #label><SearchLabel>{{ i18n.ts.aliyunMobilePushEnabled }}</SearchLabel><span v-if="aliyunMobilePushForm.modifiedStates.enableAliyunMobilePush" class="_modified">{{ i18n.ts.modified }}</span></template>
+									<template #caption><SearchText>{{ i18n.ts.aliyunMobilePushEnabledCaption }}</SearchText></template>
+								</MkSwitch>
+							</SearchMarker>
+							<SearchMarker>
+								<div class="_gaps_s">
+									<div class="_title">{{ i18n.ts.aliyunMobilePushClearDevices }}</div>
+									<MkInfo warn>{{ i18n.ts.aliyunMobilePushClearDevicesCaption }}</MkInfo>
+									<div>
+										<MkButton danger :disabled="clearingMobilePushDevices" @click="clearRegisteredMobilePushDevices">
+											<i class="ti ti-trash"></i> {{ i18n.ts.aliyunMobilePushClearDevices }}
+										</MkButton>
+									</div>
+								</div>
+							</SearchMarker>
 						</div>
 					</MkFolder>
 				</SearchMarker>
@@ -114,11 +131,12 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import MkInput from '@/components/MkInput.vue';
 import MkTextarea from '@/components/MkTextarea.vue';
 import MkButton from '@/components/MkButton.vue';
 import MkInfo from '@/components/MkInfo.vue';
+import MkSwitch from '@/components/MkSwitch.vue';
 import FormSplit from '@/components/form/split.vue';
 import * as os from '@/os.js';
 import { misskeyApi } from '@/utility/misskey-api.js';
@@ -135,14 +153,38 @@ const aliyunMobilePushForm = useForm({
 	aliyunMobilePushAccessKeyId: typeof meta.aliyunMobilePushAccessKeyId === 'string' ? meta.aliyunMobilePushAccessKeyId : '',
 	aliyunMobilePushAccessKeySecret: typeof meta.aliyunMobilePushAccessKeySecret === 'string' ? meta.aliyunMobilePushAccessKeySecret : '',
 	aliyunMobilePushAppKey: typeof meta.aliyunMobilePushAppKey === 'string' ? meta.aliyunMobilePushAppKey : '',
+	enableAliyunMobilePush: meta.enableAliyunMobilePush !== false,
 }, async (state) => {
 	await os.apiWithDialog('admin/update-meta', {
 		aliyunMobilePushAccessKeyId: state.aliyunMobilePushAccessKeyId === '' ? null : state.aliyunMobilePushAccessKeyId,
 		aliyunMobilePushAccessKeySecret: state.aliyunMobilePushAccessKeySecret === '' ? null : state.aliyunMobilePushAccessKeySecret,
 		aliyunMobilePushAppKey: state.aliyunMobilePushAppKey === '' ? null : state.aliyunMobilePushAppKey,
+		enableAliyunMobilePush: state.enableAliyunMobilePush,
 	} as Record<string, unknown>);
 	fetchInstance(true);
 });
+
+const clearingMobilePushDevices = ref(false);
+
+async function clearRegisteredMobilePushDevices() {
+	const { canceled } = await os.confirm({
+		type: 'warning',
+		title: i18n.ts.aliyunMobilePushClearDevices,
+		text: i18n.ts.aliyunMobilePushClearDevicesConfirm,
+	});
+	if (canceled) return;
+
+	clearingMobilePushDevices.value = true;
+	try {
+		const res = await os.apiWithDialog('admin/mobile-push/clear-devices', {});
+		os.alert({
+			type: 'success',
+			text: i18n.tsx.aliyunMobilePushClearDevicesDone({ count: String(res.deletedCount) }),
+		});
+	} finally {
+		clearingMobilePushDevices.value = false;
+	}
+}
 
 type NativeClientChangelogItem = {
 	version: string;

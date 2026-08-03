@@ -97,6 +97,7 @@ import type {
 	AdminInviteListResponse,
 	AdminMetaResponse,
 	AdminMigrateFeaturedRankingResponse,
+	AdminMobilePushClearDevicesResponse,
 	AdminPromoCreateRequest,
 	AdminQueueClearRequest,
 	AdminQueueDeliverDelayedResponse,
@@ -877,6 +878,7 @@ export type Endpoints = {
 	'admin/invite/list': { req: AdminInviteListRequest; res: AdminInviteListResponse };
 	'admin/meta': { req: EmptyRequest; res: AdminMetaResponse };
 	'admin/migrate-featured-ranking': { req: EmptyRequest; res: AdminMigrateFeaturedRankingResponse };
+	'admin/mobile-push/clear-devices': { req: EmptyRequest; res: AdminMobilePushClearDevicesResponse };
 	'admin/promo/create': { req: AdminPromoCreateRequest; res: EmptyResponse };
 	'admin/queue/clear': { req: AdminQueueClearRequest; res: EmptyResponse };
 	'admin/queue/deliver-delayed': { req: EmptyRequest; res: AdminQueueDeliverDelayedResponse };

@@ -494,6 +494,12 @@ export class MiMeta {
 	})
 	public aliyunMobilePushAppKey: string | null;
 
+	/** 阿里云移动推送总开关：关闭后不再下发阿里云离线推送，也拒绝新设备注册 */
+	@Column('boolean', {
+		default: true,
+	})
+	public enableAliyunMobilePush: boolean;
+
 	@Column('varchar', {
 		length: 1024,
 		nullable: true,

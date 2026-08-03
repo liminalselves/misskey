@@ -150,6 +150,7 @@ export const paramDef = {
 		aliyunMobilePushAccessKeyId: { type: 'string', nullable: true },
 		aliyunMobilePushAccessKeySecret: { type: 'string', nullable: true },
 		aliyunMobilePushAppKey: { type: 'string', nullable: true },
+		enableAliyunMobilePush: { type: 'boolean' },
 		agentFeatureEnabled: { type: 'boolean' },
 		agentGlobalSystemPrompt: { type: 'string', nullable: true },
 		agentOpenaiCompatibleBaseUrl: { type: 'string', nullable: true },
@@ -747,6 +748,10 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 
 			if (ps.aliyunMobilePushAppKey !== undefined) {
 				set.aliyunMobilePushAppKey = ps.aliyunMobilePushAppKey;
+			}
+
+			if (ps.enableAliyunMobilePush !== undefined) {
+				set.enableAliyunMobilePush = ps.enableAliyunMobilePush;
 			}
 
 			if (ps.agentFeatureEnabled !== undefined) {
