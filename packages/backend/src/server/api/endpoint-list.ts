@@ -60,6 +60,7 @@ export * as 'admin/agents/review/pending-exists' from './endpoints/admin/agents/
 export * as 'admin/agents/review/resolve' from './endpoints/admin/agents/review/resolve.js';
 export * as 'admin/agents/sessions/list' from './endpoints/admin/agents/sessions/list.js';
 export * as 'admin/agents/sessions/set-moderation-banned' from './endpoints/admin/agents/sessions/set-moderation-banned.js';
+export * as 'admin/agents/tokenizer-status' from './endpoints/admin/agents/tokenizer-status.js';
 export * as 'admin/announcements/create' from './endpoints/admin/announcements/create.js';
 export * as 'admin/announcements/delete' from './endpoints/admin/announcements/delete.js';
 export * as 'admin/announcements/list' from './endpoints/admin/announcements/list.js';
