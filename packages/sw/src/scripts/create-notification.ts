@@ -286,6 +286,14 @@ async function composeNotification(data: PushNotificationDataMap[keyof PushNotif
 					renotify: true,
 				}];
 			}
+		case 'newAgentMessage':
+			return [`${data.body.sessionName ?? ''}: ${data.body.messageText}`, {
+				icon: data.body.agentAvatarUrl ?? undefined,
+				badge: iconUrl('messages'),
+				tag: `agent:session:${data.body.sessionId}`,
+				data,
+				renotify: true,
+			}];
 		default:
 			return null;
 	}

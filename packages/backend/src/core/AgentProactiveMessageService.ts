@@ -23,7 +23,7 @@ import { AgentExternalAuditService } from '@/core/AgentExternalAuditService.js';
 import { AgentModelUsageService } from '@/core/AgentModelUsageService.js';
 import { AgentImageService } from '@/core/AgentImageService.js';
 import { MetaService } from '@/core/MetaService.js';
-import { NotificationService } from '@/core/NotificationService.js';
+import { AgentMessageNotifyService } from '@/core/AgentMessageNotifyService.js';
 import { buildAgentProactiveNotificationText } from '@/core/agent-proactive-notification-text.js';
 import { DriveFileEntityService } from '@/core/entities/DriveFileEntityService.js';
 import { AGENT_IMAGE_WORLD_PROMPT } from '@/core/agent-image-presets.js';
@@ -71,7 +71,7 @@ export class AgentProactiveMessageService {
 		private agentModelUsageService: AgentModelUsageService,
 		private agentImageService: AgentImageService,
 		private metaService: MetaService,
-		private notificationService: NotificationService,
+		private agentMessageNotifyService: AgentMessageNotifyService,
 		private driveFileEntityService: DriveFileEntityService,
 	) {}
 
@@ -343,12 +343,13 @@ export class AgentProactiveMessageService {
 				: null;
 			const agentAvatarUrl = packedAvatar?.thumbnailUrl ?? packedAvatar?.url ?? null;
 			try {
-				this.notificationService.createNotification(session.userId, 'agentProactiveMessage', {
+				// 与私信一致：不落 notification 通知表，走 newAgentMessage 消息渠道（Redis 未读标记 + 延迟事件）
+				this.agentMessageNotifyService.notifyAgentMessage(session.userId, {
 					sessionId: session.id,
 					sessionName: session.name,
-					agentAvatarUrl,
 					messageId: assistant.id,
 					messageText: buildAgentProactiveNotificationText(parsed.visibleContent),
+					agentAvatarUrl,
 				});
 			} catch {
 				// Notification delivery does not change an already persisted message.

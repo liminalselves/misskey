@@ -68,6 +68,10 @@ export function openChat(body: any, loginId: string): ReturnType<typeof openClie
 	}
 }
 
+export function openAgentChat(body: { sessionId: string }, loginId: string): ReturnType<typeof openClient> {
+	return openClient('push', `/chat/agent/${body.sessionId}`, loginId, { body });
+}
+
 // post-formのオプションから投稿フォームを開く
 export async function openPost(options: { initialText?: string; reply?: Misskey.entities.Note; renote?: Misskey.entities.Note }, loginId?: string): ReturnType<typeof openClient> {
 	// クエリを作成しておく

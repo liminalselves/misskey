@@ -23,7 +23,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<MkA
 				v-for="s in filteredSessions"
 				:key="'f:' + s.id"
-				:class="$style.message"
+				:class="[$style.message, { [$style.isRead]: !s.hasUnread }]"
 				class="_panel"
 				:to="`/chat/agent/${s.id}`"
 			>
@@ -42,7 +42,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<MkA
 				v-for="s in sessions"
 				:key="s.id"
-				:class="$style.message"
+				:class="[$style.message, { [$style.isRead]: !s.hasUnread }]"
 				class="_panel"
 				:to="`/chat/agent/${s.id}`"
 			>
@@ -54,7 +54,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { computed, onActivated, onMounted, ref, watch } from 'vue';
+import { computed, onActivated, onMounted, onUnmounted, ref, watch } from 'vue';
+import { useStream } from '@/stream.js';
 import XRow from './home.agents.row.vue';
 import type { AgentsSessionsListMineResponse } from 'misskey-js/entities.js';
 import MkLoading from '@/components/global/MkLoading.vue';
@@ -118,6 +119,15 @@ onMounted(() => {
 onActivated(() => {
 	void loadSessions();
 });
+
+// 实时响应智能体消息到达/已读事件，刷新各会话未读标记
+const agentStreamConnection = useStream().useChannel('main');
+agentStreamConnection.on('newAgentMessage', () => void loadSessions());
+agentStreamConnection.on('agentRead', () => void loadSessions());
+
+onUnmounted(() => {
+	agentStreamConnection.dispose();
+});
 </script>
 
 <style lang="scss" module>
@@ -128,6 +138,21 @@ onActivated(() => {
 	text-align: start;
 	color: inherit;
 	text-decoration: none;
+
+	&.isRead {
+		opacity: 0.8;
+	}
+
+	&:not(.isRead)::before {
+		content: '';
+		position: absolute;
+		top: 8px;
+		right: 8px;
+		width: 8px;
+		height: 8px;
+		border-radius: 100%;
+		background-color: var(--MI_THEME-accent);
+	}
 }
 
 @container (max-width: 500px) {

@@ -4861,6 +4861,7 @@ export type components = {
             hasUnreadAntenna: boolean;
             hasUnreadChannel: boolean;
             hasUnreadChatMessages: boolean;
+            hasUnreadAgentMessages: boolean;
             hasUnreadNotification: boolean;
             hasPendingReceivedFollowRequest: boolean;
             unreadNotificationsCount: number;
@@ -18959,6 +18960,7 @@ export interface operations {
                         lastMessagePreview: string;
                         /** @enum {string} */
                         lastMessageRole: 'user' | 'assistant' | 'system';
+                        hasUnread: boolean;
                         sessionModerationBanned: boolean;
                         characterModerationBanned: boolean;
                     }[];

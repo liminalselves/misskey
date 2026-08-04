@@ -2965,6 +2965,7 @@ _notification:
     agentSessionBanned: "Agent session ban changed"
     agentProactiveMessage: "Agent proactive message"
     newChatMessage: "Direct Messages"
+    newAgentMessage: "Agent messages"
     achievementEarned: "Achievement unlocked"
     exportCompleted: "The export has been completed"
     login: "Sign In"

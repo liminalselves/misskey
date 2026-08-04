@@ -553,6 +553,10 @@ export const packedMeDetailedOnlySchema = {
 			type: 'boolean',
 			nullable: false, optional: false,
 		},
+		hasUnreadAgentMessages: {
+			type: 'boolean',
+			nullable: false, optional: false,
+		},
 		hasUnreadNotification: {
 			type: 'boolean',
 			nullable: false, optional: false,

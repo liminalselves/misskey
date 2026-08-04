@@ -144,7 +144,8 @@ export const navbarItemDef = reactive<{
 		icon: 'ti ti-messages',
 		to: '/chat',
 		show: computed(() => $i != null && $i.policies.chatAvailability !== 'unavailable'),
-		indicated: computed(() => $i != null && $i.hasUnreadChatMessages),
+		// 智能体消息未读也在此点亮：智能体聊天入口在私信页面内
+		indicated: computed(() => $i != null && ($i.hasUnreadChatMessages || !!($i as { hasUnreadAgentMessages?: boolean }).hasUnreadAgentMessages)),
 	},
 	achievements: {
 		title: i18n.ts.achievements,

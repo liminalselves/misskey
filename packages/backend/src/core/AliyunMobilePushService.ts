@@ -16,10 +16,12 @@ import type Logger from '@/logger.js';
 import { CacheService } from '@/core/CacheService.js';
 import {
 	buildNativePushFromAntennaNote,
+	buildNativePushFromAgentMessage,
 	buildNativePushFromChatMessage,
 	buildNativePushFromNotification,
 	joinInstanceUrl,
 } from '@/misc/native-push-bridge-content.js';
+import type { MainEventTypes } from '@/core/GlobalEventService.js';
 
 /** 与 PushNotificationService / sw 侧类型对齐 */
 type PushNotificationsTypes = {
@@ -30,6 +32,7 @@ type PushNotificationsTypes = {
 	};
 	'readAllNotifications': undefined;
 	newChatMessage: Packed<'ChatMessage'>;
+	newAgentMessage: MainEventTypes['newAgentMessage'];
 };
 
 @Injectable()
@@ -157,6 +160,10 @@ export class AliyunMobilePushService {
 			}
 			case 'newChatMessage': {
 				const p = buildNativePushFromChatMessage(body as Packed<'ChatMessage'>, lang);
+				return { title: p.title, body: p.body, openUrl: joinInstanceUrl(origin, p.openPath) };
+			}
+			case 'newAgentMessage': {
+				const p = buildNativePushFromAgentMessage(body as PushNotificationsTypes['newAgentMessage'], lang);
 				return { title: p.title, body: p.body, openUrl: joinInstanceUrl(origin, p.openPath) };
 			}
 			case 'unreadAntennaNote': {

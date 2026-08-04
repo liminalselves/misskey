@@ -26,6 +26,19 @@ SPDX-License-Identifier: AGPL-3.0-only
 						@update="(res) => updateReceiveConfig('newChatMessage' as any, res)"
 					/>
 				</MkFolder>
+				<!-- App 壳内：智能体消息通知控制项（newAgentMessage 为 stream 事件，与私信渠道对等） -->
+				<MkFolder v-if="isEmbeddedAppShell()">
+					<template #label>{{ (i18n.ts._notification._types as Record<string, string>)['newAgentMessage'] }}</template>
+					<template #suffix>
+						{{ agentMessageNotifyConfig?.type === 'never' ? i18n.ts.none : i18n.ts.all }}
+					</template>
+					<XNotificationConfig
+						:userLists="userLists"
+						:value="agentMessageNotifyConfig ?? { type: 'all' }"
+						:configurableTypes="['all', 'never']"
+						@update="(res) => updateReceiveConfig('newAgentMessage' as any, res)"
+					/>
+				</MkFolder>
 				<MkFolder v-for="type in configurableNotificationTypes" :key="type">
 					<template #label>{{ i18n.ts._notification._types[type] }}</template>
 					<template #suffix>
@@ -111,7 +124,12 @@ const chatMessageNotifyConfig = computed(() =>
 	($i.notificationRecieveConfig as Record<string, NotificationConfig | undefined> | undefined)?.['newChatMessage'],
 );
 
-const nonConfigurableNotificationTypes = ['note', 'roleAssigned', 'followRequestAccepted', 'test', 'exportCompleted'] as const satisfies (typeof notificationTypes[number])[];
+const agentMessageNotifyConfig = computed(() =>
+	($i.notificationRecieveConfig as Record<string, NotificationConfig | undefined> | undefined)?.['newAgentMessage'],
+);
+
+// agentProactiveMessage 已废弃（智能体消息改走 newAgentMessage 消息渠道），保留类型仅为历史通知兼容渲染，不再可配置
+const nonConfigurableNotificationTypes = ['note', 'roleAssigned', 'followRequestAccepted', 'test', 'exportCompleted', 'agentProactiveMessage'] as const satisfies (typeof notificationTypes[number])[];
 
 const configurableNotificationTypes = notificationTypes.filter(type => !nonConfigurableNotificationTypes.includes(type as any)) as Exclude<typeof notificationTypes[number], typeof nonConfigurableNotificationTypes[number]>[];
 

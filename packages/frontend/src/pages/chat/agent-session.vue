@@ -1851,6 +1851,8 @@ function startReplyPendingPoll() {
 				const list = await loadInitialTimeline();
 				const assistant = list.find(message => message.role === 'assistant' && !previousIds.has(message.id));
 				if (assistant != null) {
+					// 页面可见时立即清未读，避免 3 秒延迟事件误触发声音/徽标
+					if (!window.document.hidden) void markAgentSessionRead();
 					await playSegmentedReply(assistant);
 				}
 			} catch {
@@ -2916,10 +2918,23 @@ async function fetchNewerMessages() {
 let proactiveNotificationConnection: { dispose: () => void } | null = null;
 let proactiveMessageSyncing = false;
 
-async function onProactiveMessageNotification(notification: unknown): Promise<void> {
-	const data = notification as { type?: unknown; sessionId?: unknown; messageId?: unknown };
-	if (data.type !== 'agentProactiveMessage' || data.sessionId !== sessionId || proactiveMessageSyncing) return;
+// 清除本会话的智能体消息未读标记（与私信 chat/read 对齐），后端会广播 agentRead 更新全局徽标
+async function markAgentSessionRead(): Promise<void> {
+	try {
+		await misskeyApi('agents/sessions/read' as Parameters<typeof misskeyApi>[0], { sessionId } as any);
+	} catch { /* ignore */ }
+}
 
+async function onNewAgentMessage(payload: unknown): Promise<void> {
+	const data = payload as { sessionId?: unknown; messageId?: unknown };
+	if (data.sessionId !== sessionId) return;
+
+	// 页面可见且正在查看本会话：立即清未读，避免徒增徽标
+	if (!window.document.hidden) {
+		void markAgentSessionRead();
+	}
+
+	if (proactiveMessageSyncing) return;
 	proactiveMessageSyncing = true;
 	try {
 		const existingIds = new Set(messages.value.map(message => message.id));
@@ -3204,8 +3219,10 @@ async function loadDrawArtistPresets() {
 
 onMounted(async () => {
 	const connection = useStream().useChannel('main');
-	connection.on('notification', onProactiveMessageNotification);
+	connection.on('newAgentMessage', onNewAgentMessage);
 	proactiveNotificationConnection = connection;
+	// 进入会话页即清未读（与私信房间行为一致）
+	void markAgentSessionRead();
 	try {
 		await fetchInstance(true);
 		await loadUsableStyles();
@@ -4441,6 +4458,8 @@ async function onFormSubmit(payload: { text: string; file: DriveFile | null }) {
 			formRef.value?.restoreDraft(trimmed);
 			return;
 		}
+		// 与私信一致：用户已在本页收到回复，立即清未读标记，避免 3 秒延迟事件误触发声音/徽标
+		void markAgentSessionRead();
 		if (res.longTermMemorySearchUnavailable) {
 			os.toast(i18n.ts._agents.longTermMemorySearchUnavailable);
 		}

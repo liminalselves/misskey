@@ -34,6 +34,9 @@ import { AgentImageService } from '@/core/AgentImageService.js';
 import { AgentVisionService } from '@/core/AgentVisionService.js';
 import { AgentExternalAuditService } from '@/core/AgentExternalAuditService.js';
 import { AgentProactiveScheduleService } from '@/core/AgentProactiveScheduleService.js';
+import { AgentMessageNotifyService } from '@/core/AgentMessageNotifyService.js';
+import { buildAgentProactiveNotificationText } from '@/core/agent-proactive-notification-text.js';
+import { DriveFileEntityService } from '@/core/entities/DriveFileEntityService.js';
 import { AGENT_IMAGE_WORLD_PROMPT } from '@/core/agent-image-presets.js';
 
 export const meta = {
@@ -131,6 +134,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 	private agentExternalAuditService: AgentExternalAuditService,
 	private agentProactiveScheduleService: AgentProactiveScheduleService,
 	private agentTokenService: AgentTokenService,
+	private agentMessageNotifyService: AgentMessageNotifyService,
+	private driveFileEntityService: DriveFileEntityService,
 	) {
 		super(meta, paramDef, async (ps, me) => {
 			this.agentService.assertAgentsEnabled();
@@ -566,6 +571,27 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				});
 				assistantPersisted = true;
 				await this.agentProactiveScheduleService.applyAssistantControl(session, assistantMsg, proactiveControl);
+
+				if (hasVisibleAssistantText) {
+					// 与私信一致：不落 notification 通知表，走 newAgentMessage 消息渠道（Redis 未读标记 + 延迟事件）。
+					// 用户停留在会话页时前端会立即调用已读端点清标记，3 秒后不会真正触发事件。
+					try {
+						const avatarFileId = character.avatarFileId ?? characterRow.avatarFileId;
+						const packedAvatar = avatarFileId
+							? await this.driveFileEntityService.pack(avatarFileId, {}).catch(() => null)
+							: null;
+						const agentAvatarUrl = packedAvatar?.thumbnailUrl ?? packedAvatar?.url ?? null;
+						this.agentMessageNotifyService.notifyAgentMessage(me.id, {
+							sessionId: session.id,
+							sessionName: session.name,
+							messageId: assistantMsg.id,
+							messageText: buildAgentProactiveNotificationText(assistantText),
+							agentAvatarUrl,
+						});
+					} catch {
+						// Notification delivery does not change an already persisted message.
+					}
+				}
 
 				if (memActive && hasVisibleAssistantText) {
 					const everyN = safeAgentMemEveryNRounds(

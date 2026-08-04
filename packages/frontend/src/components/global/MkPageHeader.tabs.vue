@@ -33,6 +33,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				>
 					<div v-show="t.key === tab" :class="[$style.tabTitle, $style.animate]">{{ t.title }}</div>
 				</Transition>
+				<div v-if="t.indicated" :class="[$style.indicator, '_blink']"></div>
 			</div>
 		</button>
 	</div>
@@ -50,6 +51,7 @@ export type Tab = {
 	iconOnly?: boolean;
 	title: string;
 	icon?: string;
+	indicated?: boolean;
 };
 </script>
 
@@ -258,6 +260,16 @@ onUnmounted(() => {
 	&.animate {
 		transition: width .15s linear, padding-left .15s linear;
 	}
+}
+
+.indicator {
+	flex-shrink: 0;
+	width: 8px;
+	height: 8px;
+	margin-left: 4px;
+	border-radius: 999px;
+	background: var(--MI_THEME-accent);
+	vertical-align: middle;
 }
 
 .tabHighlight {

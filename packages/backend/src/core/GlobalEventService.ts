@@ -74,6 +74,18 @@ export interface MainEventTypes {
 	chatRead: {
 		hasUnreadChatMessages: boolean; // 是否还有未读消息
 	};
+	// 智能体消息通知渠道（与私信 newChatMessage 对等，不走 notification 通知表）
+	newAgentMessage: {
+		sessionId: string;
+		sessionName: string | null;
+		messageId: string;
+		messageText: string;
+		agentAvatarUrl: string | null;
+	};
+	// 智能体消息已读事件
+	agentRead: {
+		hasUnreadAgentMessages: boolean;
+	};
 	readAllAnnouncements: undefined;
 	myTokenRegenerated: undefined;
 	signin: {

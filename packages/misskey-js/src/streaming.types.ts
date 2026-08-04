@@ -32,6 +32,15 @@ type ReversiUpdateSettings<K extends ReversiUpdateKey> = {
 	value: ReversiGameDetailed[K];
 };
 
+// 智能体消息通知渠道载荷（与私信 newChatMessage 对等，不走 notification 通知表）
+export type AgentMessageNotification = {
+	sessionId: string;
+	sessionName: string | null;
+	messageId: string;
+	messageText: string;
+	agentAvatarUrl: string | null;
+};
+
 export type Channels = {
 	main: {
 		params: null;
@@ -51,6 +60,8 @@ export type Channels = {
 			notificationFlushed: () => void;
 			unreadAntenna: (payload: Antenna) => void;
 			newChatMessage: (payload: ChatMessage) => void;
+			newAgentMessage: (payload: AgentMessageNotification) => void;
+			agentRead: (payload: { hasUnreadAgentMessages: boolean }) => void;
 			readAllAnnouncements: () => void;
 			myTokenRegenerated: () => void;
 			signin: (payload: Signin) => void;

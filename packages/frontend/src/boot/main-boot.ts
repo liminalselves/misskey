@@ -425,6 +425,43 @@ export async function mainBoot() {
 				updateCurrentAccountPartial({ hasUnreadChatMessages: data.hasUnreadChatMessages });
 			});
 
+			// 智能体消息通知渠道（与私信 newChatMessage 对等，不走 notification 通知表）
+			main.on('newAgentMessage', (payload: { sessionId: string; sessionName: string | null; messageId: string; messageText: string; agentAvatarUrl: string | null }) => {
+				// 检查页面是否可见且正在查看该智能体会话
+				const isPageVisible = !window.document.hidden;
+				const currentPath = window.location.pathname;
+				const isViewingSource = currentPath === `/chat/agent/${payload.sessionId}`;
+
+				// 与私信一致：只有在"页面可见且正在查看消息来源"时才不设置未读状态
+				if (!(isPageVisible && isViewingSource)) {
+					updateCurrentAccountPartial({ hasUnreadAgentMessages: true });
+				}
+
+				// 始终播放声音提示（与私信同一音效）
+				sound.playMisskeySfx('chatMessage');
+
+				// App 壳内：智能体消息系统通知（受 notificationRecieveConfig.newAgentMessage 控制）
+				if (isEmbeddedAppShell() && !isViewingSource) {
+					const agentConfig = ($i?.notificationRecieveConfig as Record<string, { type: string } | undefined> | undefined)?.['newAgentMessage'];
+					if (agentConfig?.type !== 'never') {
+						try {
+							const bridge = (window as unknown as { AppNativePush?: { postMessage: (m: string) => void } }).AppNativePush;
+							bridge?.postMessage?.(JSON.stringify({
+								action: 'notify',
+								title: payload.sessionName ?? i18n.ts.newMessage,
+								body: String(payload.messageText ?? '').slice(0, 500),
+								openPath: `/chat/agent/${payload.sessionId}`,
+							}));
+						} catch { /* ignore */ }
+					}
+				}
+			});
+
+			// 监听智能体消息已读事件（全局处理）
+			main.on('agentRead', (data: { hasUnreadAgentMessages: boolean }) => {
+				updateCurrentAccountPartial({ hasUnreadAgentMessages: data.hasUnreadAgentMessages });
+			});
+
 			main.on('readAllAnnouncements', () => {
 				updateCurrentAccountPartial({ hasUnreadAnnouncement: false });
 			});

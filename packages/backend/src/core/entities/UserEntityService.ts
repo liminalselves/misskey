@@ -49,6 +49,9 @@ import type { AnnouncementService } from '@/core/AnnouncementService.js';
 import type { CustomEmojiService } from '@/core/CustomEmojiService.js';
 import { AvatarDecorationService } from '@/core/AvatarDecorationService.js';
 import { ChatService } from '@/core/ChatService.js';
+// 仅类型导入：AgentMessageNotifyService 与 CacheService 存在间接循环（CacheService → UserEntityService → … → CacheService），
+// 运行时经 moduleRef 字符串令牌解析（CoreModule 已注册 $AgentMessageNotifyService 别名）
+import type { AgentMessageNotifyService } from '@/core/AgentMessageNotifyService.js';
 import type { OnModuleInit } from '@nestjs/common';
 import type { NoteEntityService } from './NoteEntityService.js';
 import type { PageEntityService } from './PageEntityService.js';
@@ -95,6 +98,7 @@ export class UserEntityService implements OnModuleInit {
 	private idService: IdService;
 	private avatarDecorationService: AvatarDecorationService;
 	private chatService: ChatService;
+	private agentMessageNotifyService: AgentMessageNotifyService;
 
 	constructor(
 		private moduleRef: ModuleRef,
@@ -151,6 +155,8 @@ export class UserEntityService implements OnModuleInit {
 		this.idService = this.moduleRef.get('IdService');
 		this.avatarDecorationService = this.moduleRef.get('AvatarDecorationService');
 		this.chatService = this.moduleRef.get('ChatService');
+		// 经字符串别名解析：既有 $ChatService 模式，minify 后同样可靠
+		this.agentMessageNotifyService = this.moduleRef.get('AgentMessageNotifyService');
 	}
 
 	//#region Validators
@@ -604,6 +610,7 @@ export class UserEntityService implements OnModuleInit {
 				hasUnreadSpecifiedNotes: false, // 後方互換性のため
 				hasUnreadMentions: false, // 後方互換性のため
 				hasUnreadChatMessages: this.chatService.hasUnreadMessages(user.id),
+				hasUnreadAgentMessages: this.agentMessageNotifyService.hasUnreadAgentMessages(user.id),
 				hasUnreadAnnouncement: unreadAnnouncements!.length > 0,
 				unreadAnnouncements,
 				hasUnreadAntenna: this.getHasUnreadAntenna(user.id),

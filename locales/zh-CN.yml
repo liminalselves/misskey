@@ -2967,6 +2967,7 @@ _notification:
     agentSessionBanned: "智能体会话封禁变更"
     agentProactiveMessage: "智能体主动消息"
     newChatMessage: "私信"
+    newAgentMessage: "智能体消息"
     achievementEarned: "取得的成就"
     exportCompleted: "已完成导出"
     login: "登录"

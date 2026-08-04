@@ -218,6 +218,8 @@ export * as 'agents/sessions/worldbook-list' from './endpoints/agents/sessions/w
 export * as 'agents/sessions/worldbook-match-preview' from './endpoints/agents/sessions/worldbook-match-preview.js';
 export * as 'agents/sessions/preview-model-change' from './endpoints/agents/sessions/preview-model-change.js';
 export * as 'agents/sessions/update' from './endpoints/agents/sessions/update.js';
+export * as 'agents/sessions/read' from './endpoints/agents/sessions/read.js';
+export * as 'agents/sessions/read-all' from './endpoints/agents/sessions/read-all.js';
 export * as 'agents/sessions/delete' from './endpoints/agents/sessions/delete.js';
 export * as 'agents/styles/create' from './endpoints/agents/styles/create.js';
 export * as 'agents/styles/delete' from './endpoints/agents/styles/delete.js';

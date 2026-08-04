@@ -25,8 +25,10 @@ import XJoiningRooms from './home.joiningRooms.vue';
 import XOwnedRooms from './home.ownedRooms.vue';
 import { i18n } from '@/i18n.js';
 import { instance } from '@/instance.js';
+import { $i } from '@/i.js';
 import { definePage } from '@/page.js';
 import MkPolkadots from '@/components/MkPolkadots.vue';
+import type { Tab } from '@/components/MkTabs.vue';
 
 const tab = ref('home');
 
@@ -37,12 +39,13 @@ const headerTabs = computed(() => {
 		key: 'home',
 		title: i18n.ts._chat.home,
 		icon: 'ti ti-home',
-	}] as { key: string; title: string; icon: string }[];
+	}] as Tab[];
 	if ((instance as Record<string, unknown>).agentFeatureEnabled === true) {
 		tabs.push({
 			key: 'agents',
 			title: i18n.ts._agents.chatTab,
 			icon: 'ti ti-robot',
+			indicated: $i?.hasUnreadAgentMessages === true,
 		});
 	}
 	tabs.push(

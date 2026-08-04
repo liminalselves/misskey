@@ -11,6 +11,7 @@ import type { MiAgentCharacter } from '@/models/AgentCharacter.js';
 import { Endpoint } from '@/server/api/endpoint-base.js';
 import { DI } from '@/di-symbols.js';
 import { AgentService } from '@/core/AgentService.js';
+import { AgentMessageNotifyService } from '@/core/AgentMessageNotifyService.js';
 import { DriveFileEntityService } from '@/core/entities/DriveFileEntityService.js';
 import { agentPreviewText } from '@/core/agent-preview-text.js';
 import { IsNull, Not } from 'typeorm';
@@ -43,6 +44,7 @@ export const meta = {
 				characterAvatar: { type: 'object', ref: 'DriveFile', nullable: true },
 				lastMessagePreview: { type: 'string' },
 				lastMessageRole: { type: 'string', enum: ['user', 'assistant', 'system'] },
+				hasUnread: { type: 'boolean' },
 				sessionModerationBanned: { type: 'boolean' },
 				characterModerationBanned: { type: 'boolean' },
 			},
@@ -65,6 +67,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		private agentMessagesRepository: AgentMessagesRepository,
 
 		private agentService: AgentService,
+		private agentMessageNotifyService: AgentMessageNotifyService,
 		private driveFileEntityService: DriveFileEntityService,
 	) {
 		super(meta, paramDef, async (ps, me) => {
@@ -101,6 +104,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			const avatarPacked = avatarIds.length > 0
 				? await this.driveFileEntityService.packManyByIdsMap(avatarIds, {})
 				: new Map();
+			const unreadIds = await this.agentMessageNotifyService.unreadSessionIds(me.id);
 
 			return rows.map(r => {
 				const ch = charMap.get(r.characterId);
@@ -122,6 +126,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					characterAvatar: avatarFileId ? avatarPacked.get(avatarFileId) ?? null : null,
 					lastMessagePreview: last ? previewText(last.content) : '',
 					lastMessageRole: last?.role ?? 'assistant',
+					hasUnread: unreadIds.has(r.id),
 					sessionModerationBanned: r.moderationBanned,
 					characterModerationBanned: ch?.moderationBanned ?? false,
 				};

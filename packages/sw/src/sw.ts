@@ -115,6 +115,7 @@ globalThis.addEventListener('push', ev => {
 			case 'notification':
 			case 'unreadAntennaNote':
 			case 'newChatMessage':
+			case 'newAgentMessage':
 				// 1日以上経過している場合は無視
 				if (Date.now() - data.dateTime > 1000 * 60 * 60 * 24) break;
 
@@ -196,6 +197,9 @@ globalThis.addEventListener('notificationclick', (ev: ServiceWorkerGlobalScopeEv
 				break;
 			case 'newChatMessage':
 				client = await swos.openChat(data.body, loginId);
+				break;
+			case 'newAgentMessage':
+				client = await swos.openAgentChat(data.body, loginId);
 				break;
 			default:
 				switch (action) {

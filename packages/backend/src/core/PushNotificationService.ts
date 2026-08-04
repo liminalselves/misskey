@@ -16,6 +16,7 @@ import { RedisKVCache } from '@/misc/cache.js';
 import { AliyunMobilePushService } from '@/core/AliyunMobilePushService.js';
 import { CacheService } from '@/core/CacheService.js';
 import { UserWebSocketStatusService } from '@/core/UserWebSocketStatusService.js';
+import type { MainEventTypes } from '@/core/GlobalEventService.js';
 
 // Defined also packages/sw/types.ts#L13
 type PushNotificationsTypes = {
@@ -26,6 +27,7 @@ type PushNotificationsTypes = {
 	};
 	'readAllNotifications': undefined;
 	newChatMessage: Packed<'ChatMessage'>;
+	newAgentMessage: MainEventTypes['newAgentMessage'];
 };
 
 // Reduce length because push message servers have character limits

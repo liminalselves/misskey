@@ -260,6 +260,15 @@ export function buildNativePushFromChatMessage(
 	return { title: sender, body, openPath };
 }
 
+/** 智能体消息渠道（与私信 newChatMessage 对等，不走 notification 通知表） */
+export function buildNativePushFromAgentMessage(
+	payload: { sessionId: string; sessionName: string | null; messageId: string; messageText: string; agentAvatarUrl: string | null },
+	lang: string | null | undefined,
+): { title: string; body: string; openPath: string } {
+	const title = payload.sessionName ?? t(lang, 'agentProactiveMessage');
+	return { title, body: String(payload.messageText ?? ''), openPath: `/chat/agent/${payload.sessionId}` };
+}
+
 export function buildNativePushFromAntennaNote(
 	payload: { antenna: { id: string; name: string }; note: Packed<'Note'> },
 	lang: string | null | undefined,

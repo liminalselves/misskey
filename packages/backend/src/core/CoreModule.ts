@@ -80,6 +80,7 @@ import { ChannelFollowingService } from './ChannelFollowingService.js';
 import { AgentService } from './AgentService.js';
 import { AgentProactiveScheduleService } from './AgentProactiveScheduleService.js';
 import { AgentProactiveMessageService } from './AgentProactiveMessageService.js';
+import { AgentMessageNotifyService } from './AgentMessageNotifyService.js';
 import { AgentImageService } from './AgentImageService.js';
 import { AgentVisionService } from './AgentVisionService.js';
 import { AgentExternalAuditService } from './AgentExternalAuditService.js';
@@ -249,6 +250,7 @@ const $AgentPlazaReviewService: Provider = { provide: 'AgentPlazaReviewService',
 const $AgentModelUsageService: Provider = { provide: 'AgentModelUsageService', useExisting: AgentModelUsageService };
 const $AgentCheckinService: Provider = { provide: 'AgentCheckinService', useExisting: AgentCheckinService };
 const $AgentDashscopeMemoryService: Provider = { provide: 'AgentDashscopeMemoryService', useExisting: AgentDashscopeMemoryService };
+const $AgentMessageNotifyService: Provider = { provide: 'AgentMessageNotifyService', useExisting: AgentMessageNotifyService };
 const $ChatService: Provider = { provide: 'ChatService', useExisting: ChatService };
 const $RegistryApiService: Provider = { provide: 'RegistryApiService', useExisting: RegistryApiService };
 const $ReversiService: Provider = { provide: 'ReversiService', useExisting: ReversiService };
@@ -407,6 +409,7 @@ const $ApQuestionService: Provider = { provide: 'ApQuestionService', useExisting
 		AgentService,
 		AgentProactiveScheduleService,
 		AgentProactiveMessageService,
+		AgentMessageNotifyService,
 		AgentImageService,
 		AgentVisionService,
 		AgentExternalAuditService,
@@ -576,6 +579,7 @@ const $ApQuestionService: Provider = { provide: 'ApQuestionService', useExisting
 		$AgentModelUsageService,
 		$AgentCheckinService,
 		$AgentDashscopeMemoryService,
+		$AgentMessageNotifyService,
 		$ChatService,
 		$RegistryApiService,
 		$ReversiService,
@@ -731,6 +735,7 @@ const $ApQuestionService: Provider = { provide: 'ApQuestionService', useExisting
 		AgentService,
 		AgentProactiveScheduleService,
 		AgentProactiveMessageService,
+		AgentMessageNotifyService,
 		AgentImageService,
 		AgentVisionService,
 		AgentExternalAuditService,
@@ -897,6 +902,7 @@ const $ApQuestionService: Provider = { provide: 'ApQuestionService', useExisting
 		$AgentModelUsageService,
 		$AgentCheckinService,
 		$AgentDashscopeMemoryService,
+		$AgentMessageNotifyService,
 		$ChatService,
 		$RegistryApiService,
 		$ReversiService,
