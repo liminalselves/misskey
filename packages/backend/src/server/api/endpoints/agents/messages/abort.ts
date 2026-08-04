@@ -37,8 +37,13 @@ export const paramDef = {
 
 /**
  * 终止正在进行中的智能体请求。
- * 只允许会话的所有者发起；调用后由 send 端点在 catch 分支中
- * 标记为 aborted、删除已入库的用户消息并返回 409 错误。
+ * 只允许会话的所有者发起。
+ *
+ * 统一中断行为（per_call 与 usage 一致）：
+ * - 直接中断 LLM 请求；
+ * - 按 costPerCall 扣费（usage 模式中断时回退按次价）；
+ * - 删除已入库的用户消息，助手消息不落库；
+ * - 会话锁由 send 端点 catch 块立即释放，用户可马上发新消息。
  */
 @Injectable()
 export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-disable-line import/no-default-export

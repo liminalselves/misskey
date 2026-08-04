@@ -4202,6 +4202,19 @@ const OPTIMISTIC_MESSAGE_ID_PREFIX = 'agent-opt:';
 
 /** 当前正在进行的发送请求 ID；由 abort 端点使用 */
 let currentClientRequestId: string | null = null;
+/**
+ * 已被用户主动中断的请求 ID 集合（兜底守卫）。
+ * 发送请求的 Promise 无法被真正取消：即便后端已中断，原 send 请求仍可能迟到地
+ * settle（成功或失败）。一旦某个 clientRequestId 在此集合中，onFormSubmit 收到其
+ * 任何响应都必须忽略——绝不渲染 user/assistant 气泡，也不弹错或回填草稿。
+ */
+const abortedRequestIds = new Set<string>();
+/**
+ * 当前 send 请求的 AbortController。
+ * 右上角全局加载指示器由 pendingApiRequestsCount 驱动，只在 HTTP 请求 settle 时递减；
+ * 中断时主动 abort 此连接，浏览器立即断开、promise 立即 reject，转圈随之停止。
+ */
+let sendAbortController: AbortController | null = null;
 const segmentPlayback = ref<{
 	token: number;
 	messageId: string;
@@ -4366,6 +4379,11 @@ async function onFormSubmit(payload: { text: string; file: DriveFile | null }) {
 	let leaveSendingSpinner = false;
 	const clientRequestId = crypto.randomUUID();
 	currentClientRequestId = clientRequestId;
+	// 为本次 send 建立可取消的 HTTP 连接：中断时 abort 它，浏览器立即断开，
+	// pendingApiRequestsCount 递减，右上角全局加载转圈随之停止。
+	sendAbortController?.abort();
+	sendAbortController = new AbortController();
+	const sendSignal = sendAbortController.signal;
 	await previewPendingWorldbookMatches(trimmed);
 	const optimisticId = OPTIMISTIC_MESSAGE_ID_PREFIX + crypto.randomUUID();
 	const userCreatedAt = new Date().toISOString();
@@ -4378,7 +4396,7 @@ async function onFormSubmit(payload: { text: string; file: DriveFile | null }) {
 	});
 
 	try {
-		const res = await misskeyApi('agents/messages/send', { sessionId, text: trimmed, fileId: payload.file?.id ?? null, clientRequestId } as any) as {
+		const res = await misskeyApi('agents/messages/send', { sessionId, text: trimmed, fileId: payload.file?.id ?? null, clientRequestId } as any, undefined, sendSignal) as {
 		userMessageId: string | null;
 		assistantMessageId: string | null;
 		userImageRecognitionStatus?: 'succeeded' | 'failed' | null;
@@ -4397,6 +4415,13 @@ async function onFormSubmit(payload: { text: string; file: DriveFile | null }) {
 			auditCategory?: string | null;
 			auditReason?: string | null;
 		};
+		// 兜底守卫：用户已中断此请求。无论后端迟到地返回什么（哪怕正常成功结果），
+		// 都忽略——不渲染任何气泡、不回填草稿，避免被中断的消息“突然出现”。
+		if (abortedRequestIds.has(clientRequestId)) {
+			abortedRequestIds.delete(clientRequestId);
+			messages.value = messages.value.filter(m => m.id !== optimisticId);
+			return;
+		}
 		if (res.auditBlocked === true) {
 			messages.value = messages.value.filter(m => m.id !== optimisticId);
 			formRef.value?.restoreDraft(trimmed);
@@ -4474,6 +4499,18 @@ async function onFormSubmit(payload: { text: string; file: DriveFile | null }) {
 			scheduleCompressionOverviewAfterSidecar();
 		}
 	} catch (e) {
+		// 兜底守卫：用户已中断此请求。迟到的任何错误都忽略——
+		// 不弹错、不回填草稿、不触发回复轮询。
+		if (abortedRequestIds.has(clientRequestId)) {
+			abortedRequestIds.delete(clientRequestId);
+			messages.value = messages.value.filter(m => m.id !== optimisticId);
+			return;
+		}
+		// 用户主动中断导致 fetch 被 abort 时抛 AbortError：静默处理，
+		// 不弹错、不回填草稿（中断是用户明确的意图）。
+		if (e instanceof DOMException && e.name === 'AbortError') {
+			return;
+		}
 		const isAborted = e != null && typeof e === 'object' && (e as { code?: string }).code === 'AGENTS_LLM_ABORTED';
 		// 中断或失败时均移除乐观气泡
 		messages.value = messages.value.filter(m => m.id !== optimisticId);
@@ -4509,6 +4546,9 @@ async function onFormSubmit(payload: { text: string; file: DriveFile | null }) {
 			if (!leaveSendingSpinner) {
 				sending.value = false;
 			}
+		}
+		if (sendAbortController?.signal === sendSignal) {
+			sendAbortController = null;
 		}
 		pendingWorldbookMatches.value = [];
 	}
@@ -4593,6 +4633,7 @@ async function onAbortRequest() {
 	const playback = segmentPlayback.value;
 	if (playback) {
 		finishSegmentPlayback();
+		currentClientRequestId = null;
 		sending.value = false;
 		return;
 	}
@@ -4605,8 +4646,16 @@ async function onAbortRequest() {
 		// 此时无法调用 abort 端点；若不止血，X 按钮会静默失效、sending 永久为 true（死锁）。
 		stopReplyPendingPoll();
 		sending.value = false;
+		// 同步后端 pending 状态，避免前端已复位但后端仍标记为生成中
+		if (sess.agentReplyPending) {
+			sess.agentReplyPending = false;
+		}
 		return;
 	}
+
+	// 立即标记为已中断：无论后端 abort 是否及时生效，原 send 请求迟到 settle 时
+	// 都会被 onFormSubmit 的兜底守卫拦截，不会再渲染气泡。
+	abortedRequestIds.add(reqId);
 
 	try {
 		await misskeyApi(
@@ -4617,16 +4666,26 @@ async function onAbortRequest() {
 		// 中断请求本身失败时静默处理（服务端可能已经完成了）
 	}
 
-	// 看门狗：正常路径下原 send 请求被中断后会 reject，并由 onFormSubmit 的 finally 复位 sending。
-	// 但若请求卡在 registerAbortable 之前（abort 无法触发 reject），sending 会永久卡住。
-	// 此处超时后兑底复位；仅当仍处于同一请求（未发起新请求）时才复位，避免误清新请求状态。
-	window.setTimeout(() => {
-		if (currentClientRequestId === reqId && sending.value) {
-			stopReplyPendingPoll();
-			currentClientRequestId = null;
-			sending.value = false;
-		}
-	}, 8000);
+	// 真正取消 send 的 HTTP 连接：浏览器立即断开，pendingApiRequestsCount 递减，
+	// 右上角全局加载转圈随之停止；onFormSubmit 将收到 AbortError 并被静默处理。
+	if (sendAbortController && !sendAbortController.signal.aborted) {
+		sendAbortController.abort();
+	}
+
+	// abort 成功或失败后均移除乐观气泡（若仍存在），避免残留
+	messages.value = messages.value.filter(m => !m.id.startsWith(OPTIMISTIC_MESSAGE_ID_PREFIX));
+
+	// 立即复位状态，让用户能马上发新消息。
+	// 原 send 请求的 finally 块会检查 currentClientRequestId === clientRequestId，
+	// 由于此处已清空，旧请求的 finally 不会误清新请求的状态。
+	if (currentClientRequestId === reqId) {
+		currentClientRequestId = null;
+	}
+	sending.value = false;
+	// 同步后端 pending 状态，确保前端立即允许发新消息
+	if (sess.agentReplyPending) {
+		sess.agentReplyPending = false;
+	}
 }
 </script>
 

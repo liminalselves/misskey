@@ -85,7 +85,8 @@ export class AgentModelUsageService {
 			modelId: params.modelId,
 			modelApiName: params.modelApiName,
 			usageKind: params.usageKind ?? 'chat',
-			status: 'success',
+			// 请求进行中：finishLog 结算时才更新为 success/failed/aborted，避免请求中误显示“成功”
+			status: 'pending',
 			errorCode: null,
 			cost: 0,
 			promptTokens: null,

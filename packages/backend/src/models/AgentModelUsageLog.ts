@@ -7,7 +7,7 @@ import { Entity, Index, Column, PrimaryColumn, JoinColumn, ManyToOne } from 'typ
 import { id } from './util/id.js';
 import { MiUser } from './User.js';
 
-export const agentModelUsageStatuses = ['success', 'failed', 'aborted'] as const;
+export const agentModelUsageStatuses = ['pending', 'success', 'failed', 'aborted'] as const;
 export type AgentModelUsageStatus = typeof agentModelUsageStatuses[number];
 
 export const agentModelUsageKinds = ['chat', 'compression', 'image_generation', 'vision', 'proactive_random', 'proactive_scheduled', 'checkin', 'admin_reward', 'credit_migration'] as const;

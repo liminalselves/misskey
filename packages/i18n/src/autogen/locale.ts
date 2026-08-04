@@ -16103,6 +16103,10 @@ export interface Locale extends ILocale {
          */
         "myStatsStatusAborted": string;
         /**
+         * リクエスト中
+         */
+        "myStatsStatusPending": string;
+        /**
          * Duration
          */
         "myStatsDuration": string;
@@ -16214,6 +16218,10 @@ export interface Locale extends ILocale {
          * モデル呼び出しは成功。金額はインスタンスのルールに従い、0 のこともあります。
          */
         "billingUsageTitleSuccess": string;
+        /**
+         * モデル呼び出しは進行中で、まだ確定していません。
+         */
+        "billingUsageTitlePending": string;
         /**
          * 呼び出しは失敗。通常は課金されません。赤は状態表示です。
          */

@@ -1039,38 +1039,62 @@ export class AgentService {
 			if (external.aborted) ac.abort();
 			else external.addEventListener('abort', onExternalAbort, { once: true });
 		}
+		// fetch 的 signal 只能中断「响应头到达前」的阶段；一旦 fetch resolve（响应头已到），
+		// 后续读响应体（res.json()）不再受 signal 控制，会一直等到 LLM 流式生成完毕。
+		// 这会导致中断被拖延到请求自然结束才生效（扣费/落库也随之延后）。
+		// 此处用一个随 ac 触发即 reject 的 Promise 与读体操作竞速，确保整个请求随时可中断。
+		let abortRace: (err?: unknown) => void = () => {};
+		const abortPromise = new Promise<never>((_, reject) => { abortRace = reject; });
+		const onAcAbort = () => abortRace(new ApiError(agentsErrors.llmAborted));
+		if (ac.signal.aborted) onAcAbort();
+		else ac.signal.addEventListener('abort', onAcAbort, { once: true });
 		let res: Response;
 		try {
-			res = await fetch(url, {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-					'Authorization': `Bearer ${apiKeyRaw}`,
-				},
-				body: JSON.stringify(body),
-				signal: ac.signal,
-			});
+			res = await Promise.race([
+				fetch(url, {
+					method: 'POST',
+					headers: {
+						'Content-Type': 'application/json',
+						'Authorization': `Bearer ${apiKeyRaw}`,
+					},
+					body: JSON.stringify(body),
+					signal: ac.signal,
+				}),
+				abortPromise,
+			]);
 		} catch (e) {
 			if (external && external.aborted) {
 				throw new ApiError(agentsErrors.llmAborted);
 			}
+			if (e instanceof ApiError && e.code === 'AGENTS_LLM_ABORTED') {
+				throw e;
+			}
 			throw new ApiError(agentsErrors.llmRequestFailed, { reason: 'NETWORK_ERROR', detail: sanitizeLlmErrorDetail(e) });
-		} finally {
-			clearTimeout(t);
-			if (external) external.removeEventListener('abort', onExternalAbort);
 		}
 
 		if (!res.ok) {
 			let upstreamBody = '';
-			try { upstreamBody = await res.text(); } catch { /* ignore */ }
+			try { upstreamBody = await Promise.race([res.text(), abortPromise]); } catch { /* ignore */ }
+			ac.abort();
 			throw new ApiError(agentsErrors.llmRequestFailed, { reason: 'UPSTREAM_HTTP_ERROR', status: res.status, detail: sanitizeLlmErrorDetail(upstreamBody) });
 		}
 
 		let json: unknown;
 		try {
-			json = await res.json();
-		} catch {
+			// 读体阶段同样纳入竞速：中断时立即 reject，不再苦等 LLM 生成完毕。
+			json = await Promise.race([res.json(), abortPromise]);
+		} catch (e) {
+			if (e instanceof ApiError && e.code === 'AGENTS_LLM_ABORTED') {
+				throw e;
+			}
+			if (external && external.aborted) {
+				throw new ApiError(agentsErrors.llmAborted);
+			}
 			throw new ApiError(agentsErrors.llmRequestFailed, { reason: 'RESPONSE_NOT_JSON' });
+		} finally {
+			clearTimeout(t);
+			ac.signal.removeEventListener('abort', onAcAbort);
+			if (external) external.removeEventListener('abort', onExternalAbort);
 		}
 
 		const choices = (json as { choices?: { message?: { content?: string } }[] }).choices;

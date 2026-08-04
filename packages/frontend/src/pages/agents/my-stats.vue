@@ -92,7 +92,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 							</span>
 							<span
 								v-else-if="item.kind === 'usage'"
-								:class="[$style.billingStatusChip, item.status === 'success' ? $style.badgeOk : item.status === 'failed' ? $style.badgeErr : $style.badgeWarn]"
+								:class="[$style.billingStatusChip, item.status === 'pending' ? $style.badgePending : item.status === 'success' ? $style.badgeOk : item.status === 'failed' ? $style.badgeErr : $style.badgeWarn]"
 								:title="billingUsageRowTitle(item.status)"
 							>
 								<span :class="$style.billingStatusPrefix">{{ billingUsageSubkindLabel(item) }}</span>
@@ -221,7 +221,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 						<span :class="$style.name">{{ usageLogKindLabel(log.usageKind) }}</span>
 						<span :class="$style.name" :title="log.modelName ?? undefined">{{ log.modelName ?? '—' }}</span>
 						<span :class="$style.num">
-							<span :class="[$style.badge, log.status === 'success' ? $style.badgeOk : log.status === 'failed' ? $style.badgeErr : $style.badgeWarn]">{{ statusLabel(log.status) }}</span>
+							<span :class="[$style.badge, log.status === 'pending' ? $style.badgePending : log.status === 'success' ? $style.badgeOk : log.status === 'failed' ? $style.badgeErr : $style.badgeWarn]">{{ statusLabel(log.status) }}</span>
 						</span>
 						<span :class="$style.num">{{ log.durationMs != null ? (log.durationMs / 1000).toFixed(1) + 's' : '—' }}</span>
 						<span :class="$style.num">
@@ -359,7 +359,7 @@ type RecentLog = {
 	modelName: string | null;
 	modelApiName: string | null;
 	usageKind: UsageKind;
-	status: 'success' | 'failed' | 'aborted';
+	status: 'pending' | 'success' | 'failed' | 'aborted';
 	cost: number;
 	promptTokens: number | null;
 	completionTokens: number | null;
@@ -667,7 +667,8 @@ function usageLogKindLabel(usageKind: UsageKind | undefined): string {
 	return agentUsageLocaleLabel('usageLogKindChat', 'billingKindUsage');
 }
 
-function statusLabel(status: 'success' | 'failed' | 'aborted'): string {
+function statusLabel(status: 'pending' | 'success' | 'failed' | 'aborted'): string {
+	if (status === 'pending') return i18n.ts._agents.myStatsStatusPending;
 	if (status === 'success') return i18n.ts._agents.myStatsStatusSuccess;
 	if (status === 'failed') return i18n.ts._agents.myStatsStatusFailed;
 	return i18n.ts._agents.myStatsStatusAborted;
@@ -687,6 +688,7 @@ function billingUsageSubkindLabel(item: BillingItem): string {
 }
 
 function billingUsageRowStatus(status: string | null | undefined): string {
+	if (status === 'pending') return i18n.ts._agents.myStatsStatusPending;
 	if (status === 'success') return i18n.ts._agents.myStatsStatusSuccess;
 	if (status === 'failed') return i18n.ts._agents.myStatsStatusFailed;
 	if (status === 'aborted') return i18n.ts._agents.billingLogStatusAborted;
@@ -694,6 +696,7 @@ function billingUsageRowStatus(status: string | null | undefined): string {
 }
 
 function billingUsageRowTitle(status: string | null | undefined): string {
+	if (status === 'pending') return i18n.ts._agents.billingUsageTitlePending;
 	if (status === 'success') return i18n.ts._agents.billingUsageTitleSuccess;
 	if (status === 'failed') return i18n.ts._agents.billingUsageTitleFailed;
 	if (status === 'aborted') return i18n.ts._agents.billingUsageTitleAborted;
@@ -911,6 +914,11 @@ onMounted(async () => {
 .badgeWarn {
 	color: var(--MI_THEME-warn);
 	background: color-mix(in srgb, var(--MI_THEME-warn) 18%, transparent);
+}
+
+.badgePending {
+	color: var(--MI_THEME-accent);
+	background: color-mix(in srgb, var(--MI_THEME-accent) 18%, transparent);
 }
 
 .badgeRedeem {

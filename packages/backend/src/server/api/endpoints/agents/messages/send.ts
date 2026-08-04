@@ -312,7 +312,15 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					promptTokens: null,
 					completionTokens: null,
 				});
+
+				// 尽早注册 abort 控制器，使后续所有异步阶段（图片识别、记忆搜索、LLM 调用）均可被中断
+				abortController = this.agentService.registerAbortable(session.id, clientRequestId);
+
 				if (imageFileId != null && visionModel != null) {
+					// 图片识别前检查 abort，避免长时间识别操作无法被中断
+					if (abortController.signal.aborted) {
+						throw new ApiError({ message: 'LLM request was aborted by the client.', code: 'AGENTS_LLM_ABORTED', id: 'ac65031e-5b21-4d61-b8a4-9822e52f7a2b', httpStatusCode: 409 });
+					}
 					const recognition = await this.agentVisionService.recognize({
 						instance: instanceMeta,
 						user: me,
@@ -328,7 +336,6 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				session.randomProactiveAt = null;
 				session.randomProactiveNeedsUserMessage = false;
 
-				abortController = this.agentService.registerAbortable(session.id, clientRequestId);
 				const modelApiName = (() => {
 					try {
 						return this.agentService.resolveModelApiName(instanceMeta, session.agentModelId ?? null);
@@ -468,6 +475,12 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					selectedWorldbook,
 				);
 
+				// 统一中断行为：per_call 和 usage 均直接中断 LLM 请求，按 costPerCall 扣费。
+				// 中断后用户消息被回滚、助手消息不落库、会话锁立即释放，用户可马上发新消息。
+				if (abortController.signal.aborted) {
+					throw new ApiError({ message: 'LLM request was aborted by the client.', code: 'AGENTS_LLM_ABORTED', id: 'ac65031e-5b21-4d61-b8a4-9822e52f7a2b', httpStatusCode: 409 });
+				}
+
 				const llmResult = await this.agentService.invokeChatCompletions({
 					system,
 					messages: pairs,
@@ -527,6 +540,11 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 						auditCategory: auditResult.category,
 						auditReason: auditResult.reason,
 					};
+				}
+				// 二次 abort 检查：LLM 可能在 abort 后仍返回了结果（abort 与完成竞态）。
+				// 落库前拦截，避免被中断的回复写入数据库。
+				if (abortController.signal.aborted) {
+					throw new ApiError({ message: 'LLM request was aborted by the client.', code: 'AGENTS_LLM_ABORTED', id: 'ac65031e-5b21-4d61-b8a4-9822e52f7a2b', httpStatusCode: 409 });
 				}
 				const asstNow = new Date();
 				const assistantMsg = await this.agentMessagesRepository.insertOne({
