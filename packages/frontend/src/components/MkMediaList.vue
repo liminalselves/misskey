@@ -204,7 +204,9 @@ onMounted(() => {
 			isButton: true,
 			html: {
 				isCustomSVG: true,
-				inner: '<path class="pswp__icn-shadow" d="M16 5v15m0 0-6-6m6 6 6-6M7 25h18"/><path d="M16 5v15m0 0-6-6m6 6 6-6M7 25h18"/>',
+				// 与网盘文件信息页面一致的 Tabler ti-download 图标（24x24 路径，居中缩放到 32x32 viewBox，与原生关闭图标视觉大小匹配）
+				// 双层渲染：深色描边底层 + currentColor 前景层，保证浅色背景下可见
+				inner: '<g transform="translate(5.5, 5.5) scale(0.875)" fill="none" stroke-linecap="round" stroke-linejoin="round"><g stroke="#4f4f4f" stroke-width="4"><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2 -2v-2"/><path d="M7 11l5 5l5 -5"/><path d="M12 4l0 12"/></g><g stroke="currentColor" stroke-width="2"><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2 -2v-2"/><path d="M7 11l5 5l5 -5"/><path d="M12 4l0 12"/></g></g>',
 			},
 			onClick: async (ev, el, pswp) => {
 				ev.preventDefault();
@@ -396,13 +398,43 @@ defineExpose({
 	backdrop-filter: var(--MI-modalBgFilter);
 }
 
-.pswp__button--download .pswp__icn {
+// 顶部工具栏：紧凑布局，按钮垂直居中（保留默认的 pointer-events:none，勿动）
+.pswp .pswp__top-bar {
+	align-items: center !important;
+	height: 56px !important;
+	padding: 0 12px !important;
+	gap: 6px;
+}
+
+// 按钮：无背景纯图标，轻盈干净（保留 PhotoSwipe 原生填充式图标，不覆盖 fill/stroke）
+.pswp .pswp__button {
+	width: 44px !important;
+	height: 44px !important;
+	margin: 0 !important;
+	border-radius: 50% !important;
+	background: transparent !important;
+	opacity: 0.75 !important;
+	transition: opacity 0.15s ease, background-color 0.15s ease !important;
+}
+
+.pswp .pswp__button:hover,
+.pswp .pswp__button:focus {
+	opacity: 1 !important;
+	background: rgba(255, 255, 255, 0.12) !important;
+}
+
+// 图标：28x28，居中于 44x44 按钮内
+.pswp .pswp__button .pswp__icn {
+	top: 8px !important;
+	left: 8px !important;
+	width: 28px !important;
+	height: 28px !important;
+}
+
+// 下载按钮图标（Tabler ti-download，stroke 属性已内联在 SVG 中）
+.pswp .pswp__button--download .pswp__icn {
 	color: var(--pswp-icon-color);
 	fill: none;
-	stroke: currentColor;
-	stroke-width: 1.8;
-	stroke-linecap: round;
-	stroke-linejoin: round;
 }
 
 .pswp__alt-text-container {
