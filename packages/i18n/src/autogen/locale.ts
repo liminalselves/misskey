@@ -3489,6 +3489,10 @@ export interface Locale extends ILocale {
      */
     "adminOverviewProcess": string;
     /**
+     * 待機中
+     */
+    "adminOverviewWaiting": string;
+    /**
      * 受信
      */
     "adminOverviewSub": string;
