@@ -158,6 +158,13 @@ watch(() => [props.instanceUrl, props.sitekey, props.secretKey, props.sceneId, p
 if (loaded || props.provider === 'mcaptcha' || props.provider === 'testcaptcha') {
 	available.value = true;
 } else if (src.value !== null) {
+	// 阿里云验证码要求 AliyunCaptchaConfig 必须在主脚本加载前设置
+	if (props.provider === 'aliyuncaptcha' && props.sitekey) {
+		(window as AliyunCaptchaWindow).AliyunCaptchaConfig = {
+			region: props.region ?? 'cn',
+			prefix: props.sitekey,
+		};
+	}
 	(window.document.getElementById(scriptId.value) ?? window.document.head.appendChild(Object.assign(window.document.createElement('script'), {
 		async: true,
 		id: scriptId.value,
@@ -205,6 +212,7 @@ async function requestRender() {
 			const triggerLabel = window.document.createElement('span');
 			const uniq = Math.random().toString(36).slice(2);
 			root.id = `aliyun-captcha-element-${uniq}`;
+			root.className = styleModule.aliyunHost;
 			trigger.id = `aliyun-captcha-button-${uniq}`;
 			trigger.type = 'button';
 			trigger.className = styleModule.aliyunTrigger;
@@ -221,9 +229,11 @@ async function requestRender() {
 				region: props.region ?? 'cn',
 				prefix: props.sitekey,
 			};
-			(window as AliyunCaptchaWindow).initAliyunCaptcha?.({
+
+			let gotInstance = false;
+			const initOptions = {
 				SceneId: props.sceneId,
-				mode: 'popup',
+				mode: 'popup' as const,
 				element: root,
 				button: trigger,
 				success: (captchaVerifyParam: string) => callback(captchaVerifyParam),
@@ -232,9 +242,33 @@ async function requestRender() {
 					if (_DEV_) console.warn('aliyun captcha failed', result);
 				},
 				getInstance: (instance: AliyunCaptcha) => {
+					gotInstance = true;
 					aliyunCaptchaInstance.value = instance;
 				},
-			});
+			};
+
+			try {
+				(window as AliyunCaptchaWindow).initAliyunCaptcha?.(initOptions);
+			} catch (error: unknown) {
+				if (_DEV_) console.warn('initAliyunCaptcha failed', error);
+			}
+
+			// 阿里云 SDK 不支持随意重复初始化，若本次未成功渲染出原生组件，
+			// 则退避重试，避免出现只剩自绘触发按钮的“旧版”UI
+			let retryCount = 0;
+			const ensureWidgetRendered = () => {
+				window.setTimeout(() => {
+					if (!root.isConnected || root.childElementCount > 0 || gotInstance) return;
+					if (retryCount++ >= 8) return;
+					try {
+						(window as AliyunCaptchaWindow).initAliyunCaptcha?.(initOptions);
+					} catch (error: unknown) {
+						if (_DEV_) console.warn('initAliyunCaptcha retry failed', error);
+					}
+					ensureWidgetRendered();
+				}, 600);
+			};
+			ensureWidgetRendered();
 
 			// Fallback: some builds don't bind click properly; ensure click triggers popup.
 			trigger.addEventListener('click', () => {
@@ -243,7 +277,7 @@ async function requestRender() {
 			});
 			return;
 		}
-		window.setTimeout(requestRender, 1);
+		window.setTimeout(requestRender, 50);
 		return;
 	}
 
@@ -352,7 +386,7 @@ defineExpose({
 <style lang="scss" module>
 .root {
 	width: 100%;
-	max-width: 304px;
+	max-width: 360px;
 	margin-inline: auto;
 	overflow-x: auto;
 }
@@ -379,11 +413,25 @@ defineExpose({
 
 .externalWidget {
 	display: flex;
+	flex-direction: column;
+	gap: 8px;
 	width: 100%;
 	align-items: center;
 	justify-content: center;
 
 	:global(iframe) {
+		max-width: 100%;
+	}
+}
+
+.aliyunHost {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	width: 100%;
+
+	> :global(*) {
+		margin-inline: auto;
 		max-width: 100%;
 	}
 }

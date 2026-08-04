@@ -346,6 +346,7 @@ function onSignupApiError() {
 }
 
 .captcha {
-	margin: 16px 0;
+	margin-block: 16px;
+	margin-inline: auto;
 }
 </style>
