@@ -108,4 +108,12 @@ export class MiAgentExternalAuditLog {
 
 	@Column('varchar', { length: 1024, nullable: true })
 	public errorMessage: string | null;
+
+	/** 复审忽略时间，非 null 表示该记录已被管理员标记为误拦 */
+	@Column('timestamp with time zone', { nullable: true })
+	public reviewIgnoredAt: Date | null;
+
+	/** 执行复审忽略操作的管理员 */
+	@Column({ ...id(), nullable: true })
+	public reviewIgnoredById: MiUser['id'] | null;
 }

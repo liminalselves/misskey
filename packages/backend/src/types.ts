@@ -140,6 +140,7 @@ export const moderationLogTypes = [
 	'resolveAgentReview',
 	'setAgentSessionModerationBan',
 	'setAgentCharacterModerationBan',
+	'ignoreAgentExternalAuditReview',
 ] as const;
 
 export type ModerationLogPayloads = {
@@ -435,6 +436,10 @@ export type ModerationLogPayloads = {
 		banned: boolean;
 		before: boolean;
 		reason?: string | null;
+	};
+	ignoreAgentExternalAuditReview: {
+		ids: string[];
+		count: number;
 	};
 };
 

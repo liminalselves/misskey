@@ -308,6 +308,19 @@ export const paramDef = {
 		agentExternalAuditFailureMinRequests: { type: 'integer', minimum: 1, maximum: 100000 },
 		agentExternalAuditNotifyEmails: { type: 'string', nullable: true, maxLength: 4000 },
 		agentExternalAuditSystemPrompt: { type: 'string', nullable: true, maxLength: 20000 },
+		agentReviewTriggerRules: {
+			type: 'array',
+			items: {
+				type: 'object',
+				properties: {
+					id: { type: 'string', minLength: 1, maxLength: 64 },
+					timeWindowMinutes: { type: 'integer', minimum: 1, maximum: 10080 },
+					blockThreshold: { type: 'integer', minimum: 1, maximum: 1000 },
+					enabled: { type: 'boolean' },
+				},
+				required: ['id', 'timeWindowMinutes', 'blockThreshold', 'enabled'],
+			},
+		},
 		agentCheckinSettings: { type: 'object', nullable: true, additionalProperties: true },
 		agentRedeemPurchaseUrl: { type: 'string', nullable: true, maxLength: 1024 },
 		agentAliyaCharacterId: { type: 'string', nullable: true, maxLength: 256 },
@@ -1173,6 +1186,14 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				set.agentExternalAuditSystemPrompt = ps.agentExternalAuditSystemPrompt === null || String(ps.agentExternalAuditSystemPrompt).trim() === ''
 					? null
 					: String(ps.agentExternalAuditSystemPrompt).trim();
+			}
+			if (ps.agentReviewTriggerRules !== undefined) {
+				set.agentReviewTriggerRules = (ps.agentReviewTriggerRules ?? []).map(r => ({
+					id: String(r.id),
+					timeWindowMinutes: Math.max(1, Math.min(10080, Math.trunc(r.timeWindowMinutes))),
+					blockThreshold: Math.max(1, Math.min(1000, Math.trunc(r.blockThreshold))),
+					enabled: r.enabled !== false,
+				}));
 			}
 
 			if (ps.agentCheckinSettings !== undefined) {

@@ -609,6 +609,19 @@ export const meta = {
 				type: 'string',
 				optional: false, nullable: false,
 			},
+			agentReviewTriggerRules: {
+				type: 'array',
+				optional: false, nullable: false,
+				items: {
+					type: 'object',
+					properties: {
+						id: { type: 'string' },
+						timeWindowMinutes: { type: 'integer' },
+						blockThreshold: { type: 'integer' },
+						enabled: { type: 'boolean' },
+					},
+				},
+			},
 			agentCheckinSettings: {
 				type: 'object',
 				optional: false, nullable: true,
@@ -1156,6 +1169,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				agentExternalAuditSystemPromptResolved: typeof instance.agentExternalAuditSystemPrompt === 'string' && instance.agentExternalAuditSystemPrompt.trim() !== ''
 					? instance.agentExternalAuditSystemPrompt
 					: DEFAULT_AGENT_EXTERNAL_AUDIT_SYSTEM_PROMPT,
+				agentReviewTriggerRules: instance.agentReviewTriggerRules ?? [],
 				agentCheckinSettings: instance.agentCheckinSettings ?? null,
 				agentRedeemPurchaseUrl: instance.agentRedeemPurchaseUrl ?? null,
 				agentAliyaCharacterId: instance.agentAliyaCharacterId ?? null,

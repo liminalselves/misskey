@@ -29,6 +29,9 @@ export * as 'admin/agents/credits/migration/generate-key' from './endpoints/admi
 export * as 'admin/agents/credits/migration/logs' from './endpoints/admin/agents/credits/migration/logs.js';
 export * as 'admin/agents/governance/external-audit/detail' from './endpoints/admin/agents/governance/external-audit/detail.js';
 export * as 'admin/agents/governance/external-audit/list' from './endpoints/admin/agents/governance/external-audit/list.js';
+export * as 'admin/agents/governance/external-audit/review-list' from './endpoints/admin/agents/governance/external-audit/review-list.js';
+export * as 'admin/agents/governance/external-audit/review-ignore' from './endpoints/admin/agents/governance/external-audit/review-ignore.js';
+export * as 'admin/agents/governance/quick-action' from './endpoints/admin/agents/governance/quick-action.js';
 export * as 'admin/agents/governance/images/list' from './endpoints/admin/agents/governance/images/list.js';
 export * as 'admin/agents/governance/images/set-blocked' from './endpoints/admin/agents/governance/images/set-blocked.js';
 export * as 'admin/agents/governance/logs/list' from './endpoints/admin/agents/governance/logs/list.js';
@@ -166,6 +169,7 @@ export * as 'agents/compression-sticky/delete' from './endpoints/agents/compress
 export * as 'agents/compression-sticky/list' from './endpoints/agents/compression-sticky/list.js';
 export * as 'agents/compression-sticky/update' from './endpoints/agents/compression-sticky/update.js';
 export * as 'agents/compression-sticky/reorder' from './endpoints/agents/compression-sticky/reorder.js';
+export * as 'agents/compression-sticky/import' from './endpoints/agents/compression-sticky/import.js';
 export * as 'agents/credit-balance' from './endpoints/agents/credit-balance.js';
 export * as 'agents/credits/migrate' from './endpoints/agents/credits/migrate.js';
 export * as 'agents/my-usage-summary' from './endpoints/agents/my-usage-summary.js';

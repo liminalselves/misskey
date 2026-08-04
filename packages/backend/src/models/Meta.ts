@@ -98,6 +98,17 @@ export type MiAgentExternalAuditModel = {
 	lastError?: string | null;
 };
 
+/** 外审复审触发条件：在 timeWindowMinutes 分钟内触发外审拦截 blockThreshold 次则进入人工复审 */
+export type MiAgentReviewTriggerRule = {
+	id: string;
+	/** 时间窗口（分钟） */
+	timeWindowMinutes: number;
+	/** 触发次数阈值 */
+	blockThreshold: number;
+	/** 是否启用 */
+	enabled: boolean;
+};
+
 @Entity('meta')
 export class MiMeta {
 	@PrimaryColumn({
@@ -1189,6 +1200,12 @@ export class MiMeta {
 		nullable: true,
 	})
 	public agentExternalAuditSystemPrompt: string | null;
+
+	/** 外审复审触发条件规则列表 */
+	@Column('jsonb', {
+		default: [],
+	})
+	public agentReviewTriggerRules: MiAgentReviewTriggerRule[];
 
 	@Column('jsonb', {
 		nullable: true,

@@ -340,6 +340,32 @@ SPDX-License-Identifier: AGPL-3.0-only
 					</div>
 
 					<MkFolder :defaultOpen="true">
+						<template #icon><i class="ti ti-shield-exclamation"></i></template>
+						<template #label>人工复审触发条件</template>
+						<div class="_gaps">
+							<MkInfo>当用户在指定时间窗口内触发外审拦截达到设定次数时，自动将该用户标记为需要人工复审。可配置多条规则。</MkInfo>
+							<div v-for="(rule, i) in form.state.agentReviewTriggerRules" :key="rule.id" :class="$style.modelCard" class="_gaps_s">
+								<div :class="$style.modelCardHead">
+									<b>规则 #{{ i + 1 }}</b>
+									<button type="button" class="_button" :class="$style.iconWarn" @click="removeReviewTriggerRule(i)"><i class="ti ti-trash"></i></button>
+								</div>
+								<FormSplit :minWidth="200">
+									<MkInput v-model="rule.timeWindowMinutes" type="text">
+										<template #label>时间窗口（分钟）</template>
+										<template #caption>如 60 表示 1 小时内</template>
+									</MkInput>
+									<MkInput v-model="rule.blockThreshold" type="text">
+										<template #label>触发次数</template>
+										<template #caption>如 5 表示触发 5 次</template>
+									</MkInput>
+								</FormSplit>
+								<MkSwitch v-model="rule.enabled"><template #label>启用此规则</template></MkSwitch>
+							</div>
+							<MkButton rounded @click="addReviewTriggerRule"><i class="ti ti-plus"></i> 添加复审规则</MkButton>
+						</div>
+					</MkFolder>
+
+					<MkFolder :defaultOpen="true">
 						<template #icon><i class="ti ti-chart-bar"></i></template>
 						<template #label>最近 1 小时模型统计</template>
 						<MkLoading v-if="externalAuditStatsLoading"/>
@@ -627,7 +653,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 						</MkInput>
 						<div class="_buttons">
 							<MkButton primary rounded :disabled="redeemGenerating" @click="generateRedeemCodes"><i class="ti ti-plus"></i> {{ i18n.ts._agents.redeemCodesGenerateBtn }}</MkButton>
-							<MkButton rounded :disabled="redeemLoading" @click="loadRedeemCodes"><i class="ti ti-refresh"></i> 刷新列表</MkButton>
+							<MkButton rounded :disabled="redeemLoading" @click="loadRedeemCodes()"><i class="ti ti-refresh"></i> 刷新列表</MkButton>
 						</div>
 						<div v-if="generatedCodes.length > 0" :class="$style.generatedBox">
 							<div :class="$style.generatedHead">
@@ -682,6 +708,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 								<MkButton v-if="row.status === 'available'" small rounded danger @click="revokeRedeemCode(row)"><i class="ti ti-ban"></i> {{ i18n.ts._agents.redeemCodesRevoke }}</MkButton>
 							</div>
 						</div>
+						<div v-if="redeemHasMore" style="display: flex; justify-content: center; margin-top: 10px;">
+							<MkButton small rounded :disabled="redeemLoading" @click="loadMoreRedeemCodes"><i class="ti ti-chevron-down"></i> {{ redeemLoading ? '载入中…' : '继续载入' }}</MkButton>
+						</div>
 					</div>
 				</MkFolder>
 			</template>
@@ -707,7 +736,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<template #label>迁移日志</template>
 					<div class="_gaps">
 						<div class="_buttons">
-							<MkButton rounded :disabled="migrationLogsLoading" @click="loadMigrationLogs"><i class="ti ti-refresh"></i> 刷新</MkButton>
+							<MkButton rounded :disabled="migrationLogsLoading" @click="loadMigrationLogs()"><i class="ti ti-refresh"></i> 刷新</MkButton>
 						</div>
 						<MkLoading v-if="migrationLogsLoading"/>
 						<div v-else-if="migrationLogs.length === 0" :class="$style.emptyModels">暂无迁移记录</div>
@@ -976,6 +1005,13 @@ type AgentExternalAuditModelStat = {
 	failureRate: number;
 };
 
+type AgentReviewTriggerRule = {
+	id: string;
+	timeWindowMinutes: string;
+	blockThreshold: string;
+	enabled: boolean;
+};
+
 const agentImageProviderItems: MkSelectItem[] = [
 	{ value: 'aurora', label: 'Aurora / Naval AI' },
 	{ value: 'openai', label: i18n.ts._agents.imageProviderOpenai },
@@ -1173,6 +1209,20 @@ function initAgentExternalAuditModelRows(): AgentExternalAuditModelRow[] {
 	});
 }
 
+function initAgentReviewTriggerRules(): AgentReviewTriggerRule[] {
+	const raw = meta.agentReviewTriggerRules;
+	if (!Array.isArray(raw)) return [];
+	return raw.map((item) => {
+		const o = (item && typeof item === 'object') ? item as Record<string, unknown> : {};
+		return {
+			id: typeof o.id === 'string' && o.id ? o.id : genId(),
+			timeWindowMinutes: String(numFromMeta(o.timeWindowMinutes, 60)),
+			blockThreshold: String(numFromMeta(o.blockThreshold, 5)),
+			enabled: o.enabled !== false,
+		};
+	});
+}
+
 function imageParamsFromMeta(): Record<string, unknown> {
 	return (meta.agentImageDefaultParams && typeof meta.agentImageDefaultParams === 'object')
 		? meta.agentImageDefaultParams as Record<string, unknown>
@@ -1232,6 +1282,7 @@ const form = useForm({
 	agentExternalAuditSystemPrompt: typeof meta.agentExternalAuditSystemPrompt === 'string'
 		? meta.agentExternalAuditSystemPrompt
 		: (typeof meta.agentExternalAuditSystemPromptResolved === 'string' ? meta.agentExternalAuditSystemPromptResolved : ''),
+	agentReviewTriggerRules: initAgentReviewTriggerRules(),
 	checkinEnabled: Boolean((meta as any).agentCheckinSettings?.enabled ?? true),
 	checkinStreakMaxDays: String((meta as any).agentCheckinSettings?.streakMaxDays ?? 365),
 	checkinStreakMaxMultiplier: String((meta as any).agentCheckinSettings?.streakMaxMultiplier ?? 2.0),
@@ -1625,6 +1676,14 @@ const form = useForm({
 		agentExternalAuditFailureMinRequests: externalAuditFailureMinRequests,
 		agentExternalAuditNotifyEmails: state.agentExternalAuditNotifyEmails.trim() === '' ? null : state.agentExternalAuditNotifyEmails,
 		agentExternalAuditSystemPrompt: state.agentExternalAuditSystemPrompt.trim() === '' ? null : state.agentExternalAuditSystemPrompt,
+		agentReviewTriggerRules: state.agentReviewTriggerRules
+			.filter(r => r.timeWindowMinutes.trim() !== '' && r.blockThreshold.trim() !== '')
+			.map(r => ({
+				id: r.id,
+				timeWindowMinutes: Math.max(1, Math.min(10080, Math.trunc(Number(r.timeWindowMinutes) || 60))),
+				blockThreshold: Math.max(1, Math.min(1000, Math.trunc(Number(r.blockThreshold) || 5))),
+				enabled: r.enabled,
+			})),
 		agentCheckinSettings: {
 			enabled: state.checkinEnabled,
 			streakMaxDays: Number(state.checkinStreakMaxDays) || 365,
@@ -1765,6 +1824,7 @@ const redeemGenerating = ref(false);
 const generatedCodes = ref<{ id: string; code: string; creditAmount: number }[]>([]);
 const redeemLoading = ref(false);
 const redeemCodes = ref<RedeemCodeRow[]>([]);
+const redeemHasMore = ref(false);
 const redeemStatus = ref<'available' | 'redeemed' | 'expired' | 'revoked' | 'all'>('available');
 
 // === 迁移 Tab ===
@@ -1938,19 +1998,30 @@ async function generateRedeemCodes() {
 	}
 }
 
-async function loadRedeemCodes() {
+async function loadRedeemCodes(append = false) {
 	redeemLoading.value = true;
 	try {
 		const params: Record<string, unknown> = {
-			limit: Number(redeemPageSize.value) || 30,
+			limit: (Number(redeemPageSize.value) || 30) + 1,
 		};
 		if (redeemStatus.value !== 'all') params.status = redeemStatus.value;
-		redeemCodes.value = await misskeyApi('admin/agents/redeem-codes/list' as any, params) as RedeemCodeRow[];
+		if (append && redeemCodes.value.length > 0) {
+			params.untilId = redeemCodes.value[redeemCodes.value.length - 1].id;
+		}
+		const rows = await misskeyApi('admin/agents/redeem-codes/list' as any, params) as RedeemCodeRow[];
+		const pageSize = Number(redeemPageSize.value) || 30;
+		redeemHasMore.value = rows.length > pageSize;
+		const pageRows = rows.slice(0, pageSize);
+		redeemCodes.value = append ? [...redeemCodes.value, ...pageRows] : pageRows;
 	} catch (err) {
 		os.alert({ type: 'error', text: formatApiError(err) });
 	} finally {
 		redeemLoading.value = false;
 	}
+}
+
+function loadMoreRedeemCodes() {
+	void loadRedeemCodes(true);
 }
 
 async function revokeRedeemCode(row: RedeemCodeRow) {
@@ -2017,6 +2088,19 @@ function clearExternalAuditAutoDisabled(index: number) {
 	row.autoDisabledAt = '';
 	row.autoDisabledReason = '';
 	row.lastError = '';
+}
+
+function addReviewTriggerRule() {
+	form.state.agentReviewTriggerRules.push({
+		id: genId(),
+		timeWindowMinutes: '60',
+		blockThreshold: '5',
+		enabled: true,
+	});
+}
+
+function removeReviewTriggerRule(index: number) {
+	form.state.agentReviewTriggerRules.splice(index, 1);
 }
 
 function restoreExternalAuditPrompt() {
@@ -2291,6 +2375,12 @@ definePage(() => ({
 }));
 
 watch(redeemStatus, () => {
+	redeemHasMore.value = false;
+	if (activeTab.value === 'credits') void loadRedeemCodes();
+});
+
+watch(redeemPageSize, () => {
+	redeemHasMore.value = false;
 	if (activeTab.value === 'credits') void loadRedeemCodes();
 });
 
@@ -2655,6 +2745,7 @@ onMounted(() => {
 @media (max-width: 800px) {
 	.simpleRow {
 		grid-template-columns: 1fr;
+		gap: 6px;
 	}
 
 	.auditStatsHead {
@@ -2663,6 +2754,7 @@ onMounted(() => {
 
 	.auditStatsRow {
 		grid-template-columns: 1fr;
+		gap: 6px;
 	}
 
 	.simpleHeadRow {
@@ -2672,6 +2764,37 @@ onMounted(() => {
 	.generatedHead {
 		align-items: flex-start;
 		flex-direction: column;
+	}
+
+	.overviewGrid {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+
+	.quickGrid {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+
+	.artistPresetGrid {
+		grid-template-columns: 1fr;
+	}
+
+	.reportTabRow {
+		flex-wrap: wrap;
+	}
+
+	.reportToolbar {
+		flex-direction: column;
+		align-items: stretch;
+	}
+}
+
+@media (max-width: 480px) {
+	.overviewGrid {
+		grid-template-columns: 1fr;
+	}
+
+	.quickGrid {
+		grid-template-columns: 1fr;
 	}
 }
 

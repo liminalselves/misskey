@@ -12,6 +12,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<h1>智能体治理工作台</h1>
 					<p>集中处理发布审核、运行治理、外审拦截、AI 生图和治理日志。</p>
 				</div>
+				<div :class="$style.heroStats" v-if="summary">
+					<span :class="$style.heroStat">待处理 <b>{{ summary.pendingTotal }}</b></span>
+					<span :class="$style.heroStat">封禁 <b>{{ summary.bannedCharacters + summary.bannedSessions }}</b></span>
+				</div>
 			</section>
 
 			<main :class="$style.mainPane">
@@ -19,39 +23,47 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<div :class="$style.sectionHead">
 						<div>
 							<h2>治理概览</h2>
-							<p>汇总当前待处理审核与运行治理状态。</p>
+							<p>汇总当前待处理审核与运行治理状态。点击卡片快速跳转。</p>
 						</div>
 					</div>
 					<div :class="$style.summaryGrid">
-						<div v-for="card in summaryCards" :key="card.key" v-panel :class="$style.summaryCard">
-							<span>{{ card.label }}</span>
-							<b>{{ card.value }}</b>
-						</div>
+						<button v-for="card in summaryCards" :key="card.key" type="button" class="_button" :class="$style.summaryCard" @click="card.target ? activeView = card.target : null">
+							<span :class="$style.summaryLabel"><i :class="card.icon"></i> {{ card.label }}</span>
+							<b :class="$style.summaryValue">{{ card.value }}</b>
+						</button>
 					</div>
 				</section>
 
 				<template v-else-if="activeView === 'queue' || activeView === 'library'">
 					<section :class="$style.filterBand">
-						<FormSplit :minWidth="190">
-							<MkSelect v-model="reviewFilters.kind" :items="kindItems">
-								<template #label>类型</template>
-							</MkSelect>
-							<MkSelect v-model="reviewFilters.status" :items="reviewStatusItems">
-								<template #label>状态</template>
-							</MkSelect>
-						</FormSplit>
-						<FormSplit :minWidth="240">
-							<MkInput v-model="reviewFilters.query" type="text">
-								<template #label>关键词</template>
-							</MkInput>
-							<MkInput v-model="reviewFilters.userId" type="text">
-								<template #label>作者用户名 / acct</template>
-							</MkInput>
-						</FormSplit>
-						<div class="_buttons">
-							<MkButton primary rounded :disabled="reviewLoading" @click="loadReviewList(true)"><i class="ti ti-search"></i> 检索</MkButton>
-							<MkButton rounded :disabled="reviewLoading" @click="resetReviewFilters"><i class="ti ti-filter-off"></i> 重置</MkButton>
+						<div :class="$style.filterToggle" @click="reviewFilterOpen = !reviewFilterOpen">
+							<i :class="reviewFilterOpen ? 'ti ti-filter-off' : 'ti ti-filter'"></i>
+							<span>筛选条件</span>
+							<span v-if="hasActiveReviewFilters" :class="$style.filterActiveDot"></span>
+							<i :class="reviewFilterOpen ? 'ti ti-chevron-up' : 'ti ti-chevron-down'" style="margin-left: auto;"></i>
 						</div>
+						<template v-if="reviewFilterOpen">
+							<FormSplit :minWidth="190">
+								<MkSelect v-model="reviewFilters.kind" :items="kindItems">
+									<template #label>类型</template>
+								</MkSelect>
+								<MkSelect v-model="reviewFilters.status" :items="reviewStatusItems">
+									<template #label>状态</template>
+								</MkSelect>
+							</FormSplit>
+							<FormSplit :minWidth="240">
+								<MkInput v-model="reviewFilters.query" type="text">
+									<template #label>关键词</template>
+								</MkInput>
+								<MkInput v-model="reviewFilters.userId" type="text">
+									<template #label>作者用户名 / acct</template>
+								</MkInput>
+							</FormSplit>
+							<div class="_buttons">
+								<MkButton primary rounded :disabled="reviewLoading" @click="loadReviewList(true)"><i class="ti ti-search"></i> 检索</MkButton>
+								<MkButton rounded :disabled="reviewLoading" @click="resetReviewFilters"><i class="ti ti-filter-off"></i> 重置</MkButton>
+							</div>
+						</template>
 					</section>
 
 					<div :class="$style.splitPane">
@@ -85,13 +97,13 @@ SPDX-License-Identifier: AGPL-3.0-only
 								</button>
 							</div>
 							<div v-if="reviewRows.length > 0 && reviewHasMore" :class="$style.loadMore">
-								<MkButton small rounded :disabled="reviewLoading" @click="loadMoreReviews"><i class="ti ti-chevron-down"></i> 继续载入</MkButton>
+								<MkButton v-appear="prefer.s.enableInfiniteScroll ? loadMoreReviews : null" small rounded :disabled="reviewLoading" @click="loadMoreReviews"><i class="ti ti-chevron-down"></i> {{ reviewLoading ? '载入中…' : '继续载入' }}</MkButton>
 							</div>
 						</section>
 
 						<aside :class="$style.detailPane">
 							<MkLoading v-if="reviewDetailLoading"/>
-							<ReviewDetail v-else-if="reviewDetail" :detail="reviewDetail" @approve="approveReview" @reject="rejectReview" @ban="toggleCharacterBan" @copy="copyText"/>
+							<ReviewDetail v-else-if="reviewDetail" :detail="reviewDetail" :canModerate="iAmModerator" @approve="approveReview" @reject="rejectReview" @ban="toggleCharacterBan" @copy="copyText"/>
 							<div v-else :class="$style.emptyDetail">
 								<i class="ti ti-click"></i>
 								<p>选择一条内容查看完整提示词、差异和治理操作。</p>
@@ -153,6 +165,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 									<MkButton small rounded @click="copyText(row.id)"><i class="ti ti-copy"></i> 复制消息 ID</MkButton>
 								</div>
 							</article>
+							<div v-if="messagesHasMore" :class="$style.loadMore">
+								<MkButton v-appear="prefer.s.enableInfiniteScroll ? () => messagesPagination.load(false) : null" small rounded :disabled="messagesLoading" @click="messagesPagination.load(false)"><i class="ti ti-chevron-down"></i> {{ messagesLoading ? '载入中…' : '继续载入' }}</MkButton>
+							</div>
 						</div>
 					</section>
 					<div :class="$style.splitPane">
@@ -178,10 +193,13 @@ SPDX-License-Identifier: AGPL-3.0-only
 									</div>
 								</button>
 							</div>
+							<div v-if="sessions.length > 0 && sessionsHasMore" :class="$style.loadMore">
+								<MkButton v-appear="prefer.s.enableInfiniteScroll ? () => sessionsPagination.load(false) : null" small rounded :disabled="sessionsLoading" @click="sessionsPagination.load(false)"><i class="ti ti-chevron-down"></i> {{ sessionsLoading ? '载入中…' : '继续载入' }}</MkButton>
+							</div>
 						</section>
 						<aside :class="$style.detailPane">
 							<MkLoading v-if="sessionDetailLoading"/>
-							<SessionDetail v-else-if="sessionDetail" :detail="sessionDetail" @toggleBan="toggleSessionBan" @copy="copyText"/>
+							<SessionDetail v-else-if="sessionDetail" :detail="sessionDetail" :canModerate="iAmModerator" :messagesLoading="sessionMessagesLoading" @toggleBan="toggleSessionBan" @copy="copyText" @loadMoreMessages="loadMoreSessionMessages"/>
 							<div v-else :class="$style.emptyDetail">
 								<i class="ti ti-messages"></i>
 								<p>选择会话查看最近消息。</p>
@@ -244,6 +262,92 @@ SPDX-License-Identifier: AGPL-3.0-only
 								<MkButton v-if="row.sessionId" small rounded @click="jumpSession(row.sessionId)"><i class="ti ti-arrow-right"></i> 查看会话</MkButton>
 							</div>
 						</article>
+						<div v-if="externalHasMore" :class="$style.loadMore">
+							<MkButton v-appear="prefer.s.enableInfiniteScroll ? () => externalPagination.load(false) : null" small rounded :disabled="externalLoading" @click="externalPagination.load(false)"><i class="ti ti-chevron-down"></i> {{ externalLoading ? '载入中…' : '继续载入' }}</MkButton>
+						</div>
+					</div>
+				</template>
+
+				<template v-else-if="activeView === 'review'">
+					<section :class="$style.filterBand">
+						<FormSplit :minWidth="220">
+							<MkInput v-model="reviewUserFilter" type="text"><template #label>用户名 / acct</template></MkInput>
+						</FormSplit>
+						<div class="_buttons">
+							<MkButton primary rounded :disabled="reviewListLoading" @click="loadReviewListItems(true)"><i class="ti ti-search"></i> 检索</MkButton>
+							<MkButton rounded :disabled="reviewListLoading" @click="resetReviewListFilters"><i class="ti ti-filter-off"></i> 重置</MkButton>
+						</div>
+					</section>
+					<MkLoading v-if="reviewListLoading && reviewUserCards.length === 0" style="margin-top: 12px;"/>
+					<MkInfo v-else-if="reviewUserCards.length === 0" style="margin-top: 12px;">暂无需要复审的用户。配置复审触发条件后，满足条件的用户将自动出现在这里。</MkInfo>
+					<div v-else :class="$style.reviewUserList">
+						<article v-for="card in reviewUserCards" :key="card.userId" v-panel :class="[$style.reviewUserCard, card.isSuspended ? $style.reviewUserCardSuspended : null]">
+							<!-- 用户头部：核心信息 + 操作入口 -->
+							<div :class="$style.reviewUserHead">
+								<div :class="$style.reviewUserInfo">
+									<div :class="$style.reviewUserName">
+										<UserAcctInline :user="card.user" :fallback="card.userId" @copy="copyText"/>
+										<span v-if="card.isSuspended" :class="$style.warnBadge">已封禁</span>
+										<span :class="$style.reviewBadge">{{ card.blockCount }} 次拦截</span>
+									</div>
+									<div :class="$style.reviewUserMeta">
+										<span>最近拦截：{{ formatTime(card.latestBlockAt) }}</span>
+										<span v-if="card.suspendedUntil">解封时间：{{ formatTime(card.suspendedUntil) }}</span>
+									</div>
+								</div>
+								<div :class="$style.reviewUserActions">
+									<MkButton v-if="iAmModerator" small rounded @click="ignoreReviewUser(card)"><i class="ti ti-eye-off"></i> 忽略</MkButton>
+									<MkButton v-if="iAmModerator" small rounded danger @click="openQuickActionForUser(card)"><i class="ti ti-gavel"></i> 处理</MkButton>
+									<MkButton small rounded @click="toggleReviewUserExpand(card.userId)"><i :class="expandedReviewUsers.has(card.userId) ? 'ti ti-chevron-up' : 'ti ti-chevron-down'"></i> {{ expandedReviewUsers.has(card.userId) ? '收起' : '展开' }}</MkButton>
+								</div>
+							</div>
+
+							<!-- 管理笔记预览 -->
+							<div v-if="card.moderationNote" :class="$style.reviewNotePreview">
+								<i class="ti ti-notes"></i>
+								<div>
+									<b :class="$style.reviewNoteLabel">管理笔记</b>
+									<pre>{{ card.moderationNote }}</pre>
+								</div>
+							</div>
+
+							<!-- 展开的违规记录列表 -->
+							<div v-if="expandedReviewUsers.has(card.userId)" :class="$style.reviewLogList">
+								<div v-for="log in card.logs" :key="log.id" :class="[$style.reviewLogItem, log.sessionModerationBanned ? $style.reviewLogItemBanned : null]">
+									<div :class="$style.reviewLogHead">
+										<div :class="$style.badges">
+											<code v-if="log.blockCode">{{ log.blockCode }}</code>
+											<span v-if="log.category">{{ log.category }}</span>
+											<span v-if="log.sessionModerationBanned" :class="$style.warnBadge">会话已封禁</span>
+										</div>
+										<time>{{ formatTime(log.createdAt) }}</time>
+									</div>
+									<div :class="$style.reviewLogMeta">
+										<span>会话：{{ log.sessionName || log.sessionId || '—' }}</span>
+										<span>角色：{{ log.characterName || '—' }}</span>
+									</div>
+									<div v-if="log.reason" :class="$style.reviewLogReason">{{ log.reason }}</div>
+									<div :class="$style.twoCol">
+										<section>
+											<h3>用户输入</h3>
+											<pre :class="$style.pre">{{ log.userText || '—' }}</pre>
+										</section>
+										<section>
+											<h3>AI 回复</h3>
+											<pre :class="$style.pre">{{ log.assistantText || '—' }}</pre>
+										</section>
+									</div>
+									<div class="_buttons">
+										<MkButton v-if="log.sessionId" small rounded @click="jumpSession(log.sessionId)"><i class="ti ti-arrow-right"></i> 查看会话</MkButton>
+										<MkButton small rounded @click="copyText(log.blockCode || log.id)"><i class="ti ti-copy"></i> 复制编码</MkButton>
+									</div>
+								</div>
+							</div>
+						</article>
+
+						<div v-if="reviewListHasMore" :class="$style.loadMore">
+							<MkButton small rounded :disabled="reviewListLoading" @click="loadMoreReviewUsers"><i class="ti ti-chevron-down"></i> {{ reviewListLoading ? '载入中…' : '加载更多用户' }}</MkButton>
+						</div>
 					</div>
 				</template>
 
@@ -289,11 +393,14 @@ SPDX-License-Identifier: AGPL-3.0-only
 								</div>
 								<div class="_buttons">
 									<MkButton v-if="row.url && !row.isBlocked && row.status !== 'auto_cleaned'" small rounded @click="openUrl(row.url)"><i class="ti ti-external-link"></i> 打开图片</MkButton>
-									<MkButton v-if="row.status !== 'auto_cleaned'" small rounded :danger="!row.isBlocked" @click="toggleImageBlocked(row)"><i class="ti ti-ban"></i> {{ row.isBlocked ? '解封图片' : '封禁图片' }}</MkButton>
+									<MkButton v-if="iAmModerator && row.status !== 'auto_cleaned'" small rounded :danger="!row.isBlocked" @click="toggleImageBlocked(row)"><i class="ti ti-ban"></i> {{ row.isBlocked ? '解封图片' : '封禁图片' }}</MkButton>
 									<MkButton small rounded @click="jumpSession(row.sessionId)"><i class="ti ti-arrow-right"></i> 查看会话</MkButton>
 								</div>
 							</div>
 						</article>
+						<div v-if="imagesHasMore" :class="$style.loadMore">
+							<MkButton v-appear="prefer.s.enableInfiniteScroll ? () => imagesPagination.load(false) : null" small rounded :disabled="imagesLoading" @click="imagesPagination.load(false)"><i class="ti ti-chevron-down"></i> {{ imagesLoading ? '载入中…' : '继续载入' }}</MkButton>
+						</div>
 					</div>
 				</template>
 
@@ -329,6 +436,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 								<p>{{ logNote(log) }}</p>
 							</div>
 						</article>
+						<div v-if="logsHasMore" :class="$style.loadMore">
+							<MkButton v-appear="prefer.s.enableInfiniteScroll ? () => logsPagination.load(false) : null" small rounded :disabled="logsLoading" @click="logsPagination.load(false)"><i class="ti ti-chevron-down"></i> {{ logsLoading ? '载入中…' : '继续载入' }}</MkButton>
+						</div>
 					</div>
 				</template>
 			</main>
@@ -352,8 +462,12 @@ import { definePage } from '@/page.js';
 import { formatDateTimeString } from '@/utility/format-time-string.js';
 import { acct as userAcct } from '@/filters/user.js';
 import * as os from '@/os.js';
+import MkAgentQuickActionDialog from '@/components/MkAgentQuickActionDialog.vue';
+import { useGovernancePagination } from '@/composables/use-governance-pagination.js';
+import { prefer } from '@/preferences.js';
+import { iAmModerator, $i } from '@/i.js';
 
-type ViewKey = 'overview' | 'queue' | 'library' | 'sessions' | 'externalAudit' | 'images' | 'logs';
+type ViewKey = 'overview' | 'queue' | 'library' | 'sessions' | 'externalAudit' | 'review' | 'images' | 'logs';
 type Kind = 'character' | 'style';
 type ReviewRow = {
 	kind: Kind;
@@ -391,10 +505,10 @@ type ReviewDetailRow = ReviewRow & {
 type WorldbookEntry = { id: string; title: string; content: string; keywords: string[]; triggerMode: 'keyword' | 'manual' | 'always'; priority: number; enabled: boolean; revision: number };
 type SessionRow = { id: string; createdAt: string; updatedAt: string; userId: string; name: string; characterId: string; dialogueStyleId: string | null; sessionKind: 'draft_test' | 'community'; lastMessageAt: string | null; agentReplyPending: boolean; moderationBanned: boolean; characterName: string; user: any | null };
 type TimelineMsg = { id: string; role: 'user' | 'assistant' | 'system'; content: string; createdAt: string };
-type SessionDetailRow = { session: SessionRow; messages: TimelineMsg[] };
+type SessionDetailRow = { session: SessionRow; messages: TimelineMsg[]; hasMoreMessages?: boolean };
 type MessageRow = TimelineMsg & { sessionId: string; sessionName: string; sessionKind: 'draft_test' | 'community'; userId: string; user: any | null; characterId: string; characterName: string; dialogueStyleId: string | null; sessionModerationBanned: boolean; characterModerationBanned: boolean };
 type ExternalStatus = 'allow' | 'block' | 'failed' | 'all_failed';
-type ExternalAuditRow = { id: string; createdAt: string; completedAt: string | null; durationMs: number | null; userId: string | null; user: any | null; sessionId: string | null; sessionName: string | null; characterId: string | null; characterName: string; dialogueStyleId: string | null; modelId: string | null; modelName: string | null; apiModelName: string | null; baseUrl: string | null; priority: number; attemptIndex: number; status: ExternalStatus; blockCode: string | null; category: string | null; reason: string | null; confidence: number | null; userText: string | null; assistantText: string | null; responseText: string | null; errorCode: string | null; errorMessage: string | null };
+type ExternalAuditRow = { id: string; createdAt: string; completedAt: string | null; durationMs: number | null; userId: string | null; user: any | null; sessionId: string | null; sessionName: string | null; sessionModerationBanned?: boolean; characterId: string | null; characterName: string; dialogueStyleId: string | null; modelId: string | null; modelName: string | null; apiModelName: string | null; baseUrl: string | null; priority: number; attemptIndex: number; status: ExternalStatus; blockCode: string | null; category: string | null; reason: string | null; confidence: number | null; userText: string | null; assistantText: string | null; responseText: string | null; errorCode: string | null; errorMessage: string | null; userRecentBlockCount?: number; triggeredRules?: { id: string; timeWindowMinutes: number; blockThreshold: number }[] };
 type ImageRow = { id: string; createdAt: string; updatedAt: string; userId: string; user: any | null; sessionId: string; messageId: string | null; placeholderIndex: number; tag: string; size: string; provider: string; imageModelId: string; status: string; fileId: string | null; url: string | null; errorCode: string | null; cost: number; isBlocked: boolean; blockedReason: string | null; autoCleanedAt: string | null; autoCleanedReason: string | null };
 type AgentLog = { id: string; createdAt: string; type: string; info: Record<string, unknown>; userId: string; user: any };
 
@@ -429,39 +543,221 @@ type Summary = { pendingCharacters: number; pendingStyles: number; pendingTotal:
 
 const api = misskeyApi as unknown as <T>(endpoint: string, data?: Record<string, unknown>) => Promise<T>;
 const activeView = ref<ViewKey>((new URLSearchParams(window.location.search).get('view') as ViewKey) || 'overview');
-if (!['overview', 'queue', 'library', 'sessions', 'externalAudit', 'images', 'logs'].includes(activeView.value)) activeView.value = 'overview';
+if (!['overview', 'queue', 'library', 'sessions', 'externalAudit', 'review', 'images', 'logs'].includes(activeView.value)) activeView.value = 'overview';
 
 const summaryLoading = ref(false);
 const summary = ref<Summary | null>(null);
 const REVIEW_PAGE_SIZE = 50;
-const reviewLoading = ref(false);
-const reviewRows = ref<ReviewRow[]>([]);
-const reviewHasMore = ref(false);
 const selectedReview = ref<ReviewRow | null>(null);
 const reviewDetail = ref<ReviewDetailRow | null>(null);
 const reviewDetailLoading = ref(false);
 const reviewFilters = reactive({ kind: 'all', status: 'pending', query: '', userId: '' });
+const reviewFilterOpen = ref(false);
+const hasActiveReviewFilters = computed(() => {
+	return reviewFilters.kind !== 'all' || reviewFilters.query.trim() !== '' || reviewFilters.userId.trim() !== ''
+		|| (activeView.value === 'library' && reviewFilters.status !== 'all');
+});
 
-const sessionsLoading = ref(false);
-const sessions = ref<SessionRow[]>([]);
+// 审核列表分页
+const reviewPagination = useGovernancePagination<ReviewRow>(async (untilId) => {
+	const rows = await api<ReviewRow[]>('admin/agents/governance/review/list', {
+		kind: reviewFilters.kind,
+		status: activeView.value === 'queue' ? 'pending' : reviewFilters.status,
+		query: reviewFilters.query.trim() || null,
+		userId: reviewFilters.userId.trim() || null,
+		limit: REVIEW_PAGE_SIZE + 1,
+		untilId,
+	});
+	return rows;
+}, { pageSize: REVIEW_PAGE_SIZE });
+const reviewRows = reviewPagination.items;
+const reviewLoading = reviewPagination.loading;
+const reviewHasMore = reviewPagination.hasMore;
+
 const selectedSession = ref<SessionRow | null>(null);
 const sessionDetail = ref<SessionDetailRow | null>(null);
 const sessionDetailLoading = ref(false);
+const sessionMessagesLoading = ref(false);
 const sessionFilters = reactive({ userId: '', sessionId: '' });
-const messagesLoading = ref(false);
+
+// 会话列表分页
+const sessionsPagination = useGovernancePagination<SessionRow>(async (untilId) => {
+	return await api<SessionRow[]>('admin/agents/governance/sessions/list', {
+		userId: sessionFilters.userId.trim() || null,
+		sessionId: sessionFilters.sessionId.trim() || null,
+		limit: 50,
+		untilId,
+	});
+}, { pageSize: 50 });
+const sessions = sessionsPagination.items;
+const sessionsLoading = sessionsPagination.loading;
+const sessionsHasMore = sessionsPagination.hasMore;
+
 const messagesSearched = ref(false);
-const messages = ref<MessageRow[]>([]);
 const messageFilters = reactive({ userId: '', sessionId: '', characterId: '', role: 'all', query: '' });
 
-const externalLoading = ref(false);
-const externalAudits = ref<ExternalAuditRow[]>([]);
+// 消息检索分页
+const messagesPagination = useGovernancePagination<MessageRow>(async (untilId) => {
+	const payload: Record<string, unknown> = { limit: 80, untilId };
+	const userId = messageFilters.userId.trim();
+	const sessionId = messageFilters.sessionId.trim();
+	const characterId = messageFilters.characterId.trim();
+	const query = messageFilters.query.trim();
+	if (userId) payload.userId = userId;
+	if (sessionId) payload.sessionId = sessionId;
+	if (characterId) payload.characterId = characterId;
+	if (messageFilters.role !== 'all') payload.role = messageFilters.role;
+	if (query) payload.query = query;
+	return await api<MessageRow[]>('admin/agents/governance/messages/list', payload);
+}, { pageSize: 80 });
+const messages = messagesPagination.items;
+const messagesLoading = messagesPagination.loading;
+const messagesHasMore = messagesPagination.hasMore;
+
 const externalFilters = reactive({ status: 'block' as ExternalStatus | 'all', blockCode: '', userId: '', sessionId: '', modelId: '', query: '' });
-const imagesLoading = ref(false);
-const images = ref<ImageRow[]>([]);
+
+// 外审列表分页
+const externalPagination = useGovernancePagination<ExternalAuditRow>(async (untilId) => {
+	return await api<ExternalAuditRow[]>('admin/agents/governance/external-audit/list', {
+		status: externalFilters.status === 'all' ? null : externalFilters.status,
+		blockCode: externalFilters.blockCode.trim() || null,
+		userId: externalFilters.userId.trim() || null,
+		sessionId: externalFilters.sessionId.trim() || null,
+		modelId: externalFilters.modelId.trim() || null,
+		query: externalFilters.query.trim() || null,
+		limit: 80,
+		untilId,
+	});
+}, { pageSize: 80 });
+const externalAudits = externalPagination.items;
+const externalLoading = externalPagination.loading;
+const externalHasMore = externalPagination.hasMore;
+
 const imageFilters = reactive({ userId: '', sessionId: '', messageId: '', status: '', blocked: '', query: '' });
-const logsLoading = ref(false);
-const logs = ref<AgentLog[]>([]);
+
+// 图片列表分页
+const imagesPagination = useGovernancePagination<ImageRow>(async (untilId) => {
+	return await api<ImageRow[]>('admin/agents/governance/images/list', {
+		userId: imageFilters.userId.trim() || null,
+		sessionId: imageFilters.sessionId.trim() || null,
+		messageId: imageFilters.messageId.trim() || null,
+		status: imageFilters.status || null,
+		blocked: imageFilters.blocked === '' ? null : imageFilters.blocked === 'true',
+		query: imageFilters.query.trim() || null,
+		limit: 80,
+		untilId,
+	});
+}, { pageSize: 80 });
+const images = imagesPagination.items;
+const imagesLoading = imagesPagination.loading;
+const imagesHasMore = imagesPagination.hasMore;
+
 const logType = ref('all');
+
+// 日志列表分页
+const logsPagination = useGovernancePagination<AgentLog>(async (untilId) => {
+	return await api<AgentLog[]>('admin/agents/governance/logs/list', { type: logType.value, limit: 80, untilId });
+}, { pageSize: 80 });
+const logs = logsPagination.items;
+const logsLoading = logsPagination.loading;
+const logsHasMore = logsPagination.hasMore;
+
+// 复审列表 - 以用户为中心
+const reviewUserFilter = ref('');
+const reviewListLoading = ref(false);
+const reviewListHasMore = ref(false);
+const reviewUserCards = ref<ReviewUserCard[]>([]);
+const expandedReviewUsers = reactive(new Set<string>());
+const reviewOffset = ref(0);
+const REVIEW_USER_PAGE_SIZE = 20;
+
+type ReviewUserCard = {
+	userId: string;
+	user: any | null;
+	isSuspended: boolean;
+	suspendedUntil: string | null;
+	moderationNote: string | null;
+	blockCount: number;
+	latestBlockAt: string | null;
+	triggeredRules: { id: string; timeWindowMinutes: number; blockThreshold: number }[];
+	logs: ReviewLogEntry[];
+};
+
+type ReviewLogEntry = {
+	id: string;
+	createdAt: string;
+	sessionId: string | null;
+	sessionName: string | null;
+	sessionModerationBanned: boolean;
+	characterName: string;
+	blockCode: string | null;
+	category: string | null;
+	reason: string | null;
+	userText: string | null;
+	assistantText: string | null;
+};
+
+async function loadReviewListItems(reset: boolean) {
+	if (reviewListLoading.value) return;
+	reviewListLoading.value = true;
+	if (reset) {
+		reviewUserCards.value = [];
+		reviewOffset.value = 0;
+		reviewListHasMore.value = false;
+		expandedReviewUsers.clear();
+	}
+	try {
+		const rows = await api<ReviewUserCard[]>('admin/agents/governance/external-audit/review-list', {
+			userId: reviewUserFilter.value.trim() || null,
+			limit: REVIEW_USER_PAGE_SIZE + 1,
+			offset: reviewOffset.value,
+		});
+		reviewListHasMore.value = rows.length > REVIEW_USER_PAGE_SIZE;
+		const pageRows = rows.slice(0, REVIEW_USER_PAGE_SIZE);
+		reviewUserCards.value = reset ? pageRows : [...reviewUserCards.value, ...pageRows];
+		reviewOffset.value += pageRows.length;
+	} catch (err) {
+		os.alert({ type: 'error', text: formatApiError(err) });
+	} finally {
+		reviewListLoading.value = false;
+	}
+}
+
+function loadMoreReviewUsers() {
+	void loadReviewListItems(false);
+}
+
+function resetReviewListFilters() {
+	reviewUserFilter.value = '';
+	void loadReviewListItems(true);
+}
+
+function toggleReviewUserExpand(userId: string) {
+	if (expandedReviewUsers.has(userId)) {
+		expandedReviewUsers.delete(userId);
+	} else {
+		expandedReviewUsers.add(userId);
+	}
+}
+
+async function ignoreReviewUser(card: ReviewUserCard) {
+	const userName = card.user ? `@${userAcct(card.user)}` : card.userId;
+	const { canceled } = await os.confirm({
+		type: 'question',
+		title: '忽略复审',
+		text: `确定忽略用户 ${userName} 的 ${card.logs.length} 条外审拦截记录？忽略后这批记录将标记为已审阅，该用户后续再次触发复审时仍会出现在列表中。`,
+	});
+	if (canceled) return;
+	try {
+		await api('admin/agents/governance/external-audit/review-ignore', {
+			ids: card.logs.map(l => l.id),
+		});
+		os.toast('已忽略');
+		await loadReviewListItems(true);
+	} catch (err) {
+		os.alert({ type: 'error', text: formatApiError(err) });
+	}
+}
 
 const headerTabs = computed(() => [
 	{ key: 'overview', title: '概览', icon: 'ti ti-dashboard' },
@@ -469,6 +765,7 @@ const headerTabs = computed(() => [
 	{ key: 'library', title: '内容库', icon: 'ti ti-cards' },
 	{ key: 'sessions', title: '会话治理', icon: 'ti ti-messages' },
 	{ key: 'externalAudit', title: '外审拦截', icon: 'ti ti-shield-check' },
+	{ key: 'review', title: '复审', icon: 'ti ti-shield-exclamation' },
 	{ key: 'images', title: 'AI 生图', icon: 'ti ti-photo-shield' },
 	{ key: 'logs', title: '操作日志', icon: 'ti ti-history' },
 ]);
@@ -478,12 +775,12 @@ const headerActions = computed(() => [{
 	handler: refreshCurrentView,
 }]);
 const summaryCards = computed(() => [
-	{ key: 'pending', label: '待处理审核', value: summary.value?.pendingTotal ?? '—' },
-	{ key: 'characters', label: '待审角色', value: summary.value?.pendingCharacters ?? '—' },
-	{ key: 'styles', label: '待审风格', value: summary.value?.pendingStyles ?? '—' },
-	{ key: 'sessions', label: '封禁会话', value: summary.value?.bannedSessions ?? '—' },
-	{ key: 'external', label: '外审拦截', value: summary.value?.blockedExternalAudits ?? '—' },
-	{ key: 'images', label: '封禁图片', value: summary.value?.blockedImages ?? '—' },
+	{ key: 'pending', label: '待处理审核', value: summary.value?.pendingTotal ?? '—', icon: 'ti ti-inbox', target: 'queue' as ViewKey },
+	{ key: 'characters', label: '待审角色', value: summary.value?.pendingCharacters ?? '—', icon: 'ti ti-user', target: 'queue' as ViewKey },
+	{ key: 'styles', label: '待审风格', value: summary.value?.pendingStyles ?? '—', icon: 'ti ti-palette', target: 'queue' as ViewKey },
+	{ key: 'sessions', label: '封禁会话', value: summary.value?.bannedSessions ?? '—', icon: 'ti ti-messages', target: 'sessions' as ViewKey },
+	{ key: 'external', label: '外审拦截', value: summary.value?.blockedExternalAudits ?? '—', icon: 'ti ti-shield-check', target: 'externalAudit' as ViewKey },
+	{ key: 'images', label: '封禁图片', value: summary.value?.blockedImages ?? '—', icon: 'ti ti-photo-shield', target: 'images' as ViewKey },
 ]);
 
 const kindItems = [{ value: 'all', label: '全部' }, { value: 'character', label: '角色' }, { value: 'style', label: '风格提示词' }];
@@ -497,6 +794,46 @@ const blockedItems = [{ value: '', label: '全部' }, { value: 'true', label: '�
 const logTypeItems = [{ value: 'all', label: '全部' }, { value: 'resolveAgentReview', label: '审核处理' }, { value: 'setAgentCharacterModerationBan', label: '角色封禁' }, { value: 'setAgentSessionModerationBan', label: '会话封禁' }];
 
 definePage({ title: '智能体治理', icon: 'ti ti-shield-check' });
+
+// 筛选条件持久化
+const FILTER_STORAGE_KEY = 'agents-review-filters';
+
+function saveFilters() {
+	try {
+		localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify({
+			review: { kind: reviewFilters.kind, status: reviewFilters.status, query: reviewFilters.query, userId: reviewFilters.userId },
+			session: { userId: sessionFilters.userId, sessionId: sessionFilters.sessionId },
+			external: { status: externalFilters.status, blockCode: externalFilters.blockCode, userId: externalFilters.userId, sessionId: externalFilters.sessionId, modelId: externalFilters.modelId, query: externalFilters.query },
+			image: { userId: imageFilters.userId, sessionId: imageFilters.sessionId, messageId: imageFilters.messageId, status: imageFilters.status, blocked: imageFilters.blocked, query: imageFilters.query },
+			logType: logType.value,
+		}));
+	} catch { /* ignore */ }
+}
+
+function restoreFilters() {
+	try {
+		const saved = localStorage.getItem(FILTER_STORAGE_KEY);
+		if (!saved) return;
+		const data = JSON.parse(saved);
+		if (data.review) Object.assign(reviewFilters, data.review);
+		if (data.session) Object.assign(sessionFilters, data.session);
+		if (data.external) Object.assign(externalFilters, data.external);
+		if (data.image) Object.assign(imageFilters, data.image);
+		if (data.logType) logType.value = data.logType;
+	} catch { /* ignore */ }
+}
+
+// 搜索防抖
+let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+function debouncedLoadReview() {
+	if (searchDebounceTimer) clearTimeout(searchDebounceTimer);
+	searchDebounceTimer = setTimeout(() => { void loadReviewList(true); }, 300);
+}
+
+watch(() => reviewFilters.query, () => { debouncedLoadReview(); saveFilters(); });
+watch(() => reviewFilters.kind, () => { saveFilters(); });
+watch(() => reviewFilters.status, () => { saveFilters(); });
+watch(logType, () => { void loadLogs(true); saveFilters(); });
 
 async function loadSummary() {
 	summaryLoading.value = true;
@@ -527,6 +864,8 @@ watch(activeView, view => {
 		void loadSessions(true);
 	} else if (view === 'externalAudit' && externalAudits.value.length === 0) {
 		void loadExternalAudits(true);
+	} else if (view === 'review' && reviewUserCards.value.length === 0) {
+		void loadReviewListItems(true);
 	} else if (view === 'images' && images.value.length === 0) {
 		void loadImages(true);
 	} else if (view === 'logs' && logs.value.length === 0) {
@@ -540,45 +879,24 @@ async function refreshCurrentView() {
 	if (activeView.value === 'queue' || activeView.value === 'library') await loadReviewList(true);
 	else if (activeView.value === 'sessions') await loadSessions(true);
 	else if (activeView.value === 'externalAudit') await loadExternalAudits(true);
+	else if (activeView.value === 'review') await loadReviewListItems(true);
 	else if (activeView.value === 'images') await loadImages(true);
 	else await loadLogs(true);
 }
 
 async function loadReviewList(reset: boolean) {
-	if (reviewLoading.value || (!reset && !reviewHasMore.value)) return;
-	reviewLoading.value = true;
 	if (reset) {
-		reviewRows.value = [];
-		reviewHasMore.value = false;
 		selectedReview.value = null;
 		reviewDetail.value = null;
 	}
-	try {
-		const untilId = reset ? null : reviewRows.value.at(-1)?.id ?? null;
-		if (!reset && untilId == null) {
-			reviewHasMore.value = false;
-			return;
-		}
-		const rows = await api<ReviewRow[]>('admin/agents/governance/review/list', {
-			kind: reviewFilters.kind,
-			status: activeView.value === 'queue' ? 'pending' : reviewFilters.status,
-			query: reviewFilters.query.trim() || null,
-			userId: reviewFilters.userId.trim() || null,
-			limit: REVIEW_PAGE_SIZE + 1,
-			untilId,
-		});
-		const pageRows = rows.slice(0, REVIEW_PAGE_SIZE);
-		reviewHasMore.value = rows.length > REVIEW_PAGE_SIZE;
-		reviewRows.value = reset ? pageRows : [...reviewRows.value, ...pageRows];
-	} catch (err) {
-		os.alert({ type: 'error', text: formatApiError(err) });
-	} finally {
-		reviewLoading.value = false;
+	await reviewPagination.load(reset);
+	if (reviewPagination.error.value) {
+		os.alert({ type: 'error', text: formatApiError(reviewPagination.error.value) });
 	}
 }
 
 function loadMoreReviews() {
-	void loadReviewList(false);
+	void reviewPagination.load(false);
 }
 
 function resetReviewFilters() {
@@ -662,22 +980,13 @@ async function toggleCharacterBan(row: ReviewDetailRow) {
 }
 
 async function loadSessions(reset: boolean) {
-	sessionsLoading.value = true;
 	if (reset) {
-		sessions.value = [];
 		selectedSession.value = null;
 		sessionDetail.value = null;
 	}
-	try {
-		sessions.value = await api<SessionRow[]>('admin/agents/governance/sessions/list', {
-			userId: sessionFilters.userId.trim() || null,
-			sessionId: sessionFilters.sessionId.trim() || null,
-			limit: 50,
-		});
-	} catch (err) {
-		os.alert({ type: 'error', text: formatApiError(err) });
-	} finally {
-		sessionsLoading.value = false;
+	await sessionsPagination.load(reset);
+	if (sessionsPagination.error.value) {
+		os.alert({ type: 'error', text: formatApiError(sessionsPagination.error.value) });
 	}
 }
 
@@ -691,11 +1000,33 @@ async function selectSession(row: SessionRow) {
 	selectedSession.value = row;
 	sessionDetailLoading.value = true;
 	try {
-		sessionDetail.value = await api<SessionDetailRow>('admin/agents/governance/sessions/detail', { sessionId: row.id, limit: 120 });
+		const result = await api<SessionDetailRow>('admin/agents/governance/sessions/detail', { sessionId: row.id, limit: 80 });
+		result.hasMoreMessages = result.messages.length >= 80;
+		sessionDetail.value = result;
 	} catch (err) {
 		os.alert({ type: 'error', text: formatApiError(err) });
 	} finally {
 		sessionDetailLoading.value = false;
+	}
+}
+
+async function loadMoreSessionMessages() {
+	if (!sessionDetail.value || sessionMessagesLoading.value) return;
+	const oldestMsg = sessionDetail.value.messages[0];
+	if (!oldestMsg) return;
+	sessionMessagesLoading.value = true;
+	try {
+		const result = await api<SessionDetailRow>('admin/agents/governance/sessions/detail', {
+			sessionId: sessionDetail.value.session.id,
+			limit: 80,
+			untilId: oldestMsg.id,
+		});
+		sessionDetail.value.hasMoreMessages = result.messages.length >= 80;
+		sessionDetail.value.messages = [...result.messages, ...sessionDetail.value.messages];
+	} catch (err) {
+		os.alert({ type: 'error', text: formatApiError(err) });
+	} finally {
+		sessionMessagesLoading.value = false;
 	}
 }
 
@@ -718,24 +1049,10 @@ async function toggleSessionBan(row: SessionRow) {
 }
 
 async function searchMessages() {
-	messagesLoading.value = true;
 	messagesSearched.value = true;
-	try {
-		const payload: Record<string, unknown> = { limit: 80 };
-		const userId = messageFilters.userId.trim();
-		const sessionId = messageFilters.sessionId.trim();
-		const characterId = messageFilters.characterId.trim();
-		const query = messageFilters.query.trim();
-		if (userId) payload.userId = userId;
-		if (sessionId) payload.sessionId = sessionId;
-		if (characterId) payload.characterId = characterId;
-		if (messageFilters.role !== 'all') payload.role = messageFilters.role;
-		if (query) payload.query = query;
-		messages.value = await api<MessageRow[]>('admin/agents/governance/messages/list', payload);
-	} catch (err) {
-		os.alert({ type: 'error', text: formatApiError(err) });
-	} finally {
-		messagesLoading.value = false;
+	await messagesPagination.load(true);
+	if (messagesPagination.error.value) {
+		os.alert({ type: 'error', text: formatApiError(messagesPagination.error.value) });
 	}
 }
 
@@ -745,27 +1062,14 @@ function resetMessageFilters() {
 	messageFilters.characterId = '';
 	messageFilters.role = 'all';
 	messageFilters.query = '';
-	messages.value = [];
+	messagesPagination.reset();
 	messagesSearched.value = false;
 }
 
 async function loadExternalAudits(reset: boolean) {
-	externalLoading.value = true;
-	if (reset) externalAudits.value = [];
-	try {
-		externalAudits.value = await api<ExternalAuditRow[]>('admin/agents/governance/external-audit/list', {
-			status: externalFilters.status === 'all' ? null : externalFilters.status,
-			blockCode: externalFilters.blockCode.trim() || null,
-			userId: externalFilters.userId.trim() || null,
-			sessionId: externalFilters.sessionId.trim() || null,
-			modelId: externalFilters.modelId.trim() || null,
-			query: externalFilters.query.trim() || null,
-			limit: 80,
-		});
-	} catch (err) {
-		os.alert({ type: 'error', text: formatApiError(err) });
-	} finally {
-		externalLoading.value = false;
+	await externalPagination.load(reset);
+	if (externalPagination.error.value) {
+		os.alert({ type: 'error', text: formatApiError(externalPagination.error.value) });
 	}
 }
 
@@ -780,22 +1084,9 @@ function resetExternalFilters() {
 }
 
 async function loadImages(reset: boolean) {
-	imagesLoading.value = true;
-	if (reset) images.value = [];
-	try {
-		images.value = await api<ImageRow[]>('admin/agents/governance/images/list', {
-			userId: imageFilters.userId.trim() || null,
-			sessionId: imageFilters.sessionId.trim() || null,
-			messageId: imageFilters.messageId.trim() || null,
-			status: imageFilters.status || null,
-			blocked: imageFilters.blocked === '' ? null : imageFilters.blocked === 'true',
-			query: imageFilters.query.trim() || null,
-			limit: 80,
-		});
-	} catch (err) {
-		os.alert({ type: 'error', text: formatApiError(err) });
-	} finally {
-		imagesLoading.value = false;
+	await imagesPagination.load(reset);
+	if (imagesPagination.error.value) {
+		os.alert({ type: 'error', text: formatApiError(imagesPagination.error.value) });
 	}
 }
 
@@ -825,14 +1116,9 @@ async function toggleImageBlocked(row: ImageRow) {
 }
 
 async function loadLogs(reset: boolean) {
-	logsLoading.value = true;
-	if (reset) logs.value = [];
-	try {
-		logs.value = await api<AgentLog[]>('admin/agents/governance/logs/list', { type: logType.value, limit: 80 });
-	} catch (err) {
-		os.alert({ type: 'error', text: formatApiError(err) });
-	} finally {
-		logsLoading.value = false;
+	await logsPagination.load(reset);
+	if (logsPagination.error.value) {
+		os.alert({ type: 'error', text: formatApiError(logsPagination.error.value) });
 	}
 }
 
@@ -840,6 +1126,68 @@ function jumpSession(sessionId: string) {
 	activeView.value = 'sessions';
 	sessionFilters.sessionId = sessionId;
 	void loadSessions(true);
+}
+
+// 一键违规处理
+const quickActionProcessing = ref(false);
+
+async function openQuickActionForUser(card: ReviewUserCard) {
+	// 收集该用户所有相关会话（含已封禁）
+	const sessionMap = new Map<string, { name: string; banned: boolean }>();
+	for (const log of card.logs) {
+		if (log.sessionId && !sessionMap.has(log.sessionId)) {
+			sessionMap.set(log.sessionId, {
+				name: log.sessionName || log.sessionId,
+				banned: log.sessionModerationBanned,
+			});
+		}
+	}
+	if (sessionMap.size === 0) {
+		os.alert({ type: 'info', text: '该用户没有相关会话记录。' });
+		return;
+	}
+
+	const userName = card.user ? `@${userAcct(card.user)}` : card.userId;
+	const sessions = [...sessionMap.entries()].map(([id, s]) => ({ id, name: s.name, banned: s.banned }));
+	const defaultCategory = card.logs[0]?.category || '色情内容';
+	const defaultSuspendHours = card.blockCount >= 4 ? 0 : card.blockCount >= 3 ? 720 : card.blockCount >= 2 ? 168 : -1;
+
+	const result = await new Promise<{ sessionIds: string[]; sessionBanReason: string | null; suspendDurationHours: number; userSuspendReason: string | null; moderationNote: string | null; violationCategory: string } | null>(resolve => {
+		const { dispose } = os.popup(MkAgentQuickActionDialog, {
+			userName,
+			sessions,
+			defaultCategory,
+			defaultSuspendHours,
+			moderatorName: $i?.username ?? '',
+		}, {
+			done: (res) => { resolve(res); dispose(); },
+			cancel: () => { resolve(null); dispose(); },
+			closed: () => { resolve(null); dispose(); },
+		});
+	});
+	if (!result) return;
+
+	quickActionProcessing.value = true;
+	try {
+		const res = await api<Record<string, unknown>>('admin/agents/governance/quick-action', {
+			sessionIds: result.sessionIds,
+			sessionBanReason: result.sessionBanReason,
+			suspendDurationHours: result.suspendDurationHours,
+			userSuspendReason: result.userSuspendReason,
+			violationCategory: result.violationCategory,
+			moderationNote: result.moderationNote,
+		});
+		const parts: string[] = [];
+		if (res.sessionsBanned) parts.push(`${res.sessionsBanned} 个会话已封禁`);
+		if (res.userSuspended) parts.push(`用户已封禁（${res.suspendDurationHours === 0 ? '永久' : `${res.suspendDurationHours}小时`}）`);
+		if (res.noteAdded) parts.push('管理笔记已记录');
+		os.toast(parts.join('，') || '处理完成');
+		await Promise.all([loadSummary(), loadReviewListItems(true)]);
+	} catch (err) {
+		os.alert({ type: 'error', text: formatApiError(err) });
+	} finally {
+		quickActionProcessing.value = false;
+	}
 }
 
 function copyText(text: string) {
@@ -974,7 +1322,7 @@ function worldbookText(entries: WorldbookEntry[] | undefined) {
 }
 
 const ReviewDetail = defineComponent({
-	props: { detail: { type: Object as () => ReviewDetailRow, required: true } },
+	props: { detail: { type: Object as () => ReviewDetailRow, required: true }, canModerate: { type: Boolean, default: true } },
 	emits: ['approve', 'reject', 'ban', 'copy'],
 	setup(props, { emit }) {
 		return () => h('article', { class: '_gaps_s' }, [
@@ -1019,9 +1367,9 @@ const ReviewDetail = defineComponent({
 				h('pre', props.detail.body || '—'),
 			]),
 			h('div', { class: 'review-actions' }, [
-				props.detail.reviewStatus === 'pending' ? h(MkButton, { primary: true, rounded: true, onClick: () => emit('approve', props.detail) }, () => [h('i', { class: 'ti ti-check' }), ' 通过']) : null,
-				props.detail.reviewStatus === 'pending' ? h(MkButton, { danger: true, rounded: true, onClick: () => emit('reject', props.detail) }, () => [h('i', { class: 'ti ti-x' }), ' 拒绝']) : null,
-				props.detail.kind === 'character' ? h(MkButton, { rounded: true, danger: !props.detail.moderationBanned, onClick: () => emit('ban', props.detail) }, () => [h('i', { class: 'ti ti-ban' }), props.detail.moderationBanned ? ' 解封角色' : ' 封禁角色']) : null,
+				props.canModerate && props.detail.reviewStatus === 'pending' ? h(MkButton, { primary: true, rounded: true, onClick: () => emit('approve', props.detail) }, () => [h('i', { class: 'ti ti-check' }), ' 通过']) : null,
+				props.canModerate && props.detail.reviewStatus === 'pending' ? h(MkButton, { danger: true, rounded: true, onClick: () => emit('reject', props.detail) }, () => [h('i', { class: 'ti ti-x' }), ' 拒绝']) : null,
+				props.canModerate && props.detail.kind === 'character' ? h(MkButton, { rounded: true, danger: !props.detail.moderationBanned, onClick: () => emit('ban', props.detail) }, () => [h('i', { class: 'ti ti-ban' }), props.detail.moderationBanned ? ' 解封角色' : ' 封禁角色']) : null,
 				h(MkButton, { rounded: true, onClick: () => emit('copy', props.detail.id) }, () => [h('i', { class: 'ti ti-copy' }), ' 复制 ID']),
 			]),
 		]);
@@ -1029,8 +1377,8 @@ const ReviewDetail = defineComponent({
 });
 
 const SessionDetail = defineComponent({
-	props: { detail: { type: Object as () => SessionDetailRow, required: true } },
-	emits: ['toggleBan', 'copy'],
+	props: { detail: { type: Object as () => SessionDetailRow, required: true }, canModerate: { type: Boolean, default: true }, messagesLoading: { type: Boolean, default: false } },
+	emits: ['toggleBan', 'copy', 'loadMoreMessages'],
 	setup(props, { emit }) {
 		const messagesAsc = computed(() => [...props.detail.messages].reverse());
 		return () => h('article', { class: '_gaps_s' }, [
@@ -1039,11 +1387,17 @@ const SessionDetail = defineComponent({
 				h('span', { class: props.detail.session.moderationBanned ? 'state-warn' : 'state-ok' }, props.detail.session.moderationBanned ? '已封禁' : '可用'),
 			]),
 			h('div', { class: 'review-actions' }, [
-				h(MkButton, { rounded: true, danger: !props.detail.session.moderationBanned, onClick: () => emit('toggleBan', props.detail.session) }, () => [h('i', { class: 'ti ti-ban' }), props.detail.session.moderationBanned ? ' 解封会话' : ' 封禁会话']),
+				props.canModerate ? h(MkButton, { rounded: true, danger: !props.detail.session.moderationBanned, onClick: () => emit('toggleBan', props.detail.session) }, () => [h('i', { class: 'ti ti-ban' }), props.detail.session.moderationBanned ? ' 解封会话' : ' 封禁会话']) : null,
 				h(MkButton, { rounded: true, onClick: () => emit('copy', props.detail.session.id) }, () => [h('i', { class: 'ti ti-copy' }), ' 复制会话 ID']),
 			]),
 			h('section', { class: 'review-block' }, [
-				h('h3', '最近消息'),
+				h('h3', `最近消息（已加载 ${props.detail.messages.length} 条）`),
+				props.detail.hasMoreMessages ? h('div', { style: 'display: flex; justify-content: center; margin-bottom: 10px;' }, [
+					h(MkButton, { small: true, rounded: true, disabled: props.messagesLoading, onClick: () => emit('loadMoreMessages') }, () => [
+						h('i', { class: 'ti ti-chevron-up' }),
+						props.messagesLoading ? ' 载入中…' : ' 加载更早的消息',
+					]),
+				]) : null,
 				...messagesAsc.value.map(msg => h('div', { class: `timeline-message role-${msg.role}` }, [
 					h('div', [h('b', roleLabel(msg.role)), h('time', formatTime(msg.createdAt))]),
 					h('pre', msg.content),
@@ -1054,12 +1408,14 @@ const SessionDetail = defineComponent({
 });
 
 onMounted(() => {
+	restoreFilters();
 	void loadSummary();
 	if (activeView.value === 'overview') return;
 	if (activeView.value === 'queue') void loadReviewList(true);
 	else if (activeView.value === 'library') void loadReviewList(true);
 	else if (activeView.value === 'sessions') void loadSessions(true);
 	else if (activeView.value === 'externalAudit') void loadExternalAudits(true);
+	else if (activeView.value === 'review') void loadReviewListItems(true);
 	else if (activeView.value === 'images') void loadImages(true);
 	else void loadLogs(true);
 });
@@ -1086,6 +1442,26 @@ onMounted(() => {
 	line-height: 1.5;
 	overflow-wrap: anywhere;
 }
+.heroStats {
+	display: flex;
+	gap: 16px;
+	flex-shrink: 0;
+}
+.heroStat {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 8px 14px;
+	border-radius: 8px;
+	background: var(--MI_THEME-panel);
+	border: 1px solid var(--MI_THEME-divider);
+	font-size: 0.9em;
+	color: var(--MI_THEME-fgTransparentWeak);
+}
+.heroStat b {
+	color: var(--MI_THEME-accent);
+	font-size: 1.2em;
+}
 .mainPane,
 .overview {
 	min-width: 0;
@@ -1104,15 +1480,29 @@ onMounted(() => {
 	gap: 10px;
 	padding: 16px;
 	border-radius: 8px;
+	background: var(--MI_THEME-panel);
+	border: 1px solid var(--MI_THEME-divider);
+	cursor: pointer;
+	transition: border-color 0.15s, box-shadow 0.15s;
+	text-align: left;
 }
-.summaryCard span {
-	display: block;
+.summaryCard:hover {
+	border-color: var(--MI_THEME-accent);
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+.summaryLabel {
+	display: flex;
+	align-items: center;
+	gap: 6px;
 	color: var(--MI_THEME-fgTransparentWeak);
 	font-size: 0.88em;
 	line-height: 1.4;
 	overflow-wrap: anywhere;
 }
-.summaryCard b {
+.summaryLabel i {
+	font-size: 1.1em;
+}
+.summaryValue {
 	display: block;
 	color: var(--MI_THEME-accent);
 	font-size: 1.8em;
@@ -1127,6 +1517,25 @@ onMounted(() => {
 	border-radius: 8px;
 	background: var(--MI_THEME-panel);
 	border: 1px solid var(--MI_THEME-divider);
+}
+.filterToggle {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	cursor: pointer;
+	padding: 4px 0;
+	color: var(--MI_THEME-fgTransparentWeak);
+	font-size: 0.92em;
+	user-select: none;
+}
+.filterToggle:hover {
+	color: var(--MI_THEME-fg);
+}
+.filterActiveDot {
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	background: var(--MI_THEME-accent);
 }
 .filterBand > :global(._buttons),
 .searchSection > :global(._buttons) {
@@ -1296,6 +1705,145 @@ onMounted(() => {
 	padding: 12px 14px;
 	border-radius: 8px;
 }
+.evidenceCardReview {
+	border-color: var(--MI_THEME-warn) !important;
+	background: color-mix(in srgb, var(--MI_THEME-panel) 92%, var(--MI_THEME-warn) 8%) !important;
+}
+.reviewBadge {
+	display: inline-flex;
+	align-items: center;
+	min-height: 22px;
+	padding: 1px 8px;
+	border-radius: 999px;
+	background: var(--MI_THEME-warn);
+	color: var(--MI_THEME-fgOnWarn, #fff);
+	font-size: 0.82em;
+	font-weight: 600;
+}
+.reviewTriggerInfo {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	margin: 8px 0;
+	padding: 8px 10px;
+	border-radius: 6px;
+	background: var(--MI_THEME-warn);
+	color: var(--MI_THEME-fgOnWarn, #fff);
+	font-size: 0.85em;
+}
+
+/* 复审用户卡片 */
+.reviewUserList {
+	display: grid;
+	gap: 12px;
+	margin-top: 12px;
+}
+.reviewUserCard {
+	border-radius: 12px;
+	overflow: hidden;
+	transition: border-color 0.15s, box-shadow 0.15s;
+}
+.reviewUserCard:hover {
+	border-color: var(--MI_THEME-accent);
+	box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+}
+.reviewUserCardSuspended {
+	opacity: 0.7;
+	border-color: var(--MI_THEME-error);
+}
+.reviewUserHead {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 12px;
+	padding: 14px 16px;
+}
+.reviewUserInfo {
+	min-width: 0;
+	flex: 1;
+}
+.reviewUserName {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex-wrap: wrap;
+	font-size: 1.05em;
+	font-weight: 600;
+}
+.reviewUserMeta {
+	display: flex;
+	gap: 16px;
+	margin-top: 6px;
+	color: var(--MI_THEME-fgTransparentWeak);
+	font-size: 0.85em;
+	flex-wrap: wrap;
+}
+.reviewUserActions {
+	display: flex;
+	gap: 8px;
+	flex-shrink: 0;
+}
+.reviewNotePreview {
+	display: flex;
+	gap: 8px;
+	margin: 0 16px 12px;
+	padding: 10px 12px;
+	border-radius: 8px;
+	background: var(--MI_THEME-infoBg);
+	border: 1px solid var(--MI_THEME-divider);
+	font-size: 0.85em;
+}
+.reviewNotePreview i {
+	flex-shrink: 0;
+	margin-top: 2px;
+}
+.reviewNotePreview pre {
+	margin: 4px 0 0;
+	white-space: pre-wrap;
+	word-break: break-word;
+	line-height: 1.4;
+}
+.reviewNoteLabel {
+	font-size: 0.82em;
+	color: var(--MI_THEME-fgTransparentWeak);
+}
+.reviewLogList {
+	display: grid;
+	gap: 8px;
+	padding: 0 16px 14px;
+}
+.reviewLogItem {
+	padding: 12px;
+	border-radius: 8px;
+	background: var(--MI_THEME-bg);
+	border: 1px solid var(--MI_THEME-divider);
+}
+.reviewLogItemBanned {
+	opacity: 0.6;
+}
+.reviewLogHead {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 10px;
+	flex-wrap: wrap;
+}
+.reviewLogMeta {
+	display: flex;
+	gap: 16px;
+	margin-top: 6px;
+	color: var(--MI_THEME-fgTransparentWeak);
+	font-size: 0.85em;
+	flex-wrap: wrap;
+}
+.reviewLogReason {
+	margin-top: 8px;
+	padding: 8px 10px;
+	border-radius: 6px;
+	background: var(--MI_THEME-infoBg);
+	font-size: 0.88em;
+	line-height: 1.4;
+}
 .metaGrid {
 	display: grid;
 	grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -1385,12 +1933,13 @@ onMounted(() => {
 	}
 	.detailPane {
 		position: static;
-	}
-	.detailPane {
 		max-height: none;
 	}
 	.summaryGrid {
 		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+	.heroStats {
+		display: none;
 	}
 }
 @media (max-width: 600px) {
@@ -1412,6 +1961,17 @@ onMounted(() => {
 	.sectionHead,
 	.rowMeta {
 		align-items: flex-start;
+	}
+	.summaryGrid {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 8px;
+	}
+	.summaryCard {
+		min-height: 72px;
+		padding: 12px;
+	}
+	.summaryValue {
+		font-size: 1.4em;
 	}
 }
 
