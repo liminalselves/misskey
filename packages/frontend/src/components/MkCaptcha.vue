@@ -38,7 +38,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { ref, useTemplateRef, computed, onMounted, onBeforeUnmount, watch, onUnmounted, useCssModule } from 'vue';
+import { ref, useTemplateRef, computed, onMounted, onBeforeUnmount, watch, onUnmounted } from 'vue';
 import { store } from '@/store.js';
 import { i18n } from '@/i18n.js';
 
@@ -82,8 +82,10 @@ type AliyunCaptchaWindow = Window & {
 	initAliyunCaptcha?: (options: {
 		SceneId: string;
 		mode: 'popup';
-		element: string | HTMLElement;
-		button: string | HTMLElement;
+		// 阿里云验证码 SDK 要求传入元素 id 选择器字符串（如 '#captcha-element'），
+		// 直接传 DOM 元素会触发 "element 传入参数类型不合法" 报错（新版 SDK 严格校验）。
+		element: string;
+		button: string;
 		success: (captchaVerifyParam: string) => void;
 		fail?: (result: unknown) => void;
 		getInstance: (instance: AliyunCaptcha) => void;
@@ -114,7 +116,12 @@ const aliyunTriggerIconEl = ref<HTMLElement | undefined>(undefined);
 const aliyunTriggerLabelEl = ref<HTMLSpanElement | undefined>(undefined);
 const testcaptchaInput = ref('');
 const testcaptchaPassed = ref(false);
-const styleModule = useCssModule();
+
+// 注意：不能在运行时依赖 useCssModule() 动态取类名——rollup 生产构建中该 API 会失效
+// （参见 pages/qr.show.vue 中的注释），因此这里使用全局样式类（_aliyunCaptcha* 前缀）。
+const aliyunHostClass = '_aliyunCaptchaHost';
+const aliyunTriggerClass = '_aliyunCaptchaTrigger';
+const aliyunTriggerVerifiedClass = '_aliyunCaptchaTriggerVerified';
 
 const variable = computed(() => {
 	switch (props.provider) {
@@ -212,10 +219,10 @@ async function requestRender() {
 			const triggerLabel = window.document.createElement('span');
 			const uniq = Math.random().toString(36).slice(2);
 			root.id = `aliyun-captcha-element-${uniq}`;
-			root.className = styleModule.aliyunHost;
+			root.className = aliyunHostClass;
 			trigger.id = `aliyun-captcha-button-${uniq}`;
 			trigger.type = 'button';
-			trigger.className = styleModule.aliyunTrigger;
+			trigger.className = aliyunTriggerClass;
 			triggerIcon.setAttribute('aria-hidden', 'true');
 			trigger.append(triggerIcon, triggerLabel);
 			aliyunTriggerEl.value = trigger;
@@ -234,8 +241,9 @@ async function requestRender() {
 			const initOptions = {
 				SceneId: props.sceneId,
 				mode: 'popup' as const,
-				element: root,
-				button: trigger,
+				// SDK 要求 id 选择器字符串，传 DOM 元素会报 "传入参数类型不合法"
+				element: `#${root.id}`,
+				button: `#${trigger.id}`,
 				success: (captchaVerifyParam: string) => callback(captchaVerifyParam),
 				fail: (result: unknown) => {
 					callback(undefined);
@@ -339,7 +347,7 @@ function updateAliyunTriggerState(verified: boolean) {
 	const label = aliyunTriggerLabelEl.value;
 	if (trigger == null || icon == null || label == null) return;
 
-	trigger.classList.toggle(styleModule.aliyunTriggerVerified, verified);
+	trigger.classList.toggle(aliyunTriggerVerifiedClass, verified);
 	trigger.disabled = verified;
 	trigger.setAttribute('aria-label', verified ? i18n.ts.done : i18n.ts._captcha.verify);
 	icon.className = verified ? 'ti ti-circle-check' : 'ti ti-shield-check';
@@ -424,57 +432,6 @@ defineExpose({
 	}
 }
 
-.aliyunHost {
-	display: flex;
-	flex-direction: column;
-	align-items: center;
-	width: 100%;
-
-	> :global(*) {
-		margin-inline: auto;
-		max-width: 100%;
-	}
-}
-
-.aliyunTrigger {
-	display: flex;
-	width: 100%;
-	align-items: center;
-	justify-content: center;
-	gap: 7px;
-	min-height: 40px;
-	padding: 7px 12px;
-	border: solid 1px color-mix(in srgb, var(--MI_THEME-accent) 42%, var(--MI_THEME-divider));
-	border-radius: 8px;
-	background: color-mix(in srgb, var(--MI_THEME-accentedBg) 72%, var(--MI_THEME-panel));
-	color: var(--MI_THEME-fg);
-	font: inherit;
-	font-size: 0.9em;
-	font-weight: 600;
-	line-height: 1.2;
-	cursor: pointer;
-	transition: background-color 0.15s ease, border-color 0.15s ease;
-	user-select: none;
-}
-
-.aliyunTrigger:hover {
-	border-color: var(--MI_THEME-accent);
-	background: var(--MI_THEME-accentedBg);
-}
-
-.aliyunTrigger:focus-visible {
-	outline: 2px solid color-mix(in srgb, var(--MI_THEME-accent) 45%, transparent);
-	outline-offset: 2px;
-}
-
-.aliyunTriggerVerified,
-.aliyunTrigger:disabled {
-	border-color: color-mix(in srgb, var(--MI_THEME-accent) 45%, var(--MI_THEME-divider));
-	background: var(--MI_THEME-accentedBg);
-	color: var(--MI_THEME-accent);
-	cursor: default;
-}
-
 .testCaptcha {
 	display: flex;
 	width: 100%;
@@ -554,4 +511,65 @@ defineExpose({
 	}
 }
 
+</style>
+
+<!--
+	阿里云验证码的自绘按钮样式必须使用全局类（_aliyunCaptcha* 前缀）：
+	rollup 生产构建中 useCssModule() 会失效（参见 pages/qr.show.vue 中的注释），
+	运行时无法通过 style module 拿到类名，动态创建的元素会丢失样式。
+	同时为 color-mix() 提供 fallback，兼容不支持该语法的旧浏览器。
+-->
+<style lang="scss">
+._aliyunCaptchaHost {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	width: 100%;
+
+	> * {
+		margin-inline: auto;
+		max-width: 100%;
+	}
+}
+
+._aliyunCaptchaTrigger {
+	display: flex;
+	width: 100%;
+	align-items: center;
+	justify-content: center;
+	gap: 7px;
+	min-height: 40px;
+	padding: 7px 12px;
+	border: solid 1px var(--MI_THEME-divider);
+	border-color: color-mix(in srgb, var(--MI_THEME-accent) 42%, var(--MI_THEME-divider));
+	border-radius: 8px;
+	background: var(--MI_THEME-accentedBg);
+	background: color-mix(in srgb, var(--MI_THEME-accentedBg) 72%, var(--MI_THEME-panel));
+	color: var(--MI_THEME-fg);
+	font: inherit;
+	font-size: 0.9em;
+	font-weight: 600;
+	line-height: 1.2;
+	cursor: pointer;
+	transition: background-color 0.15s ease, border-color 0.15s ease;
+	user-select: none;
+}
+
+._aliyunCaptchaTrigger:hover {
+	border-color: var(--MI_THEME-accent);
+	background: var(--MI_THEME-accentedBg);
+}
+
+._aliyunCaptchaTrigger:focus-visible {
+	outline: 2px solid color-mix(in srgb, var(--MI_THEME-accent) 45%, transparent);
+	outline-offset: 2px;
+}
+
+._aliyunCaptchaTriggerVerified,
+._aliyunCaptchaTrigger:disabled {
+	border-color: color-mix(in srgb, var(--MI_THEME-accent) 45%, var(--MI_THEME-divider));
+	background: var(--MI_THEME-accentedBg);
+	color: var(--MI_THEME-accent);
+	cursor: default;
+}
 </style>
