@@ -642,6 +642,50 @@ export class AgentCompressionMemoryService {
 		await this.stickyRepository.delete({ sessionId });
 	}
 
+	/**
+	 * v4 导入：批量重建压缩便签。
+	 * 先清空会话现有便签，再按导入数据批量插入。
+	 * fromMessageId/toMessageId 使用 'imported' 占位，因为导入时没有原始消息 ID。
+	 */
+	@bindThis
+	public async importStickies(
+		sessionId: string,
+		stickies: Array<{
+			summaryText: string;
+			state: AgentCompressionStickyState;
+			userOverridden: boolean;
+			sortIndex: number;
+		}>,
+		userId: string,
+		sessionUserId: string,
+	): Promise<number> {
+		if (sessionUserId !== userId) {
+			throw new ApiError({ message: 'Access denied.', code: 'ACCESS_DENIED', id: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890' });
+		}
+		// 先删除现有便签
+		await this.stickyRepository.delete({ sessionId });
+		if (stickies.length === 0) return 0;
+		const now = new Date();
+		const rows = stickies.map(s => ({
+			id: this.agentService.newId(),
+			createdAt: now,
+			updatedAt: now,
+			sessionId,
+			fromMessageId: 'imported',
+			toMessageId: 'imported',
+			summaryText: s.summaryText,
+			state: s.state,
+			userOverridden: s.userOverridden,
+			sourceFingerprint: null,
+			errorMessage: null,
+			lastModelId: null,
+			sortIndex: s.sortIndex,
+			retryCount: 0,
+		}));
+		await this.stickyRepository.insert(rows);
+		return rows.length;
+	}
+
 	@bindThis
 	public async deleteStickyById(
 		stickyId: string,

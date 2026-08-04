@@ -48,6 +48,10 @@ export const paramDef = {
 				properties: {
 					role: { type: 'string', enum: ['user', 'assistant'] },
 					content: { type: 'string', minLength: 1, maxLength: 16000 },
+					// v5 新增：图片附件与识别结果
+					imageFileId: { type: 'string', nullable: true, maxLength: 128 },
+					imageRecognitionStatus: { type: 'string', nullable: true },
+					imageRecognitionDescription: { type: 'string', nullable: true, maxLength: 50000 },
 				},
 				required: ['role', 'content'],
 			},
@@ -88,18 +92,29 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				sessionId: string;
 				role: 'user' | 'assistant';
 				content: string;
+				imageFileId: string | null;
+				imageRecognitionStatus: 'succeeded' | 'failed' | null;
+				imageRecognitionDescription: string | null;
 				statsDialogueStyleId: string | null;
 				promptTokens: null;
 				completionTokens: null;
 			}> = [];
 			for (const msg of ps.messages) {
 				createdAtMs += 1;
+				// v5: 验证并规范化图片识别状态
+				const imageRecognitionStatus = msg.imageRecognitionStatus === 'succeeded' || msg.imageRecognitionStatus === 'failed'
+					? msg.imageRecognitionStatus
+					: null;
 				rows.push({
 					id: this.agentService.newId(),
 					createdAt: new Date(createdAtMs),
 					sessionId: session.id,
 					role: msg.role,
 					content: msg.content,
+					// v5: 保存图片附件与识别结果
+					imageFileId: msg.imageFileId ?? null,
+					imageRecognitionStatus,
+					imageRecognitionDescription: msg.imageRecognitionDescription ?? null,
 					statsDialogueStyleId: session.dialogueStyleId ?? null,
 					promptTokens: null,
 					completionTokens: null,

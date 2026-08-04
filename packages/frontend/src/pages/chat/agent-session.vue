@@ -3589,7 +3589,14 @@ async function jumpToChatMessage(messageId: string) {
 }
 
 type SessionContextRole = 'user' | 'assistant';
-type SessionContextRow = { role: SessionContextRole; content: string };
+/** v5 消息行：新增图片附件与识别结果 */
+type SessionContextRow = {
+	role: SessionContextRole;
+	content: string;
+	imageFileId?: string | null;
+	imageRecognitionStatus?: 'succeeded' | 'failed' | null;
+	imageRecognitionDescription?: string | null;
+};
 const SESSION_IMPORT_MAX_MESSAGES = 10_000;
 const SESSION_IMPORT_MAX_MESSAGE_CHARS = 16_000;
 type SessionExportSettings = {
@@ -3611,6 +3618,11 @@ type SessionExportSettings = {
 	timeAwarenessEnabled?: boolean;
 	randomProactiveEnabled?: boolean;
 	scheduledProactiveEnabled?: boolean;
+	/** v5 新增：主动消息高级设置（会话级覆盖） */
+	randomProactiveMinSilenceMinutes?: number | null;
+	randomProactiveMaxWindowMinutes?: number | null;
+	randomProactiveDaytimeWeight?: number | null;
+	randomProactiveRecencyBias?: number | null;
 };
 /** v3 导出的定时主动消息计划（仅保留可重建所需字段，id/nextRunAt 等由导入端重新计算） */
 type SessionExportProactiveSchedule = {
@@ -3618,9 +3630,16 @@ type SessionExportProactiveSchedule = {
 	status: 'active' | 'paused';
 	trigger: { type: 'once'; at: string } | { type: 'recurring'; cron: string; repeat: { mode: 'count'; count: number } | { mode: 'unlimited' } };
 };
+/** v4 导出的压缩便签（仅保留可重建所需字段，id/消息关联等由导入端重新生成） */
+type SessionExportCompressionSticky = {
+	summaryText: string;
+	state: 'queued' | 'compressing' | 'dormant' | 'active' | 'stale' | 'failed';
+	userOverridden: boolean;
+	sortIndex: number;
+};
 type SessionExportPayload = {
-	format: 'misskey-agent-session-export-v3';
-	version: 3;
+	format: 'misskey-agent-session-export-v5';
+	version: 5;
 	sessionId: string;
 	exportedAt: string;
 	source: {
@@ -3629,12 +3648,14 @@ type SessionExportPayload = {
 	};
 	settings: SessionExportSettings;
 	proactiveSchedules: SessionExportProactiveSchedule[];
+	compressionStickies: SessionExportCompressionSticky[];
 	messages: SessionContextRow[];
 };
 type ParsedSessionImportPayload = {
 	messages: SessionContextRow[];
 	settings: SessionExportSettings | null;
 	proactiveSchedules: SessionExportProactiveSchedule[];
+	compressionStickies: SessionExportCompressionSticky[];
 	legacy: boolean;
 };
 
@@ -3648,9 +3669,13 @@ function normalizeSessionContextRows(rows: AgentMsg[]): SessionContextRow[] {
 	const out: SessionContextRow[] = [];
 	for (const row of sortedAsc) {
 		if (row.role !== 'user' && row.role !== 'assistant') continue;
+		// v5: 包含图片附件与识别结果（AgentMsg 使用 file 字段存储 DriveFile）
 		out.push({
 			role: row.role,
 			content: row.content,
+			imageFileId: row.file?.id ?? null,
+			imageRecognitionStatus: row.imageRecognitionStatus ?? null,
+			imageRecognitionDescription: row.imageRecognitionDescription ?? null,
 		});
 	}
 	return out;
@@ -3678,6 +3703,11 @@ function buildSessionExportSettings(): SessionExportSettings {
 		timeAwarenessEnabled: s.timeAwarenessEnabled !== false,
 		randomProactiveEnabled: s.randomProactiveEnabled === true,
 		scheduledProactiveEnabled: s.scheduledProactiveEnabled === true,
+		// v5 新增：主动消息高级设置
+		randomProactiveMinSilenceMinutes: s.randomProactiveMinSilenceMinutes ?? null,
+		randomProactiveMaxWindowMinutes: s.randomProactiveMaxWindowMinutes ?? null,
+		randomProactiveDaytimeWeight: s.randomProactiveDaytimeWeight ?? null,
+		randomProactiveRecencyBias: s.randomProactiveRecencyBias ?? null,
 	};
 }
 
@@ -3729,18 +3759,42 @@ async function buildSessionExportProactiveSchedules(): Promise<SessionExportProa
 	}
 }
 
+/** v4 导出：获取当前会话的压缩便签 */
+async function buildSessionExportCompressionStickies(): Promise<SessionExportCompressionSticky[]> {
+	try {
+		const list = await (misskeyApi as unknown as (
+			endpoint: 'agents/compression-sticky/list',
+			data: { sessionId: string },
+		) => Promise<Array<{
+			summaryText: string;
+			state: string;
+			userOverridden: boolean;
+			sortIndex: number;
+		}>>)('agents/compression-sticky/list', { sessionId });
+		return list.map(s => ({
+			summaryText: s.summaryText,
+			state: s.state as SessionExportCompressionSticky['state'],
+			userOverridden: s.userOverridden,
+			sortIndex: s.sortIndex,
+		}));
+	} catch {
+		return [];
+	}
+}
+
 async function exportSessionContext() {
 	if (contextExporting.value) return;
 	contextExporting.value = true;
 	try {
-		const [all, proactiveSchedulesForExport] = await Promise.all([
+		const [all, proactiveSchedulesForExport, compressionStickiesForExport] = await Promise.all([
 			fetchAllSessionMessages(),
 			buildSessionExportProactiveSchedules(),
+			buildSessionExportCompressionStickies(),
 		]);
 		const messagesForContext = normalizeSessionContextRows(all);
 		const payload: SessionExportPayload = {
-			format: 'misskey-agent-session-export-v3',
-			version: 3,
+			format: 'misskey-agent-session-export-v5',
+			version: 5,
 			sessionId,
 			exportedAt: new Date().toISOString(),
 			source: {
@@ -3749,6 +3803,7 @@ async function exportSessionContext() {
 			},
 			settings: buildSessionExportSettings(),
 			proactiveSchedules: proactiveSchedulesForExport,
+			compressionStickies: compressionStickiesForExport,
 			messages: messagesForContext,
 		};
 		const json = JSON.stringify(payload, null, 2);
@@ -3800,16 +3855,29 @@ function parseImportedContext(text: string): ParsedSessionImportPayload {
 		if (content.length > SESSION_IMPORT_MAX_MESSAGE_CHARS) {
 			throw new Error(`导入失败：单条消息不能超过 ${SESSION_IMPORT_MAX_MESSAGE_CHARS} 字符。`);
 		}
-		out.push({ role, content });
+		// v5: 解析图片附件字段
+		const imageFileId = (row as { imageFileId?: unknown }).imageFileId;
+		const imageRecognitionStatus = (row as { imageRecognitionStatus?: unknown }).imageRecognitionStatus;
+		const imageRecognitionDescription = (row as { imageRecognitionDescription?: unknown }).imageRecognitionDescription;
+		out.push({
+			role,
+			content,
+			imageFileId: typeof imageFileId === 'string' ? imageFileId : null,
+			imageRecognitionStatus: imageRecognitionStatus === 'succeeded' || imageRecognitionStatus === 'failed' ? imageRecognitionStatus : null,
+			imageRecognitionDescription: typeof imageRecognitionDescription === 'string' ? imageRecognitionDescription : null,
+		});
 	}
 	const settings = parseImportedSessionSettings((parsed as { settings?: unknown }).settings);
 	const proactiveSchedules = parseImportedProactiveSchedules((parsed as { proactiveSchedules?: unknown }).proactiveSchedules);
+	const compressionStickies = parseImportedCompressionStickies((parsed as { compressionStickies?: unknown }).compressionStickies);
 	const format = (parsed as { format?: unknown }).format;
 	const version = (parsed as { version?: unknown }).version;
 	const isSessionExport = format === 'misskey-agent-session-export-v1'
 		|| format === 'misskey-agent-session-export-v2'
 		|| format === 'misskey-agent-session-export-v3'
-		|| version === 1 || version === 2 || version === 3;
+		|| format === 'misskey-agent-session-export-v4'
+		|| format === 'misskey-agent-session-export-v5'
+		|| version === 1 || version === 2 || version === 3 || version === 4 || version === 5;
 	const legacy = !isSessionExport;
 	if (out.length === 0 && (legacy || settings == null || Object.keys(settings).length === 0)) {
 		throw new Error(i18n.ts._agents.sessionMemoryImportContextInvalidFormat);
@@ -3818,6 +3886,7 @@ function parseImportedContext(text: string): ParsedSessionImportPayload {
 		messages: out,
 		settings,
 		proactiveSchedules,
+		compressionStickies,
 		legacy,
 	};
 }
@@ -3853,6 +3922,28 @@ function parseImportedProactiveSchedules(raw: unknown): SessionExportProactiveSc
 	return out;
 }
 
+/** v4 导入：解析压缩便签；无效条目安全忽略（不报错），仅保留可重建的字段。 */
+function parseImportedCompressionStickies(raw: unknown): SessionExportCompressionSticky[] {
+	if (raw == null || !Array.isArray(raw)) return [];
+	const validStates = new Set(['queued', 'compressing', 'dormant', 'active', 'stale', 'failed']);
+	const out: SessionExportCompressionSticky[] = [];
+	for (const item of raw) {
+		if (item == null || typeof item !== 'object' || Array.isArray(item)) continue;
+		const rec = item as Record<string, unknown>;
+		if (typeof rec.summaryText !== 'string' || rec.summaryText.trim() === '') continue;
+		const state = typeof rec.state === 'string' && validStates.has(rec.state)
+			? rec.state as SessionExportCompressionSticky['state']
+			: 'active';
+		out.push({
+			summaryText: rec.summaryText,
+			state,
+			userOverridden: rec.userOverridden === true,
+			sortIndex: typeof rec.sortIndex === 'number' && Number.isInteger(rec.sortIndex) ? rec.sortIndex : 0,
+		});
+	}
+	return out;
+}
+
 function parseImportedSessionSettings(raw: unknown): SessionExportSettings | null {
 	if (raw === undefined || raw === null) return null;
 	if (typeof raw !== 'object' || Array.isArray(raw)) {
@@ -3884,6 +3975,11 @@ function parseImportedSessionSettings(raw: unknown): SessionExportSettings | nul
 	if ('timeAwarenessEnabled' in src) out.timeAwarenessEnabled = validateBoolean(src.timeAwarenessEnabled, 'timeAwarenessEnabled');
 	if ('randomProactiveEnabled' in src) out.randomProactiveEnabled = validateBoolean(src.randomProactiveEnabled, 'randomProactiveEnabled');
 	if ('scheduledProactiveEnabled' in src) out.scheduledProactiveEnabled = validateBoolean(src.scheduledProactiveEnabled, 'scheduledProactiveEnabled');
+	// v5 新增：主动消息高级设置
+	if ('randomProactiveMinSilenceMinutes' in src) out.randomProactiveMinSilenceMinutes = validateNullableInteger(src.randomProactiveMinSilenceMinutes, 'randomProactiveMinSilenceMinutes', 5, 1440);
+	if ('randomProactiveMaxWindowMinutes' in src) out.randomProactiveMaxWindowMinutes = validateNullableInteger(src.randomProactiveMaxWindowMinutes, 'randomProactiveMaxWindowMinutes', 30, 10080);
+	if ('randomProactiveDaytimeWeight' in src) out.randomProactiveDaytimeWeight = validateNullableInteger(src.randomProactiveDaytimeWeight, 'randomProactiveDaytimeWeight', 1, 10);
+	if ('randomProactiveRecencyBias' in src) out.randomProactiveRecencyBias = validateNullableInteger(src.randomProactiveRecencyBias, 'randomProactiveRecencyBias', 1, 10);
 
 	return out;
 }
@@ -3943,13 +4039,71 @@ function validateAgentImageSettings(raw: unknown): Record<string, unknown> {
 	return out;
 }
 
-async function applyImportedSessionSettings(settings: SessionExportSettings | null): Promise<boolean> {
-	if (settings == null || Object.keys(settings).length === 0) return false;
-	await misskeyApi('agents/sessions/update', {
-		sessionId,
-		...settings,
-	});
-	return true;
+async function applyImportedSessionSettings(settings: SessionExportSettings | null): Promise<{ applied: boolean; skippedFields: string[] }> {
+	if (settings == null || Object.keys(settings).length === 0) return { applied: false, skippedFields: [] };
+	// 安全忽略可能不存在的引用字段（如 dialogueStyleId、agentModelId 等），
+	// 避免导入时因目标服务器缺少对应资源而整体失败。
+	const safeSettings = { ...settings };
+	// 记录被移除的字段，用于最终提示用户
+	const removedFields: string[] = [];
+	const tryUpdate = async (): Promise<void> => {
+		await misskeyApi('agents/sessions/update', {
+			sessionId,
+			...safeSettings,
+		});
+	};
+	// 递归重试：逐个移除可能的问题字段
+	const attemptWithFallback = async (): Promise<{ applied: boolean; skippedFields: string[] }> => {
+		try {
+			await tryUpdate();
+			return { applied: true, skippedFields: removedFields };
+		} catch (e: unknown) {
+			const err = e as { code?: string; message?: string };
+			const errorMsg = err.message ?? '';
+			// 对话风格不存在
+			if (err.code === 'NO_SUCH_STYLE' && safeSettings.dialogueStyleId != null) {
+				delete safeSettings.dialogueStyleId;
+				removedFields.push('对话风格');
+				return await attemptWithFallback();
+			}
+			// 生图模型不存在
+			if (err.code === 'NO_SUCH_AGENT_IMAGE_MODEL' && safeSettings.agentImageModelId != null) {
+				delete safeSettings.agentImageModelId;
+				removedFields.push('生图模型');
+				return await attemptWithFallback();
+			}
+			// 视觉模型不存在
+			if (err.code === 'NO_SUCH_AGENT_VISION_MODEL' && safeSettings.agentVisionModelId != null) {
+				delete safeSettings.agentVisionModelId;
+				removedFields.push('视觉模型');
+				return await attemptWithFallback();
+			}
+			// 模型相关错误（INVALID_PARAM 可能是对话模型或压缩模型无效）
+			if (err.code === 'INVALID_PARAM' || err.code === 'NO_SUCH_MODEL' || err.code === 'INVALID_MODEL') {
+				// 根据错误消息判断是哪个模型的问题
+				const isLlmModelError = errorMsg.includes('LLM model') || errorMsg.includes('Invalid LLM');
+				// 如果明确是 LLM 模型错误，优先移除对话模型
+				if (isLlmModelError && safeSettings.agentModelId != null) {
+					delete safeSettings.agentModelId;
+					removedFields.push('对话模型');
+					return await attemptWithFallback();
+				}
+				// 否则按顺序尝试：先压缩模型，再对话模型
+				if (safeSettings.agentCompressionModelId != null) {
+					delete safeSettings.agentCompressionModelId;
+					removedFields.push('压缩模型');
+					return await attemptWithFallback();
+				}
+				if (safeSettings.agentModelId != null) {
+					delete safeSettings.agentModelId;
+					removedFields.push('对话模型');
+					return await attemptWithFallback();
+				}
+			}
+			throw e;
+		}
+	};
+	return await attemptWithFallback();
 }
 
 /** v3 导入：重建定时主动消息计划；失败时安全忽略（不影响消息与配置导入），返回实际导入数。 */
@@ -3962,6 +4116,23 @@ async function applyImportedProactiveSchedules(schedules: SessionExportProactive
 		) => Promise<{ importedCount: number }>)('agents/proactive-schedules/import', {
 			sessionId,
 			schedules,
+		});
+		return res.importedCount;
+	} catch {
+		return 0;
+	}
+}
+
+/** v4 导入：重建压缩便签；失败时安全忽略（不影响消息与配置导入），返回实际导入数。 */
+async function applyImportedCompressionStickies(stickies: SessionExportCompressionSticky[]): Promise<number> {
+	if (stickies.length === 0) return 0;
+	try {
+		const res = await (misskeyApi as unknown as (
+			endpoint: 'agents/compression-sticky/import',
+			data: { sessionId: string; stickies: SessionExportCompressionSticky[] },
+		) => Promise<{ importedCount: number }>)('agents/compression-sticky/import', {
+			sessionId,
+			stickies,
 		});
 		return res.importedCount;
 	} catch {
@@ -3987,8 +4158,9 @@ async function onContextImportFileChange(ev: Event) {
 				: '导入将先应用文件中的会话配置，再覆盖当前会话中的全部消息记录，且无法撤销。是否继续？',
 		});
 		if (canceled) return;
-		const settingsApplied = await applyImportedSessionSettings(importedPayload.settings);
+		const settingsResult = await applyImportedSessionSettings(importedPayload.settings);
 		const schedulesImported = await applyImportedProactiveSchedules(importedPayload.proactiveSchedules);
+		const stickiesImported = await applyImportedCompressionStickies(importedPayload.compressionStickies);
 		if (importedMessages.length > 0) {
 			await (misskeyApi as unknown as (
 				endpoint: 'agents/messages/import-context',
@@ -4003,9 +4175,21 @@ async function onContextImportFileChange(ev: Event) {
 		if (schedulesImported > 0) {
 			await loadProactiveSchedules();
 		}
-		os.toast(settingsApplied
+		if (stickiesImported > 0) {
+			// 刷新便签列表显示
+			await loadCompressionOverview();
+		}
+		// 构建导入结果提示
+		let toastText = settingsResult.applied
 			? `已导入会话配置并覆盖 ${importedMessages.length} 条消息`
-			: i18n.tsx._agents.sessionMemoryImportContextDone({ n: importedMessages.length }));
+			: i18n.tsx._agents.sessionMemoryImportContextDone({ n: importedMessages.length });
+		if (settingsResult.skippedFields.length > 0) {
+			toastText += `（已跳过不存在的配置：${settingsResult.skippedFields.join('、')}）`;
+		}
+		if (stickiesImported > 0) {
+			toastText += `，含 ${stickiesImported} 条便签`;
+		}
+		os.toast(toastText);
 	} catch (e) {
 		const text = e instanceof Error ? e.message : formatApiError(e);
 		os.alert({ type: 'error', text });
