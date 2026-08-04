@@ -216,6 +216,9 @@ import { checkDragDataType, getDragData, setDragData } from '@/drag-and-drop.js'
 import { getDriveFileMenu } from '@/utility/get-drive-file-menu.js';
 import { Paginator } from '@/utility/paginator.js';
 import bytes from '@/filters/bytes.js';
+import { useRouter } from '@/router.js';
+
+const router = useRouter();
 
 const props = withDefaults(defineProps<{
 	initialFolder?: Misskey.entities.DriveFolder | Misskey.entities.DriveFolder['id'] | null;
@@ -629,7 +632,9 @@ function onFileClick(ev: PointerEvent, file: Misskey.entities.DriveFile) {
 			}
 		}
 	} else {
-		os.popupMenu(getDriveFileMenu(file, folder.value), (ev.currentTarget ?? ev.target ?? undefined) as HTMLElement | undefined);
+		// 短点击导航到文件详情页面（媒体预览）
+		// 右键菜单仍可通过 @contextmenu 触发
+		router.pushByPath(`/my/drive/file/${file.id}`, 'forcePage');
 	}
 }
 

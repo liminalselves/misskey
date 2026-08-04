@@ -31,9 +31,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<button v-else v-tooltip="i18n.ts.markAsSensitive" class="_button" :class="$style.fileQuickActionsOthersButton" @click="toggleSensitive()">
 					<i class="ti ti-eye-exclamation"></i>
 				</button>
-				<a v-if="!file.isAgentImageBlocked" v-tooltip="i18n.ts.download" :href="file.url" :download="file.name" class="_button" :class="$style.fileQuickActionsOthersButton">
+				<button v-if="!file.isAgentImageBlocked" v-tooltip="i18n.ts.download" class="_button" :class="$style.fileQuickActionsOthersButton" @click="downloadFile()">
 					<i class="ti ti-download"></i>
-				</a>
+				</button>
 				<button v-tooltip="i18n.ts.delete" class="_button" :class="[$style.fileQuickActionsOthersButton, $style.danger]" @click="deleteFile()">
 					<i class="ti ti-trash"></i>
 				</button>
@@ -87,7 +87,7 @@ import MkKeyValue from '@/components/MkKeyValue.vue';
 import bytes from '@/filters/bytes.js';
 import { i18n } from '@/i18n.js';
 import * as os from '@/os.js';
-import { misskeyApi } from '@/utility/misskey-api.js';
+import { misskeyApi, formatApiError } from '@/utility/misskey-api.js';
 import { useRouter } from '@/router.js';
 import { selectDriveFolder } from '@/utility/drive.js';
 import { globalEvents } from '@/events.js';
@@ -133,6 +133,28 @@ function postThis() {
 	os.post({
 		initialFiles: [file.value],
 	});
+}
+
+async function downloadFile() {
+	if (file.value == null || file.value.isAgentImageBlocked) return;
+
+	try {
+		const result = await (misskeyApi as unknown as (
+			endpoint: 'drive/files/download-url',
+			data: { fileId: string },
+		) => Promise<{ url: string }>)('drive/files/download-url', {
+			fileId: file.value.id,
+		});
+		const a = window.document.createElement('a');
+		a.href = result.url;
+		a.download = file.value.name || 'download';
+		a.style.display = 'none';
+		window.document.body.appendChild(a);
+		a.click();
+		a.remove();
+	} catch (error) {
+		os.alert({ type: 'error', text: formatApiError(error) });
+	}
 }
 
 function move() {
