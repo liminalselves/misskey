@@ -97,6 +97,9 @@ withDefaults(defineProps<{
 	position: relative;
 	padding: 10px 14px;
 	box-sizing: border-box;
+	overflow: clip;
+	overflow-wrap: break-word;
+	word-break: break-word;
 }
 
 @container (max-width: 450px) {

@@ -328,6 +328,20 @@ function showMenu(ev: PointerEvent, contextmenu = false) {
 		.footer {
 			flex-direction: row-reverse;
 		}
+
+		.header {
+			justify-content: flex-end;
+		}
+
+		.headerName {
+			order: 1;
+			margin-left: 0.5em;
+		}
+
+		.headerAcct {
+			order: 0;
+			margin-left: 0;
+		}
 	}
 
 	&.clickable {
@@ -420,12 +434,6 @@ function showMenu(ev: PointerEvent, contextmenu = false) {
 
 .fukidashi {
 	text-align: left;
-}
-
-.content {
-	overflow: clip;
-	overflow-wrap: break-word;
-	word-break: break-word;
 }
 
 .footer {
