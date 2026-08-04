@@ -1014,7 +1014,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<i class="ti ti-loader-2" :class="$style.memAddHintIcon"></i>
 				<span>{{ i18n.ts._agents.compressionSidecarScheduledHint }}</span>
 			</div>
-			<XForm ref="formRef" :class="$style.form" :disabled="formDisabled" :sending="sending || editSaving" :editing="editingForForm" :attachmentEnabled="visionModels.length > 0" @submit="onFormSubmit" @cancelEdit="cancelEditingMessage" @abort="onAbortRequest"/>
+			<XForm ref="formRef" :class="$style.form" :sessionId="sessionId" :disabled="formDisabled" :sending="sending || editSaving" :editing="editingForForm" :attachmentEnabled="visionModels.length > 0" @submit="onFormSubmit" @cancelEdit="cancelEditingMessage" @abort="onAbortRequest"/>
 		</div>
 	</template>
 </PageWithHeader>

@@ -81,8 +81,10 @@ import { emojiPicker } from '@/utility/emoji-picker.js';
 import type { DriveFile } from 'misskey-js/entities.js';
 import { selectFile } from '@/utility/drive.js';
 import * as os from '@/os.js';
+import { miLocalStorage } from '@/local-storage.js';
 
 const props = defineProps<{
+	sessionId?: string;
 	disabled?: boolean;
 	sending?: boolean;
 	attachmentEnabled?: boolean;
@@ -104,6 +106,54 @@ let autocompleteInstance: Autocomplete | null = null;
 const sendDisabled = computed(() => props.disabled || props.sending || (text.value.trim().length === 0 && file.value == null));
 
 const submitTitle = computed(() => props.editing ? i18n.ts.save : i18n.ts.send);
+
+// 草稿持久化相关
+function getDraftKey() {
+	return props.sessionId ? `agent:${props.sessionId}` : null;
+}
+
+function saveDraft() {
+	const key = getDraftKey();
+	if (!key) return;
+
+	const drafts = JSON.parse(miLocalStorage.getItem('chatMessageDrafts') || '{}');
+	drafts[key] = {
+		updatedAt: new Date(),
+		data: {
+			text: text.value,
+			file: file.value,
+		},
+	};
+	miLocalStorage.setItem('chatMessageDrafts', JSON.stringify(drafts));
+}
+
+function deleteDraft() {
+	const key = getDraftKey();
+	if (!key) return;
+
+	const drafts = JSON.parse(miLocalStorage.getItem('chatMessageDrafts') || '{}');
+	delete drafts[key];
+	miLocalStorage.setItem('chatMessageDrafts', JSON.stringify(drafts));
+}
+
+function restoreDraftFromStorage() {
+	const key = getDraftKey();
+	if (!key) return;
+
+	const draft = JSON.parse(miLocalStorage.getItem('chatMessageDrafts') || '{}')[key];
+	if (draft) {
+		text.value = draft.data.text || '';
+		file.value = draft.data.file || null;
+	}
+}
+
+// 监听文本和文件变化，自动保存草稿
+watch([text, file], () => {
+	// 编辑模式下不保存草稿（编辑有独立的恢复机制）
+	if (!props.editing) {
+		saveDraft();
+	}
+});
 
 function onKeydown(ev: KeyboardEvent) {
 	if (ev.key === 'Enter') {
@@ -131,6 +181,7 @@ function submit() {
 	if (!props.editing) {
 		text.value = '';
 		file.value = null;
+		deleteDraft();
 	}
 }
 
@@ -161,6 +212,7 @@ function setText(t: string) {
 
 function clearText() {
 	text.value = '';
+	deleteDraft();
 }
 
 defineExpose({
@@ -210,6 +262,11 @@ async function insertEmoji(ev: MouseEvent) {
 onMounted(() => {
 	if (textareaEl.value != null) {
 		autocompleteInstance = new Autocomplete(textareaEl.value, text);
+	}
+
+	// 恢复草稿（仅在非编辑模式下）
+	if (!props.editing) {
+		restoreDraftFromStorage();
 	}
 });
 
