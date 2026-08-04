@@ -1973,6 +1973,24 @@ onMounted(() => {
 	.summaryValue {
 		font-size: 1.4em;
 	}
+
+	/* 复审用户卡片：头部纵向堆叠，操作按钮组换行，避免挤压信息区 */
+	.reviewUserHead {
+		flex-direction: column;
+		align-items: stretch;
+		gap: 10px;
+	}
+	.reviewUserActions {
+		width: 100%;
+		flex-wrap: wrap;
+	}
+	.reviewUserActions :global(._button) {
+		flex: 1 1 auto;
+		min-width: 0;
+	}
+	.reviewLogHead {
+		align-items: flex-start;
+	}
 }
 
 @media (max-width: 380px) {
