@@ -47,7 +47,8 @@ export async function getAcctByUserId(usersRepository: UsersRepository, userId: 
 	return `@${Acct.toString({ username: user.username, host: user.host })}`;
 }
 
-function extractTextFromWorldbook(worldbook: Array<Record<string, unknown>>): string {
+function extractTextFromWorldbook(worldbook: Array<Record<string, unknown>> | null | undefined): string {
+	if (!Array.isArray(worldbook)) return '';
 	return worldbook.flatMap(entry => [
 		typeof entry.title === 'string' ? entry.title : '',
 		typeof entry.content === 'string' ? entry.content : '',
@@ -55,7 +56,8 @@ function extractTextFromWorldbook(worldbook: Array<Record<string, unknown>>): st
 	]).join('\n');
 }
 
-function extractTextFromRules(rules: Array<Record<string, unknown>>): string {
+function extractTextFromRules(rules: Array<Record<string, unknown>> | null | undefined): string {
+	if (!Array.isArray(rules)) return '';
 	return rules.flatMap(rule => [
 		typeof rule.name === 'string' ? rule.name : '',
 		typeof rule.description === 'string' ? rule.description : '',
