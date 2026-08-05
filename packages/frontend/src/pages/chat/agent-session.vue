@@ -286,6 +286,51 @@ SPDX-License-Identifier: AGPL-3.0-only
 		</div>
 	</div>
 
+	<div v-else-if="tab === 'rules'" class="_spacer" style="--MI_SPACER-w: 760px;">
+		<div v-if="loading || sessionRulesLoading" class="_gaps">
+			<MkLoading/>
+		</div>
+		<div v-else class="_gaps">
+			<MkInfo v-if="sessionRules.length === 0">当前会话使用的角色没有配置规则。</MkInfo>
+			<template v-else>
+				<div :class="$style.ruleSummary">
+					<span :class="$style.ruleSummaryItem"><i class="ti ti-shield-check"></i> {{ sessionRules.length }} 条规则</span>
+					<span :class="$style.ruleSummaryItem"><i class="ti ti-lock"></i> {{ sessionRules.filter(r => r.type === 'persistent').length }} 常驻</span>
+					<span :class="$style.ruleSummaryItem"><i class="ti ti-toggle-right"></i> {{ sessionRules.filter(r => r.type === 'toggleable').length }} 可切换</span>
+				</div>
+				<div
+					v-for="rule in sessionRules"
+					:key="rule.id"
+					v-panel
+					:class="[$style.ruleCard, rule.type === 'toggleable' && rule.currentEnabled && $style.ruleCardActive]"
+				>
+					<div :class="$style.ruleHeader">
+						<div :class="$style.ruleInfo">
+							<div :class="$style.ruleName">
+								{{ rule.name }}
+								<span v-if="rule.type === 'persistent'" :class="$style.ruleBadge">常驻</span>
+								<span v-else-if="rule.hasDisabledPrompt" :class="[$style.ruleBadge, $style.ruleBadgeBidirectional]">双向</span>
+							</div>
+							<div v-if="rule.description" :class="$style.ruleDesc">{{ rule.description }}</div>
+							<div v-if="rule.type === 'toggleable'" :class="$style.ruleStatus">
+								<span :class="[$style.ruleStatusDot, rule.currentEnabled ? $style.ruleStatusDotOn : $style.ruleStatusDotOff]"></span>
+								{{ rule.currentEnabled ? '已开启' : '已关闭' }}
+								<template v-if="rule.hasDisabledPrompt">（{{ rule.currentEnabled ? '注入开启提示词' : '注入关闭提示词' }}）</template>
+							</div>
+						</div>
+						<MkSwitch
+							v-if="rule.type === 'toggleable'"
+							:modelValue="rule.currentEnabled"
+							:disabled="ruleSaving"
+							@update:modelValue="toggleRule(rule, $event)"
+						/>
+					</div>
+				</div>
+				<MkInfo>规则内容由角色作者设定，此处仅显示名称与简介。开关状态即时生效，下一轮对话将使用更新后的规则。</MkInfo>
+			</template>
+		</div>
+	</div>
+
 	<div v-else-if="tab === 'draw'" class="_spacer" style="--MI_SPACER-w: 760px;">
 		<div class="_gaps">
 			<MkInfo>
@@ -1127,6 +1172,16 @@ type SessionWorldbookEntry = {
 	contentLength: number;
 };
 
+type SessionRule = {
+	id: string;
+	name: string;
+	description: string;
+	type: 'persistent' | 'toggleable';
+	defaultEnabled: boolean;
+	currentEnabled: boolean;
+	hasDisabledPrompt: boolean;
+};
+
 const messages = ref<AgentMsg[]>([]);
 const visionModels = ref<Array<{ id: string; name: string; costPerCall: number; isDefault: boolean }>>([]);
 const visionModelSelectionId = ref('');
@@ -1146,6 +1201,10 @@ const highlightedMessageId = ref<string | null>(null);
 const pendingWorldbookMatches = ref<PendingWorldbookMatch[]>([]);
 const worldbookEntries = ref<SessionWorldbookEntry[]>([]);
 const worldbookListLoading = ref(false);
+const sessionRules = ref<SessionRule[]>([]);
+const sessionRulesLoading = ref(false);
+const ruleOverrides = ref<Record<string, boolean>>({});
+const ruleSaving = ref(false);
 const showWorldbookHitHint = ref(localStorage.getItem('agent.showWorldbookHitHint') !== '0');
 const worldbookHitPopoverOpen = ref(false);
 let highlightTimeoutId: number | null = null;
@@ -1183,6 +1242,7 @@ const session = ref<{
 	sessionModerationBanned?: boolean;
 	characterModerationBanned?: boolean;
 	sessionModerationBannedReason?: string | null;
+	ruleOverrides?: Record<string, boolean>;
 } | null>(null);
 
 const character = ref<{ name: string; avatarFileId: string | null; avatar?: DriveFile | null; referenceImageFileIds: string[]; referenceImages: DriveFile[]; regexRules: AgentRegexRule[] } | null>(null);
@@ -2157,6 +2217,11 @@ const headerTabs = computed(() => {
 		icon: 'ti ti-book',
 	});
 	tabs.push({
+		key: 'rules',
+		title: '规则',
+		icon: 'ti ti-shield-check',
+	});
+	tabs.push({
 		key: 'style',
 		title: i18n.ts._agents.sessionDialogueStyle,
 		icon: 'ti ti-message-cog',
@@ -2206,6 +2271,8 @@ watch(tab, (v) => {
 		}
 	} else if (v === 'worldbook' && session.value != null) {
 		void loadWorldbookEntries();
+	} else if (v === 'rules' && session.value != null) {
+		void loadSessionRules();
 	} else if (v === 'model') {
 		void loadModelSuccessRates();
 		void loadModelFreeQuota();
@@ -2604,6 +2671,9 @@ async function loadSession() {
 			if (tab.value === 'worldbook') {
 				await loadWorldbookEntries();
 			}
+			if (tab.value === 'rules') {
+				await loadSessionRules();
+			}
 		}
 	} catch {
 		session.value = null;
@@ -2718,6 +2788,44 @@ async function loadWorldbookEntries() {
 		worldbookEntries.value = [];
 	} finally {
 		worldbookListLoading.value = false;
+	}
+}
+
+async function loadSessionRules() {
+	sessionRulesLoading.value = true;
+	try {
+		const rows = await misskeyApi(
+			'agents/sessions/rule-list' as Parameters<typeof misskeyApi>[0],
+			{ sessionId } as any,
+		) as SessionRule[];
+		sessionRules.value = Array.isArray(rows) ? rows : [];
+		// Initialize ruleOverrides from session data.
+		if (session.value?.ruleOverrides) {
+			ruleOverrides.value = { ...session.value.ruleOverrides };
+		}
+	} catch {
+		sessionRules.value = [];
+	} finally {
+		sessionRulesLoading.value = false;
+	}
+}
+
+async function toggleRule(rule: SessionRule, enabled: boolean) {
+	if (ruleSaving.value) return;
+	ruleSaving.value = true;
+	try {
+		ruleOverrides.value = { ...ruleOverrides.value, [rule.id]: enabled };
+		await misskeyApi('agents/sessions/update', {
+			sessionId,
+			ruleOverrides: ruleOverrides.value,
+		});
+		rule.currentEnabled = enabled;
+	} catch {
+		// Revert on failure.
+		delete ruleOverrides.value[rule.id];
+		os.alert({ type: 'error', text: i18n.ts.somethingHappened });
+	} finally {
+		ruleSaving.value = false;
 	}
 }
 
@@ -4868,6 +4976,102 @@ async function onAbortRequest() {
 .worldbookSettingCard {
 	padding: 14px 16px;
 	border-radius: var(--MI-radius);
+}
+
+.ruleCard {
+	padding: 14px 16px;
+	border-radius: var(--MI-radius);
+	transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.ruleCardActive {
+	border-color: color-mix(in srgb, var(--MI_THEME-accent) 40%, transparent);
+	box-shadow: 0 0 0 1px color-mix(in srgb, var(--MI_THEME-accent) 20%, transparent);
+}
+
+.ruleSummary {
+	display: flex;
+	gap: 16px;
+	padding: 10px 14px;
+	border-radius: var(--MI-radius);
+	background: color-mix(in srgb, var(--MI_THEME-panel) 60%, transparent);
+	font-size: 0.85em;
+}
+
+.ruleSummaryItem {
+	display: flex;
+	align-items: center;
+	gap: 5px;
+	opacity: 0.8;
+}
+
+.ruleBadgeBidirectional {
+	background: color-mix(in srgb, var(--MI_THEME-warn) 12%, transparent);
+	color: var(--MI_THEME-warn);
+	border-color: color-mix(in srgb, var(--MI_THEME-warn) 25%, transparent);
+}
+
+.ruleStatus {
+	margin-top: 6px;
+	font-size: 0.8em;
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	opacity: 0.7;
+}
+
+.ruleStatusDot {
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	flex-shrink: 0;
+}
+
+.ruleStatusDotOn {
+	background: var(--MI_THEME-accent);
+	box-shadow: 0 0 6px color-mix(in srgb, var(--MI_THEME-accent) 50%, transparent);
+}
+
+.ruleStatusDotOff {
+	background: var(--MI_THEME-divider);
+}
+
+.ruleHeader {
+	display: flex;
+	justify-content: space-between;
+	align-items: flex-start;
+	gap: 12px;
+}
+
+.ruleInfo {
+	flex: 1;
+	min-width: 0;
+}
+
+.ruleName {
+	font-weight: 600;
+	font-size: 0.95em;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.ruleBadge {
+	font-size: 0.75em;
+	font-weight: 500;
+	padding: 2px 8px;
+	border-radius: 999px;
+	background: color-mix(in srgb, var(--MI_THEME-accent) 12%, transparent);
+	color: var(--MI_THEME-accent);
+	border: solid 1px color-mix(in srgb, var(--MI_THEME-accent) 25%, transparent);
+	white-space: nowrap;
+}
+
+.ruleDesc {
+	margin-top: 4px;
+	font-size: 0.85em;
+	opacity: 0.75;
+	line-height: 1.4;
 }
 
 .worldbookList {

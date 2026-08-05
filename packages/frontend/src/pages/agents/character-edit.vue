@@ -249,6 +249,47 @@ SPDX-License-Identifier: AGPL-3.0-only
 						</div>
 					</div>
 
+					<!-- Tab: Rules -->
+					<div v-if="activeTab === 'rules'" class="_gaps">
+						<div :class="$style.sectionTitle"><i class="ti ti-shield-check"></i> 规则</div>
+						<p :class="$style.captionText">为角色定义行为规则。常驻规则始终生效；可切换规则允许用户在会话中开启或关闭。最多 {{ RULE_MAX }} 条。</p>
+						<div v-for="(rule, i) in form.state.rules" :key="rule.id" :class="$style.card" class="_gaps_s">
+							<div :class="$style.cardHeader">
+								<MkInput v-model="rule.name" :class="$style.cardHeaderInput" :maxlength="RULE_NAME_MAX">
+									<template #label>规则名称</template>
+								</MkInput>
+								<div :class="$style.cardActions">
+									<MkButton danger inline rounded @click="removeRule(i)"><i class="ti ti-trash"></i></MkButton>
+								</div>
+							</div>
+							<MkInput v-model="rule.description" :maxlength="RULE_DESC_MAX">
+								<template #label>简介</template>
+								<template #caption>向用户说明规则的作用（{{ RULE_DESC_MAX }} 字以内）。</template>
+							</MkInput>
+							<MkTextarea v-model="rule.content" tall :maxlength="RULE_CONTENT_MAX">
+								<template #label>{{ rule.type === 'toggleable' ? '开启状态提示词' : '规则内容' }}</template>
+								<template #caption>{{ rule.content.length }} / {{ RULE_CONTENT_MAX }}</template>
+							</MkTextarea>
+							<MkTextarea v-if="rule.type === 'toggleable'" v-model="rule.disabledContent" tall :maxlength="RULE_CONTENT_MAX">
+								<template #label>关闭状态提示词（可选）</template>
+								<template #caption>规则被用户关闭时注入的提示词。留空则关闭时不注入。{{ rule.disabledContent.length }} / {{ RULE_CONTENT_MAX }}</template>
+							</MkTextarea>
+							<div :class="$style.wbMetaRow">
+								<div :class="$style.wbTrigger">
+									<div :class="$style.wbTriggerLabel">规则类型</div>
+									<MkTab v-model="rule.type" :tabs="ruleTypeTabs"/>
+									<div :class="$style.wbTriggerCaption">{{ ruleTypeDescription(rule.type) }}</div>
+								</div>
+								<MkSwitch v-if="rule.type === 'toggleable'" v-model="rule.defaultEnabled" :class="$style.wbEnabled">
+									<template #label>默认开启</template>
+								</MkSwitch>
+							</div>
+						</div>
+						<div>
+							<MkButton rounded inline :disabled="form.state.rules.length >= RULE_MAX" @click="addRule"><i class="ti ti-plus"></i> 新增规则{{ form.state.rules.length >= RULE_MAX ? `（已达上限 ${RULE_MAX} 条）` : '' }}</MkButton>
+						</div>
+					</div>
+
 					<!-- Tab: Regex -->
 					<div v-if="activeTab === 'regex'" class="_gaps">
 						<div :class="$style.sectionTitle"><i class="ti ti-filter"></i> {{ agentText('editCharacterRegex', '正则') }}</div>
@@ -420,7 +461,7 @@ const headerActions = computed<PageHeaderItem[]>(() => [{
 	},
 }]);
 
-type TabKey = 'basic' | 'persona' | 'dialogue' | 'worldbook' | 'regex' | 'versions';
+type TabKey = 'basic' | 'persona' | 'dialogue' | 'worldbook' | 'rules' | 'regex' | 'versions';
 const activeTab = ref<TabKey>('basic');
 
 const navTabs: Array<{ key: TabKey; icon: string; label: string }> = [
@@ -428,6 +469,7 @@ const navTabs: Array<{ key: TabKey; icon: string; label: string }> = [
 		{ key: 'persona', icon: 'ti ti-brain', label: '人设' },
 		{ key: 'dialogue', icon: 'ti ti-message', label: '对话与示例' },
 	{ key: 'worldbook', icon: 'ti ti-book', label: '世界书' },
+	{ key: 'rules', icon: 'ti ti-shield-check', label: '规则' },
 	{ key: 'regex', icon: 'ti ti-filter', label: agentText('editCharacterRegex', '正则') },
 		{ key: 'versions', icon: 'ti ti-history', label: '版本管理' },
 ];
@@ -508,6 +550,31 @@ type WorldbookPayload = {
 
 type RegexForm = { id: string; pattern: string; targets: { user: boolean; assistant: boolean }; effects: { hide: boolean; aiInvisible: boolean } };
 
+type RuleForm = {
+	id: string;
+	name: string;
+	content: string;
+	disabledContent: string;
+	description: string;
+	type: 'persistent' | 'toggleable';
+	defaultEnabled: boolean;
+};
+
+const RULE_MAX = 5;
+const RULE_CONTENT_MAX = 300;
+const RULE_NAME_MAX = 50;
+const RULE_DESC_MAX = 50;
+
+const ruleTypeTabs = [
+	{ key: 'persistent' as const, label: '常驻规则' },
+	{ key: 'toggleable' as const, label: '可切换规则' },
+];
+
+function ruleTypeDescription(type: 'persistent' | 'toggleable'): string {
+	if (type === 'persistent') return '常驻规则：始终生效，用户无法关闭。';
+	return '可切换规则：用户可以在会话中开启或关闭。';
+}
+
 const regexPreviewText = ref('');
 const regexPreviewRole = ref<'user' | 'assistant'>('user');
 const regexPreviewRoleOptions = computed(() => [
@@ -554,6 +621,37 @@ function buildWorldbookPayload(entries: WorldbookForm[]): WorldbookPayload[] {
 		.filter(entry => entry.title.length > 0);
 }
 
+function buildRulesPayload(entries: RuleForm[]) {
+	return entries
+		.map(rule => ({
+			id: rule.id,
+			name: rule.name.trim(),
+			content: rule.content,
+			disabledContent: rule.type === 'toggleable' ? rule.disabledContent : '',
+			description: rule.description.trim(),
+			type: rule.type,
+			defaultEnabled: rule.type === 'persistent' ? true : rule.defaultEnabled,
+		}))
+		.filter(rule => rule.name.length > 0 && rule.content.trim().length > 0);
+}
+
+function addRule() {
+	if (form.state.rules.length >= RULE_MAX) return;
+	form.state.rules.push({
+		id: crypto.randomUUID(),
+		name: '',
+		content: '',
+		disabledContent: '',
+		description: '',
+		type: 'persistent',
+		defaultEnabled: true,
+	});
+}
+
+function removeRule(index: number) {
+	form.state.rules.splice(index, 1);
+}
+
 function keywordTextareaRows(text: string): number {
 	return Math.max(1, text.split('\n').length);
 }
@@ -582,6 +680,7 @@ const empty = () => ({
 	exampleTurns: [] as ExampleTurnForm[],
 	worldbook: [] as WorldbookForm[],
 	regexRules: [] as RegexForm[],
+	rules: [] as RuleForm[],
 	forbiddenBehavior: '',
 	avatarFileId: null as string | null,
 	referenceImageFileIds: [] as string[],
@@ -611,6 +710,7 @@ const form = useForm(empty(), async (state) => {
 		}
 	}
 	const regexRules = buildRegexPayload(state.regexRules);
+	const rules = buildRulesPayload(state.rules);
 	await misskeyApi('agents/characters/update', {
 		characterId: props.characterId,
 		name: state.name,
@@ -622,6 +722,7 @@ const form = useForm(empty(), async (state) => {
 		exampleTurns,
 		worldbook,
 		regexRules,
+		rules,
 		forbiddenBehavior: state.forbiddenBehavior,
 		avatarFileId: state.avatarFileId,
 		referenceImageFileIds: state.referenceImageFileIds,
@@ -736,6 +837,15 @@ async function load() {
 				pattern: rule.pattern ?? '',
 				targets: { user: Array.isArray(rule.targets) && rule.targets.includes('user'), assistant: Array.isArray(rule.targets) && rule.targets.includes('assistant') },
 				effects: { hide: Array.isArray(rule.effects) && rule.effects.includes('hide'), aiInvisible: Array.isArray(rule.effects) && rule.effects.includes('aiInvisible') },
+			})),
+			rules: (row.rules ?? []).map((rule: any) => ({
+				id: rule.id ?? crypto.randomUUID(),
+				name: rule.name ?? '',
+				content: rule.content ?? '',
+				disabledContent: rule.disabledContent ?? '',
+				description: rule.description ?? '',
+				type: rule.type === 'toggleable' ? 'toggleable' : 'persistent',
+				defaultEnabled: rule.defaultEnabled !== false,
 			})),
 			forbiddenBehavior: row.forbiddenBehavior ?? '',
 			avatarFileId: row.avatarFileId,
@@ -944,6 +1054,7 @@ const diffFieldLabels: Record<string, string> = {
 	avatarFileId: '头像',
 	worldbook: '世界书',
 	regexRules: '正则',
+	rules: '规则',
 };
 
 function diffFieldLabel(key: string): string {
@@ -951,7 +1062,7 @@ function diffFieldLabel(key: string): string {
 }
 
 function prettyForDiff(key: string, text: string): string {
-	if (key !== 'worldbook') return text;
+	if (key !== 'worldbook' && key !== 'rules') return text;
 	try {
 		return JSON.stringify(JSON.parse(text), null, 2);
 	} catch {

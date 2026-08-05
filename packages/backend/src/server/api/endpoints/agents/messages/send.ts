@@ -374,11 +374,16 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				const sendTokenConfig = this.agentTokenService.resolveTokenConfig(instanceMeta, session.agentModelId ?? instanceMeta.agentDefaultModelId);
 				const sendExactCounter = this.agentTokenService.makeCounter(sendTokenConfig);
 				const selectedWorldbook = this.agentService.selectWorldbookEntriesForPrompt(character, userText);
+				const activeRules = this.agentService.resolveActiveRules(
+					this.agentService.normalizeRules(character.rules),
+					session.ruleOverrides,
+				);
 				const systemBase = this.agentService.buildSystemPrompt({
 					globalPrompt: instanceMeta.agentGlobalSystemPrompt,
 					character,
 					style,
 					timeAwarenessEnabled: session.timeAwarenessEnabled === true,
+					activeRules,
 				});
 
 				let longTermMemorySearchUnavailable = false;
@@ -478,6 +483,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					this.agentService.prependCurrentBeijingTime(proactiveUserText, session.timeAwarenessEnabled === true),
 					style,
 					selectedWorldbook,
+					activeRules,
 				);
 
 				// 统一中断行为：per_call 和 usage 均直接中断 LLM 请求，按 costPerCall 扣费。

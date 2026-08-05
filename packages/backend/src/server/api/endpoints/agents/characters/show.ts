@@ -69,6 +69,10 @@ export const meta = {
 				type: 'array',
 				items: { type: 'object' },
 			},
+			rules: {
+				type: 'array',
+				items: { type: 'object' },
+			},
 			isPublished: { type: 'boolean' },
 			reviewStatus: { type: 'string', optional: true },
 			publishedVersion: { type: 'integer', nullable: true, optional: true },
@@ -163,6 +167,10 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				worldbook,
 				// Regex rules are behavior configuration, not prompt prose; clients need them even when the prompt is private.
 				regexRules: this.agentService.normalizeRegexRules(display.regexRules),
+				// Rules: non-owners see only metadata (name/description/type), not content.
+				rules: exposePrompt
+					? this.agentService.normalizeRules(display.rules)
+					: this.agentService.normalizeRules(display.rules).map(({ content, ...meta }) => meta),
 				isPublished: row.isPublished,
 				...(isOwner ? {
 					reviewStatus: row.reviewStatus,

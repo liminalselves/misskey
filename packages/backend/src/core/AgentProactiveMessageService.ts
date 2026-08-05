@@ -214,11 +214,16 @@ export class AgentProactiveMessageService {
 			if (!await this.agentModelUsageService.canAffordModelCall(instance, session.agentModelId, session.userId)) {
 				throw new ProactiveAttemptError('PROACTIVE_INSUFFICIENT_CREDIT');
 			}
+			const activeRules = this.agentService.resolveActiveRules(
+				this.agentService.normalizeRules(character.rules),
+				session.ruleOverrides,
+			);
 			const systemBase = this.agentService.buildSystemPrompt({
 				globalPrompt: instance.agentGlobalSystemPrompt,
 				character,
 				style,
 				timeAwarenessEnabled: true,
+				activeRules,
 			});
 			let system = session.scheduledProactiveEnabled
 				? `${systemBase}\n${this.agentProactiveScheduleService.systemPromptBlock}`
@@ -242,6 +247,7 @@ export class AgentProactiveMessageService {
 				this.agentService.prependCurrentBeijingTime(scheduledTrigger, true),
 				style,
 				selectedWorldbook,
+				activeRules,
 			);
 			const modelApiName = (() => {
 				try {

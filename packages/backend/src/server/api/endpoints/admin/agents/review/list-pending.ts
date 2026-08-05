@@ -70,6 +70,10 @@ export const meta = {
 								required: ['id', 'title', 'content', 'keywords', 'triggerMode', 'priority', 'enabled', 'revision'],
 							},
 						},
+						rules: {
+							type: 'array',
+							items: { type: 'object' },
+						},
 						avatarFileId: { type: 'string', format: 'misskey:id', nullable: true },
 						avatar: { type: 'object', ref: 'DriveFile', nullable: true },
 						publishedVersion: { type: 'integer', nullable: true },
@@ -212,6 +216,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					exampleTurns: this.agentService.exampleTurnsFromStored(c.exampleDialogue),
 					forbiddenBehavior: c.forbiddenBehavior,
 					worldbook: this.agentService.normalizeWorldbookEntries(c.worldbook),
+					rules: this.agentService.normalizeRules(c.rules),
 					avatarFileId: c.avatarFileId,
 					avatar: c.avatarFileId ? avatarMap.get(c.avatarFileId) ?? null : null,
 					publishedVersion: c.publishedVersion,

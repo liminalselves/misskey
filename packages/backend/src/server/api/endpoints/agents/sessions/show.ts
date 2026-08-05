@@ -58,6 +58,7 @@ export const meta = {
 			sessionModerationBanned: { type: 'boolean' },
 			characterModerationBanned: { type: 'boolean' },
 			sessionModerationBannedReason: { type: 'string', nullable: true },
+			ruleOverrides: { type: 'object' },
 		},
 	},
 } as const;
@@ -155,6 +156,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				sessionModerationBanned: row.moderationBanned,
 				characterModerationBanned: characterRow.moderationBanned,
 				sessionModerationBannedReason: row.moderationBannedReason ?? null,
+				ruleOverrides: row.ruleOverrides ?? {},
 			};
 		});
 	}

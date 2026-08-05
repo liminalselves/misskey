@@ -216,6 +216,7 @@ export * as 'agents/sessions/show' from './endpoints/agents/sessions/show.js';
 export * as 'agents/sessions/context-window' from './endpoints/agents/sessions/context-window.js';
 export * as 'agents/sessions/compression-overview' from './endpoints/agents/sessions/compression-overview.js';
 export * as 'agents/sessions/worldbook-list' from './endpoints/agents/sessions/worldbook-list.js';
+export * as 'agents/sessions/rule-list' from './endpoints/agents/sessions/rule-list.js';
 export * as 'agents/sessions/worldbook-match-preview' from './endpoints/agents/sessions/worldbook-match-preview.js';
 export * as 'agents/sessions/preview-model-change' from './endpoints/agents/sessions/preview-model-change.js';
 export * as 'agents/sessions/update' from './endpoints/agents/sessions/update.js';

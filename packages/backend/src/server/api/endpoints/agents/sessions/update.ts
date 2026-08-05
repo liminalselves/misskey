@@ -78,6 +78,11 @@ export const paramDef = {
 		randomProactiveMaxWindowMinutes: { type: 'integer', nullable: true, minimum: 30, maximum: 10080 },
 		randomProactiveDaytimeWeight: { type: 'integer', nullable: true, minimum: 1, maximum: 10 },
 		randomProactiveRecencyBias: { type: 'integer', nullable: true, minimum: 1, maximum: 10 },
+		ruleOverrides: {
+			type: 'object',
+			nullable: true,
+			additionalProperties: { type: 'boolean' },
+		},
 	},
 	required: ['sessionId'],
 } as const;
@@ -240,6 +245,13 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				row.randomProactiveRecencyBias = ps.randomProactiveRecencyBias === null
 					? null
 					: Math.max(1, Math.min(10, ps.randomProactiveRecencyBias));
+			}
+			if (ps.ruleOverrides !== undefined) {
+				row.ruleOverrides = ps.ruleOverrides != null
+					? Object.fromEntries(
+						Object.entries(ps.ruleOverrides).filter(([, v]) => typeof v === 'boolean'),
+					) as Record<string, boolean>
+					: {};
 			}
 
 			row.updatedAt = new Date();

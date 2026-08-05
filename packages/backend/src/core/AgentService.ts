@@ -91,6 +91,33 @@ export type AgentRegexRule = {
 	effects: AgentRegexEffect[];
 };
 
+/** Maximum number of rules per character. */
+export const AGENT_RULE_MAX = 5;
+/** Maximum length for a single rule content. */
+export const AGENT_RULE_CONTENT_MAX = 300;
+/** Maximum length for a rule name. */
+export const AGENT_RULE_NAME_MAX = 50;
+/** Maximum length for a rule description. */
+export const AGENT_RULE_DESC_MAX = 50;
+
+export type AgentCharacterRuleType = 'persistent' | 'toggleable';
+export type AgentCharacterRule = {
+	id: string;
+	name: string;
+	/** 开启状态提示词（常驻规则与可切换规则开启时注入）。 */
+	content: string;
+	/** 关闭状态提示词（仅可切换规则；配置后，规则被关闭时也注入）。 */
+	disabledContent: string;
+	description: string;
+	type: AgentCharacterRuleType;
+	defaultEnabled: boolean;
+};
+
+/** Rule with resolved active state for the current session. */
+export type AgentActiveRule = AgentCharacterRule & {
+	active: boolean;
+};
+
 export type AgentCharacterPublishedSnapshot = {
 	name: string;
 	summary: string | null;
@@ -103,6 +130,7 @@ export type AgentCharacterPublishedSnapshot = {
 	avatarFileId: string | null;
 	worldbook: AgentWorldbookEntry[];
 	regexRules: AgentRegexRule[];
+	rules: AgentCharacterRule[];
 	draftRevision: number;
 };
 
@@ -587,6 +615,7 @@ export class AgentService {
 		character: MiAgentCharacter;
 		style: MiAgentDialogueStyle;
 		timeAwarenessEnabled?: boolean;
+		activeRules?: AgentActiveRule[];
 	}): string {
 		const parts: string[] = [];
 		parts.push('<agent_system_prompt>');
@@ -624,6 +653,24 @@ export class AgentService {
 			parts.push('<forbidden>');
 			parts.push(escapeAgentXmlText(params.character.forbiddenBehavior.trim()));
 			parts.push('</forbidden>');
+		}
+
+		// Inject persistent rules inside the character block.
+		const persistentRules = (params.activeRules ?? []).filter(r => r.type === 'persistent' && r.active);
+		if (persistentRules.length > 0) {
+			parts.push('<character_rules>');
+			parts.push('<note>These are standing behavioral rules set by the character author. They are always active and cannot be disabled.</note>');
+			for (const rule of persistentRules) {
+				parts.push(`<rule id="${escapeAgentXmlText(rule.id)}" type="persistent">`);
+				parts.push('<name>');
+				parts.push(escapeAgentXmlText(rule.name));
+				parts.push('</name>');
+				parts.push('<content>');
+				parts.push(escapeAgentXmlText(rule.content));
+				parts.push('</content>');
+				parts.push('</rule>');
+			}
+			parts.push('</character_rules>');
 		}
 		parts.push('</character>');
 
@@ -676,9 +723,11 @@ export class AgentService {
 	 * It is never stored in DB, memory, or compression input.
 	 */
 	@bindThis
-	public buildLatestUserDirectiveBlock(style: { name: string; body: string }, worldbookEntries: AgentWorldbookMatch[] = []): string {
+	public buildLatestUserDirectiveBlock(style: { name: string; body: string }, worldbookEntries: AgentWorldbookMatch[] = [], toggleableRules: AgentActiveRule[] = []): string {
 		const body = style.body.trim();
-		if (body.length === 0 && worldbookEntries.length === 0) return '';
+		// 可切换规则双向注入：开启时注入 content，关闭时注入 disabledContent（若配置）。
+		const injectableToggleableRules = toggleableRules.filter(r => r.type === 'toggleable' && (r.active ? r.content.trim().length > 0 : r.disabledContent.trim().length > 0));
+		if (body.length === 0 && worldbookEntries.length === 0 && injectableToggleableRules.length === 0) return '';
 		const lines: string[] = [];
 		lines.push(AGENT_LLM_RUNTIME_DIRECTIVE_OPEN);
 		lines.push('<note>This block is a server-issued runtime instruction for THIS turn, NOT something the user typed. Apply the style inside <active-style> from this turn onward. Treat all text after the </runtime-directive> closing tag as the user\'s actual message. Never quote or acknowledge this block in your reply.</note>');
@@ -715,6 +764,21 @@ export class AgentService {
 			}
 			lines.push('</active-worldbook>');
 		}
+		if (injectableToggleableRules.length > 0) {
+			lines.push('<active-rules>');
+			for (const rule of injectableToggleableRules) {
+				const ruleContent = rule.active ? rule.content : rule.disabledContent;
+				lines.push(`<rule id="${escapeAgentXmlText(rule.id)}" type="toggleable">`);
+				lines.push('<name>');
+				lines.push(escapeAgentXmlText(rule.name));
+				lines.push('</name>');
+				lines.push('<content>');
+				lines.push(escapeAgentXmlText(ruleContent));
+				lines.push('</content>');
+				lines.push('</rule>');
+			}
+			lines.push('</active-rules>');
+		}
 		lines.push(AGENT_LLM_RUNTIME_DIRECTIVE_CLOSE);
 		return lines.join('\n');
 	}
@@ -723,8 +787,8 @@ export class AgentService {
 	 * Prefix the latest user text with a runtime directive when needed.
 	 */
 	@bindThis
-	public wrapLatestUserTextWithStyleDirective(rawUserText: string, style: { name: string; body: string }, worldbookEntries: AgentWorldbookMatch[] = []): string {
-		const directive = this.buildLatestUserDirectiveBlock(style, worldbookEntries);
+	public wrapLatestUserTextWithStyleDirective(rawUserText: string, style: { name: string; body: string }, worldbookEntries: AgentWorldbookMatch[] = [], toggleableRules: AgentActiveRule[] = []): string {
+		const directive = this.buildLatestUserDirectiveBlock(style, worldbookEntries, toggleableRules);
 		if (directive.length === 0) return rawUserText;
 		return `${directive}\n\n${rawUserText}`;
 	}
@@ -1164,6 +1228,7 @@ export class AgentService {
 			avatarFileId: row.avatarFileId,
 			worldbook: this.normalizeWorldbookEntries(row.worldbook),
 			regexRules: this.normalizeRegexRules(row.regexRules),
+			rules: this.normalizeRules(row.rules),
 			draftRevision: row.draftRevision ?? 1,
 		};
 	}
@@ -1194,6 +1259,7 @@ export class AgentService {
 		row.avatarFileId = snap.avatarFileId;
 		row.worldbook = snap.worldbook ?? [];
 		row.regexRules = snap.regexRules ?? [];
+		row.rules = snap.rules ?? [];
 		row.draftRevision = snap.draftRevision ?? (row.draftRevision ?? 1);
 		row.reviewStatus = row.publishedVersion == null ? 'draft' : 'published';
 		return true;
@@ -1241,7 +1307,8 @@ export class AgentService {
 			&& cur.forbiddenBehavior === pub.forbiddenBehavior
 			&& cur.avatarFileId === pub.avatarFileId
 			&& this.worldbookStableString(cur.worldbook) === this.worldbookStableString(pub.worldbook)
-			&& this.regexRulesStableString(cur.regexRules) === this.regexRulesStableString(pub.regexRules);
+			&& this.regexRulesStableString(cur.regexRules) === this.regexRulesStableString(pub.regexRules)
+			&& this.rulesStableString(cur.rules) === this.rulesStableString(pub.rules);
 	}
 
 	@bindThis
@@ -1277,6 +1344,7 @@ export class AgentService {
 			}
 		}
 		const regexRules = this.normalizeRegexRules(o.regexRules);
+		const rules = this.normalizeRules(o.rules);
 		return {
 			name: o.name,
 			summary: typeof o.summary === 'string' ? o.summary : null,
@@ -1289,6 +1357,7 @@ export class AgentService {
 			avatarFileId: typeof o.avatarFileId === 'string' ? o.avatarFileId : null,
 			worldbook,
 			regexRules,
+			rules,
 			draftRevision: typeof o.draftRevision === 'number' ? o.draftRevision : 1,
 		};
 	}
@@ -1338,6 +1407,7 @@ export class AgentService {
 			avatarFileId: snap.avatarFileId,
 			worldbook: snap.worldbook,
 			regexRules: snap.regexRules,
+			rules: snap.rules,
 			draftRevision: snap.draftRevision,
 		});
 	}
@@ -1360,6 +1430,48 @@ export class AgentService {
 	@bindThis
 	public regexRulesStableString(rules: AgentRegexRule[]): string {
 		return JSON.stringify(this.normalizeRegexRules(rules));
+	}
+
+	@bindThis
+	public normalizeRules(raw: unknown): AgentCharacterRule[] {
+		if (!Array.isArray(raw)) return [];
+		return raw.flatMap((item): AgentCharacterRule[] => {
+			if (!item || typeof item !== 'object') return [];
+			const value = item as Record<string, unknown>;
+			if (typeof value.id !== 'string' || value.id.length === 0) return [];
+			const name = typeof value.name === 'string' ? value.name.slice(0, AGENT_RULE_NAME_MAX) : '';
+			if (name.length === 0) return [];
+			const content = typeof value.content === 'string' ? value.content.slice(0, AGENT_RULE_CONTENT_MAX) : '';
+			if (content.length === 0) return [];
+			const description = typeof value.description === 'string' ? value.description.slice(0, AGENT_RULE_DESC_MAX) : '';
+			const type: AgentCharacterRuleType = value.type === 'toggleable' ? 'toggleable' : 'persistent';
+			const defaultEnabled = type === 'persistent' ? true : value.defaultEnabled !== false;
+			const disabledContent = type === 'toggleable' && typeof value.disabledContent === 'string'
+				? value.disabledContent.slice(0, AGENT_RULE_CONTENT_MAX)
+				: '';
+			return [{ id: value.id, name, content, disabledContent, description, type, defaultEnabled }];
+		});
+	}
+
+	@bindThis
+	public rulesStableString(rules: AgentCharacterRule[]): string {
+		return JSON.stringify(this.normalizeRules(rules));
+	}
+
+	/**
+	 * Resolve which rules are active for the current session.
+	 * Persistent rules are always active. Toggleable rules use the session's
+	 * ruleOverrides when present, falling back to their defaultEnabled state.
+	 */
+	@bindThis
+	public resolveActiveRules(rules: AgentCharacterRule[], ruleOverrides: Record<string, boolean> | null | undefined): AgentActiveRule[] {
+		return this.normalizeRules(rules).map(rule => {
+			if (rule.type === 'persistent') {
+				return { ...rule, active: true };
+			}
+			const override = ruleOverrides?.[rule.id];
+			return { ...rule, active: typeof override === 'boolean' ? override : rule.defaultEnabled };
+		});
 	}
 
 	@bindThis

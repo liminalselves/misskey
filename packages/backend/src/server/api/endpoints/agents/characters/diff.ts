@@ -80,6 +80,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			pushIfDiff('forbiddenBehavior', draft.forbiddenBehavior, pub.forbiddenBehavior);
 			pushIfDiff('avatarFileId', draft.avatarFileId ?? '', pub.avatarFileId ?? '');
 			pushIfDiff('worldbook', this.agentService.worldbookStableString(draft.worldbook), this.agentService.worldbookStableString(pub.worldbook));
+			pushIfDiff('rules', this.agentService.rulesStableString(draft.rules), this.agentService.rulesStableString(pub.rules));
 			return {
 				hasChanges: fields.length > 0,
 				fields,

@@ -82,6 +82,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				pushIfDiff('forbiddenBehavior', draft.forbiddenBehavior, pub.forbiddenBehavior);
 				pushIfDiff('avatarFileId', draft.avatarFileId ?? '', pub.avatarFileId ?? '');
 				pushIfDiff('worldbook', this.agentService.worldbookStableString(draft.worldbook), this.agentService.worldbookStableString(pub.worldbook));
+				pushIfDiff('rules', this.agentService.rulesStableString(draft.rules), this.agentService.rulesStableString(pub.rules));
 			} else {
 				const row = await this.agentDialogueStylesRepository.findOneBy({ id: ps.id });
 				if (!row) throw new ApiError({ message: 'No such style.', code: 'NO_SUCH_STYLE', id: '196f88b6-8a2f-4a3e-9e61-61a560d95bb7' });

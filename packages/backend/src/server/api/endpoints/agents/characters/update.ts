@@ -9,7 +9,7 @@ import type { AgentCharactersRepository, DriveFilesRepository } from '@/models/_
 import { Endpoint } from '@/server/api/endpoint-base.js';
 import { DI } from '@/di-symbols.js';
 import { ApiError } from '@/server/api/error.js';
-import { AgentService, AGENT_TEXT_FIELD_MAX, AGENT_EXAMPLE_TURN_CONTENT_MAX, type AgentWorldbookEntry } from '@/core/AgentService.js';
+import { AgentService, AGENT_TEXT_FIELD_MAX, AGENT_EXAMPLE_TURN_CONTENT_MAX, AGENT_RULE_MAX, AGENT_RULE_CONTENT_MAX, AGENT_RULE_NAME_MAX, AGENT_RULE_DESC_MAX, type AgentWorldbookEntry } from '@/core/AgentService.js';
 
 export const meta = {
 	tags: ['agents'],
@@ -90,6 +90,24 @@ export const paramDef = {
 				required: ['id', 'pattern', 'targets', 'effects'],
 			},
 		},
+		rules: {
+			type: 'array',
+			nullable: true,
+			maxItems: AGENT_RULE_MAX,
+			items: {
+				type: 'object',
+				properties: {
+					id: { type: 'string', minLength: 1, maxLength: 128 },
+					name: { type: 'string', minLength: 1, maxLength: AGENT_RULE_NAME_MAX },
+					content: { type: 'string', minLength: 1, maxLength: AGENT_RULE_CONTENT_MAX },
+					disabledContent: { type: 'string', maxLength: AGENT_RULE_CONTENT_MAX },
+					description: { type: 'string', maxLength: AGENT_RULE_DESC_MAX },
+					type: { type: 'string', enum: ['persistent', 'toggleable'] },
+					defaultEnabled: { type: 'boolean' },
+				},
+				required: ['id', 'name', 'content', 'description', 'type', 'defaultEnabled'],
+			},
+		},
 		avatarFileId: { type: 'string', format: 'misskey:id', nullable: true },
 		referenceImageFileId: { type: 'string', format: 'misskey:id', nullable: true },
 		referenceImageFileIds: { type: 'array', nullable: true, maxItems: 4, items: { type: 'string', format: 'misskey:id' } },
@@ -155,6 +173,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				revision: entry.revision,
 			}));
 			if (ps.regexRules !== undefined) row.regexRules = this.agentService.normalizeRegexRules(ps.regexRules);
+			if (ps.rules !== undefined) row.rules = this.agentService.normalizeRules(ps.rules);
 			if (ps.avatarFileId !== undefined) row.avatarFileId = ps.avatarFileId;
 			if (referenceImageFileIds != null) {
 				row.referenceImageFileIds = referenceImageFileIds;

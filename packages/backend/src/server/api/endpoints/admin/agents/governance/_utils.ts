@@ -55,6 +55,14 @@ function extractTextFromWorldbook(worldbook: Array<Record<string, unknown>>): st
 	]).join('\n');
 }
 
+function extractTextFromRules(rules: Array<Record<string, unknown>>): string {
+	return rules.flatMap(rule => [
+		typeof rule.name === 'string' ? rule.name : '',
+		typeof rule.description === 'string' ? rule.description : '',
+		typeof rule.content === 'string' ? rule.content : '',
+	]).join('\n');
+}
+
 function riskTagsForText(params: {
 	text: string;
 	worldbookCount?: number;
@@ -90,6 +98,7 @@ export function packCharacterGovernanceRow(
 		row.exampleDialogue,
 		row.forbiddenBehavior,
 		extractTextFromWorldbook(row.worldbook),
+		extractTextFromRules(row.rules),
 	].join('\n');
 
 	return {
@@ -169,6 +178,7 @@ export function buildCharacterReviewDiff(agentService: AgentService, row: MiAgen
 	push('forbiddenBehavior', draft.forbiddenBehavior, pub.forbiddenBehavior);
 	push('avatarFileId', draft.avatarFileId ?? '', pub.avatarFileId ?? '');
 	push('worldbook', agentService.worldbookStableString(draft.worldbook), agentService.worldbookStableString(pub.worldbook));
+	push('rules', agentService.rulesStableString(draft.rules), agentService.rulesStableString(pub.rules));
 	return { hasChanges: fields.length > 0, fields };
 }
 
@@ -196,6 +206,7 @@ export function packCharacterGovernanceDetail(agentService: AgentService, row: M
 		exampleTurns: agentService.exampleTurnsFromStored(row.exampleDialogue),
 		forbiddenBehavior: row.forbiddenBehavior,
 		worldbook: agentService.normalizeWorldbookEntries(row.worldbook),
+		rules: agentService.normalizeRules(row.rules),
 		publishedSnapshot: row.publishedSnapshot ? agentService.parseCharacterSnapshot(row.publishedSnapshot) : null,
 		diff: buildCharacterReviewDiff(agentService, row),
 	};

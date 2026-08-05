@@ -498,11 +498,13 @@ type ReviewDetailRow = ReviewRow & {
 	exampleTurns?: { role: 'user' | 'assistant'; content: string }[];
 	forbiddenBehavior?: string;
 	worldbook?: WorldbookEntry[];
+	rules?: CharacterRuleEntry[];
 	body?: string;
 	publishedSnapshot: Record<string, unknown> | null;
 	diff: { hasChanges: boolean; fields: { key: string; draftPreview: string; publishedPreview: string }[] };
 };
 type WorldbookEntry = { id: string; title: string; content: string; keywords: string[]; triggerMode: 'keyword' | 'manual' | 'always'; priority: number; enabled: boolean; revision: number };
+type CharacterRuleEntry = { id: string; name: string; content: string; description: string; type: 'persistent' | 'toggleable'; defaultEnabled: boolean };
 type SessionRow = { id: string; createdAt: string; updatedAt: string; userId: string; name: string; characterId: string; dialogueStyleId: string | null; sessionKind: 'draft_test' | 'community'; lastMessageAt: string | null; agentReplyPending: boolean; moderationBanned: boolean; characterName: string; user: any | null };
 type TimelineMsg = { id: string; role: 'user' | 'assistant' | 'system'; content: string; createdAt: string };
 type SessionDetailRow = { session: SessionRow; messages: TimelineMsg[]; hasMoreMessages?: boolean };
@@ -1252,6 +1254,7 @@ function reviewFieldLabel(key: string) {
 		exampleDialogue: '示例对话',
 		forbiddenBehavior: '禁止行为',
 		worldbook: '世界书',
+		rules: '规则',
 		body: '风格提示词正文',
 		avatarFileId: '头像',
 	};
@@ -1321,6 +1324,15 @@ function worldbookText(entries: WorldbookEntry[] | undefined) {
 	].join('\n')).join('\n\n');
 }
 
+function rulesText(entries: CharacterRuleEntry[] | undefined) {
+	if (!entries?.length) return '—';
+	return entries.map((rule, index) => [
+		`${index + 1}. ${rule.name || '未命名'}（${rule.type === 'persistent' ? '常驻' : `可切换 · 默认${rule.defaultEnabled ? '开启' : '关闭'}`}）`,
+		`简介：${rule.description || '—'}`,
+		`正文：${rule.content || '—'}`,
+	].join('\n')).join('\n\n');
+}
+
 const ReviewDetail = defineComponent({
 	props: { detail: { type: Object as () => ReviewDetailRow, required: true }, canModerate: { type: Boolean, default: true } },
 	emits: ['approve', 'reject', 'ban', 'copy'],
@@ -1362,6 +1374,8 @@ const ReviewDetail = defineComponent({
 				].join('\n\n')),
 				h('h3', '世界书'),
 				h('pre', worldbookText(props.detail.worldbook)),
+				h('h3', '规则'),
+				h('pre', rulesText(props.detail.rules)),
 			]) : h('section', { class: 'review-block' }, [
 				h('h3', '风格提示词正文'),
 				h('pre', props.detail.body || '—'),

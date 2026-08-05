@@ -72,6 +72,12 @@ export class MiAgentCharacter {
 	})
 	public regexRules: Array<Record<string, unknown>>;
 
+	/** 角色专属行为规则：常驻规则固定启用，可切换规则由用户在会话中控制。 */
+	@Column('jsonb', {
+		default: '[]',
+	})
+	public rules: Array<Record<string, unknown>>;
+
 	@Column('integer', {
 		default: 1,
 	})
