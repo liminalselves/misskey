@@ -1315,7 +1315,7 @@ function logNote(log: AgentLog) {
 	return logInfoString(log, 'rejectMessage') ?? logInfoString(log, 'rejectReason') ?? logInfoString(log, 'reason') ?? logInfoString(log, 'internalNote');
 }
 
-function worldbookText(entries: WorldbookEntry[] | undefined) {
+function worldbookToText(entries: WorldbookEntry[] | null | undefined): string {
 	if (!entries?.length) return '—';
 	return entries.map((entry, index) => [
 		`${index + 1}. ${entry.title || '未命名'}（${entry.enabled ? '启用' : '停用'} · ${entry.triggerMode} · 优先级 ${entry.priority}）`,
@@ -1324,13 +1324,34 @@ function worldbookText(entries: WorldbookEntry[] | undefined) {
 	].join('\n')).join('\n\n');
 }
 
-function rulesText(entries: CharacterRuleEntry[] | undefined) {
+function rulesToText(entries: CharacterRuleEntry[] | null | undefined): string {
 	if (!entries?.length) return '—';
 	return entries.map((rule, index) => [
 		`${index + 1}. ${rule.name || '未命名'}（${rule.type === 'persistent' ? '常驻' : `可切换 · 默认${rule.defaultEnabled ? '开启' : '关闭'}`}）`,
 		`简介：${rule.description || '—'}`,
 		`正文：${rule.content || '—'}`,
 	].join('\n')).join('\n\n');
+}
+
+function worldbookText(entries: WorldbookEntry[] | undefined) {
+	return worldbookToText(entries);
+}
+
+function rulesText(entries: CharacterRuleEntry[] | undefined) {
+	return rulesToText(entries);
+}
+
+// diff 字段预览：rules/worldbook 为 JSON 字符串时转为可读文本，其余字段原样展示
+function diffPreviewText(key: string, text: string): string {
+	if (!text) return '—';
+	try {
+		const parsed = JSON.parse(text);
+		if (key === 'rules' && Array.isArray(parsed)) return rulesToText(parsed);
+		if (key === 'worldbook' && Array.isArray(parsed)) return worldbookToText(parsed);
+	} catch {
+		// 非 JSON，原样展示
+	}
+	return text;
 }
 
 const ReviewDetail = defineComponent({
@@ -1359,7 +1380,7 @@ const ReviewDetail = defineComponent({
 				h('h3', '与当前线上版本的差异'),
 				...props.detail.diff.fields.map(field => h('div', { class: 'diff-row' }, [
 					h('b', reviewFieldLabel(field.key)),
-					h('pre', `当前：${field.draftPreview || '—'}\n\n线上：${field.publishedPreview || '—'}`),
+					h('pre', `当前：${diffPreviewText(field.key, field.draftPreview)}\n\n线上：${diffPreviewText(field.key, field.publishedPreview)}`),
 				])),
 			]) : h('section', { class: 'review-block' }, [h('h3', '版本差异'), h('p', '首次提交或当前内容与线上版本无差异。')]),
 			props.detail.kind === 'character' ? h('section', { class: 'review-block' }, [
