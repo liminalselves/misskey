@@ -123,11 +123,6 @@ async function fetchHistory(updateGlobalStatus = false) {
 				: Promise.resolve([] as AgentsSessionsListMineResponse),
 		]);
 
-		// [DEBUG] 诊断未读光标：输出 list-mine 返回的每个会话 hasUnread 原始值
-		if (props.includeAgentSessions) {
-			console.log('[MkChatHistories] list-mine hasUnread:', (agentSessions ?? []).map(s => ({ id: s.id, name: s.name, hasUnread: s.hasUnread, lastRole: s.lastMessageRole })));
-		}
-
 		const chatItems: ChatHistoryItem[] = [...userMessages, ...roomMessages].map(m => ({
 			id: m.id,
 			message: m,
@@ -211,13 +206,10 @@ onMounted(() => {
 
 	// 合并智能体会话时：同步响应消息到达/已读事件，刷新各会话未读标记（与智能体标签页一致）
 	if (props.includeAgentSessions) {
-		mainChannel.on('newAgentMessage', (payload) => {
-			// [DEBUG] 诊断：确认事件是否触发及 payload
-			console.log('[MkChatHistories] newAgentMessage event received:', payload);
+		mainChannel.on('newAgentMessage', () => {
 			fetchHistory(false);
 		});
-		mainChannel.on('agentRead', (payload) => {
-			console.log('[MkChatHistories] agentRead event received:', payload);
+		mainChannel.on('agentRead', () => {
 			// 延迟刷新列表，确保后端 Redis 操作完成后 API 能返回最新数据
 			window.setTimeout(() => {
 				fetchHistory(false);

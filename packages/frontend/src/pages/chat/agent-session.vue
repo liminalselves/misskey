@@ -1066,7 +1066,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, useCssModule, useTemplateRef, watch } from 'vue';
+import { computed, nextTick, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, useCssModule, useTemplateRef, watch } from 'vue';
 import { getScrollContainer } from '@@/js/scroll.js';
 import XAgentMessage from './agent-session.message.vue';
 import XForm from './agent-session.form.vue';
@@ -1880,6 +1880,13 @@ type AgentChatTimelineItem =
 
 let replyPollTimer: number | null = null;
 
+/** 组件已卸载标记：卸载后仍在飞的异步回调（如 send 请求）不得再清未读——用户已离开本页、没有看到回复，应保持未读并在列表点亮 */
+let isComponentUnmounted = false;
+
+/** KeepAlive 激活态：页面被路由缓存（KeepAlive）时点返回不会卸载组件，只会 deactivate；
+未激活（用户不在本会话页）时不得清未读，否则会把用户没看到的新消息误清，导致列表未读光标不亮 */
+let isPageActivated = true;
+
 function stopReplyPendingPoll() {
 	if (replyPollTimer != null) {
 		window.clearTimeout(replyPollTimer);
@@ -1911,8 +1918,8 @@ function startReplyPendingPoll() {
 				const list = await loadInitialTimeline();
 				const assistant = list.find(message => message.role === 'assistant' && !previousIds.has(message.id));
 				if (assistant != null) {
-					// 页面可见时立即清未读，避免 3 秒延迟事件误触发声音/徽标
-					if (!window.document.hidden) void markAgentSessionRead();
+					// 页面可见、仍停留在本页且处于激活态时立即清未读，避免 3 秒延迟事件误触发声音/徽标
+					if (!window.document.hidden && isPageActivated && !isComponentUnmounted) void markAgentSessionRead();
 					await playSegmentedReply(assistant);
 				}
 			} catch {
@@ -3037,8 +3044,8 @@ async function onNewAgentMessage(payload: unknown): Promise<void> {
 	const data = payload as { sessionId?: unknown; messageId?: unknown };
 	if (data.sessionId !== sessionId) return;
 
-	// 页面可见且正在查看本会话：立即清未读，避免徒增徽标
-	if (!window.document.hidden) {
+	// 页面可见且正在查看本会话（KeepAlive 缓存页未激活时用户不在本页，不得误清未读）：立即清未读，避免徒增徽标
+	if (!window.document.hidden && isPageActivated && !isComponentUnmounted) {
 		void markAgentSessionRead();
 	}
 
@@ -3365,7 +3372,20 @@ onMounted(async () => {
 	formRef.value?.focus();
 });
 
+onActivated(() => {
+	isPageActivated = true;
+	// KeepAlive 缓存页重新进入时 onMounted 不会再次执行：与首次进入一致，看到会话即清未读
+	void markAgentSessionRead();
+});
+
+onDeactivated(() => {
+	// 被 KeepAlive 缓存（用户点返回离开）：组件仍存活，但不得再清未读
+	isPageActivated = false;
+});
+
 onBeforeUnmount(() => {
+	// 必须最先置位：阻止在飞异步回调（send 返回、轮询 tick）在卸载后误清未读
+	isComponentUnmounted = true;
 	proactiveNotificationConnection?.dispose();
 	proactiveNotificationConnection = null;
 	stopReplyPendingPoll();
@@ -4566,8 +4586,9 @@ async function onFormSubmit(payload: { text: string; file: DriveFile | null }) {
 			formRef.value?.restoreDraft(trimmed);
 			return;
 		}
-		// 与私信一致：用户已在本页收到回复，立即清未读标记，避免 3 秒延迟事件误触发声音/徽标
-		void markAgentSessionRead();
+		// 与私信一致：用户已在本页收到回复，立即清未读标记，避免 3 秒延迟事件误触发声音/徽标；
+		// 若用户在等待回复期间已离开本页（如点击返回，组件被 KeepAlive 缓存仅 deactivate），则没有看到回复，不清未读，让列表正常点亮
+		if (isPageActivated && !isComponentUnmounted) void markAgentSessionRead();
 		if (res.longTermMemorySearchUnavailable) {
 			os.toast(i18n.ts._agents.longTermMemorySearchUnavailable);
 		}
