@@ -25,7 +25,6 @@ import XJoiningRooms from './home.joiningRooms.vue';
 import XOwnedRooms from './home.ownedRooms.vue';
 import { i18n } from '@/i18n.js';
 import { instance } from '@/instance.js';
-import { $i } from '@/i.js';
 import { definePage } from '@/page.js';
 import MkPolkadots from '@/components/MkPolkadots.vue';
 import type { Tab } from '@/components/MkTabs.vue';
@@ -45,7 +44,6 @@ const headerTabs = computed(() => {
 			key: 'agents',
 			title: i18n.ts._agents.chatTab,
 			icon: 'ti ti-robot',
-			indicated: $i?.hasUnreadAgentMessages === true,
 		});
 	}
 	tabs.push(

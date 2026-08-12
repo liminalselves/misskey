@@ -8,35 +8,55 @@ SPDX-License-Identifier: AGPL-3.0-only
 	<MkA
 		v-for="item in history"
 		:key="item.id"
-		:class="[$style.message, { [$style.isMe]: item.isMe, [$style.isRead]: item.message.isRead }]"
+		:class="[$style.message, { [$style.isMe]: item.isMe, [$style.isRead]: item.isRead }]"
 		class="_panel"
-		:to="item.message.toRoomId ? `/chat/room/${item.message.toRoomId}` : `/chat/user/${item.other!.id}`"
+		:to="item.href"
 	>
-		<template v-if="item.message.toRoomId">
-			<img v-if="(item.message.toRoom as any)?.iconUrl" :src="(item.message.toRoom as any).iconUrl" :class="[$style.messageAvatar, $style.roomIcon]"/>
-			<div v-else :class="[$style.messageAvatar, $style.roomIconPlaceholder]"><i class="ti ti-users"></i></div>
-		</template>
-		<MkAvatar v-else-if="item.other" :class="$style.messageAvatar" :user="item.other" indicator :preview="false"/>
-		<div :class="$style.messageBody">
-			<header v-if="item.message.toRoom" :class="$style.messageHeader">
-				<span :class="$style.messageHeaderName"><i class="ti ti-users"></i> {{ item.message.toRoom.name }}</span>
-				<MkTime :time="item.message.createdAt" :class="$style.messageHeaderTime"/>
-			</header>
-			<header v-else :class="$style.messageHeader">
-				<MkUserName :class="$style.messageHeaderName" :user="item.other!"/>
-				<MkAcct :class="$style.messageHeaderUsername" :user="item.other!"/>
-				<MkTime :time="item.message.createdAt" :class="$style.messageHeaderTime"/>
-			</header>
-			<div v-if="item.message.toRoom" :class="[$style.messageBodyText, $style.inlineLayout]">
-				<template v-if="!item.isMe">
-					<MkUserName :class="$style.inlineSenderName" :user="item.message.fromUser"/>
-					<MkAcct :class="$style.inlineSenderAcct" :user="item.message.fromUser"/>
-				</template>
-				<span v-if="item.isMe" :class="$style.youSaid">{{ i18n.ts.you }}:</span>
-				<span :class="$style.messageText">{{ item.message.text }}</span>
+		<template v-if="item.session">
+			<MkDriveFileThumbnail
+				v-if="item.session.characterAvatar"
+				:file="item.session.characterAvatar"
+				fit="cover"
+				:class="[$style.messageAvatar, $style.agentAvatar]"
+			/>
+			<div v-else :class="[$style.messageAvatar, $style.roomIconPlaceholder]"><i class="ti ti-robot"></i></div>
+			<div :class="$style.messageBody">
+				<header :class="$style.messageHeader">
+					<span :class="$style.messageHeaderName">{{ item.session.name }}</span>
+					<MkTime :time="item.session.lastMessageAt" :class="$style.messageHeaderTime"/>
+				</header>
+				<div v-if="item.session.lastMessagePreview" :class="$style.messageBodyText">
+					<span v-if="item.session.lastMessageRole === 'user'" :class="$style.youSaid">{{ i18n.ts.you }}:</span>{{ item.session.lastMessagePreview }}
+				</div>
 			</div>
-			<div v-else :class="$style.messageBodyText"><span v-if="item.isMe" :class="$style.youSaid">{{ i18n.ts.you }}:</span>{{ item.message.text }}</div>
-		</div>
+		</template>
+		<template v-else>
+			<template v-if="item.message.toRoomId">
+				<img v-if="(item.message.toRoom as any)?.iconUrl" :src="(item.message.toRoom as any).iconUrl" :class="[$style.messageAvatar, $style.roomIcon]"/>
+				<div v-else :class="[$style.messageAvatar, $style.roomIconPlaceholder]"><i class="ti ti-users"></i></div>
+			</template>
+			<MkAvatar v-else-if="item.other" :class="$style.messageAvatar" :user="item.other" indicator :preview="false"/>
+			<div :class="$style.messageBody">
+				<header v-if="item.message.toRoom" :class="$style.messageHeader">
+					<span :class="$style.messageHeaderName"><i class="ti ti-users"></i> {{ item.message.toRoom.name }}</span>
+					<MkTime :time="item.message.createdAt" :class="$style.messageHeaderTime"/>
+				</header>
+				<header v-else :class="$style.messageHeader">
+					<MkUserName :class="$style.messageHeaderName" :user="item.other!"/>
+					<MkAcct :class="$style.messageHeaderUsername" :user="item.other!"/>
+					<MkTime :time="item.message.createdAt" :class="$style.messageHeaderTime"/>
+				</header>
+				<div v-if="item.message.toRoom" :class="[$style.messageBodyText, $style.inlineLayout]">
+					<template v-if="!item.isMe">
+						<MkUserName :class="$style.inlineSenderName" :user="item.message.fromUser"/>
+						<MkAcct :class="$style.inlineSenderAcct" :user="item.message.fromUser"/>
+					</template>
+					<span v-if="item.isMe" :class="$style.youSaid">{{ i18n.ts.you }}:</span>
+					<span :class="$style.messageText">{{ item.message.text }}</span>
+				</div>
+				<div v-else :class="$style.messageBodyText"><span v-if="item.isMe" :class="$style.youSaid">{{ i18n.ts.you }}:</span>{{ item.message.text }}</div>
+			</div>
+		</template>
 	</MkA>
 </div>
 <MkResult v-if="!initializing && history.length == 0" type="empty" :text="i18n.ts._chat.noHistory"/>
@@ -46,21 +66,44 @@ SPDX-License-Identifier: AGPL-3.0-only
 <script lang="ts" setup>
 import { onActivated, onDeactivated, onMounted, ref } from 'vue';
 import * as Misskey from 'misskey-js';
+import type { AgentsSessionsListMineResponse } from 'misskey-js/entities.js';
 import { useInterval } from '@@/js/use-interval.js';
 import { misskeyApi } from '@/utility/misskey-api.js';
 import { i18n } from '@/i18n.js';
 import { ensureSignin } from '@/i.js';
 import { updateCurrentAccountPartial } from '@/accounts.js';
 import { useStream } from '@/stream.js';
+import MkDriveFileThumbnail from '@/components/MkDriveFileThumbnail.vue';
+
+const props = withDefaults(defineProps<{
+	/** 是否把智能体会话合并进列表（/chat「全部」页启用；Deck 列、Widget 保持原样） */
+	includeAgentSessions?: boolean;
+}>(), {
+	includeAgentSessions: false,
+});
 
 const $i = ensureSignin();
 
-const history = ref<{
+/** 历史列表条目：普通私信/群聊消息，或智能体会话（合并展示时 session 存在） */
+type ChatHistoryItem = {
 	id: string;
-	message: Misskey.entities.ChatMessage;
-	other: Misskey.entities.ChatMessage['fromUser'] | Misskey.entities.ChatMessage['toUser'] | null;
 	isMe: boolean;
-}[]>([]);
+	isRead: boolean;
+	href: string;
+} & (
+	| {
+		session: AgentsSessionsListMineResponse[number];
+		message: null;
+		other: null;
+	}
+	| {
+		session?: undefined;
+		message: Misskey.entities.ChatMessage;
+		other: Misskey.entities.ChatMessage['fromUser'] | Misskey.entities.ChatMessage['toUser'] | null;
+	}
+);
+
+const history = ref<ChatHistoryItem[]>([]);
 
 const initializing = ref(true);
 const fetching = ref(false);
@@ -70,30 +113,60 @@ async function fetchHistory(updateGlobalStatus = false) {
 
 	fetching.value = true;
 
-	const [userMessages, roomMessages] = await Promise.all([
-		misskeyApi('chat/history', { room: false }),
-		misskeyApi('chat/history', { room: true }),
-	]);
+	try {
+		const [userMessages, roomMessages, agentSessions] = await Promise.all([
+			misskeyApi('chat/history', { room: false }),
+			misskeyApi('chat/history', { room: true }),
+			props.includeAgentSessions
+				// 智能体会话获取失败不影响私信列表刷新
+				? misskeyApi('agents/sessions/list-mine', {}).catch(() => [] as AgentsSessionsListMineResponse)
+				: Promise.resolve([] as AgentsSessionsListMineResponse),
+		]);
 
-	const allMessages = [...userMessages, ...roomMessages];
+		// [DEBUG] 诊断未读光标：输出 list-mine 返回的每个会话 hasUnread 原始值
+		if (props.includeAgentSessions) {
+			console.log('[MkChatHistories] list-mine hasUnread:', (agentSessions ?? []).map(s => ({ id: s.id, name: s.name, hasUnread: s.hasUnread, lastRole: s.lastMessageRole })));
+		}
 
-	history.value = allMessages
-		.toSorted((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-		.map(m => ({
+		const chatItems: ChatHistoryItem[] = [...userMessages, ...roomMessages].map(m => ({
 			id: m.id,
 			message: m,
 			other: (!('room' in m) || m.room == null) ? (m.fromUserId === $i.id ? m.toUser : m.fromUser) : null,
 			isMe: m.fromUserId === $i.id,
+			isRead: m.isRead === true,
+			href: m.toRoomId ? `/chat/room/${m.toRoomId}` : `/chat/user/${(m.fromUserId === $i.id ? m.toUser : m.fromUser)!.id}`,
 		}));
 
-	// 只在明确要求时才更新全局状态（例如用户进入 /chat 页面时）
-	if (updateGlobalStatus) {
-		const hasUnread = allMessages.some(m => m.fromUserId !== $i.id && !m.isRead);
-		updateCurrentAccountPartial({ hasUnreadChatMessages: hasUnread });
-	}
+		// 智能体会话与私信合并展示：按最后活动时间统一排序。
+		// 未读光标只按 hasUnread 判定（与「智能体」标签页一致）；lastMessageRole 仅用于「你:」前缀展示，
+		// 不参与 isMe（否则会话最后一条是用户消息时会错误隐藏未读光标）
+		const agentItems: ChatHistoryItem[] = (agentSessions ?? []).map(s => ({
+			id: s.id,
+			message: null,
+			other: null,
+			isMe: false,
+			isRead: !s.hasUnread,
+			href: `/chat/agent/${s.id}`,
+			session: s,
+		}));
 
-	fetching.value = false;
-	initializing.value = false;
+		history.value = [...chatItems, ...agentItems]
+			.toSorted((a, b) => {
+				const timeOf = (item: ChatHistoryItem) =>
+					item.session ? new Date(item.session.lastMessageAt).getTime() : new Date(item.message.createdAt).getTime();
+				return timeOf(b) - timeOf(a);
+			});
+
+		// 只在明确要求时才更新全局状态（例如用户进入 /chat 页面时）
+		if (updateGlobalStatus) {
+			const hasUnread = [...userMessages, ...roomMessages].some(m => m.fromUserId !== $i.id && !m.isRead);
+			updateCurrentAccountPartial({ hasUnreadChatMessages: hasUnread });
+		}
+	} finally {
+		// 无论成功失败都复位锁，避免异常时 fetching 永久卡死导致列表不再刷新
+		fetching.value = false;
+		initializing.value = false;
+	}
 }
 
 let isActivated = true;
@@ -135,6 +208,22 @@ onMounted(() => {
 		// 有新消息时刷新列表，但不更新全局状态（由 main-boot.ts 处理）
 		fetchHistory(false);
 	});
+
+	// 合并智能体会话时：同步响应消息到达/已读事件，刷新各会话未读标记（与智能体标签页一致）
+	if (props.includeAgentSessions) {
+		mainChannel.on('newAgentMessage', (payload) => {
+			// [DEBUG] 诊断：确认事件是否触发及 payload
+			console.log('[MkChatHistories] newAgentMessage event received:', payload);
+			fetchHistory(false);
+		});
+		mainChannel.on('agentRead', (payload) => {
+			console.log('[MkChatHistories] agentRead event received:', payload);
+			// 延迟刷新列表，确保后端 Redis 操作完成后 API 能返回最新数据
+			window.setTimeout(() => {
+				fetchHistory(false);
+			}, 150);
+		});
+	}
 
 	// 监听聊天已读事件
 	// 当用户在其他页面阅读消息后，后端发送此事件通知刷新列表
@@ -198,6 +287,19 @@ onMounted(() => {
 .roomIcon {
 	object-fit: cover;
 	border-radius: 50%;
+}
+
+.agentAvatar {
+	border-radius: 999px;
+	overflow: hidden;
+	background: var(--MI_THEME-panel);
+	border: solid 1px var(--MI_THEME-divider);
+
+	:global(.root) {
+		width: 100%;
+		height: 100%;
+		border-radius: 999px;
+	}
 }
 
 .roomIconPlaceholder {

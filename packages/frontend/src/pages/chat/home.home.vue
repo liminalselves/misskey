@@ -34,7 +34,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 	<MkFoldableSection>
 		<template #header>{{ i18n.ts._chat.history }}</template>
 
-		<MkChatHistories/>
+		<!-- 「全部」标签页：智能体会话与普通私信合并展示，未读行为一致 -->
+		<MkChatHistories :includeAgentSessions="true"/>
 	</MkFoldableSection>
 </div>
 </template>
