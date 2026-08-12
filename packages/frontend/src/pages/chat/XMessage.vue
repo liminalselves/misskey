@@ -408,6 +408,7 @@ function showMenu(ev: PointerEvent, contextmenu = false) {
 
 .body {
 	margin: 0 12px;
+	min-width: 0;
 
 	&.fullWidth {
 		width: 100%;
@@ -488,6 +489,8 @@ function showMenu(ev: PointerEvent, contextmenu = false) {
 	display: flex;
 	align-items: stretch;
 	gap: 8px;
+	max-width: 100%;
+	box-sizing: border-box;
 	margin-bottom: 8px;
 	padding: 6px 10px;
 	background: var(--MI_THEME-bg);
@@ -526,8 +529,7 @@ function showMenu(ev: PointerEvent, contextmenu = false) {
 	font-size: 0.85em;
 	color: var(--MI_THEME-fg);
 	opacity: 0.8;
-	white-space: nowrap;
-	overflow: hidden;
-	text-overflow: ellipsis;
+	overflow-wrap: break-word;
+	word-break: break-word;
 }
 </style>
