@@ -1024,7 +1024,7 @@ export class AgentService {
 	 * 公开供 `AgentCompressionMemoryService` 计算 D 累计时使用，确保与发信滑窗口径一致。
 	 * `opts.timeAwarenessEnabled` 开启且消息为 user、createdAt 可信（timeTrusted !== false）时，
 	 * 前缀注入该消息发送时间的 `<time>` 块（与 `buildCurrentBeijingTimeBlock` 同格式、同时区）。
-	 * 时间 XML 仅存在于返回的 LLM 文本中，绝不写入 DB / 长期记忆 / 压缩输入（调用方负责隔离）。
+	 * 时间 XML 仅存在于返回的 LLM 文本中，绝不写入 DB / 长期记忆；压缩输入（AgentCompressionMemoryService）按本格式携带时间、图片识别等必要数据，与发信滑窗口径一致。
 	 */
 	@bindThis
 	public formatMessageForLlmHistory(message: Pick<MiAgentMessage, 'role' | 'content' | 'imageFileId' | 'imageRecognitionStatus' | 'imageRecognitionDescription' | 'proactiveScheduleControlRaw' | 'proactiveScheduleControlError'> & { createdAt?: Date; timeTrusted?: boolean }, opts?: { timeAwarenessEnabled?: boolean }): string {

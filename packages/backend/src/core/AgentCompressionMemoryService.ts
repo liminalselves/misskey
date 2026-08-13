@@ -384,6 +384,7 @@ export class AgentCompressionMemoryService {
 		hSend: number;
 		t1: number;
 		t2: number;
+		timeAwarenessEnabled: boolean;
 	}): Promise<null | {
 		candidates: CompressionScanRow[];
 		fromId: string;
@@ -428,7 +429,12 @@ export class AgentCompressionMemoryService {
 		});
 		// 同区间已有「非失败」便签才视为重复；失败便签不拦截，交由下方指纹路径重试
 		if (existingByRange && existingByRange.state !== 'failed') return null;
-		const textBlob = candidates.map(m => `${m.role}: ${m.content}`).join('\n\n');
+		// 与发信滑窗一致：按 `formatMessageForLlmHistory` 携带时间戳、图片识别 XML、主动调度控制块等必要数据（不携带则模型压缩时丢失发送时间与图片描述语义）
+		const formatFn = (m: CompressionScanRow): string => this.agentService.formatMessageForLlmHistory(
+			m as Parameters<AgentService['formatMessageForLlmHistory']>[0],
+			{ timeAwarenessEnabled: params.timeAwarenessEnabled },
+		);
+		const textBlob = candidates.map(m => `${m.role}: ${formatFn(m)}`).join('\n\n');
 		const fingerprint = createHash('sha256').update(textBlob, 'utf8').digest('hex');
 		const existingByFp = await this.stickyRepository.findOne({ where: { sessionId, sourceFingerprint: fingerprint } });
 		// 已有等价便签（成功/用户已修正）→ 视为已覆盖，无需再压；
@@ -458,7 +464,7 @@ export class AgentCompressionMemoryService {
 			select: ['id', 'role', 'content', 'createdAt', 'imageFileId', 'imageRecognitionStatus', 'imageRecognitionDescription', 'proactiveScheduleControlRaw', 'proactiveScheduleControlError', 'timeTrusted'],
 		});
 		const { dMap, hSend, t1, t2 } = precomputedSidecar ?? await this.computeSidecarTokenD({ session, character, style, instanceMeta, rows });
-		const gathered = await this.gatherCompressionCandidates({ sessionId: session.id, rows, dMap, hSend, t1, t2 });
+		const gathered = await this.gatherCompressionCandidates({ sessionId: session.id, rows, dMap, hSend, t1, t2, timeAwarenessEnabled: session.timeAwarenessEnabled === true });
 		if (!gathered) return false;
 		const compModelId = this.resolveEffectiveCompressionModelId(session, instanceMeta);
 		try {
@@ -890,7 +896,7 @@ export class AgentCompressionMemoryService {
 		});
 		const { dMap, hSend, t1, t2 } = precomputedSidecar ?? await this.computeSidecarTokenD({ session, character, style, instanceMeta, rows });
 		// 仅在「排队较后」(t2,hSend]（预备下段）出现未压 raw 时触发 LLM；未压若只在「排队较前」(t1,t2]（上段）则仅 reconcile。
-		const gathered = await this.gatherCompressionCandidates({ sessionId: session.id, rows, dMap, hSend, t1, t2 });
+		const gathered = await this.gatherCompressionCandidates({ sessionId: session.id, rows, dMap, hSend, t1, t2, timeAwarenessEnabled: session.timeAwarenessEnabled === true });
 		if (!gathered) {
 			await this.reconcileStickyStates(session.id, hSend, dMap);
 			return;
