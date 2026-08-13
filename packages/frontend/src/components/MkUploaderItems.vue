@@ -31,6 +31,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<span v-if="item.compressedSize">({{ i18n.tsx._uploader.compressedToX({ x: bytes(item.compressedSize) }) }} = {{ i18n.tsx._uploader.savedXPercent({ x: Math.round((1 - item.compressedSize / item.file.size) * 100) }) }})</span>
 					<span v-else>{{ bytes(item.file.size) }}</span>
 					<span v-if="item.preprocessing">{{ i18n.ts.preprocessing }}<MkLoading inline em style="margin-left: 0.5em;"/></span>
+					<span v-else-if="item.uploadFailed" style="color: var(--MI_THEME-error);">{{ i18n.ts.uploadFailed }}</span>
+					<span v-else-if="item.aborted" style="opacity: 0.6;">{{ i18n.ts.uploadAborted }}</span>
 				</div>
 				<div>
 				</div>

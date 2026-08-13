@@ -1268,7 +1268,7 @@ const showAliyaBanner = computed(() => isAliyaSession.value && !aliyABannerDismi
 
 function readAliyaSeenCookie(): boolean {
 	try {
-		return document.cookie.split(';').some(c => c.trim().startsWith(`${aliyASeenCookieKey.value}=`));
+		return window.document.cookie.split(';').some(c => c.trim().startsWith(`${aliyASeenCookieKey.value}=`));
 	} catch {
 		return false;
 	}
@@ -1276,7 +1276,7 @@ function readAliyaSeenCookie(): boolean {
 
 function writeAliyaSeenCookie() {
 	try {
-		document.cookie = `${aliyASeenCookieKey.value}=1; path=/; max-age=${365 * 24 * 3600}; SameSite=Lax`;
+		window.document.cookie = `${aliyASeenCookieKey.value}=1; path=/; max-age=${365 * 24 * 3600}; SameSite=Lax`;
 	} catch { /* ignore */ }
 }
 
@@ -4715,16 +4715,16 @@ function formatAgentImageError(err: unknown): string {
 	let message: string;
 	switch (code) {
 		case 'AGENT_IMAGE_NO_FREE_DRIVE_SPACE':
-			message = '网盘空间不足，无法保存生成图片。请清理网盘后再试。';
+			message = i18n.ts._agents.agentImageErrorNoSpace;
 			break;
 		case 'AGENT_IMAGE_MAX_FILE_SIZE_EXCEEDED':
-			message = '生成图片超过当前账号允许的最大文件大小，无法保存到网盘。';
+			message = i18n.ts._agents.agentImageErrorMaxSize;
 			break;
 		case 'AGENT_IMAGE_UNALLOWED_FILE_TYPE':
-			message = '生成图片的文件类型不在当前账号允许上传的范围内。';
+			message = i18n.ts._agents.agentImageErrorUnallowedType;
 			break;
 		case 'AGENT_IMAGE_INSUFFICIENT_CREDIT':
-			message = '智能体额度不足，无法生成图片。';
+			message = i18n.ts._agents.agentImageErrorInsufficientCredit;
 			break;
 		default:
 			message = formatApiError(err);

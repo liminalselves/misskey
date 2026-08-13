@@ -6,8 +6,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 <template>
 <PageWithHeader :actions="headerActions" :tabs="headerTabs">
 	<div class="_spacer" style="--MI_SPACER-w: 800px;">
+		<MkLoading v-if="state === 'fetching'"/>
 		<MkPostForm
-			v-if="state === 'writing'"
+			v-else-if="state === 'writing'"
 			fixed
 			:instant="true"
 			:initialText="initialText"
@@ -176,8 +177,8 @@ async function init() {
 	} catch (err: any) {
 		os.alert({
 			type: 'error',
-			title: err.message,
-			text: err.name,
+			title: i18n.ts.somethingHappened,
+			text: err?.message ?? String(err),
 		});
 	}
 

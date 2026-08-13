@@ -112,10 +112,15 @@ const nextChannelPaginator = markRaw(new Paginator('channels/timeline', {
 	}) : undefined),
 }));
 
+// 竞态控制：快速切换 noteId 时，仅接受最新请求的响应
+let noteFetchSeq = 0;
+
 function fetchNote() {
+	const seq = ++noteFetchSeq;
 	showPrev.value = false;
 	showNext.value = false;
 	note.value = null;
+	error.value = null;
 
 	if (CTX_NOTE && CTX_NOTE.id === props.noteId) {
 		note.value = CTX_NOTE;
@@ -125,6 +130,7 @@ function fetchNote() {
 	misskeyApi('notes/show', {
 		noteId: props.noteId,
 	}).then(res => {
+		if (seq !== noteFetchSeq) return;
 		note.value = res;
 		const appearNote = getAppearNote(res) ?? res;
 		// 古いノートは被クリップ数をカウントしていないので、2023-10-01以前のものは強制的にnotes/clipsを叩く
@@ -132,10 +138,15 @@ function fetchNote() {
 			misskeyApi('notes/clips', {
 				noteId: appearNote.id,
 			}).then((_clips) => {
+				if (seq !== noteFetchSeq) return;
 				clips.value = _clips;
+			}).catch(err => {
+				if (seq !== noteFetchSeq) return;
+				console.error(err);
 			});
 		}
 	}).catch(err => {
+		if (seq !== noteFetchSeq) return;
 		if (['fbcc002d-37d9-4944-a6b0-d9e29f2d33ab', '145f88d2-b03d-4087-8143-a78928883c4b'].includes(err.id)) {
 			pleaseLogin({
 				path: '/',

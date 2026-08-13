@@ -521,7 +521,7 @@ export function useUploader(options: {
 			item.abort = null;
 			abort();
 			item.uploading = false;
-			item.uploadFailed = true;
+			item.aborted = true;
 		};
 
 		await filePromise.then((file) => {
@@ -529,9 +529,12 @@ export function useUploader(options: {
 			item.abort = null;
 			events.emit('itemUploaded', { item });
 		}).catch(err => {
-			item.uploadFailed = true;
 			item.progress = null;
-			if (!(err instanceof UploadAbortedError)) {
+			if (err instanceof UploadAbortedError) {
+				// 用户主动中止不算失败：置 aborted 而非 uploadFailed，避免误导性错误文案
+				item.aborted = true;
+			} else {
+				item.uploadFailed = true;
 				throw err;
 			}
 		}).finally(() => {
@@ -553,7 +556,12 @@ export function useUploader(options: {
 				continue;
 			}
 
-			await uploadOne(item);
+			try {
+				await uploadOne(item);
+			} catch (err) {
+				// 単一ファイルの失敗で残りのアップロードを中断しない。失敗はアイテムごとに表示される
+				console.error('Failed to upload item', err);
+			}
 		}
 	}
 
@@ -571,7 +579,6 @@ export function useUploader(options: {
 				item.abort();
 			}
 			item.aborted = true;
-			item.uploadFailed = true;
 		}
 	}
 
@@ -775,7 +782,7 @@ export function useUploader(options: {
 		upload,
 		getMenu,
 		uploading: computed(() => items.value.some(item => item.uploading)),
-		readyForUpload: computed(() => items.value.length > 0 && items.value.some(item => item.uploaded == null) && !items.value.some(item => item.uploading || item.preprocessing)),
+		readyForUpload: computed(() => items.value.length > 0 && items.value.some(item => item.uploaded == null) && !items.value.some(item => item.uploading || item.preprocessing || item.uploadFailed || item.aborted)),
 		allItemsUploaded: computed(() => items.value.every(item => item.uploaded != null)),
 		events,
 	};

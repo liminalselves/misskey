@@ -124,6 +124,8 @@ onMounted(async () => {
 		federationPubActiveDiff.value = chart.pubActive[0] - chart.pubActive[1];
 		federationSubActive.value = chart.subActive[0];
 		federationSubActiveDiff.value = chart.subActive[0] - chart.subActive[1];
+	}).catch(() => {
+		// 顶部指标加载失败不阻塞页面，静默处理
 	});
 
 	misskeyApiGet('federation/stats', { limit: 10 }).then(res => {
@@ -149,10 +151,14 @@ onMounted(async () => {
 			})),
 			{ name: '(other)', color: '#80808080', value: res.otherFollowingCount },
 		];
+	}).catch(() => {
+		// 联邦统计图失败不阻塞页面，静默处理
 	});
 
 	misskeyApi('admin/server-info').then(serverInfoResponse => {
 		serverInfo.value = serverInfoResponse;
+	}).catch(() => {
+		// 静默处理
 	});
 
 	misskeyApi('admin/show-users', {
@@ -160,6 +166,8 @@ onMounted(async () => {
 		sort: '+createdAt',
 	}).then(res => {
 		newUsers.value = res;
+	}).catch(() => {
+		// 静默处理
 	});
 
 	misskeyApi('federation/instances', {
@@ -167,6 +175,8 @@ onMounted(async () => {
 		limit: 25,
 	}).then(res => {
 		activeInstances.value = res;
+	}).catch(() => {
+		// 静默处理
 	});
 
 	nextTick(() => {

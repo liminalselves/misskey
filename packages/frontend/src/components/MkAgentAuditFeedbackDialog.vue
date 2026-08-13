@@ -10,7 +10,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 	@close="close"
 	@closed="emit('closed')"
 >
-	<template #header>内容未通过外审</template>
+	<template #header>{{ i18n.ts._agents.auditFeedbackTitle }}</template>
 
 	<div :class="$style.root">
 		<div :class="$style.hero">
@@ -23,23 +23,23 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 		<dl :class="$style.details">
 			<template v-if="category">
-				<dt>问题分类</dt>
+				<dt>{{ i18n.ts._agents.auditFeedbackCategory }}</dt>
 				<dd>{{ category }}</dd>
 			</template>
 			<template v-if="reason">
-				<dt>外审反馈</dt>
+				<dt>{{ i18n.ts._agents.auditFeedbackReason }}</dt>
 				<dd>{{ reason }}</dd>
 			</template>
-			<dt>拦截编码</dt>
-			<dd><code>{{ blockCode || '未知' }}</code></dd>
+			<dt>{{ i18n.ts._agents.auditFeedbackBlockCode }}</dt>
+			<dd><code>{{ blockCode || i18n.ts._agents.auditFeedbackUnknown }}</code></dd>
 		</dl>
 
 		<div :class="$style.notice">
 			<i class="ti ti-bulb"></i>
-			<span>请移除或调整上述风险内容，重新设计后再试。</span>
+			<span>{{ i18n.ts._agents.auditFeedbackNotice }}</span>
 		</div>
 
-		<MkButton primary rounded :class="$style.button" @click="close">返回修改</MkButton>
+		<MkButton primary rounded :class="$style.button" @click="close">{{ i18n.ts._agents.auditFeedbackBackToEdit }}</MkButton>
 	</div>
 </MkModalWindow>
 </template>
@@ -48,6 +48,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 import { useTemplateRef } from 'vue';
 import MkModalWindow from '@/components/MkModalWindow.vue';
 import MkButton from '@/components/MkButton.vue';
+import { i18n } from '@/i18n.js';
 
 withDefaults(defineProps<{
 	title?: string;
@@ -56,8 +57,8 @@ withDefaults(defineProps<{
 	category?: string | null;
 	reason?: string | null;
 }>(), {
-	title: '当前内容无法展示或执行',
-	guide: '安全外审发现内容可能违反平台规则。',
+	title: () => i18n.ts._agents.auditFeedbackTitleDefault,
+	guide: () => i18n.ts._agents.auditFeedbackGuideDefault,
 	blockCode: null,
 	category: null,
 	reason: null,

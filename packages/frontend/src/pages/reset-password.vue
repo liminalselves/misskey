@@ -19,7 +19,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<template v-else-if="passwordRetypeState === 'not-match'" #caption><span style="color: var(--MI_THEME-error)"><i class="ti ti-alert-triangle ti-fw"></i> {{ i18n.ts.passwordNotMatched }}</span></template>
 			</MkInput>
 
-			<MkButton primary :disabled="!canSave" @click="save">{{ i18n.ts.save }}</MkButton>
+			<MkButton primary :disabled="!canSave || saving" @click="save">{{ saving ? i18n.ts.saving : i18n.ts.save }}</MkButton>
 		</div>
 	</div>
 </PageWithHeader>
@@ -40,6 +40,7 @@ const props = defineProps<{
 
 const password = ref('');
 const retypedPassword = ref('');
+const saving = ref(false);
 
 const passwordRetypeState = computed(() => {
 	if (password.value === '' || retypedPassword.value === '') return null;
@@ -49,12 +50,21 @@ const passwordRetypeState = computed(() => {
 const canSave = computed(() => password.value !== '' && passwordRetypeState.value === 'match');
 
 async function save() {
-	if (props.token == null || !canSave.value) return;
-	await os.apiWithDialog('reset-password', {
-		token: props.token,
-		password: password.value,
-	});
-	mainRouter.push('/');
+	if (props.token == null || !canSave.value || saving.value) return;
+	saving.value = true;
+	try {
+		await os.apiWithDialog('reset-password', {
+			token: props.token,
+			password: password.value,
+		});
+		os.alert({
+			type: 'success',
+			text: i18n.ts.passwordChanged,
+		});
+		mainRouter.push('/');
+	} finally {
+		saving.value = false;
+	}
 }
 
 onMounted(async () => {

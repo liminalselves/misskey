@@ -12,7 +12,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<div :class="$style.overviewGrid">
 					<div v-panel :class="$style.overviewCard">
 						<span>功能状态</span>
-						<b>{{ form.state.agentFeatureEnabled ? '已启用' : '已关闭' }}</b>
+						<b>{{ form.state.agentFeatureEnabled ? i18n.ts._agents.adminEnabled : i18n.ts._agents.adminDisabled }}</b>
 					</div>
 					<div v-panel :class="$style.overviewCard">
 						<span>可用模型</span>
@@ -24,7 +24,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 					</div>
 					<div v-panel :class="$style.overviewCard">
 						<span>长期记忆</span>
-						<b>{{ form.state.agentMem0Enabled ? '已启用' : '未启用' }}</b>
+						<b>{{ form.state.agentMem0Enabled ? i18n.ts._agents.adminEnabled : i18n.ts._agents.adminNotEnabled }}</b>
 					</div>
 					<div v-panel :class="$style.overviewCard">
 						<span>24h 请求</span>
@@ -40,17 +40,17 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<div v-if="missingTokenizers.length > 0" class="_gaps_s">
 					<MkInfo v-for="t in missingTokenizers" :key="t.family" warn>
 						<i class="ti ti-alert-triangle"></i>
-						<strong>{{ tokenizerFamilyLabel(t.family) }}</strong> 分词器词表缺失，将回退到兼容近似计数（≈）。
+						<strong>{{ tokenizerFamilyLabel(t.family) }}</strong> {{ i18n.ts._agents.adminTokenizerMissing }}
 						<br>
-						<small>请将词表文件放入 <code>data/tokenizers/</code> 目录（开发环境）或通过 Docker 构建时自动下载。</small>
+						<small>{{ i18n.ts._agents.adminTokenizerMissingHint }}</small>
 					</MkInfo>
 				</div>
 
 				<div :class="$style.quickGrid">
-					<MkButton rounded @click="activeTab = 'models'"><i class="ti ti-cpu"></i> 模型管理</MkButton>
-					<MkButton rounded @click="activeTab = 'credits'"><i class="ti ti-ticket"></i> 额度与卡密</MkButton>
-					<MkButton rounded @click="activeTab = 'reports'"><i class="ti ti-report-analytics"></i> 请求报表</MkButton>
-					<MkButton rounded @click="activeTab = 'externalAudit'"><i class="ti ti-shield-check"></i> 外部审核</MkButton>
+					<MkButton rounded @click="activeTab = 'models'"><i class="ti ti-cpu"></i> {{ i18n.ts._agents.adminModelsTab }}</MkButton>
+					<MkButton rounded @click="activeTab = 'credits'"><i class="ti ti-ticket"></i> {{ i18n.ts._agents.adminCreditsTab }}</MkButton>
+					<MkButton rounded @click="activeTab = 'reports'"><i class="ti ti-report-analytics"></i> {{ i18n.ts._agents.adminReportsTab }}</MkButton>
+					<MkButton rounded @click="activeTab = 'externalAudit'"><i class="ti ti-shield-check"></i> {{ i18n.ts._agents.adminExternalAuditTab }}</MkButton>
 					<MkButton rounded @click="router.push('/admin/agents-review' as any)"><i class="ti ti-shield-check"></i> {{ i18n.ts._agents.adminAgentReview }}</MkButton>
 				</div>
 			</template>
@@ -67,16 +67,16 @@ SPDX-License-Identifier: AGPL-3.0-only
 					</MkTextarea>
 					<MkFolder>
 						<template #icon><i class="ti ti-brand-telegram"></i></template>
-						<template #label>Aliya Web 推荐</template>
-						<template #caption>配置后，对应角色的会话将展示 Aliya Web 跳转推荐</template>
+						<template #label>{{ i18n.ts._agents.adminAliyaRecommend }}</template>
+						<template #caption>{{ i18n.ts._agents.adminAliyaRecommendCaption }}</template>
 						<div class="_gaps">
 							<MkInput v-model="form.state.agentAliyaCharacterId" type="text">
-								<template #label>Aliya 智能体角色 ID</template>
-								<template #caption>填写该角色的 ID 后，用户打开该角色的会话时会看到 Aliya Web 推荐横幅与常驻板块；留空则关闭该功能</template>
+								<template #label>{{ i18n.ts._agents.adminAliyaCharacterId }}</template>
+								<template #caption>{{ i18n.ts._agents.adminAliyaCharacterIdCaption }}</template>
 							</MkInput>
 							<MkInput v-model="form.state.agentAliyaWebUrl" type="url">
-								<template #label>Aliya Web 地址</template>
-								<template #caption>横幅与板块中“前往 Aliya Web”链接的跳转地址</template>
+								<template #label>{{ i18n.ts._agents.adminAliyaWebUrl }}</template>
+								<template #caption>{{ i18n.ts._agents.adminAliyaWebUrlCaption }}</template>
 								<template #prefix><i class="ti ti-link"></i></template>
 							</MkInput>
 						</div>
@@ -188,8 +188,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 								<template #caption>tiktoken/Gemini/GLM/DeepSeek 为精确计数（GLM/DeepSeek 需镜像预置词表，缺失时自动降级近似）；Claude 为兼容近似（≈）；不选则字符估算</template>
 							</MkSelect>
 							<MkSelect v-model="row.charsPerToken" :items="charsPerTokenItems" :readonly="row.unlisted">
-								<template #label>字符/Token 比率</template>
-								<template #caption>未使用精确编码器时的估算比率</template>
+								<template #label>{{ i18n.ts._agents.adminCharsPerToken }}</template>
+								<template #caption>{{ i18n.ts._agents.adminCharsPerTokenCaption }}</template>
 							</MkSelect>
 						</FormSplit>
 					</div>
@@ -621,14 +621,14 @@ SPDX-License-Identifier: AGPL-3.0-only
 							<template #caption>用户 ID 或 @username / @username@host</template>
 						</MkInput>
 						<MkInput v-model="rewardForm.reason" type="text" :maxlength="200">
-							<template #label>奖励原因（选填）</template>
+							<template #label>{{ i18n.ts._agents.adminRewardReason }}</template>
 						</MkInput>
 						<MkInput v-model="rewardForm.amount" type="number" :min="0.01" :max="100000" :step="0.01">
-							<template #label>额度数量</template>
+							<template #label>{{ i18n.ts._agents.adminRewardAmount }}</template>
 							<template #prefix><i class="ti ti-coin"></i></template>
 						</MkInput>
 						<MkButton primary rounded :disabled="rewardIssuing || !rewardForm.userId.trim() || !rewardForm.amount || Number(rewardForm.amount) <= 0" @click="issueReward">
-							<i class="ti ti-gift"></i> 签发
+							<i class="ti ti-gift"></i> {{ i18n.ts._agents.adminIssueRewardBtn }}
 						</MkButton>
 					</div>
 				</MkFolder>
@@ -720,13 +720,13 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<template #icon><i class="ti ti-key"></i></template>
 					<template #label>系统授权 Key</template>
 					<div class="_gaps">
-						<MkInfo>用于旧版服务调用额度迁移接口时的身份验证。Key 生成后仅展示一次，请妥善保存。重新生成将使旧 Key 立即失效。</MkInfo>
+						<MkInfo>{{ i18n.ts._agents.adminMigrationKeyHint }}</MkInfo>
 						<div :class="$style.migrationKeyStatus">
 							<span :class="[$style.migrationKeyDot, migrationKeyExists ? $style.migrationKeyDotActive : null]"></span>
-							<span>{{ migrationKeyExists ? '已生成' : '未生成' }}</span>
+							<span>{{ migrationKeyExists ? i18n.ts._agents.adminMigrationKeyGenerated : i18n.ts._agents.adminMigrationKeyNotGenerated }}</span>
 						</div>
 						<MkButton primary rounded :disabled="migrationKeyGenerating" @click="generateMigrationKey">
-							<i class="ti ti-refresh"></i> {{ migrationKeyExists ? '重新生成' : '生成 Key' }}
+							<i class="ti ti-refresh"></i> {{ migrationKeyExists ? i18n.ts._agents.adminMigrationKeyRegenerate : i18n.ts._agents.adminMigrationKeyGenerate }}
 						</MkButton>
 					</div>
 				</MkFolder>
@@ -1366,7 +1366,7 @@ const form = useForm({
 			const t = raw.trim();
 			const v = t === '' ? 0 : Number(t);
 			if (!Number.isFinite(v) || v < 0 || v > 1_000_000) {
-				os.alert({ type: 'error', text: `${name}：${label}单价需为 0~1000000 的数字` });
+				os.alert({ type: 'error', text: i18n.tsx._agents.adminMillionTokenPriceInvalid({ name, label }) });
 				throw new Error('invalid million token price');
 			}
 			return v;
@@ -1462,17 +1462,35 @@ const form = useForm({
 			};
 		});
 	for (const row of imageModels) {
-		if (!row.id || !row.name || !row.provider) throw new Error('invalid image model row');
-		if (row.provider === 'aurora' && !row.apiModelName) throw new Error('invalid aurora image model api name');
+		if (!row.id || !row.name || !row.provider) {
+			os.alert({ type: 'error', text: i18n.ts._agents.adminImageModelInvalid });
+			throw new Error('invalid image model row');
+		}
+		if (row.provider === 'aurora' && !row.apiModelName) {
+			os.alert({ type: 'error', text: i18n.ts._agents.adminImageModelInvalid });
+			throw new Error('invalid aurora image model api name');
+		}
 		if (row.provider === 'openai' && (!row.apiModelName || !row.apiUrl || !row.apiKey)) {
 			os.alert({ type: 'error', text: i18n.ts._agents.adminOpenaiImageRequired });
 			throw new Error('invalid openai image model configuration');
 		}
-		if (row.costPerCall != null && (!Number.isFinite(row.costPerCall) || row.costPerCall < 0)) throw new Error('invalid image model cost');
+		if (row.costPerCall != null && (!Number.isFinite(row.costPerCall) || row.costPerCall < 0)) {
+			os.alert({ type: 'error', text: i18n.ts._agents.adminImageModelInvalid });
+			throw new Error('invalid image model cost');
+		}
 		if (row.provider === 'aurora' && row.defaultParams != null) {
-			if (!Number.isFinite(row.defaultParams.steps) || row.defaultParams.steps < 1 || row.defaultParams.steps > 80) throw new Error('invalid image model steps');
-			if (!Number.isFinite(row.defaultParams.scale) || row.defaultParams.scale < 0 || row.defaultParams.scale > 30) throw new Error('invalid image model scale');
-			if (!Number.isFinite(row.defaultParams.cfgRescale) || row.defaultParams.cfgRescale < 0 || row.defaultParams.cfgRescale > 1) throw new Error('invalid image model cfg rescale');
+			if (!Number.isFinite(row.defaultParams.steps) || row.defaultParams.steps < 1 || row.defaultParams.steps > 80) {
+				os.alert({ type: 'error', text: i18n.ts._agents.adminImageParamsInvalid });
+				throw new Error('invalid image model steps');
+			}
+			if (!Number.isFinite(row.defaultParams.scale) || row.defaultParams.scale < 0 || row.defaultParams.scale > 30) {
+				os.alert({ type: 'error', text: i18n.ts._agents.adminImageParamsInvalid });
+				throw new Error('invalid image model scale');
+			}
+			if (!Number.isFinite(row.defaultParams.cfgRescale) || row.defaultParams.cfgRescale < 0 || row.defaultParams.cfgRescale > 1) {
+				os.alert({ type: 'error', text: i18n.ts._agents.adminImageParamsInvalid });
+				throw new Error('invalid image model cfg rescale');
+			}
 		}
 	}
 	const visionModels = state.agentVisionModelRows
@@ -1504,11 +1522,11 @@ const form = useForm({
 	const imageArtistPresetIds = new Set<string>();
 	for (const row of imageArtistPresets) {
 		if (!row.id || !row.name) {
-			os.alert({ type: 'error', text: '画师串必须填写 ID 和名称。' });
+			os.alert({ type: 'error', text: i18n.ts._agents.adminArtistPresetInvalid });
 			throw new Error('invalid image artist preset row');
 		}
 		if (imageArtistPresetIds.has(row.id)) {
-			os.alert({ type: 'error', text: `画师串 ID 重复：${row.id}` });
+			os.alert({ type: 'error', text: i18n.tsx._agents.adminArtistPresetDuplicate({ id: row.id }) });
 			throw new Error('duplicate image artist preset id');
 		}
 		imageArtistPresetIds.add(row.id);
@@ -1520,13 +1538,34 @@ const form = useForm({
 	const imageSteps = Math.trunc(Number(state.agentImageSteps));
 	const imageScale = Number(state.agentImageScale);
 	const imageCfgRescale = Number(state.agentImageCfgRescale);
-	if (!Number.isFinite(imageMaxPerReply) || imageMaxPerReply < 0 || imageMaxPerReply > 12) throw new Error('invalid image max per reply');
-	if (!Number.isFinite(imageCost) || imageCost < 0) throw new Error('invalid image cost');
-	if (!Number.isFinite(imageMinPoints) || imageMinPoints < 0) throw new Error('invalid image min points');
-	if (!Number.isFinite(imageTtl) || imageTtl < 0) throw new Error('invalid image ttl');
-	if (!Number.isFinite(imageSteps) || imageSteps < 1 || imageSteps > 80) throw new Error('invalid image steps');
-	if (!Number.isFinite(imageScale) || imageScale < 0 || imageScale > 30) throw new Error('invalid image scale');
-	if (!Number.isFinite(imageCfgRescale) || imageCfgRescale < 0 || imageCfgRescale > 1) throw new Error('invalid image cfg rescale');
+	if (!Number.isFinite(imageMaxPerReply) || imageMaxPerReply < 0 || imageMaxPerReply > 12) {
+		os.alert({ type: 'error', text: i18n.ts._agents.adminImageParamsInvalid });
+		throw new Error('invalid image max per reply');
+	}
+	if (!Number.isFinite(imageCost) || imageCost < 0) {
+		os.alert({ type: 'error', text: i18n.ts._agents.adminImageParamsInvalid });
+		throw new Error('invalid image cost');
+	}
+	if (!Number.isFinite(imageMinPoints) || imageMinPoints < 0) {
+		os.alert({ type: 'error', text: i18n.ts._agents.adminImageParamsInvalid });
+		throw new Error('invalid image min points');
+	}
+	if (!Number.isFinite(imageTtl) || imageTtl < 0) {
+		os.alert({ type: 'error', text: i18n.ts._agents.adminImageParamsInvalid });
+		throw new Error('invalid image ttl');
+	}
+	if (!Number.isFinite(imageSteps) || imageSteps < 1 || imageSteps > 80) {
+		os.alert({ type: 'error', text: i18n.ts._agents.adminImageParamsInvalid });
+		throw new Error('invalid image steps');
+	}
+	if (!Number.isFinite(imageScale) || imageScale < 0 || imageScale > 30) {
+		os.alert({ type: 'error', text: i18n.ts._agents.adminImageParamsInvalid });
+		throw new Error('invalid image scale');
+	}
+	if (!Number.isFinite(imageCfgRescale) || imageCfgRescale < 0 || imageCfgRescale > 1) {
+		os.alert({ type: 'error', text: i18n.ts._agents.adminImageParamsInvalid });
+		throw new Error('invalid image cfg rescale');
+	}
 
 	const externalAuditModels = state.agentExternalAuditModelRows
 		.filter(row => row.name.trim() !== '' || row.baseUrl.trim() !== '' || row.apiModelName.trim() !== '' || row.apiKey.trim() !== '')
@@ -1545,11 +1584,11 @@ const form = useForm({
 	const externalAuditIds = new Set<string>();
 	for (const row of externalAuditModels) {
 		if (!row.id || !row.name || !row.baseUrl || !row.apiKey || !row.apiModelName) {
-			os.alert({ type: 'error', text: '外审模型必须填写模型名、请求端点、API Key 和上游模型名。' });
+			os.alert({ type: 'error', text: i18n.ts._agents.adminExternalAuditInvalid });
 			throw new Error('invalid external audit model row');
 		}
 		if (externalAuditIds.has(row.id)) {
-			os.alert({ type: 'error', text: `外审模型 ID 重复：${row.id}` });
+			os.alert({ type: 'error', text: i18n.tsx._agents.adminExternalAuditDuplicate({ id: row.id }) });
 			throw new Error('duplicate external audit model id');
 		}
 		externalAuditIds.add(row.id);
@@ -1767,13 +1806,13 @@ function initCheckinRoleRows(meta: Record<string, any>) {
 async function revokeTodayCheckin() {
 	const confirm = await os.confirm({
 		type: 'warning',
-		title: '撤销当日签到',
-		text: '将删除今日所有用户的签到记录并回收已发放额度（消费日志保留）。确定继续？',
+		title: i18n.ts._agents.adminCheckinRevokeTitle,
+		text: i18n.ts._agents.adminCheckinRevokeText,
 	});
 	if (confirm.canceled) return;
 	try {
 		const res = await misskeyApi('admin/agents-checkin-revoke-today' as any, {}) as { revokedCount: number; totalRewardReversed: number };
-		os.alert({ type: 'success', text: `已撤销 ${res.revokedCount} 条签到，回收 ${res.totalRewardReversed.toFixed(2)} 额度` });
+		os.alert({ type: 'success', text: i18n.tsx._agents.adminCheckinRevoked({ count: res.revokedCount, amount: res.totalRewardReversed.toFixed(2) }) });
 	} catch (err) {
 		os.alert({ type: 'error', text: formatApiError(err) });
 	}
@@ -1798,8 +1837,8 @@ async function issueReward() {
 	if (!rewardForm.userId.trim() || !Number.isFinite(amount) || amount <= 0) return;
 	const { canceled } = await os.confirm({
 		type: 'question',
-		title: '签发奖励',
-		text: `确认向 ${rewardForm.userId.trim()} 发放 ${amount.toFixed(2)} 额度？`,
+		title: i18n.ts._agents.adminIssueRewardTitle,
+		text: i18n.tsx._agents.adminIssueRewardConfirm({ user: rewardForm.userId.trim(), amount: amount.toFixed(2) }),
 	});
 	if (canceled) return;
 	rewardIssuing.value = true;
@@ -1809,7 +1848,7 @@ async function issueReward() {
 			amount,
 			reason: rewardForm.reason.trim() || null,
 		}) as { userId: string; amount: number; newBalance: number };
-		os.alert({ type: 'success', text: `已向 ${rewardForm.userId.trim()} 签发 ${res.amount.toFixed(2)} 额度` });
+		os.alert({ type: 'success', text: i18n.tsx._agents.adminRewardIssued({ user: rewardForm.userId.trim(), amount: res.amount.toFixed(2) }) });
 		rewardForm.userId = '';
 		rewardForm.reason = '';
 		rewardForm.amount = null;
@@ -1846,10 +1885,10 @@ const migrationLogs = ref<{
 async function generateMigrationKey() {
 	const { canceled } = await os.confirm({
 		type: 'warning',
-		title: migrationKeyExists.value ? '重新生成系统授权 Key' : '生成系统授权 Key',
+		title: migrationKeyExists.value ? i18n.ts._agents.adminMigrationKeyRegenTitle : i18n.ts._agents.adminMigrationKeyGenTitle,
 		text: migrationKeyExists.value
-			? '重新生成将使旧 Key 立即失效，旧版服务将无法继续使用旧 Key 进行迁移。确认继续？'
-			: '生成后 Key 仅展示一次，请妥善保存。确认继续？',
+			? i18n.ts._agents.adminMigrationKeyRegenText
+			: i18n.ts._agents.adminMigrationKeyGenText,
 	});
 	if (canceled) return;
 	migrationKeyGenerating.value = true;
@@ -1858,11 +1897,11 @@ async function generateMigrationKey() {
 		migrationKeyExists.value = true;
 		await os.alert({
 			type: 'success',
-			title: '系统授权 Key 已生成',
-			text: `请立即复制保存，关闭后将无法再次查看：\n\n${res.key}`,
+			title: i18n.ts._agents.adminMigrationKeyGeneratedTitle,
+			text: i18n.tsx._agents.adminMigrationKeyGeneratedText({ key: res.key }),
 		});
 		await copyToClipboard(res.key);
-		os.alert({ type: 'info', text: 'Key 已复制到剪贴板' });
+		os.alert({ type: 'info', text: i18n.ts._agents.adminMigrationKeyCopied });
 	} catch (err) {
 		os.alert({ type: 'error', text: formatApiError(err) });
 	}
@@ -2041,10 +2080,10 @@ function copyGeneratedCodes() {
 }
 
 function redeemStatusLabel(status: RedeemCodeRow['status']) {
-	if (status === 'available') return '可用';
-	if (status === 'redeemed') return '已兑换';
-	if (status === 'expired') return '已过期';
-	return '已撤销';
+	if (status === 'available') return i18n.ts._agents.adminRedeemAvailable;
+	if (status === 'redeemed') return i18n.ts._agents.adminRedeemRedeemed;
+	if (status === 'expired') return i18n.ts._agents.adminRedeemExpired;
+	return i18n.ts._agents.adminRedeemRevoked;
 }
 
 async function loadReports() {
@@ -2121,9 +2160,9 @@ async function loadExternalAuditStats() {
 }
 
 function externalAuditStatStatus(row: AgentExternalAuditModelStat) {
-	if (row.autoDisabledAt) return '自动禁用';
-	if (!row.enabled) return '停用';
-	return '启用';
+	if (row.autoDisabledAt) return i18n.ts._agents.adminAuditAutoDisabled;
+	if (!row.enabled) return i18n.ts._agents.adminAuditDisabled;
+	return i18n.ts._agents.adminAuditEnabled;
 }
 
 /** 添加模型：先选择模型类型，再创建对应预置行 */
@@ -2305,7 +2344,7 @@ async function refreshImageTokens() {
 			lastCheckedAt: typeof o.lastCheckedAt === 'string' ? o.lastCheckedAt : '',
 			lastError: typeof o.lastError === 'string' ? o.lastError : '',
 		}));
-		os.toast('余额已刷新');
+		os.toast(i18n.ts._agents.adminImageTokensRefreshed);
 	} catch (e) {
 		os.alert({ type: 'error', text: formatApiError(e) });
 	} finally {

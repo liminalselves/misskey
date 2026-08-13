@@ -63,6 +63,11 @@ function _fetch_() {
 					text: 'Not a user',
 				});
 			}
+		}).catch(err => {
+			os.alert({
+				type: 'error',
+				text: err.message + '\n' + err.id,
+			});
 		});
 	} else {
 		if (uri.startsWith('acct:')) {
@@ -74,8 +79,19 @@ function _fetch_() {
 					acct: user.host != null ? `${user.username}@${user.host}` : user.username,
 				},
 			});
+		}).catch(err => {
+			os.alert({
+				type: 'error',
+				text: err.message + '\n' + err.id,
+			});
 		});
 	}
+
+	// 无论成功失败，页面都应退出加载态，避免永久转圈；
+	// 成功跳转后组件会随路由卸载，此处仅是兜底
+	promise.finally(() => {
+		state.value = 'done';
+	});
 
 	os.promiseDialog(promise, null, null, i18n.ts.fetchingAsApObject);
 }

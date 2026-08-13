@@ -10,39 +10,41 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<div :class="$style.bannerIcon">
 				<i class="ti ti-calendar-check"></i>
 			</div>
-			<div :class="$style.bannerTitle">签到成功</div>
-			<div :class="$style.bannerStreak">已连续签到 {{ streak }} 天</div>
+			<div :class="$style.bannerTitle">{{ i18n.ts._agents.checkinPopupTitle }}</div>
+			<div :class="$style.bannerStreak">{{ i18n.tsx._agents.checkinPopupStreak({ days: streak }) }}</div>
 		</div>
 		<div :class="$style.body">
 			<div :class="$style.rewardLine">
 				<span :class="$style.rewardNum">+{{ reward.toFixed(2) }}</span>
-				<span :class="$style.rewardUnit">额度</span>
+				<span :class="$style.rewardUnit">{{ i18n.ts._agents.checkinPopupRewardUnit }}</span>
 			</div>
 			<div :class="$style.formulaBox">
 				<div :class="$style.formulaRow">
-					<span :class="$style.formulaTag">今日手气</span>
+					<span :class="$style.formulaTag">{{ i18n.ts._agents.checkinPopupTodayLuck }}</span>
 					<span :class="$style.formulaVal">{{ baseValue.toFixed(2) }}</span>
 				</div>
 				<div :class="$style.formulaRow">
-					<span :class="$style.formulaTag">连续签到</span>
+					<span :class="$style.formulaTag">{{ i18n.ts._agents.checkinPopupStreakFactor }}</span>
 					<span :class="$style.formulaVal">×{{ streakMultiplier.toFixed(2) }}</span>
 				</div>
 				<div v-if="roleMultiplier > 1" :class="$style.formulaRow">
-					<span :class="$style.formulaTag">身份组加成</span>
+					<span :class="$style.formulaTag">{{ i18n.ts._agents.checkinPopupRoleBonus }}</span>
 					<span :class="$style.formulaVal">×{{ roleMultiplier.toFixed(2) }}</span>
 				</div>
 				<div v-if="dayMultiplier > 1" :class="$style.formulaRow">
-					<span :class="$style.formulaTag">节日加成</span>
+					<span :class="$style.formulaTag">{{ i18n.ts._agents.checkinPopupHolidayBonus }}</span>
 					<span :class="$style.formulaVal">×{{ dayMultiplier.toFixed(1) }}</span>
 				</div>
 			</div>
-			<button class="_button" :class="$style.closeBtn" @click="close">收下</button>
+			<button class="_button" :class="$style.closeBtn" @click="close">{{ i18n.ts._agents.checkinPopupClaim }}</button>
 		</div>
 	</div>
 </div>
 </template>
 
 <script lang="ts" setup>
+import { i18n } from '@/i18n.js';
+
 const props = defineProps<{
 	reward: number;
 	streak: number;

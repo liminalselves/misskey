@@ -47,8 +47,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<MkNote v-else :class="$style.note" :note="note" :withHardMute="true" :data-scroll-anchor="note.id"/>
 			</template>
 		</component>
-		<button v-show="paginator.canFetchOlder.value" key="_more_" v-appear="prefer.s.enableInfiniteScroll ? paginator.fetchOlder : null" :disabled="paginator.fetchingOlder.value" class="_button" :class="$style.more" @click="paginator.fetchOlder">
-			<div v-if="!paginator.fetchingOlder.value">{{ i18n.ts.loadMore }}</div>
+		<button v-show="paginator.canFetchOlder.value" key="_more_" v-appear="prefer.s.enableInfiniteScroll ? paginator.fetchOlder : null" :disabled="paginator.fetchingOlder.value" class="_button" :class="[$style.more, { [$style.moreFailed]: paginator.fetchError.value }]" @click="paginator.fetchOlder">
+			<div v-if="!paginator.fetchingOlder.value">{{ paginator.fetchError.value ? i18n.ts.loadMoreFailed : i18n.ts.loadMore }}</div>
 			<MkLoading v-else :inline="true"/>
 		</button>
 	</div>
@@ -566,5 +566,9 @@ defineExpose({
 	box-sizing: border-box;
 	padding: 16px;
 	background: var(--MI_THEME-panel);
+}
+
+.moreFailed {
+	color: var(--MI_THEME-error);
 }
 </style>

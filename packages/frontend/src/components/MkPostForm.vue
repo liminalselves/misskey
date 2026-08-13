@@ -1010,6 +1010,24 @@ async function post(ev?: PointerEvent) {
 
 		// アップロード失敗したものがあったら中止
 		if (uploader.items.value.some(x => x.uploaded == null)) {
+			const failedItems = uploader.items.value.filter(x => x.uploaded == null && x.uploadFailed);
+			const abortedItems = uploader.items.value.filter(x => x.uploaded == null && !x.uploadFailed && x.aborted);
+			if (failedItems.length > 0) {
+				os.alert({
+					type: 'error',
+					text: i18n.tsx.uploadFailedAndCannotPost({ count: failedItems.length }),
+				});
+			} else if (abortedItems.length > 0) {
+				os.alert({
+					type: 'error',
+					text: i18n.tsx.uploadCancelledAndCannotPost({ count: abortedItems.length }),
+				});
+			} else {
+				os.alert({
+					type: 'error',
+					text: i18n.ts.uploading,
+				});
+			}
 			return;
 		}
 	}

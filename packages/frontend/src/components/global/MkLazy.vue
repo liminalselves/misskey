@@ -20,6 +20,8 @@ const observer = new IntersectionObserver(
 	(entries) => {
 		if (entries.some((entry) => entry.isIntersecting)) {
 			showing.value = true;
+			// 已触发懒加载后不再需要观察，及时断开避免长期驻留
+			observer.disconnect();
 		}
 	},
 );

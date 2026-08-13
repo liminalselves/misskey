@@ -10,12 +10,12 @@ SPDX-License-Identifier: AGPL-3.0-only
 	@close="cancel"
 	@closed="emit('closed')"
 >
-	<template #header>处理用户 {{ userName }}</template>
+	<template #header>{{ i18n.tsx._agents.quickActionTitle({ name: userName }) }}</template>
 
 	<div :class="$style.root">
 		<!-- 1. 违规类别（最顶部） -->
 		<div :class="$style.field">
-			<label :class="$style.label">违规类别</label>
+			<label :class="$style.label">{{ i18n.ts._agents.quickActionCategory }}</label>
 			<div :class="$style.categoryGrid">
 				<button
 					v-for="cat in categoryOptions"
@@ -27,13 +27,13 @@ SPDX-License-Identifier: AGPL-3.0-only
 				>{{ cat.label }}</button>
 			</div>
 			<MkInput v-if="form.category === '其他违规'" v-model="form.customCategory" type="text" :class="$style.customCategoryInput">
-				<template #label>具体违规内容</template>
+				<template #label>{{ i18n.ts._agents.quickActionCustomCategory }}</template>
 			</MkInput>
 		</div>
 
 		<!-- 2. 选择会话（多选） -->
 		<div :class="$style.field">
-			<label :class="$style.label">封禁会话（已选 {{ form.selectedSessionIds.size }} / {{ sessions.length }} 个）</label>
+			<label :class="$style.label">{{ i18n.tsx._agents.quickActionSelectSessions({ selected: form.selectedSessionIds.size, total: sessions.length }) }}</label>
 			<div :class="$style.sessionList">
 				<label
 					v-for="s in sessions"
@@ -46,20 +46,20 @@ SPDX-License-Identifier: AGPL-3.0-only
 						@change="toggleSession(s.id)"
 					/>
 					<span :class="$style.sessionName">{{ s.name }}</span>
-					<span v-if="s.banned" :class="$style.sessionBannedTag">已封禁</span>
+					<span v-if="s.banned" :class="$style.sessionBannedTag">{{ i18n.ts._agents.quickActionSessionBanned }}</span>
 				</label>
 			</div>
 		</div>
 
 		<!-- 3. 封禁会话原因 -->
 		<div :class="$style.field">
-			<label :class="$style.label">封禁会话原因（面向用户）</label>
-			<MkTextarea v-model="form.sessionBanReason" :placeholder="`留空自动生成：${effectiveCategory}`"/>
+			<label :class="$style.label">{{ i18n.ts._agents.quickActionSessionBanReason }}</label>
+			<MkTextarea v-model="form.sessionBanReason" :placeholder="i18n.tsx._agents.quickActionAutoGenerate({ value: effectiveCategory })"/>
 		</div>
 
 		<!-- 4. 封禁用户 -->
 		<div :class="$style.field">
-			<label :class="$style.label">封禁用户账户</label>
+			<label :class="$style.label">{{ i18n.ts._agents.quickActionBanUser }}</label>
 			<div :class="$style.suspendOptions">
 				<button
 					v-for="opt in suspendOptions"
@@ -74,22 +74,22 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 		<!-- 5. 封禁用户原因 -->
 		<div v-if="form.suspendHours >= 0" :class="$style.field">
-			<label :class="$style.label">封禁用户原因（面向用户）</label>
-			<MkTextarea v-model="form.userSuspendReason" :placeholder="`留空自动生成：智能体${effectiveCategory}`"/>
+			<label :class="$style.label">{{ i18n.ts._agents.quickActionUserSuspendReason }}</label>
+			<MkTextarea v-model="form.userSuspendReason" :placeholder="i18n.tsx._agents.quickActionAutoGenerate({ value: '智能体' + effectiveCategory })"/>
 		</div>
 
 		<!-- 6. 管理笔记（仅封禁用户时显示） -->
 		<div v-if="form.suspendHours >= 0" :class="$style.field">
-			<label :class="$style.label">管理笔记</label>
+			<label :class="$style.label">{{ i18n.ts._agents.quickActionModerationNote }}</label>
 			<div :class="$style.noteFormatHint">
-				格式：<code>[{{ datePreview }}]智能体{{ effectiveCategory }}{{ suspendText }} -{{ moderatorName }}</code>
+				{{ i18n.ts._agents.quickActionNoteFormat }}：<code>[{{ datePreview }}]智能体{{ effectiveCategory }}{{ suspendText }} -{{ moderatorName }}</code>
 			</div>
-			<MkTextarea v-model="form.moderationNote" :placeholder="'留空自动生成'"/>
+			<MkTextarea v-model="form.moderationNote" :placeholder="i18n.ts._agents.quickActionAutoGenerate.replace('{value}', '')"/>
 		</div>
 
 		<!-- 操作按钮 -->
 		<div :class="$style.actions">
-			<MkButton rounded @click="cancel">取消</MkButton>
+			<MkButton rounded @click="cancel">{{ i18n.ts._agents.quickActionCancel }}</MkButton>
 			<MkButton
 				primary
 				rounded
@@ -97,7 +97,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				@click="submit"
 			>
 				<i class="ti ti-gavel"></i>
-				{{ processing ? '处理中…' : '确认处理' }}
+				{{ processing ? i18n.ts._agents.quickActionProcessing : i18n.ts._agents.quickActionSubmit }}
 			</MkButton>
 		</div>
 	</div>
@@ -105,11 +105,12 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { computed, reactive, ref, useTemplateRef } from 'vue';
+import { computed, reactive, ref, useTemplateRef, watch } from 'vue';
 import MkModalWindow from '@/components/MkModalWindow.vue';
 import MkButton from '@/components/MkButton.vue';
 import MkInput from '@/components/MkInput.vue';
 import MkTextarea from '@/components/MkTextarea.vue';
+import { i18n } from '@/i18n.js';
 
 export type QuickActionSession = {
 	id: string;
@@ -147,20 +148,20 @@ const dialog = useTemplateRef('dialog');
 const processing = ref(false);
 
 const categoryOptions = [
-	{ label: '色情内容', value: '色情内容' },
-	{ label: '暴力内容', value: '暴力内容' },
-	{ label: '仇恨言论', value: '仇恨言论' },
-	{ label: '提示词注入', value: '提示词注入' },
-	{ label: '违法内容', value: '违法内容' },
-	{ label: '其他违规', value: '其他违规' },
+	{ label: i18n.ts._agents.quickActionCatPorn, value: '色情内容' },
+	{ label: i18n.ts._agents.quickActionCatViolence, value: '暴力内容' },
+	{ label: i18n.ts._agents.quickActionCatHate, value: '仇恨言论' },
+	{ label: i18n.ts._agents.quickActionCatPromptInjection, value: '提示词注入' },
+	{ label: i18n.ts._agents.quickActionCatIllegal, value: '违法内容' },
+	{ label: i18n.ts._agents.quickActionCatOther, value: '其他违规' },
 ];
 
 const suspendOptions = [
-	{ label: '不封禁', value: -1 },
-	{ label: '1 天', value: 24 },
-	{ label: '1 周', value: 168 },
-	{ label: '1 个月', value: 720 },
-	{ label: '永久', value: 0 },
+	{ label: i18n.ts._agents.quickActionNoBan, value: -1 },
+	{ label: i18n.ts._agents.quickActionDay, value: 24 },
+	{ label: i18n.ts._agents.quickActionWeek, value: 168 },
+	{ label: i18n.ts._agents.quickActionMonth, value: 720 },
+	{ label: i18n.ts._agents.quickActionForever, value: 0 },
 ];
 
 const form = reactive({
@@ -173,14 +174,25 @@ const form = reactive({
 	moderationNote: '',
 });
 
+// 会话列表异步加载时，首次到达后同步默认勾选；
+// 用户一旦手动勾选过，就不再同步，避免覆盖用户操作
+let sessionsSynced = false;
+let userInteracted = false;
+watch(() => props.sessions, (sessions) => {
+	if (sessionsSynced || userInteracted) return;
+	if (sessions.length === 0) return;
+	sessionsSynced = true;
+	form.selectedSessionIds = new Set(sessions.filter(s => !s.banned).map(s => s.id));
+}, { deep: true });
+
 const effectiveCategory = computed(() => {
 	return form.category === '其他违规' ? (form.customCategory.trim() || '其他违规') : form.category;
 });
 
 const suspendText = computed(() => {
-	if (form.suspendHours < 0) return '封禁会话';
-	if (form.suspendHours === 0) return '永封';
-	return `封禁${form.suspendHours}小时`;
+	if (form.suspendHours < 0) return i18n.ts._agents.quickActionSessionOnly;
+	if (form.suspendHours === 0) return i18n.ts._agents.quickActionPermanent;
+	return i18n.tsx._agents.quickActionSuspendHours({ hours: form.suspendHours });
 });
 
 const datePreview = computed(() => {
@@ -195,6 +207,7 @@ const canSubmit = computed(() => {
 });
 
 function toggleSession(id: string) {
+	userInteracted = true;
 	if (form.selectedSessionIds.has(id)) {
 		form.selectedSessionIds.delete(id);
 	} else {

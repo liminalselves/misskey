@@ -6,7 +6,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 <template>
 <div>
 	<MkLoading v-if="fetching"/>
-	<div v-show="!fetching" :class="$style.root">
+	<MkError v-else-if="error" @retry="load"/>
+	<div v-else :class="$style.root">
 		<div v-if="topSubInstancesForPie && topPubInstancesForPie" class="pies">
 			<div class="pie deliver _panel">
 				<div class="title">{{ i18n.ts.adminOverviewSub }}</div>
@@ -63,15 +64,24 @@ const federationPubActiveDiff = ref<number | null>(null);
 const federationSubActive = ref<number | null>(null);
 const federationSubActiveDiff = ref<number | null>(null);
 const fetching = ref(true);
+const error = ref(false);
 
 const { handler: externalTooltipHandler } = useChartTooltip();
 
-onMounted(async () => {
-	const chart = await misskeyApiGet('charts/federation', { limit: 2, span: 'day' });
-	federationPubActive.value = chart.pubActive[0];
-	federationPubActiveDiff.value = chart.pubActive[0] - chart.pubActive[1];
-	federationSubActive.value = chart.subActive[0];
-	federationSubActiveDiff.value = chart.subActive[0] - chart.subActive[1];
+async function load(): Promise<void> {
+	fetching.value = true;
+	error.value = false;
+	try {
+		const chart = await misskeyApiGet('charts/federation', { limit: 2, span: 'day' });
+		federationPubActive.value = chart.pubActive[0];
+		federationPubActiveDiff.value = chart.pubActive[0] - chart.pubActive[1];
+		federationSubActive.value = chart.subActive[0];
+		federationSubActiveDiff.value = chart.subActive[0] - chart.subActive[1];
+	} catch (err) {
+		error.value = true;
+		fetching.value = false;
+		return;
+	}
 
 	misskeyApiGet('federation/stats', { limit: 10 }).then(res => {
 		topSubInstancesForPie.value = [
@@ -96,9 +106,15 @@ onMounted(async () => {
 			})),
 			{ name: i18n.ts.other, color: '#80808080', value: res.otherFollowingCount },
 		];
+	}).catch(() => {
+		// 统计图失败不影响主内容展示，静默处理
 	});
 
 	fetching.value = false;
+}
+
+onMounted(() => {
+	load();
 });
 </script>
 

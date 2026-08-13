@@ -184,9 +184,9 @@ function onChangeUsername(): void {
 
 	{
 		const err =
-			!username.value.match(/^[a-zA-Z0-9_]+$/) ? 'invalid-format' :
 			username.value.length < 1 ? 'min-range' :
 			username.value.length > 20 ? 'max-range' :
+			!username.value.match(/^[a-zA-Z0-9_]+$/) ? 'invalid-format' :
 			null;
 
 		if (err) {
@@ -271,53 +271,65 @@ async function onSubmit(): Promise<void> {
 	if (submitting.value) return;
 	submitting.value = true;
 
-	const signupPayload: Misskey.entities.SignupRequest = {
-		username: username.value,
-		password: password.value,
-		emailAddress: email.value,
-		invitationCode: invitationCode.value,
-		'hcaptcha-response': hCaptchaResponse.value,
-		'm-captcha-response': mCaptchaResponse.value,
-		'g-recaptcha-response': reCaptchaResponse.value,
-		'turnstile-response': turnstileResponse.value,
-		'aliyun-captcha-response': aliyunCaptchaResponse.value,
-		'testcaptcha-response': testcaptchaResponse.value,
-	};
+	try {
+		const signupPayload: Misskey.entities.SignupRequest = {
+			username: username.value,
+			password: password.value,
+			emailAddress: email.value,
+			invitationCode: invitationCode.value,
+			'hcaptcha-response': hCaptchaResponse.value,
+			'm-captcha-response': mCaptchaResponse.value,
+			'g-recaptcha-response': reCaptchaResponse.value,
+			'turnstile-response': turnstileResponse.value,
+			'aliyun-captcha-response': aliyunCaptchaResponse.value,
+			'testcaptcha-response': testcaptchaResponse.value,
+		};
 
-	const res = await window.fetch(`${config.apiUrl}/signup`, {
-		method: 'POST',
-		headers: {
-			'Content-Type': 'application/json',
-		},
-		body: JSON.stringify(signupPayload),
-	}).catch(() => {
-		onSignupApiError();
-		return null;
-	});
+		const res = await window.fetch(`${config.apiUrl}/signup`, {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+			},
+			body: JSON.stringify(signupPayload),
+		}).catch(() => {
+			onSignupApiError();
+			return null;
+		});
 
-	if (res && res.ok) {
-		if (res.status === 204 || instance.emailRequiredForSignup) {
-			os.alert({
-				type: 'success',
-				title: i18n.ts._signup.almostThere,
-				text: i18n.tsx._signup.emailSent({ email: email.value }),
-			});
-			emit('signupEmailPending');
-		} else {
-			const resJson = (await res.json()) as Misskey.entities.SignupResponse;
-			if (_DEV_) console.log(resJson);
+		if (res && res.ok) {
+			if (res.status === 204 || instance.emailRequiredForSignup) {
+				os.alert({
+					type: 'success',
+					title: i18n.ts._signup.almostThere,
+					text: i18n.tsx._signup.emailSent({ email: email.value }),
+				});
+				emit('signupEmailPending');
+			} else {
+				const resJson = (await res.json()) as Misskey.entities.SignupResponse;
+				if (_DEV_) console.log(resJson);
 
-			emit('signup', resJson);
+				emit('signup', resJson);
 
-			if (props.autoSet) {
-				await login(resJson.token);
+				if (props.autoSet) {
+					// 自动登录失败时（如网络抖动）不应让提交按钮永久卡死：
+					// 注册已成功，提示用户手动登录即可
+					await login(resJson.token).catch(() => {
+						os.alert({
+							type: 'error',
+							text: i18n.ts._signup.signedUpButAutoLoginFailed,
+						});
+					});
+				}
 			}
+		} else {
+			onSignupApiError();
 		}
-	} else {
+	} catch (err) {
+		console.error(err);
 		onSignupApiError();
+	} finally {
+		submitting.value = false;
 	}
-
-	submitting.value = false;
 }
 
 function onSignupApiError() {

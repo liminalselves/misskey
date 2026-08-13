@@ -13,17 +13,18 @@ SPDX-License-Identifier: AGPL-3.0-only
 	</div>
 	<div>{{ i18n.tsx._auth.shareAccess({ name: `${name} (${app.id})` }) }}</div>
 	<div :class="$style.buttons">
-		<MkButton inline @click="cancel">{{ i18n.ts.cancel }}</MkButton>
-		<MkButton inline primary @click="accept">{{ i18n.ts.accept }}</MkButton>
+		<MkButton inline :disabled="waiting" @click="cancel">{{ i18n.ts.cancel }}</MkButton>
+		<MkButton inline primary :disabled="waiting" @click="accept">{{ waiting ? i18n.ts.processing : i18n.ts.accept }}</MkButton>
 	</div>
 </section>
 </template>
 
 <script lang="ts" setup>
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import * as Misskey from 'misskey-js';
 import MkButton from '@/components/MkButton.vue';
 import { misskeyApi } from '@/utility/misskey-api.js';
+import * as os from '@/os.js';
 import { i18n } from '@/i18n.js';
 
 const props = defineProps<{
@@ -47,21 +48,30 @@ const name = computed(() => {
 	return el.innerHTML;
 });
 
-function cancel() {
-	//misskeyApi('auth/deny', {
-	//	token: props.session.token,
-	//}).then(() => {
-	//	emit('denied');
-	//});
+const waiting = ref(false);
 
+function cancel() {
+	if (waiting.value) return;
+	waiting.value = true;
+
+	// 后端无 auth/deny 端点（上游已移除），直接关闭授权会话即可
 	emit('denied');
 }
 
 function accept() {
+	if (waiting.value) return;
+	waiting.value = true;
+
 	misskeyApi('auth/accept', {
 		token: props.session.token,
 	}).then(() => {
 		emit('accepted');
+	}).catch(err => {
+		waiting.value = false;
+		os.alert({
+			type: 'error',
+			text: err.message + '\n' + err.id,
+		});
 	});
 }
 </script>

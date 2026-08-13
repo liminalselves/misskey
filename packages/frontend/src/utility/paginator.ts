@@ -47,6 +47,7 @@ export interface IPaginator<T = unknown, _T = T & MisskeyEntity> {
 	canFetchNewer: Ref<boolean>;
 	canSearch: boolean;
 	error: Ref<boolean>;
+	fetchError: Ref<boolean>;
 	computedParams: ComputedRef<Misskey.Endpoints[PaginatorCompatibleEndpointPaths]['req'] | null | undefined> | null;
 	initialId: MisskeyEntity['id'] | null;
 	initialDate: number | null;
@@ -88,6 +89,8 @@ export class Paginator<
 	public canFetchNewer = ref(false);
 	public canSearch = false;
 	public error = ref(false);
+	// 加载更多/更新的失败状态：用于在“加载更多”处提示用户重试，避免静默失败
+	public fetchError = ref(false);
 	private endpoint: Endpoint;
 	private limit: number;
 	private params: E['req'] | (() => E['req']);
@@ -250,6 +253,7 @@ export class Paginator<
 		}
 
 		this.error.value = false;
+		this.fetchError.value = false;
 		this.fetching.value = false;
 	}
 
@@ -274,6 +278,7 @@ export class Paginator<
 		};
 
 		const apiRes = (await misskeyApi<T[]>(this.endpoint, data).catch(_ => {
+			this.fetchError.value = true;
 			return null;
 		})) as T[] | null;
 
@@ -282,6 +287,8 @@ export class Paginator<
 		if (apiRes == null) {
 			return;
 		}
+
+		this.fetchError.value = false;
 
 		for (let i = 0; i < apiRes.length; i++) {
 			const item = apiRes[i];
@@ -327,14 +334,29 @@ export class Paginator<
 		};
 
 		const apiRes = (await misskeyApi<T[]>(this.endpoint, data).catch(_ => {
+			// fetchNewer 由轮询/事件自动驱动，失败不置 fetchError，
+			// 避免把“加载更多”（fetchOlder）按钮污染成错误态
 			return null;
 		})) as T[] | null;
 
 		this.fetchingNewer.value = false;
 
-		if (apiRes == null || apiRes.length === 0) {
+		if (apiRes == null) {
 			this.canFetchNewer.value = false;
 			// 余計なre-renderを防止するためここで終了
+			return;
+		}
+
+		// 请求成功即说明网络已恢复：清除失败态，并让时间线自动从初回加载的错误页恢复
+		this.fetchError.value = false;
+		// 仅在有数据时清除错误态：若时间线确实为空（init 失败后拉新仍返回空），
+		// 保留错误页与重试按钮，避免出现无任何加载入口的死胡同
+		if (this.items.value.length > 0) {
+			this.error.value = false;
+		}
+
+		if (apiRes.length === 0) {
+			this.canFetchNewer.value = false;
 			return;
 		}
 

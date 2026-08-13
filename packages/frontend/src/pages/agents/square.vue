@@ -266,8 +266,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</div>
 				<div :class="$style.cardActions">
 					<MkButton rounded @click="goStyleDetail(s.id)"><i class="ti ti-eye"></i> {{ i18n.ts._agents.plazaViewDetails }}</MkButton>
-					<MkButton v-if="plazaRowState(s) === 'other'" rounded @click="subscribe(s.id)"><i class="ti ti-plus"></i> {{ i18n.ts._agents.addStyleToMine }}</MkButton>
-					<MkButton v-if="plazaRowState(s) === 'subscribed'" rounded @click="unsubscribe(s.id)"><i class="ti ti-x"></i> {{ i18n.ts._agents.removeStyleFromMine }}</MkButton>
+					<MkButton v-if="plazaRowState(s) === 'other'" rounded :disabled="styleBusy.has(s.id)" @click="subscribe(s.id)"><i class="ti ti-plus"></i> {{ i18n.ts._agents.addStyleToMine }}</MkButton>
+					<MkButton v-if="plazaRowState(s) === 'subscribed'" rounded :disabled="styleBusy.has(s.id)" @click="unsubscribe(s.id)"><i class="ti ti-x"></i> {{ i18n.ts._agents.removeStyleFromMine }}</MkButton>
 					<MkButton v-if="plazaRowState(s) === 'mine'" rounded @click="router.push(('/agents/style/' + s.id) as '/agents/style/:styleId')"><i class="ti ti-pencil"></i> {{ i18n.ts._agents.edit }}</MkButton>
 				</div>
 			</div>
@@ -280,7 +280,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import type { AgentsCharactersPublicListResponse, AgentsStylesPublicListResponse } from 'misskey-js/entities.js';
 import MkButton from '@/components/MkButton.vue';
 import MkInput from '@/components/MkInput.vue';
@@ -319,7 +319,7 @@ const searchLoading = ref(false);
 const searchCharacters = ref<any[]>([]);
 const searchStyles = ref<any[]>([]);
 let searchSeq = 0; // 竞态控制：每次请求递增序号，仅接受最新请求的结果
-let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+let searchDebounceTimer: number | null = null;
 
 async function execSearch(query: string) {
 	const q = query.trim();
@@ -347,8 +347,8 @@ async function execSearch(query: string) {
 }
 
 function scheduleSearch(q: string) {
-	if (searchDebounceTimer != null) clearTimeout(searchDebounceTimer);
-	searchDebounceTimer = setTimeout(() => {
+	if (searchDebounceTimer != null) window.clearTimeout(searchDebounceTimer);
+	searchDebounceTimer = window.setTimeout(() => {
 		searchDebounceTimer = null;
 		void execSearch(q);
 	}, 400);
@@ -356,7 +356,7 @@ function scheduleSearch(q: string) {
 
 function cancelPendingSearch() {
 	if (searchDebounceTimer != null) {
-		clearTimeout(searchDebounceTimer);
+		window.clearTimeout(searchDebounceTimer);
 		searchDebounceTimer = null;
 	}
 }
@@ -408,6 +408,12 @@ const loadingMoreStyles = ref(false);
 let scrollTicking = false;
 const SCROLL_NEAR_BOTTOM_PX = 420;
 
+// 分页竞态控制：排序切换（reset）会使旧请求失效，避免旧排序数据混入新列表
+let charactersSeq = 0;
+let stylesSeq = 0;
+// 订阅/退订处理中状态，防止重复点击重复请求
+const styleBusy = reactive(new Set<string>());
+
 function plazaStarVisual(avg: number | null | undefined): string {
 	if (avg == null || !Number.isFinite(avg)) return '—';
 	const full = Math.max(0, Math.min(5, Math.round(avg)));
@@ -428,10 +434,12 @@ function plazaRowState(s: { id: string; userId: string }) {
 
 async function loadCharacters(reset = true) {
 	if (reset) {
+		charactersSeq++;
 		charactersOffset.value = 0;
 		canLoadMoreCharacters.value = true;
 		list.value = [];
 	}
+	const seq = charactersSeq;
 	if (!canLoadMoreCharacters.value) return;
 	loadingCh.value = true;
 	try {
@@ -445,12 +453,14 @@ async function loadCharacters(reset = true) {
 				...base,
 				offset: charactersOffset.value,
 			} as any));
+		if (seq !== charactersSeq) return; // 丢弃过期响应
 		const next = res as AgentsCharactersPublicListResponse;
 		if (reset) list.value = next;
 		else list.value = [...list.value, ...next];
 		if (sortCharacters.value !== 'recommended') charactersOffset.value += next.length;
 		canLoadMoreCharacters.value = next.length === 30;
 	} catch (err) {
+		if (seq !== charactersSeq) return;
 		if (sortCharacters.value !== 'latest') {
 			try {
 				const fallback = await misskeyApi('agents/characters/public-list', {
@@ -458,31 +468,35 @@ async function loadCharacters(reset = true) {
 					offset: charactersOffset.value,
 					sort: 'latest',
 				});
+				if (seq !== charactersSeq) return;
 				const next = fallback as AgentsCharactersPublicListResponse;
 				if (reset) list.value = next;
 				else list.value = [...list.value, ...next];
 				charactersOffset.value += next.length;
 				canLoadMoreCharacters.value = next.length === 30;
-				os.toast('推荐排序加载失败，已自动切换为最新排序结果。');
+				os.toast(i18n.ts._agents.recommendedSortFailedFallback);
 				return;
 			} catch {
 				// fallthrough
 			}
 		}
+		if (seq !== charactersSeq) return;
 		if (reset) list.value = [];
 		canLoadMoreCharacters.value = false;
 		os.alert({ type: 'error', text: formatApiError(err) });
 	} finally {
-		loadingCh.value = false;
+		if (seq === charactersSeq) loadingCh.value = false;
 	}
 }
 
 async function loadPlaza(reset = true) {
 	if (reset) {
+		stylesSeq++;
 		stylesOffset.value = 0;
 		canLoadMoreStyles.value = true;
 		plazaStyles.value = [];
 	}
+	const seq = stylesSeq;
 	if (!canLoadMoreStyles.value) return;
 	loadingPlaza.value = true;
 	try {
@@ -500,6 +514,7 @@ async function loadPlaza(reset = true) {
 				} as any)),
 			misskeyApi('agents/styles/list-usable', {}),
 		]);
+		if (seq !== stylesSeq) return; // 丢弃过期响应
 		const next = pub as AgentsStylesPublicListResponse;
 		if (reset) plazaStyles.value = next;
 		else plazaStyles.value = [...plazaStyles.value, ...next];
@@ -511,6 +526,7 @@ async function loadPlaza(reset = true) {
 		}
 		usableById.value = m;
 	} catch (err) {
+		if (seq !== stylesSeq) return;
 		if (sortStyles.value !== 'latest') {
 			try {
 				const [pub2, usable2] = await Promise.all([
@@ -521,6 +537,7 @@ async function loadPlaza(reset = true) {
 					}),
 					misskeyApi('agents/styles/list-usable', {}),
 				]);
+				if (seq !== stylesSeq) return;
 				const next = pub2 as AgentsStylesPublicListResponse;
 				if (reset) plazaStyles.value = next;
 				else plazaStyles.value = [...plazaStyles.value, ...next];
@@ -531,18 +548,19 @@ async function loadPlaza(reset = true) {
 					m.set(u.id, { isMine: u.isMine, subscribed: u.subscribed });
 				}
 				usableById.value = m;
-				os.toast('推荐排序加载失败，已自动切换为最新排序结果。');
+				os.toast(i18n.ts._agents.recommendedSortFailedFallback);
 				return;
 			} catch {
 				// fallthrough
 			}
 		}
+		if (seq !== stylesSeq) return;
 		if (reset) plazaStyles.value = [];
 		usableById.value = new Map();
 		canLoadMoreStyles.value = false;
 		os.alert({ type: 'error', text: formatApiError(err) });
 	} finally {
-		loadingPlaza.value = false;
+		if (seq === stylesSeq) loadingPlaza.value = false;
 	}
 }
 
@@ -603,20 +621,28 @@ watch(sortStyles, () => {
 });
 
 async function subscribe(styleId: string) {
+	if (styleBusy.has(styleId)) return;
+	styleBusy.add(styleId);
 	try {
 		await misskeyApi('agents/styles/subscribe', { styleId });
 		await loadPlaza();
 	} catch (e) {
 		os.alert({ type: 'error', text: formatApiError(e) });
+	} finally {
+		styleBusy.delete(styleId);
 	}
 }
 
 async function unsubscribe(styleId: string) {
+	if (styleBusy.has(styleId)) return;
+	styleBusy.add(styleId);
 	try {
 		await misskeyApi('agents/styles/unsubscribe', { styleId });
 		await loadPlaza();
 	} catch (e) {
 		os.alert({ type: 'error', text: formatApiError(e) });
+	} finally {
+		styleBusy.delete(styleId);
 	}
 }
 

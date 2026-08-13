@@ -161,6 +161,10 @@ export interface Locale extends ILocale {
      */
     "save": string;
     /**
+     * 保存中…
+     */
+    "saving": string;
+    /**
      * ユーザー
      */
     "users": string;
@@ -284,6 +288,10 @@ export interface Locale extends ILocale {
      * もっと見る
      */
     "loadMore": string;
+    /**
+     * 読み込みに失敗しました。クリックして再試行
+     */
+    "loadMoreFailed": string;
     /**
      * もっと見る
      */
@@ -1193,6 +1201,22 @@ export interface Locale extends ILocale {
      */
     "upload": string;
     /**
+     * アップロードに失敗しました
+     */
+    "uploadFailed": string;
+    /**
+     * アップロードをキャンセルしました
+     */
+    "uploadAborted": string;
+    /**
+     * {count} 個のファイルのアップロードに失敗しました。削除してもう一度お試しください。
+     */
+    "uploadFailedAndCannotPost": ParameterizedString<"count">;
+    /**
+     * {count} 個のファイルのアップロードがキャンセルされました。削除してもう一度お試しください。
+     */
+    "uploadCancelledAndCannotPost": ParameterizedString<"count">;
+    /**
      * オリジナル画像を保持
      */
     "keepOriginalUploading": string;
@@ -1948,6 +1972,10 @@ export interface Locale extends ILocale {
      * パスワードをリセット
      */
     "resetPassword": string;
+    /**
+     * パスワードが変更されました
+     */
+    "passwordChanged": string;
     /**
      * 新しいパスワードは「{password}」です
      */
@@ -6404,6 +6432,18 @@ export interface Locale extends ILocale {
          */
         "youAreNotAMemberOfThisRoomButInvited": string;
         /**
+         * あなたはこのグループの参加者ではありません。参加するとメッセージを閲覧・送信できます。
+         */
+        "youAreNotAMemberOfThisRoom": string;
+        /**
+         * このグループに参加
+         */
+        "joinThisRoom": string;
+        /**
+         * このユーザーからブロックされているため、メッセージを送信できません。
+         */
+        "youHaveBeenBlockedByThisUser": string;
+        /**
          * 招待を承認しますか？
          */
         "doYouAcceptInvitation": string;
@@ -8858,6 +8898,10 @@ export interface Locale extends ILocale {
          * 入力されたメールアドレス({email})宛に確認のメールが送信されました。メールに記載されたリンクにアクセスすると、アカウントの作成が完了します。メールに記載されているリンクの有効期限は30分です。
          */
         "emailSent": ParameterizedString<"email">;
+        /**
+         * アカウントは作成されましたが、ネットワークエラーのため自動ログインに失敗しました。手動でログインしてください。
+         */
+        "signedUpButAutoLoginFailed": string;
     };
     "_accountDelete": {
         /**
@@ -14705,6 +14749,420 @@ export interface Locale extends ILocale {
          * 評価
          */
         "plazaRatingTitle": string;
+        /**
+         * おすすめ順の読み込みに失敗しました。最新順の結果に自動的に切り替えました。
+         */
+        "recommendedSortFailedFallback": string;
+        /**
+         * チェックイン成功
+         */
+        "checkinPopupTitle": string;
+        /**
+         * 連続 {days} 日チェックイン
+         */
+        "checkinPopupStreak": ParameterizedString<"days">;
+        /**
+         * クレジット
+         */
+        "checkinPopupRewardUnit": string;
+        /**
+         * 今日の運
+         */
+        "checkinPopupTodayLuck": string;
+        /**
+         * 連続チェックイン
+         */
+        "checkinPopupStreakFactor": string;
+        /**
+         * ロールボーナス
+         */
+        "checkinPopupRoleBonus": string;
+        /**
+         * 祝日ボーナス
+         */
+        "checkinPopupHolidayBonus": string;
+        /**
+         * 受け取る
+         */
+        "checkinPopupClaim": string;
+        /**
+         * 外部審査に不合格
+         */
+        "auditFeedbackTitle": string;
+        /**
+         * このコンテンツは表示・実行できません
+         */
+        "auditFeedbackTitleDefault": string;
+        /**
+         * 安全外部審査により、プラットフォームのルールに違反する可能性があるコンテンツが検出されました。
+         */
+        "auditFeedbackGuideDefault": string;
+        /**
+         * 問題カテゴリ
+         */
+        "auditFeedbackCategory": string;
+        /**
+         * 外部審査フィードバック
+         */
+        "auditFeedbackReason": string;
+        /**
+         * ブロックコード
+         */
+        "auditFeedbackBlockCode": string;
+        /**
+         * 不明
+         */
+        "auditFeedbackUnknown": string;
+        /**
+         * 上記のリスクコンテンツを削除または調整して、もう一度お試しください。
+         */
+        "auditFeedbackNotice": string;
+        /**
+         * 編集に戻る
+         */
+        "auditFeedbackBackToEdit": string;
+        /**
+         * ユーザー {name} を処理
+         */
+        "quickActionTitle": ParameterizedString<"name">;
+        /**
+         * 違反カテゴリ
+         */
+        "quickActionCategory": string;
+        /**
+         * 具体的な違反内容
+         */
+        "quickActionCustomCategory": string;
+        /**
+         * セッションを禁止（{selected} / {total} 件選択）
+         */
+        "quickActionSelectSessions": ParameterizedString<"selected" | "total">;
+        /**
+         * セッション禁止理由（ユーザー向け）
+         */
+        "quickActionSessionBanReason": string;
+        /**
+         * ユーザーアカウントを禁止
+         */
+        "quickActionBanUser": string;
+        /**
+         * ユーザー停止理由（ユーザー向け）
+         */
+        "quickActionUserSuspendReason": string;
+        /**
+         * モデレーションノート
+         */
+        "quickActionModerationNote": string;
+        /**
+         * 形式：{format}
+         */
+        "quickActionNoteFormat": ParameterizedString<"format">;
+        /**
+         * 空欄なら自動生成：{value}
+         */
+        "quickActionAutoGenerate": ParameterizedString<"value">;
+        /**
+         * キャンセル
+         */
+        "quickActionCancel": string;
+        /**
+         * 処理を確定
+         */
+        "quickActionSubmit": string;
+        /**
+         * 処理中…
+         */
+        "quickActionProcessing": string;
+        /**
+         * セッション禁止
+         */
+        "quickActionSessionOnly": string;
+        /**
+         * 永久停止
+         */
+        "quickActionPermanent": string;
+        /**
+         * {hours}時間禁止
+         */
+        "quickActionSuspendHours": ParameterizedString<"hours">;
+        /**
+         * 性的コンテンツ
+         */
+        "quickActionCatPorn": string;
+        /**
+         * 暴力的コンテンツ
+         */
+        "quickActionCatViolence": string;
+        /**
+         * ヘイトスピーチ
+         */
+        "quickActionCatHate": string;
+        /**
+         * プロンプトインジェクション
+         */
+        "quickActionCatPromptInjection": string;
+        /**
+         * 違法コンテンツ
+         */
+        "quickActionCatIllegal": string;
+        /**
+         * その他の違反
+         */
+        "quickActionCatOther": string;
+        /**
+         * 禁止しない
+         */
+        "quickActionNoBan": string;
+        /**
+         * 1日
+         */
+        "quickActionDay": string;
+        /**
+         * 1週間
+         */
+        "quickActionWeek": string;
+        /**
+         * 1ヶ月
+         */
+        "quickActionMonth": string;
+        /**
+         * 永久
+         */
+        "quickActionForever": string;
+        /**
+         * 禁止済み
+         */
+        "quickActionSessionBanned": string;
+        /**
+         * ドライブの空き容量が不足しているため、生成画像を保存できません。空き容量を確保してもう一度お試しください。
+         */
+        "agentImageErrorNoSpace": string;
+        /**
+         * 生成画像がアカウントの最大ファイルサイズを超えているため、ドライブに保存できません。
+         */
+        "agentImageErrorMaxSize": string;
+        /**
+         * 生成画像のファイルタイプはアカウントで許可されたアップロード範囲にありません。
+         */
+        "agentImageErrorUnallowedType": string;
+        /**
+         * エージェントのクレジットが不足しているため、画像を生成できません。
+         */
+        "agentImageErrorInsufficientCredit": string;
+        /**
+         * 有効
+         */
+        "adminEnabled": string;
+        /**
+         * 無効
+         */
+        "adminDisabled": string;
+        /**
+         * 未有効
+         */
+        "adminNotEnabled": string;
+        /**
+         * トークナイザーの語彙ファイルがありません。互換の近似カウント（≈）にフォールバックします。
+         */
+        "adminTokenizerMissing": string;
+        /**
+         * 語彙ファイルを data/tokenizers/ ディレクトリ（開発環境）に配置するか、Docker ビルド時に自動ダウンロードしてください。
+         */
+        "adminTokenizerMissingHint": string;
+        /**
+         * モデル管理
+         */
+        "adminModelsTab": string;
+        /**
+         * クレジットとコード
+         */
+        "adminCreditsTab": string;
+        /**
+         * リクエストレポート
+         */
+        "adminReportsTab": string;
+        /**
+         * 外部審査
+         */
+        "adminExternalAuditTab": string;
+        /**
+         * Aliya Web レコメンド
+         */
+        "adminAliyaRecommend": string;
+        /**
+         * 設定すると、対応するキャラクターのセッションに Aliya Web への遷移レコメンドが表示されます
+         */
+        "adminAliyaRecommendCaption": string;
+        /**
+         * Aliya エージェントキャラクター ID
+         */
+        "adminAliyaCharacterId": string;
+        /**
+         * このキャラクター ID を入力すると、ユーザーがキャラクターのセッションを開いたときに Aliya Web のレコメンドバナーと常設セクションが表示されます。空欄にするとこの機能は無効になります
+         */
+        "adminAliyaCharacterIdCaption": string;
+        /**
+         * Aliya Web アドレス
+         */
+        "adminAliyaWebUrl": string;
+        /**
+         * バナーとセクション内の「Aliya Web へ移動」リンクの遷移先 URL
+         */
+        "adminAliyaWebUrlCaption": string;
+        /**
+         * 文字数/トークン比率
+         */
+        "adminCharsPerToken": string;
+        /**
+         * 正確なエンコーダーを使用しない場合の推定比率
+         */
+        "adminCharsPerTokenCaption": string;
+        /**
+         * 旧版サービスがクレジット移行 API を呼び出す際の認証に使用します。キーは生成後に一度だけ表示されます。大切に保管してください。再生成すると旧キーはすぐに無効になります。
+         */
+        "adminMigrationKeyHint": string;
+        /**
+         * 生成済み
+         */
+        "adminMigrationKeyGenerated": string;
+        /**
+         * 未生成
+         */
+        "adminMigrationKeyNotGenerated": string;
+        /**
+         * 再生成
+         */
+        "adminMigrationKeyRegenerate": string;
+        /**
+         * キーを生成
+         */
+        "adminMigrationKeyGenerate": string;
+        /**
+         * {name}：{label}の単価は 0〜1000000 の数値である必要があります
+         */
+        "adminMillionTokenPriceInvalid": ParameterizedString<"name" | "label">;
+        /**
+         * アーティストプリセットには ID と名前が必要です。
+         */
+        "adminArtistPresetInvalid": string;
+        /**
+         * アーティストプリセット ID が重複しています：{id}
+         */
+        "adminArtistPresetDuplicate": ParameterizedString<"id">;
+        /**
+         * 外部審査モデルにはモデル名、リクエストエンドポイント、API キー、上流モデル名が必要です。
+         */
+        "adminExternalAuditInvalid": string;
+        /**
+         * 外部審査モデル ID が重複しています：{id}
+         */
+        "adminExternalAuditDuplicate": ParameterizedString<"id">;
+        /**
+         * 今日のチェックインを取り消し
+         */
+        "adminCheckinRevokeTitle": string;
+        /**
+         * 今日の全ユーザーのチェックイン記録を削除し、付与済みクレジットを回収します（消費ログは保持）。続行しますか？
+         */
+        "adminCheckinRevokeText": string;
+        /**
+         * {count} 件のチェックインを取り消し、{amount} クレジットを回収しました
+         */
+        "adminCheckinRevoked": ParameterizedString<"count" | "amount">;
+        /**
+         * 報酬を発行
+         */
+        "adminIssueRewardTitle": string;
+        /**
+         * {user} に {amount} クレジットを発行しますか？
+         */
+        "adminIssueRewardConfirm": ParameterizedString<"user" | "amount">;
+        /**
+         * {user} に {amount} クレジットを発行しました
+         */
+        "adminRewardIssued": ParameterizedString<"user" | "amount">;
+        /**
+         * 発行
+         */
+        "adminIssueRewardBtn": string;
+        /**
+         * クレジット数
+         */
+        "adminRewardAmount": string;
+        /**
+         * 報酬理由（任意）
+         */
+        "adminRewardReason": string;
+        /**
+         * システム認証キーを再生成
+         */
+        "adminMigrationKeyRegenTitle": string;
+        /**
+         * システム認証キーを生成
+         */
+        "adminMigrationKeyGenTitle": string;
+        /**
+         * 再生成すると旧キーはすぐに無効になり、旧版サービスは移行に旧キーを使用できなくなります。続行しますか？
+         */
+        "adminMigrationKeyRegenText": string;
+        /**
+         * キーは生成後に一度だけ表示されます。大切に保管してください。続行しますか？
+         */
+        "adminMigrationKeyGenText": string;
+        /**
+         * システム認証キーを生成しました
+         */
+        "adminMigrationKeyGeneratedTitle": string;
+        /**
+         * すぐにコピーして保存してください。閉じると再度表示できません：
+         *
+         * {key}
+         */
+        "adminMigrationKeyGeneratedText": ParameterizedString<"key">;
+        /**
+         * キーをクリップボードにコピーしました
+         */
+        "adminMigrationKeyCopied": string;
+        /**
+         * 利用可能
+         */
+        "adminRedeemAvailable": string;
+        /**
+         * 交換済み
+         */
+        "adminRedeemRedeemed": string;
+        /**
+         * 期限切れ
+         */
+        "adminRedeemExpired": string;
+        /**
+         * 取り消し済み
+         */
+        "adminRedeemRevoked": string;
+        /**
+         * 自動無効化
+         */
+        "adminAuditAutoDisabled": string;
+        /**
+         * 停止中
+         */
+        "adminAuditDisabled": string;
+        /**
+         * 有効
+         */
+        "adminAuditEnabled": string;
+        /**
+         * 残高を更新しました
+         */
+        "adminImageTokensRefreshed": string;
+        /**
+         * 画像モデルの設定が無効です。モデル ID、名前、プロバイダー、API パラメータを確認してください。
+         */
+        "adminImageModelInvalid": string;
+        /**
+         * 画像生成パラメータが無効です。数値範囲を確認してください（ステップ 1-80、Scale 0-30、CFG Rescale 0-1）。
+         */
+        "adminImageParamsInvalid": string;
         /**
          * まだ評価がありません
          */

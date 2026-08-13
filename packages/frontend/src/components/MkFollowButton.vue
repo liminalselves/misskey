@@ -34,13 +34,39 @@ SPDX-License-Identifier: AGPL-3.0-only
 </button>
 </template>
 
+<script lang="ts">
+import * as MisskeyNs from 'misskey-js';
+import { useStream } from '@/stream.js';
+
+// 模块级共享（跨组件实例）：时间线上每个关注按钮都创建独立 channel 会浪费大量
+// WebSocket 连接，因此共享同一个 main channel，用引用计数管理生命周期
+let sharedConnection: MisskeyNs.IChannelConnection<MisskeyNs.Channels['main']> | null = null;
+let sharedRefCount = 0;
+
+function acquireMainChannel(): MisskeyNs.IChannelConnection<MisskeyNs.Channels['main']> {
+	if (sharedConnection == null) {
+		sharedConnection = useStream().useChannel('main');
+	}
+	sharedRefCount++;
+	return sharedConnection;
+}
+
+function releaseMainChannel(): void {
+	sharedRefCount--;
+	if (sharedRefCount <= 0) {
+		sharedConnection?.dispose();
+		sharedConnection = null;
+		sharedRefCount = 0;
+	}
+}
+</script>
+
 <script lang="ts" setup>
 import { onBeforeUnmount, onMounted, ref } from 'vue';
 import * as Misskey from 'misskey-js';
 import { host } from '@@/js/config.js';
 import * as os from '@/os.js';
 import { misskeyApi } from '@/utility/misskey-api.js';
-import { useStream } from '@/stream.js';
 import { i18n } from '@/i18n.js';
 import { claimAchievement } from '@/utility/achievements.js';
 import { pleaseLogin } from '@/utility/please-login.js';
@@ -64,7 +90,6 @@ const emit = defineEmits<{
 const isFollowing = ref(props.user.isFollowing);
 const hasPendingFollowRequestFromYou = ref(props.user.hasPendingFollowRequestFromYou);
 const wait = ref(false);
-const connection = useStream().useChannel('main');
 
 if (props.user.isFollowing == null && $i) {
 	misskeyApi('users/show', {
@@ -108,6 +133,8 @@ async function onClick() {
 			await misskeyApi('following/delete', {
 				userId: props.user.id,
 			});
+			isFollowing.value = false;
+			hasPendingFollowRequestFromYou.value = false;
 		} else if (hasPendingFollowRequestFromYou.value) {
 			const { canceled } = await os.confirm({
 				type: 'question',
@@ -144,7 +171,13 @@ async function onClick() {
 				...props.user,
 				withReplies: prefer.s.defaultFollowWithReplies,
 			});
-			hasPendingFollowRequestFromYou.value = true;
+			// 非锁定用户关注后立即生效；锁定用户进入待批准状态。
+			// 不依赖 WebSocket 事件同步，避免 WS 断开时按钮一直显示“处理中”
+			if (props.user.isLocked) {
+				hasPendingFollowRequestFromYou.value = true;
+			} else {
+				isFollowing.value = true;
+			}
 
 			if ($i == null) {
 				wait.value = false;
@@ -173,13 +206,21 @@ async function onClick() {
 	}
 }
 
+let connection: Misskey.IChannelConnection<Misskey.Channels['main']> | null = null;
+
 onMounted(() => {
+	connection = acquireMainChannel();
 	connection.on('follow', onFollowChange);
 	connection.on('unfollow', onFollowChange);
 });
 
 onBeforeUnmount(() => {
-	connection.dispose();
+	if (connection != null) {
+		connection.off('follow', onFollowChange);
+		connection.off('unfollow', onFollowChange);
+		releaseMainChannel();
+		connection = null;
+	}
 });
 </script>
 

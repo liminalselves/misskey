@@ -36,9 +36,16 @@ export function useForm<T extends Record<string, any>>(initialState: T, save: (n
 	}, { deep: true });
 
 	async function _save() {
-		await save(unwrapReactive(currentState));
-		for (const key in currentState) {
-			previousState[key] = copy(currentState[key]);
+		try {
+			await save(unwrapReactive(currentState));
+			for (const key in currentState) {
+				previousState[key] = copy(currentState[key]);
+			}
+			return true;
+		} catch (err) {
+			// 校验或网络错误：保持 modified 状态以便重试，具体错误由 save 回调或调用方提示
+			console.error('Failed to save form', err);
+			return false;
 		}
 	}
 
