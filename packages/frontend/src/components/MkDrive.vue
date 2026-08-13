@@ -188,7 +188,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 	<template #footer>
 		<div v-if="isEditMode" :class="$style.footer">
-			<MkButton primary rounded @click="moveFilesBulk()"><i class="ti ti-folder-symlink"></i> {{ i18n.ts.move }}...</MkButton>
+			<MkButton primary rounded :disabled="selectedFiles.length === 0" @click="moveFilesBulk()"><i class="ti ti-folder-symlink"></i> {{ i18n.ts.move }}...</MkButton>
+			<MkButton danger rounded :disabled="selectedFiles.length === 0" @click="deleteFilesBulk()"><i class="ti ti-trash"></i> {{ i18n.ts.delete }}</MkButton>
 		</div>
 	</template>
 </MkStickyContainer>
@@ -718,6 +719,40 @@ async function moveFilesBulk() {
 	void fetchDriveStats();
 }
 
+async function deleteFilesBulk() {
+	if (selectedFiles.value.length === 0) return;
+
+	const { canceled } = await os.confirm({
+		type: 'warning',
+		title: i18n.ts.delete,
+		text: `确定要删除选中的 ${selectedFiles.value.length} 个文件吗？此操作不可撤销`,
+	});
+	if (canceled) return;
+
+	// 逐一删除，已成功删除的文件从列表中移除，失败时提示并保留未删除的选中状态
+	const deletedFiles: Misskey.entities.DriveFile[] = [];
+	for (const file of [...selectedFiles.value]) {
+		try {
+			await misskeyApi('drive/files/delete', {
+				fileId: file.id,
+			});
+			deletedFiles.push(file);
+		} catch (err) {
+			os.alert({
+				type: 'error',
+				text: i18n.ts.somethingHappened,
+			});
+			break;
+		}
+	}
+
+	if (deletedFiles.length > 0) {
+		globalEvents.emit('driveFilesDeleted', deletedFiles);
+		selectedFiles.value = selectedFiles.value.filter(f => !deletedFiles.some(x => x.id === f.id));
+		void fetchDriveStats();
+	}
+}
+
 function goRoot() {
 	// 既にrootにいるなら何もしない
 	if (folder.value == null) return;
@@ -1066,6 +1101,9 @@ onBeforeUnmount(() => {
 }
 
 .footer {
+	display: flex;
+	align-items: center;
+	gap: 8px;
 	padding: 8px 16px;
 	font-size: 90%;
 	-webkit-backdrop-filter: var(--MI-blur, blur(8px));
