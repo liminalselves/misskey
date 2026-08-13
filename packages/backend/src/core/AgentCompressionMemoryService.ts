@@ -71,6 +71,7 @@ export type CompressionScanRow = {
 	imageRecognitionDescription?: string | null;
 	proactiveScheduleControlRaw?: string | null;
 	proactiveScheduleControlError?: unknown;
+	timeTrusted?: boolean;
 };
 
 @Injectable()
@@ -454,7 +455,7 @@ export class AgentCompressionMemoryService {
 			where: { sessionId: session.id },
 			order: { createdAt: 'DESC', id: 'DESC' },
 			take: AGENT_SEND_PATH_SCAN_LIMIT,
-			select: ['id', 'role', 'content', 'createdAt', 'imageFileId', 'imageRecognitionStatus', 'imageRecognitionDescription', 'proactiveScheduleControlRaw', 'proactiveScheduleControlError'],
+			select: ['id', 'role', 'content', 'createdAt', 'imageFileId', 'imageRecognitionStatus', 'imageRecognitionDescription', 'proactiveScheduleControlRaw', 'proactiveScheduleControlError', 'timeTrusted'],
 		});
 		const { dMap, hSend, t1, t2 } = precomputedSidecar ?? await this.computeSidecarTokenD({ session, character, style, instanceMeta, rows });
 		const gathered = await this.gatherCompressionCandidates({ sessionId: session.id, rows, dMap, hSend, t1, t2 });
@@ -481,6 +482,7 @@ export class AgentCompressionMemoryService {
 		exactTokenCounter?: (text: string) => Promise<number | null> | number | null,
 		charsPerToken?: number,
 		historyBudgetTokens?: number,
+		timeAwarenessEnabled?: boolean,
 	): Promise<{
 		historyBudgetTokens: number;
 		t1Tokens: number;
@@ -506,10 +508,10 @@ export class AgentCompressionMemoryService {
 			where: { sessionId },
 			order: { createdAt: 'DESC', id: 'DESC' },
 			take: AGENT_OVERVIEW_SCAN_LIMIT,
-			select: ['id', 'role', 'content', 'createdAt', 'imageFileId', 'imageRecognitionStatus', 'imageRecognitionDescription', 'proactiveScheduleControlRaw', 'proactiveScheduleControlError'],
+			select: ['id', 'role', 'content', 'createdAt', 'imageFileId', 'imageRecognitionStatus', 'imageRecognitionDescription', 'proactiveScheduleControlRaw', 'proactiveScheduleControlError', 'timeTrusted'],
 		});
 		const rowsD = filterRowsForChatHistoryD(rows);
-		const formatFn = (m: (typeof rowsD)[number]): string => this.agentService.formatMessageForLlmHistory(m as Parameters<AgentService['formatMessageForLlmHistory']>[0]);
+		const formatFn = (m: (typeof rowsD)[number]): string => this.agentService.formatMessageForLlmHistory(m as Parameters<AgentService['formatMessageForLlmHistory']>[0], { timeAwarenessEnabled: timeAwarenessEnabled === true });
 		const cpt = charsPerToken ?? AGENT_LLM_APPROX_CHARS_PER_TOKEN;
 		const budgetTokens = historyBudgetTokens ?? this.agentTokenService.estimateTokens(historyBudget, cpt);
 		// 统一委托 AgentTokenService：D 累计（token 口径，分块并发 + 超预算提前终止）+ 窗口/区带划分。
@@ -857,7 +859,7 @@ export class AgentCompressionMemoryService {
 		const counter = this.agentTokenService.makeCounter(tokenConfig);
 		const rowsD = filterRowsForChatHistoryD(params.rows);
 		const weights = await this.agentTokenService.computeMessageWeights(rowsD, {
-			formatFn: (m) => this.agentService.formatMessageForLlmHistory(m as unknown as Parameters<AgentService['formatMessageForLlmHistory']>[0]),
+			formatFn: (m) => this.agentService.formatMessageForLlmHistory(m as unknown as Parameters<AgentService['formatMessageForLlmHistory']>[0], { timeAwarenessEnabled: params.session.timeAwarenessEnabled === true }),
 			counter,
 			charsPerToken: budgets.charsPerToken,
 			budgetForExact: counter ? hSend : undefined,
@@ -884,7 +886,7 @@ export class AgentCompressionMemoryService {
 			where: { sessionId: session.id },
 			order: { createdAt: 'DESC', id: 'DESC' },
 			take: AGENT_SEND_PATH_SCAN_LIMIT,
-			select: ['id', 'role', 'content', 'createdAt', 'imageFileId', 'imageRecognitionStatus', 'imageRecognitionDescription', 'proactiveScheduleControlRaw', 'proactiveScheduleControlError'],
+			select: ['id', 'role', 'content', 'createdAt', 'imageFileId', 'imageRecognitionStatus', 'imageRecognitionDescription', 'proactiveScheduleControlRaw', 'proactiveScheduleControlError', 'timeTrusted'],
 		});
 		const { dMap, hSend, t1, t2 } = precomputedSidecar ?? await this.computeSidecarTokenD({ session, character, style, instanceMeta, rows });
 		// 仅在「排队较后」(t2,hSend]（预备下段）出现未压 raw 时触发 LLM；未压若只在「排队较前」(t1,t2]（上段）则仅 reconcile。

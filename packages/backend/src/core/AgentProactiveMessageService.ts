@@ -231,7 +231,8 @@ export class AgentProactiveMessageService {
 			if (this.agentImageService.resolveImageModel(instance, session.agentImageModelId) != null) {
 				system += `\n\n<agent_image_generation_protocol>\n${AGENT_IMAGE_WORLD_PROMPT}\n</agent_image_generation_protocol>`;
 			}
-			const { messages } = await this.agentService.loadRecentMessagesForContextWithMeta(session.id, 48_000);
+			// 主动消息仅在对 timeAwarenessEnabled 已前置校验（processScheduled / armRandomAfterVisibleAssistant）的会话触发，历史一并注入发送时间
+			const { messages } = await this.agentService.loadRecentMessagesForContextWithMeta(session.id, 48_000, 500, { timeAwarenessEnabled: true });
 			const regexRules = this.agentService.normalizeRegexRules(character.regexRules);
 			const history = messages
 				.filter(message => message.role === 'user' || message.role === 'assistant')

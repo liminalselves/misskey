@@ -126,7 +126,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				session.id,
 				historyBudgetChars,
 				AGENT_OVERVIEW_SCAN_LIMIT,
-				{ exactTokenCounter: counter, tokenBudget: historyBudgetTokens, charsPerToken },
+				{ exactTokenCounter: counter, tokenBudget: historyBudgetTokens, charsPerToken, timeAwarenessEnabled: session.timeAwarenessEnabled === true },
 			);
 
 			return {

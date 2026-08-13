@@ -23,6 +23,7 @@ import {
 	AGENT_LLM_MEMORY_XML_OPEN,
 	escapeAgentXmlText,
 	normalizeAgentLlmTurns,
+	stripHistoricTimePrefix,
 } from '@/core/AgentService.js';
 import { AgentDashscopeMemoryService } from '@/core/AgentDashscopeMemoryService.js';
 import { AgentModelUsageService } from '@/core/AgentModelUsageService.js';
@@ -391,8 +392,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				const memActive = this.agentCompressionMemoryService.isAliyunPathActive(longMemProvider, session, instanceMeta);
 				const maxMemChars = Math.max(200, Math.min(50_000, session.agentLongMemoryInjectMaxChars || instanceMeta.agentMem0InjectMaxChars));
 
-				const { messages: history, scannedRows: historyScannedRows, dMap: historyDMap } = await this.agentService.loadRecentMessagesForContextWithMeta(session.id, historyBudget, AGENT_OVERVIEW_SCAN_LIMIT, { exactTokenCounter: sendExactCounter, tokenBudget: historyBudgetTokens, charsPerToken });
-			const historyForApi = history.filter(m => (m.role === 'user' || m.role === 'assistant') && m.id !== userMsg!.id);
+				const { messages: history, scannedRows: historyScannedRows, dMap: historyDMap } = await this.agentService.loadRecentMessagesForContextWithMeta(session.id, historyBudget, AGENT_OVERVIEW_SCAN_LIMIT, { exactTokenCounter: sendExactCounter, tokenBudget: historyBudgetTokens, charsPerToken, timeAwarenessEnabled: session.timeAwarenessEnabled === true });
+				const historyForApi = history.filter(m => (m.role === 'user' || m.role === 'assistant') && m.id !== userMsg!.id);
 				const regexRules = this.agentService.normalizeRegexRules(character.regexRules);
 				const filterForAi = (text: string, role: 'user' | 'assistant') => this.agentService.applyRegexRules(text, role, 'aiInvisible', regexRules);
 				const filteredUserText = filterForAi(userText, 'user');
@@ -423,10 +424,13 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				}
 				pairs = normalizeAgentLlmTurns(pairs);
 
+				// 记忆检索/写入复用 pairs 但剥离历史发送时间 XML（与现有 runtime-directive「不进记忆」原则一致）
+				const memPairs: { role: 'user' | 'assistant'; content: string }[] = pairs.map(p => ({ role: p.role, content: stripHistoricTimePrefix(p.content) }));
+
 				let memoryBlock = '';
 				if (memActive) {
 					const topK = Math.max(1, Math.min(100, session.agentLongMemoryTopK || instanceMeta.agentMem0TopK));
-					const searchMsgs: { role: 'user' | 'assistant'; content: string }[] = [...pairs, { role: 'user', content: aiUserText }];
+					const searchMsgs: { role: 'user' | 'assistant'; content: string }[] = [...memPairs, { role: 'user', content: aiUserText }];
 					const bailianUserId = this.agentDashscopeMemoryService.bailianUserId(me.id, session.id);
 					const retrieved = await this.agentDashscopeMemoryService.searchMemory({
 						meta: instanceMeta,
@@ -478,6 +482,9 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				//   压缩侧车（pairs）、UI 时间线均见原始用户文本，不受 directive 污染；
 				// - directive 长度已通过 `buildSendPathBudgets` 预扣到 historyBudget，对应 system 仅保留
 				//   `<dialogue_style_protocol>` 安全网说明，与 `AgentService.buildLatestUserDirectiveBlock` 一一呼应。
+				// 历史发送时间 `<time>` 块随 formatMessageForLlmHistory 注入到发往 LLM 的 user 消息（仅
+				// timeAwarenessEnabled 且消息时间可信时；导入消息 timeTrusted=false 不注入），长度随滑窗 D 自动计入预算；
+				// 长期记忆检索 / 写入复用 pairs 时经 stripHistoricTimePrefix 剥离时间块，保持「不进记忆」隔离。
 				const proactiveUserText = await this.agentProactiveScheduleService.prependScheduleContext(aiUserText, session);
 				const wrappedUserText = this.agentService.wrapLatestUserTextWithStyleDirective(
 					this.agentService.prependCurrentBeijingTime(proactiveUserText, session.timeAwarenessEnabled === true),
@@ -619,7 +626,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 							instanceMeta.agentMem0AddMemoryMaxRounds,
 						);
 						const addMessages = this.agentDashscopeMemoryService.buildMessagesForAddMemory({
-							priorMessages: pairs,
+							priorMessages: memPairs,
 						currentUserText: userText,
 							assistantText,
 							maxRounds: addRounds,
@@ -663,7 +670,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					// 既避免侧车另查 DB 与重复分词，更修复了侧车旧实现仅扫 500 条、
 					// 在大上下文窗口（staged 区带位于 500 条之外）下永远触达不到而压缩不触发的问题。
 					const { t1Ratio, t2Ratio } = this.agentCompressionMemoryService.resolveCompressionBandRatios(instanceMeta);
-					let compressionRows: Pick<MiAgentMessage, 'id' | 'role' | 'content' | 'createdAt' | 'imageFileId' | 'imageRecognitionStatus' | 'imageRecognitionDescription' | 'proactiveScheduleControlRaw' | 'proactiveScheduleControlError'>[];
+					let compressionRows: Pick<MiAgentMessage, 'id' | 'role' | 'content' | 'createdAt' | 'imageFileId' | 'imageRecognitionStatus' | 'imageRecognitionDescription' | 'proactiveScheduleControlRaw' | 'proactiveScheduleControlError' | 'timeTrusted'>[];
 					let compressionSidecar: CompressionSidecarTokenD;
 					if (historyScannedRows && historyDMap) {
 						compressionRows = historyScannedRows;
@@ -674,7 +681,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 							where: { sessionId: session.id },
 							order: { createdAt: 'DESC', id: 'DESC' },
 							take: AGENT_OVERVIEW_SCAN_LIMIT,
-							select: ['id', 'role', 'content', 'createdAt', 'imageFileId', 'imageRecognitionStatus', 'imageRecognitionDescription', 'proactiveScheduleControlRaw', 'proactiveScheduleControlError'],
+							select: ['id', 'role', 'content', 'createdAt', 'imageFileId', 'imageRecognitionStatus', 'imageRecognitionDescription', 'proactiveScheduleControlRaw', 'proactiveScheduleControlError', 'timeTrusted'],
 						});
 						compressionSidecar = await this.agentCompressionMemoryService.computeSidecarTokenD({
 							session, character, style, instanceMeta, rows: compressionRows,

@@ -142,6 +142,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				exactCounter,
 				charsPerToken,
 				historyBudgetTokens,
+				row.timeAwarenessEnabled === true,
 			);
 			return {
 				historyBudgetTokens: hbt,

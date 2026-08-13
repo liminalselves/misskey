@@ -98,6 +98,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				statsDialogueStyleId: string | null;
 				promptTokens: null;
 				completionTokens: null;
+				timeTrusted: boolean;
 			}> = [];
 			for (const msg of ps.messages) {
 				createdAtMs += 1;
@@ -118,6 +119,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					statsDialogueStyleId: session.dialogueStyleId ?? null,
 					promptTokens: null,
 					completionTokens: null,
+					// 导入的 createdAt 为导入时刻（逐条 +1ms），并非真实发送时间：标记不可信，禁止向 LLM 注入发送时间
+					timeTrusted: false,
 				});
 			}
 

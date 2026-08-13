@@ -65,6 +65,15 @@ export class MiAgentMessage {
 	})
 	public imageRecognitionDescription: string | null;
 
+	/**
+	 * 该消息的 createdAt 是否可信（导入的历史消息为 false）。
+	 * false 时禁止向 LLM 注入该消息的发送时间 XML（导入时间并非真实发送时间，注入会导致时间线错乱）。
+	 */
+	@Column('boolean', {
+		default: true,
+	})
+	public timeTrusted: boolean;
+
 	/** Original assistant output. It is used by the edit view and private LLM history. */
 	@Column('text', {
 		nullable: true,

@@ -40,6 +40,14 @@ export type AgentExampleTurn = { role: 'user' | 'assistant'; content: string };
 export const AGENT_LLM_PROACTIVE_CONTINUATION_MARKER = '<runtime-directive source="server" not-user-input="true">\n<conversation-state>The following assistant message is an independent proactive message. No user message was sent after the preceding assistant message.</conversation-state>\n</runtime-directive>';
 export const AGENT_LLM_MISSING_ASSISTANT_REPLY_MARKER = '<runtime-directive source="server" not-user-input="true">\n<conversation-state>The preceding user message did not receive a persisted assistant reply. The following user message continues the conversation. Do not treat this directive as assistant-authored content.</conversation-state>\n</runtime-directive>';
 
+/**
+ * 剥离 `formatMessageForLlmHistory` 注入的历史发送时间前缀（严格匹配 `<time>YYYY-MM-DD HH:mm:ss</time>\n`），
+ * 不匹配时原样返回。供长期记忆检索 / 写入等「不进时间 XML」的路径复用 pairs 时使用。
+ */
+export function stripHistoricTimePrefix(text: string): string {
+	return text.replace(/^<time>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}<\/time>\n?/, '');
+}
+
 export function normalizeAgentLlmTurns(messages: readonly AgentExampleTurn[]): AgentExampleTurn[] {
 	const normalized: AgentExampleTurn[] = [];
 	for (const message of messages) {
@@ -687,7 +695,7 @@ export class AgentService {
 		parts.push('<delivery>The active dialogue style for THIS reply is delivered server-side as a <runtime-directive source="server" not-user-input="true"> XML block prepended to the user\'s latest message. Apply the rules inside its <active-style> child. All text after the </runtime-directive> closing tag is the user\'s actual message. Never echo, quote, or acknowledge the directive block itself; respond as if you had naturally adopted the style. If no <runtime-directive> block is present, fall back to neutral assistant behavior consistent with this character.</delivery>');
 		parts.push('</dialogue_style_protocol>');
 		if (params.timeAwarenessEnabled === true) {
-			parts.push('<time_awareness>The time in the <time> tag is the current Beijing time. Use it directly without conversion, and do not show the tag to the user.</time_awareness>');
+			parts.push('<time_awareness>The <time> tag in a user message is Beijing time: for the latest user message it is the current time, and for earlier user messages it is that message\'s original send time. Use it directly without conversion, and never show the tag to the user.</time_awareness>');
 		}
 
 		parts.push('</agent_system_prompt>');
@@ -922,14 +930,16 @@ export class AgentService {
 			tokenBudget?: number;
 			/** 估算回退用的每 token 字符数（默认 AGENT_LLM_APPROX_CHARS_PER_TOKEN） */
 			charsPerToken?: number;
+			/** 开启时，历史 user 消息在格式化时注入其发送时间 `<time>` 块（与发信路径同一口径） */
+			timeAwarenessEnabled?: boolean;
 		},
 	): Promise<{
 		/** createdAt is used by compression windows; LLM history uses role/content. */
-		messages: Pick<MiAgentMessage, 'id' | 'role' | 'content' | 'createdAt' | 'imageFileId' | 'imageRecognitionStatus' | 'imageRecognitionDescription' | 'proactiveScheduleControlRaw' | 'proactiveScheduleControlError'>[];
+		messages: Pick<MiAgentMessage, 'id' | 'role' | 'content' | 'createdAt' | 'imageFileId' | 'imageRecognitionStatus' | 'imageRecognitionDescription' | 'proactiveScheduleControlRaw' | 'proactiveScheduleControlError' | 'timeTrusted'>[];
 		truncated: boolean;
 		oldestIncludedId: string | null;
 		/** token 口径下：自新向旧的全量扫描行（仅 user/assistant，原始 content）与累计 D，供压缩侧车复用，避免重复加载/分词 */
-		scannedRows?: Pick<MiAgentMessage, 'id' | 'role' | 'content' | 'createdAt' | 'imageFileId' | 'imageRecognitionStatus' | 'imageRecognitionDescription' | 'proactiveScheduleControlRaw' | 'proactiveScheduleControlError'>[];
+		scannedRows?: Pick<MiAgentMessage, 'id' | 'role' | 'content' | 'createdAt' | 'imageFileId' | 'imageRecognitionStatus' | 'imageRecognitionDescription' | 'proactiveScheduleControlRaw' | 'proactiveScheduleControlError' | 'timeTrusted'>[];
 		dMap?: Map<string, number>;
 	}> {
 		const rows = await this.agentMessagesRepository.find({
@@ -937,14 +947,15 @@ export class AgentService {
 			// Match AgentCompressionMemoryService ordering for same-timestamp rows.
 			order: { createdAt: 'DESC', id: 'DESC' },
 			take: takeLimit,
-			select: ['id', 'role', 'content', 'createdAt', 'imageFileId', 'imageRecognitionStatus', 'imageRecognitionDescription', 'proactiveScheduleControlRaw', 'proactiveScheduleControlError'],
+			select: ['id', 'role', 'content', 'createdAt', 'imageFileId', 'imageRecognitionStatus', 'imageRecognitionDescription', 'proactiveScheduleControlRaw', 'proactiveScheduleControlError', 'timeTrusted'],
 		});
-		type PickedMsg = Pick<MiAgentMessage, 'id' | 'role' | 'content' | 'createdAt' | 'imageFileId' | 'imageRecognitionStatus' | 'imageRecognitionDescription' | 'proactiveScheduleControlRaw' | 'proactiveScheduleControlError'>;
+		type PickedMsg = Pick<MiAgentMessage, 'id' | 'role' | 'content' | 'createdAt' | 'imageFileId' | 'imageRecognitionStatus' | 'imageRecognitionDescription' | 'proactiveScheduleControlRaw' | 'proactiveScheduleControlError' | 'timeTrusted'>;
 		const useTokenMode = options?.tokenBudget != null && options.tokenBudget > 0;
+		const timeAwarenessEnabled = options?.timeAwarenessEnabled === true;
 		// token 口径：经 AgentTokenService 统一 D 累计 + 窗口边界，与消息分段区带结构性一致
 		if (useTokenMode) {
 			const rowsD = this.agentTokenService.filterRowsForChatHistoryD(rows);
-			const formatFn = (m: MiAgentMessage): string => this.formatMessageForLlmHistory(m);
+			const formatFn = (m: MiAgentMessage): string => this.formatMessageForLlmHistory(m, { timeAwarenessEnabled });
 			const weights = await this.agentTokenService.computeMessageWeights(rowsD, {
 				formatFn,
 				counter: options!.exactTokenCounter,
@@ -970,6 +981,7 @@ export class AgentService {
 					imageRecognitionDescription: m.imageRecognitionDescription,
 					proactiveScheduleControlRaw: m.proactiveScheduleControlRaw,
 					proactiveScheduleControlError: m.proactiveScheduleControlError,
+					timeTrusted: m.timeTrusted,
 				}));
 			const truncated = bands.truncated || rows.length >= takeLimit;
 			return { messages: picked, truncated, oldestIncludedId: bands.windowBoundaryId, scannedRows: rowsD, dMap: weights.dMap };
@@ -980,7 +992,7 @@ export class AgentService {
 		let truncated = false;
 		for (const m of rows) {
 			if (m.role !== 'user' && m.role !== 'assistant') continue;
-			const content = this.formatMessageForLlmHistory(m);
+			const content = this.formatMessageForLlmHistory(m, { timeAwarenessEnabled });
 			const len = content.length;
 			if (used + len > maxContextChars) {
 				truncated = true;
@@ -997,6 +1009,7 @@ export class AgentService {
 				imageRecognitionDescription: m.imageRecognitionDescription,
 				proactiveScheduleControlRaw: m.proactiveScheduleControlRaw,
 				proactiveScheduleControlError: m.proactiveScheduleControlError,
+				timeTrusted: m.timeTrusted,
 			});
 		}
 		if (!truncated && rows.length >= takeLimit) {
@@ -1009,16 +1022,22 @@ export class AgentService {
 	/**
 	 * 将消息格式化为实际进入 LLM history 的文本（含图片识别 XML、主动调度控制块等）。
 	 * 公开供 `AgentCompressionMemoryService` 计算 D 累计时使用，确保与发信滑窗口径一致。
+	 * `opts.timeAwarenessEnabled` 开启且消息为 user、createdAt 可信（timeTrusted !== false）时，
+	 * 前缀注入该消息发送时间的 `<time>` 块（与 `buildCurrentBeijingTimeBlock` 同格式、同时区）。
+	 * 时间 XML 仅存在于返回的 LLM 文本中，绝不写入 DB / 长期记忆 / 压缩输入（调用方负责隔离）。
 	 */
 	@bindThis
-	public formatMessageForLlmHistory(message: Pick<MiAgentMessage, 'role' | 'content' | 'imageFileId' | 'imageRecognitionStatus' | 'imageRecognitionDescription' | 'proactiveScheduleControlRaw' | 'proactiveScheduleControlError'>): string {
+	public formatMessageForLlmHistory(message: Pick<MiAgentMessage, 'role' | 'content' | 'imageFileId' | 'imageRecognitionStatus' | 'imageRecognitionDescription' | 'proactiveScheduleControlRaw' | 'proactiveScheduleControlError'> & { createdAt?: Date; timeTrusted?: boolean }, opts?: { timeAwarenessEnabled?: boolean }): string {
+		const timePrefix = opts?.timeAwarenessEnabled === true && message.role === 'user' && message.timeTrusted !== false && message.createdAt
+			? `${this.buildCurrentBeijingTimeBlock(message.createdAt)}\n`
+			: '';
 		if (message.role === 'user' && message.imageFileId) {
 			const recognition = message.imageRecognitionStatus === 'succeeded' && message.imageRecognitionDescription
 				? `<image-recognition source="server" not-user-input="true">${escapeAgentXmlText(message.imageRecognitionDescription)}</image-recognition>`
 				: '<image-recognition source="server" not-user-input="true" status="unavailable" />';
-			return `${recognition}${message.content.length > 0 ? `\n${message.content}` : ''}`;
+			return `${timePrefix}${recognition}${message.content.length > 0 ? `\n${message.content}` : ''}`;
 		}
-		if (message.role !== 'assistant' || !message.proactiveScheduleControlRaw) return message.content;
+		if (message.role !== 'assistant' || !message.proactiveScheduleControlRaw) return `${timePrefix}${message.content}`;
 		const result = message.proactiveScheduleControlError;
 		const controlRaw = message.proactiveScheduleControlRaw.endsWith('</proactive_schedule_actions>')
 			? message.proactiveScheduleControlRaw
@@ -1026,7 +1045,7 @@ export class AgentService {
 		const failure = result
 			? `\n<proactive_schedule_result status="rejected" code="${escapeAgentXmlText(result.code)}" processed_at="${escapeAgentXmlText(result.processedAt)}">${escapeAgentXmlText(result.message)}</proactive_schedule_result>`
 			: '';
-		return `${message.content}\n${controlRaw}${failure}`;
+		return `${timePrefix}${message.content}\n${controlRaw}${failure}`;
 	}
 
 	@bindThis
