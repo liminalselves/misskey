@@ -84,7 +84,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 								</div>
 								<div v-for="m in data.byModel" :key="m.modelId ?? '__null__'" :class="[$style.modelRow, m.unlisted ? $style.modelRowUnlisted : null]">
 									<span :class="$style.modelName">
-										{{ m.modelName ?? m.modelId ?? '未知' }}
+										{{ m.modelName ?? (m.modelId?.startsWith('u') ? '自定义模型请求' : m.modelId ?? '未知') }}
 										<span v-if="m.unlisted" :class="$style.unlistedBadge">已下架</span>
 									</span>
 									<span :class="$style.success">{{ m.success }}</span>

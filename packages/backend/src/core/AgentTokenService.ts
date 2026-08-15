@@ -9,6 +9,7 @@ import { bindThis } from '@/decorators.js';
 import { getEffectiveLlmModels } from '@/misc/agent-llm-models.js';
 import { loadCustomTiktokenTokenizer, resolveTokenizerDirs, GLM_DEFAULT_PAT_STR, type CustomTokenizerFamily } from '@/misc/agent-custom-tokenizers.js';
 import type { MiMeta } from '@/models/Meta.js';
+import { AgentUserModelService, isAgentUserModelId } from '@/core/AgentUserModelService.js';
 
 // ─────────────────────────────────────────────────────────────
 // 常量（单一出处；其它模块从此 re-export）
@@ -151,6 +152,10 @@ export class AgentTokenService {
 	/** 初始化失败的模型（如不受支持的型号），避免逐条重试与日志洪泛 */
 	private geminiFailedModels = new Set<string>();
 
+	constructor(
+		private agentUserModelService?: AgentUserModelService,
+	) {}
+
 	// ── 1. 计数层 ──────────────────────────────────────────
 
 	/**
@@ -241,6 +246,24 @@ export class AgentTokenService {
 		const encoding = pick?.tokenizerEncoding;
 		const tokenMode = this.resolveTokenMode(encoding);
 		return { charsPerToken, encoding, tokenMode };
+	}
+
+	/** 用户自定义模型（BYOK）的 token 配置；非用户模型回退到官方解析 */
+	@bindThis
+	public async resolveTokenConfigForUser(instanceMeta: MiMeta, modelId: string | null, userId: string): Promise<TokenConfig> {
+		if (modelId && isAgentUserModelId(modelId)) {
+			if (!this.agentUserModelService) {
+				return this.resolveTokenConfig(instanceMeta, null);
+			}
+			const conn = await this.agentUserModelService.resolveConnection(userId, modelId);
+			const charsPerToken = Number.isFinite(conn.charsPerToken) && conn.charsPerToken >= 1
+				? conn.charsPerToken
+				: AGENT_LLM_APPROX_CHARS_PER_TOKEN;
+			const encoding = conn.tokenizerEncoding ?? undefined;
+			const tokenMode = this.resolveTokenMode(encoding);
+			return { charsPerToken, encoding, tokenMode };
+		}
+		return this.resolveTokenConfig(instanceMeta, modelId);
 	}
 
 	// ── 3. 计数器工厂 ──────────────────────────────────────

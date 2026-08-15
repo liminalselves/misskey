@@ -136,7 +136,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			if (ps.agentModelId !== undefined) {
 				const mid = ps.agentModelId === '' ? null : ps.agentModelId;
 				if (mid) {
-					this.agentService.resolveModelApiName(instanceMeta, mid);
+					await this.agentService.resolveModelApiNameForUser(instanceMeta, mid, me.id);
 				}
 				row.agentModelId = mid;
 			}
@@ -177,7 +177,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				if (ps.agentCompressionModelId === null || ps.agentCompressionModelId === '') {
 					row.agentCompressionModelId = null;
 				} else {
-					this.agentService.resolveModelApiName(instanceMeta, ps.agentCompressionModelId.trim());
+					await this.agentService.resolveModelApiNameForUser(instanceMeta, ps.agentCompressionModelId.trim(), me.id);
 					row.agentCompressionModelId = ps.agentCompressionModelId.trim();
 				}
 			}

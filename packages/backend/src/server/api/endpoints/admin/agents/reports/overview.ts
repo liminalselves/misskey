@@ -105,18 +105,44 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				this.agentModelUsageService.hourlyBuckets({ since }),
 			]);
 
+			const byModelRows = byModel.map(r => ({
+				modelId: r.modelId,
+				modelName: r.modelId ? (modelMap.get(r.modelId)?.name ?? null) : null,
+				total: r.total,
+				success: r.success,
+				failed: r.failed,
+				aborted: r.aborted,
+				totalCost: r.totalCost,
+				unlisted: r.modelId ? (modelMap.get(r.modelId)?.unlisted === true) : false,
+			}));
+
+			// BYOK（用户自定义模型，id 以 u 前缀开头）合并为一条综合统计，避免显示为“未知/已删除模型”
+			const mergedByModel: typeof byModelRows = [];
+			let custom: { total: number; success: number; failed: number; aborted: number; totalCost: number } | null = null;
+			for (const r of byModelRows) {
+				if (r.modelId != null && r.modelId.startsWith('u')) {
+					if (custom == null) custom = { total: 0, success: 0, failed: 0, aborted: 0, totalCost: 0 };
+					custom.total += r.total;
+					custom.success += r.success;
+					custom.failed += r.failed;
+					custom.aborted += r.aborted;
+					custom.totalCost += r.totalCost;
+				} else {
+					mergedByModel.push(r);
+				}
+			}
+			if (custom != null) {
+				mergedByModel.push({
+					modelId: '__byok_custom_models__',
+					modelName: '自定义模型请求',
+					...custom,
+					unlisted: false,
+				});
+			}
+
 			return {
 				overall,
-				byModel: byModel.map(r => ({
-					modelId: r.modelId,
-					modelName: r.modelId ? (modelMap.get(r.modelId)?.name ?? null) : null,
-					total: r.total,
-					success: r.success,
-					failed: r.failed,
-					aborted: r.aborted,
-					totalCost: r.totalCost,
-					unlisted: r.modelId ? (modelMap.get(r.modelId)?.unlisted === true) : false,
-				})),
+				byModel: mergedByModel,
 				hourlyBuckets,
 			};
 		});

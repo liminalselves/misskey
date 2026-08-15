@@ -102,6 +102,7 @@ import { MiAgentCheckinRecord } from '@/models/AgentCheckinRecord.js';
 import { MiAgentRedeemCode } from '@/models/AgentRedeemCode.js';
 import { MiAgentPublishedVersion } from '@/models/AgentPublishedVersion.js';
 import { MiAgentCreditMigration } from '@/models/AgentCreditMigration.js';
+import { MiAgentUserModel } from '@/models/AgentUserModel.js';
 import { MiSystemAccount } from '@/models/SystemAccount.js';
 
 pg.types.setTypeParser(20, Number);
@@ -284,6 +285,7 @@ export const entities = [
 	MiAgentRedeemCode,
 	MiAgentPublishedVersion,
 	MiAgentCreditMigration,
+	MiAgentUserModel,
 	MiBubbleGameRecord,
 	MiReversiGame,
 	...charts,

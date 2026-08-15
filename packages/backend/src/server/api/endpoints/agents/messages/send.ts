@@ -342,13 +342,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				session.randomProactiveAt = null;
 				session.randomProactiveNeedsUserMessage = false;
 
-				const modelApiName = (() => {
-					try {
-						return this.agentService.resolveModelApiName(instanceMeta, session.agentModelId ?? null);
-					} catch {
-						return null;
-					}
-				})();
+				const modelApiName = (await this.agentService.resolveModelApiNameForUser(instanceMeta, session.agentModelId ?? null, me.id).catch(() => null)) ?? null;
 				usageLog = await this.agentModelUsageService.startLog({
 					userId: me.id,
 					sessionId: session.id,
@@ -363,7 +357,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					session.agentLongMemoryProvider,
 					instanceMeta,
 				);
-				const budgets = this.agentCompressionMemoryService.buildSendPathBudgets({
+				const budgets = await this.agentCompressionMemoryService.buildSendPathBudgets({
 					instanceMeta,
 					session,
 					character,
@@ -372,7 +366,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				});
 				const { maxContextTokens, maxOutputTokensPerCall, historyBudget, historyBudgetTokens, charsPerToken } = budgets;
 				// 统一经 AgentTokenService 解析计数器；发信滑窗按 token 口径截断（exact 或 estimate），与分割线/区带同源
-				const sendTokenConfig = this.agentTokenService.resolveTokenConfig(instanceMeta, session.agentModelId ?? instanceMeta.agentDefaultModelId);
+				const sendTokenConfig = await this.agentTokenService.resolveTokenConfigForUser(instanceMeta, session.agentModelId ?? instanceMeta.agentDefaultModelId, me.id);
 				const sendExactCounter = this.agentTokenService.makeCounter(sendTokenConfig);
 				const selectedWorldbook = this.agentService.selectWorldbookEntriesForPrompt(character, userText);
 				const activeRules = this.agentService.resolveActiveRules(
@@ -504,6 +498,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					messages: pairs,
 					userText: wrappedUserText,
 					sessionModelId: session.agentModelId ?? null,
+					userId: me.id,
 					externalAbortSignal: abortController.signal,
 				});
 				const rawAssistantText = llmResult.text;

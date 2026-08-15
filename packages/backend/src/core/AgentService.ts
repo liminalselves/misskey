@@ -17,6 +17,7 @@ import { getActiveLlmModels, getEffectiveLlmModels, isAgentLlmRunnable, type Age
 import { MetaService } from '@/core/MetaService.js';
 import { IdService } from '@/core/IdService.js';
 import { AgentTokenService, AGENT_LLM_APPROX_CHARS_PER_TOKEN } from '@/core/AgentTokenService.js';
+import { AgentUserModelService, isAgentUserModelId } from '@/core/AgentUserModelService.js';
 import { ApiError } from '@/server/api/error.js';
 
 export { AGENT_LLM_APPROX_CHARS_PER_TOKEN };
@@ -264,6 +265,7 @@ export class AgentService {
 		private metaService: MetaService,
 		private idService: IdService,
 		private agentTokenService: AgentTokenService,
+		private agentUserModelService: AgentUserModelService,
 	) {}
 
 	@bindThis
@@ -376,6 +378,16 @@ export class AgentService {
 		return this.pickModelOrThrow(instance, modelId).apiModelName;
 	}
 
+	/** 用户自定义模型（BYOK）的 apiModelName；非用户模型回退到官方解析 */
+	@bindThis
+	public async resolveModelApiNameForUser(instance: MiMeta, modelId: string | null, userId: string): Promise<string> {
+		if (modelId && isAgentUserModelId(modelId)) {
+			const conn = await this.agentUserModelService.resolveConnection(userId, modelId);
+			return conn.apiModelName;
+		}
+		return this.resolveModelApiName(instance, modelId);
+	}
+
 	@bindThis
 	public resolveModelConnection(instance: MiMeta, modelId: string | null): {
 		apiModelName: string;
@@ -399,6 +411,32 @@ export class AgentService {
 			maxContextTokens: pick.maxContextTokens,
 			maxOutputTokensPerCall: pick.maxOutputTokensPerCall,
 			charsPerToken: Number.isFinite(pick.charsPerToken) && pick.charsPerToken! >= 1 ? pick.charsPerToken! : AGENT_LLM_APPROX_CHARS_PER_TOKEN,
+		};
+	}
+
+	/** 用户自定义模型（BYOK）的连接信息；非用户模型回退到官方解析 */
+	@bindThis
+	public async resolveModelConnectionForUser(instance: MiMeta, modelId: string | null, userId: string): Promise<{
+		apiModelName: string;
+		baseUrlRaw: string;
+		apiKeyRaw: string;
+		maxContextTokens: number;
+		maxOutputTokensPerCall: number;
+		charsPerToken: number;
+		tokenizerEncoding: string | null;
+	}> {
+		if (modelId && isAgentUserModelId(modelId)) {
+			return this.agentUserModelService.resolveConnection(userId, modelId);
+		}
+		const conn = this.resolveModelConnection(instance, modelId);
+		return {
+			...conn,
+			tokenizerEncoding: (() => {
+				const pick = modelId
+					? getEffectiveLlmModels(instance).find(m => m.id === modelId)
+					: (getEffectiveLlmModels(instance).find(m => m.id === instance.agentDefaultModelId) ?? getEffectiveLlmModels(instance)[0]);
+				return pick?.tokenizerEncoding ?? null;
+			})(),
 		};
 	}
 
@@ -1063,6 +1101,8 @@ export class AgentService {
 		messages: { role: 'user' | 'assistant'; content: string }[];
 		userText: string;
 		sessionModelId: string | null;
+		/** 会话归属用户（BYOK 用户自定义模型解析必需）。 */
+		userId?: string;
 		/** Caller-provided cancellation signal. */
 		externalAbortSignal?: AbortSignal;
 		/** Per-call max_tokens override, capped by model/site settings. */
@@ -1070,7 +1110,9 @@ export class AgentService {
 	}): Promise<{ text: string; usage: AgentLlmUsage | null }> {
 		const instance = await this.metaService.fetch(true);
 		this.assertLlmConfigured(instance);
-		const { apiModelName, baseUrlRaw, apiKeyRaw, maxOutputTokensPerCall } = this.resolveModelConnection(instance, params.sessionModelId);
+		const { apiModelName, baseUrlRaw, apiKeyRaw, maxOutputTokensPerCall } = params.userId
+			? await this.resolveModelConnectionForUser(instance, params.sessionModelId, params.userId)
+			: this.resolveModelConnection(instance, params.sessionModelId);
 
 		let safeBase: URL;
 		try {

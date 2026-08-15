@@ -986,6 +986,34 @@ export class MiMeta {
 	})
 	public agentCompressionDefaultModelId: string | null;
 
+	/** 是否启用 BYOK（用户自带 API Key 自定义模型） */
+	@Column('boolean', {
+		default: false,
+	})
+	public agentByokEnabled: boolean;
+
+	/** BYOK 半设置提供商模板：管理员预置连接信息，用户只需填自己的 Key */
+	@Column('jsonb', {
+		nullable: true,
+	})
+	public agentByokProviders: Array<{
+		id: string;
+		name: string;
+		description?: string | null;
+		baseUrl: string;
+		apiModelName?: string | null;
+		maxContextTokens?: number;
+		maxOutputTokensPerCall?: number;
+		tokenizerEncoding?: string | null;
+		charsPerToken?: number;
+	}> | null;
+
+	/** 每用户自定义模型数量上限 */
+	@Column('integer', {
+		default: 20,
+	})
+	public agentByokMaxUserModels: number;
+
 	@Column('integer', {
 		default: 8192,
 	})

@@ -163,6 +163,9 @@ export class MetaEntityService {
 			agentMaxOutputTokensPerCall: packedAgentMaxOutputTokensPerCall(instance),
 			agentModels: packPublicAgentModels(instance),
 			agentDefaultModelId: instance.agentDefaultModelId ?? effAgentModels[0]?.id ?? null,
+			agentByokEnabled: instance.agentByokEnabled === true,
+			agentByokProviders: instance.agentByokProviders ?? null,
+			agentByokMaxUserModels: Math.max(1, Math.min(500, instance.agentByokMaxUserModels ?? 20)),
 			agentCompressionDefaultModelId: (() => {
 				const t = instance.agentCompressionDefaultModelId?.trim();
 				if (t) {

@@ -166,6 +166,10 @@ export * as 'agents/characters/worldbook-match-preview' from './endpoints/agents
 export * as 'agents/characters/unpublish' from './endpoints/agents/characters/unpublish.js';
 export * as 'agents/characters/update' from './endpoints/agents/characters/update.js';
 export * as 'agents/billing-logs' from './endpoints/agents/billing-logs.js';
+export * as 'agents/byok/models/create' from './endpoints/agents/byok/models/create.js';
+export * as 'agents/byok/models/delete' from './endpoints/agents/byok/models/delete.js';
+export * as 'agents/byok/models/list' from './endpoints/agents/byok/models/list.js';
+export * as 'agents/byok/models/update' from './endpoints/agents/byok/models/update.js';
 export * as 'agents/compression-sticky/delete' from './endpoints/agents/compression-sticky/delete.js';
 export * as 'agents/compression-sticky/list' from './endpoints/agents/compression-sticky/list.js';
 export * as 'agents/compression-sticky/update' from './endpoints/agents/compression-sticky/update.js';

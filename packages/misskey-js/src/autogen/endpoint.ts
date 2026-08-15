@@ -23,8 +23,61 @@ import type {
 	AdminAdListRequest,
 	AdminAdListResponse,
 	AdminAdUpdateRequest,
+	AdminAgentsCheckinReportsRequest,
+	AdminAgentsCheckinReportsResponse,
+	AdminAgentsCheckinRevokeTodayResponse,
 	AdminAgentsCharactersSetModerationBannedRequest,
 	AdminAgentsCharactersSetModerationBannedResponse,
+	AdminAgentsCreditsIssueRewardRequest,
+	AdminAgentsCreditsIssueRewardResponse,
+	AdminAgentsCreditsMigrationGenerateKeyResponse,
+	AdminAgentsCreditsMigrationLogsRequest,
+	AdminAgentsCreditsMigrationLogsResponse,
+	AdminAgentsExternalAuditLogsListRequest,
+	AdminAgentsExternalAuditLogsListResponse,
+	AdminAgentsExternalAuditLogsShowRequest,
+	AdminAgentsExternalAuditLogsShowResponse,
+	AdminAgentsExternalAuditModelsStatsResponse,
+	AdminAgentsGovernanceExternalAuditDetailRequest,
+	AdminAgentsGovernanceExternalAuditDetailResponse,
+	AdminAgentsGovernanceExternalAuditListRequest,
+	AdminAgentsGovernanceExternalAuditListResponse,
+	AdminAgentsGovernanceExternalAuditReviewIgnoreRequest,
+	AdminAgentsGovernanceExternalAuditReviewIgnoreResponse,
+	AdminAgentsGovernanceExternalAuditReviewListRequest,
+	AdminAgentsGovernanceExternalAuditReviewListResponse,
+	AdminAgentsGovernanceImagesListRequest,
+	AdminAgentsGovernanceImagesListResponse,
+	AdminAgentsGovernanceImagesSetBlockedRequest,
+	AdminAgentsGovernanceImagesSetBlockedResponse,
+	AdminAgentsGovernanceLogsListRequest,
+	AdminAgentsGovernanceLogsListResponse,
+	AdminAgentsGovernanceMessagesListRequest,
+	AdminAgentsGovernanceMessagesListResponse,
+	AdminAgentsGovernanceQuickActionRequest,
+	AdminAgentsGovernanceQuickActionResponse,
+	AdminAgentsGovernanceReviewDetailRequest,
+	AdminAgentsGovernanceReviewDetailResponse,
+	AdminAgentsGovernanceReviewListRequest,
+	AdminAgentsGovernanceReviewListResponse,
+	AdminAgentsGovernanceReviewResolveRequest,
+	AdminAgentsGovernanceReviewResolveResponse,
+	AdminAgentsGovernanceReviewSetCharacterBannedRequest,
+	AdminAgentsGovernanceReviewSetCharacterBannedResponse,
+	AdminAgentsGovernanceSessionsDetailRequest,
+	AdminAgentsGovernanceSessionsDetailResponse,
+	AdminAgentsGovernanceSessionsListRequest,
+	AdminAgentsGovernanceSessionsListResponse,
+	AdminAgentsGovernanceSessionsSetBannedRequest,
+	AdminAgentsGovernanceSessionsSetBannedResponse,
+	AdminAgentsGovernanceSummaryResponse,
+	AdminAgentsImagesListRequest,
+	AdminAgentsImagesListResponse,
+	AdminAgentsImagesSetBlockedRequest,
+	AdminAgentsImagesSetBlockedResponse,
+	AdminAgentsImagesTokensRefreshResponse,
+	AdminAgentsImagesTokensTestRequest,
+	AdminAgentsImagesTokensTestResponse,
 	AdminAgentsMessagesListRequest,
 	AdminAgentsMessagesListResponse,
 	AdminAgentsMessagesTimelineRequest,
@@ -37,7 +90,12 @@ import type {
 	AdminAgentsRedeemCodesRevokeResponse,
 	AdminAgentsReportsOverviewRequest,
 	AdminAgentsReportsOverviewResponse,
+	AdminAgentsReviewDiffRequest,
+	AdminAgentsReviewDiffResponse,
+	AdminAgentsReviewListPendingRequest,
 	AdminAgentsReviewListPendingResponse,
+	AdminAgentsReviewLogsRequest,
+	AdminAgentsReviewLogsResponse,
 	AdminAgentsReviewPendingExistsResponse,
 	AdminAgentsReviewResolveRequest,
 	AdminAgentsReviewResolveResponse,
@@ -45,6 +103,7 @@ import type {
 	AdminAgentsSessionsListResponse,
 	AdminAgentsSessionsSetModerationBannedRequest,
 	AdminAgentsSessionsSetModerationBannedResponse,
+	AdminAgentsTokenizerStatusResponse,
 	AdminAnnouncementsCreateRequest,
 	AdminAnnouncementsCreateResponse,
 	AdminAnnouncementsDeleteRequest,
@@ -63,6 +122,8 @@ import type {
 	AdminDeleteAllFilesOfAUserRequest,
 	AdminDriveFilesRequest,
 	AdminDriveFilesResponse,
+	AdminDriveFilesSetBlockedRequest,
+	AdminDriveFilesSetBlockedResponse,
 	AdminDriveShowFileRequest,
 	AdminDriveShowFileResponse,
 	AdminEmojiAddRequest,
@@ -165,6 +226,13 @@ import type {
 	AdminUsersAgentSuccessRateResponse,
 	AgentsBillingLogsRequest,
 	AgentsBillingLogsResponse,
+	AgentsByokModelsCreateRequest,
+	AgentsByokModelsCreateResponse,
+	AgentsByokModelsDeleteRequest,
+	AgentsByokModelsDeleteResponse,
+	AgentsByokModelsListResponse,
+	AgentsByokModelsUpdateRequest,
+	AgentsByokModelsUpdateResponse,
 	AgentsCharactersCreateRequest,
 	AgentsCharactersCreateResponse,
 	AgentsCharactersDeleteRequest,
@@ -190,8 +258,15 @@ import type {
 	AgentsCharactersVersionsResponse,
 	AgentsCharactersWorldbookMatchPreviewRequest,
 	AgentsCharactersWorldbookMatchPreviewResponse,
+	AgentsCheckinResponse,
+	AgentsCheckinMakeupRequest,
+	AgentsCheckinMakeupResponse,
+	AgentsCheckinStatusRequest,
+	AgentsCheckinStatusResponse,
 	AgentsCompressionStickyDeleteRequest,
 	AgentsCompressionStickyDeleteResponse,
+	AgentsCompressionStickyImportRequest,
+	AgentsCompressionStickyImportResponse,
 	AgentsCompressionStickyListRequest,
 	AgentsCompressionStickyListResponse,
 	AgentsCompressionStickyReorderRequest,
@@ -199,6 +274,16 @@ import type {
 	AgentsCompressionStickyUpdateRequest,
 	AgentsCompressionStickyUpdateResponse,
 	AgentsCreditBalanceResponse,
+	AgentsCreditsMigrateRequest,
+	AgentsCreditsMigrateResponse,
+	AgentsImagesGenerateRequest,
+	AgentsImagesGenerateResponse,
+	AgentsImagesGeneratePlaceholderRequest,
+	AgentsImagesGeneratePlaceholderResponse,
+	AgentsImagesModelsListResponse,
+	AgentsImagesPlaceholderStatusRequest,
+	AgentsImagesPlaceholderStatusResponse,
+	AgentsImagesPresetsListResponse,
 	AgentsMemoryAddRequest,
 	AgentsMemoryAddResponse,
 	AgentsMemoryDeleteRequest,
@@ -225,6 +310,7 @@ import type {
 	AgentsMessagesTimelineResponse,
 	AgentsMessagesUpdateRequest,
 	AgentsMessagesUpdateResponse,
+	AgentsModelsFreeQuotaResponse,
 	AgentsModelsSuccessRatesRequest,
 	AgentsModelsSuccessRatesResponse,
 	AgentsMyUsageSummaryRequest,
@@ -233,6 +319,16 @@ import type {
 	AgentsPlazaReviewsCreateResponse,
 	AgentsPlazaReviewsListRequest,
 	AgentsPlazaReviewsListResponse,
+	AgentsPlazaSearchRequest,
+	AgentsPlazaSearchResponse,
+	AgentsProactiveSchedulesDeleteRequest,
+	AgentsProactiveSchedulesDeleteResponse,
+	AgentsProactiveSchedulesImportRequest,
+	AgentsProactiveSchedulesImportResponse,
+	AgentsProactiveSchedulesListRequest,
+	AgentsProactiveSchedulesListResponse,
+	AgentsProactiveSchedulesSetStatusRequest,
+	AgentsProactiveSchedulesSetStatusResponse,
 	AgentsRedeemCodeRequest,
 	AgentsRedeemCodeResponse,
 	AgentsSessionsCompressionOverviewRequest,
@@ -246,10 +342,17 @@ import type {
 	AgentsSessionsListMineResponse,
 	AgentsSessionsPreviewModelChangeRequest,
 	AgentsSessionsPreviewModelChangeResponse,
+	AgentsSessionsReadRequest,
+	AgentsSessionsRuleListRequest,
+	AgentsSessionsRuleListResponse,
 	AgentsSessionsShowRequest,
 	AgentsSessionsShowResponse,
 	AgentsSessionsUpdateRequest,
 	AgentsSessionsUpdateResponse,
+	AgentsSessionsWorldbookListRequest,
+	AgentsSessionsWorldbookListResponse,
+	AgentsSessionsWorldbookMatchPreviewRequest,
+	AgentsSessionsWorldbookMatchPreviewResponse,
 	AgentsStylesCreateRequest,
 	AgentsStylesCreateResponse,
 	AgentsStylesDeleteRequest,
@@ -278,6 +381,7 @@ import type {
 	AgentsStylesUpdateResponse,
 	AgentsStylesVersionsRequest,
 	AgentsStylesVersionsResponse,
+	AgentsVisionModelsListResponse,
 	AnnouncementsRequest,
 	AnnouncementsResponse,
 	AnnouncementsShowRequest,
@@ -380,6 +484,7 @@ import type {
 	ChatMessagesUnreactRequest,
 	ChatMessagesUserTimelineRequest,
 	ChatMessagesUserTimelineResponse,
+	ChatReadRequest,
 	ChatRoomsCreateRequest,
 	ChatRoomsCreateResponse,
 	ChatRoomsDeleteRequest,
@@ -436,6 +541,8 @@ import type {
 	DriveFilesCreateRequest,
 	DriveFilesCreateResponse,
 	DriveFilesDeleteRequest,
+	DriveFilesDownloadUrlRequest,
+	DriveFilesDownloadUrlResponse,
 	DriveFilesFindRequest,
 	DriveFilesFindResponse,
 	DriveFilesFindByHashRequest,
@@ -457,6 +564,7 @@ import type {
 	DriveFoldersShowResponse,
 	DriveFoldersUpdateRequest,
 	DriveFoldersUpdateResponse,
+	DriveStatsResponse,
 	DriveStreamRequest,
 	DriveStreamResponse,
 	EmailAddressAvailableRequest,
@@ -825,18 +933,50 @@ export type Endpoints = {
 	'admin/ad/delete': { req: AdminAdDeleteRequest; res: EmptyResponse };
 	'admin/ad/list': { req: AdminAdListRequest; res: AdminAdListResponse };
 	'admin/ad/update': { req: AdminAdUpdateRequest; res: EmptyResponse };
+	'admin/agents-checkin-reports': { req: AdminAgentsCheckinReportsRequest; res: AdminAgentsCheckinReportsResponse };
+	'admin/agents-checkin-revoke-today': { req: EmptyRequest; res: AdminAgentsCheckinRevokeTodayResponse };
 	'admin/agents/characters/set-moderation-banned': { req: AdminAgentsCharactersSetModerationBannedRequest; res: AdminAgentsCharactersSetModerationBannedResponse };
+	'admin/agents/credits/issue-reward': { req: AdminAgentsCreditsIssueRewardRequest; res: AdminAgentsCreditsIssueRewardResponse };
+	'admin/agents/credits/migration/generate-key': { req: EmptyRequest; res: AdminAgentsCreditsMigrationGenerateKeyResponse };
+	'admin/agents/credits/migration/logs': { req: AdminAgentsCreditsMigrationLogsRequest; res: AdminAgentsCreditsMigrationLogsResponse };
+	'admin/agents/external-audit/logs/list': { req: AdminAgentsExternalAuditLogsListRequest; res: AdminAgentsExternalAuditLogsListResponse };
+	'admin/agents/external-audit/logs/show': { req: AdminAgentsExternalAuditLogsShowRequest; res: AdminAgentsExternalAuditLogsShowResponse };
+	'admin/agents/external-audit/models/stats': { req: EmptyRequest; res: AdminAgentsExternalAuditModelsStatsResponse };
+	'admin/agents/governance/external-audit/detail': { req: AdminAgentsGovernanceExternalAuditDetailRequest; res: AdminAgentsGovernanceExternalAuditDetailResponse };
+	'admin/agents/governance/external-audit/list': { req: AdminAgentsGovernanceExternalAuditListRequest; res: AdminAgentsGovernanceExternalAuditListResponse };
+	'admin/agents/governance/external-audit/review-ignore': { req: AdminAgentsGovernanceExternalAuditReviewIgnoreRequest; res: AdminAgentsGovernanceExternalAuditReviewIgnoreResponse };
+	'admin/agents/governance/external-audit/review-list': { req: AdminAgentsGovernanceExternalAuditReviewListRequest; res: AdminAgentsGovernanceExternalAuditReviewListResponse };
+	'admin/agents/governance/images/list': { req: AdminAgentsGovernanceImagesListRequest; res: AdminAgentsGovernanceImagesListResponse };
+	'admin/agents/governance/images/set-blocked': { req: AdminAgentsGovernanceImagesSetBlockedRequest; res: AdminAgentsGovernanceImagesSetBlockedResponse };
+	'admin/agents/governance/logs/list': { req: AdminAgentsGovernanceLogsListRequest; res: AdminAgentsGovernanceLogsListResponse };
+	'admin/agents/governance/messages/list': { req: AdminAgentsGovernanceMessagesListRequest; res: AdminAgentsGovernanceMessagesListResponse };
+	'admin/agents/governance/quick-action': { req: AdminAgentsGovernanceQuickActionRequest; res: AdminAgentsGovernanceQuickActionResponse };
+	'admin/agents/governance/review/detail': { req: AdminAgentsGovernanceReviewDetailRequest; res: AdminAgentsGovernanceReviewDetailResponse };
+	'admin/agents/governance/review/list': { req: AdminAgentsGovernanceReviewListRequest; res: AdminAgentsGovernanceReviewListResponse };
+	'admin/agents/governance/review/resolve': { req: AdminAgentsGovernanceReviewResolveRequest; res: AdminAgentsGovernanceReviewResolveResponse };
+	'admin/agents/governance/review/set-character-banned': { req: AdminAgentsGovernanceReviewSetCharacterBannedRequest; res: AdminAgentsGovernanceReviewSetCharacterBannedResponse };
+	'admin/agents/governance/sessions/detail': { req: AdminAgentsGovernanceSessionsDetailRequest; res: AdminAgentsGovernanceSessionsDetailResponse };
+	'admin/agents/governance/sessions/list': { req: AdminAgentsGovernanceSessionsListRequest; res: AdminAgentsGovernanceSessionsListResponse };
+	'admin/agents/governance/sessions/set-banned': { req: AdminAgentsGovernanceSessionsSetBannedRequest; res: AdminAgentsGovernanceSessionsSetBannedResponse };
+	'admin/agents/governance/summary': { req: EmptyRequest; res: AdminAgentsGovernanceSummaryResponse };
+	'admin/agents/images/list': { req: AdminAgentsImagesListRequest; res: AdminAgentsImagesListResponse };
+	'admin/agents/images/set-blocked': { req: AdminAgentsImagesSetBlockedRequest; res: AdminAgentsImagesSetBlockedResponse };
+	'admin/agents/images/tokens/refresh': { req: EmptyRequest; res: AdminAgentsImagesTokensRefreshResponse };
+	'admin/agents/images/tokens/test': { req: AdminAgentsImagesTokensTestRequest; res: AdminAgentsImagesTokensTestResponse };
 	'admin/agents/messages/list': { req: AdminAgentsMessagesListRequest; res: AdminAgentsMessagesListResponse };
 	'admin/agents/messages/timeline': { req: AdminAgentsMessagesTimelineRequest; res: AdminAgentsMessagesTimelineResponse };
 	'admin/agents/redeem-codes/generate': { req: AdminAgentsRedeemCodesGenerateRequest; res: AdminAgentsRedeemCodesGenerateResponse };
 	'admin/agents/redeem-codes/list': { req: AdminAgentsRedeemCodesListRequest; res: AdminAgentsRedeemCodesListResponse };
 	'admin/agents/redeem-codes/revoke': { req: AdminAgentsRedeemCodesRevokeRequest; res: AdminAgentsRedeemCodesRevokeResponse };
 	'admin/agents/reports/overview': { req: AdminAgentsReportsOverviewRequest; res: AdminAgentsReportsOverviewResponse };
-	'admin/agents/review/list-pending': { req: EmptyRequest; res: AdminAgentsReviewListPendingResponse };
+	'admin/agents/review/diff': { req: AdminAgentsReviewDiffRequest; res: AdminAgentsReviewDiffResponse };
+	'admin/agents/review/list-pending': { req: AdminAgentsReviewListPendingRequest; res: AdminAgentsReviewListPendingResponse };
+	'admin/agents/review/logs': { req: AdminAgentsReviewLogsRequest; res: AdminAgentsReviewLogsResponse };
 	'admin/agents/review/pending-exists': { req: EmptyRequest; res: AdminAgentsReviewPendingExistsResponse };
 	'admin/agents/review/resolve': { req: AdminAgentsReviewResolveRequest; res: AdminAgentsReviewResolveResponse };
 	'admin/agents/sessions/list': { req: AdminAgentsSessionsListRequest; res: AdminAgentsSessionsListResponse };
 	'admin/agents/sessions/set-moderation-banned': { req: AdminAgentsSessionsSetModerationBannedRequest; res: AdminAgentsSessionsSetModerationBannedResponse };
+	'admin/agents/tokenizer-status': { req: EmptyRequest; res: AdminAgentsTokenizerStatusResponse };
 	'admin/announcements/create': { req: AdminAnnouncementsCreateRequest; res: AdminAnnouncementsCreateResponse };
 	'admin/announcements/delete': { req: AdminAnnouncementsDeleteRequest; res: EmptyResponse };
 	'admin/announcements/list': { req: AdminAnnouncementsListRequest; res: AdminAnnouncementsListResponse };
@@ -852,6 +992,7 @@ export type Endpoints = {
 	'admin/drive/clean-remote-files': { req: EmptyRequest; res: EmptyResponse };
 	'admin/drive/cleanup': { req: EmptyRequest; res: EmptyResponse };
 	'admin/drive/files': { req: AdminDriveFilesRequest; res: AdminDriveFilesResponse };
+	'admin/drive/files/set-blocked': { req: AdminDriveFilesSetBlockedRequest; res: AdminDriveFilesSetBlockedResponse };
 	'admin/drive/show-file': { req: AdminDriveShowFileRequest; res: AdminDriveShowFileResponse };
 	'admin/emoji/add': { req: AdminEmojiAddRequest; res: AdminEmojiAddResponse };
 	'admin/emoji/add-aliases-bulk': { req: AdminEmojiAddAliasesBulkRequest; res: EmptyResponse };
@@ -927,6 +1068,10 @@ export type Endpoints = {
 	'admin/update-user-note': { req: AdminUpdateUserNoteRequest; res: EmptyResponse };
 	'admin/users/agent-success-rate': { req: AdminUsersAgentSuccessRateRequest; res: AdminUsersAgentSuccessRateResponse };
 	'agents/billing-logs': { req: AgentsBillingLogsRequest; res: AgentsBillingLogsResponse };
+	'agents/byok/models/create': { req: AgentsByokModelsCreateRequest; res: AgentsByokModelsCreateResponse };
+	'agents/byok/models/delete': { req: AgentsByokModelsDeleteRequest; res: AgentsByokModelsDeleteResponse };
+	'agents/byok/models/list': { req: EmptyRequest; res: AgentsByokModelsListResponse };
+	'agents/byok/models/update': { req: AgentsByokModelsUpdateRequest; res: AgentsByokModelsUpdateResponse };
 	'agents/characters/create': { req: AgentsCharactersCreateRequest; res: AgentsCharactersCreateResponse };
 	'agents/characters/delete': { req: AgentsCharactersDeleteRequest; res: AgentsCharactersDeleteResponse };
 	'agents/characters/diff': { req: AgentsCharactersDiffRequest; res: AgentsCharactersDiffResponse };
@@ -940,11 +1085,21 @@ export type Endpoints = {
 	'agents/characters/update': { req: AgentsCharactersUpdateRequest; res: AgentsCharactersUpdateResponse };
 	'agents/characters/versions': { req: AgentsCharactersVersionsRequest; res: AgentsCharactersVersionsResponse };
 	'agents/characters/worldbook-match-preview': { req: AgentsCharactersWorldbookMatchPreviewRequest; res: AgentsCharactersWorldbookMatchPreviewResponse };
+	'agents/checkin': { req: EmptyRequest; res: AgentsCheckinResponse };
+	'agents/checkin-makeup': { req: AgentsCheckinMakeupRequest; res: AgentsCheckinMakeupResponse };
+	'agents/checkin-status': { req: AgentsCheckinStatusRequest; res: AgentsCheckinStatusResponse };
 	'agents/compression-sticky/delete': { req: AgentsCompressionStickyDeleteRequest; res: AgentsCompressionStickyDeleteResponse };
+	'agents/compression-sticky/import': { req: AgentsCompressionStickyImportRequest; res: AgentsCompressionStickyImportResponse };
 	'agents/compression-sticky/list': { req: AgentsCompressionStickyListRequest; res: AgentsCompressionStickyListResponse };
 	'agents/compression-sticky/reorder': { req: AgentsCompressionStickyReorderRequest; res: AgentsCompressionStickyReorderResponse };
 	'agents/compression-sticky/update': { req: AgentsCompressionStickyUpdateRequest; res: AgentsCompressionStickyUpdateResponse };
 	'agents/credit-balance': { req: EmptyRequest; res: AgentsCreditBalanceResponse };
+	'agents/credits/migrate': { req: AgentsCreditsMigrateRequest; res: AgentsCreditsMigrateResponse };
+	'agents/images/generate': { req: AgentsImagesGenerateRequest; res: AgentsImagesGenerateResponse };
+	'agents/images/generate-placeholder': { req: AgentsImagesGeneratePlaceholderRequest; res: AgentsImagesGeneratePlaceholderResponse };
+	'agents/images/models/list': { req: EmptyRequest; res: AgentsImagesModelsListResponse };
+	'agents/images/placeholder-status': { req: AgentsImagesPlaceholderStatusRequest; res: AgentsImagesPlaceholderStatusResponse };
+	'agents/images/presets/list': { req: EmptyRequest; res: AgentsImagesPresetsListResponse };
 	'agents/memory/add': { req: AgentsMemoryAddRequest; res: AgentsMemoryAddResponse };
 	'agents/memory/delete': { req: AgentsMemoryDeleteRequest; res: AgentsMemoryDeleteResponse };
 	'agents/memory/list': { req: AgentsMemoryListRequest; res: AgentsMemoryListResponse };
@@ -958,10 +1113,16 @@ export type Endpoints = {
 	'agents/messages/show': { req: AgentsMessagesShowRequest; res: AgentsMessagesShowResponse };
 	'agents/messages/timeline': { req: AgentsMessagesTimelineRequest; res: AgentsMessagesTimelineResponse };
 	'agents/messages/update': { req: AgentsMessagesUpdateRequest; res: AgentsMessagesUpdateResponse };
+	'agents/models/free-quota': { req: EmptyRequest; res: AgentsModelsFreeQuotaResponse };
 	'agents/models/success-rates': { req: AgentsModelsSuccessRatesRequest; res: AgentsModelsSuccessRatesResponse };
 	'agents/my-usage-summary': { req: AgentsMyUsageSummaryRequest; res: AgentsMyUsageSummaryResponse };
 	'agents/plaza-reviews/create': { req: AgentsPlazaReviewsCreateRequest; res: AgentsPlazaReviewsCreateResponse };
 	'agents/plaza-reviews/list': { req: AgentsPlazaReviewsListRequest; res: AgentsPlazaReviewsListResponse };
+	'agents/plaza-search': { req: AgentsPlazaSearchRequest; res: AgentsPlazaSearchResponse };
+	'agents/proactive-schedules/delete': { req: AgentsProactiveSchedulesDeleteRequest; res: AgentsProactiveSchedulesDeleteResponse };
+	'agents/proactive-schedules/import': { req: AgentsProactiveSchedulesImportRequest; res: AgentsProactiveSchedulesImportResponse };
+	'agents/proactive-schedules/list': { req: AgentsProactiveSchedulesListRequest; res: AgentsProactiveSchedulesListResponse };
+	'agents/proactive-schedules/set-status': { req: AgentsProactiveSchedulesSetStatusRequest; res: AgentsProactiveSchedulesSetStatusResponse };
 	'agents/redeem-code': { req: AgentsRedeemCodeRequest; res: AgentsRedeemCodeResponse };
 	'agents/sessions/compression-overview': { req: AgentsSessionsCompressionOverviewRequest; res: AgentsSessionsCompressionOverviewResponse };
 	'agents/sessions/context-window': { req: AgentsSessionsContextWindowRequest; res: AgentsSessionsContextWindowResponse };
@@ -969,8 +1130,13 @@ export type Endpoints = {
 	'agents/sessions/delete': { req: AgentsSessionsDeleteRequest; res: AgentsSessionsDeleteResponse };
 	'agents/sessions/list-mine': { req: EmptyRequest; res: AgentsSessionsListMineResponse };
 	'agents/sessions/preview-model-change': { req: AgentsSessionsPreviewModelChangeRequest; res: AgentsSessionsPreviewModelChangeResponse };
+	'agents/sessions/read': { req: AgentsSessionsReadRequest; res: EmptyResponse };
+	'agents/sessions/read-all': { req: EmptyRequest; res: EmptyResponse };
+	'agents/sessions/rule-list': { req: AgentsSessionsRuleListRequest; res: AgentsSessionsRuleListResponse };
 	'agents/sessions/show': { req: AgentsSessionsShowRequest; res: AgentsSessionsShowResponse };
 	'agents/sessions/update': { req: AgentsSessionsUpdateRequest; res: AgentsSessionsUpdateResponse };
+	'agents/sessions/worldbook-list': { req: AgentsSessionsWorldbookListRequest; res: AgentsSessionsWorldbookListResponse };
+	'agents/sessions/worldbook-match-preview': { req: AgentsSessionsWorldbookMatchPreviewRequest; res: AgentsSessionsWorldbookMatchPreviewResponse };
 	'agents/styles/create': { req: AgentsStylesCreateRequest; res: AgentsStylesCreateResponse };
 	'agents/styles/delete': { req: AgentsStylesDeleteRequest; res: AgentsStylesDeleteResponse };
 	'agents/styles/diff': { req: AgentsStylesDiffRequest; res: AgentsStylesDiffResponse };
@@ -986,6 +1152,7 @@ export type Endpoints = {
 	'agents/styles/unsubscribe': { req: AgentsStylesUnsubscribeRequest; res: AgentsStylesUnsubscribeResponse };
 	'agents/styles/update': { req: AgentsStylesUpdateRequest; res: AgentsStylesUpdateResponse };
 	'agents/styles/versions': { req: AgentsStylesVersionsRequest; res: AgentsStylesVersionsResponse };
+	'agents/vision-models/list': { req: EmptyRequest; res: AgentsVisionModelsListResponse };
 	'announcements': { req: AnnouncementsRequest; res: AnnouncementsResponse };
 	'announcements/show': { req: AnnouncementsShowRequest; res: AnnouncementsShowResponse };
 	'antennas/create': { req: AntennasCreateRequest; res: AntennasCreateResponse };
@@ -1045,6 +1212,7 @@ export type Endpoints = {
 	'chat/messages/show': { req: ChatMessagesShowRequest; res: ChatMessagesShowResponse };
 	'chat/messages/unreact': { req: ChatMessagesUnreactRequest; res: EmptyResponse };
 	'chat/messages/user-timeline': { req: ChatMessagesUserTimelineRequest; res: ChatMessagesUserTimelineResponse };
+	'chat/read': { req: ChatReadRequest; res: EmptyResponse };
 	'chat/read-all': { req: EmptyRequest; res: EmptyResponse };
 	'chat/rooms/create': { req: ChatRoomsCreateRequest; res: ChatRoomsCreateResponse };
 	'chat/rooms/delete': { req: ChatRoomsDeleteRequest; res: EmptyResponse };
@@ -1082,6 +1250,7 @@ export type Endpoints = {
 	'drive/files/check-existence': { req: DriveFilesCheckExistenceRequest; res: DriveFilesCheckExistenceResponse };
 	'drive/files/create': { req: DriveFilesCreateRequest; res: DriveFilesCreateResponse };
 	'drive/files/delete': { req: DriveFilesDeleteRequest; res: EmptyResponse };
+	'drive/files/download-url': { req: DriveFilesDownloadUrlRequest; res: DriveFilesDownloadUrlResponse };
 	'drive/files/find': { req: DriveFilesFindRequest; res: DriveFilesFindResponse };
 	'drive/files/find-by-hash': { req: DriveFilesFindByHashRequest; res: DriveFilesFindByHashResponse };
 	'drive/files/move-bulk': { req: DriveFilesMoveBulkRequest; res: EmptyResponse };
@@ -1094,6 +1263,7 @@ export type Endpoints = {
 	'drive/folders/find': { req: DriveFoldersFindRequest; res: DriveFoldersFindResponse };
 	'drive/folders/show': { req: DriveFoldersShowRequest; res: DriveFoldersShowResponse };
 	'drive/folders/update': { req: DriveFoldersUpdateRequest; res: DriveFoldersUpdateResponse };
+	'drive/stats': { req: EmptyRequest; res: DriveStatsResponse };
 	'drive/stream': { req: DriveStreamRequest; res: DriveStreamResponse };
 	'email-address/available': { req: EmailAddressAvailableRequest; res: EmailAddressAvailableResponse };
 	'emoji': { req: EmojiRequest; res: EmojiResponse };

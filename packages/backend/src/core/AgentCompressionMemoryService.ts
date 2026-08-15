@@ -156,13 +156,13 @@ export class AgentCompressionMemoryService {
 	/**
 	 * 与 `agents/messages/send` 一致，用于**真实进 LLM** 的 history 上界、`reconcileStickyStates`（区间两端 D 取大者与 H 比较）、压缩总览区带（provider 为 compression 时）。	 * 字符池：`max(4000, maxContextTokens×3)` 减 `systemChars`（含 comp 全段、百科 / `memory` 等）与当期 `maxOut×3` 预留。Token 约数同 `AgentService.approxLlmTokensFromCharEstimate`（即，四舍五入）。	 */
 	@bindThis
-	public buildSendPathBudgets(params: {
+	public async buildSendPathBudgets(params: {
 		instanceMeta: MiMeta;
 		session: MiAgentSession;
 		character: ReturnType<AgentService['effectiveCharacterForLlm']>;
 		style: ReturnType<AgentService['effectiveStyleForLlm']>;
 		provider: AgentLongMemoryProviderId;
-	}): {
+	}): Promise<{
 		historyBudget: number;
 		maxContextTokens: number;
 		maxOutputTokensPerCall: number;
@@ -171,13 +171,14 @@ export class AgentCompressionMemoryService {
 		charsPerToken: number;
 		/** 精确编码器下的历史 token 预算（无编码器时与 historyBudget/charsPerToken 一致） */
 		historyBudgetTokens: number;
-	} {
+	}> {
 		const { instanceMeta, session, character, style, provider } = params;
-		const { maxContextTokens, maxOutputTokensPerCall } = this.agentService.resolveModelConnection(
+		const { maxContextTokens, maxOutputTokensPerCall } = await this.agentService.resolveModelConnectionForUser(
 			instanceMeta,
 			session.agentModelId ?? null,
+			session.userId,
 		);
-		const tokenConfig = this.agentTokenService.resolveTokenConfig(instanceMeta, session.agentModelId ?? null);
+		const tokenConfig = await this.agentTokenService.resolveTokenConfigForUser(instanceMeta, session.agentModelId ?? null, session.userId);
 		const charsPerToken = tokenConfig.charsPerToken;
 		const systemBase = this.agentService.buildSystemPrompt({
 			globalPrompt: instanceMeta.agentGlobalSystemPrompt,
@@ -468,7 +469,7 @@ export class AgentCompressionMemoryService {
 		if (!gathered) return false;
 		const compModelId = this.resolveEffectiveCompressionModelId(session, instanceMeta);
 		try {
-			this.agentService.resolveModelApiName(instanceMeta, compModelId);
+			await this.agentService.resolveModelApiNameForUser(instanceMeta, compModelId, userId);
 		} catch {
 			return false;
 		}
@@ -791,12 +792,12 @@ export class AgentCompressionMemoryService {
 	}> {
 		const { session, newAgentModelId, instanceMeta, character, style } = params;
 		const provider = this.resolveEffectiveProvider(session.agentLongMemoryProvider, instanceMeta) === 'compression';
-		const beforeB = this.buildSendPathBudgets({
+		const beforeB = await this.buildSendPathBudgets({
 			instanceMeta, session, character, style,
 			provider: 'compression',
 		});
 		const clone = { ...session, agentModelId: newAgentModelId === undefined ? session.agentModelId : newAgentModelId };
-		const afterB = this.buildSendPathBudgets({
+		const afterB = await this.buildSendPathBudgets({
 			instanceMeta, session: clone, character, style,
 			provider: 'compression',
 		});
@@ -856,12 +857,12 @@ export class AgentCompressionMemoryService {
 		instanceMeta: MiMeta;
 		rows: { id: string; role: string; content: string }[];
 	}): Promise<CompressionSidecarTokenD> {
-		const budgets = this.buildSendPathBudgets({
+		const budgets = await this.buildSendPathBudgets({
 			instanceMeta: params.instanceMeta, session: params.session, character: params.character, style: params.style,
 			provider: 'compression',
 		});
 		const hSend = budgets.historyBudgetTokens;
-		const tokenConfig = this.agentTokenService.resolveTokenConfig(params.instanceMeta, params.session.agentModelId ?? null);
+		const tokenConfig = await this.agentTokenService.resolveTokenConfigForUser(params.instanceMeta, params.session.agentModelId ?? null, params.session.userId);
 		const counter = this.agentTokenService.makeCounter(tokenConfig);
 		const rowsD = filterRowsForChatHistoryD(params.rows);
 		const weights = await this.agentTokenService.computeMessageWeights(rowsD, {
@@ -925,7 +926,7 @@ export class AgentCompressionMemoryService {
 		const compModelId = this.resolveEffectiveCompressionModelId(session, instanceMeta);
 		let modelApiName: string | null = null;
 		try {
-			modelApiName = this.agentService.resolveModelApiName(instanceMeta, compModelId);
+			modelApiName = await this.agentService.resolveModelApiNameForUser(instanceMeta, compModelId, userId);
 		} catch {
 			await this.reconcileStickyStates(session.id, hSend, dMap);
 			return;
@@ -952,6 +953,7 @@ export class AgentCompressionMemoryService {
 				messages: [],
 				userText: textBlob.length > maxInput ? textBlob.slice(0, maxInput) : textBlob,
 				sessionModelId: compModelId,
+				userId,
 				maxTokens: maxOut,
 			});
 			summary = llmResult.text;

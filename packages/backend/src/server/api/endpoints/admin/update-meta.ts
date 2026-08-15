@@ -12,6 +12,7 @@ import { MetaService } from '@/core/MetaService.js';
 import { ApiError } from '@/server/api/error.js';
 import { assertSafeLlmHttpsUrl, describeUnsafeLlmUrlReason, hrefForStoredLlmBaseUrl, UnsafeLlmUrlError } from '@/misc/validate-llm-endpoint-url.js';
 import { getActiveLlmModels, normalizeAgentLlmModelsParam } from '@/misc/agent-llm-models.js';
+import { normalizeAgentByokProvidersParam } from '@/core/AgentUserModelService.js';
 import { AgentCompressionMemoryService } from '@/core/AgentCompressionMemoryService.js';
 
 function normalizeObjectStorageConfigValue(value: string | null | undefined): string | null {
@@ -179,6 +180,26 @@ export const paramDef = {
 			},
 		},
 		agentDefaultModelId: { type: 'string', nullable: true, maxLength: 64 },
+		agentByokEnabled: { type: 'boolean' },
+		agentByokProviders: {
+			type: 'array',
+			nullable: true,
+			items: {
+				type: 'object',
+				properties: {
+					id: { type: 'string', maxLength: 64 },
+					name: { type: 'string', minLength: 1, maxLength: 256 },
+					description: { type: 'string', nullable: true, maxLength: 2048 },
+					baseUrl: { type: 'string', minLength: 1, maxLength: 512 },
+					apiModelName: { type: 'string', nullable: true, maxLength: 256 },
+					maxContextTokens: { type: 'integer', minimum: 256, maximum: 2000000 },
+					maxOutputTokensPerCall: { type: 'integer', minimum: 1, maximum: 128000 },
+					tokenizerEncoding: { type: 'string', nullable: true, maxLength: 64 },
+					charsPerToken: { type: 'integer', minimum: 1, maximum: 10 },
+				},
+			},
+		},
+		agentByokMaxUserModels: { type: 'integer', minimum: 1, maximum: 500 },
 		agentMaxContextTokens: { type: 'integer', minimum: 256, maximum: 2000000 },
 		agentMaxOutputTokensPerCall: { type: 'integer', minimum: 1, maximum: 128000 },
 		agentMem0Enabled: { type: 'boolean' },
@@ -865,6 +886,46 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 
 			if (ps.agentDefaultModelId !== undefined) {
 				set.agentDefaultModelId = ps.agentDefaultModelId === '' ? null : ps.agentDefaultModelId;
+			}
+
+			if (ps.agentByokEnabled !== undefined) {
+				set.agentByokEnabled = ps.agentByokEnabled;
+			}
+
+			if (ps.agentByokProviders !== undefined) {
+				const r = normalizeAgentByokProvidersParam(ps.agentByokProviders);
+				if (!r.ok) {
+					throw new ApiError({
+						message: 'Invalid BYOK providers.',
+						code: 'INVALID_PARAM',
+						id: 'd5e6f7a8-b9c0-41d1-8e2f-3a4b5c6d7e8f',
+					});
+				}
+				if (r.value != null && r.value.length > 0) {
+					const verified = [];
+					for (const p of r.value) {
+						try {
+							const safe = await assertSafeLlmHttpsUrl(p.baseUrl);
+							verified.push({ ...p, baseUrl: hrefForStoredLlmBaseUrl(safe) });
+						} catch (e) {
+							const detail = e instanceof UnsafeLlmUrlError
+								? describeUnsafeLlmUrlReason(e.reason)
+								: (e instanceof Error ? e.message : String(e));
+							throw new ApiError({
+								message: `BYOK provider "${p.name}" base URL: ${detail}`,
+								code: 'INVALID_PARAM',
+								id: 'e6f7a8b9-c0d1-42e2-9f3a-4b5c6d7e8f90',
+							});
+						}
+					}
+					set.agentByokProviders = verified;
+				} else {
+					set.agentByokProviders = null;
+				}
+			}
+
+			if (ps.agentByokMaxUserModels !== undefined) {
+				set.agentByokMaxUserModels = Math.max(1, Math.min(500, ps.agentByokMaxUserModels));
 			}
 
 			if (ps.agentMaxContextTokens !== undefined) {

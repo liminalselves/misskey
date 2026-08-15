@@ -100,6 +100,7 @@ import {
 	MiAgentPublishedVersion,
 	MiAgentPlazaReview,
 	MiAgentCreditMigration,
+	MiAgentUserModel,
 } from './_.js';
 import type { Provider } from '@nestjs/common';
 import type { DataSource } from 'typeorm';
@@ -644,6 +645,12 @@ const $agentCreditMigrationsRepository: Provider = {
 	inject: [DI.db],
 };
 
+const $agentUserModelsRepository: Provider = {
+	provide: DI.agentUserModelsRepository,
+	useFactory: (db: DataSource) => db.getRepository(MiAgentUserModel).extend(miRepository as MiRepository<MiAgentUserModel>),
+	inject: [DI.db],
+};
+
 const $bubbleGameRecordsRepository: Provider = {
 	provide: DI.bubbleGameRecordsRepository,
 	useFactory: (db: DataSource) => db.getRepository(MiBubbleGameRecord).extend(miRepository as MiRepository<MiBubbleGameRecord>),
@@ -749,6 +756,7 @@ const $reversiGamesRepository: Provider = {
 		$agentSessionCompressionStickyRepository,
 		$agentPublishedVersionsRepository,
 		$agentCreditMigrationsRepository,
+		$agentUserModelsRepository,
 		$bubbleGameRecordsRepository,
 		$reversiGamesRepository,
 	],
@@ -843,6 +851,7 @@ const $reversiGamesRepository: Provider = {
 		$agentSessionCompressionStickyRepository,
 		$agentPublishedVersionsRepository,
 		$agentCreditMigrationsRepository,
+		$agentUserModelsRepository,
 		$bubbleGameRecordsRepository,
 		$reversiGamesRepository,
 	],

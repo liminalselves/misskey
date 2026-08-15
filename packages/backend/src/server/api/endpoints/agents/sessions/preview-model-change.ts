@@ -75,7 +75,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			const instanceMeta = await this.metaService.fetch(true);
 			const newMid = ps.agentModelId === undefined || ps.agentModelId === '' ? null : ps.agentModelId;
 			if (newMid) {
-				this.agentService.resolveModelApiName(instanceMeta, newMid);
+				await this.agentService.resolveModelApiNameForUser(instanceMeta, newMid, me.id);
 			}
 			const r = await this.agentCompressionMemoryService.previewModelChangeForCompression({
 				session: row,

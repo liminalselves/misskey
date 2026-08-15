@@ -198,11 +198,79 @@ SPDX-License-Identifier: AGPL-3.0-only
 						<MkButton rounded @click="onAddModelMenu"><i class="ti ti-plus"></i> {{ i18n.ts._agents.addAgentModel }}</MkButton>
 					</div>
 
-					<MkSelect v-model="form.state.agentDefaultModelId" :items="defaultModelItems">
-						<template #label>{{ i18n.ts._agents.agentDefaultModelId }}</template>
-					</MkSelect>
-				</div>
-			</MkFolder>
+				<MkSelect v-model="form.state.agentDefaultModelId" :items="defaultModelItems">
+					<template #label>{{ i18n.ts._agents.agentDefaultModelId }}</template>
+				</MkSelect>
+			</div>
+		</MkFolder>
+
+		<MkFolder v-if="activeTab === 'models'" :defaultOpen="true">
+			<template #icon><i class="ti ti-key"></i></template>
+			<template #label>BYOK 自定义模型</template>
+			<div class="_gaps">
+				<MkInfo>启用后用户可自带 API Key 添加自定义模型；自定义模型调用不扣平台信用、不消耗官方免费额度，仅计入用量统计。</MkInfo>
+				<MkSwitch v-model="form.state.agentByokEnabled">
+					<template #label>启用 BYOK（用户自带 Key）</template>
+				</MkSwitch>
+				<MkInput v-model="form.state.agentByokMaxUserModels" type="text">
+					<template #label>每用户自定义模型数量上限</template>
+				</MkInput>
+
+				<MkFolder>
+					<template #icon><i class="ti ti-plug"></i></template>
+					<template #label>半设置提供商模板</template>
+					<template #caption>管理员预置连接信息，用户选择模板后只需填自己的 Key</template>
+					<div class="_gaps">
+						<MkInfo>例如配置 DeepSeek：Base URL 填 https://api.deepseek.com，模型名填 deepseek-chat 等，用户提交自己的 DeepSeek Key 即可使用。</MkInfo>
+						<div v-if="form.state.agentByokProviderRows.length === 0" :class="$style.emptyModels">
+							尚未配置提供商模板
+						</div>
+						<div v-for="(row, i) in form.state.agentByokProviderRows" :key="i" :class="[$style.modelCard, $style.byokProviderCard]" class="_gaps_s">
+							<div :class="$style.modelCardHead">
+								<span :class="$style.modelCardTitle">提供商 #{{ i + 1 }}</span>
+								<div :class="$style.modelCardActions">
+									<button type="button" class="_button" :class="$style.iconDanger" :title="'删除'" @click="form.state.agentByokProviderRows.splice(i, 1)">
+										<i class="ti ti-trash"></i>
+									</button>
+								</div>
+							</div>
+							<MkInput v-model="row.name">
+								<template #label>名称（如 DeepSeek）</template>
+							</MkInput>
+							<MkTextarea v-model="row.description">
+								<template #label>说明</template>
+							</MkTextarea>
+							<MkInput v-model="row.baseUrl">
+								<template #label>Base URL</template>
+								<template #prefix><i class="ti ti-link"></i></template>
+							</MkInput>
+							<MkInput v-model="row.apiModelName">
+								<template #label>模型名（可留空，由用户填）</template>
+							</MkInput>
+							<FormSplit :minWidth="260">
+								<MkInput v-model="row.maxContextTokens" type="text">
+									<template #label>上下文长度（token）</template>
+								</MkInput>
+								<MkInput v-model="row.maxOutputTokensPerCall" type="text">
+									<template #label>输出长度（token）</template>
+								</MkInput>
+							</FormSplit>
+							<FormSplit :minWidth="260">
+								<MkSelect v-model="row.tokenizerEncoding" :items="tokenizerEncodingItems">
+									<template #label>Token 编码器</template>
+								</MkSelect>
+								<MkSelect v-model="row.charsPerToken" :items="charsPerTokenItems">
+									<template #label>字符/token 估算</template>
+								</MkSelect>
+							</FormSplit>
+						</div>
+						<div>
+							<MkButton rounded @click="onAddByokProvider"><i class="ti ti-plus"></i> 添加提供商模板</MkButton>
+						</div>
+					</div>
+				</MkFolder>
+			</div>
+		</MkFolder>
 
 			<MkFolder v-if="activeTab === 'memory'" :defaultOpen="true">
 				<template #icon><i class="ti ti-brain"></i></template>
@@ -1005,6 +1073,18 @@ type AgentExternalAuditModelStat = {
 	failureRate: number;
 };
 
+type AgentByokProviderRow = {
+	id: string;
+	name: string;
+	description: string;
+	baseUrl: string;
+	apiModelName: string;
+	maxContextTokens: string;
+	maxOutputTokensPerCall: string;
+	tokenizerEncoding: string;
+	charsPerToken: string;
+};
+
 type AgentReviewTriggerRule = {
 	id: string;
 	timeWindowMinutes: string;
@@ -1112,6 +1192,25 @@ function initAgentLlmModelRows(): AgentLlmModelRow[] {
 function rowIsBlank(row: AgentLlmModelRow): boolean {
 	return !row.name.trim() && !row.description.trim() && !row.baseUrl.trim()
 		&& !row.apiKey.trim() && !row.apiModelName.trim();
+}
+
+function initAgentByokProviderRows(): AgentByokProviderRow[] {
+	const raw = meta.agentByokProviders;
+	if (raw == null || !Array.isArray(raw) || raw.length === 0) return [];
+	return raw.map(item => {
+		const o = (item && typeof item === 'object') ? item as Record<string, unknown> : {};
+		return {
+			id: typeof o.id === 'string' && o.id.trim() ? o.id.trim() : genId(),
+			name: typeof o.name === 'string' ? o.name : '',
+			description: typeof o.description === 'string' ? o.description : '',
+			baseUrl: typeof o.baseUrl === 'string' ? o.baseUrl : '',
+			apiModelName: typeof o.apiModelName === 'string' ? o.apiModelName : '',
+			maxContextTokens: String(numFromMeta(o.maxContextTokens, 8192)),
+			maxOutputTokensPerCall: String(numFromMeta(o.maxOutputTokensPerCall, 2048)),
+			tokenizerEncoding: typeof o.tokenizerEncoding === 'string' ? o.tokenizerEncoding : '',
+			charsPerToken: typeof o.charsPerToken === 'number' && Number.isFinite(o.charsPerToken) ? String(o.charsPerToken) : '',
+		};
+	});
 }
 
 function initAgentImageTokenRows(): AgentImageTokenRow[] {
@@ -1236,6 +1335,9 @@ const form = useForm({
 	agentGlobalSystemPrompt: typeof meta.agentGlobalSystemPrompt === 'string' ? meta.agentGlobalSystemPrompt : '',
 	agentLlmModelRows: initAgentLlmModelRows(),
 	agentDefaultModelId: typeof meta.agentDefaultModelId === 'string' ? meta.agentDefaultModelId : '',
+	agentByokEnabled: Boolean(meta.agentByokEnabled),
+	agentByokProviderRows: initAgentByokProviderRows(),
+	agentByokMaxUserModels: String(numFromMeta(meta.agentByokMaxUserModels, 20)),
 	agentMem0Enabled: Boolean(meta.agentMem0Enabled),
 	agentMem0ApiKey: typeof meta.agentMem0ApiKey === 'string' ? meta.agentMem0ApiKey : '',
 	agentMem0ApiBaseUrl: typeof meta.agentMem0ApiBaseUrl === 'string' ? meta.agentMem0ApiBaseUrl : '',
@@ -1666,6 +1768,21 @@ const form = useForm({
 		agentGlobalSystemPrompt: state.agentGlobalSystemPrompt === '' ? null : state.agentGlobalSystemPrompt,
 		agentLlmModels: normalized,
 		agentDefaultModelId: defTrim === '' ? null : defTrim,
+		agentByokEnabled: state.agentByokEnabled,
+		agentByokMaxUserModels: Math.max(1, Math.min(500, Math.trunc(Number(state.agentByokMaxUserModels) || 20))),
+		agentByokProviders: state.agentByokProviderRows
+			.filter(row => row.name.trim() !== '' || row.baseUrl.trim() !== '')
+			.map(row => ({
+				id: row.id.trim() || genId(),
+				name: row.name.trim(),
+				description: row.description.trim() === '' ? null : row.description.trim(),
+				baseUrl: row.baseUrl.trim(),
+				apiModelName: row.apiModelName.trim() === '' ? null : row.apiModelName.trim(),
+				maxContextTokens: row.maxContextTokens.trim() === '' ? undefined : Math.trunc(Number(row.maxContextTokens)),
+				maxOutputTokensPerCall: row.maxOutputTokensPerCall.trim() === '' ? undefined : Math.trunc(Number(row.maxOutputTokensPerCall)),
+				tokenizerEncoding: row.tokenizerEncoding.trim() === '' ? null : row.tokenizerEncoding.trim(),
+				charsPerToken: row.charsPerToken.trim() === '' ? undefined : Number(row.charsPerToken),
+			})),
 		agentOpenaiCompatibleBaseUrl: null,
 		agentOpenaiCompatibleApiKey: null,
 		agentModelDisplayName: null,
@@ -2013,7 +2130,7 @@ const reportSuccessRate = computed(() => {
 
 function formatReportModelName(model: ReportsOverview['byModel'][number]): string {
 	if (model.modelName) return model.modelName;
-	if (model.modelId) return '未知/已删除模型';
+	if (model.modelId) return model.modelId.startsWith('u') ? '自定义模型请求' : '未知/已删除模型';
 	return '默认模型';
 }
 
@@ -2198,6 +2315,20 @@ function addRow() {
 		charsPerToken: '',
 		tokenizerEncoding: '',
 		dailyFreeQuota: '0',
+	});
+}
+
+function onAddByokProvider() {
+	form.state.agentByokProviderRows.push({
+		id: genId(),
+		name: '',
+		description: '',
+		baseUrl: '',
+		apiModelName: '',
+		maxContextTokens: '8192',
+		maxOutputTokensPerCall: '2048',
+		tokenizerEncoding: '',
+		charsPerToken: '',
 	});
 }
 
@@ -2475,6 +2606,11 @@ onMounted(() => {
 	font-size: 0.92em;
 	font-weight: 600;
 	opacity: 0.9;
+}
+
+.byokProviderCard {
+	border-color: color-mix(in srgb, var(--MI_THEME-accent) 35%, var(--MI_THEME-divider));
+	background: color-mix(in srgb, var(--MI_THEME-accent) 5%, var(--MI_THEME-panel));
 }
 
 .iconDanger {

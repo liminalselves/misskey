@@ -138,6 +138,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 	<div v-else-if="mainTab === 'my-stats'" class="_spacer" style="--MI_SPACER-w: 700px;">
 		<XMyStats/>
 	</div>
+	<div v-else-if="mainTab === 'models'" class="_spacer" style="--MI_SPACER-w: 700px;">
+		<XModels/>
+	</div>
 	<div v-else-if="mainTab === 'checkin'" class="_spacer" style="--MI_SPACER-w: 700px;">
 		<XCheckin/>
 	</div>
@@ -148,6 +151,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 import { computed, onMounted, ref, watch } from 'vue';
 import XSquare from './square.vue';
 import XMyStats from './my-stats.vue';
+import XModels from './models.vue';
 import XCheckin from './checkin.vue';
 import type { AgentsCharactersListMineResponse, AgentsStylesListMineResponse } from 'misskey-js/entities.js';
 import MkButton from '@/components/MkButton.vue';
@@ -174,7 +178,7 @@ const props = withDefaults(defineProps<{
 
 const router = useRouter();
 
-type MainTab = 'square' | 'create' | 'my-stats' | 'checkin';
+type MainTab = 'square' | 'create' | 'my-stats' | 'models' | 'checkin';
 type CreateSub = 'characters' | 'styles';
 
 const mainTab = ref<MainTab>('square');
@@ -196,6 +200,7 @@ const mainHeaderTabs = computed(() => [
 	{ key: 'square', icon: 'ti ti-layout-grid', title: i18n.ts._agents.navSquare },
 	{ key: 'create', icon: 'ti ti-pencil-plus', title: i18n.ts._agents.navCreate },
 	{ key: 'my-stats', icon: 'ti ti-chart-line', title: i18n.ts._agents.myStats },
+	{ key: 'models', icon: 'ti ti-cpu', title: i18n.ts._agents.modelsTab },
 	{ key: 'checkin', icon: 'ti ti-calendar-check', title: '签到' },
 ]);
 
@@ -210,7 +215,7 @@ definePage(() => ({
 }));
 
 function normalizeMainTab(view: string | undefined): MainTab {
-	if (view === 'create' || view === 'my-stats' || view === 'checkin') return view;
+	if (view === 'create' || view === 'my-stats' || view === 'models' || view === 'checkin') return view;
 	return 'square';
 }
 

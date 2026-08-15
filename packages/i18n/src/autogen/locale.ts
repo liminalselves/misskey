@@ -16585,6 +16585,150 @@ export interface Locale extends ILocale {
          */
         "myStatsNoLogs": string;
         /**
+         * モデル
+         */
+        "modelsTab": string;
+        /**
+         * 公式モデル
+         */
+        "modelsTabOfficial": string;
+        /**
+         * マイカスタムモデル
+         */
+        "modelsTabCustom": string;
+        /**
+         * 管理者は BYOK（API キー持ち込み）を有効化していません。
+         */
+        "byokDisabledHint": string;
+        /**
+         * 自分の API キーでモデルを追加できます。利用料はモデル提供元に請求され、プラットフォームのクレジットは消費しません。
+         */
+        "byokCustomHint": string;
+        /**
+         * カスタムモデルはまだありません。下のボタンから追加してください。
+         */
+        "byokNoModels": string;
+        /**
+         * カスタム
+         */
+        "byokCustomBadge": string;
+        /**
+         * 無効
+         */
+        "byokDisabled": string;
+        /**
+         * カスタムモデルを追加
+         */
+        "byokAddModel": string;
+        /**
+         * カスタムモデルを編集
+         */
+        "byokEditModel": string;
+        /**
+         * 削除
+         */
+        "byokDelete": string;
+        /**
+         * このカスタムモデルを削除しますか？削除後は利用できなくなります。
+         */
+        "byokDeleteConfirm": string;
+        /**
+         * 有効 / 無効
+         */
+        "byokToggle": string;
+        /**
+         * 使用済み
+         */
+        "byokFreeQuotaUsed": string;
+        /**
+         * この名前は既に存在します（公式モデルや他のモデルと重複できません）
+         */
+        "byokNameConflict": string;
+        /**
+         * プロバイダーを選択
+         */
+        "byokProviderDialogTitle": string;
+        /**
+         * プリセットのプロバイダーを選ぶと接続情報が自動入力されます。すべて手動で設定することもできます。
+         */
+        "byokProviderDialogCaption": string;
+        /**
+         * カスタム
+         */
+        "byokProviderCustom": string;
+        /**
+         * URLやモデル名などの接続情報をすべて手動で入力します
+         */
+        "byokProviderCustomDesc": string;
+        /**
+         * 「{name}」の接続情報を入力済みです。あなたのキーを入力するだけで利用できます。
+         */
+        "byokProviderBanner": ParameterizedString<"name">;
+        /**
+         * 毎日無料
+         */
+        "modelChipFreeQuota": string;
+        /**
+         * 無料
+         */
+        "modelCostFree": string;
+        /**
+         * モデル表示名
+         */
+        "byokFieldName": string;
+        /**
+         * 名前は一意で、公式モデルと重複できません
+         */
+        "byokFieldNameCaption": string;
+        /**
+         * リクエスト URL
+         */
+        "byokFieldBaseUrl": string;
+        /**
+         * リクエスト Key
+         */
+        "byokFieldApiKey": string;
+        /**
+         * リクエストにのみ使用され、平文では表示されません
+         */
+        "byokApiKeyCaption": string;
+        /**
+         * 空欄の場合は既存のキーを維持します
+         */
+        "byokApiKeyKeepHint": string;
+        /**
+         * モデル名（API パラメータ）
+         */
+        "byokFieldApiModelName": string;
+        /**
+         * リクエストの model フィールドに送信する値
+         */
+        "byokFieldApiModelNameCaption": string;
+        /**
+         * コンテキスト長（トークン）
+         */
+        "byokFieldContext": string;
+        /**
+         * 出力長（トークン）
+         */
+        "byokFieldOutput": string;
+        /**
+         * トークナイザー
+         */
+        "byokFieldTokenizer": string;
+        /**
+         * 組み込みトークナイザーまたは文字数推定を選択
+         */
+        "byokFieldTokenizerCaption": string;
+        /**
+         * 文字 / トークン推定
+         */
+        "byokFieldCharsPerToken": string;
+        /**
+         * 名前・リクエスト URL・キー・モデル名を入力してください
+         */
+        "byokFormIncomplete": string;
+        /**
          * 消費ログ
          */
         "billingLog": string;

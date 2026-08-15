@@ -107,5 +107,6 @@ export const DI = {
 	agentSessionCompressionStickyRepository: Symbol('agentSessionCompressionStickyRepository'),
 	agentPublishedVersionsRepository: Symbol('agentPublishedVersionsRepository'),
 	agentCreditMigrationsRepository: Symbol('agentCreditMigrationsRepository'),
+	agentUserModelsRepository: Symbol('agentUserModelsRepository'),
 	//#endregion
 };

@@ -412,6 +412,23 @@ export const meta = {
 				type: 'string',
 				optional: false, nullable: true,
 			},
+			agentByokEnabled: {
+				type: 'boolean',
+				optional: false, nullable: false,
+			},
+			agentByokProviders: {
+				type: 'array',
+				optional: false, nullable: true,
+				items: {
+					type: 'object',
+					optional: false, nullable: false,
+					additionalProperties: true,
+				},
+			},
+			agentByokMaxUserModels: {
+				type: 'number',
+				optional: false, nullable: false,
+			},
 			agentCompressionDefaultModelId: {
 				type: 'string',
 				optional: false, nullable: true,
@@ -1125,6 +1142,9 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				agentModelApiName: instance.agentModelApiName,
 				agentLlmModels: instance.agentLlmModels,
 				agentDefaultModelId: instance.agentDefaultModelId,
+				agentByokEnabled: instance.agentByokEnabled === true,
+				agentByokProviders: instance.agentByokProviders ?? null,
+				agentByokMaxUserModels: Math.max(1, Math.min(500, instance.agentByokMaxUserModels ?? 20)),
 				agentCompressionDefaultModelId: instance.agentCompressionDefaultModelId,
 				agentMaxContextTokens: instance.agentMaxContextTokens,
 				agentMaxOutputTokensPerCall: instance.agentMaxOutputTokensPerCall,

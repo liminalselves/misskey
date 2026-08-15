@@ -9,6 +9,7 @@ import { In } from 'typeorm';
 import type {
 	AgentCharactersRepository,
 	AgentDialogueStylesRepository,
+	AgentUserModelsRepository,
 	UserProfilesRepository,
 } from '@/models/_.js';
 import { Endpoint } from '@/server/api/endpoint-base.js';
@@ -17,6 +18,7 @@ import { AgentService } from '@/core/AgentService.js';
 import { AgentImageService } from '@/core/AgentImageService.js';
 import { AgentModelUsageService } from '@/core/AgentModelUsageService.js';
 import { MetaService } from '@/core/MetaService.js';
+import { AgentUserModelService } from '@/core/AgentUserModelService.js';
 import { getEffectiveLlmModels } from '@/misc/agent-llm-models.js';
 
 export const meta = {
@@ -40,6 +42,7 @@ export const meta = {
 						durationMs: { type: 'integer', nullable: true },
 						modelId: { type: 'string', nullable: true },
 						modelName: { type: 'string', nullable: true },
+						modelSource: { type: 'string', enum: ['official', 'user'], nullable: true },
 						modelApiName: { type: 'string', nullable: true },
 						usageKind: { type: 'string', enum: ['chat', 'compression', 'image_generation', 'vision', 'proactive_random', 'proactive_scheduled', 'checkin', 'admin_reward', 'credit_migration'] },
 						status: { type: 'string' },
@@ -66,6 +69,7 @@ export const meta = {
 					properties: {
 						modelId: { type: 'string', nullable: true },
 						modelName: { type: 'string', nullable: true },
+						modelSource: { type: 'string', enum: ['official', 'user'], nullable: true },
 						total: { type: 'integer' },
 						success: { type: 'integer' },
 						failed: { type: 'integer' },
@@ -131,10 +135,13 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		@Inject(DI.agentCharactersRepository)
 		private agentCharactersRepository: AgentCharactersRepository,
 
-		@Inject(DI.agentDialogueStylesRepository)
-		private agentDialogueStylesRepository: AgentDialogueStylesRepository,
+	@Inject(DI.agentDialogueStylesRepository)
+	private agentDialogueStylesRepository: AgentDialogueStylesRepository,
 
-		private agentService: AgentService,
+	@Inject(DI.agentUserModelsRepository)
+	private agentUserModelsRepository: AgentUserModelsRepository,
+
+	private agentService: AgentService,
 		private agentImageService: AgentImageService,
 		private agentModelUsageService: AgentModelUsageService,
 		private metaService: MetaService,
@@ -174,10 +181,12 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			if (recentLogsHasMore) recentLogsRaw.pop();
 
 			// 名称映射使用全量模型（含已下架/禁用），避免历史用量记录因模型下架而显示为“—”
+			const userModels = await this.agentUserModelsRepository.find({ where: { userId: me.id } });
 			const modelNameMap = new Map<string, string>([
 				...getEffectiveLlmModels(instanceMeta).map(m => [m.id, m.name] as const),
 				...this.agentImageService.listAvailableImageModels(instanceMeta, true).map(m => [m.id, m.name] as const),
 				...(instanceMeta.agentVisionModels ?? []).map(m => [m.id, m.name] as const),
+				...userModels.map(m => [m.id, m.name] as const),
 			]);
 			const characterIds = characterStatsRaw.map(r => r.characterId);
 			const dialogueStyleIds = dialogueStyleStatsRaw.map(r => r.dialogueStyleId);
@@ -210,13 +219,31 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				if (typeof dfq === 'number' && dfq > 0) quotaMap.set(m.id, Math.trunc(dfq));
 			}
 
+			const modelSourceOf = (modelId: string | null): 'official' | 'user' | null => {
+				if (!modelId) return null;
+				if (userModels.some(m => m.id === modelId)) return 'user';
+				// BYOK 自定义模型 id 以 u 前缀开头；即使模型已删除也能识别为自定义模型
+				if (modelId.startsWith('u')) return 'user';
+				if (modelNameMap.has(modelId)) return 'official';
+				return null;
+			};
+
+			// 模型名兜底：已删除/查不到的自定义模型显示为「自定义模型」，而非「—」
+			const resolveModelName = (modelId: string | null): string | null => {
+				if (!modelId) return null;
+				const n = modelNameMap.get(modelId);
+				if (n) return n;
+				return modelId.startsWith('u') ? '自定义模型' : null;
+			};
+
 			const modelStats = modelStatsRaw.map(r => {
 				const total = r.modelId ? (quotaMap.get(r.modelId) ?? 0) : 0;
 				// 免费次数取近 30 天数据库快照统计（usedFreeQuota=true），而非 Redis 当日计数
 				const used = r.modelId ? (freeQuota30dMap.get(r.modelId) ?? 0) : 0;
 				return {
 					modelId: r.modelId,
-					modelName: r.modelId ? (modelNameMap.get(r.modelId) ?? null) : null,
+					modelName: resolveModelName(r.modelId),
+					modelSource: modelSourceOf(r.modelId),
 					total: r.total,
 					success: r.success,
 					failed: r.failed,
@@ -233,7 +260,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				completedAt: log.completedAt?.toISOString() ?? null,
 				durationMs: log.durationMs,
 				modelId: log.modelId,
-				modelName: log.modelId ? (modelNameMap.get(log.modelId) ?? null) : null,
+				modelName: resolveModelName(log.modelId),
+				modelSource: modelSourceOf(log.modelId),
 				modelApiName: log.modelApiName,
 				usageKind: log.usageKind,
 				status: log.status,

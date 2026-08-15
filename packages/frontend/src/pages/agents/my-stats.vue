@@ -191,7 +191,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<span :class="$style.num">免费次数</span>
 				</div>
 				<div v-for="ms in summary.modelStats" :key="ms.modelId ?? '__null__'" :class="[$style.row, $style.rowData, $style.modelCols]">
-					<span :class="$style.name" :title="ms.modelName ?? undefined">{{ ms.modelName ?? '—' }}</span>
+					<span :class="$style.name" :title="ms.modelName ?? undefined">
+						{{ ms.modelName ?? (ms.modelId?.startsWith('u') ? '自定义模型' : '—') }}
+						<span v-if="ms.modelSource === 'user'" :class="$style.customBadge">{{ i18n.ts._agents.byokCustomBadge }}</span>
+					</span>
 					<span :class="[$style.num, $style.colorOk]">{{ ms.success }}</span>
 					<span :class="[$style.num, ms.failed > 0 ? $style.colorErr : null]">{{ ms.failed }}</span>
 					<span :class="[$style.num, ms.aborted > 0 ? $style.colorWarn : null]">{{ ms.aborted }}</span>
@@ -219,7 +222,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<div v-for="log in summary.recentLogs" :key="log.id" :class="[$style.row, $style.rowData, $style.logCols]">
 						<span :class="$style.name">{{ toBJT(log.requestedAt) }}</span>
 						<span :class="$style.name">{{ usageLogKindLabel(log.usageKind) }}</span>
-						<span :class="$style.name" :title="log.modelName ?? undefined">{{ log.modelName ?? '—' }}</span>
+						<span :class="$style.name" :title="log.modelName ?? undefined">
+							{{ log.modelName ?? (log.modelId?.startsWith('u') ? '自定义模型' : '—') }}
+							<span v-if="log.modelSource === 'user'" :class="$style.customBadge">{{ i18n.ts._agents.byokCustomBadge }}</span>
+						</span>
 						<span :class="$style.num">
 							<span :class="[$style.badge, log.status === 'pending' ? $style.badgePending : log.status === 'success' ? $style.badgeOk : log.status === 'failed' ? $style.badgeErr : $style.badgeWarn]">{{ statusLabel(log.status) }}</span>
 						</span>
@@ -357,6 +363,7 @@ type RecentLog = {
 	durationMs: number | null;
 	modelId: string | null;
 	modelName: string | null;
+	modelSource?: 'official' | 'user' | null;
 	modelApiName: string | null;
 	usageKind: UsageKind;
 	status: 'pending' | 'success' | 'failed' | 'aborted';
@@ -378,7 +385,7 @@ type UsageSummary = {
 	recentLogsTotal: number;
 	recentLogsPage: number;
 	recentLogsPageSize: number;
-	modelStats: { modelId: string | null; modelName: string | null; total: number; success: number; failed: number; aborted: number; totalCost: number; freeQuotaUsed?: number; freeQuotaTotal?: number }[];
+	modelStats: { modelId: string | null; modelName: string | null; modelSource?: 'official' | 'user' | null; total: number; success: number; failed: number; aborted: number; totalCost: number; freeQuotaUsed?: number; freeQuotaTotal?: number }[];
 	characterStats: CharacterStat[];
 	characterStatsTotal: number;
 	dialogueStyleStats: StyleStat[];
@@ -893,6 +900,23 @@ onMounted(async () => {
 	font-size: 0.82em;
 	font-weight: 600;
 	line-height: 1.3;
+}
+
+.customBadge {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	height: 20px;
+	padding: 0 8px;
+	margin-left: 6px;
+	border-radius: 999px;
+	font-size: 0.74em;
+	font-weight: 700;
+	line-height: 1;
+	vertical-align: middle;
+	background: color-mix(in srgb, var(--MI_THEME-accent) 14%, var(--MI_THEME-panel));
+	color: var(--MI_THEME-accent);
+	border: solid 1px color-mix(in srgb, var(--MI_THEME-accent) 34%, var(--MI_THEME-divider));
 }
 
 .badgeBillingUsage {

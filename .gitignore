@@ -86,3 +86,4 @@ vite.config.local-dev.ts.timestamp-*
 .cursor
 .kilo
 .qoder
+.opencode

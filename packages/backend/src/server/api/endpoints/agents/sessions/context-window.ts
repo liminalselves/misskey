@@ -111,7 +111,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				session.agentLongMemoryProvider,
 				instanceMeta,
 			);
-			const { maxContextTokens, historyBudget: historyBudgetChars, charsPerToken, historyBudgetTokens } = this.agentCompressionMemoryService.buildSendPathBudgets({
+			const { maxContextTokens, historyBudget: historyBudgetChars, charsPerToken, historyBudgetTokens } = await this.agentCompressionMemoryService.buildSendPathBudgets({
 				instanceMeta,
 				session,
 				character,
@@ -120,7 +120,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			});
 
 			// 统一经 AgentTokenService 解析编码与计数器；分割线按 token 口径截断，与消息分段区带同源
-			const tokenConfig = this.agentTokenService.resolveTokenConfig(instanceMeta, session.agentModelId ?? instanceMeta.agentDefaultModelId);
+			const tokenConfig = await this.agentTokenService.resolveTokenConfigForUser(instanceMeta, session.agentModelId ?? instanceMeta.agentDefaultModelId, session.userId);
 			const counter = this.agentTokenService.makeCounter(tokenConfig);
 			const { truncated, oldestIncludedId } = await this.agentService.loadRecentMessagesForContextWithMeta(
 				session.id,

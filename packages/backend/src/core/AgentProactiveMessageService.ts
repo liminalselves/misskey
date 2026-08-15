@@ -250,13 +250,7 @@ export class AgentProactiveMessageService {
 				selectedWorldbook,
 				activeRules,
 			);
-			const modelApiName = (() => {
-				try {
-					return this.agentService.resolveModelApiName(instance, session.agentModelId ?? null);
-				} catch {
-					return null;
-				}
-			})();
+			const modelApiName = (await this.agentService.resolveModelApiNameForUser(instance, session.agentModelId ?? null, session.userId).catch(() => null)) ?? null;
 			usageLog = await this.agentModelUsageService.startLog({
 				userId: user.id,
 				sessionId: session.id,
@@ -280,6 +274,7 @@ export class AgentProactiveMessageService {
 					messages: history,
 					userText,
 					sessionModelId: session.agentModelId,
+					userId: session.userId,
 				});
 				rawAssistantText = llmResult.text;
 				// 计费 token 数一律取自响应 usage（禁止本地估算）；缺失时由 finishLog 按策略兜底

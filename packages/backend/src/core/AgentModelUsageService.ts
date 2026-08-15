@@ -16,6 +16,7 @@ import type { MiAgentModelUsageLog, AgentModelUsageStatus, AgentModelUsageKind }
 import type { MiMeta } from '@/models/Meta.js';
 import type { MiUser } from '@/models/User.js';
 import { AgentService } from '@/core/AgentService.js';
+import { isAgentUserModelId } from '@/core/AgentUserModelService.js';
 import { getEffectiveLlmModels, isAgentLlmPeakTimeBeijing } from '@/misc/agent-llm-models.js';
 
 export type StartLogParams = {
@@ -160,6 +161,8 @@ export class AgentModelUsageService {
 	 */
 	@bindThis
 	public async canAffordModelCall(instance: MiMeta, modelId: string | null, userId: string): Promise<boolean> {
+		// BYOK 用户自定义模型：平台不产生成本，直接放行
+		if (modelId && isAgentUserModelId(modelId)) return true;
 		if (await this.hasFreeQuotaRemaining(userId, modelId, instance)) return true;
 		const billingMode = this.agentService.resolveModelBillingMode(instance, modelId);
 		if (billingMode === 'usage') {
@@ -192,6 +195,8 @@ export class AgentModelUsageService {
 	 */
 	@bindThis
 	private resolveLlmCallCost(instance: MiMeta, modelId: string | null, params: FinishLogParams): number {
+		// BYOK 用户自定义模型：用户自带 Key，平台不扣费
+		if (modelId && isAgentUserModelId(modelId)) return 0;
 		const model = modelId ? getEffectiveLlmModels(instance).find(m => m.id === modelId) : undefined;
 		// 高峰倍率：仅当模型显式配置（>1）且结算时刻处于高峰时段时生效
 		const peakMultiplier = model?.peakPriceMultiplier != null && model.peakPriceMultiplier > 1 && isAgentLlmPeakTimeBeijing()
@@ -237,6 +242,8 @@ export class AgentModelUsageService {
 	/** 从 LLM / 生图模型配置中解析指定模型的每日免费额度 */
 	@bindThis
 	private resolveDailyFreeQuota(instance: MiMeta, modelId: string): number {
+		// BYOK 用户自定义模型无平台免费额度
+		if (isAgentUserModelId(modelId)) return 0;
 		const llm = getEffectiveLlmModels(instance).find(m => m.id === modelId);
 		if (llm) return llm.dailyFreeQuota ?? 0;
 		const img = (Array.isArray(instance.agentImageModels) ? instance.agentImageModels : []).find(m => m.id === modelId);

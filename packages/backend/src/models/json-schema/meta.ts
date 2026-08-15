@@ -465,6 +465,33 @@ export const packedMetaLiteSchema = {
 			type: 'string',
 			optional: false, nullable: true,
 		},
+		agentByokEnabled: {
+			type: 'boolean',
+			optional: false, nullable: false,
+		},
+		agentByokProviders: {
+			type: 'array',
+			optional: false, nullable: true,
+			items: {
+				type: 'object',
+				optional: false, nullable: false,
+				properties: {
+					id: { type: 'string', optional: false, nullable: false },
+					name: { type: 'string', optional: false, nullable: false },
+					description: { type: 'string', optional: true, nullable: true },
+					baseUrl: { type: 'string', optional: false, nullable: false },
+					apiModelName: { type: 'string', optional: true, nullable: true },
+					maxContextTokens: { type: 'number', optional: true, nullable: true },
+					maxOutputTokensPerCall: { type: 'number', optional: true, nullable: true },
+					tokenizerEncoding: { type: 'string', optional: true, nullable: true },
+					charsPerToken: { type: 'number', optional: true, nullable: true },
+				},
+			},
+		},
+		agentByokMaxUserModels: {
+			type: 'number',
+			optional: false, nullable: false,
+		},
 		agentCompressionDefaultModelId: {
 			type: 'string',
 			optional: false, nullable: true,

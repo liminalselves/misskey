@@ -122,7 +122,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				instanceMeta,
 			);
 			/** 与 `agents/messages/send`、`reconcileStickyStates` 同一 H，避免总览区带与便签态/自动压条错位 */
-			const { historyBudget: historyBudgetChars, charsPerToken, historyBudgetTokens } = this.agentCompressionMemoryService.buildSendPathBudgets({
+			const { historyBudget: historyBudgetChars, charsPerToken, historyBudgetTokens } = await this.agentCompressionMemoryService.buildSendPathBudgets({
 				instanceMeta,
 				session: row,
 				character,
@@ -131,7 +131,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			});
 			const { t1Ratio, t2Ratio } = this.agentCompressionMemoryService.resolveCompressionBandRatios(instanceMeta);
 			// 统一经 AgentTokenService 解析编码与计数器（收敛此前重复的 getEffectiveLlmModels().find() 逻辑）
-			const tokenConfig = this.agentTokenService.resolveTokenConfig(instanceMeta, row.agentModelId ?? instanceMeta.agentDefaultModelId);
+			const tokenConfig = await this.agentTokenService.resolveTokenConfigForUser(instanceMeta, row.agentModelId ?? instanceMeta.agentDefaultModelId, row.userId);
 			const exactCounter = this.agentTokenService.makeCounter(tokenConfig);
 			const { historyBudgetTokens: hbt, t1Tokens, t2Tokens, messages, stickies, compressionSidecarFailedAt } = await this.agentCompressionMemoryService.getCompressionOverviewData(
 				row.id,

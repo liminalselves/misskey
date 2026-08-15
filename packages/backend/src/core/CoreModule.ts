@@ -88,6 +88,7 @@ import { AgentCompressionMemoryService } from './AgentCompressionMemoryService.j
 import { AgentTokenService } from './AgentTokenService.js';
 import { AgentPlazaReviewService } from './AgentPlazaReviewService.js';
 import { AgentModelUsageService } from './AgentModelUsageService.js';
+import { AgentUserModelService } from './AgentUserModelService.js';
 import { AgentCheckinService } from './AgentCheckinService.js';
 import { AgentDashscopeMemoryService } from './AgentDashscopeMemoryService.js';
 import { ChatService } from './ChatService.js';
@@ -248,6 +249,7 @@ const $AgentVisionService: Provider = { provide: 'AgentVisionService', useExisti
 const $AgentExternalAuditService: Provider = { provide: 'AgentExternalAuditService', useExisting: AgentExternalAuditService };
 const $AgentPlazaReviewService: Provider = { provide: 'AgentPlazaReviewService', useExisting: AgentPlazaReviewService };
 const $AgentModelUsageService: Provider = { provide: 'AgentModelUsageService', useExisting: AgentModelUsageService };
+const $AgentUserModelService: Provider = { provide: 'AgentUserModelService', useExisting: AgentUserModelService };
 const $AgentCheckinService: Provider = { provide: 'AgentCheckinService', useExisting: AgentCheckinService };
 const $AgentDashscopeMemoryService: Provider = { provide: 'AgentDashscopeMemoryService', useExisting: AgentDashscopeMemoryService };
 const $AgentMessageNotifyService: Provider = { provide: 'AgentMessageNotifyService', useExisting: AgentMessageNotifyService };
@@ -417,6 +419,7 @@ const $ApQuestionService: Provider = { provide: 'ApQuestionService', useExisting
 		AgentTokenService,
 		AgentPlazaReviewService,
 		AgentModelUsageService,
+		AgentUserModelService,
 		AgentCheckinService,
 		AgentDashscopeMemoryService,
 		ChatService,
@@ -577,6 +580,7 @@ const $ApQuestionService: Provider = { provide: 'ApQuestionService', useExisting
 		$AgentExternalAuditService,
 		$AgentPlazaReviewService,
 		$AgentModelUsageService,
+		$AgentUserModelService,
 		$AgentCheckinService,
 		$AgentDashscopeMemoryService,
 		$AgentMessageNotifyService,
@@ -743,6 +747,7 @@ const $ApQuestionService: Provider = { provide: 'ApQuestionService', useExisting
 		AgentTokenService,
 		AgentPlazaReviewService,
 		AgentModelUsageService,
+		AgentUserModelService,
 		AgentCheckinService,
 		AgentDashscopeMemoryService,
 		ChatService,
@@ -900,6 +905,7 @@ const $ApQuestionService: Provider = { provide: 'ApQuestionService', useExisting
 		$AgentExternalAuditService,
 		$AgentPlazaReviewService,
 		$AgentModelUsageService,
+		$AgentUserModelService,
 		$AgentCheckinService,
 		$AgentDashscopeMemoryService,
 		$AgentMessageNotifyService,

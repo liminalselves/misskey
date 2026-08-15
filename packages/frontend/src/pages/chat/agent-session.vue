@@ -943,7 +943,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 							<div :class="[$style.selectCardMain, $style.modelSelectCardMain]">
 								<div :class="[$style.selectCardHead, $style.modelSelectCardHead]">
 									<div :class="$style.selectCardTitleWrap">
-										<div :class="$style.modelSelectCardTitle">{{ m.name }}</div>
+										<div :class="$style.modelSelectCardTitle">
+											{{ m.name }}
+											<span v-if="m.isUserModel" :class="$style.byokBadge">{{ i18n.ts._agents.byokCustomBadge }}</span>
+										</div>
 										<p v-if="m.description" :class="$style.modelDescClamp">{{ m.description }}</p>
 										<div :class="$style.modelMetaChips" :aria-label="i18n.ts._agents.sessionModel" role="list">
 											<span
@@ -1956,13 +1959,56 @@ type AgentModelLite = {
 	pricePerMillionInputCacheMissTokens?: number;
 	pricePerMillionOutputTokens?: number;
 	peakPriceMultiplier?: number | null;
+	/** 用户自定义模型（BYOK）标记 */
+	isUserModel?: boolean;
 };
+
+/** 用户自定义模型（BYOK）列表；仅 when 实例启用 BYOK 时非空 */
+const userModels = ref<AgentModelLite[]>([]);
 
 const agentModels = computed(() => {
 	const raw = (instance as Record<string, unknown>).agentModels;
-	if (!raw || !Array.isArray(raw)) return [] as AgentModelLite[];
-	return raw as AgentModelLite[];
+	const official = Array.isArray(raw) ? raw as AgentModelLite[] : [];
+	return [...official, ...userModels.value];
 });
+
+async function loadUserModels() {
+	if ((instance as Record<string, unknown>).agentByokEnabled !== true) {
+		userModels.value = [];
+		return;
+	}
+	try {
+		const rows = await misskeyApi(
+			'agents/byok/models/list' as Parameters<typeof misskeyApi>[0],
+			{} as any,
+		) as {
+			id: string;
+			name: string;
+			baseUrl: string;
+			apiModelName: string;
+			maxContextTokens: number;
+			maxOutputTokensPerCall: number;
+			tokenizerEncoding: string | null;
+			charsPerToken: number | null;
+			providerId: string | null;
+			enabled: boolean;
+		}[];
+		userModels.value = rows
+			.filter(r => r.enabled)
+			.map(r => ({
+				id: r.id,
+				name: r.name,
+				description: null,
+				maxContextTokens: r.maxContextTokens,
+				maxOutputTokensPerCall: r.maxOutputTokensPerCall,
+				costPerCall: 0,
+				billingMode: 'per_call' as const,
+				isUserModel: true,
+			}));
+	} catch {
+		userModels.value = [];
+	}
+}
 
 /** Matches server MetaLite: site default id, or first configured model. */
 const resolvedInstanceDefaultModelId = computed(() => {
@@ -3344,6 +3390,7 @@ onMounted(async () => {
 		void loadModelSuccessRates();
 		void loadModelFreeQuota();
 		void loadAgentCreditBalance();
+		void loadUserModels();
 		void loadDrawArtistPresets();
 		void loadDrawImageModels();
 		await loadVisionModels();
@@ -5694,6 +5741,23 @@ async function onAbortRequest() {
 	font-weight: 700;
 	line-height: 1.25;
 	word-break: break-word;
+}
+
+.byokBadge {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	height: 20px;
+	padding: 0 8px;
+	margin-left: 6px;
+	border-radius: 999px;
+	font-size: 0.74em;
+	font-weight: 700;
+	line-height: 1;
+	vertical-align: middle;
+	background: color-mix(in srgb, var(--MI_THEME-accent) 14%, var(--MI_THEME-panel));
+	color: var(--MI_THEME-accent);
+	border: solid 1px color-mix(in srgb, var(--MI_THEME-accent) 34%, var(--MI_THEME-divider));
 }
 
 .modelMetaChips {

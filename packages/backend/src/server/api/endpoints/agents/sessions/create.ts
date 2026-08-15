@@ -108,7 +108,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			const eff = getActiveLlmModels(instanceMeta);
 			const agentModelId = ps.agentModelId ?? instanceMeta.agentDefaultModelId ?? eff[0]?.id ?? null;
 			if (agentModelId) {
-				this.agentService.resolveModelApiName(instanceMeta, agentModelId);
+				await this.agentService.resolveModelApiNameForUser(instanceMeta, agentModelId, me.id);
 			}
 
 			/** 创建时快照：与当时 meta 的压缩默认、对话默认、主模型、可用列表顺序一致，写入会话列供后续独立变更 */
@@ -121,7 +121,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			let agentCompressionModelId: string | null = null;
 			for (const id of [...new Set(compressionIdCandidates)]) {
 				try {
-					this.agentService.resolveModelApiName(instanceMeta, id);
+					await this.agentService.resolveModelApiNameForUser(instanceMeta, id, me.id);
 					agentCompressionModelId = id;
 					break;
 				} catch {

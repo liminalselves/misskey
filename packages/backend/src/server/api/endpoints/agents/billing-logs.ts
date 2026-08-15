@@ -5,7 +5,7 @@
 
 import ms from 'ms';
 import { Inject, Injectable } from '@nestjs/common';
-import type { AgentModelUsageLogsRepository, AgentRedeemCodesRepository } from '@/models/_.js';
+import type { AgentModelUsageLogsRepository, AgentRedeemCodesRepository, AgentUserModelsRepository } from '@/models/_.js';
 import { Endpoint } from '@/server/api/endpoint-base.js';
 import { DI } from '@/di-symbols.js';
 import { AgentService } from '@/core/AgentService.js';
@@ -85,6 +85,9 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		@Inject(DI.agentRedeemCodesRepository)
 		private agentRedeemCodesRepository: AgentRedeemCodesRepository,
 
+		@Inject(DI.agentUserModelsRepository)
+		private agentUserModelsRepository: AgentUserModelsRepository,
+
 		private agentService: AgentService,
 		private metaService: MetaService,
 		private agentVisionService: AgentVisionService,
@@ -105,16 +108,29 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				...this.agentVisionService.listAvailableVisionModels(instanceMeta).map(m => [m.id, m.name] as const),
 			]);
 
+			// BYOK（自定义模型）请求不消耗平台额度，不在消费日志中展示
+			const byokModelIds = (await this.agentUserModelsRepository.find({ where: { userId: me.id }, select: ['id'] })).map(m => m.id);
+
 			const usageQb = this.agentModelUsageLogsRepository.createQueryBuilder('log')
 				.where('log.userId = :userId', { userId: me.id })
 				.orderBy('log.requestedAt', 'DESC')
 				.take(fetchLimit);
+			if (byokModelIds.length > 0) {
+				usageQb.andWhere('log.modelId NOT IN (:...byokIds)', { byokIds: byokModelIds });
+			}
 			if (untilDate) {
 				usageQb.andWhere('log.requestedAt < :until', { until: untilDate });
 			}
+
+			const usageCountQb = this.agentModelUsageLogsRepository.createQueryBuilder('log')
+				.where('log.userId = :userId', { userId: me.id });
+			if (byokModelIds.length > 0) {
+				usageCountQb.andWhere('log.modelId NOT IN (:...byokIds)', { byokIds: byokModelIds });
+			}
+
 			const [usageLogs, usageTotal] = await Promise.all([
 				usageQb.getMany(),
-				this.agentModelUsageLogsRepository.countBy({ userId: me.id }),
+				usageCountQb.getCount(),
 			]);
 
 			const redeemQb = this.agentRedeemCodesRepository.createQueryBuilder('c')
