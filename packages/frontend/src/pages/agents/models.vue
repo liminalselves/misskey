@@ -122,7 +122,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, ref, useCssModule } from 'vue';
 import MkLoading from '@/components/global/MkLoading.vue';
 import MkInfo from '@/components/MkInfo.vue';
 import MkButton from '@/components/MkButton.vue';
@@ -134,6 +134,8 @@ import { instance } from '@/instance.js';
 import { i18n } from '@/i18n.js';
 import * as os from '@/os.js';
 import type { AgentsByokModelsListResponse } from 'misskey-js/entities.js';
+
+const modelsCss = useCssModule();
 
 type OfficialModelLite = {
 	id: string;
@@ -208,11 +210,11 @@ function ratePercent(success: number, total: number): string {
 }
 
 function getRateClass(success: number, total: number): string {
-	if (total === 0) return $style.rateMuted;
+	if (total === 0) return modelsCss.rateMuted;
 	const rate = success / total;
-	if (rate >= 0.9) return $style.rateOk;
-	if (rate >= 0.7) return $style.rateWarn;
-	return $style.rateErr;
+	if (rate >= 0.9) return modelsCss.rateOk;
+	if (rate >= 0.7) return modelsCss.rateWarn;
+	return modelsCss.rateErr;
 }
 
 function openUsagePricing(m: OfficialModelLite, ev: MouseEvent) {
