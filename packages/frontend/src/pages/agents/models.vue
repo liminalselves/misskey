@@ -123,7 +123,6 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <script lang="ts" setup>
 import { computed, onMounted, ref } from 'vue';
-import { useCssModule } from 'vue';
 import MkLoading from '@/components/global/MkLoading.vue';
 import MkInfo from '@/components/MkInfo.vue';
 import MkButton from '@/components/MkButton.vue';
@@ -135,8 +134,6 @@ import { instance } from '@/instance.js';
 import { i18n } from '@/i18n.js';
 import * as os from '@/os.js';
 import type { AgentsByokModelsListResponse } from 'misskey-js/entities.js';
-
-const $style = useCssModule();
 
 type OfficialModelLite = {
 	id: string;
