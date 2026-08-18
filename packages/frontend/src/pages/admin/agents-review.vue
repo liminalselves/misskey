@@ -170,7 +170,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 							</div>
 						</div>
 					</section>
-					<div :class="$style.splitPane">
+					<div :class="[$style.splitPane, $style.sessionsSplit, sessionDetail || sessionDetailLoading ? $style.detailOpen : null]">
 						<section :class="$style.listPane">
 							<div :class="$style.sectionHead">
 								<div>
@@ -189,7 +189,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 									<p>{{ row.characterName || '—' }}</p>
 									<div :class="$style.rowMeta">
 										<UserAcctInline :user="row.user" :fallback="row.userId" @copy="copyText"/>
-										<time>{{ formatTime(row.lastMessageAt || row.updatedAt) }}</time>
+										<span :class="$style.rowMetaRight">
+											<span v-if="row.messageCount != null" :class="$style.msgCount" :title="`共 ${row.messageCount} 条消息`"><i class="ti ti-messages"></i>{{ row.messageCount.toLocaleString() }}</span>
+											<time>{{ formatTime(row.lastMessageAt || row.updatedAt) }}</time>
+										</span>
 									</div>
 								</button>
 							</div>
@@ -197,9 +200,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 								<MkButton v-appear="prefer.s.enableInfiniteScroll ? () => sessionsPagination.load(false) : null" small rounded :disabled="sessionsLoading" @click="sessionsPagination.load(false)"><i class="ti ti-chevron-down"></i> {{ sessionsLoading ? '载入中…' : '继续载入' }}</MkButton>
 							</div>
 						</section>
-						<aside :class="$style.detailPane">
+						<aside ref="sessionDetailPaneEl" :class="$style.detailPane">
+							<MkButton v-if="sessionDetail || sessionDetailLoading" :class="$style.backToList" small rounded @click="closeSessionDetail"><i class="ti ti-chevron-left"></i> 返回会话列表</MkButton>
 							<MkLoading v-if="sessionDetailLoading"/>
-							<SessionDetail v-else-if="sessionDetail" :detail="sessionDetail" :canModerate="iAmModerator" :messagesLoading="sessionMessagesLoading" @toggleBan="toggleSessionBan" @copy="copyText" @loadMoreMessages="loadMoreSessionMessages"/>
+							<SessionDetail v-else-if="sessionDetail" :detail="sessionDetail" :canModerate="iAmModerator" :messagesLoading="sessionMessagesLoading" :messagesPage="sessionMsgPage" :messagesPageSize="SESSION_MSG_PAGE_SIZE" @toggleBan="toggleSessionBan" @copy="copyText" @pageMessages="loadSessionMessagesPage"/>
 							<div v-else :class="$style.emptyDetail">
 								<i class="ti ti-messages"></i>
 								<p>选择会话查看最近消息。</p>
@@ -506,9 +510,9 @@ type ReviewDetailRow = ReviewRow & {
 };
 type WorldbookEntry = { id: string; title: string; content: string; keywords: string[]; triggerMode: 'keyword' | 'manual' | 'always'; priority: number; enabled: boolean; revision: number };
 type CharacterRuleEntry = { id: string; name: string; content: string; description: string; type: 'persistent' | 'toggleable'; defaultEnabled: boolean };
-type SessionRow = { id: string; createdAt: string; updatedAt: string; userId: string; name: string; characterId: string; dialogueStyleId: string | null; sessionKind: 'draft_test' | 'community'; lastMessageAt: string | null; agentReplyPending: boolean; moderationBanned: boolean; characterName: string; user: any | null };
+type SessionRow = { id: string; createdAt: string; updatedAt: string; userId: string; name: string; characterId: string; dialogueStyleId: string | null; sessionKind: 'draft_test' | 'community'; lastMessageAt: string | null; agentReplyPending: boolean; moderationBanned: boolean; characterName: string; user: any | null; messageCount: number | null };
 type TimelineMsg = { id: string; role: 'user' | 'assistant' | 'system'; content: string; createdAt: string };
-type SessionDetailRow = { session: SessionRow; messages: TimelineMsg[]; hasMoreMessages?: boolean };
+type SessionDetailRow = { session: SessionRow; messages: TimelineMsg[]; totalCount: number; hasMore: boolean };
 type MessageRow = TimelineMsg & { sessionId: string; sessionName: string; sessionKind: 'draft_test' | 'community'; userId: string; user: any | null; characterId: string; characterName: string; dialogueStyleId: string | null; sessionModerationBanned: boolean; characterModerationBanned: boolean };
 type ExternalStatus = 'allow' | 'block' | 'failed' | 'all_failed';
 type ExternalAuditRow = { id: string; createdAt: string; completedAt: string | null; durationMs: number | null; userId: string | null; user: any | null; sessionId: string | null; sessionName: string | null; sessionModerationBanned?: boolean; characterId: string | null; characterName: string; dialogueStyleId: string | null; modelId: string | null; modelName: string | null; apiModelName: string | null; baseUrl: string | null; priority: number; attemptIndex: number; status: ExternalStatus; blockCode: string | null; category: string | null; reason: string | null; confidence: number | null; userText: string | null; assistantText: string | null; responseText: string | null; errorCode: string | null; errorMessage: string | null; userRecentBlockCount?: number; triggeredRules?: { id: string; timeWindowMinutes: number; blockThreshold: number }[] };
@@ -582,6 +586,27 @@ const sessionDetail = ref<SessionDetailRow | null>(null);
 const sessionDetailLoading = ref(false);
 const sessionMessagesLoading = ref(false);
 const sessionFilters = reactive({ userId: '', sessionId: '' });
+
+// 会话消息页码式翻页（第 0 页为最新消息）
+const SESSION_MSG_PAGE_SIZE = 50;
+const sessionMsgPage = ref(0);
+const sessionDetailPaneEl = ref<HTMLElement | null>(null);
+
+function scrollSessionDetailToTop() {
+	const pane = sessionDetailPaneEl.value;
+	if (!pane) return;
+	if (window.innerWidth <= 900) {
+		// 移动端详情面板不是独立滚动容器，需要滚动页面
+		pane.scrollIntoView({ block: 'start' });
+	} else {
+		pane.scrollTop = 0;
+	}
+}
+
+function closeSessionDetail() {
+	sessionDetail.value = null;
+	selectedSession.value = null;
+}
 
 // 会话列表分页
 const sessionsPagination = useGovernancePagination<SessionRow>(async (untilId) => {
@@ -999,13 +1024,21 @@ function resetSessionFilters() {
 	void loadSessions(true);
 }
 
+function fetchSessionMessagesPage(sessionId: string, page: number): Promise<SessionDetailRow> {
+	return api<SessionDetailRow>('admin/agents/governance/sessions/detail', {
+		sessionId,
+		limit: SESSION_MSG_PAGE_SIZE,
+		offset: page * SESSION_MSG_PAGE_SIZE,
+	});
+}
+
 async function selectSession(row: SessionRow) {
 	selectedSession.value = row;
+	sessionMsgPage.value = 0;
 	sessionDetailLoading.value = true;
 	try {
-		const result = await api<SessionDetailRow>('admin/agents/governance/sessions/detail', { sessionId: row.id, limit: 80 });
-		result.hasMoreMessages = result.messages.length >= 80;
-		sessionDetail.value = result;
+		sessionDetail.value = await fetchSessionMessagesPage(row.id, 0);
+		scrollSessionDetailToTop();
 	} catch (err) {
 		os.alert({ type: 'error', text: formatApiError(err) });
 	} finally {
@@ -1013,19 +1046,16 @@ async function selectSession(row: SessionRow) {
 	}
 }
 
-async function loadMoreSessionMessages() {
+async function loadSessionMessagesPage(page: number) {
 	if (!sessionDetail.value || sessionMessagesLoading.value) return;
-	const oldestMsg = sessionDetail.value.messages[0];
-	if (!oldestMsg) return;
+	const totalPages = Math.max(1, Math.ceil(sessionDetail.value.totalCount / SESSION_MSG_PAGE_SIZE));
+	const target = Math.min(Math.max(page, 0), totalPages - 1);
+	if (target === sessionMsgPage.value) return;
 	sessionMessagesLoading.value = true;
 	try {
-		const result = await api<SessionDetailRow>('admin/agents/governance/sessions/detail', {
-			sessionId: sessionDetail.value.session.id,
-			limit: 80,
-			untilId: oldestMsg.id,
-		});
-		sessionDetail.value.hasMoreMessages = result.messages.length >= 80;
-		sessionDetail.value.messages = [...result.messages, ...sessionDetail.value.messages];
+		sessionDetail.value = await fetchSessionMessagesPage(sessionDetail.value.session.id, target);
+		sessionMsgPage.value = target;
+		scrollSessionDetailToTop();
 	} catch (err) {
 		os.alert({ type: 'error', text: formatApiError(err) });
 	} finally {
@@ -1466,10 +1496,30 @@ const ReviewDetail = defineComponent({
 });
 
 const SessionDetail = defineComponent({
-	props: { detail: { type: Object as () => SessionDetailRow, required: true }, canModerate: { type: Boolean, default: true }, messagesLoading: { type: Boolean, default: false } },
-	emits: ['toggleBan', 'copy', 'loadMoreMessages'],
+	props: {
+		detail: { type: Object as () => SessionDetailRow, required: true },
+		canModerate: { type: Boolean, default: true },
+		messagesLoading: { type: Boolean, default: false },
+		messagesPage: { type: Number, default: 0 },
+		messagesPageSize: { type: Number, default: 50 },
+	},
+	emits: ['toggleBan', 'copy', 'pageMessages'],
 	setup(props, { emit }) {
-		const messagesAsc = computed(() => [...props.detail.messages].reverse());
+		const totalPages = computed(() => Math.max(1, Math.ceil(props.detail.totalCount / props.messagesPageSize)));
+		const pagerBtn = (icon: string, label: string, disabled: boolean, page: number) => h('button', {
+			class: '_button session-msg-pager-btn',
+			type: 'button',
+			title: label,
+			disabled,
+			onClick: () => emit('pageMessages', page),
+		}, [h('i', { class: `ti ${icon}` })]);
+		const renderPager = () => h('div', { class: 'session-msg-pager' }, [
+			pagerBtn('ti-chevrons-left', '最新', props.messagesLoading || props.messagesPage <= 0, 0),
+			pagerBtn('ti-chevron-left', '更新', props.messagesLoading || props.messagesPage <= 0, props.messagesPage - 1),
+			h('span', { class: 'session-msg-pager-info' }, props.messagesLoading ? '…' : `${props.messagesPage + 1} / ${totalPages.value}`),
+			pagerBtn('ti-chevron-right', '更早', props.messagesLoading || props.messagesPage >= totalPages.value - 1, props.messagesPage + 1),
+			pagerBtn('ti-chevrons-right', '最早', props.messagesLoading || props.messagesPage >= totalPages.value - 1, totalPages.value - 1),
+		]);
 		return () => h('article', { class: '_gaps_s' }, [
 			h('div', { class: 'session-detail-head' }, [
 				h('div', [h('h2', props.detail.session.name), h('p', `${props.detail.session.characterName || '—'} · ${sessionKindLabel(props.detail.session.sessionKind)}`)]),
@@ -1480,17 +1530,13 @@ const SessionDetail = defineComponent({
 				h(MkButton, { rounded: true, onClick: () => emit('copy', props.detail.session.id) }, () => [h('i', { class: 'ti ti-copy' }), ' 复制会话 ID']),
 			]),
 			h('section', { class: 'review-block' }, [
-				h('h3', `最近消息（已加载 ${props.detail.messages.length} 条）`),
-				props.detail.hasMoreMessages ? h('div', { style: 'display: flex; justify-content: center; margin-bottom: 10px;' }, [
-					h(MkButton, { small: true, rounded: true, disabled: props.messagesLoading, onClick: () => emit('loadMoreMessages') }, () => [
-						h('i', { class: 'ti ti-chevron-up' }),
-						props.messagesLoading ? ' 载入中…' : ' 加载更早的消息',
-					]),
-				]) : null,
-				...messagesAsc.value.map(msg => h('div', { class: `timeline-message role-${msg.role}` }, [
+				props.detail.totalCount === 0 ? h('p', '该会话还没有消息。') : null,
+				props.detail.totalCount > props.messagesPageSize ? renderPager() : null,
+				...props.detail.messages.map(msg => h('div', { class: `timeline-message role-${msg.role}` }, [
 					h('div', [h('b', roleLabel(msg.role)), h('time', formatTime(msg.createdAt))]),
 					h('pre', msg.content),
 				])),
+				props.detail.totalCount > props.messagesPageSize ? renderPager() : null,
 			]),
 		]);
 	},
@@ -1651,6 +1697,9 @@ onMounted(() => {
 	max-height: calc(100vh - 32px);
 	overflow: auto;
 }
+.backToList {
+	display: none;
+}
 .sectionHead {
 	display: flex;
 	align-items: flex-start;
@@ -1756,6 +1805,32 @@ onMounted(() => {
 	margin-top: 8px;
 	color: var(--MI_THEME-fgTransparentWeak);
 	font-size: 0.86em;
+}
+.rowMetaRight {
+	display: inline-flex;
+	align-items: center;
+	flex-shrink: 0;
+	gap: 8px;
+}
+.msgCount {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 2px 8px;
+	border-radius: 999px;
+	background: var(--MI_THEME-bg);
+	border: 1px solid var(--MI_THEME-divider);
+	font-variant-numeric: tabular-nums;
+	line-height: 1.4;
+}
+.msgCount i {
+	font-size: 0.95em;
+	opacity: 0.8;
+}
+.rowActive .msgCount {
+	background: var(--MI_THEME-panel);
+	border-color: var(--MI_THEME-accent);
+	color: var(--MI_THEME-accent);
 }
 .rowMeta > *,
 .metaGrid > *,
@@ -2024,6 +2099,17 @@ onMounted(() => {
 		position: static;
 		max-height: none;
 	}
+	/* 会话治理：移动端主从布局，选中会话后详情整页替换列表 */
+	.sessionsSplit.detailOpen .listPane {
+		display: none;
+	}
+	.sessionsSplit:not(.detailOpen) .detailPane {
+		display: none;
+	}
+	.backToList {
+		display: inline-flex;
+		margin-bottom: 10px;
+	}
 	.summaryGrid {
 		grid-template-columns: repeat(2, minmax(0, 1fr));
 	}
@@ -2235,6 +2321,39 @@ onMounted(() => {
 }
 .role-assistant {
 	border-color: var(--MI_THEME-success);
+}
+.session-msg-pager {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex-wrap: nowrap;
+	gap: 4px;
+	padding: 6px 0;
+}
+.session-msg-pager-btn {
+	display: inline-grid;
+	place-items: center;
+	width: 32px;
+	height: 32px;
+	border-radius: 8px;
+	font-size: 1em;
+	color: var(--MI_THEME-fgTransparentWeak);
+	transition: background 0.15s, color 0.15s;
+}
+.session-msg-pager-btn:hover:not(:disabled) {
+	color: var(--MI_THEME-accent);
+	background: var(--MI_THEME-accentedBg);
+}
+.session-msg-pager-btn:disabled {
+	opacity: 0.35;
+	cursor: default;
+}
+.session-msg-pager-info {
+	min-width: 56px;
+	text-align: center;
+	color: var(--MI_THEME-fgTransparentWeak);
+	font-size: 0.9em;
+	font-variant-numeric: tabular-nums;
 }
 @media (max-width: 600px) {
 	.review-detail-head,

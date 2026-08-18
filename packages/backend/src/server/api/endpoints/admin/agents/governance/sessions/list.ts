@@ -6,7 +6,7 @@
 import ms from 'ms';
 import { Inject, Injectable } from '@nestjs/common';
 import { In } from 'typeorm';
-import type { AgentCharactersRepository, AgentSessionsRepository, UsersRepository } from '@/models/_.js';
+import type { AgentCharactersRepository, AgentMessagesRepository, AgentSessionsRepository, UsersRepository } from '@/models/_.js';
 import { Endpoint } from '@/server/api/endpoint-base.js';
 import { DI } from '@/di-symbols.js';
 import { QueryService } from '@/core/QueryService.js';
@@ -44,6 +44,9 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		@Inject(DI.agentCharactersRepository)
 		private agentCharactersRepository: AgentCharactersRepository,
 
+		@Inject(DI.agentMessagesRepository)
+		private agentMessagesRepository: AgentMessagesRepository,
+
 		@Inject(DI.usersRepository)
 		private usersRepository: UsersRepository,
 
@@ -75,8 +78,15 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			const users = await this.usersRepository.findBy({ id: In(userIds) });
 			const packedUsers = await this.userEntityService.packMany(users, me, { schema: 'UserLite' });
 			const userById = new Map(packedUsers.map(u => [u.id, u]));
+			const messageCounts = await this.agentMessagesRepository.createQueryBuilder('m')
+				.select('m.sessionId', 'sessionId')
+				.addSelect('COUNT(m.id)', 'count')
+				.where('m.sessionId IN (:...sessionIds)', { sessionIds: rows.map(r => r.id) })
+				.groupBy('m.sessionId')
+				.getRawMany<{ sessionId: string; count: string }>();
+			const messageCountById = new Map(messageCounts.map(c => [c.sessionId, Number(c.count)]));
 
-			return rows.map(r => packSessionGovernanceRow(r, userById.get(r.userId) ?? null, charMap.get(r.characterId) ?? ''));
+			return rows.map(r => packSessionGovernanceRow(r, userById.get(r.userId) ?? null, charMap.get(r.characterId) ?? '', messageCountById.get(r.id) ?? 0));
 		});
 	}
 }

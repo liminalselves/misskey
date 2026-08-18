@@ -29,6 +29,7 @@ export const paramDef = {
 	properties: {
 		sessionId: { type: 'string', format: 'misskey:id' },
 		limit: { type: 'integer', minimum: 1, maximum: 200, default: 80 },
+		offset: { type: 'integer', minimum: 0, default: 0 },
 		untilId: { type: 'string', format: 'misskey:id', nullable: true },
 	},
 	required: ['sessionId'],
@@ -62,22 +63,53 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				this.agentCharactersRepository.findOne({ where: { id: session.characterId }, select: ['id', 'name'] }),
 			]);
 			const packedUser = user ? await this.userEntityService.pack(user, me, { schema: 'UserLite' }) : null;
-			const messages = await this.queryService.makePaginationQuery(
+			const limit = ps.limit ?? 80;
+			const offset = ps.offset ?? 0;
+			const packMessage = (m: { id: string; role: string; content: string; createdAt: Date }) => ({
+				id: m.id,
+				role: m.role,
+				content: m.content,
+				createdAt: m.createdAt.toISOString(),
+			});
+
+			if (ps.untilId) {
+				// 兼容旧的游标式"加载更早"：返回比 untilId 更早的一页（新→旧）
+				const [messages, totalCount] = await Promise.all([
+					this.queryService.makePaginationQuery(
+						this.agentMessagesRepository.createQueryBuilder('m')
+							.where('m.sessionId = :sessionId', { sessionId: session.id })
+							.select(['m.id', 'm.role', 'm.content', 'm.createdAt']),
+						null,
+						ps.untilId,
+					).take(limit).getMany(),
+					this.agentMessagesRepository.countBy({ sessionId: session.id }),
+				]);
+
+				return {
+					session: packSessionGovernanceRow(session, packedUser, character?.name ?? '', totalCount),
+					messages: messages.map(packMessage),
+					totalCount,
+					hasMore: messages.length >= limit,
+				};
+			}
+
+			// 页码式翻页：按时间倒序返回，第 0 页为最新消息
+			const [messages, totalCount] = await Promise.all([
 				this.agentMessagesRepository.createQueryBuilder('m')
 					.where('m.sessionId = :sessionId', { sessionId: session.id })
-					.select(['m.id', 'm.role', 'm.content', 'm.createdAt']),
-				null,
-				ps.untilId ?? null,
-			).take(ps.limit ?? 80).getMany();
+					.select(['m.id', 'm.role', 'm.content', 'm.createdAt'])
+					.orderBy('m.id', 'DESC')
+					.skip(offset)
+					.take(limit)
+					.getMany(),
+				this.agentMessagesRepository.countBy({ sessionId: session.id }),
+			]);
 
 			return {
-				session: packSessionGovernanceRow(session, packedUser, character?.name ?? ''),
-				messages: messages.map(m => ({
-					id: m.id,
-					role: m.role,
-					content: m.content,
-					createdAt: m.createdAt.toISOString(),
-				})),
+				session: packSessionGovernanceRow(session, packedUser, character?.name ?? '', totalCount),
+				messages: messages.map(packMessage),
+				totalCount,
+				hasMore: offset + messages.length < totalCount,
 			};
 		});
 	}

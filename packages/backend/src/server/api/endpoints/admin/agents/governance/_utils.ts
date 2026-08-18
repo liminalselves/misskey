@@ -224,7 +224,7 @@ export function packStyleGovernanceDetail(agentService: AgentService, row: MiAge
 	};
 }
 
-export function packSessionGovernanceRow(row: any, user: unknown, characterName: string) {
+export function packSessionGovernanceRow(row: any, user: unknown, characterName: string, messageCount?: number) {
 	return {
 		id: row.id,
 		createdAt: row.createdAt.toISOString(),
@@ -239,6 +239,7 @@ export function packSessionGovernanceRow(row: any, user: unknown, characterName:
 		moderationBanned: row.moderationBanned,
 		characterName,
 		user,
+		messageCount: messageCount ?? null,
 	};
 }
 
