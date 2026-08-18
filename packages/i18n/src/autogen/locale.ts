@@ -16897,6 +16897,10 @@ export interface Locale extends ILocale {
          */
         "adminReportsUnlistedBadge": string;
         /**
+         * 削除済み
+         */
+        "adminReportsDeletedBadge": string;
+        /**
          * Last 24h
          */
         "adminReportsWindow24h": string;
@@ -16912,6 +16916,138 @@ export interface Locale extends ILocale {
          * Last 30 days
          */
         "adminReportsWindow720h": string;
+        /**
+         * 過去 90 日
+         */
+        "adminReportsWindow90d": string;
+        /**
+         * 今日
+         */
+        "adminReportsWindowToday": string;
+        /**
+         * 今月
+         */
+        "adminReportsWindowThisMonth": string;
+        /**
+         * 先月
+         */
+        "adminReportsWindowLastMonth": string;
+        /**
+         * 前周期比
+         */
+        "adminReportsVsPrevious": string;
+        /**
+         * 平均所要時間推移
+         */
+        "adminReportsLatencyTrend": string;
+        /**
+         * 時間別
+         */
+        "adminReportsGranularityHour": string;
+        /**
+         * 日別
+         */
+        "adminReportsGranularityDay": string;
+        /**
+         * 成功
+         */
+        "adminReportsSuccess": string;
+        /**
+         * 無料呼び出し
+         */
+        "adminReportsFreeCalls": string;
+        /**
+         * 有料呼び出し
+         */
+        "adminReportsPaidCalls": string;
+        /**
+         * 消費クレジット
+         */
+        "adminReportsCreditsCharged": string;
+        /**
+         * 平均所要時間
+         */
+        "adminReportsAvgDuration": string;
+        /**
+         * 構成比
+         */
+        "adminReportsShareOfTotal": string;
+        /**
+         * リクエスト数推移
+         */
+        "adminReportsRequestsTrend": string;
+        /**
+         * 消費クレジット推移
+         */
+        "adminReportsCreditsTrend": string;
+        /**
+         * 課金構成
+         */
+        "adminReportsBillingComposition": string;
+        /**
+         * 用途別構成
+         */
+        "adminReportsUsageKindComposition": string;
+        /**
+         * 無料枠
+         */
+        "adminReportsFreeQuota": string;
+        /**
+         * BYOK
+         */
+        "adminReportsByok": string;
+        /**
+         * 無料モデル
+         */
+        "adminReportsZeroPriced": string;
+        /**
+         * その他
+         */
+        "adminReportsOther": string;
+        /**
+         * クレジット消費 TOP ユーザー
+         */
+        "adminReportsTopUsers": string;
+        /**
+         * すべてのモデル
+         */
+        "adminReportsAllModels": string;
+        /**
+         * カスタムモデルリクエスト
+         */
+        "adminReportsByokCustomModels": string;
+        /**
+         * モデル
+         */
+        "adminReportsModelColumn": string;
+        /**
+         * リクエスト
+         */
+        "adminReportsRequestsColumn": string;
+        /**
+         * 無料
+         */
+        "adminReportsFreeColumn": string;
+        /**
+         * 有料
+         */
+        "adminReportsPaidColumn": string;
+        /**
+         * ユーザー
+         */
+        "adminReportsUsersColumn": string;
+        /**
+         * 呼び出し
+         */
+        "adminReportsCallsColumn": string;
+        /**
+         * 読み込みに失敗しました。しばらくしてから再試行してください。
+         */
+        "adminReportsLoadFailed": string;
+        /**
+         * 行をクリックするとそのモデルの推移だけを表示します
+         */
+        "adminReportsClickRowToFilter": string;
         /**
          * Agent success rate (1h)
          */

@@ -846,39 +846,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</div>
 
 				<!-- 模型报表（v-show保留状态，切换不重新加载） -->
-				<div v-show="reportType === 'model'" class="_gaps_m">
-				<section :class="$style.reportToolbar">
-					<div class="_buttons">
-						<MkButton v-for="w in reportWindows" :key="w.value" rounded :primary="reportHours === w.value" @click="setReportWindow(w.value)">{{ w.label }}</MkButton>
-					</div>
-					<MkButton rounded :disabled="reportsLoading" @click="loadReports"><i class="ti ti-refresh"></i> 刷新</MkButton>
-				</section>
-				<MkLoading v-if="reportsLoading"/>
-				<template v-else-if="reportsData">
-					<div :class="$style.overviewGrid">
-						<div v-panel :class="$style.overviewCard"><span>总请求</span><b>{{ reportsData.overall.total }}</b></div>
-						<div v-panel :class="$style.overviewCard"><span>成功率</span><b>{{ reportSuccessRate }}</b></div>
-						<div v-panel :class="$style.overviewCard"><span>失败数</span><b>{{ reportsData.overall.failed }}</b></div>
-						<div v-panel :class="$style.overviewCard"><span>总费用</span><b>{{ reportsData.overall.totalCost.toFixed(4) }}</b></div>
-						<div v-panel :class="$style.overviewCard"><span>活跃用户</span><b>{{ reportsData.overall.uniqueUsers }}</b></div>
-					</div>
-					<MkFolder :defaultOpen="true">
-						<template #icon><i class="ti ti-cpu"></i></template>
-						<template #label>按模型统计</template>
-						<div :class="$style.simpleTable">
-							<div v-for="m in reportsData.byModel" :key="m.modelId ?? '__null__'" :class="$style.simpleRow">
-								<span>
-									{{ formatReportModelName(m) }}
-									<small v-if="m.modelId && !m.modelName" :class="$style.mutedBlock">ID: {{ m.modelId }}</small>
-								</span>
-								<span>成功 {{ m.success }}</span>
-								<span>失败 {{ m.failed }}</span>
-								<span>中断 {{ m.aborted }}</span>
-								<span>费用 {{ m.totalCost.toFixed(4) }}</span>
-							</div>
-						</div>
-					</MkFolder>
-				</template>
+				<div v-show="reportType === 'model'">
+					<XModelReports/>
 				</div>
 
 				<!-- 签到报表（KeepAlive缓存，切换回来不重新加载） -->
@@ -944,6 +913,7 @@ import MkLoading from '@/components/global/MkLoading.vue';
 import MkUserName from '@/components/global/MkUserName.vue';
 import FormSplit from '@/components/form/split.vue';
 import XCheckinReports from './agents-checkin-reports.vue';
+import XModelReports from './agents-model-reports.vue';
 import * as os from '@/os.js';
 import { misskeyApi, formatApiError } from '@/utility/misskey-api.js';
 import { fetchInstance } from '@/instance.js';
@@ -973,10 +943,9 @@ type RedeemCodeRow = {
 	status: 'available' | 'redeemed' | 'expired' | 'revoked';
 };
 
+// 总览页 24h 小卡片仅需整体统计，完整报表见 agents-model-reports.vue
 type ReportsOverview = {
-	overall: { total: number; success: number; failed: number; aborted: number; totalCost: number; uniqueUsers: number };
-	byModel: { modelId: string | null; modelName: string | null; total: number; success: number; failed: number; aborted: number; totalCost: number; unlisted: boolean }[];
-	hourlyBuckets: { bucketStart: string; total: number; success: number; failed: number; aborted: number }[];
+	overall: { total: number; success: number };
 };
 
 type AgentLlmModelRow = {
@@ -2073,21 +2042,12 @@ const redeemStatusItems: MkSelectItem[] = [
 	{ value: 'revoked', label: '已撤销' },
 ];
 
-const reportWindows = [
-	{ label: '24h', value: 24 },
-	{ label: '72h', value: 72 },
-	{ label: '7 天', value: 168 },
-	{ label: '30 天', value: 720 },
-];
-
 // 报表分类切换：模型报表 / 签到报表
 const reportTypeTabs = [
 	{ label: '模型报表', value: 'model' as const, icon: 'ti ti-cpu' },
 	{ label: '签到报表', value: 'checkin' as const, icon: 'ti ti-calendar-check' },
 ];
 const reportType = ref<'model' | 'checkin'>('model');
-const reportHours = ref(24);
-const reportsLoading = ref(false);
 const reportsData = ref<ReportsOverview | null>(null);
 
 interface TokenizerStatus {
@@ -2127,12 +2087,6 @@ const reportSuccessRate = computed(() => {
 	if (!d || d.overall.total <= 0) return '—';
 	return `${((d.overall.success / d.overall.total) * 100).toFixed(1)}%`;
 });
-
-function formatReportModelName(model: ReportsOverview['byModel'][number]): string {
-	if (model.modelName) return model.modelName;
-	if (model.modelId) return model.modelId.startsWith('u') ? '自定义模型请求' : '未知/已删除模型';
-	return '默认模型';
-}
 
 async function generateRedeemCodes() {
 	redeemGenerating.value = true;
@@ -2203,20 +2157,13 @@ function redeemStatusLabel(status: RedeemCodeRow['status']) {
 	return i18n.ts._agents.adminRedeemRevoked;
 }
 
+// 总览页 24h 小卡片：固定拉取近 24 小时整体统计
 async function loadReports() {
-	reportsLoading.value = true;
 	try {
-		reportsData.value = await misskeyApi('admin/agents/reports/overview' as any, { hours: reportHours.value }) as ReportsOverview;
+		reportsData.value = await misskeyApi('admin/agents/reports/overview' as any, { hours: 24 }) as ReportsOverview;
 	} catch (err) {
 		os.alert({ type: 'error', text: formatApiError(err) });
-	} finally {
-		reportsLoading.value = false;
 	}
-}
-
-function setReportWindow(hours: number) {
-	reportHours.value = hours;
-	void loadReports();
 }
 
 function addExternalAuditModel() {
@@ -2559,7 +2506,6 @@ watch(activeTab, tab => {
 	if (tab === 'externalAudit' && externalAuditStats.value.length === 0) void loadExternalAuditStats();
 	if (tab === 'credits' && redeemCodes.value.length === 0) void loadRedeemCodes();
 	if (tab === 'migration' && migrationLogs.value.length === 0) void loadMigrationLogs();
-	if (tab === 'reports' && reportsData.value == null) void loadReports();
 	if (tab === 'checkin' && roleItems.value.length === 0) void loadRolesForCheckin();
 });
 
@@ -2805,13 +2751,6 @@ onMounted(() => {
 	padding-block: 8px;
 }
 
-.mutedBlock {
-	display: block;
-	margin-top: 2px;
-	color: var(--MI_THEME-fgTransparentWeak);
-	font-size: 0.85em;
-}
-
 .reportTabRow {
 	display: flex;
 	gap: 8px;
@@ -2840,18 +2779,6 @@ onMounted(() => {
 	background: var(--MI_THEME-accent);
 	border-color: var(--MI_THEME-accent);
 	color: var(--MI_THEME-fgOnAccent, #fff);
-}
-
-.reportToolbar {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	gap: 12px;
-	flex-wrap: wrap;
-	padding: 12px;
-	border-radius: 8px;
-	border: 1px solid var(--MI_THEME-divider);
-	background: var(--MI_THEME-panel);
 }
 
 .auditStatsTable {
@@ -2955,11 +2882,6 @@ onMounted(() => {
 
 	.reportTabRow {
 		flex-wrap: wrap;
-	}
-
-	.reportToolbar {
-		flex-direction: column;
-		align-items: stretch;
 	}
 }
 
