@@ -102,6 +102,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 							:visibleSegmentCount="segmentPlayback?.messageId === item.data.id ? segmentPlayback.visibleCount : undefined"
 							:autoDrawEnabled="session?.agentImageSettings?.autoDraw !== false"
 							:autoDrawCount="effectiveAutoDrawCount"
+							:drawModelReady="(session?.agentImageModelId ?? '') !== ''"
+							:liveArrived="liveArrivedMessageIds.has(item.data.id)"
 							@deleted="onAgentMessageDeleted"
 							@editRequested="onEditRequested"
 							@rollbackRequested="onRollbackRequested"
@@ -1069,7 +1071,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { computed, nextTick, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, useCssModule, useTemplateRef, watch } from 'vue';
+import { computed, nextTick, onActivated, onBeforeUnmount, onDeactivated, onMounted, reactive, ref, useCssModule, useTemplateRef, watch } from 'vue';
 import { getScrollContainer } from '@@/js/scroll.js';
 import XAgentMessage from './agent-session.message.vue';
 import XForm from './agent-session.form.vue';
@@ -1186,6 +1188,8 @@ type SessionRule = {
 };
 
 const messages = ref<AgentMsg[]>([]);
+/** 本次页面存活期间新到达（发送/流式）的助手消息 id：仅这些消息的占位符允许自动生图，历史消息只查已有记录 */
+const liveArrivedMessageIds = reactive(new Set<string>());
 const visionModels = ref<Array<{ id: string; name: string; costPerCall: number; isDefault: boolean }>>([]);
 const visionModelSelectionId = ref('');
 const selectedVisionModel = computed(() => visionModels.value.find(model => model.id === visionModelSelectionId.value) ?? null);
@@ -3107,6 +3111,9 @@ async function onNewAgentMessage(payload: unknown): Promise<void> {
 		const incoming = typeof data.messageId === 'string'
 			? messages.value.find(message => message.id === data.messageId)
 			: null;
+		if (incoming && !existingIds.has(incoming.id)) {
+			liveArrivedMessageIds.add(incoming.id);
+		}
 		if (incoming && !existingIds.has(incoming.id) && tab.value === 'chat') {
 			await scrollToLatest();
 			void playSegmentedReply(incoming);
@@ -4661,6 +4668,7 @@ async function onFormSubmit(payload: { text: string; file: DriveFile | null }) {
 			};
 			const segments = playableSegmentsFor(asstMsg.content);
 			messages.value = [asstMsg, userMsg, ...withoutOpt];
+			liveArrivedMessageIds.add(asstMsg.id);
 			const playbackCompleted = await playSegmentedReply(asstMsg, segments);
 			if (!playbackCompleted) return;
 		} else {

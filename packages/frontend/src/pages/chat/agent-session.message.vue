@@ -158,6 +158,10 @@ const props = defineProps<{
 	autoDrawEnabled?: boolean;
 	/** 单轮自动生图张数上限；超出索引的占位符进入待手动生成 */
 	autoDrawCount?: number;
+	/** 会话是否已选择生图模型；为 false 时不发起任何生成请求，占位符与关闭自动生图一致进入待手动生成 */
+	drawModelReady?: boolean;
+	/** 消息是否为本次页面存活期间新到达（发送/流式）；历史消息不自动触发生成，仅查询服务端已有记录 */
+	liveArrived?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -367,6 +371,13 @@ async function generateDraw(index: number, regenerate = false) {
 		) as DrawResult;
 		drawResults[index] = res;
 	} catch (e) {
+		const errorCode = e != null && typeof e === 'object' && 'code' in e ? String((e as { code?: unknown }).code ?? '') : '';
+		// 兜底：生图不可用（模型为「无」或未配置）时不落失败态，回到「尚未生成」待手动（与关闭自动生图一致）
+		if (!regenerate && (errorCode === 'AGENT_IMAGE_DISABLED' || errorCode === 'AGENT_IMAGE_NOT_CONFIGURED')) {
+			delete drawResults[index];
+			manualPending[index] = true;
+			return;
+		}
 		drawResults[index] = {
 			...drawResults[index]!,
 			status: 'failed',
@@ -389,6 +400,10 @@ function isManualPending(index: number): boolean {
 }
 
 function manualGenerate(index: number) {
+	if (props.drawModelReady === false) {
+		os.alert({ type: 'info', text: '请先选择并保存生图模型。' });
+		return;
+	}
 	delete manualPending[index];
 	void generateDraw(index, false);
 }
@@ -426,29 +441,52 @@ async function checkExistingDrawResult(index: number) {
 	}
 }
 
-function startDraws() {
+/** 将占位符分流为「待手动生成」：本地无记录时先查询服务端已有生成记录，避免已生成的图片被误标为"尚未自动生成" */
+function parkDrawForManual(index: number) {
+	const cur = drawResults[index];
+	if (cur == null) {
+		// 已确认无记录并完成分流时不重复查询
+		if (manualPending[index] === true) return;
+		if (!statusChecking[index]) void checkExistingDrawResult(index);
+	} else if (cur.status === 'pending') {
+		manualPending[index] = true;
+	}
+}
+
+/**
+ * @param allowUnpark 仅自动生图开关/张数变更时为 true：允许解除「待手动生成」分流并自动生成。
+ * 生图模型切换不触发该 watch，历史占位符保持待手动，避免批量触发生成。
+ */
+function startDraws(allowUnpark = false) {
 	if (props.message.role !== 'assistant' || props.isSearchResult) return;
 	for (const segment of renderedSegments.value) {
 		for (const part of segment.parts) {
 			if (part.type !== 'draw') continue;
+			// 生图模型为「无」：与关闭自动生图一致进入待手动生成，不发起必然失败（AGENT_IMAGE_DISABLED）的请求
+			if (props.drawModelReady === false) {
+				parkDrawForManual(part.index);
+				continue;
+			}
 			if (isAutoDrawn(part.index)) {
-				delete manualPending[part.index];
-				void generateDraw(part.index, false);
+				if (allowUnpark && manualPending[part.index] === true) {
+					delete manualPending[part.index];
+					void generateDraw(part.index, false);
+				} else if (manualPending[part.index] !== true && props.liveArrived === true) {
+					void generateDraw(part.index, false);
+				} else {
+					// 历史消息（非本次页面存活期间到达）：仅查询服务端已有记录，无记录则待手动生成，
+					// 避免打开会话或切换生图模型后对历史占位符批量触发生成
+					parkDrawForManual(part.index);
+				}
 			} else {
 				// 超出自动生图上限（或自动生图关闭）：仅当尚未生成时标记为待手动生成
-				const cur = drawResults[part.index];
-				if (cur == null) {
-					// 本地无记录（如组件重新挂载）：先查询服务端是否已有生成记录，避免已生成的图片被误标为"尚未自动生成"
-					if (!statusChecking[part.index]) void checkExistingDrawResult(part.index);
-				} else if (cur.status === 'pending') {
-					manualPending[part.index] = true;
-				}
+				parkDrawForManual(part.index);
 			}
 		}
 	}
 }
 
-onMounted(startDraws);
+onMounted(() => startDraws());
 watch(() => `${props.message.id}:${props.message.content}`, () => {
 	drawCheckGeneration++;
 	for (const key of Object.keys(statusChecking)) delete statusChecking[Number(key)];
@@ -456,12 +494,13 @@ watch(() => `${props.message.id}:${props.message.content}`, () => {
 	for (const key of Object.keys(manualPending)) delete manualPending[Number(key)];
 	startDraws();
 });
-watch(() => props.visibleSegmentCount, startDraws);
-// 自动生图开关/张数变更后重新分流（generateDraw 对已成功项幂等，不会重复生成）
-watch([() => props.autoDrawEnabled, () => props.autoDrawCount], startDraws);
+watch(() => props.visibleSegmentCount, () => startDraws());
+// 自动生图开关/张数变更后重新分流（generateDraw 对已成功项幂等，不会重复生成）；
+// 仅此处允许解除「待手动生成」分流，生图模型切换不会重跑本逻辑
+watch([() => props.autoDrawEnabled, () => props.autoDrawCount], () => startDraws(true));
 watch(
 	() => renderedSegments.value.flatMap(segment => segment.parts.filter(part => part.type === 'draw').map(part => part.index)).join(','),
-	startDraws,
+	() => startDraws(),
 	{ flush: 'post' },
 );
 
