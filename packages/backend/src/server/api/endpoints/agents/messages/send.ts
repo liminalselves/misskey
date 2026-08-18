@@ -510,7 +510,11 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					promptCacheMissTokens: llmResult.usage.promptCacheMissTokens ?? null,
 				} : {};
 				const proactiveControl = this.agentProactiveScheduleService.extractControl(rawAssistantText);
-				const assistantText = proactiveControl.visibleContent;
+				// 生图模型为「无」时协议未注入 system，但历史中的 [[agent_draw ...]] 占位符可能诱导
+				// 模型继续输出生图标记：落库前整体过滤本次回复（历史消息不动），如同模型从未输出。
+				const assistantText = activeImageModel == null
+					? this.agentImageService.stripDrawPlaceholders(proactiveControl.visibleContent)
+					: proactiveControl.visibleContent;
 				const hasVisibleAssistantText = assistantText.trim().length > 0;
 
 				const auditResult = await this.agentExternalAuditService.auditReply({

@@ -304,7 +304,11 @@ export class AgentProactiveMessageService {
 				throw new ProactiveAttemptError('PROACTIVE_BILLING_FAILED');
 			}
 			const parsed = this.agentProactiveScheduleService.extractControl(rawAssistantText);
-			if (parsed.visibleContent.trim().length === 0) {
+			// 与发送路径一致：生图模型为「无」时过滤模型受历史诱导输出的 [[agent_draw ...]] 占位符
+			const visibleContent = this.agentImageService.resolveImageModel(instance, session.agentImageModelId) == null
+				? this.agentImageService.stripDrawPlaceholders(parsed.visibleContent)
+				: parsed.visibleContent;
+			if (visibleContent.trim().length === 0) {
 				throw new ProactiveAttemptError('PROACTIVE_EMPTY_REPLY');
 			}
 			const audit = await this.agentExternalAuditService.auditReply({
@@ -312,7 +316,7 @@ export class AgentProactiveMessageService {
 				user,
 				session,
 				userText: trigger,
-				assistantText: parsed.visibleContent,
+				assistantText: visibleContent,
 			}).catch(() => ({ blocked: false as const }));
 			if (audit.blocked) throw new ProactiveAttemptError('PROACTIVE_REPLY_BLOCKED');
 
@@ -322,7 +326,7 @@ export class AgentProactiveMessageService {
 				createdAt: assistantAt,
 				sessionId: session.id,
 				role: 'assistant',
-				content: parsed.visibleContent,
+				content: visibleContent,
 				rawContent: parsed.controlRaw ? rawAssistantText : null,
 				proactiveScheduleControlRaw: parsed.controlRaw,
 				proactiveScheduleControlError: null,
@@ -350,7 +354,7 @@ export class AgentProactiveMessageService {
 					sessionId: session.id,
 					sessionName: session.name,
 					messageId: assistant.id,
-					messageText: buildAgentProactiveNotificationText(parsed.visibleContent),
+					messageText: buildAgentProactiveNotificationText(visibleContent),
 					agentAvatarUrl,
 				});
 			} catch {

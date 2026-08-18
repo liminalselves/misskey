@@ -50,6 +50,10 @@ export type AgentReferenceImage = {
 
 const AGENT_DRAW_RE = /\[\[agent_draw(?:\s+size=(portrait|landscape|square))?\s+tag=([\s\S]*?)\]\]/g;
 
+// 宽松匹配 [[agent_draw ...]]（含缺参/畸形变体），用于生图关闭时的输出过滤
+const AGENT_DRAW_ANY_RE = /\[\[agent_draw\b[\s\S]*?\]\]/iu;
+const AGENT_DRAW_ANY_RE_G = /\[\[agent_draw\b[\s\S]*?\]\]/giu;
+
 export const agentImageErrors = {
 	disabled: {
 		message: 'Agent image generation is disabled.',
@@ -368,6 +372,23 @@ export class AgentImageService {
 			out.push({ size: normalizeSize(m[1]), tag: tag.slice(0, 4000) });
 		}
 		return out;
+	}
+
+	/**
+	 * 生图关闭（会话生图模型为「无」）时，从最新回复中整体移除 [[agent_draw ...]] 占位符。
+	 * 历史上下文中残留的占位符会诱导模型在协议未注入时仍输出生图标记；
+	 * 仅用于落库前过滤本次输出，历史消息不受影响。
+	 */
+	@bindThis
+	public stripDrawPlaceholders(text: string): string {
+		if (!text) return text;
+		if (!AGENT_DRAW_ANY_RE.test(text)) return text;
+		return text
+			// 独占一行的占位符连同整行（含换行）移除，避免留下空行
+			.replace(/^[ \t]*\[\[agent_draw\b[\s\S]*?\]\][ \t]*\r?\n?/gimu, '')
+			.replace(AGENT_DRAW_ANY_RE_G, '')
+			.replace(/\n{3,}/gu, '\n\n')
+			.trim();
 	}
 
 	@bindThis
