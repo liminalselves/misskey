@@ -82,9 +82,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<div v-if="form.suspendHours >= 0" :class="$style.field">
 			<label :class="$style.label">{{ i18n.ts._agents.quickActionModerationNote }}</label>
 			<div :class="$style.noteFormatHint">
-				{{ i18n.ts._agents.quickActionNoteFormat }}：<code>[{{ datePreview }}]智能体{{ effectiveCategory }}{{ suspendText }} -{{ moderatorName }}</code>
+				{{ i18n.tsx._agents.quickActionNoteFormat({ format: '' }) }}<code>[{{ datePreview }}]智能体{{ effectiveCategory }}{{ suspendText }} -{{ moderatorName }}</code>
 			</div>
-			<MkTextarea v-model="form.moderationNote" :placeholder="i18n.ts._agents.quickActionAutoGenerate.replace('{value}', '')"/>
+			<MkTextarea v-model="form.moderationNote" :placeholder="i18n.tsx._agents.quickActionAutoGenerate({ value: '' })"/>
 		</div>
 
 		<!-- 操作按钮 -->
@@ -132,10 +132,12 @@ const props = withDefaults(defineProps<{
 	sessions: QuickActionSession[];
 	defaultCategory?: string;
 	defaultSuspendHours?: number;
+	defaultSelectedIds?: string[];
 	moderatorName: string;
 }>(), {
 	defaultCategory: '色情内容',
 	defaultSuspendHours: -1,
+	defaultSelectedIds: undefined,
 });
 
 const emit = defineEmits<{
@@ -164,10 +166,18 @@ const suspendOptions = [
 	{ label: i18n.ts._agents.quickActionForever, value: 0 },
 ];
 
+function initialSelectedIds(sessions: QuickActionSession[]): Set<string> {
+	if (props.defaultSelectedIds) {
+		const known = new Set(sessions.map(s => s.id));
+		return new Set(props.defaultSelectedIds.filter(id => known.has(id)));
+	}
+	return new Set(sessions.filter(s => !s.banned).map(s => s.id));
+}
+
 const form = reactive({
 	category: props.defaultCategory,
 	customCategory: '',
-	selectedSessionIds: new Set(props.sessions.filter(s => !s.banned).map(s => s.id)),
+	selectedSessionIds: initialSelectedIds(props.sessions),
 	sessionBanReason: '',
 	suspendHours: props.defaultSuspendHours,
 	userSuspendReason: '',
@@ -182,7 +192,7 @@ watch(() => props.sessions, (sessions) => {
 	if (sessionsSynced || userInteracted) return;
 	if (sessions.length === 0) return;
 	sessionsSynced = true;
-	form.selectedSessionIds = new Set(sessions.filter(s => !s.banned).map(s => s.id));
+	form.selectedSessionIds = initialSelectedIds(sessions);
 }, { deep: true });
 
 const effectiveCategory = computed(() => {

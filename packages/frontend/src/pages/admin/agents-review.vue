@@ -463,6 +463,7 @@ import { formatDateTimeString } from '@/utility/format-time-string.js';
 import { acct as userAcct } from '@/filters/user.js';
 import * as os from '@/os.js';
 import MkAgentQuickActionDialog from '@/components/MkAgentQuickActionDialog.vue';
+import type { QuickActionResult, QuickActionSession } from '@/components/MkAgentQuickActionDialog.vue';
 import { useGovernancePagination } from '@/composables/use-governance-pagination.js';
 import { prefer } from '@/preferences.js';
 import { iAmModerator, $i } from '@/i.js';
@@ -1033,16 +1034,69 @@ async function loadMoreSessionMessages() {
 }
 
 async function toggleSessionBan(row: SessionRow) {
-	const next = !row.moderationBanned;
-	const { canceled, result } = await os.form(next ? '封禁会话' : '解封会话', {
-		reason: { type: 'string', label: '处理原因', required: next, multiline: true },
-	});
-	if (canceled) return;
+	// 解封保持简单流程
+	if (row.moderationBanned) {
+		const { canceled, result } = await os.form('解封会话', {
+			reason: { type: 'string', label: '处理原因', required: false, multiline: true },
+		});
+		if (canceled) return;
+		try {
+			await api('admin/agents/governance/sessions/set-banned', { sessionId: row.id, banned: false, reason: result.reason || null });
+			const selectedId = selectedSession.value?.id;
+			await loadSummary();
+			await loadSessions(true);
+			const updated = sessions.value.find(item => item.id === row.id);
+			if (updated && selectedId === row.id) await selectSession(updated);
+		} catch (err) {
+			os.alert({ type: 'error', text: formatApiError(err) });
+		}
+		return;
+	}
+
+	// 封禁走与复审处理相同的快捷处理对话框，支持同时封禁用户
+	let dialogSessions: QuickActionSession[] = [{ id: row.id, name: row.name, banned: row.moderationBanned }];
 	try {
-		await api('admin/agents/governance/sessions/set-banned', { sessionId: row.id, banned: next, reason: result.reason || null });
+		const userSessions = await api<SessionRow[]>('admin/agents/governance/sessions/list', { userId: row.userId, limit: 100 });
+		if (userSessions.length > 0) {
+			dialogSessions = userSessions.map(s => ({ id: s.id, name: s.name, banned: s.moderationBanned }));
+		}
+	} catch {
+		// 拉取失败时兜底只用当前会话，保证操作可用
+	}
+
+	const result = await new Promise<QuickActionResult | null>(resolve => {
+		const { dispose } = os.popup(MkAgentQuickActionDialog, {
+			userName: row.user ? `@${userAcct(row.user)}` : row.userId,
+			sessions: dialogSessions,
+			defaultSelectedIds: [row.id],
+			defaultSuspendHours: -1,
+			moderatorName: $i?.username ?? '',
+		}, {
+			done: (res) => { resolve(res); dispose(); },
+			cancel: () => { resolve(null); dispose(); },
+			closed: () => { resolve(null); dispose(); },
+		});
+	});
+	if (!result) return;
+
+	try {
+		const res = await api<Record<string, unknown>>('admin/agents/governance/quick-action', {
+			sessionIds: result.sessionIds,
+			sessionBanReason: result.sessionBanReason,
+			suspendDurationHours: result.suspendDurationHours,
+			userSuspendReason: result.userSuspendReason,
+			violationCategory: result.violationCategory,
+			moderationNote: result.moderationNote,
+		});
+		const parts: string[] = [];
+		if (res.sessionsBanned) parts.push(`${res.sessionsBanned} 个会话已封禁`);
+		if (res.userSuspended) parts.push(`用户已封禁（${res.suspendDurationHours === 0 ? '永久' : `${res.suspendDurationHours}小时`}）`);
+		if (res.noteAdded) parts.push('管理笔记已记录');
+		os.toast(parts.join('，') || '处理完成');
 		const selectedId = selectedSession.value?.id;
 		await loadSummary();
 		await loadSessions(true);
+		if (reviewUserCards.value.length > 0) await loadReviewListItems(true);
 		const updated = sessions.value.find(item => item.id === row.id);
 		if (updated && selectedId === row.id) await selectSession(updated);
 	} catch (err) {
