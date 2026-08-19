@@ -1005,7 +1005,7 @@ describe('Timelines', () => {
 
 					await waitForPushToTl();
 
-					await api('admin/suspend-user', { userId: carol.id }, root);
+					await api('admin/suspend-user', { userId: carol.id, reason: 'test suspension' }, root);
 					await setTimeout(100);
 				});
 
@@ -1046,7 +1046,7 @@ describe('Timelines', () => {
 
 					await waitForPushToTl();
 
-					await api('admin/suspend-user', { userId: carol.id }, root);
+					await api('admin/suspend-user', { userId: carol.id, reason: 'test suspension' }, root);
 					await setTimeout(100);
 				});
 
@@ -1089,7 +1089,7 @@ describe('Timelines', () => {
 
 					await waitForPushToTl();
 
-					await api('admin/suspend-user', { userId: carol.id }, root);
+					await api('admin/suspend-user', { userId: carol.id, reason: 'test suspension' }, root);
 					await setTimeout(100);
 				});
 
@@ -2140,8 +2140,8 @@ describe('Timelines', () => {
 
 					await waitForPushToTl();
 
-					await api('admin/suspend-user', { userId: carol.id }, root);
-					await api('admin/suspend-user', { userId: dave.id }, root);
+					await api('admin/suspend-user', { userId: carol.id, reason: 'test suspension' }, root);
+					await api('admin/suspend-user', { userId: dave.id, reason: 'test suspension' }, root);
 					await setTimeout(250);
 				});
 
@@ -2187,8 +2187,8 @@ describe('Timelines', () => {
 
 					await waitForPushToTl();
 
-					await api('admin/suspend-user', { userId: carol.id }, root);
-					await api('admin/suspend-user', { userId: elle.id }, root);
+					await api('admin/suspend-user', { userId: carol.id, reason: 'test suspension' }, root);
+					await api('admin/suspend-user', { userId: elle.id, reason: 'test suspension' }, root);
 					await setTimeout(250);
 				});
 

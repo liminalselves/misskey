@@ -33,10 +33,11 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 	) {
 		super(meta, paramDef, async () => {
 			const instance = await this.metaService.fetch(true);
-			const defaultModelId = this.agentVisionService.resolveVisionModel(instance, null)?.id ?? null;
+			const models = await this.agentVisionService.listAvailableVisionModels(instance);
+			const defaultModelId = (await this.agentVisionService.resolveVisionModel(instance, null))?.id ?? models[0]?.id ?? null;
 			return {
 				defaultModelId,
-				models: this.agentVisionService.listAvailableVisionModels(instance).map(model => ({
+				models: models.map(model => ({
 					id: model.id,
 					name: model.name,
 					costPerCall: Math.max(0, Number(model.costPerCall) || 0),

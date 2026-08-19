@@ -260,7 +260,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			let visionModel = null;
 			if (imageFileId != null) {
 				await this.agentVisionService.assertImageFileOwnedByUser(imageFileId, me.id);
-				visionModel = this.agentVisionService.assertConfigured(instanceMeta, session.agentVisionModelId);
+				visionModel = await this.agentVisionService.assertConfigured(instanceMeta, session.agentVisionModelId);
 				const visionCost = Math.max(0, Number(visionModel.costPerCall) || 0);
 				if (visionCost > 0) {
 					const profile = await this.userProfilesRepository.findOneBy({ userId: me.id });
@@ -333,6 +333,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 						session,
 						model: visionModel,
 						fileId: imageFileId,
+						externalAbortSignal: abortController.signal,
 					});
 					userMsg.imageRecognitionStatus = recognition.status;
 					userMsg.imageRecognitionDescription = recognition.status === 'succeeded' ? recognition.description : null;

@@ -9,56 +9,56 @@ SPDX-License-Identifier: AGPL-3.0-only
 	<div :class="$style.body" class="_gaps_s">
 		<MkInfo v-if="nameConflict" warn>{{ i18n.ts._agents.byokNameConflict }}</MkInfo>
 
-			<!-- 已选择的提供商（连接信息已预填，可修改） -->
-			<div v-if="provider && !editing" :class="$style.providerBanner">
-				<i class="ti ti-server-2"></i>
-				<span>{{ i18n.tsx._agents.byokProviderBanner({ name: provider.name }) }}</span>
-			</div>
-
-			<MkInput v-model="form.name">
-				<template #label>{{ i18n.ts._agents.byokFieldName }}</template>
-				<template #caption>{{ i18n.ts._agents.byokFieldNameCaption }}</template>
-			</MkInput>
-			<MkInput v-model="form.baseUrl">
-				<template #label>{{ i18n.ts._agents.byokFieldBaseUrl }}</template>
-				<template #prefix><i class="ti ti-link"></i></template>
-			</MkInput>
-			<MkInput v-model="form.apiKey" type="password">
-				<template #label>{{ i18n.ts._agents.byokFieldApiKey }}</template>
-				<template #caption>{{ editing ? i18n.ts._agents.byokApiKeyKeepHint : i18n.ts._agents.byokApiKeyCaption }}</template>
-			</MkInput>
-			<MkInput v-model="form.apiModelName">
-				<template #label>{{ i18n.ts._agents.byokFieldApiModelName }}</template>
-				<template #caption>{{ i18n.ts._agents.byokFieldApiModelNameCaption }}</template>
-			</MkInput>
-			<FormSplit :minWidth="260">
-				<MkInput v-model="form.maxContextTokens" type="text">
-					<template #label>{{ i18n.ts._agents.byokFieldContext }}</template>
-				</MkInput>
-				<MkInput v-model="form.maxOutputTokensPerCall" type="text">
-					<template #label>{{ i18n.ts._agents.byokFieldOutput }}</template>
-				</MkInput>
-			</FormSplit>
-			<FormSplit :minWidth="260">
-				<MkSelect v-model="form.tokenizerEncoding" :items="tokenizerEncodingItems">
-					<template #label>{{ i18n.ts._agents.byokFieldTokenizer }}</template>
-					<template #caption>{{ i18n.ts._agents.byokFieldTokenizerCaption }}</template>
-				</MkSelect>
-				<MkSelect v-model="form.charsPerToken" :items="charsPerTokenItems">
-					<template #label>{{ i18n.ts._agents.byokFieldCharsPerToken }}</template>
-				</MkSelect>
-			</FormSplit>
-			<MkInfo v-if="submitError" warn>{{ submitError }}</MkInfo>
+		<!-- 已选择的提供商（连接信息已预填，可修改） -->
+		<div v-if="provider && !editing" :class="$style.providerBanner">
+			<i class="ti ti-server-2"></i>
+			<span>{{ i18n.tsx._agents.byokProviderBanner({ name: provider.name }) }}</span>
 		</div>
-		<template #footer>
-			<div :class="$style.footer">
-				<MkButton rounded :disabled="submitting" @click="closeDialog">{{ i18n.ts.cancel }}</MkButton>
-				<MkButton primary rounded :disabled="submitting" @click="submit">
-					<MkLoading v-if="submitting" :mini="true"/>
-					{{ editing ? i18n.ts.save : i18n.ts._agents.byokAddModel }}
-				</MkButton>
-			</div>
-		</template>
+
+		<MkInput v-model="form.name">
+			<template #label>{{ i18n.ts._agents.byokFieldName }}</template>
+			<template #caption>{{ i18n.ts._agents.byokFieldNameCaption }}</template>
+		</MkInput>
+		<MkInput v-model="form.baseUrl">
+			<template #label>{{ i18n.ts._agents.byokFieldBaseUrl }}</template>
+			<template #prefix><i class="ti ti-link"></i></template>
+		</MkInput>
+		<MkInput v-model="form.apiKey" type="password">
+			<template #label>{{ i18n.ts._agents.byokFieldApiKey }}</template>
+			<template #caption>{{ editing ? i18n.ts._agents.byokApiKeyKeepHint : i18n.ts._agents.byokApiKeyCaption }}</template>
+		</MkInput>
+		<MkInput v-model="form.apiModelName">
+			<template #label>{{ i18n.ts._agents.byokFieldApiModelName }}</template>
+			<template #caption>{{ i18n.ts._agents.byokFieldApiModelNameCaption }}</template>
+		</MkInput>
+		<FormSplit :minWidth="260">
+			<MkInput v-model="form.maxContextTokens" type="text">
+				<template #label>{{ i18n.ts._agents.byokFieldContext }}</template>
+			</MkInput>
+			<MkInput v-model="form.maxOutputTokensPerCall" type="text">
+				<template #label>{{ i18n.ts._agents.byokFieldOutput }}</template>
+			</MkInput>
+		</FormSplit>
+		<FormSplit :minWidth="260">
+			<MkSelect v-model="form.tokenizerEncoding" :items="tokenizerEncodingItems">
+				<template #label>{{ i18n.ts._agents.byokFieldTokenizer }}</template>
+				<template #caption>{{ i18n.ts._agents.byokFieldTokenizerCaption }}</template>
+			</MkSelect>
+			<MkSelect v-model="form.charsPerToken" :items="charsPerTokenItems">
+				<template #label>{{ i18n.ts._agents.byokFieldCharsPerToken }}</template>
+			</MkSelect>
+		</FormSplit>
+		<MkInfo v-if="submitError" warn>{{ submitError }}</MkInfo>
+	</div>
+	<template #footer>
+		<div :class="$style.footer">
+			<MkButton rounded :disabled="submitting" @click="closeDialog">{{ i18n.ts.cancel }}</MkButton>
+			<MkButton primary rounded :disabled="submitting" @click="submit">
+				<MkLoading v-if="submitting" :mini="true"/>
+				{{ editing ? i18n.ts.save : i18n.ts._agents.byokAddModel }}
+			</MkButton>
+		</div>
+	</template>
 </MkModalWindow>
 </template>
 
@@ -182,7 +182,9 @@ async function submit() {
 	const baseUrl = form.baseUrl.trim();
 	const apiKey = form.apiKey.trim();
 	const apiModelName = form.apiModelName.trim();
-	if (!name || !baseUrl || !apiKey || !apiModelName) {
+	// 编辑模式留空表示沿用已有 Key：后端仅在请求携带 apiKey 字段时才更新
+	const keepExistingKey = editing.value && apiKey === '';
+	if (!name || !baseUrl || (!apiKey && !keepExistingKey) || !apiModelName) {
 		submitError.value = i18n.ts._agents.byokFormIncomplete;
 		return;
 	}
@@ -193,7 +195,6 @@ async function submit() {
 	const payload = {
 		name,
 		baseUrl,
-		apiKey,
 		apiModelName,
 		maxContextTokens: Math.max(256, Math.min(2_000_000, Math.trunc(Number(form.maxContextTokens) || 8192))),
 		maxOutputTokensPerCall: Math.max(1, Math.min(128_000, Math.trunc(Number(form.maxOutputTokensPerCall) || 2048))),
@@ -203,10 +204,15 @@ async function submit() {
 	submitting.value = true;
 	try {
 		if (editing.value && props.model) {
-			// 编辑时不发送 providerId，避免清空已有的提供商关联
-			await misskeyApi('agents/byok/models/update', { modelId: props.model.id, ...payload });
+			// 编辑时不发送 providerId，避免清空已有的提供商关联；
+			// 留空 Key 时省略 apiKey 字段，后端只在收到该字段时才更新
+			await misskeyApi('agents/byok/models/update', {
+				modelId: props.model.id,
+				...payload,
+				...(keepExistingKey ? {} : { apiKey }),
+			});
 		} else {
-			await misskeyApi('agents/byok/models/create', { ...payload, providerId: provider.value?.id ?? null });
+			await misskeyApi('agents/byok/models/create', { ...payload, apiKey, providerId: provider.value?.id ?? null });
 		}
 		closeDialog();
 	} catch (e) {

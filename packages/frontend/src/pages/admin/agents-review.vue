@@ -12,7 +12,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<h1>智能体治理工作台</h1>
 					<p>集中处理发布审核、运行治理、外审拦截、AI 生图和治理日志。</p>
 				</div>
-				<div :class="$style.heroStats" v-if="summary">
+				<div v-if="summary" :class="$style.heroStats">
 					<span :class="$style.heroStat">待处理 <b>{{ summary.pendingTotal }}</b></span>
 					<span :class="$style.heroStat">封禁 <b>{{ summary.bannedCharacters + summary.bannedSessions }}</b></span>
 				</div>
@@ -210,7 +210,6 @@ SPDX-License-Identifier: AGPL-3.0-only
 							</div>
 						</aside>
 					</div>
-
 				</template>
 
 				<template v-else-if="activeView === 'externalAudit'">
@@ -452,7 +451,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { computed, defineComponent, h, onMounted, reactive, ref, watch } from 'vue';
+import { computed, defineComponent, h, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
+import type { QuickActionResult, QuickActionSession } from '@/components/MkAgentQuickActionDialog.vue';
 import MkButton from '@/components/MkButton.vue';
 import MkLoading from '@/components/global/MkLoading.vue';
 import MkInfo from '@/components/MkInfo.vue';
@@ -467,7 +467,6 @@ import { formatDateTimeString } from '@/utility/format-time-string.js';
 import { acct as userAcct } from '@/filters/user.js';
 import * as os from '@/os.js';
 import MkAgentQuickActionDialog from '@/components/MkAgentQuickActionDialog.vue';
-import type { QuickActionResult, QuickActionSession } from '@/components/MkAgentQuickActionDialog.vue';
 import { useGovernancePagination } from '@/composables/use-governance-pagination.js';
 import { prefer } from '@/preferences.js';
 import { iAmModerator, $i } from '@/i.js';
@@ -852,10 +851,11 @@ function restoreFilters() {
 }
 
 // 搜索防抖
-let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+let searchDebounceTimer: number | null = null;
+
 function debouncedLoadReview() {
-	if (searchDebounceTimer) clearTimeout(searchDebounceTimer);
-	searchDebounceTimer = setTimeout(() => { void loadReviewList(true); }, 300);
+	if (searchDebounceTimer) window.clearTimeout(searchDebounceTimer);
+	searchDebounceTimer = window.setTimeout(() => { void loadReviewList(true); }, 300);
 }
 
 watch(() => reviewFilters.query, () => { debouncedLoadReview(); saveFilters(); });
@@ -1553,6 +1553,14 @@ onMounted(() => {
 	else if (activeView.value === 'review') void loadReviewListItems(true);
 	else if (activeView.value === 'images') void loadImages(true);
 	else void loadLogs(true);
+});
+
+onUnmounted(() => {
+	// 卸载后防抖回调不得再发起列表请求并写入已销毁组件的 ref
+	if (searchDebounceTimer != null) {
+		window.clearTimeout(searchDebounceTimer);
+		searchDebounceTimer = null;
+	}
 });
 </script>
 

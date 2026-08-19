@@ -477,7 +477,7 @@ describe('User', () => {
 				const followers = await alice.client.request('users/followers', { userId: alice.id });
 				strictEqual(followers.length, 1); // followed by Bob
 
-				await aAdmin.client.request('admin/suspend-user', { userId: alice.id });
+				await aAdmin.client.request('admin/suspend-user', { userId: alice.id, reason: 'test suspension' });
 				await sleep();
 
 				const following = await bob.client.request('users/following', { userId: bob.id });

@@ -6,7 +6,7 @@
 import ms from 'ms';
 import { Inject, Injectable } from '@nestjs/common';
 import { DataSource } from 'typeorm';
-import type { AgentSessionsRepository } from '@/models/_.js';
+import type { AgentSessionsRepository, DriveFilesRepository } from '@/models/_.js';
 import { Endpoint } from '@/server/api/endpoint-base.js';
 import { DI } from '@/di-symbols.js';
 import { ApiError } from '@/server/api/error.js';
@@ -17,7 +17,8 @@ import { MiAgentSession } from '@/models/AgentSession.js';
 
 const MAX_IMPORT_MESSAGES = 10_000;
 const IMPORT_INSERT_CHUNK_SIZE = 500;
-const IMPORT_BODY_LIMIT_BYTES = 256 * 1024 * 1024;
+// 10k 条 × 常规消息体量的导出远小于此值；此前 256MB 的上限会让单请求 JSON.parse 产生分钟级 CPU 峰值
+const IMPORT_BODY_LIMIT_BYTES = 32 * 1024 * 1024;
 
 export const meta = {
 	tags: ['agents'],
@@ -69,6 +70,9 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		@Inject(DI.agentSessionsRepository)
 		private agentSessionsRepository: AgentSessionsRepository,
 
+		@Inject(DI.driveFilesRepository)
+		private driveFilesRepository: DriveFilesRepository,
+
 		private agentService: AgentService,
 		private chatService: ChatService,
 	) {
@@ -106,6 +110,17 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				const imageRecognitionStatus = msg.imageRecognitionStatus === 'succeeded' || msg.imageRecognitionStatus === 'failed'
 					? msg.imageRecognitionStatus
 					: null;
+				// 归属校验：导入的图片必须属于本人 Drive，防止借导入塞入他人 fileId 后经 timeline 读取其元数据/直链
+				if (msg.imageFileId != null) {
+					const owned = await this.driveFilesRepository.findOneBy({ id: msg.imageFileId, userId: me.id });
+					if (!owned || !owned.type.startsWith('image/')) {
+						throw new ApiError({
+							message: 'The attached file is not a usable image from your Drive.',
+							code: 'AGENT_IMPORT_INVALID_IMAGE_FILE',
+							id: '9d3fa7b1-4c25-4e8a-b170-2f6c9a41d8e5',
+						});
+					}
+				}
 				rows.push({
 					id: this.agentService.newId(),
 					createdAt: new Date(createdAtMs),

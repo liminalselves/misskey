@@ -1081,6 +1081,7 @@ import type { PageHeaderItem } from '@/types/page-header.js';
 import type { DateSeparetedTimelineItem } from '@/utility/timeline-date-separate.js';
 import type { AgentsStylesListUsableResponse, DriveFile } from 'misskey-js/entities.js';
 import type { MkSelectItem } from '@/components/MkSelect.vue';
+import type { MenuItem } from '@/types/menu.js';
 import MkLoading from '@/components/global/MkLoading.vue';
 import MkAvatar from '@/components/global/MkAvatar.vue';
 import MkUserName from '@/components/global/MkUserName.vue';
@@ -1100,7 +1101,6 @@ import { misskeyApi, formatApiError } from '@/utility/misskey-api.js';
 import { i18n } from '@/i18n.js';
 import { definePage } from '@/page.js';
 import * as os from '@/os.js';
-import type { MenuItem } from '@/types/menu.js';
 import { fetchInstance, instance } from '@/instance.js';
 import { useRouter } from '@/router.js';
 import { makeDateSeparatedTimelineComputedRef } from '@/utility/timeline-date-separate.js';
@@ -3430,11 +3430,15 @@ onActivated(() => {
 	isPageActivated = true;
 	// KeepAlive 缓存页重新进入时 onMounted 不会再次执行：与首次进入一致，看到会话即清未读
 	void markAgentSessionRead();
+	// 返回本页时若回复仍在生成则恢复轮询（onDeactivated 已将其停止）
+	if (session.value?.agentReplyPending) startReplyPendingPoll();
 });
 
 onDeactivated(() => {
 	// 被 KeepAlive 缓存（用户点返回离开）：组件仍存活，但不得再清未读
 	isPageActivated = false;
+	// 后台页不再需要 2.5s 轮询会话状态，避免多个缓存页叠加出后台请求风暴
+	stopReplyPendingPoll();
 });
 
 onBeforeUnmount(() => {
@@ -3453,6 +3457,14 @@ onBeforeUnmount(() => {
 		window.clearTimeout(compressionLlmPollTimeout);
 		compressionLlmPollTimeout = null;
 	}
+	if (compressionOverviewMessagesDebounce != null) {
+		window.clearTimeout(compressionOverviewMessagesDebounce);
+		compressionOverviewMessagesDebounce = null;
+	}
+	for (const id of compressionOverviewSidecarTimeoutIds) {
+		window.clearTimeout(id);
+	}
+	compressionOverviewSidecarTimeoutIds = [];
 	compressionLlmPollGen++;
 	compressionSidecarHintVisible.value = false;
 });
@@ -4596,19 +4608,19 @@ async function onFormSubmit(payload: { text: string; file: DriveFile | null }) {
 
 	try {
 		const res = await misskeyApi('agents/messages/send', { sessionId, text: trimmed, fileId: payload.file?.id ?? null, clientRequestId } as any, undefined, sendSignal) as {
-		userMessageId: string | null;
-		assistantMessageId: string | null;
-		userImageRecognitionStatus?: 'succeeded' | 'failed' | null;
-		userImageRecognitionDescription?: string | null;
-		assistantText: string;
+			userMessageId: string | null;
+			assistantMessageId: string | null;
+			userImageRecognitionStatus?: 'succeeded' | 'failed' | null;
+			userImageRecognitionDescription?: string | null;
+			assistantText: string;
 			longTermMemorySearchUnavailable?: boolean;
 			longTermMemoryAddScheduled?: boolean;
 			compressionLlmPending?: boolean;
-		compressionStickiesBaselineCount?: number;
-		compressionStickiesBaselineMaxUpdatedAt?: string | null;
-		proactiveScheduleControlFailed?: boolean;
-		proactiveScheduleActionTypes?: ('create' | 'update' | 'cancel')[];
-		aborted?: boolean;
+			compressionStickiesBaselineCount?: number;
+			compressionStickiesBaselineMaxUpdatedAt?: string | null;
+			proactiveScheduleControlFailed?: boolean;
+			proactiveScheduleActionTypes?: ('create' | 'update' | 'cancel')[];
+			aborted?: boolean;
 			auditBlocked?: boolean;
 			auditBlockCode?: string | null;
 			auditCategory?: string | null;

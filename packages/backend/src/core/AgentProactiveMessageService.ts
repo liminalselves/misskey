@@ -115,11 +115,17 @@ export class AgentProactiveMessageService {
 			await this.agentProactiveScheduleService.consumeScheduleRun(schedule, now);
 		});
 		if (!result.claimed) return;
-		session.scheduledProactiveLastError = result.errorCode
-			? { code: result.errorCode, occurredAt: new Date().toISOString() }
-			: null;
-		session.updatedAt = new Date();
-		await this.sessionsRepository.save(session);
+		// 窄列更新：LLM 调用耗时长，整行 save 会用加载时的旧快照覆盖用户并发修改的会话字段
+		await this.sessionsRepository.createQueryBuilder()
+			.update()
+			.set({
+				scheduledProactiveLastError: result.errorCode
+					? { code: result.errorCode, occurredAt: new Date().toISOString() }
+					: null,
+				updatedAt: new Date(),
+			})
+			.where('id = :id', { id: session.id })
+			.execute();
 	}
 
 	private async processRandom(session: MiAgentSession): Promise<void> {
@@ -133,11 +139,16 @@ export class AgentProactiveMessageService {
 		if (!result.claimed) return;
 		// The delivery was already consumed by the atomic claim inside generateProactiveReply;
 		// record the outcome so the UI can surface skipped attempts.
-		session.randomProactiveLastError = result.errorCode
-			? { code: result.errorCode, occurredAt: new Date().toISOString() }
-			: null;
-		session.updatedAt = new Date();
-		await this.sessionsRepository.save(session);
+		await this.sessionsRepository.createQueryBuilder()
+			.update()
+			.set({
+				randomProactiveLastError: result.errorCode
+					? { code: result.errorCode, occurredAt: new Date().toISOString() }
+					: null,
+				updatedAt: new Date(),
+			})
+			.where('id = :id', { id: session.id })
+			.execute();
 	}
 
 	private async generateProactiveReply(
@@ -337,10 +348,12 @@ export class AgentProactiveMessageService {
 				completionTokens: null,
 			});
 			await this.agentProactiveScheduleService.applyAssistantControl(session, assistant, parsed);
-			session.lastMessageAt = assistantAt;
-			session.updatedAt = assistantAt;
-			session.agentReplyPending = false;
-			await this.sessionsRepository.save(session);
+			// 窄列更新：LLM 调用期间用户可能并发修改会话（改名/切模型等），只写回本流程拥有的列
+			await this.sessionsRepository.createQueryBuilder()
+				.update()
+				.set({ lastMessageAt: assistantAt, updatedAt: assistantAt, agentReplyPending: false })
+				.where('id = :id', { id: session.id })
+				.execute();
 			// The effective character avatar is the agent's avatar for this session. When a
 			// session has no separate avatar, it naturally falls back to the role avatar.
 			const avatarFileId = character.avatarFileId ?? characterRow.avatarFileId;
@@ -371,9 +384,13 @@ export class AgentProactiveMessageService {
 			if (internalMessageId) {
 				await this.messagesRepository.delete({ id: internalMessageId }).catch(() => {});
 			}
-			session.agentReplyPending = false;
-			session.updatedAt = new Date();
-			await this.sessionsRepository.save(session).catch(() => {});
+			// 失败兜底同样窄列更新，仅释放回复锁
+			await this.sessionsRepository.createQueryBuilder()
+				.update()
+				.set({ agentReplyPending: false, updatedAt: new Date() })
+				.where('id = :id', { id: session.id })
+				.execute()
+				.catch(() => {});
 			return {
 				claimed: true,
 				delivered: false,

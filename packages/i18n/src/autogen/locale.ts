@@ -16056,6 +16056,10 @@ export interface Locale extends ILocale {
          */
         "llmRequestFailedHint": string;
         /**
+         * AIリクエストがタイムアウトしました（サーバー上限120秒）。このリクエストは課金されません。しばらくしてから再試行してください。
+         */
+        "llmTimeoutHint": string;
+        /**
          * 文脈上の位置
          */
         "compressionMessageBands": string;

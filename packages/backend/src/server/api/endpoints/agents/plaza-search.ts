@@ -255,6 +255,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		const qb = this.agentCharactersRepository.createQueryBuilder('c')
 			.innerJoin('c.user', 'u')
 			.where('c.isPublished = true')
+			.andWhere('c.moderationBanned = false')
 			.select('c.id', 'id')
 			.addSelect('c.userId', 'userId');
 

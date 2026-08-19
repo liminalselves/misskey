@@ -245,7 +245,7 @@ describe('ユーザー', () => {
 		userSuspended = await signup({ username: 'userSuspended' });
 		await post(userSuspended, { text: 'test' });
 		await successfulApiCall({ endpoint: 'i/update', parameters: { description: '#user_testuserSuspended' }, user: userSuspended });
-		await api('admin/suspend-user', { userId: userSuspended.id }, root);
+		await api('admin/suspend-user', { userId: userSuspended.id, reason: 'test suspension' }, root);
 		userDeletedBySelf = await signup({ username: 'userDeletedBySelf', password: 'userDeletedBySelf' });
 		await post(userDeletedBySelf, { text: 'test' });
 		await api('i/delete-account', { password: 'userDeletedBySelf' }, userDeletedBySelf);

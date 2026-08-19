@@ -150,6 +150,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 
 			let q = this.agentCharactersRepository.createQueryBuilder('c')
 				.where('c.isPublished = true')
+				.andWhere('c.moderationBanned = false')
 				.select(['c.id', 'c.userId', 'c.name', 'c.summary', 'c.avatarFileId', 'c.publishedSnapshot', 'c.publishedVersion', 'c.createdAt', 'c.updatedAt']);
 
 			// For stable pagination with non-id ordering, use offset-based paging.
@@ -213,11 +214,12 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					const pickedIds = picked.map(x => x.id);
 
 					// Replace entity query: load only picked ids, keep sampled order
-					const pickedRows = await this.agentCharactersRepository.createQueryBuilder('c')
-						.where('c.isPublished = true')
-						.andWhere('c.id IN (:...ids)', { ids: pickedIds })
-						.select(['c.id', 'c.userId', 'c.name', 'c.summary', 'c.avatarFileId', 'c.publishedSnapshot', 'c.publishedVersion', 'c.createdAt', 'c.updatedAt'])
-						.getMany();
+				const pickedRows = await this.agentCharactersRepository.createQueryBuilder('c')
+					.where('c.isPublished = true')
+					.andWhere('c.moderationBanned = false')
+					.andWhere('c.id IN (:...ids)', { ids: pickedIds })
+					.select(['c.id', 'c.userId', 'c.name', 'c.summary', 'c.avatarFileId', 'c.publishedSnapshot', 'c.publishedVersion', 'c.createdAt', 'c.updatedAt'])
+					.getMany();
 
 					// Stable output order following sampled ids
 					const rowById = new Map(pickedRows.map(r => [r.id, r]));

@@ -35,7 +35,9 @@ export function formatApiError(err: unknown): string {
 			// 已知错误码映射为用户友好的中文提示
 			const head = o.code === 'AGENTS_LLM_FAILED'
 				? i18n.ts._agents.llmRequestFailedHint
-				: o.message;
+				: o.code === 'AGENTS_LLM_TIMEOUT'
+					? i18n.ts._agents.llmTimeoutHint
+					: o.message;
 			// 附加脱敏诊断信息：错误码 · 原因 · HTTP状态 · 详情
 			const parts: string[] = [];
 			if (o.code) parts.push(o.code);

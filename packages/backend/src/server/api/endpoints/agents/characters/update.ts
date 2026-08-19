@@ -133,6 +133,14 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			if (!row || row.userId !== me.id) {
 				throw new ApiError({ message: 'No such character.', code: 'NO_SUCH_CHARACTER', id: '72c74cc7-ed2e-48e5-952d-27233545bf22' });
 			}
+			// 审核中的草稿必须冻结：否则作者可在审核员通过前替换内容，导致发布内容与审核所见不一致
+			if (row.reviewStatus === 'pending') {
+				throw new ApiError({
+					message: 'This character is pending review and cannot be edited. Withdraw the submission first.',
+					code: 'AGENT_REVIEW_PENDING_LOCKED',
+					id: 'b1d2e3f4-a5b6-4789-bcde-f234567890a1',
+				});
+			}
 			if (ps.avatarFileId) {
 				const f = await this.driveFilesRepository.findOneBy({ id: ps.avatarFileId, userId: me.id });
 				if (!f) {

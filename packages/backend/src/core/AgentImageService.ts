@@ -3,10 +3,10 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
-import { Inject, Injectable } from '@nestjs/common';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { Inject, Injectable } from '@nestjs/common';
 import { DI } from '@/di-symbols.js';
 import { bindThis } from '@/decorators.js';
 import { IdService } from '@/core/IdService.js';
@@ -22,6 +22,7 @@ import type { AgentCharactersRepository, AgentImageGenerationsRepository, DriveF
 import { ApiError } from '@/server/api/error.js';
 import { IdentifiableError } from '@/misc/identifiable-error.js';
 import { assertSafeLlmHttpsUrl, describeUnsafeLlmUrlReason, UnsafeLlmUrlError } from '@/misc/validate-llm-endpoint-url.js';
+import { readBodyWithLimit, UpstreamBodyTooLargeError } from '@/misc/read-body-with-limit.js';
 import { getAgentImagePreset } from './agent-image-presets.js';
 import { resolveAgentImageNegativePrompt } from './agent-image-defaults.js';
 
@@ -101,6 +102,13 @@ const NON_RETRIABLE_GENERATION_ERROR_CODES = new Set<string>([
 ]);
 
 const AGENT_IMAGE_DIAGNOSTIC_MAX_LENGTH = 600;
+/** Aurora 余额查询超时与响应体上限（用户生图请求路径会同步等待余额刷新） */
+const TOKEN_BALANCE_TIMEOUT_MS = 15_000;
+const TOKEN_BALANCE_BODY_LIMIT_BYTES = 1024 * 1024;
+/** 生成图片二进制读取上限（storeGeneratedImage 亦按 20MiB 拒绝） */
+const GENERATED_IMAGE_BODY_LIMIT_BYTES = 20 * 1024 * 1024;
+/** OpenAI 兼容生图 JSON 响应上限（内含 base64 时约为图片体积的 1.33 倍） */
+const OPENAI_IMAGE_JSON_BODY_LIMIT_BYTES = 40 * 1024 * 1024;
 
 function sanitizeAgentImageDiagnostic(raw: string): string {
 	const sanitized = raw
@@ -125,7 +133,12 @@ export function getAgentImageErrorDiagnostic(err: unknown): string | null {
 }
 
 async function describeImageUpstreamHttpError(res: Response): Promise<string> {
-	const raw = await res.text().catch(() => '');
+	let raw = '';
+	try {
+		raw = (await readBodyWithLimit(res, 64 * 1024)).toString('utf8');
+	} catch {
+		raw = '';
+	}
 	let detail = '';
 	if (raw.trim() !== '') {
 		try {
@@ -395,14 +408,8 @@ export class AgentImageService {
 	public async refreshTokenBalances(instance?: MiMeta): Promise<MiAgentImageToken[]> {
 		const meta = instance ?? await this.metaService.fetch(true);
 		const tokens = this.normalizeTokens(meta.agentImageTokens);
-		const next: MiAgentImageToken[] = [];
-		for (const token of tokens) {
-			if (!token.enabled) {
-				next.push(token);
-				continue;
-			}
-			next.push(await this.refreshOneToken(meta, token));
-		}
+		// 并行刷新：单个 token 的端点挂起时 15s 超时兜底，串行会把最坏等待叠乘
+		const next = await Promise.all(tokens.map(token => token.enabled ? this.refreshOneToken(meta, token) : Promise.resolve(token)));
 		await this.metaService.update({ agentImageTokens: next });
 		return next;
 	}
@@ -420,10 +427,14 @@ export class AgentImageService {
 
 	private async refreshOneToken(meta: MiMeta, token: MiAgentImageToken): Promise<MiAgentImageToken> {
 		const url = new URL('/api/points', this.safeBaseUrl(meta.agentImageBaseUrl));
+		const ac = new AbortController();
+		const timeout = setTimeout(() => ac.abort(), TOKEN_BALANCE_TIMEOUT_MS);
 		try {
 			const res = await fetch(url, {
 				method: 'GET',
+				redirect: 'error',
 				headers: { Authorization: `Bearer ${token.token}` },
+				signal: ac.signal,
 			});
 			if (!res.ok) {
 				return {
@@ -433,7 +444,7 @@ export class AgentImageService {
 					lastError: `HTTP ${res.status}`,
 				};
 			}
-			const json = await res.json() as { points?: unknown; last_used_at?: unknown };
+			const json = JSON.parse((await readBodyWithLimit(res, TOKEN_BALANCE_BODY_LIMIT_BYTES)).toString('utf8')) as { points?: unknown; last_used_at?: unknown };
 			return {
 				...token,
 				points: typeof json.points === 'number' ? json.points : null,
@@ -448,6 +459,8 @@ export class AgentImageService {
 				lastCheckedAt: new Date().toISOString(),
 				lastError: err instanceof Error ? err.message.slice(0, 200) : 'request failed',
 			};
+		} finally {
+			clearTimeout(timeout);
 		}
 	}
 
@@ -693,16 +706,19 @@ export class AgentImageService {
 		const ac = new AbortController();
 		const timeout = setTimeout(() => ac.abort(), 180_000);
 		try {
-			const res = await fetch(url, { signal: ac.signal });
+			const res = await fetch(url, { signal: ac.signal, redirect: 'error' });
 			if (!res.ok) throw upstreamImageError(await describeImageUpstreamHttpError(res));
 			const contentType = res.headers.get('content-type');
 			if (!contentType?.toLowerCase().startsWith('image/')) {
 				throw upstreamImageError(`Upstream returned an unsupported content type: ${contentType ?? 'missing Content-Type'}.`);
 			}
-			const buf = Buffer.from(await res.arrayBuffer());
+			const buf = await readBodyWithLimit(res, GENERATED_IMAGE_BODY_LIMIT_BYTES);
 			return await this.storeGeneratedImage(params, buf, contentType);
 		} catch (err) {
 			if (err instanceof ApiError) throw err;
+			if (err instanceof UpstreamBodyTooLargeError) {
+				throw upstreamImageError(`Upstream returned an image larger than the ${GENERATED_IMAGE_BODY_LIMIT_BYTES} byte read limit.`);
+			}
 			throw upstreamImageError(describeImageRequestFailure(err, ac.signal.aborted));
 		} finally {
 			clearTimeout(timeout);
@@ -733,15 +749,19 @@ export class AgentImageService {
 				...(isChatCompletions
 					? buildOpenAiChatImageGenerationRequestInit(apiKey, apiModelName, params.tag, params.referenceImages)
 					: buildOpenAiImageGenerationRequestInit(apiKey, apiModelName, params.tag, params.size, params.referenceImages)),
+				redirect: 'error',
 				signal: ac.signal,
 			});
 			if (!res.ok) throw upstreamImageError(await describeImageUpstreamHttpError(res));
 
 			let result: OpenAiImageResult;
 			try {
-				const body = JSON.parse(await res.text()) as unknown;
+				const body = JSON.parse((await readBodyWithLimit(res, OPENAI_IMAGE_JSON_BODY_LIMIT_BYTES)).toString('utf8')) as unknown;
 				result = isChatCompletions ? parseOpenAiChatImageResult(body) : parseOpenAiImageResult(body);
 			} catch (err) {
+				if (err instanceof UpstreamBodyTooLargeError) {
+					throw upstreamImageError(`Upstream response exceeded the ${OPENAI_IMAGE_JSON_BODY_LIMIT_BYTES} byte read limit.`);
+				}
 				const expected = isChatCompletions
 					? 'choices[0].message content containing a Base64 image or HTTPS image URL'
 					: 'data[0].b64_json or data[0].url';
@@ -773,7 +793,15 @@ export class AgentImageService {
 			if (!contentType?.toLowerCase().startsWith('image/')) {
 				throw upstreamImageError(`Upstream image URL returned an unsupported content type: ${contentType ?? 'missing Content-Type'}.`);
 			}
-			const buf = Buffer.from(await imageRes.arrayBuffer());
+			let buf: Buffer;
+			try {
+				buf = await readBodyWithLimit(imageRes, GENERATED_IMAGE_BODY_LIMIT_BYTES);
+			} catch (err) {
+				if (err instanceof UpstreamBodyTooLargeError) {
+					throw upstreamImageError(`Upstream returned an image larger than the ${GENERATED_IMAGE_BODY_LIMIT_BYTES} byte read limit.`);
+				}
+				throw err;
+			}
 			return await this.storeGeneratedImage(params, buf, contentType);
 		} catch (err) {
 			if (err instanceof ApiError) throw err;
@@ -798,7 +826,7 @@ export class AgentImageService {
 			try {
 				const res = await fetch(this.driveFileEntityService.getPublicUrl(file), { signal: ac.signal });
 				if (!res.ok) return null;
-				const data = Buffer.from(await res.arrayBuffer());
+				const data = await readBodyWithLimit(res, 5 * 1024 * 1024);
 				if (data.length === 0 || data.length > 5 * 1024 * 1024) return null;
 				return { contentType: file.type, data };
 			} catch {

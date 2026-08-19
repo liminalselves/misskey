@@ -10,6 +10,7 @@ import { AgentImageService } from '@/core/AgentImageService.js';
 export const meta = {
 	tags: ['admin', 'agents'],
 	requireCredential: true,
+	secure: true,
 	requireModerator: true,
 	kind: 'write:admin:meta',
 	res: {

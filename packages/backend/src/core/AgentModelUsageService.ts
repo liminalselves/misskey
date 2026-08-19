@@ -139,16 +139,21 @@ export class AgentModelUsageService {
 			if (quota > 0) {
 				const dateKey = this.beijingDateKey(completedAt);
 				const key = this.freeQuotaKey(log.userId, log.modelId, dateKey);
-				const current = Number(await this.redisClient.get(key)) || 0;
-				if (current < quota) {
+				// INCR 原子计数：get+set 在并发下会相互覆盖，系统性放大免费次数
+				const afterIncr = await this.redisClient.incr(key);
+				if (afterIncr === 1) {
 					const ttl = this.secondsUntilNextBeijingMidnight(completedAt);
-					const afterIncr = current + 1;
-					await this.redisClient.set(key, String(afterIncr), 'EX', ttl);
+					await this.redisClient.expire(key, ttl);
+				}
+				if (afterIncr <= quota) {
 					cost = 0;
 					// 快照写入：记录调用时刻的免费额度使用情况，后续管理员修改配额不影响已有日志
 					log.usedFreeQuota = true;
 					log.freeQuotaUsedAtCall = afterIncr;
 					log.freeQuotaTotalAtCall = quota;
+				} else {
+					// 本次调用不免费：回滚计数，额度位置留给后续真正命中的调用
+					await this.redisClient.decr(key);
 				}
 			}
 		}
@@ -697,12 +702,12 @@ export class AgentModelUsageService {
 			.groupBy('log.usageKind')
 			.orderBy('total', 'DESC')
 			.getRawMany<{
-				usageKind: AgentModelUsageKind;
-				total: number;
-				freeCalls: number;
-				paidCalls: number;
-				creditsCharged: string | number;
-			}>();
+			usageKind: AgentModelUsageKind;
+			total: number;
+			freeCalls: number;
+			paidCalls: number;
+			creditsCharged: string | number;
+		}>();
 		return rows.map(r => ({
 			usageKind: r.usageKind,
 			total: Number(r.total) || 0,
@@ -744,14 +749,14 @@ export class AgentModelUsageService {
 			.addOrderBy('total', 'DESC')
 			.limit(opts.limit ?? 10)
 			.getRawMany<{
-				userId: MiUser['id'];
-				username: string;
-				name: string | null;
-				total: number;
-				freeCalls: number;
-				paidCalls: number;
-				creditsCharged: string | number;
-			}>();
+			userId: MiUser['id'];
+			username: string;
+			name: string | null;
+			total: number;
+			freeCalls: number;
+			paidCalls: number;
+			creditsCharged: string | number;
+		}>();
 		return rows.map(r => ({
 			userId: r.userId,
 			username: r.username,

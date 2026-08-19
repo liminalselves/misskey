@@ -190,7 +190,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			}
 			if (ps.agentVisionModelId !== undefined) {
 				const mid = ps.agentVisionModelId == null || ps.agentVisionModelId.trim() === '' ? null : ps.agentVisionModelId.trim();
-				if (mid != null && this.agentVisionService.resolveVisionModel(instanceMeta, mid) == null) {
+				if (mid != null && await this.agentVisionService.resolveVisionModel(instanceMeta, mid) == null) {
 					throw new ApiError({ message: 'No such image recognition model.', code: 'NO_SUCH_AGENT_VISION_MODEL', id: '1b2541f8-0cb5-4ef1-b633-7b5c89ad3b3e' });
 				}
 				row.agentVisionModelId = mid;

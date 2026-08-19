@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { DI } from '@/di-symbols.js';
 import { bindThis } from '@/decorators.js';
 import type { MiMeta } from '@/models/Meta.js';
@@ -13,6 +13,8 @@ import { MiAgentDialogueStyle } from '@/models/AgentDialogueStyle.js';
 import { MiAgentMessage } from '@/models/AgentMessage.js';
 import { MiAgentSession, type AgentSessionKind } from '@/models/AgentSession.js';
 import { assertSafeLlmHttpsUrl, describeUnsafeLlmUrlReason, UnsafeLlmUrlError } from '@/misc/validate-llm-endpoint-url.js';
+import { readBodyWithLimit, UpstreamBodyTooLargeError } from '@/misc/read-body-with-limit.js';
+import { sanitizeLlmErrorDetail, extractSafeUpstreamErrorDetail } from '@/misc/llm-error-detail.js';
 import { getActiveLlmModels, getEffectiveLlmModels, isAgentLlmRunnable, type AgentLlmModelJson } from '@/misc/agent-llm-models.js';
 import { MetaService } from '@/core/MetaService.js';
 import { IdService } from '@/core/IdService.js';
@@ -24,6 +26,9 @@ export { AGENT_LLM_APPROX_CHARS_PER_TOKEN };
 
 /** Maximum length for a single agent text field. */
 export const AGENT_TEXT_FIELD_MAX = 100_000;
+
+/** LLM chat/completions 响应体读取上限：128k token 输出约 0.5~1MB，20MiB 已极度宽裕 */
+const AGENT_LLM_RESPONSE_BODY_LIMIT_BYTES = 20 * 1024 * 1024;
 
 /** Example dialogue is stored as structured JSON in character.exampleDialogue. */
 export const AGENT_EXAMPLE_TURN_MAX = 24;
@@ -235,20 +240,18 @@ export const agentsErrors = {
 		id: 'ac65031e-5b21-4d61-b8a4-9822e52f7a2b',
 		httpStatusCode: 409,
 	},
+	llmTimeout: {
+		message: 'Upstream LLM request timed out.',
+		code: 'AGENTS_LLM_TIMEOUT',
+		id: '7e4c1a52-9b3d-4f68-a5e0-3d92c8b71f46',
+		httpStatusCode: 504,
+	},
 } as const;
-
-/** 脱敏上游错误详情：剥离凭据/密钥、压缩空白、截断长度，供 ApiError.info 返回前端辅助诊断 */
-function sanitizeLlmErrorDetail(raw: unknown): string {
-	let s = raw instanceof Error ? (raw.message || raw.name) : String(raw ?? '');
-	s = s.replace(/Bearer\s+[A-Za-z0-9_\-.=+\/]+/gi, 'Bearer [REDACTED]');
-	s = s.replace(/(?:sk|ak|pk|api[_-]?key|token|secret)["']?\s*[:=]\s*["']?[A-Za-z0-9_\-.]{8,}/gi, '[REDACTED]');
-	s = s.replace(/\b(?:sk|ak)-[A-Za-z0-9_\-]{10,}/g, '[REDACTED]');
-	s = s.replace(/\s+/g, ' ').trim();
-	return s.length > 200 ? `${s.slice(0, 200)}…` : s;
-}
 
 @Injectable()
 export class AgentService {
+	private readonly logger = new Logger(AgentService.name);
+
 	constructor(
 		@Inject(DI.meta)
 		private meta: MiMeta,
@@ -1157,7 +1160,13 @@ export class AgentService {
 		}
 
 		const ac = new AbortController();
-		const t = setTimeout(() => ac.abort(), 120_000);
+		// 服务器侧超时标志：超时与「客户端主动中止」走不同的错误码——
+		// 前者属于上游故障（结算为 failed，不扣费），后者 token 已被消耗（结算为 aborted，扣费）
+		let timedOut = false;
+		const t = setTimeout(() => {
+			timedOut = true;
+			ac.abort();
+		}, 120_000);
 		const external = params.externalAbortSignal;
 		const onExternalAbort = () => ac.abort();
 		if (external) {
@@ -1170,64 +1179,94 @@ export class AgentService {
 		// 此处用一个随 ac 触发即 reject 的 Promise 与读体操作竞速，确保整个请求随时可中断。
 		let abortRace: (err?: unknown) => void = () => {};
 		const abortPromise = new Promise<never>((_, reject) => { abortRace = reject; });
-		const onAcAbort = () => abortRace(new ApiError(agentsErrors.llmAborted));
+		const onAcAbort = () => abortRace(new ApiError(timedOut ? agentsErrors.llmTimeout : agentsErrors.llmAborted));
 		if (ac.signal.aborted) onAcAbort();
 		else ac.signal.addEventListener('abort', onAcAbort, { once: true });
-		let res: Response;
+		// BYOK 上游是用户自己的端点与密钥；官方模型上游错误体可能原样回显管理员配置的密钥
+		const isByok = params.sessionModelId != null && isAgentUserModelId(params.sessionModelId);
 		try {
-			res = await Promise.race([
-				fetch(url, {
-					method: 'POST',
-					headers: {
-						'Content-Type': 'application/json',
-						'Authorization': `Bearer ${apiKeyRaw}`,
-					},
-					body: JSON.stringify(body),
-					signal: ac.signal,
-				}),
-				abortPromise,
-			]);
-		} catch (e) {
-			if (external && external.aborted) {
-				throw new ApiError(agentsErrors.llmAborted);
+			let res: Response;
+			try {
+				res = await Promise.race([
+					fetch(url, {
+						method: 'POST',
+						// 禁止跟随重定向：校验过的 URL 经 302 跳向内网即构成 SSRF 旁路
+						redirect: 'error',
+						headers: {
+							'Content-Type': 'application/json',
+							'Authorization': `Bearer ${apiKeyRaw}`,
+						},
+						body: JSON.stringify(body),
+						signal: ac.signal,
+					}),
+					abortPromise,
+				]);
+			} catch (e) {
+				if (external && external.aborted) {
+					throw new ApiError(agentsErrors.llmAborted);
+				}
+				if (e instanceof ApiError && (e.code === 'AGENTS_LLM_ABORTED' || e.code === 'AGENTS_LLM_TIMEOUT')) {
+					throw e;
+				}
+				if (timedOut) {
+					throw new ApiError(agentsErrors.llmTimeout);
+				}
+				throw new ApiError(agentsErrors.llmRequestFailed, { reason: 'NETWORK_ERROR', detail: sanitizeLlmErrorDetail(e) });
 			}
-			if (e instanceof ApiError && e.code === 'AGENTS_LLM_ABORTED') {
-				throw e;
-			}
-			throw new ApiError(agentsErrors.llmRequestFailed, { reason: 'NETWORK_ERROR', detail: sanitizeLlmErrorDetail(e) });
-		}
 
-		if (!res.ok) {
-			let upstreamBody = '';
-			try { upstreamBody = await Promise.race([res.text(), abortPromise]); } catch { /* ignore */ }
-			ac.abort();
-			throw new ApiError(agentsErrors.llmRequestFailed, { reason: 'UPSTREAM_HTTP_ERROR', status: res.status, detail: sanitizeLlmErrorDetail(upstreamBody) });
-		}
+			if (!res.ok) {
+				let upstreamBody = '';
+				try {
+					upstreamBody = (await Promise.race([readBodyWithLimit(res, AGENT_LLM_RESPONSE_BODY_LIMIT_BYTES), abortPromise])).toString('utf8');
+				} catch { /* ignore */ }
+				ac.abort();
+				// 服务端日志保留全文脱敏版，管理员排障信息量 >= 用户侧所见
+				this.logger.warn(`LLM upstream HTTP ${res.status} (${apiModelName}): ${sanitizeLlmErrorDetail(upstreamBody)}`);
+				const detail = isByok
+					// BYOK：上游是用户自己的端点与密钥，全文脱敏后直传，便于用户自行排障
+					? sanitizeLlmErrorDetail(upstreamBody)
+					// 官方模型：上游可能回显管理员配置的密钥——仅提取 JSON 错误结构中的已知字段再脱敏，
+					// 丢弃 echo 的请求体/响应头等密钥常见回显位置
+					: extractSafeUpstreamErrorDetail(upstreamBody);
+				throw new ApiError(agentsErrors.llmRequestFailed, {
+					reason: 'UPSTREAM_HTTP_ERROR',
+					status: res.status,
+					...(detail !== '' ? { detail } : {}),
+				});
+			}
 
-		let json: unknown;
-		try {
-			// 读体阶段同样纳入竞速：中断时立即 reject，不再苦等 LLM 生成完毕。
-			json = await Promise.race([res.json(), abortPromise]);
-		} catch (e) {
-			if (e instanceof ApiError && e.code === 'AGENTS_LLM_ABORTED') {
-				throw e;
+			let json: unknown;
+			try {
+				// 读体阶段同样纳入竞速：中断时立即 reject，不再苦等 LLM 生成完毕。
+				// 读取流式限量：BYOK 用户可让端点返回任意大的 body，不允许无界缓冲进内存。
+				const bodyText = (await Promise.race([readBodyWithLimit(res, AGENT_LLM_RESPONSE_BODY_LIMIT_BYTES), abortPromise])).toString('utf8');
+				json = JSON.parse(bodyText);
+			} catch (e) {
+				if (e instanceof ApiError && (e.code === 'AGENTS_LLM_ABORTED' || e.code === 'AGENTS_LLM_TIMEOUT')) {
+					throw e;
+				}
+				if (e instanceof UpstreamBodyTooLargeError) {
+					throw new ApiError(agentsErrors.llmRequestFailed, { reason: 'RESPONSE_TOO_LARGE' });
+				}
+				if (external && external.aborted) {
+					throw new ApiError(agentsErrors.llmAborted);
+				}
+				if (timedOut) {
+					throw new ApiError(agentsErrors.llmTimeout);
+				}
+				throw new ApiError(agentsErrors.llmRequestFailed, { reason: 'RESPONSE_NOT_JSON' });
 			}
-			if (external && external.aborted) {
-				throw new ApiError(agentsErrors.llmAborted);
+			const choices = (json as { choices?: { message?: { content?: string } }[] }).choices;
+			const text = choices?.[0]?.message?.content;
+			if (typeof text !== 'string') {
+				throw new ApiError(agentsErrors.llmRequestFailed, { reason: 'RESPONSE_MISSING_CONTENT' });
 			}
-			throw new ApiError(agentsErrors.llmRequestFailed, { reason: 'RESPONSE_NOT_JSON' });
+			return { text, usage: parseLlmUsageFromResponse(json) };
 		} finally {
 			clearTimeout(t);
 			ac.signal.removeEventListener('abort', onAcAbort);
 			if (external) external.removeEventListener('abort', onExternalAbort);
 		}
-
-		const choices = (json as { choices?: { message?: { content?: string } }[] }).choices;
-		const text = choices?.[0]?.message?.content;
-		if (typeof text !== 'string') {
-			throw new ApiError(agentsErrors.llmRequestFailed, { reason: 'RESPONSE_MISSING_CONTENT' });
-		}
-		return { text, usage: parseLlmUsageFromResponse(json) };
 	}
 
 	/**
@@ -1267,7 +1306,8 @@ export class AgentService {
 
 	@bindThis
 	public isListedOnPlazaCharacter(character: MiAgentCharacter): boolean {
-		return character.publishedVersion != null;
+		// 管理端封禁的角色视同未上架：广场列表/详情/新会话/评价等所有可见性判断统一走本闸门
+		return character.publishedVersion != null && character.moderationBanned !== true;
 	}
 
 	@bindThis

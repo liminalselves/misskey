@@ -77,10 +77,23 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				});
 			}
 
-			await this.agentRedeemCodesRepository.update(row.id, {
-				redeemedAt: new Date(),
-				redeemedById: me.id,
-			});
+			// 一次性码必须用条件更新原子认领：并发请求中只有一个能命中
+			// `redeemedAt IS NULL`，杜绝 check-then-act 竞态导致的重复入账
+			const claim = await this.agentRedeemCodesRepository.createQueryBuilder()
+				.update()
+				.set({
+					redeemedAt: new Date(),
+					redeemedById: me.id,
+				})
+				.where('id = :id AND "redeemedAt" IS NULL AND revoked = false', { id: row.id })
+				.execute();
+			if ((claim.affected ?? 0) !== 1) {
+				throw new ApiError({
+					message: 'This code has already been redeemed.',
+					code: 'REDEEM_CODE_ALREADY_USED',
+					id: 'c3d4e5f6-a7b8-9012-3456-7890abcdef01',
+				});
+			}
 
 			await this.userProfilesRepository.increment(
 				{ userId: me.id },

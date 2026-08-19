@@ -4254,6 +4254,7 @@ _agents:
   compressionTokensApproxTooltip: "≈ 付きの数字はヒューリスティック推定値です。正確なカウントはウィンドウ内のメッセージにのみ適用されます。"
   compressionStickyRetry: "圧縮を再試行"
   llmRequestFailedHint: "AIリクエストに失敗しました。モデル設定とアップストリームサービスの状態を確認してから再試行してください。"
+  llmTimeoutHint: "AIリクエストがタイムアウトしました（サーバー上限120秒）。このリクエストは課金されません。しばらくしてから再試行してください。"
   compressionMessageBands: "文脈上の位置"
   compressionMessageBandsSubtitle: "新しい順です。行を選ぶとスレッドの該当メッセージへ移動します。"
   compressionMessageCompressed: "要約済み"

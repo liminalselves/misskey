@@ -19,6 +19,7 @@ import type { MiAgentCheckinRecord } from '@/models/AgentCheckinRecord.js';
 import type { AgentCheckinSettings } from '@/models/Meta.js';
 import type { MiMeta } from '@/models/Meta.js';
 import type { MiUser } from '@/models/User.js';
+import { isDuplicateKeyValueError } from '@/misc/is-duplicate-key-value-error.js';
 
 export const DEFAULT_CHECKIN_SETTINGS: AgentCheckinSettings = {
 	enabled: true,
@@ -178,21 +179,37 @@ export class AgentCheckinService {
 
 		const reward = Math.round(baseValue * streakMultiplier * roleMultiplier * dayMultiplier * 100) / 100;
 
-		// 写入签到记录
-		await this.checkinRecordsRepository.insertOne({
-			id: this.idService.gen(),
-			userId,
-			date: today,
-			reward,
-			streakAtCheckin: streak,
-			baseValue,
-			streakMultiplier,
-			roleMultiplier,
-			dayMultiplier,
-			isMakeup: false,
-			makeupCost: null,
-			createdAt: now,
-		});
+		// 写入签到记录（并发双签由 userId+date 唯一索引兜底：后来者转为幂等返回）
+		try {
+			await this.checkinRecordsRepository.insertOne({
+				id: this.idService.gen(),
+				userId,
+				date: today,
+				reward,
+				streakAtCheckin: streak,
+				baseValue,
+				streakMultiplier,
+				roleMultiplier,
+				dayMultiplier,
+				isMakeup: false,
+				makeupCost: null,
+				createdAt: now,
+			});
+		} catch (e) {
+			if (isDuplicateKeyValueError(e)) {
+				const existing = await this.checkinRecordsRepository.findOneByOrFail({ userId, date: today });
+				return {
+					alreadyCheckedIn: true,
+					reward: existing.reward,
+					streak: existing.streakAtCheckin,
+					baseValue: existing.baseValue,
+					streakMultiplier: existing.streakMultiplier,
+					roleMultiplier: existing.roleMultiplier,
+					dayMultiplier: existing.dayMultiplier,
+				};
+			}
+			throw e;
+		}
 
 		// 入账额度
 		await this.userProfilesRepository.increment({ userId }, 'agentCreditBalance', reward);
@@ -229,8 +246,12 @@ export class AgentCheckinService {
 		const now = new Date();
 		const today = this.beijingDateStr(now);
 
+		// 校验日期格式：Invalid Date 的 NaN 比较会绕过下方所有窗口检查
+		if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return { ok: false, reason: '日期格式无效' };
+
 		// 校验日期在回溯窗口内
 		const target = new Date(date + 'T00:00:00+08:00');
+		if (Number.isNaN(target.getTime())) return { ok: false, reason: '日期格式无效' };
 		const diffDays = Math.floor((new Date(today + 'T00:00:00+08:00').getTime() - target.getTime()) / 86400_000);
 		if (diffDays < 1 || diffDays > settings.makeupAllowedWindowDays) {
 			return { ok: false, reason: `只能补签最近 ${settings.makeupAllowedWindowDays} 天内的日期` };
@@ -239,14 +260,8 @@ export class AgentCheckinService {
 		// 不能补今天
 		if (date >= today) return { ok: false, reason: '不能补签今天或未来的日期' };
 
-		// 检查是否已签到
-		const existing = await this.checkinRecordsRepository.findOneBy({ userId, date });
-		if (existing) return { ok: false, reason: '该日期已签到' };
-
-		// 本月补签次数
-		const monthPrefix = today.slice(0, 7); // yyyy-MM
-		const monthMakeups = await this.checkinRecordsRepository.countBy({ userId, isMakeup: true });
 		// 精确统计本月补签
+		const monthPrefix = today.slice(0, 7); // yyyy-MM
 		const monthRecords = await this.checkinRecordsRepository.createQueryBuilder('r')
 			.where('r.userId = :userId', { userId })
 			.andWhere('r.isMakeup = true')
@@ -259,14 +274,42 @@ export class AgentCheckinService {
 		// 计算消耗
 		const cost = settings.makeupBaseCost + monthRecords * settings.makeupCostIncrement;
 
-		// 检查余额
-		const profile = await this.userProfilesRepository.findOneBy({ userId });
-		if ((profile?.agentCreditBalance ?? 0) < cost) {
-			return { ok: false, reason: `余额不足（需要 ${cost} 额度）` };
+		// 原子认领日期：先插补签记录（userId+date 唯一索引兜底），抢到才允许扣费。
+		// 若扣费失败再删除认领的记录补偿，保证「扣费成功 ⇔ 记录存在」。
+		const recordId = this.idService.gen();
+		try {
+			await this.checkinRecordsRepository.insertOne({
+				id: recordId,
+				userId,
+				date,
+				reward: 0,
+				streakAtCheckin: 0, // 补签后 streak 由前端重新查询
+				baseValue: 0,
+				streakMultiplier: 1,
+				roleMultiplier: 1,
+				dayMultiplier: 1,
+				isMakeup: true,
+				makeupCost: cost,
+				createdAt: now,
+			});
+		} catch (e) {
+			if (isDuplicateKeyValueError(e)) {
+				return { ok: false, reason: '该日期已签到' };
+			}
+			throw e;
 		}
 
-		// 扣减余额
-		await this.userProfilesRepository.decrement({ userId }, 'agentCreditBalance', cost);
+		// 条件扣费（原子）：余额不足时不扣成负数
+		const charge = await this.userProfilesRepository.createQueryBuilder()
+			.update()
+			.set({ agentCreditBalance: () => '"agentCreditBalance" - :cost' })
+			.where('"userId" = :userId AND "agentCreditBalance" >= :cost', { userId, cost })
+			.setParameter('cost', cost)
+			.execute();
+		if ((charge.affected ?? 0) !== 1) {
+			await this.checkinRecordsRepository.delete({ id: recordId }).catch(() => {});
+			return { ok: false, reason: `余额不足（需要 ${cost} 额度）` };
+		}
 
 		// 写入消费日志（补签扣费，cost 为正数表示支出）
 		await this.agentModelUsageLogsRepository.insertOne({
@@ -286,22 +329,6 @@ export class AgentCheckinService {
 			cost: cost,
 			promptTokens: null,
 			completionTokens: null,
-		});
-
-		// 写入补签记录
-		await this.checkinRecordsRepository.insertOne({
-			id: this.idService.gen(),
-			userId,
-			date,
-			reward: 0,
-			streakAtCheckin: 0, // 补签后 streak 由前端重新查询
-			baseValue: 0,
-			streakMultiplier: 1,
-			roleMultiplier: 1,
-			dayMultiplier: 1,
-			isMakeup: true,
-			makeupCost: cost,
-			createdAt: now,
 		});
 
 		return { ok: true, cost };

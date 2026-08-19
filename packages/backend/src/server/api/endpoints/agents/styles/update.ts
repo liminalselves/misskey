@@ -55,6 +55,14 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			if (!row || row.userId !== me.id) {
 				throw new ApiError({ message: 'No such style.', code: 'NO_SUCH_STYLE', id: 'a3b4c5d6-e7f8-9012-6789-123456789012' });
 			}
+			// 审核中的草稿必须冻结：否则作者可在审核员通过前替换内容，导致发布内容与审核所见不一致
+			if (row.reviewStatus === 'pending') {
+				throw new ApiError({
+					message: 'This style is pending review and cannot be edited. Withdraw the submission first.',
+					code: 'AGENT_REVIEW_PENDING_LOCKED',
+					id: 'c2d3e4f5-a6b7-4789-bcde-f345678901b2',
+				});
+			}
 			if (ps.name != null) row.name = ps.name;
 			if (ps.summary !== undefined) row.summary = ps.summary;
 			if (ps.body != null) row.body = ps.body;

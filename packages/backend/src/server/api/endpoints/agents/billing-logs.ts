@@ -105,7 +105,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			const instanceMeta = await this.metaService.fetch(true);
 			const modelNameMap = new Map([
 				...packPublicAgentModels(instanceMeta).map(m => [m.id, m.name] as const),
-				...this.agentVisionService.listAvailableVisionModels(instanceMeta).map(m => [m.id, m.name] as const),
+				...(await this.agentVisionService.listAvailableVisionModels(instanceMeta)).map(m => [m.id, m.name] as const),
 			]);
 
 			// BYOK（自定义模型）请求不消耗平台额度，不在消费日志中展示

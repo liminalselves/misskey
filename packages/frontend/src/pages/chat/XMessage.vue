@@ -78,7 +78,7 @@ import type { NormalizedChatMessage } from './room.vue';
 import { extractUrlFromMfm } from '@/utility/extract-url-from-mfm.js';
 import MkUrlPreview from '@/components/MkUrlPreview.vue';
 import { ensureSignin } from '@/i.js';
-import { misskeyApi } from '@/utility/misskey-api.js';
+import { misskeyApi, formatApiError } from '@/utility/misskey-api.js';
 import { i18n } from '@/i18n.js';
 import MkFukidashi from '@/components/MkFukidashi.vue';
 import * as os from '@/os.js';
@@ -184,6 +184,22 @@ function onContextmenu(ev: PointerEvent) {
 	showMenu(ev, true);
 }
 
+async function confirmAndDeleteMessage(): Promise<void> {
+	const { canceled } = await os.confirm({
+		type: 'warning',
+		text: i18n.ts.deleteConfirm,
+	});
+	if (canceled) return;
+	try {
+		await misskeyApi('chat/messages/delete', {
+			messageId: props.message.id,
+		});
+		os.toast(i18n.ts.removed);
+	} catch (e) {
+		os.alert({ type: 'error', text: formatApiError(e) });
+	}
+}
+
 function showMenu(ev: PointerEvent, contextmenu = false) {
 	const menu: MenuItem[] = [];
 
@@ -271,9 +287,7 @@ function showMenu(ev: PointerEvent, contextmenu = false) {
 				icon: 'ti ti-trash',
 				danger: true,
 				action: () => {
-					misskeyApi('chat/messages/delete', {
-						messageId: props.message.id,
-					});
+					void confirmAndDeleteMessage();
 				},
 			});
 		}
@@ -287,9 +301,7 @@ function showMenu(ev: PointerEvent, contextmenu = false) {
 			icon: 'ti ti-trash',
 			danger: true,
 			action: () => {
-				misskeyApi('chat/messages/delete', {
-					messageId: props.message.id,
-				});
+				void confirmAndDeleteMessage();
 			},
 		});
 	}

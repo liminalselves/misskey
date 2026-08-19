@@ -33,7 +33,7 @@ export const meta = {
 export const paramDef = {
 	type: 'object',
 	properties: {
-		date: { type: 'string', minLength: 10, maxLength: 10 },
+		date: { type: 'string', minLength: 10, maxLength: 10, pattern: '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' },
 	},
 	required: ['date'],
 } as const;

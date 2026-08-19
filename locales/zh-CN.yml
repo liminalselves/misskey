@@ -4162,6 +4162,7 @@ _agents:
   compressionTokensApproxTooltip: "带 ≈ 的数字为启发式估算值；精确计数仅应用于对话窗口内的消息。"
   compressionStickyRetry: "重试压缩"
   llmRequestFailedHint: "AI 请求失败，请检查模型配置与上游服务状态后重试。若持续失败，请联系管理员。"
+  llmTimeoutHint: "AI 请求超时（服务器上限 120 秒），本次不计费。请稍后重试；若频繁超时，请缩短上下文或联系管理员。"
   compressionMessageBands: "消息分段"
   compressionMessageBandsSubtitle: "自上而下为由新到旧；点某一行可在私信中打开该条消息。"
   compressionMessageCompressed: "已总结"
