@@ -37,17 +37,17 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<div v-panel :class="$style.summaryCard">
 				<div :class="$style.summaryCardLabel">{{ i18n.ts._agents.adminReportsSuccessRate }}</div>
 				<div :class="[$style.summaryCardValue, $style.success]">{{ pct(data.overall.success, data.overall.total) }}</div>
-				<div :class="[$style.summaryCardSub, $style[deltaClass(deltaPp(overallSuccessRate, previousSuccessRate), 'good')]]" :title="i18n.ts._agents.adminReportsVsPrevious">{{ deltaText(deltaPp(overallSuccessRate, previousSuccessRate), 'pp') }}</div>
+				<div :class="[$style.summaryCardSub, successRateDeltaState === 'good' ? $style.deltaGood : successRateDeltaState === 'bad' ? $style.deltaBad : $style.deltaNeutral]" :title="i18n.ts._agents.adminReportsVsPrevious">{{ deltaText(successRateDelta, 'pp') }}</div>
 			</div>
 			<div v-panel :class="$style.summaryCard">
 				<div :class="$style.summaryCardLabel">{{ i18n.ts._agents.adminReportsFailed }}</div>
 				<div :class="[$style.summaryCardValue, data.overall.failed > 0 ? $style.failed : null]">{{ data.overall.failed }}</div>
-				<div :class="[$style.summaryCardSub, $style[deltaClass(deltaPct(data.overall.failed, data.previousOverall.failed), 'bad')]]" :title="i18n.ts._agents.adminReportsVsPrevious">{{ deltaText(deltaPct(data.overall.failed, data.previousOverall.failed)) }}</div>
+				<div :class="[$style.summaryCardSub, failedDeltaState === 'good' ? $style.deltaGood : failedDeltaState === 'bad' ? $style.deltaBad : $style.deltaNeutral]" :title="i18n.ts._agents.adminReportsVsPrevious">{{ deltaText(failedDelta) }}</div>
 			</div>
 			<div v-panel :class="$style.summaryCard">
 				<div :class="$style.summaryCardLabel">{{ i18n.ts._agents.adminReportsAborted }}</div>
 				<div :class="[$style.summaryCardValue, data.overall.aborted > 0 ? $style.aborted : null]">{{ data.overall.aborted }}</div>
-				<div :class="[$style.summaryCardSub, $style[deltaClass(deltaPct(data.overall.aborted, data.previousOverall.aborted), 'bad')]]" :title="i18n.ts._agents.adminReportsVsPrevious">{{ deltaText(deltaPct(data.overall.aborted, data.previousOverall.aborted)) }}</div>
+				<div :class="[$style.summaryCardSub, abortedDeltaState === 'good' ? $style.deltaGood : abortedDeltaState === 'bad' ? $style.deltaBad : $style.deltaNeutral]" :title="i18n.ts._agents.adminReportsVsPrevious">{{ deltaText(abortedDelta) }}</div>
 			</div>
 			<div v-panel :class="$style.summaryCard">
 				<div :class="$style.summaryCardLabel">{{ i18n.ts._agents.adminReportsFreeCalls }}</div>
@@ -425,12 +425,22 @@ function deltaText(d: DeltaInfo, unit: '%' | 'pp' = '%'): string {
 }
 
 // sentiment: good=上升为好（成功率）；bad=上升为坏（失败/中断）；neutral=仅展示方向
-// 返回 CSS module 类名键，由模板经 $style[...] 解析（script 中不可直接引用 $style）
-function deltaClass(d: DeltaInfo, sentiment: 'good' | 'bad' | 'neutral'): 'deltaGood' | 'deltaBad' | 'deltaNeutral' {
-	if (d == null || d.dir === 'flat' || sentiment === 'neutral') return 'deltaNeutral';
+// 返回语义状态（非 CSS 类名）。生产构建的 UnwindCssModuleClassName 插件会把静态 $style.xxx 内联为
+// 字面量并移除运行时 __cssModules（$style 变为 undefined），因此模板中禁止 $style[动态键]，
+// 必须写成静态 $style.deltaGood / $style.deltaBad / $style.deltaNeutral 的三元分支。
+function deltaState(d: DeltaInfo, sentiment: 'good' | 'bad' | 'neutral'): 'good' | 'bad' | 'neutral' {
+	if (d == null || d.dir === 'flat' || sentiment === 'neutral') return 'neutral';
 	const isGood = sentiment === 'good' ? d.dir === 'up' : d.dir === 'down';
-	return isGood ? 'deltaGood' : 'deltaBad';
+	return isGood ? 'good' : 'bad';
 }
+
+const successRateDelta = computed(() => deltaPp(overallSuccessRate.value, previousSuccessRate.value));
+const failedDelta = computed(() => deltaPct(data.value?.overall.failed ?? 0, data.value?.previousOverall?.failed ?? 0));
+const abortedDelta = computed(() => deltaPct(data.value?.overall.aborted ?? 0, data.value?.previousOverall?.aborted ?? 0));
+
+const successRateDeltaState = computed(() => deltaState(successRateDelta.value, 'good'));
+const failedDeltaState = computed(() => deltaState(failedDelta.value, 'bad'));
+const abortedDeltaState = computed(() => deltaState(abortedDelta.value, 'bad'));
 
 // ---------- 排序（模型表） ----------
 
