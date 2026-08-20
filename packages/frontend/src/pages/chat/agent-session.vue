@@ -473,7 +473,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<MkInfo v-if="drawSelectedImageModel?.provider === 'aurora'" warn>
 						Naval AI 参数会直接影响出图质量、费用和稳定性。不了解时请保持默认，或使用“恢复默认设置”。
 					</MkInfo>
-					<div v-if="drawSelectedImageModel?.provider === 'openai'" :class="$style.drawSizeRow">
+					<div v-if="drawSelectedImageModel?.provider === 'openai' || drawSelectedImageModel?.provider === 'qwen'" :class="$style.drawSizeRow">
 						<MkSelect v-model="drawSize" :items="drawSizeItems">
 							<template #label>{{ i18n.ts._agents.adminOpenaiImageSize }}</template>
 						</MkSelect>
@@ -918,30 +918,44 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<MkInfo v-if="session == null">{{ i18n.ts.somethingHappened }}</MkInfo>
 			<template v-else>
 				<MkInfo v-if="moderationLocksSessionWrites" warn>{{ moderationBlockUserMessage }}</MkInfo>
-				<div v-if="agentModels.length > 0" class="_gaps_s">
-					<div v-panel :class="[$style.settingHero, $style.modelHeroCompact]">
-						<div :class="$style.modelHeroSummary">
-							<span :class="$style.modelHeroSummaryItem">
-								<span :class="$style.settingLabel">{{ i18n.ts._agents.sessionModel }}</span>
-								<span :class="$style.modelHeroSummaryValue">{{ selectedModelMeta?.name ?? '-' }}</span>
-							</span>
-							<span v-if="agentCreditBalance != null" :class="$style.modelHeroSummaryItem">
-								<span :class="$style.settingLabel">{{ i18n.ts._agents.myStatsCreditBalance }}</span>
-								<span :class="$style.modelHeroSummaryValue"><MkNumber :value="agentCreditBalance" :tween="false"/></span>
-							</span>
-							<span v-if="expectedCallCostForSession > 0" :class="$style.modelHeroSummaryItem">
-								<span :class="$style.settingLabel">{{ i18n.ts._agents.sessionModelExpectedCost }}</span>
-								<span :class="$style.modelHeroSummaryValue">{{ expectedCallCostForSession.toLocaleString() }}</span>
-							</span>
+					<div v-if="agentModels.length > 0" class="_gaps_s">
+						<div v-panel :class="[$style.settingHero, $style.modelHeroCompact]">
+							<div :class="$style.modelHeroSummary">
+								<span :class="$style.modelHeroSummaryItem">
+									<span :class="$style.settingLabel">{{ i18n.ts._agents.sessionModel }}</span>
+									<span :class="$style.modelHeroSummaryValue">{{ selectedModelMeta?.name ?? '-' }}</span>
+								</span>
+								<span v-if="agentCreditBalance != null" :class="$style.modelHeroSummaryItem">
+									<span :class="$style.settingLabel">{{ i18n.ts._agents.myStatsCreditBalance }}</span>
+									<span :class="$style.modelHeroSummaryValue"><MkNumber :value="agentCreditBalance" :tween="false"/></span>
+								</span>
+								<span v-if="expectedCallCostForSession > 0" :class="$style.modelHeroSummaryItem">
+									<span :class="$style.settingLabel">{{ i18n.ts._agents.sessionModelExpectedCost }}</span>
+									<span :class="$style.modelHeroSummaryValue">{{ expectedCallCostForSession.toLocaleString() }}</span>
+								</span>
+							</div>
 						</div>
-					</div>
-					<div :class="$style.selectCardList">
-						<div
-							v-for="m in agentModels"
-							:key="m.id"
-							v-panel
-							:class="[$style.selectCard, $style.modelSelectCard, modelCardSelectionId === m.id ? $style.selectCardActive : '']"
-						>
+						<div v-if="modelGroupTabs.length > 1" :class="$style.modelGroupTabs" role="tablist">
+							<button
+								v-for="t in modelGroupTabs"
+								:key="t.key"
+								type="button"
+								role="tab"
+								:aria-selected="modelGroupFilter === t.key"
+								:class="[$style.modelGroupTab, modelGroupFilter === t.key ? $style.modelGroupTabActive : '']"
+								@click="modelGroupFilter = t.key"
+							>
+								<span :class="$style.modelGroupTabLabel">{{ t.label }}</span>
+								<span :class="$style.modelGroupTabCount">{{ t.count }}</span>
+							</button>
+						</div>
+						<div :class="$style.selectCardList">
+							<div
+								v-for="m in visibleAgentModels"
+								:key="m.id"
+								v-panel
+								:class="[$style.selectCard, $style.modelSelectCard, modelCardSelectionId === m.id ? $style.selectCardActive : '']"
+							>
 							<div :class="[$style.selectCardMain, $style.modelSelectCardMain]">
 								<div :class="[$style.selectCardHead, $style.modelSelectCardHead]">
 									<div :class="$style.selectCardTitleWrap">
@@ -1513,7 +1527,7 @@ type AgentImageModel = {
 	id: string;
 	name: string;
 	description: string | null;
-	provider: 'aurora' | 'openai';
+	provider: 'aurora' | 'openai' | 'qwen';
 	supportsReferenceImage: boolean;
 	apiModelName: string | null;
 	costPerCall: number;
@@ -1963,6 +1977,8 @@ type AgentModelLite = {
 	pricePerMillionInputCacheMissTokens?: number;
 	pricePerMillionOutputTokens?: number;
 	peakPriceMultiplier?: number | null;
+	/** 所属分组名（来自 MetaLite agentModels.group）；null/无 表示未分组（归入「其他」） */
+	group?: string | null;
 	/** 用户自定义模型（BYOK）标记 */
 	isUserModel?: boolean;
 };
@@ -1974,6 +1990,36 @@ const agentModels = computed(() => {
 	const raw = (instance as Record<string, unknown>).agentModels;
 	const official = Array.isArray(raw) ? raw as AgentModelLite[] : [];
 	return [...official, ...userModels.value];
+});
+
+/** 模型 tab 次级分组导航的当前筛选：'__all__' 全部、'__none__' 其他（无分组）、其余为分组名 */
+const modelGroupFilter = ref<string>('__all__');
+
+type ModelGroupTab = { key: string; label: string; count: number };
+
+/** 模型 tab 次级分组导航：全部 / 各分组（按站点分组顺序，仅显示有可见模型者）/ 其他 */
+const modelGroupTabs = computed<ModelGroupTab[]>(() => {
+	const models = agentModels.value;
+	const tabs: ModelGroupTab[] = [{ key: '__all__', label: i18n.ts._agents.modelGroupAll, count: models.length }];
+	const rawGroups = (instance as Record<string, unknown>).agentLlmModelGroups;
+	const groupOrder = Array.isArray(rawGroups) ? rawGroups.filter((g): g is string => typeof g === 'string') : [];
+	for (const g of groupOrder) {
+		const count = models.filter(m => m.group === g).length;
+		if (count > 0) tabs.push({ key: g, label: g, count });
+	}
+	const ungrouped = models.filter(m => !m.group);
+	if (ungrouped.length > 0) {
+		tabs.push({ key: '__none__', label: i18n.ts._agents.modelGroupOther, count: ungrouped.length });
+	}
+	return tabs;
+});
+
+/** 按当前分组筛选后的模型列表 */
+const visibleAgentModels = computed(() => {
+	const models = agentModels.value;
+	if (modelGroupFilter.value === '__all__') return models;
+	if (modelGroupFilter.value === '__none__') return models.filter(m => !m.group);
+	return models.filter(m => m.group === modelGroupFilter.value);
 });
 
 async function loadUserModels() {
@@ -2007,6 +2053,7 @@ async function loadUserModels() {
 				maxOutputTokensPerCall: r.maxOutputTokensPerCall,
 				costPerCall: 0,
 				billingMode: 'per_call' as const,
+				group: null,
 				isUserModel: true,
 			}));
 	} catch {
@@ -2961,6 +3008,7 @@ function chooseDrawImageModel(modelId: string) {
 function imageProviderLabel(provider: AgentImageModel['provider']): string {
 	if (provider === 'aurora') return 'Aurora';
 	if (provider === 'openai') return i18n.ts._agents.imageProviderOpenai;
+	if (provider === 'qwen') return i18n.ts._agents.imageProviderQwen;
 	return provider;
 }
 
@@ -5531,6 +5579,51 @@ async function onAbortRequest() {
 .selectCardList {
 	display: grid;
 	gap: 0.75em;
+}
+
+/* 模型 tab 次级分组导航：全部 / 各分组 / 其他 */
+.modelGroupTabs {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.4em;
+}
+
+.modelGroupTab {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.45em;
+	padding: 0.32em 0.8em;
+	border-radius: 999px;
+	border: solid 1px var(--MI_THEME-divider);
+	background: var(--MI_THEME-panel);
+	color: var(--MI_THEME-fg);
+	font-size: 0.9em;
+	cursor: pointer;
+	transition: border-color 0.15s, background 0.15s;
+
+	&:hover {
+		border-color: color-mix(in srgb, var(--MI_THEME-accent) 45%, var(--MI_THEME-divider));
+	}
+}
+
+.modelGroupTabActive {
+	border-color: var(--MI_THEME-accent);
+	background: color-mix(in srgb, var(--MI_THEME-accent) 14%, var(--MI_THEME-panel));
+	color: var(--MI_THEME-accent);
+	font-weight: 600;
+}
+
+.modelGroupTabLabel {
+	white-space: nowrap;
+}
+
+.modelGroupTabCount {
+	padding: 0 0.45em;
+	border-radius: 999px;
+	font-size: 0.82em;
+	line-height: 1.5;
+	background: color-mix(in srgb, var(--MI_THEME-fg) 12%, transparent);
+	opacity: 0.75;
 }
 
 /* 对话风格空状态引导 */

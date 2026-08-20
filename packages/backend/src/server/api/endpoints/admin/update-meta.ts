@@ -259,7 +259,7 @@ export const paramDef = {
 					id: { type: 'string', minLength: 1, maxLength: 128 },
 					name: { type: 'string', minLength: 1, maxLength: 256 },
 					description: { type: 'string', nullable: true, maxLength: 2048 },
-					provider: { type: 'string', enum: ['aurora', 'openai'] },
+					provider: { type: 'string', enum: ['aurora', 'openai', 'qwen'] },
 					enabled: { type: 'boolean' },
 					apiModelName: { type: 'string', nullable: true, maxLength: 128 },
 					apiUrl: { type: 'string', nullable: true, maxLength: 2048 },
@@ -1088,12 +1088,12 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					}
 					let apiUrl: string | null = null;
 					let apiKey: string | null = null;
-					if (m.provider === 'openai') {
+					if (m.provider === 'openai' || m.provider === 'qwen') {
 						if (typeof m.apiModelName !== 'string' || m.apiModelName.trim() === ''
 							|| typeof m.apiUrl !== 'string' || m.apiUrl.trim() === ''
 							|| typeof m.apiKey !== 'string' || m.apiKey.trim() === '') {
 							throw new ApiError({
-								message: 'OpenAI image model requires apiModelName, apiUrl, and apiKey.',
+								message: 'Image model requires apiModelName, apiUrl, and apiKey.',
 								code: 'INVALID_PARAM',
 								id: '4b9f0af0-aec5-4151-bff6-239b0c639baa',
 							});
@@ -1103,7 +1103,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 						} catch (err) {
 							const reason = err instanceof UnsafeLlmUrlError ? describeUnsafeLlmUrlReason(err.reason) : 'Invalid URL.';
 							throw new ApiError({
-								message: `OpenAI image model URL is invalid: ${reason}`,
+								message: `Image model URL is invalid: ${reason}`,
 								code: 'INVALID_PARAM',
 								id: 'd5c7da16-6e40-4f65-90db-996bba9c4aaf',
 							});

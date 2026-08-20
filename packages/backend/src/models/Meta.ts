@@ -44,7 +44,7 @@ export type MiAgentImageDefaultParams = {
 	promptSuffix?: string;
 };
 
-export type MiAgentImageProvider = 'aurora' | 'openai';
+export type MiAgentImageProvider = 'aurora' | 'openai' | 'qwen';
 
 export type MiAgentImageModel = {
 	id: string;
@@ -53,9 +53,13 @@ export type MiAgentImageModel = {
 	provider: MiAgentImageProvider;
 	enabled?: boolean;
 	apiModelName?: string | null;
-	/** Full OpenAI-compatible /images/generations or /chat/completions endpoint URL. */
+	/**
+	 * Full endpoint URL.
+	 * - openai: OpenAI-compatible /images/generations or /chat/completions.
+	 * - qwen: DashScope-style /images/generations (Qwen-Image).
+	 */
 	apiUrl?: string | null;
-	/** Per-model credential for an OpenAI-compatible image endpoint. */
+	/** Per-model credential for the image endpoint. */
 	apiKey?: string | null;
 	/** Whether this model accepts the character's default reference image. */
 	supportsReferenceImage?: boolean;

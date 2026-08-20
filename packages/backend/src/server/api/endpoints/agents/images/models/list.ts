@@ -22,7 +22,7 @@ export const meta = {
 				id: { type: 'string' },
 				name: { type: 'string' },
 				description: { type: 'string', nullable: true },
-				provider: { type: 'string', enum: ['aurora', 'openai'] },
+				provider: { type: 'string', enum: ['aurora', 'openai', 'qwen'] },
 				apiModelName: { type: 'string', nullable: true },
 				supportsReferenceImage: { type: 'boolean' },
 				costPerCall: { type: 'number' },
@@ -51,8 +51,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		super(meta, paramDef, async (ps, me) => {
 			const instance = await this.metaService.fetch(true);
 			const models = this.agentImageService.listAvailableImageModels(instance);
-			const out: {
-				id: string; name: string; description: string | null; provider: 'aurora' | 'openai';
+				const out: {
+					id: string; name: string; description: string | null; provider: 'aurora' | 'openai' | 'qwen';
 				apiModelName: string | null; supportsReferenceImage: boolean; costPerCall: number;
 				freeQuotaUsed: number; freeQuotaTotal: number;
 				defaultParams: Record<string, unknown>; defaultArtistPresetId: string | null;

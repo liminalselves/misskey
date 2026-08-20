@@ -85,6 +85,33 @@ SPDX-License-Identifier: AGPL-3.0-only
 			</MkFolder>
 
 			<MkFolder v-if="activeTab === 'models'" :defaultOpen="true">
+				<template #icon><i class="ti ti-folder"></i></template>
+				<template #label>{{ i18n.ts._agents.modelGroups }}</template>
+				<div class="_gaps">
+					<MkInfo>{{ i18n.ts._agents.modelGroupsHint }}</MkInfo>
+					<div v-if="form.state.agentLlmModelGroupRows.length === 0" :class="$style.emptyModels">
+						{{ i18n.ts._agents.modelGroupsEmpty }}
+					</div>
+					<div v-for="(g, gi) in form.state.agentLlmModelGroupRows" :key="g.id" :class="$style.groupRow">
+						<MkInput v-model="g.name" small :class="$style.groupNameInput">
+							<template #label>{{ i18n.ts._agents.modelGroupName }}</template>
+						</MkInput>
+						<div :class="$style.groupRowActions">
+							<button type="button" class="_button" :class="$style.iconMuted" :disabled="gi === 0" :title="i18n.ts._agents.adminModelMoveUp" @click="moveGroup(gi, -1)"><i class="ti ti-arrow-up"></i></button>
+							<button type="button" class="_button" :class="$style.iconMuted" :disabled="gi === form.state.agentLlmModelGroupRows.length - 1" :title="i18n.ts._agents.adminModelMoveDown" @click="moveGroup(gi, 1)"><i class="ti ti-arrow-down"></i></button>
+							<button type="button" class="_button" :class="$style.iconDanger" :title="i18n.ts._agents.modelGroupDelete" @click="removeGroup(g.id)"><i class="ti ti-trash"></i></button>
+						</div>
+					</div>
+					<div :class="$style.addGroupRow">
+						<MkInput v-model="newGroupName" small :class="$style.groupNameInput" @enter="addGroup">
+							<template #label>{{ i18n.ts._agents.modelGroupAdd }}</template>
+						</MkInput>
+						<MkButton rounded @click="addGroup"><i class="ti ti-plus"></i> {{ i18n.ts._agents.modelGroupAdd }}</MkButton>
+					</div>
+				</div>
+			</MkFolder>
+
+			<MkFolder v-if="activeTab === 'models'" :defaultOpen="true">
 				<template #icon><i class="ti ti-list-details"></i></template>
 				<template #label>{{ i18n.ts._agents.adminSectionModels }}</template>
 				<div class="_gaps">
@@ -101,6 +128,15 @@ SPDX-License-Identifier: AGPL-3.0-only
 								<span v-if="row.unlisted" :class="$style.unlistedBadge">{{ i18n.ts._agents.adminModelUnlistedBadge }}</span>
 							</span>
 							<div :class="$style.modelCardActions">
+								<button type="button" class="_button" :class="$style.iconMuted" :title="i18n.ts._agents.adminModelCopy" @click="copyModelRow(i)">
+									<i class="ti ti-copy"></i>
+								</button>
+								<button type="button" class="_button" :class="$style.iconMuted" :disabled="i === 0" :title="i18n.ts._agents.adminModelMoveUp" @click="moveModelRow(i, -1)">
+									<i class="ti ti-arrow-up"></i>
+								</button>
+								<button type="button" class="_button" :class="$style.iconMuted" :disabled="i === form.state.agentLlmModelRows.length - 1" :title="i18n.ts._agents.adminModelMoveDown" @click="moveModelRow(i, 1)">
+									<i class="ti ti-arrow-down"></i>
+								</button>
 								<button v-if="row.unlisted" type="button" class="_button" :class="$style.iconMuted" :title="i18n.ts._agents.adminModelRelist" @click="toggleUnlist(i, false)">
 									<i class="ti ti-eye"></i>
 								</button>
@@ -117,6 +153,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 							<code :class="$style.internalIdValue">{{ row.id }}</code>
 							<p :class="$style.internalIdCaption">{{ i18n.ts._agents.fieldModelInternalIdCaption }}</p>
 						</div>
+						<MkSelect v-model="row.groupId" :items="modelGroupItems" :readonly="row.unlisted">
+							<template #label>{{ i18n.ts._agents.modelGroup }}</template>
+						</MkSelect>
 						<MkTextarea v-model="row.description" :readonly="row.unlisted">
 							<template #label>{{ i18n.ts._agents.modelDescription }}</template>
 						</MkTextarea>
@@ -498,6 +537,24 @@ SPDX-License-Identifier: AGPL-3.0-only
 							</FormSplit>
 							<MkTextarea v-model="row.promptPrefix"><template #label>Prompt Prefix</template></MkTextarea>
 							<MkTextarea v-model="row.promptSuffix"><template #label>Prompt Suffix</template></MkTextarea>
+						</template>
+						<template v-else-if="row.provider === 'qwen'">
+							<FormSplit :minWidth="220">
+								<MkInput v-model="row.apiUrl">
+									<template #label>{{ i18n.ts._agents.adminQwenImageRequestUrl }}</template>
+									<template #caption>{{ i18n.ts._agents.adminQwenImageRequestUrlCaption }}</template>
+								</MkInput>
+								<MkInput v-model="row.apiKey" type="password"><template #label>{{ i18n.ts._agents.adminQwenImageApiKey }}</template></MkInput>
+							</FormSplit>
+							<FormSplit :minWidth="220">
+								<MkInput v-model="row.apiModelName"><template #label>{{ i18n.ts._agents.adminQwenImageModelName }}</template></MkInput>
+								<MkInput v-model="row.costPerCall" type="text"><template #label>{{ i18n.ts._agents.adminImageModelCost }}</template></MkInput>
+							</FormSplit>
+							<MkInput v-model="row.dailyFreeQuota" type="text">
+								<template #label>每日免费次数</template>
+								<template #caption>设为 0 则无免费额度；每日 0 点（北京时间）重置</template>
+							</MkInput>
+							<MkInfo warn>Qwen-Image 接口使用 DashScope 风格协议（input/parameters），同步返回 output.results 图片地址，不支持参考图。</MkInfo>
 						</template>
 						<template v-else>
 							<FormSplit :minWidth="220">
@@ -958,6 +1015,8 @@ type AgentLlmModelRow = {
 	maxContextTokens: string;
 	maxOutputTokensPerCall: string;
 	unlisted: boolean;
+	/** 所属模型分组 id；'' 表示无分组 */
+	groupId: string;
 	costPerCall: string;
 	/** 计费方式：per_call 按次；usage 按量（token 单价） */
 	billingMode: 'per_call' | 'usage';
@@ -969,6 +1028,11 @@ type AgentLlmModelRow = {
 	charsPerToken: string;
 	tokenizerEncoding: string;
 	dailyFreeQuota: string;
+};
+
+type AgentLlmModelGroupRow = {
+	id: string;
+	name: string;
 };
 
 type AgentImageTokenRow = {
@@ -987,7 +1051,7 @@ type AgentImageModelRow = {
 	id: string;
 	name: string;
 	description: string;
-	provider: 'aurora' | 'openai';
+	provider: 'aurora' | 'openai' | 'qwen';
 	enabled: boolean;
 	apiModelName: string;
 	apiUrl: string;
@@ -1064,6 +1128,7 @@ type AgentReviewTriggerRule = {
 const agentImageProviderItems: MkSelectItem[] = [
 	{ value: 'aurora', label: 'Aurora / Naval AI' },
 	{ value: 'openai', label: i18n.ts._agents.imageProviderOpenai },
+	{ value: 'qwen', label: i18n.ts._agents.imageProviderQwen },
 ];
 
 const billingModeItems: MkSelectItem[] = [
@@ -1144,6 +1209,7 @@ function initAgentLlmModelRows(): AgentLlmModelRow[] {
 			maxContextTokens: String(numFromMeta(o.maxContextTokens, 8192)),
 			maxOutputTokensPerCall: String(numFromMeta(o.maxOutputTokensPerCall, 2048)),
 			unlisted: o.unlisted === true,
+			groupId: typeof o.groupId === 'string' ? o.groupId.trim() : '',
 			costPerCall: typeof o.costPerCall === 'number' && Number.isFinite(o.costPerCall) ? String(o.costPerCall) : '0',
 			billingMode: o.billingMode === 'usage' ? 'usage' : 'per_call',
 			pricePerMillionInputCacheHitTokens: typeof o.pricePerMillionInputCacheHitTokens === 'number' && Number.isFinite(o.pricePerMillionInputCacheHitTokens) ? String(o.pricePerMillionInputCacheHitTokens) : '',
@@ -1161,6 +1227,21 @@ function initAgentLlmModelRows(): AgentLlmModelRow[] {
 function rowIsBlank(row: AgentLlmModelRow): boolean {
 	return !row.name.trim() && !row.description.trim() && !row.baseUrl.trim()
 		&& !row.apiKey.trim() && !row.apiModelName.trim();
+}
+
+function initAgentLlmModelGroupRows(): AgentLlmModelGroupRow[] {
+	const raw = (meta as Record<string, unknown>).agentLlmModelGroups;
+	if (raw == null || !Array.isArray(raw)) return [];
+	const rows: AgentLlmModelGroupRow[] = [];
+	for (const item of raw) {
+		if (typeof item !== 'object' || item == null) continue;
+		const o = item as Record<string, unknown>;
+		const id = typeof o.id === 'string' ? o.id.trim() : '';
+		const name = typeof o.name === 'string' ? o.name.trim() : '';
+		if (!id || !name) continue;
+		rows.push({ id, name });
+	}
+	return rows;
 }
 
 function initAgentByokProviderRows(): AgentByokProviderRow[] {
@@ -1211,7 +1292,7 @@ function initAgentImageModelRows(): AgentImageModelRow[] {
 			id: typeof o.id === 'string' && o.id ? o.id : genId(),
 			name: typeof o.name === 'string' ? o.name : '',
 			description: typeof o.description === 'string' ? o.description : '',
-			provider: o.provider === 'openai' ? 'openai' : 'aurora',
+			provider: o.provider === 'openai' ? 'openai' : o.provider === 'qwen' ? 'qwen' : 'aurora',
 			enabled: o.enabled !== false,
 			apiModelName: typeof o.apiModelName === 'string' ? o.apiModelName : '',
 			apiUrl: typeof o.apiUrl === 'string' ? o.apiUrl : '',
@@ -1303,6 +1384,7 @@ const form = useForm({
 	agentFeatureEnabled: Boolean(meta.agentFeatureEnabled),
 	agentGlobalSystemPrompt: typeof meta.agentGlobalSystemPrompt === 'string' ? meta.agentGlobalSystemPrompt : '',
 	agentLlmModelRows: initAgentLlmModelRows(),
+	agentLlmModelGroupRows: initAgentLlmModelGroupRows(),
 	agentDefaultModelId: typeof meta.agentDefaultModelId === 'string' ? meta.agentDefaultModelId : '',
 	agentByokEnabled: Boolean(meta.agentByokEnabled),
 	agentByokProviderRows: initAgentByokProviderRows(),
@@ -1384,6 +1466,7 @@ const form = useForm({
 		maxContextTokens: number;
 		maxOutputTokensPerCall: number;
 		unlisted: boolean;
+		groupId: string | null;
 		costPerCall: number;
 		billingMode: 'per_call' | 'usage';
 		pricePerMillionInputCacheHitTokens: number;
@@ -1462,6 +1545,7 @@ const form = useForm({
 			maxContextTokens: maxCtx,
 			maxOutputTokensPerCall: maxOut,
 			unlisted: row.unlisted === true,
+			groupId: row.groupId.trim() === '' ? null : row.groupId.trim(),
 			costPerCall: cost,
 			billingMode: row.billingMode === 'usage' ? 'usage' : 'per_call',
 			pricePerMillionInputCacheHitTokens: parseMillionTokenPrice(row.pricePerMillionInputCacheHitTokens, i18n.ts._agents.billingInputCacheHit),
@@ -1515,8 +1599,8 @@ const form = useForm({
 				provider: row.provider,
 				enabled: row.enabled,
 				apiModelName: row.apiModelName.trim() === '' ? null : row.apiModelName.trim(),
-				apiUrl: row.provider === 'openai' && row.apiUrl.trim() !== '' ? row.apiUrl.trim() : null,
-				apiKey: row.provider === 'openai' && row.apiKey.trim() !== '' ? row.apiKey.trim() : null,
+				apiUrl: (row.provider === 'openai' || row.provider === 'qwen') && row.apiUrl.trim() !== '' ? row.apiUrl.trim() : null,
+				apiKey: (row.provider === 'openai' || row.provider === 'qwen') && row.apiKey.trim() !== '' ? row.apiKey.trim() : null,
 				supportsReferenceImage: row.provider === 'openai' && row.supportsReferenceImage,
 				costPerCall: row.costPerCall.trim() === '' ? null : Number(row.costPerCall),
 				dailyFreeQuota: row.dailyFreeQuota.trim() !== '' && Number(row.dailyFreeQuota) > 0 ? Number(row.dailyFreeQuota) : null,
@@ -1541,10 +1625,14 @@ const form = useForm({
 			os.alert({ type: 'error', text: i18n.ts._agents.adminImageModelInvalid });
 			throw new Error('invalid aurora image model api name');
 		}
-		if (row.provider === 'openai' && (!row.apiModelName || !row.apiUrl || !row.apiKey)) {
-			os.alert({ type: 'error', text: i18n.ts._agents.adminOpenaiImageRequired });
-			throw new Error('invalid openai image model configuration');
-		}
+			if (row.provider === 'openai' && (!row.apiModelName || !row.apiUrl || !row.apiKey)) {
+				os.alert({ type: 'error', text: i18n.ts._agents.adminOpenaiImageRequired });
+				throw new Error('invalid openai image model configuration');
+			}
+			if (row.provider === 'qwen' && (!row.apiModelName || !row.apiUrl || !row.apiKey)) {
+				os.alert({ type: 'error', text: i18n.ts._agents.adminQwenImageRequired });
+				throw new Error('invalid qwen image model configuration');
+			}
 		if (row.costPerCall != null && (!Number.isFinite(row.costPerCall) || row.costPerCall < 0)) {
 			os.alert({ type: 'error', text: i18n.ts._agents.adminImageModelInvalid });
 			throw new Error('invalid image model cost');
@@ -1736,6 +1824,9 @@ const form = useForm({
 		agentFeatureEnabled: state.agentFeatureEnabled,
 		agentGlobalSystemPrompt: state.agentGlobalSystemPrompt === '' ? null : state.agentGlobalSystemPrompt,
 		agentLlmModels: normalized,
+		agentLlmModelGroups: state.agentLlmModelGroupRows
+			.filter(g => g.name.trim() !== '')
+			.map(g => ({ id: g.id.trim() || genId(), name: g.name.trim() })),
 		agentDefaultModelId: defTrim === '' ? null : defTrim,
 		agentByokEnabled: state.agentByokEnabled,
 		agentByokMaxUserModels: Math.max(1, Math.min(500, Math.trunc(Number(state.agentByokMaxUserModels) || 20))),
@@ -2253,6 +2344,7 @@ function addRow() {
 		maxContextTokens: '8192',
 		maxOutputTokensPerCall: '2048',
 		unlisted: false,
+		groupId: '',
 		costPerCall: '0',
 		billingMode: 'per_call',
 		pricePerMillionInputCacheHitTokens: '',
@@ -2294,6 +2386,7 @@ function addDeepSeekOfficialRow(variant: 'flash' | 'pro') {
 		maxContextTokens: '1000000',
 		maxOutputTokensPerCall: '32768',
 		unlisted: false,
+		groupId: '',
 		costPerCall: '0.1',
 		billingMode: 'usage',
 		pricePerMillionInputCacheHitTokens: preset.hit,
@@ -2322,6 +2415,76 @@ async function toggleUnlist(index: number, next: boolean) {
 		}
 	}
 	row.unlisted = next;
+}
+
+/** 模型卡片「分组」下拉选项：无分组 + 现有分组 */
+const modelGroupItems = computed<MkSelectItem[]>(() => [
+	{ value: '', label: i18n.ts._agents.modelGroupNone },
+	...form.state.agentLlmModelGroupRows.map(g => ({ value: g.id, label: g.name.trim() || g.id })),
+]);
+
+/** 复制模型：深拷贝该行并生成新 id，插入到原模型之后 */
+function copyModelRow(index: number) {
+	const src = form.state.agentLlmModelRows[index];
+	if (!src) return;
+	const copy: AgentLlmModelRow = {
+		...src,
+		id: genId(),
+		name: `${src.name.trim()}${i18n.ts._agents.adminModelCopySuffix}`,
+		unlisted: false,
+	};
+	form.state.agentLlmModelRows.splice(index + 1, 0, copy);
+}
+
+/** 移动模型顺序：dir 为 -1（上移）或 1（下移），重排后整批保存 */
+function moveModelRow(index: number, dir: -1 | 1) {
+	const rows = form.state.agentLlmModelRows;
+	const target = index + dir;
+	if (target < 0 || target >= rows.length) return;
+	const [row] = rows.splice(index, 1);
+	rows.splice(target, 0, row);
+}
+
+const newGroupName = ref('');
+
+function addGroup() {
+	const name = newGroupName.value.trim();
+	if (!name) {
+		os.alert({ type: 'error', text: i18n.ts._agents.modelGroupNameRequired });
+		return;
+	}
+	if (form.state.agentLlmModelGroupRows.some(g => g.name.trim() === name)) {
+		os.alert({ type: 'error', text: i18n.ts._agents.modelGroupDuplicate });
+		return;
+	}
+	form.state.agentLlmModelGroupRows.push({ id: genId(), name });
+	newGroupName.value = '';
+}
+
+/** 删除分组：引用该分组的模型回到「无分组」 */
+async function removeGroup(groupId: string) {
+	const group = form.state.agentLlmModelGroupRows.find(g => g.id === groupId);
+	const count = form.state.agentLlmModelRows.filter(r => r.groupId.trim() === groupId).length;
+	const ok = await os.confirm({
+		type: 'warning',
+		text: count > 0
+			? i18n.tsx._agents.modelGroupDeleteConfirmWithModels({ name: group?.name.trim() ?? groupId, count })
+			: i18n.tsx._agents.modelGroupDeleteConfirm({ name: group?.name.trim() ?? groupId }),
+	});
+	if (ok.canceled) return;
+	form.state.agentLlmModelGroupRows = form.state.agentLlmModelGroupRows.filter(g => g.id !== groupId);
+	for (const r of form.state.agentLlmModelRows) {
+		if (r.groupId.trim() === groupId) r.groupId = '';
+	}
+}
+
+/** 移动分组顺序：dir 为 -1（上移）或 1（下移） */
+function moveGroup(index: number, dir: -1 | 1) {
+	const rows = form.state.agentLlmModelGroupRows;
+	const target = index + dir;
+	if (target < 0 || target >= rows.length) return;
+	const [row] = rows.splice(index, 1);
+	rows.splice(target, 0, row);
 }
 
 const imageTokenRefreshing = ref(false);
@@ -2593,6 +2756,29 @@ onMounted(() => {
 	display: flex;
 	gap: 4px;
 	align-items: center;
+}
+
+.groupRow {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.groupNameInput {
+	flex: 1;
+	min-width: 0;
+}
+
+.groupRowActions {
+	display: flex;
+	gap: 4px;
+	align-items: center;
+}
+
+.addGroupRow {
+	display: flex;
+	align-items: center;
+	gap: 8px;
 }
 
 .unlistedBadge {

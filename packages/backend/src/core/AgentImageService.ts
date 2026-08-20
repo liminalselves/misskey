@@ -288,6 +288,60 @@ export function parseOpenAiChatImageResult(value: unknown): OpenAiImageResult {
 	throw new Error('OpenAI chat response has no supported image value.');
 }
 
+export function qwenImageSize(size: AgentImageSize): string {
+	switch (size) {
+		case 'portrait': return '1728*2368'; // 3:4
+		case 'landscape': return '2368*1728'; // 4:3
+		case 'square': return '2048*2048'; // 1:1
+	}
+}
+
+export function buildQwenImageGenerationRequest(model: string, prompt: string, negativePrompt: string | null, size: AgentImageSize): Record<string, unknown> {
+	return {
+		model,
+		input: { prompt },
+		parameters: {
+			n: 1,
+			size: qwenImageSize(size),
+			...(negativePrompt != null && negativePrompt.trim() !== '' ? { negative_prompt: negativePrompt.trim().slice(0, 500) } : {}),
+		},
+	};
+}
+
+export function buildQwenImageGenerationRequestInit(apiKey: string, model: string, prompt: string, negativePrompt: string | null, size: AgentImageSize): {
+	method: 'POST';
+	headers: Record<string, string>;
+	body: string;
+} {
+	return {
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/json',
+			Authorization: `Bearer ${apiKey}`,
+		},
+		body: JSON.stringify(buildQwenImageGenerationRequest(model, prompt, negativePrompt, size)),
+	};
+}
+
+export function parseQwenImageResult(value: unknown): OpenAiImageResult {
+	if (value == null || typeof value !== 'object') throw new Error('Invalid Qwen image response.');
+	const output = (value as { output?: unknown }).output;
+	if (output == null || typeof output !== 'object') throw new Error('Qwen image response has no output.');
+	const o = output as { task_status?: unknown; results?: unknown };
+	const status = typeof o.task_status === 'string' ? o.task_status.trim().toLowerCase() : '';
+	if (status !== '' && status !== 'succeeded' && status !== 'success') {
+		throw new Error(`Qwen image task did not succeed (task_status: ${o.task_status}).`);
+	}
+	const results = Array.isArray(o.results) ? o.results : [];
+	const first = results.find(item => {
+		if (typeof item === 'string' && item.trim() !== '') return true;
+		return typeof item === 'object' && item != null && typeof (item as { url?: unknown }).url === 'string' && (item as { url: string }).url.trim() !== '';
+	});
+	if (typeof first === 'string') return { type: 'url', value: first.trim() };
+	if (typeof first === 'object' && first != null) return { type: 'url', value: (first as { url: string }).url.trim() };
+	throw new Error('Qwen image response has no image URL in output.results.');
+}
+
 function safeNumber(v: unknown, fallback: number, min: number, max: number): number {
 	const n = Number(v);
 	if (!Number.isFinite(n)) return fallback;
@@ -350,7 +404,7 @@ export class AgentImageService {
 	public listAvailableImageModels(instance: MiMeta, includeDisabled = false): MiAgentImageModel[] {
 		const configured = Array.isArray(instance.agentImageModels) ? instance.agentImageModels : [];
 		const models = configured
-			.filter(m => typeof m?.id === 'string' && m.id.trim() !== '' && (m.provider === 'aurora' || m.provider === 'openai'))
+			.filter(m => typeof m?.id === 'string' && m.id.trim() !== '' && (m.provider === 'aurora' || m.provider === 'openai' || m.provider === 'qwen'))
 			.map(m => ({
 				id: m.id.trim(),
 				name: typeof m.name === 'string' && m.name.trim() !== '' ? m.name.trim() : m.id.trim(),
@@ -600,46 +654,126 @@ export class AgentImageService {
 		}
 	}
 
+	/** 每批清理的文件/记录数上限，避免单次生图请求清理过久。 */
+	private static readonly CLEANUP_BATCH_SIZE = 200;
+	/** 单次清理请求最多处理的文件/记录总数，作为防爆护栏；未达标时会抛空间不足，下次生图继续收敛。 */
+	private static readonly CLEANUP_MAX_FILES_PER_PASS = 1000;
+
 	private async cleanupOldAgentImages(user: MiUser, targetFreeBytes: number, capacityBytes: number): Promise<number> {
 		let usage = await this.driveFileEntityService.calcAgentImageDriveUsageOf(user);
 		if ((capacityBytes - usage) >= targetFreeBytes) return usage;
 
-		const rows = await this.agentImageGenerationsRepository.createQueryBuilder('g')
-			.where('g.userId = :userId', { userId: user.id })
-			.andWhere('g.fileId IS NOT NULL')
-			.andWhere('g.autoCleanedAt IS NULL')
-			.andWhere('g.status IN (:...statuses)', { statuses: ['succeeded', 'blocked'] })
-			.orderBy('g.createdAt', 'ASC')
-			.take(200)
-			.getMany();
-
-		for (const row of rows) {
-			if ((capacityBytes - usage) >= targetFreeBytes) break;
-			if (row.fileId == null) continue;
-			const file = await this.driveFilesRepository.findOneBy({ id: row.fileId, userId: user.id });
-			if (!file || !file.isAgentGenerated) {
-				row.status = 'auto_cleaned';
-				row.url = null;
-				row.autoCleanedAt = new Date();
-				row.autoCleanedReason = 'missing_agent_image_file';
-				row.updatedAt = new Date();
-				await this.agentImageGenerationsRepository.save(row);
-				continue;
-			}
-
-			const size = file.size;
-			await this.driveService.deleteFile(file);
-			row.status = 'auto_cleaned';
-			row.url = null;
-			row.errorCode = null;
-			row.autoCleanedAt = new Date();
-			row.autoCleanedReason = 'agent_image_drive_quota_cleanup';
-			row.updatedAt = new Date();
-			await this.agentImageGenerationsRepository.save(row);
-			usage = Math.max(0, usage - size);
+		// 第一段：优先回收孤儿文件——位于 AI 生图文件夹、isAgentGenerated=TRUE，但没有任何"未清理"的生成记录引用它。
+		// 这类文件来自已删除的会话/消息（记录随外键级联删除）、以及生图落盘后记录未保存为 succeeded 的崩溃窗口
+		//（addFile 成功后进程中断或记录保存失败，行停留在 failed/generating 且 fileId 为空）。
+		// 它们的聊天上下文已不存在，不会触发任何"图片已被自动清理"卡片，因此优先回收，避免吃掉用户仍可见的历史图片。
+		// 注：deleteFile 成功但记录 save 失败的窗口不在此列——那种情况下文件已删、仅剩陈旧记录，由第二段的
+		// missing_agent_image_file 分支兜底。
+		usage = await this.sweepOrphanedAgentImageFiles(user, targetFreeBytes, capacityBytes, usage);
+		if ((capacityBytes - usage) >= targetFreeBytes) {
+			return await this.driveFileEntityService.calcAgentImageDriveUsageOf(user);
 		}
 
+		// 第二段：按生成记录清理最旧的 succeeded/blocked 记录对应文件，并把记录回填为 auto_cleaned，
+		// 使聊天端能展示"图片已被自动清理"卡片（placeholder-status.ts / agent-session.message.vue）。
+		usage = await this.cleanupAgentImagesByGenerationRows(user, targetFreeBytes, capacityBytes, usage);
 		return await this.driveFileEntityService.calcAgentImageDriveUsageOf(user);
+	}
+
+	/**
+	 * 清扫 AI 生图文件夹中没有任何"未清理"生成记录引用的孤儿文件，按文件 id 最旧优先删除。
+	 * DriveFile 没有 createdAt 列，时间序由 id（时序生成）承载，故按 file.id ASC 取最旧（与 DriveService.expireOldFile 一致）。
+	 */
+	private async sweepOrphanedAgentImageFiles(user: MiUser, targetFreeBytes: number, capacityBytes: number, usageIn: number): Promise<number> {
+		let usage = usageIn;
+		let swept = 0;
+		while ((capacityBytes - usage) < targetFreeBytes && swept < AgentImageService.CLEANUP_MAX_FILES_PER_PASS) {
+			const files = await this.driveFilesRepository
+				.createQueryBuilder('file')
+				.innerJoin('drive_folder', 'folder', 'folder.id = file.folderId')
+				.where('file.userId = :userId', { userId: user.id })
+				.andWhere('file.isLink = FALSE')
+				.andWhere('file.isAgentGenerated = TRUE')
+				.andWhere('folder.systemType = :systemType', { systemType: 'agentGeneratedImages' })
+				.andWhere((qb) => {
+					const sub = qb.subQuery()
+						.select('1')
+						.from('agent_image_generation', 'g')
+						.where('g.fileId = file.id')
+						.andWhere('g.autoCleanedAt IS NULL')
+						.getQuery();
+					return `NOT EXISTS ${sub}`;
+				})
+				.orderBy('file.id', 'ASC')
+				.take(AgentImageService.CLEANUP_BATCH_SIZE)
+				.getMany();
+
+			if (files.length === 0) break;
+
+			for (const file of files) {
+				if ((capacityBytes - usage) >= targetFreeBytes) break;
+				if (swept >= AgentImageService.CLEANUP_MAX_FILES_PER_PASS) break;
+				const size = file.size;
+				await this.driveService.deleteFile(file);
+				usage = Math.max(0, usage - size);
+				swept++;
+			}
+
+			if (files.length < AgentImageService.CLEANUP_BATCH_SIZE) break;
+		}
+		return usage;
+	}
+
+	/**
+	 * 按生成记录最旧优先清理 succeeded/blocked 记录对应的文件，并回填记录为 auto_cleaned。
+	 * 仅在此路径删除的文件会保留聊天端的"图片已被自动清理"卡片语义。
+	 */
+	private async cleanupAgentImagesByGenerationRows(user: MiUser, targetFreeBytes: number, capacityBytes: number, usageIn: number): Promise<number> {
+		let usage = usageIn;
+		let processed = 0;
+		while ((capacityBytes - usage) < targetFreeBytes && processed < AgentImageService.CLEANUP_MAX_FILES_PER_PASS) {
+			const rows = await this.agentImageGenerationsRepository.createQueryBuilder('g')
+				.where('g.userId = :userId', { userId: user.id })
+				.andWhere('g.fileId IS NOT NULL')
+				.andWhere('g.autoCleanedAt IS NULL')
+				.andWhere('g.status IN (:...statuses)', { statuses: ['succeeded', 'blocked'] })
+				.orderBy('g.createdAt', 'ASC')
+				.take(AgentImageService.CLEANUP_BATCH_SIZE)
+				.getMany();
+
+			if (rows.length === 0) break;
+
+			for (const row of rows) {
+				if ((capacityBytes - usage) >= targetFreeBytes) break;
+				if (processed >= AgentImageService.CLEANUP_MAX_FILES_PER_PASS) break;
+				processed++;
+				if (row.fileId == null) continue;
+				const file = await this.driveFilesRepository.findOneBy({ id: row.fileId, userId: user.id });
+				if (!file || !file.isAgentGenerated) {
+					row.status = 'auto_cleaned';
+					row.url = null;
+					row.autoCleanedAt = new Date();
+					row.autoCleanedReason = 'missing_agent_image_file';
+					row.updatedAt = new Date();
+					await this.agentImageGenerationsRepository.save(row);
+					continue;
+				}
+
+				const size = file.size;
+				await this.driveService.deleteFile(file);
+				row.status = 'auto_cleaned';
+				row.url = null;
+				row.errorCode = null;
+				row.autoCleanedAt = new Date();
+				row.autoCleanedReason = 'agent_image_drive_quota_cleanup';
+				row.updatedAt = new Date();
+				await this.agentImageGenerationsRepository.save(row);
+				usage = Math.max(0, usage - size);
+			}
+
+			if (rows.length < AgentImageService.CLEANUP_BATCH_SIZE) break;
+		}
+		return usage;
 	}
 
 	private async fetchAndStoreImage(params: FetchImageParams) {
@@ -648,6 +782,8 @@ export class AgentImageService {
 				return await this.fetchAuroraAndStoreImage(params);
 			case 'openai':
 				return await this.fetchOpenAiAndStoreImage(params);
+			case 'qwen':
+				return await this.fetchQwenAndStoreImage(params);
 			default:
 				throw new ApiError(agentImageErrors.notConfigured);
 		}
@@ -769,46 +905,100 @@ export class AgentImageService {
 				throw upstreamImageError(`Upstream response could not be parsed. Expected ${expected}. ${detail}`);
 			}
 
-			if (result.type === 'base64') {
-				const normalized = result.value.replace(/\s+/g, '');
-				if (!/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(normalized)) {
-					throw upstreamImageError('Upstream response contains invalid Base64 image data.');
-				}
-				const buf = Buffer.from(normalized, 'base64');
-				return await this.storeGeneratedImage(params, buf, 'image/png');
-			}
-
-			let imageUrl: URL;
-			try {
-				imageUrl = await assertSafeLlmHttpsUrl(result.value);
-			} catch (err) {
-				const detail = err instanceof UnsafeLlmUrlError
-					? describeUnsafeLlmUrlReason(err.reason)
-					: 'The image URL returned by the upstream service is invalid.';
-				throw upstreamImageError(detail);
-			}
-			const imageRes = await fetch(imageUrl, { signal: ac.signal });
-			if (!imageRes.ok) throw upstreamImageError(await describeImageUpstreamHttpError(imageRes));
-			const contentType = imageRes.headers.get('content-type');
-			if (!contentType?.toLowerCase().startsWith('image/')) {
-				throw upstreamImageError(`Upstream image URL returned an unsupported content type: ${contentType ?? 'missing Content-Type'}.`);
-			}
-			let buf: Buffer;
-			try {
-				buf = await readBodyWithLimit(imageRes, GENERATED_IMAGE_BODY_LIMIT_BYTES);
-			} catch (err) {
-				if (err instanceof UpstreamBodyTooLargeError) {
-					throw upstreamImageError(`Upstream returned an image larger than the ${GENERATED_IMAGE_BODY_LIMIT_BYTES} byte read limit.`);
-				}
-				throw err;
-			}
-			return await this.storeGeneratedImage(params, buf, contentType);
+			return await this.storeGeneratedImageResult(params, result, ac.signal);
 		} catch (err) {
 			if (err instanceof ApiError) throw err;
 			throw upstreamImageError(describeImageRequestFailure(err, ac.signal.aborted));
 		} finally {
 			clearTimeout(timeout);
 		}
+	}
+
+	private async fetchQwenAndStoreImage(params: FetchImageParams) {
+		const apiUrl = params.imageModel.apiUrl?.trim();
+		const apiKey = params.imageModel.apiKey?.trim();
+		const apiModelName = params.imageModel.apiModelName?.trim();
+		if (!apiUrl || !apiKey || !apiModelName) throw new ApiError(agentImageErrors.notConfigured);
+
+		let endpoint: URL;
+		try {
+			endpoint = await assertSafeLlmHttpsUrl(apiUrl);
+		} catch (err) {
+			const diagnostic = err instanceof UnsafeLlmUrlError
+				? describeUnsafeLlmUrlReason(err.reason)
+				: 'The configured Qwen image endpoint URL is invalid.';
+			throw new ApiError(agentImageErrors.notConfigured, { diagnostic });
+		}
+
+		// Qwen-Image 的 parameters.negative_prompt 上限 500 字符，过长会被上游截断
+		const negativePrompt = resolveAgentImageNegativePrompt(params.instance.agentImageDefaultNegativePrompt).slice(0, 500);
+
+		const ac = new AbortController();
+		const timeout = setTimeout(() => ac.abort(), 180_000);
+		try {
+			const res = await fetch(endpoint, {
+				...buildQwenImageGenerationRequestInit(apiKey, apiModelName, params.tag, negativePrompt, params.size),
+				redirect: 'error',
+				signal: ac.signal,
+			});
+			if (!res.ok) throw upstreamImageError(await describeImageUpstreamHttpError(res));
+
+			let result: OpenAiImageResult;
+			try {
+				const body = JSON.parse((await readBodyWithLimit(res, OPENAI_IMAGE_JSON_BODY_LIMIT_BYTES)).toString('utf8')) as unknown;
+				result = parseQwenImageResult(body);
+			} catch (err) {
+				if (err instanceof UpstreamBodyTooLargeError) {
+					throw upstreamImageError(`Upstream response exceeded the ${OPENAI_IMAGE_JSON_BODY_LIMIT_BYTES} byte read limit.`);
+				}
+				const detail = err instanceof Error ? err.message : 'Unknown response parsing error.';
+				throw upstreamImageError(`Upstream response could not be parsed. Expected output.results containing image URLs. ${detail}`);
+			}
+
+			return await this.storeGeneratedImageResult(params, result, ac.signal);
+		} catch (err) {
+			if (err instanceof ApiError) throw err;
+			throw upstreamImageError(describeImageRequestFailure(err, ac.signal.aborted));
+		} finally {
+			clearTimeout(timeout);
+		}
+	}
+
+	private async storeGeneratedImageResult(params: FetchImageParams, result: OpenAiImageResult, signal: AbortSignal) {
+		if (result.type === 'base64') {
+			const normalized = result.value.replace(/\s+/g, '');
+			if (!/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(normalized)) {
+				throw upstreamImageError('Upstream response contains invalid Base64 image data.');
+			}
+			const buf = Buffer.from(normalized, 'base64');
+			return await this.storeGeneratedImage(params, buf, 'image/png');
+		}
+
+		let imageUrl: URL;
+		try {
+			imageUrl = await assertSafeLlmHttpsUrl(result.value);
+		} catch (err) {
+			const detail = err instanceof UnsafeLlmUrlError
+				? describeUnsafeLlmUrlReason(err.reason)
+				: 'The image URL returned by the upstream service is invalid.';
+			throw upstreamImageError(detail);
+		}
+		const imageRes = await fetch(imageUrl, { signal });
+		if (!imageRes.ok) throw upstreamImageError(await describeImageUpstreamHttpError(imageRes));
+		const contentType = imageRes.headers.get('content-type');
+		if (!contentType?.toLowerCase().startsWith('image/')) {
+			throw upstreamImageError(`Upstream image URL returned an unsupported content type: ${contentType ?? 'missing Content-Type'}.`);
+		}
+		let buf: Buffer;
+		try {
+			buf = await readBodyWithLimit(imageRes, GENERATED_IMAGE_BODY_LIMIT_BYTES);
+		} catch (err) {
+			if (err instanceof UpstreamBodyTooLargeError) {
+				throw upstreamImageError(`Upstream returned an image larger than the ${GENERATED_IMAGE_BODY_LIMIT_BYTES} byte read limit.`);
+			}
+			throw err;
+		}
+		return await this.storeGeneratedImage(params, buf, contentType);
 	}
 
 	private async resolveCharacterReferenceImages(characterId: string | null | undefined): Promise<AgentReferenceImage[]> {

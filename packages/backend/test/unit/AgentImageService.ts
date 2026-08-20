@@ -7,10 +7,14 @@ import {
 	buildOpenAiImageGenerationRequest,
 	buildOpenAiImageGenerationRequestInit,
 	buildOpenAiChatImageGenerationRequest,
+	buildQwenImageGenerationRequest,
+	buildQwenImageGenerationRequestInit,
 	getAgentImageErrorDiagnostic,
 	openAiImageSize,
 	parseOpenAiChatImageResult,
 	parseOpenAiImageResult,
+	parseQwenImageResult,
+	qwenImageSize,
 } from '@/core/AgentImageService.js';
 import { ApiError } from '@/server/api/error.js';
 
@@ -95,5 +99,59 @@ describe('OpenAI-compatible image generation helpers', () => {
 			diagnostic: 'Upstream returned HTTP 401: Authorization: Bearer secret-token-value, api_key=another-secret, https://images.example.test/v1/images/generations',
 		});
 		expect(getAgentImageErrorDiagnostic(error)).toBe('Upstream returned HTTP 401: Authorization: [redacted], api_key=[redacted], [redacted URL]');
+	});
+});
+
+describe('Qwen-Image (DashScope-style) generation helpers', () => {
+	test('maps agent image sizes to Qwen width*height dimensions', () => {
+		expect(qwenImageSize('portrait')).toBe('1728*2368');
+		expect(qwenImageSize('landscape')).toBe('2368*1728');
+		expect(qwenImageSize('square')).toBe('2048*2048');
+	});
+
+	test('builds the DashScope-style input/parameters request body', () => {
+		expect(buildQwenImageGenerationRequest('Qwen-Image-2.0', '1girl, solo', 'lowres, bad quality', 'portrait')).toEqual({
+			model: 'Qwen-Image-2.0',
+			input: { prompt: '1girl, solo' },
+			parameters: {
+				n: 1,
+				size: '1728*2368',
+				negative_prompt: 'lowres, bad quality',
+			},
+		});
+	});
+
+	test('omits negative_prompt when none is provided and truncates long ones', () => {
+		const withoutNegative = buildQwenImageGenerationRequest('Qwen-Image-2.0', '1girl', null, 'square');
+		expect(withoutNegative.parameters).toEqual({ n: 1, size: '2048*2048' });
+		const long = buildQwenImageGenerationRequest('Qwen-Image-2.0', '1girl', 'x'.repeat(600), 'square');
+		expect((long.parameters as { negative_prompt?: string }).negative_prompt).toHaveLength(500);
+	});
+
+	test('uses bearer authorization for Qwen image requests', () => {
+		const init = buildQwenImageGenerationRequestInit('secret', 'Qwen-Image-2.0', '1girl', null, 'landscape');
+		expect(init.method).toBe('POST');
+		expect(init.headers).toEqual({
+			'Content-Type': 'application/json',
+			Authorization: 'Bearer secret',
+		});
+		expect(JSON.parse(init.body)).toEqual({
+			model: 'Qwen-Image-2.0',
+			input: { prompt: '1girl' },
+			parameters: { n: 1, size: '2368*1728' },
+		});
+	});
+
+	test('accepts Qwen output.results URL responses', () => {
+		expect(parseQwenImageResult({
+			request_id: '93181007-6691-9bf8-810d-c04e37959265',
+			output: { task_id: '2069294934625923074', task_status: 'succeeded', results: ['https://example.com/image-1.png'] },
+			usage: { image_count: 1, resolution: '2048P' },
+		})).toEqual({ type: 'url', value: 'https://example.com/image-1.png' });
+	});
+
+	test('rejects Qwen responses without a successful result URL', () => {
+		expect(() => parseQwenImageResult({ output: { task_status: 'failed', results: [] } })).toThrow('task did not succeed');
+		expect(() => parseQwenImageResult({ output: { task_status: 'succeeded', results: [] } })).toThrow('no image URL');
 	});
 });

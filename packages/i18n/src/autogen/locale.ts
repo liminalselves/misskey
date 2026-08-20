@@ -14422,6 +14422,30 @@ export interface Locale extends ILocale {
          */
         "imageProviderOpenai": string;
         /**
+         * Qwen（Alibaba）
+         */
+        "imageProviderQwen": string;
+        /**
+         * 画像生成リクエスト URL
+         */
+        "adminQwenImageRequestUrl": string;
+        /**
+         * 完全な Qwen-Image（DashScope スタイル）images/generations エンドポイントです。保存時に安全性を検証します。
+         */
+        "adminQwenImageRequestUrlCaption": string;
+        /**
+         * 画像 API キー（秘密）
+         */
+        "adminQwenImageApiKey": string;
+        /**
+         * 上流画像モデル名
+         */
+        "adminQwenImageModelName": string;
+        /**
+         * Qwen 画像モデルにはリクエスト URL、API キー、上流モデル名が必要です。
+         */
+        "adminQwenImageRequired": string;
+        /**
          * 正規表現
          */
         "editCharacterRegex": string;
@@ -16396,6 +16420,78 @@ export interface Locale extends ILocale {
          * Unlist model "{name}"? Users will no longer be able to select this model.
          */
         "adminModelUnlistConfirm": ParameterizedString<"name">;
+        /**
+         * Copy model
+         */
+        "adminModelCopy": string;
+        /**
+         *  (copy)
+         */
+        "adminModelCopySuffix": string;
+        /**
+         * Move up
+         */
+        "adminModelMoveUp": string;
+        /**
+         * Move down
+         */
+        "adminModelMoveDown": string;
+        /**
+         * Model groups
+         */
+        "modelGroups": string;
+        /**
+         * After assigning models to groups, the model tab in user agent chats shows an "All / groups / Others" navigation for filtering by group. Group order is the tab order on the user side.
+         */
+        "modelGroupsHint": string;
+        /**
+         * No groups configured yet
+         */
+        "modelGroupsEmpty": string;
+        /**
+         * Group
+         */
+        "modelGroup": string;
+        /**
+         * Group name
+         */
+        "modelGroupName": string;
+        /**
+         * Add group
+         */
+        "modelGroupAdd": string;
+        /**
+         * No group
+         */
+        "modelGroupNone": string;
+        /**
+         * A group with this name already exists
+         */
+        "modelGroupDuplicate": string;
+        /**
+         * Enter a group name
+         */
+        "modelGroupNameRequired": string;
+        /**
+         * Delete group
+         */
+        "modelGroupDelete": string;
+        /**
+         * Delete group "{name}"?
+         */
+        "modelGroupDeleteConfirm": ParameterizedString<"name">;
+        /**
+         * Delete group "{name}"? The {count} model(s) in this group will become ungrouped.
+         */
+        "modelGroupDeleteConfirmWithModels": ParameterizedString<"name" | "count">;
+        /**
+         * All
+         */
+        "modelGroupAll": string;
+        /**
+         * Others
+         */
+        "modelGroupOther": string;
         /**
          * Cost per call
          */
