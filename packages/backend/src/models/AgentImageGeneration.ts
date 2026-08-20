@@ -21,6 +21,8 @@ export type AgentImageGenerationStatus = typeof agentImageGenerationStatuses[num
 @Index('IDX_agent_image_generation_user_created', ['createdAt', 'userId'])
 @Index('IDX_agent_image_generation_status_created', ['createdAt', 'status'])
 @Index('IDX_agent_image_generation_blocked_created', ['createdAt', 'isBlocked'])
+// 支撑自动清理的孤儿文件扫描：NOT EXISTS (SELECT 1 FROM agent_image_generation g WHERE g."fileId" = file.id ...)
+@Index('IDX_agent_image_generation_file', ['fileId'])
 @Index('IDX_agent_image_generation_initial_placeholder', ['messageId', 'placeholderIndex'], {
 	unique: true,
 	where: '(("messageId" IS NOT NULL) AND ("regenerationOfId" IS NULL))',
