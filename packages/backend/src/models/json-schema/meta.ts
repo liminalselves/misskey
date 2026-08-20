@@ -458,7 +458,16 @@ export const packedMetaLiteSchema = {
 					maxContextTokens: { type: 'number', optional: false, nullable: false },
 					maxOutputTokensPerCall: { type: 'number', optional: false, nullable: false },
 					costPerCall: { type: 'number', optional: false, nullable: false },
+					group: { type: 'string', optional: true, nullable: true },
 				},
+			},
+		},
+		agentLlmModelGroups: {
+			type: 'array',
+			optional: false, nullable: false,
+			items: {
+				type: 'string',
+				optional: false, nullable: false,
 			},
 		},
 		agentDefaultModelId: {

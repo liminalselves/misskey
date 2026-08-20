@@ -954,6 +954,8 @@ export class MiMeta {
 		maxOutputTokensPerCall: number;
 		/** 下架后仅保留在控制面板；对用户侧与新会话不可见 */
 		unlisted?: boolean;
+		/** 所属模型分组 id（引用 agentLlmModelGroups）；空/无表示未分组 */
+		groupId?: string | null;
 		/** 每次成功或中断调用扣费金额，默认 0；失败不扣费。usage 模式下为 usage 缺失时的兜底按次价 */
 		costPerCall?: number;
 		/** 计费模式：per_call 按次（缺省）；usage 按量（token 数取自响应 usage 字段） */
@@ -973,6 +975,15 @@ export class MiMeta {
 		tokenizerEncoding?: string;
 		/** 每日免费调用次数；0/无则无免费额度 */
 		dailyFreeQuota?: number;
+	}> | null;
+
+	/** 模型分组（JSON）：仅含 id 与展示名，数组顺序即用户侧 tab 顺序 */
+	@Column('jsonb', {
+		nullable: true,
+	})
+	public agentLlmModelGroups: Array<{
+		id: string;
+		name: string;
 	}> | null;
 
 	@Column('varchar', {

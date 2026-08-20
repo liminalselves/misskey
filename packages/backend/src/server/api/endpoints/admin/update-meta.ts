@@ -11,7 +11,7 @@ import { Endpoint } from '@/server/api/endpoint-base.js';
 import { MetaService } from '@/core/MetaService.js';
 import { ApiError } from '@/server/api/error.js';
 import { assertSafeLlmHttpsUrl, describeUnsafeLlmUrlReason, hrefForStoredLlmBaseUrl, UnsafeLlmUrlError } from '@/misc/validate-llm-endpoint-url.js';
-import { getActiveLlmModels, normalizeAgentLlmModelsParam } from '@/misc/agent-llm-models.js';
+import { getActiveLlmModels, normalizeAgentLlmModelGroupsParam, normalizeAgentLlmModelsParam } from '@/misc/agent-llm-models.js';
 import { normalizeAgentByokProvidersParam } from '@/core/AgentUserModelService.js';
 import { AgentCompressionMemoryService } from '@/core/AgentCompressionMemoryService.js';
 
@@ -174,9 +174,22 @@ export const paramDef = {
 					maxContextTokens: { type: 'integer', minimum: 256, maximum: 2000000 },
 					maxOutputTokensPerCall: { type: 'integer', minimum: 1, maximum: 128000 },
 					unlisted: { type: 'boolean' },
+					groupId: { type: 'string', nullable: true, maxLength: 64 },
 					costPerCall: { type: 'number', minimum: 0, maximum: 1000000 },
 				},
 				required: ['id', 'name', 'apiModelName', 'baseUrl', 'apiKey', 'maxContextTokens', 'maxOutputTokensPerCall'],
+			},
+		},
+		agentLlmModelGroups: {
+			type: 'array',
+			nullable: true,
+			items: {
+				type: 'object',
+				properties: {
+					id: { type: 'string', minLength: 1, maxLength: 64 },
+					name: { type: 'string', minLength: 1, maxLength: 64 },
+				},
+				required: ['id', 'name'],
 			},
 		},
 		agentDefaultModelId: { type: 'string', nullable: true, maxLength: 64 },
@@ -872,19 +885,31 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					const pick = (nextDefaultId ? r.value.find(x => x.id === nextDefaultId) : null) ?? r.value[0];
 					set.agentMaxContextTokens = pick.maxContextTokens;
 					set.agentMaxOutputTokensPerCall = pick.maxOutputTokensPerCall;
-				} else {
-					set.agentLlmModels = null;
-					set.agentOpenaiCompatibleBaseUrl = null;
-					set.agentOpenaiCompatibleApiKey = null;
-					set.agentModelDisplayName = null;
-					set.agentModelDescription = null;
-					set.agentModelApiName = null;
-					set.agentMaxContextTokens = 8192;
-					set.agentMaxOutputTokensPerCall = 2048;
-				}
+			} else {
+				set.agentLlmModels = null;
+				set.agentOpenaiCompatibleBaseUrl = null;
+				set.agentOpenaiCompatibleApiKey = null;
+				set.agentModelDisplayName = null;
+				set.agentModelDescription = null;
+				set.agentModelApiName = null;
+				set.agentMaxContextTokens = 8192;
+				set.agentMaxOutputTokensPerCall = 2048;
 			}
+		}
 
-			if (ps.agentDefaultModelId !== undefined) {
+		if (ps.agentLlmModelGroups !== undefined) {
+			const r = normalizeAgentLlmModelGroupsParam(ps.agentLlmModelGroups);
+			if (!r.ok) {
+				throw new ApiError({
+					message: 'Invalid agent LLM model groups.',
+					code: 'INVALID_PARAM',
+					id: 'd3e4f5a6-b7c8-9012-def3-456789abcdef',
+				});
+			}
+			set.agentLlmModelGroups = r.value;
+		}
+
+		if (ps.agentDefaultModelId !== undefined) {
 				set.agentDefaultModelId = ps.agentDefaultModelId === '' ? null : ps.agentDefaultModelId;
 			}
 

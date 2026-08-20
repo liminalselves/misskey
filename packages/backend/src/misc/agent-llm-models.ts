@@ -9,6 +9,12 @@ import type { MiMeta } from '@/models/Meta.js';
 /** 计费模式：per_call 按次计费；usage 按量计费（token 数取自 OpenAI 协议响应 usage 字段） */
 export type AgentLlmBillingMode = 'per_call' | 'usage';
 
+/** 模型分组：仅含 id 与展示名，顺序即用户侧 tab 顺序 */
+export type AgentLlmModelGroupJson = {
+	id: string;
+	name: string;
+};
+
 /** 单条模型：各自完整的 API 与用量配置（无全局 URL/Key 回退） */
 export type AgentLlmModelJson = {
 	id: string;
@@ -19,6 +25,8 @@ export type AgentLlmModelJson = {
 	apiModelName: string;
 	maxContextTokens: number;
 	maxOutputTokensPerCall: number;
+	/** 所属分组 id（引用 agentLlmModelGroups）；null/无表示未分组（用户侧归入「其他」） */
+	groupId?: string | null;
 	/** 下架：管理员在控制面板可见但用户侧与新建会话均不可用 */
 	unlisted: boolean;
 	/** 每次成功或中断调用扣费金额；失败不扣费。0 表示免费。usage 模式下为 usage 缺失时的兜底按次价 */
@@ -135,6 +143,13 @@ export function getEffectiveLlmModels(meta: MiMeta): AgentLlmModelJson[] {
 			DEFAULT_OUT,
 		);
 		const unlisted = o.unlisted === true;
+		let groupId: string | null = null;
+		if (o.groupId != null) {
+			if (typeof o.groupId !== 'string') continue;
+			const g = o.groupId.trim();
+			if (g.length > 64) continue;
+			groupId = g === '' ? null : g;
+		}
 		const costRaw = typeof o.costPerCall === 'number' ? o.costPerCall : Number(o.costPerCall);
 		const costPerCall = Number.isFinite(costRaw) && costRaw >= 0 ? costRaw : 0;
 		const billingMode: AgentLlmBillingMode = o.billingMode === 'usage' ? 'usage' : 'per_call';
@@ -161,6 +176,7 @@ export function getEffectiveLlmModels(meta: MiMeta): AgentLlmModelJson[] {
 			maxContextTokens,
 			maxOutputTokensPerCall,
 			unlisted,
+			groupId,
 			costPerCall,
 			billingMode,
 			pricePerMillionInputCacheHitTokens,
@@ -183,7 +199,9 @@ export function getActiveLlmModels(meta: MiMeta): AgentLlmModelJson[] {
 	return getEffectiveLlmModels(meta).filter(m => !m.unlisted);
 }
 
-export function packPublicAgentModels(meta: MiMeta): { id: string; name: string; description: string | null; maxContextTokens: number; maxOutputTokensPerCall: number; costPerCall: number; dailyFreeQuota: number; billingMode: AgentLlmBillingMode; pricePerMillionInputCacheHitTokens: number; pricePerMillionInputCacheMissTokens: number; pricePerMillionOutputTokens: number; peakPriceMultiplier: number | null }[] {
+export function packPublicAgentModels(meta: MiMeta): { id: string; name: string; description: string | null; maxContextTokens: number; maxOutputTokensPerCall: number; costPerCall: number; dailyFreeQuota: number; billingMode: AgentLlmBillingMode; pricePerMillionInputCacheHitTokens: number; pricePerMillionInputCacheMissTokens: number; pricePerMillionOutputTokens: number; peakPriceMultiplier: number | null; group: string | null }[] {
+	const groups = getAgentLlmModelGroups(meta);
+	const groupNameById = new Map(groups.map(g => [g.id, g.name] as const));
 	return getActiveLlmModels(meta).map(m => ({
 		id: m.id,
 		name: m.name,
@@ -198,7 +216,29 @@ export function packPublicAgentModels(meta: MiMeta): { id: string; name: string;
 		pricePerMillionInputCacheMissTokens: m.pricePerMillionInputCacheMissTokens,
 		pricePerMillionOutputTokens: m.pricePerMillionOutputTokens,
 		peakPriceMultiplier: m.peakPriceMultiplier ?? null,
+		// 分组名透出；未分组/引用了已删除分组则为 null（用户侧归入「其他」）
+		group: m.groupId ? (groupNameById.get(m.groupId) ?? null) : null,
 	}));
+}
+
+/**
+ * 返回 meta 中的模型分组列表（仅保留通过基本校验的项）；顺序即用户侧 tab 顺序。
+ */
+export function getAgentLlmModelGroups(meta: MiMeta): AgentLlmModelGroupJson[] {
+	const raw = meta.agentLlmModelGroups;
+	if (raw == null || !Array.isArray(raw)) return [];
+	const out: AgentLlmModelGroupJson[] = [];
+	const seen = new Set<string>();
+	for (const g of raw) {
+		if (g == null || typeof g !== 'object') continue;
+		const o = g as Record<string, unknown>;
+		const id = typeof o.id === 'string' ? o.id.trim() : '';
+		const name = typeof o.name === 'string' ? o.name.trim() : '';
+		if (!id || id.length > 64 || !name || name.length > 64 || seen.has(id)) continue;
+		seen.add(id);
+		out.push({ id, name });
+	}
+	return out;
 }
 
 /** 用于写入 meta 的 agentLlmModels */
@@ -262,6 +302,17 @@ export function normalizeAgentLlmModelsParam(input: unknown): { ok: true; value:
 				return { ok: false };
 			}
 			unlisted = o.unlisted;
+		}
+		let groupId: string | null = null;
+		if (o.groupId != null) {
+			if (typeof o.groupId !== 'string') {
+				return { ok: false };
+			}
+			const g = o.groupId.trim();
+			if (g.length > 64) {
+				return { ok: false };
+			}
+			groupId = g === '' ? null : g;
 		}
 		let costPerCall = 0;
 		if (o.costPerCall != null) {
@@ -337,6 +388,7 @@ export function normalizeAgentLlmModelsParam(input: unknown): { ok: true; value:
 			maxContextTokens: Math.trunc(maxContextTokens),
 			maxOutputTokensPerCall: Math.trunc(maxOutputTokensPerCall),
 			unlisted,
+			groupId,
 			costPerCall,
 			billingMode,
 			pricePerMillionInputCacheHitTokens: prices.pricePerMillionInputCacheHitTokens,
@@ -347,6 +399,49 @@ export function normalizeAgentLlmModelsParam(input: unknown): { ok: true; value:
 			tokenizerEncoding,
 			dailyFreeQuota,
 		});
+	}
+	return { ok: true, value: out };
+}
+
+/** 管理端保存时为空则分配分组 id；与展示名解耦 */
+function allocateAgentLlmGroupId(seen: Set<string>): string {
+	for (let i = 0; i < 32; i++) {
+		const id = `g${randomBytes(12).toString('hex')}`;
+		if (!seen.has(id) && id.length <= 64) {
+			return id;
+		}
+	}
+	throw new Error('failed to allocate agent LLM model group id');
+}
+
+/** 用于写入 meta 的 agentLlmModelGroups */
+export function normalizeAgentLlmModelGroupsParam(input: unknown): { ok: true; value: MiMeta['agentLlmModelGroups'] } | { ok: false } {
+	if (input == null) {
+		return { ok: true, value: null };
+	}
+	if (!Array.isArray(input)) {
+		return { ok: false };
+	}
+	if (input.length === 0) {
+		return { ok: true, value: null };
+	}
+	const out: NonNullable<MiMeta['agentLlmModelGroups']> = [];
+	const seen = new Set<string>();
+	for (const item of input) {
+		if (typeof item !== 'object' || item == null) {
+			return { ok: false };
+		}
+		const o = item as Record<string, unknown>;
+		let id = typeof o.id === 'string' ? o.id.trim() : '';
+		if (id === '') {
+			id = allocateAgentLlmGroupId(seen);
+		}
+		const name = typeof o.name === 'string' ? o.name.trim() : '';
+		if (id.length > 64 || seen.has(id) || !name || name.length > 64) {
+			return { ok: false };
+		}
+		seen.add(id);
+		out.push({ id, name });
 	}
 	return { ok: true, value: out };
 }

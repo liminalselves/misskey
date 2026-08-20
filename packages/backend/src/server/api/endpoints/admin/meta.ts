@@ -1141,6 +1141,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				agentModelDescription: instance.agentModelDescription,
 				agentModelApiName: instance.agentModelApiName,
 				agentLlmModels: instance.agentLlmModels,
+				agentLlmModelGroups: instance.agentLlmModelGroups ?? [],
 				agentDefaultModelId: instance.agentDefaultModelId,
 				agentByokEnabled: instance.agentByokEnabled === true,
 				agentByokProviders: instance.agentByokProviders ?? null,

@@ -15,7 +15,7 @@ import { SystemAccountService } from '@/core/SystemAccountService.js';
 import type { Config } from '@/config.js';
 import { DI } from '@/di-symbols.js';
 import { DEFAULT_POLICIES } from '@/core/RoleService.js';
-import { getActiveLlmModels, isAgentLlmRunnable, packPublicAgentModels, packedAgentMaxContextTokens, packedAgentMaxOutputTokensPerCall } from '@/misc/agent-llm-models.js';
+import { getActiveLlmModels, getAgentLlmModelGroups, isAgentLlmRunnable, packPublicAgentModels, packedAgentMaxContextTokens, packedAgentMaxOutputTokensPerCall } from '@/misc/agent-llm-models.js';
 
 @Injectable()
 export class MetaEntityService {
@@ -162,6 +162,8 @@ export class MetaEntityService {
 			agentMaxContextTokens: packedAgentMaxContextTokens(instance),
 			agentMaxOutputTokensPerCall: packedAgentMaxOutputTokensPerCall(instance),
 			agentModels: packPublicAgentModels(instance),
+			// 模型分组（有序名称列表，供用户侧模型 tab 导航；顺序即本数组顺序）
+			agentLlmModelGroups: getAgentLlmModelGroups(instance).map(g => g.name),
 			agentDefaultModelId: instance.agentDefaultModelId ?? effAgentModels[0]?.id ?? null,
 			agentByokEnabled: instance.agentByokEnabled === true,
 			agentByokProviders: instance.agentByokProviders ?? null,
