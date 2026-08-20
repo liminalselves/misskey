@@ -714,7 +714,7 @@ export class AgentImageService {
 				if ((capacityBytes - usage) >= targetFreeBytes) break;
 				if (swept >= AgentImageService.CLEANUP_MAX_FILES_PER_PASS) break;
 				const size = file.size;
-				await this.driveService.deleteFile(file);
+				await this.driveService.deleteFileSync(file);
 				usage = Math.max(0, usage - size);
 				swept++;
 			}
@@ -760,7 +760,7 @@ export class AgentImageService {
 				}
 
 				const size = file.size;
-				await this.driveService.deleteFile(file);
+				await this.driveService.deleteFileSync(file);
 				row.status = 'auto_cleaned';
 				row.url = null;
 				row.errorCode = null;
