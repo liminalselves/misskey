@@ -266,13 +266,13 @@ SPDX-License-Identifier: AGPL-3.0-only
 								<template #label>简介</template>
 								<template #caption>向用户说明规则的作用（{{ RULE_DESC_MAX }} 字以内）。</template>
 							</MkInput>
-							<MkTextarea v-model="rule.content" tall :maxlength="RULE_CONTENT_MAX">
+							<MkTextarea v-model="rule.content" tall>
 								<template #label>{{ rule.type === 'toggleable' ? '开启状态提示词' : '规则内容' }}</template>
-								<template #caption>{{ rule.content.length }} / {{ RULE_CONTENT_MAX }}</template>
+								<template #caption>当前 {{ rule.content.length }} 字</template>
 							</MkTextarea>
-							<MkTextarea v-if="rule.type === 'toggleable'" v-model="rule.disabledContent" tall :maxlength="RULE_CONTENT_MAX">
+							<MkTextarea v-if="rule.type === 'toggleable'" v-model="rule.disabledContent" tall>
 								<template #label>关闭状态提示词（可选）</template>
-								<template #caption>规则被用户关闭时注入的提示词。留空则关闭时不注入。{{ rule.disabledContent.length }} / {{ RULE_CONTENT_MAX }}</template>
+								<template #caption>规则被用户关闭时注入的提示词。留空则关闭时不注入。当前 {{ rule.disabledContent.length }} 字</template>
 							</MkTextarea>
 							<div :class="$style.wbMetaRow">
 								<div :class="$style.wbTrigger">
@@ -561,7 +561,6 @@ type RuleForm = {
 };
 
 const RULE_MAX = 5;
-const RULE_CONTENT_MAX = 300;
 const RULE_NAME_MAX = 50;
 const RULE_DESC_MAX = 50;
 

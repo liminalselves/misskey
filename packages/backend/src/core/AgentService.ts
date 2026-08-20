@@ -107,8 +107,6 @@ export type AgentRegexRule = {
 
 /** Maximum number of rules per character. */
 export const AGENT_RULE_MAX = 5;
-/** Maximum length for a single rule content. */
-export const AGENT_RULE_CONTENT_MAX = 300;
 /** Maximum length for a rule name. */
 export const AGENT_RULE_NAME_MAX = 50;
 /** Maximum length for a rule description. */
@@ -1542,13 +1540,13 @@ export class AgentService {
 			if (typeof value.id !== 'string' || value.id.length === 0) return [];
 			const name = typeof value.name === 'string' ? value.name.slice(0, AGENT_RULE_NAME_MAX) : '';
 			if (name.length === 0) return [];
-			const content = typeof value.content === 'string' ? value.content.slice(0, AGENT_RULE_CONTENT_MAX) : '';
+			const content = typeof value.content === 'string' ? value.content.slice(0, AGENT_TEXT_FIELD_MAX) : '';
 			if (content.length === 0) return [];
 			const description = typeof value.description === 'string' ? value.description.slice(0, AGENT_RULE_DESC_MAX) : '';
 			const type: AgentCharacterRuleType = value.type === 'toggleable' ? 'toggleable' : 'persistent';
 			const defaultEnabled = type === 'persistent' ? true : value.defaultEnabled !== false;
 			const disabledContent = type === 'toggleable' && typeof value.disabledContent === 'string'
-				? value.disabledContent.slice(0, AGENT_RULE_CONTENT_MAX)
+				? value.disabledContent.slice(0, AGENT_TEXT_FIELD_MAX)
 				: '';
 			return [{ id: value.id, name, content, disabledContent, description, type, defaultEnabled }];
 		});
