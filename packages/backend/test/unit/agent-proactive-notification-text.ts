@@ -14,6 +14,7 @@ describe('buildAgentProactiveNotificationText', () => {
 			'[[wb:greeting]]',
 		].join('\n'));
 
-		expect(result).toBe('嘿，欢迎回来！ 现在精神十足 看看这个 和 一小段代码。');
+		// 主动消息通知保留换行；指令标签行整体移除后不产生空行
+		expect(result).toBe('嘿，欢迎回来！ 现在精神十足\n看看这个 和 一小段代码。');
 	});
 });

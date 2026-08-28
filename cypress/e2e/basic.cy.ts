@@ -149,6 +149,7 @@ describe('After user signup', () => {
 		cy.request('POST', '/api/admin/suspend-user', {
 			i: this.admin.token,
 			userId: this.alice.id,
+			reason: 'cypress test suspension',
 		});
 
 		cy.visitHome();
@@ -238,6 +239,9 @@ describe('After user setup', () => {
 	});
 
 	it('note', () => {
+		// ログイン直後のランディングは/explore（ルートルート変更）なので、
+		// 投稿がタイムラインに表示されることを確認するには先に/timelineへ移動する
+		cy.visit('/timeline');
 		cy.get('[data-cy-open-post-form]').should('be.visible');
 		cy.get('[data-cy-open-post-form]').click();
 		cy.get('[data-cy-post-form-text]').type('Hello, Misskey!');

@@ -28,7 +28,8 @@ export class MiAgentUserModel {
 	@ManyToOne(() => MiUser, {
 		onDelete: 'CASCADE',
 	})
-	@JoinColumn()
+	// 与 migration 1779000000000 建立的约束同名，避免 TypeORM schema diff 视为不一致
+	@JoinColumn({ foreignKeyConstraintName: 'FK_agent_user_model_user' })
 	public user: MiUser | null;
 
 	/** 显示名称（用户内唯一，且不能与官方模型名重复） */

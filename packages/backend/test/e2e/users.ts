@@ -135,6 +135,8 @@ describe('ユーザー', () => {
 			hasUnreadAntenna: user.hasUnreadAntenna,
 			hasUnreadChannel: user.hasUnreadChannel,
 			hasUnreadChatMessages: user.hasUnreadChatMessages,
+			hasUnreadAgentMessages: user.hasUnreadAgentMessages,
+			enableAppPush: user.enableAppPush,
 			hasUnreadNotification: user.hasUnreadNotification,
 			unreadNotificationsCount: user.unreadNotificationsCount,
 			hasPendingReceivedFollowRequest: user.hasPendingReceivedFollowRequest,

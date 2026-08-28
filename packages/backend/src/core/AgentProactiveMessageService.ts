@@ -116,16 +116,18 @@ export class AgentProactiveMessageService {
 		});
 		if (!result.claimed) return;
 		// 窄列更新：LLM 调用耗时长，整行 save 会用加载时的旧快照覆盖用户并发修改的会话字段
+		const scheduledProactiveLastError = result.errorCode
+			? { code: result.errorCode, occurredAt: new Date().toISOString() }
+			: null;
 		await this.sessionsRepository.createQueryBuilder()
 			.update()
 			.set({
-				scheduledProactiveLastError: result.errorCode
-					? { code: result.errorCode, occurredAt: new Date().toISOString() }
-					: null,
+				scheduledProactiveLastError,
 				updatedAt: new Date(),
 			})
 			.where('id = :id', { id: session.id })
 			.execute();
+		session.scheduledProactiveLastError = scheduledProactiveLastError;
 	}
 
 	private async processRandom(session: MiAgentSession): Promise<void> {
@@ -139,16 +141,18 @@ export class AgentProactiveMessageService {
 		if (!result.claimed) return;
 		// The delivery was already consumed by the atomic claim inside generateProactiveReply;
 		// record the outcome so the UI can surface skipped attempts.
+		const randomProactiveLastError = result.errorCode
+			? { code: result.errorCode, occurredAt: new Date().toISOString() }
+			: null;
 		await this.sessionsRepository.createQueryBuilder()
 			.update()
 			.set({
-				randomProactiveLastError: result.errorCode
-					? { code: result.errorCode, occurredAt: new Date().toISOString() }
-					: null,
+				randomProactiveLastError,
 				updatedAt: new Date(),
 			})
 			.where('id = :id', { id: session.id })
 			.execute();
+		session.randomProactiveLastError = randomProactiveLastError;
 	}
 
 	private async generateProactiveReply(

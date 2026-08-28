@@ -1,6 +1,6 @@
 import assert, { rejects, strictEqual } from 'node:assert';
 import * as Misskey from 'misskey-js';
-import { createAccount, deepStrictEqualWithExcludedFields, fetchAdmin, type LoginUser, resolveRemoteNote, resolveRemoteUser, sleep } from './utils.js';
+import { createAccount, deepStrictEqualWithExcludedFields, fetchAdmin, relogin, type LoginUser, resolveRemoteNote, resolveRemoteUser, sleep } from './utils.js';
 
 const [aAdmin, bAdmin] = await Promise.all([
 	fetchAdmin('a.test'),
@@ -495,6 +495,9 @@ describe('User', () => {
 			test('Alice gets unsuspended, Bob succeeds in following Alice', async () => {
 				await aAdmin.client.request('admin/unsuspend-user', { userId: alice.id });
 				await sleep();
+
+				// 凍結時にアクセストークンが失効しているため、解除後は再サインインする
+				alice = await relogin('a.test', alice);
 
 				const followers = await alice.client.request('users/followers', { userId: alice.id });
 				strictEqual(followers.length, 1); // FIXME: followers are not deleted??

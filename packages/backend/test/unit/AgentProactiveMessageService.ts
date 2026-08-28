@@ -55,6 +55,13 @@ function createHarness(opts: { reply?: string; imageModelEnabled?: boolean; mode
 		startLog: jest.fn(async (params: Record<string, unknown>) => ({ ...params, requestedAt: new Date() })),
 		finishLog: jest.fn(async () => undefined),
 		hasFreeQuotaRemaining: jest.fn(async () => opts.hasFreeQuota ?? true),
+		// 与真实实现同口径：免费额度或余额可覆盖单次成本即放行
+		canAffordModelCall: jest.fn(async () => {
+			if (opts.hasFreeQuota ?? true) return true;
+			const cost = opts.modelCost ?? 0;
+			if (cost <= 0) return true;
+			return (opts.creditBalance ?? 100) >= cost;
+		}),
 	};
 	const agentService = {
 		newId: jest.fn(() => 'message-id'),
@@ -70,9 +77,13 @@ function createHarness(opts: { reply?: string; imageModelEnabled?: boolean; mode
 		wrapLatestUserTextWithStyleDirective: jest.fn((text: string) => text),
 		prependCurrentBeijingTime: jest.fn((text: string) => text),
 		resolveModelApiName: jest.fn(() => 'provider-model'),
+		normalizeRules: jest.fn(() => []),
+		resolveActiveRules: jest.fn(() => []),
+		resolveModelApiNameForUser: jest.fn(async () => 'provider-model'),
+		resolveEffectiveModelId: jest.fn(() => 'effective-model-id'),
 		getUserFacingModelCostPerCall: jest.fn(() => opts.modelCost ?? 0),
 		invokeChatCompletions: jest.fn(async () => {
-			if (opts.reply != null) return opts.reply;
+			if (opts.reply != null) return { text: opts.reply, usage: null };
 			throw new Error('provider unavailable');
 		}),
 	};
@@ -84,7 +95,10 @@ function createHarness(opts: { reply?: string; imageModelEnabled?: boolean; mode
 		applyAssistantControl: jest.fn(async () => undefined),
 	};
 
-	const imageService = { resolveImageModel: jest.fn(() => opts.imageModelEnabled ? { id: 'image-model-id' } : null) };
+	const imageService = {
+		resolveImageModel: jest.fn(() => opts.imageModelEnabled ? { id: 'image-model-id' } : null),
+		stripDrawPlaceholders: jest.fn((text: string) => text),
+	};
 	const service = new AgentProactiveMessageService(
 		sessionsRepository as never,
 		messagesRepository as never,
@@ -98,7 +112,7 @@ function createHarness(opts: { reply?: string; imageModelEnabled?: boolean; mode
 		usage as never,
 		imageService as never,
 		{ fetch: jest.fn(async () => ({ agentGlobalSystemPrompt: null })) } as never,
-		{ createNotification: jest.fn() } as never,
+		{ notifyAgentMessage: jest.fn(async () => undefined) } as never,
 		{} as never,
 	);
 

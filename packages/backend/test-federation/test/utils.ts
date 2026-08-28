@@ -120,6 +120,20 @@ export async function createAccount(host: Host): Promise<LoginUser> {
 	};
 }
 
+/**
+ * 凍結はアクセストークンを全て失効させるため、解除後は再サインインして新しいクライアントを使う。
+ */
+export async function relogin(host: Host, user: LoginUser): Promise<LoginUser> {
+	const signinRes = await signin(host, { username: user.username, password: user.password });
+
+	return {
+		...signinRes,
+		client: new Misskey.api.APIClient({ origin: `https://${host}`, credential: signinRes.i }),
+		username: user.username,
+		password: user.password,
+	};
+}
+
 export async function createModerator(host: Host): Promise<LoginUser> {
 	const user = await createAccount(host);
 	const role = await createRole(host, {
