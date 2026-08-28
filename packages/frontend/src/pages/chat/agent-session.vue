@@ -4920,6 +4920,15 @@ async function onAbortRequest() {
 	// 都会被 onFormSubmit 的兜底守卫拦截，不会再渲染气泡。
 	abortedRequestIds.add(reqId);
 
+	// 中断即回滚：被中断的用户消息会被服务端撤销，这里先把内容（含附件）回填
+	// 到输入框，让用户可以修改后重新发送。必须在下方 await 之前同步完成：
+	// 否则旧 send 请求若抢先 settle 并移除乐观气泡，文本将无处可寻。
+	const optimisticMsg = messages.value.find(m => m.id.startsWith(OPTIMISTIC_MESSAGE_ID_PREFIX) && m.role === 'user');
+	if (optimisticMsg != null) {
+		if (optimisticMsg.content) formRef.value?.restoreDraft(optimisticMsg.content);
+		formRef.value?.setAttachment(optimisticMsg.file ?? null);
+	}
+
 	try {
 		await misskeyApi(
 			'agents/messages/abort' as Parameters<typeof misskeyApi>[0],
