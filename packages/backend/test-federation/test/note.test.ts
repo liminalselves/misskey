@@ -1,6 +1,6 @@
 import assert, { rejects, strictEqual } from 'node:assert';
 import * as Misskey from 'misskey-js';
-import { addCustomEmoji, createAccount, createModerator, deepStrictEqualWithExcludedFields, type LoginUser, resolveRemoteNote, resolveRemoteUser, sleep, uploadFile } from './utils.js';
+import { addCustomEmoji, createAccount, createModerator, deepStrictEqualWithExcludedFields, type LoginUser, resolveRemoteNote, resolveRemoteUser, sleep, uploadFile, waitForFederation } from './utils.js';
 
 describe('Note', () => {
 	let alice: LoginUser, bob: LoginUser;
@@ -339,12 +339,14 @@ describe('Note', () => {
 				const note = (await bob.client.request('notes/create', { poll: { choices: ['inu', 'neko'] } })).createdNote;
 				const noteInA = await resolveRemoteNote('b.test', note.id, carol);
 				await carol.client.request('notes/polls/vote', { noteId: noteInA.id, choice: 0 });
-				await sleep();
 
-				const noteAfterVote = await bob.client.request('notes/show', { noteId: note.id });
-				assert(noteAfterVote.poll != null);
-				strictEqual(noteAfterVote.poll.choices[0].votes, 1);
-				strictEqual(noteAfterVote.poll.choices[1].votes, 0);
+				// 投票の連合反映は配送キュー次第で時間がぶれるためポーリングで待つ
+				await waitForFederation(async () => {
+					const noteAfterVote = await bob.client.request('notes/show', { noteId: note.id });
+					assert(noteAfterVote.poll != null);
+					strictEqual(noteAfterVote.poll.choices[0].votes, 1);
+					strictEqual(noteAfterVote.poll.choices[1].votes, 0);
+				});
 			});
 		});
 

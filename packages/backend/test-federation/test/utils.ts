@@ -40,6 +40,26 @@ export async function sleep(ms = 250): Promise<void> {
 	return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+/**
+ * 上流の vi.waitFor(WAIT_FOR_FEDERATION) 相当(jest 版)。
+ * 連合の反映は配送キューの処理タイミング次第で固定 sleep では間に合わないことがあるため、
+ * 条件が満たされるまでポーリングする。
+ */
+export async function waitForFederation(fn: () => Promise<void>, timeout = 10_000, interval = 250): Promise<void> {
+	const deadline = Date.now() + timeout;
+	let lastError: unknown;
+	while (Date.now() < deadline) {
+		try {
+			await fn();
+			return;
+		} catch (error) {
+			lastError = error;
+			await sleep(interval);
+		}
+	}
+	throw lastError;
+}
+
 async function signin(
 	host: Host,
 	params: Misskey.entities.SigninFlowRequest,
