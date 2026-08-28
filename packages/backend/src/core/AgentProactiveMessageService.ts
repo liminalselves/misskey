@@ -267,7 +267,8 @@ export class AgentProactiveMessageService {
 				sessionId: session.id,
 				characterId: session.characterId,
 				dialogueStyleId: session.dialogueStyleId,
-				modelId: session.agentModelId ?? null,
+				// 日志记录解析后的实际生效模型（未指定时为全站默认），计费/免费额度/报表均依赖 modelId
+				modelId: this.agentService.resolveEffectiveModelId(instance, session.agentModelId),
 				modelApiName,
 				usageKind,
 			});

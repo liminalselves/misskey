@@ -344,6 +344,19 @@ export class AgentService {
 	}
 
 	/**
+	 * 解析调用实际生效的模型 id：显式指定（含 BYOK 用户模型）原样返回；
+	 * 未指定时回退全站默认模型 → 首个启用模型，与 pickModelOrThrow 的取模口径一致。
+	 * 供用量日志写入 modelId 使用，避免"未指定模型"的会话在日志/计费中丢失实际模型。
+	 */
+	@bindThis
+	public resolveEffectiveModelId(instance: MiMeta, modelId: string | null): string | null {
+		if (modelId) return modelId;
+		const models = getActiveLlmModels(instance);
+		if (models.length === 0) return null;
+		return (models.find(m => m.id === instance.agentDefaultModelId) ?? models[0]).id;
+	}
+
+	/**
 	 * Cost for the selected session model. Returns 0 when model selection is invalid.
 	 */
 	@bindThis
