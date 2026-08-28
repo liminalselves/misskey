@@ -4325,7 +4325,7 @@ _agents:
   modelsTabOfficial: "官方模型"
   modelsTabCustom: "我的自定义模型"
   byokDisabledHint: "管理员尚未启用 BYOK（自带 API Key）自定义模型功能。"
-  byokCustomHint: "使用你自己的 API Key 添加自定义模型。调用产生的费用由你的模型供应商收取，不消耗平台信用额度。"
+  byokCustomHint: "使用你自己的 API Key 添加自定义模型。调用产生的费用由你的模型供应商收取，不消耗平台额度。"
   byokNoModels: "还没有自定义模型，点击下方按钮添加。"
   byokCustomBadge: "自定义"
   byokDisabled: "已停用"
