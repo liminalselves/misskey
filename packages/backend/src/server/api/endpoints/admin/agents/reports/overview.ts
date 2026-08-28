@@ -15,6 +15,9 @@ import { getEffectiveLlmModels } from '@/misc/agent-llm-models.js';
 /** 前端 BYOK 合并行使用的伪模型 id（与前端约定保持一致） */
 const BYOK_MERGED_MODEL_ID = '__byok_custom_models__';
 
+/** 前端“未关联模型”合并行使用的伪模型 id（与前端约定保持一致） */
+const UNASSIGNED_MODEL_ID = '__unassigned_model__';
+
 /** since/until 自定义窗口的最大跨度（自然年，防止全表扫描） */
 const MAX_WINDOW_MS = 366 * 24 * 60 * 60 * 1000;
 
@@ -126,9 +129,10 @@ export const meta = {
 					failed: { type: 'integer' },
 					byok: { type: 'integer' },
 					zeroPriced: { type: 'integer' },
+					unassigned: { type: 'integer' },
 					other: { type: 'integer' },
 				},
-				required: ['free', 'paid', 'failed', 'byok', 'zeroPriced', 'other'],
+				required: ['free', 'paid', 'failed', 'byok', 'zeroPriced', 'unassigned', 'other'],
 			},
 			topUsers: {
 				type: 'array',
@@ -189,7 +193,9 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			// 单模型筛选：仅作用于 overall 与 buckets（byModel 始终返回全量列表供切换）
 			const modelFilter = ps.modelId === BYOK_MERGED_MODEL_ID
 				? { byokOnly: true as const }
-				: (ps.modelId != null ? { modelId: ps.modelId } : {});
+				: (ps.modelId === UNASSIGNED_MODEL_ID
+					? { unassignedOnly: true as const }
+					: (ps.modelId != null ? { modelId: ps.modelId } : {}));
 
 			const instanceMeta = await this.metaService.fetch(true);
 			const llmModels = getEffectiveLlmModels(instanceMeta);
@@ -206,7 +212,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			const spanMs = until.getTime() - since.getTime();
 			const prevSince = new Date(since.getTime() - spanMs);
 
-			const [overall, previousOverall, byModel, buckets, byUsageKind, billing, topUsers, byokStats] = await Promise.all([
+			const [overall, previousOverall, byModel, buckets, byUsageKind, billing, topUsers, byokStats, unassignedStats] = await Promise.all([
 				this.agentModelUsageService.overallStats({ since, until, modelCallsOnly: true, ...modelFilter }),
 				this.agentModelUsageService.overallStats({ since: prevSince, until: since, modelCallsOnly: true, ...modelFilter }),
 				this.agentModelUsageService.aggregateByModel({ since, until }),
@@ -216,6 +222,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				this.agentModelUsageService.topUsersByCharged({ since, until, limit: 10 }),
 				// BYOK 合并行的 uniqueUsers/avgDurationMs 无法由分组行求和得出，单独按前缀聚合一次
 				this.agentModelUsageService.overallStats({ since, until, modelCallsOnly: true, byokOnly: true }),
+				// “未关联模型”合并行同理，单独按 modelId IS NULL 聚合一次
+				this.agentModelUsageService.overallStats({ since, until, modelCallsOnly: true, unassignedOnly: true }),
 			]);
 
 			const byModelRows = byModel.map(r => ({
@@ -234,12 +242,15 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				avgDurationMs: r.avgDurationMs,
 			}));
 
-			// BYOK（用户自定义模型，id 以 u 前缀开头）合并为一条综合统计，避免显示为“未知/已删除模型”
+			// BYOK（用户自定义模型，id 以 u 前缀开头）合并为一条综合统计，避免显示为“未知/已删除模型”；
+			// 未关联模型（modelId 为 NULL，旧版日志未解析默认模型）同样合并为一条，避免显示为“已删除模型”
 			const mergedByModel: typeof byModelRows = [];
-			let custom: {
+			type ModelAcc = {
 				total: number; success: number; failed: number; aborted: number; totalCost: number;
 				freeCalls: number; paidCalls: number; creditsCharged: number;
-			} | null = null;
+			};
+			let custom: ModelAcc | null = null;
+			let unassigned: ModelAcc | null = null;
 			for (const r of byModelRows) {
 				if (r.modelId != null && r.modelId.startsWith('u')) {
 					if (custom == null) {
@@ -253,6 +264,18 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					custom.freeCalls += r.freeCalls;
 					custom.paidCalls += r.paidCalls;
 					custom.creditsCharged += r.creditsCharged;
+				} else if (r.modelId == null) {
+					if (unassigned == null) {
+						unassigned = { total: 0, success: 0, failed: 0, aborted: 0, totalCost: 0, freeCalls: 0, paidCalls: 0, creditsCharged: 0 };
+					}
+					unassigned.total += r.total;
+					unassigned.success += r.success;
+					unassigned.failed += r.failed;
+					unassigned.aborted += r.aborted;
+					unassigned.totalCost += r.totalCost;
+					unassigned.freeCalls += r.freeCalls;
+					unassigned.paidCalls += r.paidCalls;
+					unassigned.creditsCharged += r.creditsCharged;
 				} else {
 					mergedByModel.push(r);
 				}
@@ -265,6 +288,16 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					unlisted: false,
 					uniqueUsers: byokStats.uniqueUsers,
 					avgDurationMs: byokStats.avgDurationMs,
+				});
+			}
+			if (unassigned != null) {
+				mergedByModel.push({
+					modelId: UNASSIGNED_MODEL_ID,
+					modelName: '未关联模型',
+					...unassigned,
+					unlisted: false,
+					uniqueUsers: unassignedStats.uniqueUsers,
+					avgDurationMs: unassignedStats.avgDurationMs,
 				});
 			}
 

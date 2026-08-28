@@ -4517,6 +4517,7 @@ _agents:
   adminReportsFreeQuota: "無料枠"
   adminReportsByok: "BYOK"
   adminReportsZeroPriced: "無料モデル"
+  adminReportsUnassigned: "モデル未設定"
   adminReportsOther: "その他"
   adminReportsTopUsers: "クレジット消費 TOP ユーザー"
   adminReportsAllModels: "すべてのモデル"

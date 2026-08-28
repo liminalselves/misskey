@@ -17101,6 +17101,10 @@ export interface Locale extends ILocale {
          */
         "adminReportsZeroPriced": string;
         /**
+         * モデル未設定
+         */
+        "adminReportsUnassigned": string;
+        /**
          * その他
          */
         "adminReportsOther": string;

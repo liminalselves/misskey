@@ -4384,6 +4384,7 @@ _agents:
   adminReportsFreeQuota: "Free"
   adminReportsByok: "BYOK"
   adminReportsZeroPriced: "Zero-priced"
+  adminReportsUnassigned: "No model"
   adminReportsOther: "Other"
   adminReportsTopUsers: "Top users by credits charged"
   adminReportsAllModels: "All models"

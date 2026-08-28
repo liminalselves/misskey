@@ -275,12 +275,13 @@ type ReportsOverview = {
 		freeCalls: number; paidCalls: number; creditsCharged: number; avgDurationMs: number | null;
 	}[];
 	byUsageKind: { usageKind: string; total: number; freeCalls: number; paidCalls: number; creditsCharged: number }[];
-	billing: { free: number; paid: number; failed: number; byok: number; zeroPriced: number; other: number };
+	billing: { free: number; paid: number; failed: number; byok: number; zeroPriced: number; unassigned: number; other: number };
 	topUsers: { userId: string; username: string; name: string | null; total: number; freeCalls: number; paidCalls: number; creditsCharged: number }[];
 };
 
 const ALL_MODELS = '__all__';
 const BYOK_MERGED_MODEL_ID = '__byok_custom_models__';
+const UNASSIGNED_MODEL_ID = '__unassigned_model__';
 
 type RangeKey = 'today' | '24h' | '7d' | '30d' | '90d' | 'thisMonth' | 'lastMonth';
 
@@ -312,12 +313,13 @@ const modelItems = computed(() => [
 
 function modelDisplayName(m: { modelId: string | null; modelName: string | null }): string {
 	if (m.modelId === BYOK_MERGED_MODEL_ID) return i18n.ts._agents.adminReportsByokCustomModels;
+	if (m.modelId === UNASSIGNED_MODEL_ID) return i18n.ts._agents.adminReportsUnassigned;
 	return m.modelName ?? m.modelId ?? '—';
 }
 
 // 当前配置中已不存在的历史模型（已被管理员删除）：只能显示内部 ID，加徽标区分
 function isDeletedModel(m: { modelId: string | null; modelName: string | null }): boolean {
-	return m.modelId !== BYOK_MERGED_MODEL_ID && m.modelName == null;
+	return m.modelId !== BYOK_MERGED_MODEL_ID && m.modelId !== UNASSIGNED_MODEL_ID && m.modelName == null;
 }
 
 function buildParams(): Record<string, unknown> {
@@ -488,12 +490,12 @@ const sortedByModel = computed(() => {
 
 // ---------- 计费构成 ----------
 
-const billingColors = ref({ free: '#4caf50', paid: '#f2a03d', failed: '#ec4137', byok: '#64b5f6', zeroPriced: '#4db6ac', other: '#9fb3c8' });
+const billingColors = ref({ free: '#4caf50', paid: '#f2a03d', failed: '#ec4137', byok: '#64b5f6', zeroPriced: '#4db6ac', unassigned: '#b085cc', other: '#9fb3c8' });
 
 const billingTotal = computed(() => {
 	const d = data.value;
 	if (d == null) return 0;
-	return d.billing.free + d.billing.paid + d.billing.failed + d.billing.byok + d.billing.zeroPriced + d.billing.other;
+	return d.billing.free + d.billing.paid + d.billing.failed + d.billing.byok + d.billing.zeroPriced + d.billing.unassigned + d.billing.other;
 });
 
 const billingSegments = computed(() => {
@@ -506,6 +508,7 @@ const billingSegments = computed(() => {
 		{ key: 'zeroPriced', label: i18n.ts._agents.adminReportsZeroPriced, value: d.billing.zeroPriced, color: c.zeroPriced },
 		{ key: 'byok', label: i18n.ts._agents.adminReportsByok, value: d.billing.byok, color: c.byok },
 		{ key: 'failed', label: i18n.ts._agents.adminReportsFailed, value: d.billing.failed, color: c.failed },
+		{ key: 'unassigned', label: i18n.ts._agents.adminReportsUnassigned, value: d.billing.unassigned, color: c.unassigned },
 		{ key: 'other', label: i18n.ts._agents.adminReportsOther, value: d.billing.other, color: c.other },
 	];
 });
@@ -594,6 +597,7 @@ function renderCharts() {
 		failed: colors.error,
 		byok: '#64b5f6',
 		zeroPriced: '#4db6ac',
+		unassigned: '#b085cc',
 		other: '#9fb3c8',
 	};
 

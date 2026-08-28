@@ -22,10 +22,11 @@ import { getEffectiveLlmModels, isAgentLlmPeakTimeBeijing } from '@/misc/agent-l
 /** 非模型调用类记录（签到/管理员奖励/额度迁移）：管理端模型报表统计时一律排除，避免负 cost 污染费用汇总 */
 export const nonModelUsageKinds: AgentModelUsageKind[] = ['checkin', 'admin_reward', 'credit_migration'];
 
-/** 管理端报表的模型筛选：modelId 精确匹配；byokOnly 时按 BYOK 自定义模型 id 前缀聚合 */
+/** 管理端报表的模型筛选：modelId 精确匹配；byokOnly/unassignedOnly 时按 BYOK 前缀/未关联模型聚合 */
 export type ModelReportFilter = {
 	modelId?: string;
 	byokOnly?: boolean;
+	unassignedOnly?: boolean;
 };
 
 function applyModelReportFilter<QB extends { andWhere: (w: string, p?: Record<string, unknown>) => unknown }>(qb: QB, opts: ModelReportFilter): void {
@@ -33,6 +34,8 @@ function applyModelReportFilter<QB extends { andWhere: (w: string, p?: Record<st
 		qb.andWhere('log.modelId = :reportModelId', { reportModelId: opts.modelId });
 	} else if (opts.byokOnly === true) {
 		qb.andWhere('log.modelId LIKE :byokPrefix', { byokPrefix: `${AGENT_USER_MODEL_ID_PREFIX}%` });
+	} else if (opts.unassignedOnly === true) {
+		qb.andWhere('log.modelId IS NULL');
 	}
 }
 
@@ -357,6 +360,8 @@ export class AgentModelUsageService {
 
 	/**
 	 * 按模型维度聚合时间窗内请求数；供用户侧图表与管理端报表复用。
+	 * 未关联模型（modelId 为 NULL，旧版日志未解析默认模型）的记录聚合成一行（modelId=null），
+	 * 由调用方决定展示方式：管理端合并为“未关联模型”行，用户侧/成功率接口自行兜底。
 	 */
 	@bindThis
 	public async aggregateByModel(opts: { userId?: MiUser['id']; since: Date; until?: Date }): Promise<Array<{
@@ -385,10 +390,9 @@ export class AgentModelUsageService {
 			.addSelect('COUNT(DISTINCT log.userId)::int', 'uniqueUsers')
 			.addSelect('AVG(log.durationMs)', 'avgDurationMs')
 			.where('log.requestedAt >= :since', { since: opts.since })
-			// 签到奖励/补签消耗不属于模型费用，不计入费用汇总与模型统计
-			.andWhere('log.usageKind != :checkinKind', { checkinKind: 'checkin' })
-			// 按模型维度的聚合只统计有关联模型的记录，避免出现“—”行
-			.andWhere('log.modelId IS NOT NULL')
+			// 签到/管理员奖励/额度迁移等流水不属于模型调用（modelId 恒为 NULL），不计入模型统计；
+			// 与计费构成（billingBreakdown）同口径，否则这类流水会以“未关联模型”混入按模型表
+			.andWhere('log.usageKind NOT IN (:...nonModelKinds)', { nonModelKinds: nonModelUsageKinds })
 			.groupBy('log.modelId');
 		if (opts.userId != null) {
 			qb.andWhere('log.userId = :uid', { uid: opts.userId });
@@ -638,13 +642,14 @@ export class AgentModelUsageService {
 	}
 
 	/**
-	 * 计费构成：互斥的五类计数（付费/免费/失败/BYOK/零价），其余归入 other（处理中等瞬态）。
+	 * 计费构成：互斥的六类计数（付费/免费/失败/BYOK/零价/未关联模型），其余归入 other（处理中等瞬态）。
 	 * - paid: cost>0（成功/中断实际扣费）
 	 * - free: cost=0 且消耗了每日免费额度
 	 * - failed: 失败未扣费（含 BYOK 的失败调用）
 	 * - byok: BYOK 自定义模型的成功/中断调用（平台零成本）
 	 * - zeroPriced: 官方零定价模型的成功/中断调用（模型本身不收费，区别于每日免费额度）
-	 * 供管理端报表计费构成图。仅统计模型调用类记录，支持单模型/BYOK 筛选。
+	 * - unassigned: 未关联模型的历史成功/中断调用（旧版日志未解析默认模型 id，与零价区分开）
+	 * 供管理端报表计费构成图。仅统计模型调用类记录，支持单模型/BYOK/未关联模型筛选。
 	 */
 	@bindThis
 	public async billingBreakdown(opts: { since: Date; until?: Date } & ModelReportFilter): Promise<{
@@ -653,6 +658,7 @@ export class AgentModelUsageService {
 		failed: number;
 		byok: number;
 		zeroPriced: number;
+		unassigned: number;
 		other: number;
 	}> {
 		const qb = this.agentModelUsageLogsRepository.createQueryBuilder('log')
@@ -661,7 +667,8 @@ export class AgentModelUsageService {
 			.addSelect('SUM(CASE WHEN log.cost = 0 AND log.usedFreeQuota = TRUE THEN 1 ELSE 0 END)::int', 'free')
 			.addSelect('SUM(CASE WHEN log.cost = 0 AND log.usedFreeQuota IS NOT TRUE AND log.status = \'failed\' THEN 1 ELSE 0 END)::int', 'failed')
 			.addSelect('SUM(CASE WHEN log.cost = 0 AND log.usedFreeQuota IS NOT TRUE AND log.status IN (\'success\', \'aborted\') AND log.modelId LIKE :byokPrefix THEN 1 ELSE 0 END)::int', 'byok')
-			.addSelect('SUM(CASE WHEN log.cost = 0 AND log.usedFreeQuota IS NOT TRUE AND log.status IN (\'success\', \'aborted\') AND (log.modelId IS NULL OR log.modelId NOT LIKE :byokPrefix) THEN 1 ELSE 0 END)::int', 'zeroPriced')
+			.addSelect('SUM(CASE WHEN log.cost = 0 AND log.usedFreeQuota IS NOT TRUE AND log.status IN (\'success\', \'aborted\') AND log.modelId IS NOT NULL AND log.modelId NOT LIKE :byokPrefix THEN 1 ELSE 0 END)::int', 'zeroPriced')
+			.addSelect('SUM(CASE WHEN log.cost = 0 AND log.usedFreeQuota IS NOT TRUE AND log.status IN (\'success\', \'aborted\') AND log.modelId IS NULL THEN 1 ELSE 0 END)::int', 'unassigned')
 			.where('log.requestedAt >= :since', { since: opts.since })
 			.andWhere('log.usageKind NOT IN (:...nonModelKinds)', { nonModelKinds: nonModelUsageKinds })
 			.setParameter('byokPrefix', `${AGENT_USER_MODEL_ID_PREFIX}%`);
@@ -669,14 +676,15 @@ export class AgentModelUsageService {
 			qb.andWhere('log.requestedAt < :until', { until: opts.until });
 		}
 		applyModelReportFilter(qb, opts);
-		const row = await qb.getRawOne<{ total: number; paid: number; free: number; failed: number; byok: number; zeroPriced: number }>();
+		const row = await qb.getRawOne<{ total: number; paid: number; free: number; failed: number; byok: number; zeroPriced: number; unassigned: number }>();
 		const total = Number(row?.total) || 0;
 		const paid = Number(row?.paid) || 0;
 		const free = Number(row?.free) || 0;
 		const failed = Number(row?.failed) || 0;
 		const byok = Number(row?.byok) || 0;
 		const zeroPriced = Number(row?.zeroPriced) || 0;
-		return { free, paid, failed, byok, zeroPriced, other: Math.max(0, total - paid - free - failed - byok - zeroPriced) };
+		const unassigned = Number(row?.unassigned) || 0;
+		return { free, paid, failed, byok, zeroPriced, unassigned, other: Math.max(0, total - paid - free - failed - byok - zeroPriced - unassigned) };
 	}
 
 	/**

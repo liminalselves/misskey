@@ -4425,6 +4425,7 @@ _agents:
   adminReportsFreeQuota: "免费"
   adminReportsByok: "BYOK"
   adminReportsZeroPriced: "零价"
+  adminReportsUnassigned: "未关联模型"
   adminReportsOther: "其他"
   adminReportsTopUsers: "扣额度 TOP 用户"
   adminReportsAllModels: "全部模型"
