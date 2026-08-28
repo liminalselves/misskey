@@ -88,6 +88,9 @@ jobs:
         # https://github.com/docker/compose/issues/1294#issuecomment-374847206
         run: |
           cd packages/backend/test-federation
+          # 两个实例共享 built/ 目录且都要挂载 ._config_.json，并发创建挂载点会
+          # 触发 runc "file exists" 竞态，预先创建以消除（与上游一致）
+          touch ../../../built/._config_.json
           docker compose up -d --scale tester=0
       - name: Print start_servers error
         if: ${{ steps.start_servers.outcome == 'failure' }}
