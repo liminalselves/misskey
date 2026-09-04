@@ -7,11 +7,13 @@ SPDX-License-Identifier: AGPL-3.0-only
 <PageWithHeader v-model:tab="tab" :actions="headerActions" :tabs="headerTabs">
 	<div v-if="file" class="_spacer" style="--MI_SPACER-w: 600px; --MI_SPACER-min: 16px; --MI_SPACER-max: 32px;">
 		<div v-if="tab === 'overview'" class="cxqhhsmd _gaps_m">
-			<a v-if="!isBlocked" class="thumbnail" :href="file.url" target="_blank">
-				<MkDriveFileThumbnail class="thumbnail" :file="file" fit="contain"/>
-			</a>
-			<div v-else class="thumbnail">
-				<MkDriveFileThumbnail class="thumbnail" :file="blockedFile" fit="contain"/>
+			<div class="preview">
+				<div v-if="isBlocked" class="blockedPreview">
+					<i class="ti ti-ban"></i>
+					<strong>图片已封禁</strong>
+				</div>
+				<!-- 与网盘文件页一致：站内媒体预览（图片点击进灯箱、视频内嵌播放），封禁切换时重新挂载保证灯箱数据源正确 -->
+				<MkMediaList v-else :mediaList="[blockedFile]"/>
 			</div>
 			<div>
 				<MkKeyValue :copy="file.type" oneline style="margin: 1em 0;">
@@ -94,7 +96,7 @@ import * as Misskey from 'misskey-js';
 import MkButton from '@/components/MkButton.vue';
 import MkSwitch from '@/components/MkSwitch.vue';
 import MkObjectView from '@/components/MkObjectView.vue';
-import MkDriveFileThumbnail from '@/components/MkDriveFileThumbnail.vue';
+import MkMediaList from '@/components/MkMediaList.vue';
 import MkKeyValue from '@/components/MkKeyValue.vue';
 import FormSection from '@/components/form/section.vue';
 import MkUserCardMini from '@/components/MkUserCardMini.vue';
@@ -203,12 +205,23 @@ const headerTabs = computed(() => [{
 
 <style lang="scss" scoped>
 .cxqhhsmd {
-	> .thumbnail {
-		display: block;
+	> .preview {
+		overflow: clip;
+		border-radius: 8px;
+	}
 
-		> .thumbnail {
-			height: 300px;
-			max-width: 100%;
+	> .blockedPreview {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: 8px;
+		height: 300px;
+		border: 1px solid var(--MI_THEME-divider);
+		color: var(--MI_THEME-error);
+
+		> i {
+			font-size: 40px;
 		}
 	}
 
