@@ -135,7 +135,18 @@ SPDX-License-Identifier: AGPL-3.0-only
 									<i class="ti ti-chart-line" :class="$style.modelMetaChipIcon" aria-hidden="true"></i>
 									<span :class="$style.modelMetaChipKicker">{{ i18n.ts._agents.modelRowLabelSuccess1h }}</span>
 									<template v-if="successRates[m.id] && successRates[m.id].total > 0">
-										<span :class="[...getSuccessRateClassNameModelRow(successRates[m.id].success, successRates[m.id].total), $style.modelMetaChipValLong]">
+										<!-- 动态类名必须写成 $style 字面量引用：生产构建的 unwind 插件只静态替换模板中的 $style.xxx，useCssModule() 在产线拿不到 __cssModules 会返回空对象 -->
+										<span
+											:class="[
+												$style.modelMetaChipVal,
+												$style.modelMetaChipValLong,
+												{
+													successRateHigh: $style.successRateHigh,
+													successRateMedium: $style.successRateMedium,
+													successRateLow: $style.successRateLow,
+												}[getSuccessRateClass(successRates[m.id].success, successRates[m.id].total)],
+											]"
+										>
 											{{ getSuccessRatePercentage(successRates[m.id].success, successRates[m.id].total) }}% ({{ successRates[m.id].success }}/{{ successRates[m.id].total }})
 										</span>
 									</template>
@@ -184,7 +195,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { computed, onMounted, ref, useCssModule } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import MkLoading from '@/components/global/MkLoading.vue';
 import MkInfo from '@/components/MkInfo.vue';
 import MkButton from '@/components/MkButton.vue';
@@ -199,8 +210,6 @@ import * as os from '@/os.js';
 import { useRouter } from '@/router.js';
 import type { MenuItem } from '@/types/menu.js';
 import type { AgentsByokModelsListResponse } from 'misskey-js/entities.js';
-
-const modelsCss = useCssModule();
 
 const router = useRouter();
 
@@ -384,13 +393,6 @@ function getSuccessRateClass(success: number, total: number): string {
 	if (percentage >= 90) return 'successRateHigh';
 	if (percentage >= 70) return 'successRateMedium';
 	return 'successRateLow';
-}
-
-function getSuccessRateClassNameModelRow(success: number, total: number) {
-	const className = getSuccessRateClass(success, total);
-	if (className === 'successRateHigh') return [modelsCss.successRateHigh, modelsCss.modelMetaChipVal];
-	if (className === 'successRateMedium') return [modelsCss.successRateMedium, modelsCss.modelMetaChipVal];
-	return [modelsCss.successRateLow, modelsCss.modelMetaChipVal];
 }
 
 /** 高峰时段判定（仅展示提示用，与后端结算口径一致：北京时间 9:00～12:00、14:00～18:00） */
@@ -692,10 +694,14 @@ onMounted(loadAll);
 /* 模型卡片列表（对齐聊天界面模型 tab 的卡片设计） */
 .selectCardList {
 	display: grid;
+	/* 防止子项 min-content 把轨道撑出容器（窄屏下内容异常时也不允许横向溢出） */
+	grid-template-columns: minmax(0, 1fr);
+	min-width: 0;
 	gap: 0.75em;
 }
 
 .selectCard {
+	min-width: 0;
 	border: solid 1px var(--MI_THEME-divider);
 	border-radius: calc(var(--MI-radius) * 0.92);
 	background: linear-gradient(155deg, color-mix(in srgb, var(--MI_THEME-panel) 88%, transparent), var(--MI_THEME-panel));
@@ -716,6 +722,7 @@ onMounted(loadAll);
 	display: flex;
 	flex-direction: column;
 	gap: 0.35em;
+	min-width: 0;
 }
 
 .selectCardHead {
@@ -822,6 +829,8 @@ onMounted(loadAll);
 	margin-top: 0.45em;
 	font-size: 0.78em;
 	line-height: 1.25;
+	min-width: 0;
+	max-width: 100%;
 }
 
 .modelMetaChip {
