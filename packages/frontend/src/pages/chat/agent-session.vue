@@ -420,7 +420,18 @@ SPDX-License-Identifier: AGPL-3.0-only
 													<i class="ti ti-chart-line" :class="$style.modelMetaChipIcon" aria-hidden="true"></i>
 													<span :class="$style.modelMetaChipKicker">{{ i18n.ts._agents.modelRowLabelSuccess1h }}</span>
 													<template v-if="modelSuccessRates[m.id] && modelSuccessRates[m.id].total > 0">
-														<span :class="[...getSuccessRateClassNameModelRow(modelSuccessRates[m.id].success, modelSuccessRates[m.id].total), $style.modelMetaChipValLong]">
+														<!-- 动态类名必须用 $style 字面量引用：生产构建的 unwind 插件只静态替换模板中的 $style.xxx，useCssModule() 在产线拿不到 __cssModules 会返回空对象 -->
+														<span
+															:class="[
+																$style.modelMetaChipVal,
+																$style.modelMetaChipValLong,
+																{
+																	successRateHigh: $style.successRateHigh,
+																	successRateMedium: $style.successRateMedium,
+																	successRateLow: $style.successRateLow,
+																}[getSuccessRateClass(modelSuccessRates[m.id].success, modelSuccessRates[m.id].total)],
+															]"
+														>
 															{{ getSuccessRatePercentage(modelSuccessRates[m.id].success, modelSuccessRates[m.id].total) }}% ({{ modelSuccessRates[m.id].success }}/{{ modelSuccessRates[m.id].total }})
 														</span>
 													</template>
@@ -1022,7 +1033,18 @@ SPDX-License-Identifier: AGPL-3.0-only
 												<i class="ti ti-chart-line" :class="$style.modelMetaChipIcon" aria-hidden="true"></i>
 												<span :class="$style.modelMetaChipKicker">{{ i18n.ts._agents.modelRowLabelSuccess1h }}</span>
 												<template v-if="modelSuccessRates[m.id] && modelSuccessRates[m.id].total > 0">
-													<span :class="[...getSuccessRateClassNameModelRow(modelSuccessRates[m.id].success, modelSuccessRates[m.id].total), $style.modelMetaChipValLong]">
+													<!-- 动态类名必须用 $style 字面量引用：生产构建的 unwind 插件只静态替换模板中的 $style.xxx，useCssModule() 在产线拿不到 __cssModules 会返回空对象 -->
+													<span
+														:class="[
+															$style.modelMetaChipVal,
+															$style.modelMetaChipValLong,
+															{
+																successRateHigh: $style.successRateHigh,
+																successRateMedium: $style.successRateMedium,
+																successRateLow: $style.successRateLow,
+															}[getSuccessRateClass(modelSuccessRates[m.id].success, modelSuccessRates[m.id].total)],
+														]"
+													>
 														{{ getSuccessRatePercentage(modelSuccessRates[m.id].success, modelSuccessRates[m.id].total) }}% ({{ modelSuccessRates[m.id].success }}/{{ modelSuccessRates[m.id].total }})
 													</span>
 												</template>
@@ -1085,7 +1107,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { computed, nextTick, onActivated, onBeforeUnmount, onDeactivated, onMounted, reactive, ref, useCssModule, useTemplateRef, watch } from 'vue';
+import { computed, nextTick, onActivated, onBeforeUnmount, onDeactivated, onMounted, reactive, ref, useTemplateRef, watch } from 'vue';
 import { getScrollContainer } from '@@/js/scroll.js';
 import XAgentMessage from './agent-session.message.vue';
 import XForm from './agent-session.form.vue';
@@ -1123,8 +1145,6 @@ import { prefer } from '@/preferences.js';
 import { agentSegmentDelayMs, splitAgentMessageIntoSegments } from '@/utility/agent-message-segments.js';
 import { agentI18nText } from '@/utility/agent-i18n.js';
 import { useStream } from '@/stream.js';
-
-const agentSessionCss = useCssModule();
 
 const props = defineProps<{
 	sessionId: string;
@@ -2271,13 +2291,6 @@ function getSuccessRateClass(success: number, total: number): string {
 	if (percentage >= 90) return 'successRateHigh';
 	if (percentage >= 70) return 'successRateMedium';
 	return 'successRateLow';
-}
-
-function getSuccessRateClassNameModelRow(success: number, total: number) {
-	const className = getSuccessRateClass(success, total);
-	if (className === 'successRateHigh') return [agentSessionCss.successRateHigh, agentSessionCss.modelMetaChipVal];
-	if (className === 'successRateMedium') return [agentSessionCss.successRateMedium, agentSessionCss.modelMetaChipVal];
-	return [agentSessionCss.successRateLow, agentSessionCss.modelMetaChipVal];
 }
 
 const headerTabs = computed(() => {
