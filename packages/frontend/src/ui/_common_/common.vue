@@ -191,21 +191,49 @@ if ($i) {
 		swInject();
 	}
 
-	// 每日签到：每次加载均调用后端（幂等），确保管理员撤销后用户可重新签到
-	misskeyApi('agents/checkin' as any, {}).then((res: any) => {
-		if (res && !res.alreadyCheckedIn && res.reward > 0) {
-			const { dispose } = os.popup(defineAsyncComponent(() => import('@/components/CheckinPopup.vue')), {
-				reward: res.reward,
-				streak: res.streak,
-				baseValue: res.baseValue,
-				streakMultiplier: res.streakMultiplier,
-				roleMultiplier: res.roleMultiplier,
-				dayMultiplier: res.dayMultiplier,
-			}, {
-				closed: () => dispose(),
-			});
-		}
-	}).catch(() => {});
+	// 每日签到：后端幂等且按北京时间(UTC+8)日界。页面加载时触发一次（管理员撤销签到后刷新页面即可重签）；
+	// SPA 会话常驻跨过北京时间 0 点时自动再触发，无需刷新页面。
+	// 后台标签页的定时器可能被浏览器节流或随系统休眠暂停，因此在页面重新可见时兜底校验
+	let lastCheckinDate: string | null = null;
+	const beijingDate = () => new Date(Date.now() + 8 * 3600_000).toISOString().slice(0, 10);
+
+	function runCheckin() {
+		misskeyApi('agents/checkin' as any, {}).then((res: any) => {
+			lastCheckinDate = beijingDate();
+			if (res && !res.alreadyCheckedIn && res.reward > 0) {
+				const { dispose } = os.popup(defineAsyncComponent(() => import('@/components/CheckinPopup.vue')), {
+					reward: res.reward,
+					streak: res.streak,
+					baseValue: res.baseValue,
+					streakMultiplier: res.streakMultiplier,
+					roleMultiplier: res.roleMultiplier,
+					dayMultiplier: res.dayMultiplier,
+				}, {
+					closed: () => dispose(),
+				});
+			}
+		}).catch(() => {}); // 失败时不记录日期，下次触发会自动重试
+	}
+
+	function maybeCheckin() {
+		if (beijingDate() !== lastCheckinDate) runCheckin();
+	}
+
+	function scheduleDayRolloverCheckin() {
+		// 距下一个北京时间 0 点的时长，加 5 秒余量确保已进入新的一天
+		const shifted = Date.now() + 8 * 3600_000;
+		const delay = (Math.floor(shifted / 86400_000) + 1) * 86400_000 - shifted + 5_000;
+		window.setTimeout(() => {
+			maybeCheckin();
+			scheduleDayRolloverCheckin(); // 常驻会话可能跨多个日界，重新排定下一次
+		}, delay);
+	}
+
+	maybeCheckin();
+	scheduleDayRolloverCheckin();
+	window.document.addEventListener('visibilitychange', () => {
+		if (window.document.visibilityState === 'visible') maybeCheckin();
+	});
 }
 </script>
 
