@@ -10,57 +10,59 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<MkInfo v-else-if="character == null">{{ i18n.ts.somethingHappened }}</MkInfo>
 		<div v-else class="_gaps_m">
 			<div v-panel :class="$style.hero">
-				<div :class="$style.avatarWrap">
-					<MkDriveFileThumbnail
-						v-if="avatarFile"
-						:file="avatarFile"
-						fit="cover"
-						:class="$style.avatarThumb"
-					/>
-					<div v-else :class="$style.avatarFallback"><i class="ti ti-user"></i></div>
+				<div :class="$style.heroTop">
+					<div :class="$style.avatarWrap">
+						<MkDriveFileThumbnail
+							v-if="avatarFile"
+							:file="avatarFile"
+							fit="cover"
+							:class="$style.avatarThumb"
+						/>
+						<div v-else :class="$style.avatarFallback"><i class="ti ti-user"></i></div>
+					</div>
+					<div :class="$style.heroHead">
+						<div :class="$style.titleRow">
+							<h1 :class="$style.title">{{ character.name }}</h1>
+							<span v-if="character.publishedVersion != null" class="_acrylicBadge">V{{ character.publishedVersion }}</span>
+						</div>
+						<MkA v-if="creator" v-user-preview="creator.id" :to="userPage(creator)" :class="$style.creatorRow" :title="i18n.ts._agents.cardCreator">
+							<MkAvatar :user="creator" :class="$style.creatorAvatar"/>
+							<MkUserName :user="creator" :class="$style.creatorName"/>
+							<MkAcct :user="creator" :class="$style.creatorAcct"/>
+						</MkA>
+						<div :class="$style.timeRow">
+							<span :class="$style.timeChip">
+								<i class="ti ti-calendar-plus"></i>
+								{{ i18n.ts._agents.cardCreated }}
+								<MkTime :time="character.createdAt" mode="relative"/>
+							</span>
+							<span :class="$style.timeChip">
+								<i class="ti ti-history"></i>
+								{{ i18n.ts._agents.cardUpdated }}
+								<MkTime :time="character.updatedAt" mode="relative"/>
+							</span>
+						</div>
+					</div>
 				</div>
-				<div :class="$style.heroBody">
-					<h1 :class="$style.title">{{ character.name }}</h1>
-					<p v-if="character.summary" :class="$style.summary">{{ character.summary }}</p>
-					<div v-if="character.publishedVersion != null" :class="$style.badgeRow">
-						<span class="_acrylicBadge">V{{ character.publishedVersion }}</span>
-					</div>
-					<div :class="$style.metaBlock">
-						<span :class="$style.metaLabel"><i class="ti ti-user-heart"></i> {{ i18n.ts._agents.cardCreator }}</span>
-						<div v-if="creator" :class="$style.metaAuthor">
-							<MkAvatar :user="creator" class="_noSelect" link preview/>
-							<MkUserName :user="creator" :nowrap="false"/>
+
+				<p v-if="character.summary" :class="$style.summary">{{ character.summary }}</p>
+
+				<div :class="$style.metricsGrid">
+					<div :class="$style.metricCard">
+						<span :class="$style.metricLabel"><i class="ti ti-star"></i> {{ i18n.ts._agents.plazaMetricRating }}</span>
+						<div :class="$style.metricBody">
+							<template v-if="character.rating.count === 0">
+								<span :class="$style.metricMuted">{{ i18n.ts._agents.plazaRatingNone }}</span>
+							</template>
+							<template v-else>
+								<span :class="$style.metricStars" aria-hidden="true">{{ ratingStarString }}</span>
+								<span :class="$style.metricSub">{{ ratingAverageText }} · {{ character.rating.count }} {{ i18n.ts._agents.plazaRatingCountSuffix }}</span>
+							</template>
 						</div>
 					</div>
-					<div :class="$style.timeRow">
-						<span :class="$style.timeChip">
-							<i class="ti ti-calendar-plus"></i>
-							{{ i18n.ts._agents.cardCreated }}
-							<MkTime :time="character.createdAt" mode="relative"/>
-						</span>
-						<span :class="$style.timeChip">
-							<i class="ti ti-history"></i>
-							{{ i18n.ts._agents.cardUpdated }}
-							<MkTime :time="character.updatedAt" mode="relative"/>
-						</span>
-					</div>
-					<div :class="$style.plazaMetrics">
-						<div :class="$style.plazaMetric">
-							<span :class="$style.plazaMetricLabel"><i class="ti ti-star"></i> {{ i18n.ts._agents.plazaMetricRating }}</span>
-							<div :class="$style.plazaMetricBody">
-								<template v-if="character.rating.count === 0">
-									<span :class="$style.plazaMetricMuted">{{ i18n.ts._agents.plazaRatingNone }}</span>
-								</template>
-								<template v-else>
-									<span :class="$style.plazaMetricStars" aria-hidden="true">{{ ratingStarString }}</span>
-									<span :class="$style.plazaMetricValue">{{ ratingAverageText }} · {{ character.rating.count }} {{ i18n.ts._agents.plazaRatingCountSuffix }}</span>
-								</template>
-							</div>
-						</div>
-						<div :class="$style.plazaMetric">
-							<span :class="$style.plazaMetricLabel"><i class="ti ti-message-cog"></i> {{ i18n.ts._agents.plazaMetricAiReplies }}</span>
-							<span :class="$style.plazaMetricValue">{{ character.aiReplyCount }}</span>
-						</div>
+					<div :class="$style.metricCard">
+						<span :class="$style.metricLabel"><i class="ti ti-message-cog"></i> {{ i18n.ts._agents.plazaMetricAiReplies }}</span>
+						<span :class="$style.metricValue">{{ character.aiReplyCount }}</span>
 					</div>
 				</div>
 			</div>
@@ -150,9 +152,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 			</div>
 
 			<div v-panel :class="$style.footerActions">
-				<MkButton rounded @click="goPlaza"><i class="ti ti-layout-grid"></i> {{ i18n.ts._agents.navSquare }}</MkButton>
-				<MkButton v-if="isMine" rounded @click="goEdit"><i class="ti ti-pencil"></i> {{ i18n.ts._agents.edit }}</MkButton>
-				<MkButton primary rounded @click="startPlay"><i class="ti ti-message"></i> {{ i18n.ts._agents.play }}</MkButton>
+				<MkButton rounded :class="$style.footerBtn" @click="goPlaza"><i class="ti ti-layout-grid"></i> {{ i18n.ts._agents.navSquare }}</MkButton>
+				<MkButton v-if="isMine" rounded :class="$style.footerBtn" @click="goEdit"><i class="ti ti-pencil"></i> {{ i18n.ts._agents.edit }}</MkButton>
+				<MkButton primary rounded :class="$style.footerBtn" @click="startPlay"><i class="ti ti-message"></i> {{ i18n.ts._agents.play }}</MkButton>
 			</div>
 		</div>
 	</div>
@@ -172,6 +174,7 @@ import MkAvatar from '@/components/global/MkAvatar.vue';
 import MkUserName from '@/components/global/MkUserName.vue';
 import MkTime from '@/components/global/MkTime.vue';
 import MkDriveFileThumbnail from '@/components/MkDriveFileThumbnail.vue';
+import { userPage } from '@/filters/user.js';
 import { misskeyApi, formatApiError } from '@/utility/misskey-api.js';
 import { confirmStartAgentSession } from '@/utility/confirm-start-agent-session.js';
 import { i18n } from '@/i18n.js';
@@ -327,25 +330,43 @@ watch(() => props.characterId, () => { void load(); });
 
 <style lang="scss" module>
 .hero {
+	position: relative;
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
+	padding: 20px;
+	border-radius: var(--MI-radius);
+	background: linear-gradient(160deg, color-mix(in srgb, var(--MI_THEME-accent) 12%, var(--MI_THEME-panel)), var(--MI_THEME-panel) 60%);
+	border: solid 1px var(--MI_THEME-divider);
+	box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+	overflow: hidden;
+
+	&::before {
+		content: '';
+		position: absolute;
+		top: 0;
+		left: 0;
+		right: 0;
+		height: 3px;
+		background: linear-gradient(90deg, var(--MI_THEME-accent), color-mix(in srgb, var(--MI_THEME-accent) 25%, transparent) 55%, transparent);
+	}
+}
+
+.heroTop {
 	display: flex;
 	gap: 16px;
 	align-items: flex-start;
-	flex-wrap: wrap;
-	padding: 16px;
-	border-radius: var(--MI-radius);
-	background: linear-gradient(145deg, color-mix(in srgb, var(--MI_THEME-accent) 10%, var(--MI_THEME-panel)), var(--MI_THEME-panel));
-	border: solid 1px var(--MI_THEME-divider);
-	box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
 }
 
 .avatarWrap {
 	flex-shrink: 0;
-	width: 88px;
-	height: 88px;
+	width: 96px;
+	height: 96px;
 	border-radius: 999px;
 	overflow: hidden;
 	background: var(--MI_THEME-panel);
-	border: solid 1px var(--MI_THEME-divider);
+	border: solid 2px color-mix(in srgb, var(--MI_THEME-accent) 35%, var(--MI_THEME-divider));
+	box-shadow: 0 4px 14px rgba(0, 0, 0, 0.14);
 }
 
 .avatarThumb {
@@ -370,7 +391,7 @@ watch(() => props.characterId, () => { void load(); });
 	color: var(--MI_THEME-fgTransparentWeak);
 }
 
-.heroBody {
+.heroHead {
 	flex: 1;
 	min-width: 0;
 	display: flex;
@@ -378,60 +399,70 @@ watch(() => props.characterId, () => { void load(); });
 	gap: 8px;
 }
 
+.titleRow {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+
 .title {
 	margin: 0;
-	font-size: 1.35em;
+	font-size: 1.3em;
 	font-weight: 800;
 	line-height: 1.3;
+	overflow-wrap: anywhere;
 }
 
-.summary {
-	margin: 0;
-	font-size: 0.95em;
-	line-height: 1.55;
-	opacity: 0.9;
-	white-space: pre-line;
-	padding: 10px 12px;
-	border-radius: 10px;
-	background: color-mix(in srgb, var(--MI_THEME-bg) 35%, transparent);
-	border: solid 1px color-mix(in srgb, var(--MI_THEME-divider) 80%, transparent);
-}
-
-.badgeRow {
-	display: flex;
-	flex-wrap: wrap;
-	gap: 6px;
-}
-
-.metaBlock {
-	display: flex;
-	flex-direction: column;
-	gap: 6px;
-	margin-top: 4px;
-}
-
-.metaLabel {
-	font-size: 0.78em;
-	font-weight: 600;
-	text-transform: uppercase;
-	letter-spacing: 0.04em;
-	opacity: 0.55;
-	display: flex;
-	align-items: center;
-	gap: 6px;
-}
-
-.metaAuthor {
-	display: flex;
+.creatorRow {
+	display: inline-flex;
 	align-items: center;
 	gap: 8px;
+	align-self: flex-start;
+	max-width: 100%;
 	min-width: 0;
+	padding: 4px 12px 4px 4px;
+	border-radius: 999px;
+	border: solid 1px color-mix(in srgb, var(--MI_THEME-divider) 80%, transparent);
+	background: color-mix(in srgb, var(--MI_THEME-panel) 72%, transparent);
+	transition: background 0.15s ease, border-color 0.15s ease;
+
+	&:hover {
+		background: color-mix(in srgb, var(--MI_THEME-accent) 12%, var(--MI_THEME-panel));
+		border-color: color-mix(in srgb, var(--MI_THEME-accent) 35%, var(--MI_THEME-divider));
+		text-decoration: none;
+	}
+}
+
+a.creatorRow {
+	color: var(--MI_THEME-fg);
+}
+
+.creatorAvatar {
+	width: 26px;
+	height: 26px;
+}
+
+.creatorName {
+	font-size: 0.92em;
+	font-weight: 700;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.creatorAcct {
+	font-size: 0.84em;
+	opacity: 0.6;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
 }
 
 .timeRow {
 	display: flex;
 	flex-wrap: wrap;
-	gap: 10px 16px;
+	gap: 6px 16px;
 	font-size: 0.82em;
 	opacity: 0.72;
 }
@@ -443,28 +474,38 @@ watch(() => props.characterId, () => { void load(); });
 	white-space: nowrap;
 }
 
-.plazaMetrics {
-	display: flex;
-	flex-wrap: wrap;
-	gap: 12px 20px;
-	margin-top: 6px;
+.summary {
+	margin: 0;
 	padding: 12px 14px;
-	border-radius: var(--MI-radius);
-	border: solid 1px color-mix(in srgb, var(--MI_THEME-accent) 16%, var(--MI_THEME-divider));
-	background: linear-gradient(150deg, color-mix(in srgb, var(--MI_THEME-accent) 12%, var(--MI_THEME-panel)), var(--MI_THEME-panel));
+	font-size: 0.95em;
+	line-height: 1.7;
+	opacity: 0.95;
+	white-space: pre-line;
+	overflow-wrap: anywhere;
+	border-radius: 10px;
+	border: solid 1px color-mix(in srgb, var(--MI_THEME-divider) 70%, transparent);
+	border-left: solid 3px var(--MI_THEME-accent);
+	background: color-mix(in srgb, var(--MI_THEME-bg) 40%, transparent);
 }
 
-.plazaMetric {
+.metricsGrid {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 10px;
+}
+
+.metricCard {
 	display: flex;
 	flex-direction: column;
-	gap: 6px;
+	gap: 8px;
 	min-width: 0;
-	padding: 8px 10px;
+	padding: 12px 14px;
 	border-radius: 10px;
-	background: color-mix(in srgb, var(--MI_THEME-bg) 24%, transparent);
+	border: solid 1px color-mix(in srgb, var(--MI_THEME-accent) 18%, var(--MI_THEME-divider));
+	background: color-mix(in srgb, var(--MI_THEME-panel) 55%, transparent);
 }
 
-.plazaMetricLabel {
+.metricLabel {
 	display: inline-flex;
 	align-items: center;
 	gap: 6px;
@@ -475,47 +516,68 @@ watch(() => props.characterId, () => { void load(); });
 	opacity: 0.62;
 }
 
-.plazaMetricBody {
+.metricBody {
 	display: flex;
 	flex-wrap: wrap;
-	align-items: center;
-	gap: 6px 10px;
+	align-items: baseline;
+	gap: 4px 10px;
 }
 
-.plazaMetricStars {
+.metricStars {
 	color: var(--MI_THEME-warn);
+	font-size: 1.1em;
 	letter-spacing: 0.04em;
 }
 
-.plazaMetricValue {
-	font-size: 0.95em;
-	font-weight: 700;
+.metricValue {
+	font-size: 1.5em;
+	font-weight: 800;
 	font-variant-numeric: tabular-nums;
+	line-height: 1.2;
 }
 
-.plazaMetricMuted {
-	font-size: 0.92em;
-	opacity: 0.72;
+.metricSub {
+	font-size: 0.85em;
+	opacity: 0.7;
+}
+
+.metricMuted {
+	font-size: 0.95em;
+	opacity: 0.7;
 }
 
 .statGrid {
 	display: grid;
 	grid-template-columns: minmax(0, 1fr) auto;
-	gap: 8px 16px;
 	margin: 0;
 	font-size: 0.92em;
 	line-height: 1.45;
 
-	dt {
+	dt,
+	dd {
 		margin: 0;
+		padding: 7px 10px;
+	}
+
+	dt {
 		font-weight: 600;
 		opacity: 0.75;
 	}
 
 	dd {
-		margin: 0;
 		text-align: end;
 		font-variant-numeric: tabular-nums;
+	}
+
+	dt:nth-of-type(odd),
+	dd:nth-of-type(odd) {
+		background: color-mix(in srgb, var(--MI_THEME-bg) 30%, transparent);
+	}
+
+	dt:last-of-type,
+	dd:last-of-type {
+		border-top: solid 1px var(--MI_THEME-divider);
+		font-weight: 800;
 	}
 }
 
@@ -527,6 +589,35 @@ watch(() => props.characterId, () => { void load(); });
 	border-radius: var(--MI-radius);
 	border: solid 1px var(--MI_THEME-divider);
 	background: color-mix(in srgb, var(--MI_THEME-panel) 88%, transparent);
+}
+
+.footerBtn {
+	flex: 1 1 auto;
+	min-width: 120px;
+}
+
+@media (max-width: 600px) {
+	.hero {
+		padding: 16px;
+		gap: 12px;
+	}
+
+	.heroTop {
+		gap: 12px;
+	}
+
+	.avatarWrap {
+		width: 72px;
+		height: 72px;
+	}
+
+	.title {
+		font-size: 1.15em;
+	}
+
+	.metricValue {
+		font-size: 1.3em;
+	}
 }
 
 .folderCard {
