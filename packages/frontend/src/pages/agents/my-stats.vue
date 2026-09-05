@@ -414,7 +414,7 @@ type BillingResponse = {
 	pageSize: number;
 };
 
-const PAGE_SIZE = 30;
+const PAGE_SIZE = 20;
 const pageSizeOptions = [10, 20, 50] as const;
 
 const loading = ref(true);
