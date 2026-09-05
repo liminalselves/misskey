@@ -45,7 +45,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 					'setAgentCharacterModerationBan',
 				].includes(log.type)
 			}"
-		>{{ i18n.ts._moderationLogTypes[log.type] }}</b>
+		>{{ typeLabel }}</b>
 		<span v-if="log.type === 'updateUserNote'">: @{{ log.info.userUsername }}{{ log.info.userHost ? '@' + log.info.userHost : '' }}</span>
 		<span v-else-if="log.type === 'suspend'">: @{{ log.info.userUsername }}{{ log.info.userHost ? '@' + log.info.userHost : '' }}</span>
 		<span v-else-if="log.type === 'unsuspend'">: @{{ log.info.userUsername }}{{ log.info.userHost ? '@' + log.info.userHost : '' }}</span>
@@ -87,6 +87,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<span v-else-if="log.type === 'resolveAgentReview'">: {{ log.info.kind === 'character' ? i18n.ts._agents.reviewKindCharacter : i18n.ts._agents.reviewKindStyle }} · {{ log.info.name }}</span>
 		<span v-else-if="log.type === 'setAgentSessionModerationBan'">: {{ log.info.sessionName }} <span class="_text">({{ log.info.sessionId }})</span> · {{ log.info.banned ? i18n.ts._agents.modlogAgentBanOn : i18n.ts._agents.modlogAgentBanOff }}</span>
 		<span v-else-if="log.type === 'setAgentCharacterModerationBan'">: {{ log.info.characterName }} <span class="_text">({{ log.info.characterId }})</span> · {{ log.info.banned ? i18n.ts._agents.modlogAgentBanOn : i18n.ts._agents.modlogAgentBanOff }}</span>
+		<span v-else-if="log.type === 'ignoreAgentExternalAuditReview'">: ×{{ log.info.count }}</span>
 	</template>
 	<template #icon>
 		<i v-if="log.type === 'updateServerSettings'" class="ti ti-settings"></i>
@@ -134,6 +135,17 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<i v-else-if="log.type === 'resolveAgentReview'" class="ti ti-checkbox"></i>
 		<i v-else-if="log.type === 'setAgentSessionModerationBan'" class="ti ti-message-off"></i>
 		<i v-else-if="log.type === 'setAgentCharacterModerationBan'" class="ti ti-user-off"></i>
+		<i v-else-if="log.type === 'ignoreAgentExternalAuditReview'" class="ti ti-eye-off"></i>
+		<i v-else-if="log.type === 'clearQueue'" class="ti ti-player-stop"></i>
+		<i v-else-if="log.type === 'promoteQueue'" class="ti ti-player-play"></i>
+		<i v-else-if="log.type === 'resolveAbuseReport'" class="ti ti-flag"></i>
+		<i v-else-if="log.type === 'forwardAbuseReport'" class="ti ti-mail-forward"></i>
+		<i v-else-if="log.type === 'updateAbuseReportNote'" class="ti ti-pencil"></i>
+		<i v-else-if="log.type === 'createInvitation'" class="ti ti-plus"></i>
+		<i v-else-if="log.type === 'unsetUserAvatar'" class="ti ti-photo-off"></i>
+		<i v-else-if="log.type === 'unsetUserBanner'" class="ti ti-photo-off"></i>
+		<i v-else-if="log.type === 'updateProxyAccountDescription'" class="ti ti-pencil"></i>
+		<i v-else class="ti ti-list-search"></i>
 	</template>
 	<template #suffix>
 		<MkTime :time="log.createdAt"/>
@@ -141,7 +153,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 	<div>
 		<div style="display: flex; gap: var(--MI-margin); flex-wrap: wrap;">
-			<div style="flex: 1;">{{ i18n.ts.moderator }}: <MkA :to="`/admin/user/${log.userId}`" class="_link">@{{ log.user?.username }}</MkA></div>
+			<div style="flex: 1;">{{ i18n.ts.moderator }}: <template v-if="isBySystem"><i class="ti ti-robot"></i> {{ i18n.ts.system }}</template><MkA v-else :to="`/admin/user/${log.userId}`" class="_link">@{{ log.user?.username }}</MkA></div>
 			<div style="flex: 1;">{{ i18n.ts.dateAndTime }}: <MkTime :time="log.createdAt" mode="detail"/></div>
 		</div>
 
@@ -158,9 +170,12 @@ SPDX-License-Identifier: AGPL-3.0-only
 		</template>
 		<template v-else-if="log.type === 'suspend'">
 			<div>{{ i18n.ts.user }}: <MkA :to="`/admin/user/${log.info.userId}`" class="_link">@{{ log.info.userUsername }}{{ log.info.userHost ? '@' + log.info.userHost : '' }}</MkA></div>
+			<div v-if="log.info.suspendedUntil">{{ i18n.ts.suspendedUntil }}: <span class="_monospace"><MkTime :time="log.info.suspendedUntil" mode="detail"/></span></div>
+			<div v-if="log.info.reason">{{ i18n.ts.suspensionReason }}: {{ log.info.reason }}</div>
 		</template>
 		<template v-else-if="log.type === 'unsuspend'">
 			<div>{{ i18n.ts.user }}: <MkA :to="`/admin/user/${log.info.userId}`" class="_link">@{{ log.info.userUsername }}{{ log.info.userHost ? '@' + log.info.userHost : '' }}</MkA></div>
+			<div v-if="log.info.scheduleExpired" style="margin-top: 4px;"><i class="ti ti-clock"></i> {{ i18n.ts.userSuspendAutoRelease }}</div>
 		</template>
 		<template v-else-if="log.type === 'updateRole'">
 			<div :class="$style.diff">
@@ -242,30 +257,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<div>{{ i18n.ts.user }}: <MkA :to="`/admin/user/${log.info.ownerUserId}`" class="_link">{{ log.info.ownerUserId }}</MkA></div>
 			<div>{{ i18n.ts._agents.modlogAgentBanState }}: {{ log.info.banned ? i18n.ts._agents.modlogAgentBanOn : i18n.ts._agents.modlogAgentBanOff }} (before: {{ log.info.before ? i18n.ts._agents.modlogAgentBanOn : i18n.ts._agents.modlogAgentBanOff }})</div>
 		</template>
-
-		<div :class="$style.auditSummary">
-			<div :class="$style.auditTitle">{{ i18n.ts.details }}</div>
-			<div :class="$style.auditRows">
-				<div v-for="row in auditRows" :key="row.label" :class="$style.auditRow">
-					<div class="_text">{{ row.label }}</div>
-					<div :class="$style.auditRowValue">
-						<MkA v-if="row.href" :to="row.href" class="_link">{{ row.value }}</MkA>
-						<span v-else>{{ row.value }}</span>
-					</div>
-				</div>
-			</div>
-		</div>
-
-		<div v-if="parsedInfoEntries.length > 0" :class="$style.parsedInfo">
-			<div :class="$style.auditTitle">Parsed raw</div>
-			<div v-for="entry in parsedInfoEntries" :key="entry.key" :class="$style.parsedItem">
-				<div class="_text">{{ entry.label }}</div>
-				<div v-if="entry.kind === 'primitive'">{{ entry.value }}</div>
-				<div v-else :class="$style.objectViewWrap">
-					<MkObjectView :value="entry.value as Record<string, unknown>"/>
-				</div>
-			</div>
-		</div>
+		<template v-else-if="log.type === 'ignoreAgentExternalAuditReview'">
+			<div>×{{ log.info.count }}</div>
+			<div v-if="log.info.ids.length > 0" class="_text" style="word-break: break-all;">{{ log.info.ids.join(', ') }}</div>
+		</template>
 
 		<details :class="$style.rawBlock">
 			<summary>Raw object</summary>
@@ -290,86 +285,12 @@ const props = defineProps<{
 	log: Misskey.entities.ModerationLog;
 }>();
 
-type ParsedInfoEntry = {
-	key: string;
-	label: string;
-	kind: 'primitive' | 'object';
-	value: unknown;
-};
+// 定期ジョブによる自動解凍など、システム実行のログ（FK の都合上 userId には root が入る）
+const isBySystem = computed(() => props.log.type === 'unsuspend' && props.log.info.scheduleExpired === true);
 
-const keyLabelMap: Record<string, string> = {
-	userId: String(i18n.ts.user),
-	ownerUserId: String(i18n.ts.user),
-	roleId: String(i18n.ts.role),
-	roleName: String(i18n.ts.role),
-	sessionId: String(i18n.ts._agents.adminAgentChatAuditIndexSessionId),
-	sessionName: String(i18n.ts._agents.adminAgentChatAuditIndexSessionName),
-	characterId: String(i18n.ts._agents.adminAgentChatAuditCharacterId),
-	characterName: String(i18n.ts._agents.adminAgentChatAuditCharacterName),
-	decision: String(i18n.ts.action),
-	kind: String(i18n.ts.type),
-	reviewStatus: String(i18n.ts.status),
-	host: String(i18n.ts.instance),
-};
-
-function formatFieldLabel(key: string): string {
-	return keyLabelMap[key] ?? key;
-}
-
-function formatFieldValue(value: unknown): string {
-	if (value == null) return '—';
-	if (typeof value === 'boolean') return value ? 'true' : 'false';
-	if (typeof value === 'number') return String(value);
-	if (typeof value === 'string') return value;
-	return JSON5.stringify(value);
-}
-
-const auditRows = computed(() => {
-	const rows: Array<{ label: string; value: string; href?: string }> = [
-		{
-			label: i18n.ts.type,
-			value: i18n.ts._moderationLogTypes[props.log.type] ?? props.log.type,
-		},
-		{
-			label: i18n.ts.moderator,
-			value: props.log.user?.username ? `@${props.log.user.username}` : props.log.userId,
-			href: `/admin/user/${props.log.userId}`,
-		},
-		{
-			label: i18n.ts.dateAndTime,
-			value: new Date(props.log.createdAt).toLocaleString(),
-		},
-	];
-
-	const info = props.log.info as Record<string, unknown>;
-	const importantKeys = ['userId', 'ownerUserId', 'host', 'sessionId', 'characterId', 'roleId', 'reviewStatus', 'decision', 'kind', 'banned'];
-	for (const key of importantKeys) {
-		if (!(key in info)) continue;
-		const value = info[key];
-		rows.push({
-			label: formatFieldLabel(key),
-			value: formatFieldValue(value),
-			href: key === 'userId' || key === 'ownerUserId' ? `/admin/user/${String(value)}` : undefined,
-		});
-	}
-
-	return rows;
-});
-
-const parsedInfoEntries = computed<ParsedInfoEntry[]>(() => {
-	const info = (props.log.info ?? {}) as Record<string, unknown>;
-
-	return Object.entries(info)
-		.filter(([key]) => key !== 'before' && key !== 'after')
-		.map(([key, value]) => {
-			const isObjectValue = typeof value === 'object' && value !== null;
-			return {
-				key,
-				label: formatFieldLabel(key),
-				kind: isObjectValue ? 'object' : 'primitive',
-				value: isObjectValue ? value : formatFieldValue(value),
-			};
-		});
+const typeLabel = computed(() => {
+	if (isBySystem.value) return i18n.ts.userSuspendAutoRelease;
+	return (i18n.ts._moderationLogTypes as Record<string, string | undefined>)[props.log.type] ?? props.log.type;
 });
 </script>
 
@@ -391,46 +312,6 @@ const parsedInfoEntries = computed<ParsedInfoEntry[]>(() => {
 
 .logGreen {
 	color: var(--MI_THEME-success);
-}
-
-.auditSummary {
-	margin-top: 12px;
-	padding: 12px;
-	border-radius: 8px;
-	background: color-mix(in srgb, var(--MI_THEME-panel) 85%, var(--MI_THEME-accentedBg) 15%);
-}
-
-.auditTitle {
-	font-weight: 700;
-	margin-bottom: 8px;
-}
-
-.auditRows {
-	display: grid;
-	grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-	gap: 8px 12px;
-}
-
-.auditRow {
-	padding: 8px 10px;
-	border-radius: 6px;
-	background: color-mix(in srgb, var(--MI_THEME-panel) 92%, var(--MI_THEME-fg) 8%);
-}
-
-.auditRowValue {
-	margin-top: 2px;
-	word-break: break-all;
-}
-
-.parsedInfo {
-	margin-top: 12px;
-}
-
-.parsedItem {
-	margin-top: 8px;
-	padding: 10px;
-	border-radius: 8px;
-	background: color-mix(in srgb, var(--MI_THEME-panel) 92%, var(--MI_THEME-fg) 8%);
 }
 
 .rawBlock {

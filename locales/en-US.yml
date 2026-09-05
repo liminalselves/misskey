@@ -3133,6 +3133,7 @@ _moderationLogTypes:
   resolveAgentReview: "Resolve agent character or dialogue style review"
   setAgentSessionModerationBan: "Agent chat session ban"
   setAgentCharacterModerationBan: "Agent character ban"
+  ignoreAgentExternalAuditReview: "Ignore agent external audit entries"
 _fileViewer:
   title: "File details"
   type: "File type"

@@ -161,6 +161,8 @@ suspendConfirm: "凍結しますか？"
 unsuspendConfirm: "解凍しますか？"
 userSuspendPeriod: "凍結期間"
 userSuspendAutoRelease: "自動解凍予定"
+suspensionReason: "凍結理由"
+suspendedUntil: "凍結解除予定日時"
 selectList: "リストを選択"
 editList: "リストを編集"
 selectChannel: "チャンネルを選択"
@@ -3213,6 +3215,7 @@ _moderationLogTypes:
   resolveAgentReview: "エージェント（キャラクター／会話スタイル）の審査を処理"
   setAgentSessionModerationBan: "エージェント会話セッションの利用停止"
   setAgentCharacterModerationBan: "エージェントキャラクターの利用停止"
+  ignoreAgentExternalAuditReview: "エージェント外部監査レコードを除外"
 
 _fileViewer:
   title: "ファイルの詳細"

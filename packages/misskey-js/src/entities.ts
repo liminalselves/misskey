@@ -215,6 +215,9 @@ export type ModerationLog = {
 } | {
 	type: 'setAgentCharacterModerationBan';
 	info: ModerationLogPayloads['setAgentCharacterModerationBan'];
+} | {
+	type: 'ignoreAgentExternalAuditReview';
+	info: ModerationLogPayloads['ignoreAgentExternalAuditReview'];
 });
 
 export type ServerStats = {

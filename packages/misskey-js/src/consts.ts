@@ -200,6 +200,7 @@ export const moderationLogTypes = [
 	'resolveAgentReview',
 	'setAgentSessionModerationBan',
 	'setAgentCharacterModerationBan',
+	'ignoreAgentExternalAuditReview',
 ] as const;
 
 export const rolePolicies = [
@@ -296,11 +297,14 @@ export type ModerationLogPayloads = {
 		userId: string;
 		userUsername: string;
 		userHost: string | null;
+		suspendedUntil?: string | null;
+		reason?: string | null;
 	};
 	unsuspend: {
 		userId: string;
 		userUsername: string;
 		userHost: string | null;
+		scheduleExpired?: boolean;
 	};
 	updateUserNote: {
 		userId: string;
@@ -574,5 +578,9 @@ export type ModerationLogPayloads = {
 		banned: boolean;
 		before: boolean;
 		reason?: string | null;
+	};
+	ignoreAgentExternalAuditReview: {
+		ids: string[];
+		count: number;
 	};
 };

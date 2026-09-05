@@ -3135,6 +3135,7 @@ _moderationLogTypes:
   resolveAgentReview: "处理智能体角色或对话风格审核"
   setAgentSessionModerationBan: "智能体会话封禁"
   setAgentCharacterModerationBan: "智能体角色封禁"
+  ignoreAgentExternalAuditReview: "忽略智能体外审记录"
 _fileViewer:
   title: "文件信息"
   type: "文件类型"

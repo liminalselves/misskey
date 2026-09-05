@@ -24,7 +24,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 				<MkTl v-else :events="timeline" groupBy="d">
 					<template #left="{ event }">
-						<div>
+						<div v-if="isBySystem(event)" :class="$style.systemAvatar"><i class="ti ti-robot"></i></div>
+						<div v-else>
 							<MkAvatar :user="event.user" style="width: 26px; height: 26px;"/>
 						</div>
 					</template>
@@ -90,6 +91,10 @@ const timeline = computed(() => {
 	}));
 });
 
+function isBySystem(log: Misskey.entities.ModerationLog): boolean {
+	return log.type === 'unsuspend' && log.info.scheduleExpired === true;
+}
+
 function fetchMore() {
 	if (paginator.order.value === 'oldest') {
 		paginator.fetchNewer();
@@ -107,4 +112,17 @@ definePage(() => ({
 	icon: 'ti ti-list-search',
 }));
 </script>
+
+<style lang="scss" module>
+.systemAvatar {
+	display: grid;
+	place-items: center;
+	width: 26px;
+	height: 26px;
+	border-radius: 50%;
+	background: color-mix(in srgb, var(--MI_THEME-panel) 80%, var(--MI_THEME-fg) 20%);
+	color: var(--MI_THEME-fg);
+	font-size: 14px;
+}
+</style>
 

@@ -657,6 +657,14 @@ export interface Locale extends ILocale {
      */
     "userSuspendAutoRelease": string;
     /**
+     * 凍結理由
+     */
+    "suspensionReason": string;
+    /**
+     * 凍結解除予定日時
+     */
+    "suspendedUntil": string;
+    /**
      * リストを選択
      */
     "selectList": string;
@@ -12146,6 +12154,10 @@ export interface Locale extends ILocale {
          * エージェントキャラクターの利用停止
          */
         "setAgentCharacterModerationBan": string;
+        /**
+         * エージェント外部監査レコードを除外
+         */
+        "ignoreAgentExternalAuditReview": string;
     };
     "_fileViewer": {
         /**
