@@ -778,7 +778,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 						</MkInput>
 						<div class="_buttons">
 							<MkButton primary rounded :disabled="redeemGenerating" @click="generateRedeemCodes"><i class="ti ti-plus"></i> {{ i18n.ts._agents.redeemCodesGenerateBtn }}</MkButton>
-							<MkButton rounded :disabled="redeemLoading" @click="loadRedeemCodes()"><i class="ti ti-refresh"></i> 刷新列表</MkButton>
+							<MkButton rounded :disabled="redeemLoading" @click="loadRedeemListPage(1, true)"><i class="ti ti-refresh"></i> 刷新列表</MkButton>
 						</div>
 						<div v-if="generatedCodes.length > 0" :class="$style.generatedBox">
 							<div :class="$style.generatedHead">
@@ -805,36 +805,123 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<template #icon><i class="ti ti-list"></i></template>
 					<template #label>{{ i18n.ts._agents.redeemCodesList }}</template>
 					<div class="_gaps">
-						<FormSplit :minWidth="220">
-							<MkSelect v-model="redeemStatus" :items="redeemStatusItems">
+						<div :class="$style.filterRow">
+							<MkSelect v-model="redeemStatus" :items="redeemStatusItems" small>
 								<template #label>{{ i18n.ts._agents.redeemCodesFilterStatus }}</template>
 							</MkSelect>
-							<MkInput v-model="redeemPageSize" type="number" :min="10" :max="100">
-								<template #label>每页数量</template>
+							<MkInput v-model="redeemQuery" type="text" small :class="$style.searchInput">
+								<template #label>{{ i18n.ts._agents.redeemCodesSearch }}</template>
+								<template #prefix><i class="ti ti-search"></i></template>
 							</MkInput>
-						</FormSplit>
-						<MkLoading v-if="redeemLoading"/>
-						<div v-else-if="redeemCodes.length === 0" :class="$style.emptyModels">{{ i18n.ts._agents.redeemCodesEmpty }}</div>
-						<div v-else :class="$style.simpleTable">
-							<div :class="[$style.simpleRow, $style.simpleHeadRow]">
-								<span>{{ i18n.ts._agents.redeemCodesColCode }}</span>
-								<span>{{ i18n.ts._agents.redeemCodesAmount }}</span>
-								<span>{{ i18n.ts._agents.redeemCodesColStatus }}</span>
-								<span>{{ i18n.ts._agents.redeemCodesNote }}</span>
-								<span>{{ i18n.ts._agents.redeemCodesColUser }}</span>
-								<span>操作</span>
+							<MkButton small rounded :disabled="redeemLoading" @click="loadRedeemListPage(1, true)"><i class="ti ti-refresh"></i></MkButton>
+						</div>
+
+						<MkLoading v-if="redeemLoading && redeemCodes.length === 0"/>
+						<div v-else-if="redeemCodes.length === 0" :class="$style.emptyMsg">{{ i18n.ts._agents.redeemCodesEmpty }}</div>
+
+						<div v-if="redeemCodes.length > 0" :class="$style.redeemTable">
+							<div :class="$style.redeemHead">
+								<span :class="$style.colCreatedAt">{{ i18n.ts._agents.redeemCodesColCreatedAt }}</span>
+								<span :class="$style.colCode">{{ i18n.ts._agents.redeemCodesColCode }}</span>
+								<span :class="$style.colAmount">{{ i18n.ts._agents.redeemCodesAmount }}</span>
+								<span :class="$style.colStatus">{{ i18n.ts._agents.redeemCodesColStatus }}</span>
+								<span :class="$style.colNote">{{ i18n.ts._agents.redeemCodesNote }}</span>
+								<span :class="$style.colUser">{{ i18n.ts._agents.redeemCodesColUser }}</span>
+								<span :class="$style.colActions"></span>
 							</div>
-							<div v-for="row in redeemCodes" :key="row.id" :class="$style.simpleRow">
-								<code>{{ row.code }}</code>
-								<span>{{ row.creditAmount }}</span>
-								<span>{{ redeemStatusLabel(row.status) }}</span>
-								<span>{{ row.note || '—' }}</span>
-								<span><MkUserName v-if="row.redeemedBy" :user="row.redeemedBy"/><template v-else>—</template></span>
-								<MkButton v-if="row.status === 'available'" small rounded danger @click="revokeRedeemCode(row)"><i class="ti ti-ban"></i> {{ i18n.ts._agents.redeemCodesRevoke }}</MkButton>
+							<div v-for="row in redeemCodes" :key="row.id" :class="$style.redeemRow">
+								<span :class="$style.colCreatedAt">{{ formatBjt(row.createdAt) }}</span>
+								<code :class="$style.colCode">{{ row.code }}</code>
+								<span :class="$style.colAmount">{{ row.creditAmount }}</span>
+								<span :class="$style.colStatus" :style="{ color: redeemStatusColor(row.status) }">{{ redeemStatusLabel(row.status) }}</span>
+								<span :class="$style.colNote" :title="row.note">{{ row.note || '—' }}</span>
+								<span :class="$style.colUser">
+									<template v-if="row.redeemedBy">
+										<MkA :to="`/admin/user/${row.redeemedBy.id}`" :class="$style.userLink">
+											<MkUserName :user="row.redeemedBy"/>
+											<MkAcct :user="row.redeemedBy" :class="$style.userAcct"/>
+										</MkA>
+										<button
+											type="button"
+											class="_button"
+											:class="$style.userCopyBtn"
+											:title="i18n.ts.copy"
+											:aria-label="i18n.ts.copy"
+											@click="copyAcct(row.redeemedBy)"
+										>
+											<i class="ti ti-copy"></i>
+										</button>
+									</template>
+									<template v-else>—</template>
+								</span>
+								<span :class="$style.colActions">
+									<button v-if="row.status === 'available'" type="button" class="_button" :class="$style.revokeBtn" :disabled="redeemRevoking" @click="revokeRedeemCode(row)">
+										<i class="ti ti-ban"></i>
+										<span>{{ i18n.ts._agents.redeemCodesRevoke }}</span>
+									</button>
+								</span>
 							</div>
 						</div>
-						<div v-if="redeemHasMore" style="display: flex; justify-content: center; margin-top: 10px;">
-							<MkButton small rounded :disabled="redeemLoading" @click="loadMoreRedeemCodes"><i class="ti ti-chevron-down"></i> {{ redeemLoading ? '载入中…' : '继续载入' }}</MkButton>
+						<div v-if="redeemCodes.length > 0" :class="$style.pagerBar" role="navigation" :aria-label="i18n.ts._agents.redeemCodesList">
+							<div :class="$style.pagerSegGroup" :aria-label="i18n.ts._agents.pageSize" role="group">
+								<button
+									v-for="size in redeemPageSizeOptions"
+									:key="`redeem-${size}`"
+									type="button"
+									class="_button"
+									:class="[$style.pagerSegBtn, redeemPageSize === size ? $style.pagerSegBtnActive : null]"
+									@click="redeemPageSize = size"
+								>
+									{{ size }}
+								</button>
+							</div>
+							<div :class="$style.pagerNavGroup" role="group">
+								<button
+									type="button"
+									class="_button"
+									:class="$style.pagerNavIconBtn"
+									:disabled="redeemListPage <= 1 || redeemLoading"
+									:aria-label="i18n.ts._agents.sessionMemoryPrevPage"
+									@click="goRedeemPage(redeemListPage - 1)"
+								>
+									<i class="ti ti-chevron-left" aria-hidden="true"></i>
+								</button>
+								<span :class="$style.pagerNavText">{{ redeemListPage }}</span>
+								<button
+									type="button"
+									class="_button"
+									:class="$style.pagerNavIconBtn"
+									:disabled="!redeemHasNext || redeemLoading"
+									:aria-label="i18n.ts._agents.sessionMemoryNextPage"
+									@click="goRedeemPage(redeemListPage + 1)"
+								>
+									<i class="ti ti-chevron-right" aria-hidden="true"></i>
+								</button>
+							</div>
+							<div :class="$style.pagerGoGroup" role="group" :aria-label="i18n.ts._agents.pageJump">
+								<div :class="$style.pagerGoInputCell">
+									<input
+										type="number"
+										inputmode="numeric"
+										:min="1"
+										:value="redeemListPageInput"
+										:disabled="redeemLoading"
+										:class="$style.pagerGoNativeInput"
+										:aria-label="i18n.ts._agents.pageJump"
+										@input="syncRedeemPagerInput"
+										@keydown.enter.prevent="goRedeemInputPage"
+									/>
+								</div>
+								<button
+									type="button"
+									class="_button"
+									:class="$style.pagerGoJumpBtn"
+									:disabled="redeemLoading"
+									@click="goRedeemInputPage"
+								>
+									{{ i18n.ts._agents.pageJump }}
+								</button>
+							</div>
 						</div>
 					</div>
 				</MkFolder>
@@ -968,6 +1055,8 @@ import MkButton from '@/components/MkButton.vue';
 import MkSelect from '@/components/MkSelect.vue';
 import MkLoading from '@/components/global/MkLoading.vue';
 import MkUserName from '@/components/global/MkUserName.vue';
+import MkAcct from '@/components/global/MkAcct.vue';
+import MkA from '@/components/global/MkA.vue';
 import FormSplit from '@/components/form/split.vue';
 import XCheckinReports from './agents-checkin-reports.vue';
 import XModelReports from './agents-model-reports.vue';
@@ -2040,7 +2129,6 @@ const redeemGenerating = ref(false);
 const generatedCodes = ref<{ id: string; code: string; creditAmount: number }[]>([]);
 const redeemLoading = ref(false);
 const redeemCodes = ref<RedeemCodeRow[]>([]);
-const redeemHasMore = ref(false);
 const redeemStatus = ref<'available' | 'redeemed' | 'expired' | 'revoked' | 'all'>('available');
 
 // === 迁移 Tab ===
@@ -2124,7 +2212,15 @@ function removeVisionModel(index: number) {
 	if (removed && form.state.agentVisionDefaultModelId === removed.id) form.state.agentVisionDefaultModelId = '';
 }
 
-const redeemPageSize = ref(30);
+const redeemPageSizeOptions = [10, 20, 50] as const;
+const redeemQuery = ref('');
+const redeemListPage = ref(1);
+const redeemListPageInput = ref('1');
+const redeemPageSize = ref<number>(20);
+const redeemHasNext = ref(false);
+const redeemRevoking = ref(false);
+const redeemPageCache = ref<Record<number, RedeemCodeRow[]>>({});
+const redeemPageCursorMap = ref<Record<number, string | null>>({ 1: null });
 const redeemStatusItems: MkSelectItem[] = [
 	{ value: 'all', label: '全部' },
 	{ value: 'available', label: '可用' },
@@ -2191,7 +2287,8 @@ async function generateRedeemCodes() {
 		const result = await misskeyApi('admin/agents/redeem-codes/generate' as any, params) as { id: string; code: string; creditAmount: number }[];
 		generatedCodes.value = result;
 		os.toast(i18n.ts.done);
-		await loadRedeemCodes();
+		resetRedeemPager();
+		await loadRedeemListPage(1, true);
 	} catch (err) {
 		os.alert({ type: 'error', text: formatApiError(err) });
 	} finally {
@@ -2199,21 +2296,44 @@ async function generateRedeemCodes() {
 	}
 }
 
-async function loadRedeemCodes(append = false) {
+async function loadRedeemListPage(page: number, force = false) {
+	if (page < 1) return;
 	redeemLoading.value = true;
 	try {
-		const params: Record<string, unknown> = {
-			limit: (Number(redeemPageSize.value) || 30) + 1,
-		};
-		if (redeemStatus.value !== 'all') params.status = redeemStatus.value;
-		if (append && redeemCodes.value.length > 0) {
-			params.untilId = redeemCodes.value[redeemCodes.value.length - 1].id;
+		if (!force && redeemPageCache.value[page]) {
+			redeemCodes.value = redeemPageCache.value[page];
+			redeemListPage.value = page;
+			redeemListPageInput.value = String(page);
+			redeemHasNext.value = redeemCodes.value.length === redeemPageSize.value;
+			return;
 		}
+		if (redeemPageCursorMap.value[page] === undefined) {
+			for (let p = 1; p < page; p++) {
+				if (redeemPageCursorMap.value[p + 1] !== undefined) continue;
+				if (!redeemPageCache.value[p]) {
+					await loadRedeemListPage(p, true);
+				}
+				const prevRows = redeemPageCache.value[p] ?? [];
+				const prevLast = prevRows.at(-1);
+				redeemPageCursorMap.value[p + 1] = prevLast ? prevLast.id : null;
+			}
+		}
+		const params: Record<string, unknown> = { limit: redeemPageSize.value };
+		if (redeemStatus.value !== 'all') params.status = redeemStatus.value;
+		const keyword = redeemQuery.value.trim();
+		if (keyword) params.query = keyword;
+		const untilId = redeemPageCursorMap.value[page] ?? null;
+		if (untilId) params.untilId = untilId;
 		const rows = await misskeyApi('admin/agents/redeem-codes/list' as any, params) as RedeemCodeRow[];
-		const pageSize = Number(redeemPageSize.value) || 30;
-		redeemHasMore.value = rows.length > pageSize;
-		const pageRows = rows.slice(0, pageSize);
-		redeemCodes.value = append ? [...redeemCodes.value, ...pageRows] : pageRows;
+
+		redeemPageCache.value[page] = rows;
+		redeemCodes.value = rows;
+		redeemListPage.value = page;
+		redeemListPageInput.value = String(page);
+		redeemHasNext.value = rows.length === redeemPageSize.value;
+
+		const last = rows.at(-1);
+		redeemPageCursorMap.value[page + 1] = last ? last.id : null;
 	} catch (err) {
 		os.alert({ type: 'error', text: formatApiError(err) });
 	} finally {
@@ -2221,19 +2341,46 @@ async function loadRedeemCodes(append = false) {
 	}
 }
 
-function loadMoreRedeemCodes() {
-	void loadRedeemCodes(true);
+function syncRedeemPagerInput(ev: Event) {
+	redeemListPageInput.value = (ev.target as HTMLInputElement).value;
+}
+
+function resetRedeemPager() {
+	redeemListPage.value = 1;
+	redeemListPageInput.value = '1';
+	redeemHasNext.value = false;
+	redeemPageCache.value = {};
+	redeemPageCursorMap.value = { 1: null };
+	redeemCodes.value = [];
+}
+
+function goRedeemPage(page: number) {
+	const p = Math.max(1, Math.trunc(page));
+	void loadRedeemListPage(p);
+}
+
+function goRedeemInputPage() {
+	const p = Number(redeemListPageInput.value);
+	if (!Number.isFinite(p)) return;
+	goRedeemPage(p);
 }
 
 async function revokeRedeemCode(row: RedeemCodeRow) {
 	const { canceled } = await os.confirm({ type: 'warning', text: `${i18n.ts._agents.redeemCodesRevoke}: ${row.code}` });
 	if (canceled) return;
+	redeemRevoking.value = true;
 	try {
 		await misskeyApi('admin/agents/redeem-codes/revoke' as any, { codeId: row.id });
+		const updated = redeemCodes.value.map(r =>
+			r.id === row.id ? { ...r, status: 'revoked' as const } : r,
+		);
+		redeemCodes.value = updated;
+		redeemPageCache.value[redeemListPage.value] = updated;
 		os.toast(i18n.ts.done);
-		await loadRedeemCodes();
 	} catch (err) {
 		os.alert({ type: 'error', text: formatApiError(err) });
+	} finally {
+		redeemRevoking.value = false;
 	}
 }
 
@@ -2241,11 +2388,29 @@ function copyGeneratedCodes() {
 	copyToClipboard(generatedCodes.value.map(c => c.code).join('\n'));
 }
 
+function copyAcct(user: NonNullable<RedeemCodeRow['redeemedBy']>) {
+	copyToClipboard(`@${user.username}${user.host ? `@${user.host}` : ''}`);
+}
+
+function formatBjt(iso: string): string {
+	return new Date(iso).toLocaleString('zh-CN', {
+		timeZone: 'Asia/Shanghai',
+		hour12: false,
+	});
+}
+
 function redeemStatusLabel(status: RedeemCodeRow['status']) {
 	if (status === 'available') return i18n.ts._agents.adminRedeemAvailable;
 	if (status === 'redeemed') return i18n.ts._agents.adminRedeemRedeemed;
 	if (status === 'expired') return i18n.ts._agents.adminRedeemExpired;
 	return i18n.ts._agents.adminRedeemRevoked;
+}
+
+function redeemStatusColor(status: RedeemCodeRow['status']) {
+	if (status === 'available') return 'var(--MI_THEME-accent)';
+	if (status === 'expired') return 'var(--MI_THEME-warn)';
+	if (status === 'revoked') return 'var(--MI_THEME-error)';
+	return 'var(--MI_THEME-fgTransparentWeak)';
 }
 
 // 总览页 24h 小卡片：固定拉取近 24 小时整体统计
@@ -2655,19 +2820,35 @@ definePage(() => ({
 }));
 
 watch(redeemStatus, () => {
-	redeemHasMore.value = false;
-	if (activeTab.value === 'credits') void loadRedeemCodes();
+	if (activeTab.value === 'credits') {
+		resetRedeemPager();
+		void loadRedeemListPage(1, true);
+	}
 });
 
 watch(redeemPageSize, () => {
-	redeemHasMore.value = false;
-	if (activeTab.value === 'credits') void loadRedeemCodes();
+	if (activeTab.value === 'credits') {
+		resetRedeemPager();
+		void loadRedeemListPage(1, true);
+	}
+});
+
+let redeemSearchDebounceTimer: number | null = null;
+
+watch(redeemQuery, () => {
+	if (redeemSearchDebounceTimer) window.clearTimeout(redeemSearchDebounceTimer);
+	redeemSearchDebounceTimer = window.setTimeout(() => {
+		if (activeTab.value === 'credits') {
+			resetRedeemPager();
+			void loadRedeemListPage(1, true);
+		}
+	}, 300);
 });
 
 watch(activeTab, tab => {
 	if (tab === 'overview' && reportsData.value == null) void loadReports();
 	if (tab === 'externalAudit' && externalAuditStats.value.length === 0) void loadExternalAuditStats();
-	if (tab === 'credits' && redeemCodes.value.length === 0) void loadRedeemCodes();
+	if (tab === 'credits' && redeemCodes.value.length === 0) void loadRedeemListPage(1, true);
 	if (tab === 'migration' && migrationLogs.value.length === 0) void loadMigrationLogs();
 	if (tab === 'checkin' && roleItems.value.length === 0) void loadRolesForCheckin();
 });
@@ -2935,6 +3116,379 @@ onMounted(() => {
 	background: color-mix(in srgb, var(--MI_THEME-panel) 86%, var(--MI_THEME-bg));
 	border-color: transparent;
 	padding-block: 8px;
+}
+
+.userCell {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	min-width: 0;
+}
+
+.userLink {
+	display: inline-flex;
+	align-items: baseline;
+	gap: 4px;
+	min-width: 0;
+	overflow: hidden;
+	white-space: nowrap;
+	> span:first-child {
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+}
+
+.userAcct {
+	flex-shrink: 0;
+	font-size: 0.88em;
+	color: var(--MI_THEME-fgTransparentWeak);
+}
+
+.userCopyBtn {
+	flex-shrink: 0;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 22px;
+	height: 22px;
+	border-radius: 4px;
+	font-size: 0.85em;
+	color: var(--MI_THEME-fgTransparentWeak);
+	&:hover {
+		color: var(--MI_THEME-accent);
+		background: color-mix(in srgb, var(--MI_THEME-accent) 10%, transparent);
+	}
+}
+
+/* 卡密列表（自 agents-redeem-codes.vue 合并，与 my-stats.vue 分页条规范一致） */
+.filterRow {
+	display: flex;
+	align-items: flex-end;
+	flex-wrap: wrap;
+	gap: 10px;
+}
+.searchInput {
+	flex: 1;
+	min-width: 180px;
+}
+.emptyMsg {
+	text-align: center;
+	padding: 20px;
+	color: var(--MI_THEME-fgTransparentWeak);
+	font-size: 0.9em;
+}
+.redeemTable {
+	display: block;
+	border-radius: var(--MI-radius);
+	border: solid 1px var(--MI_THEME-divider);
+	overflow-x: auto;
+	overflow-y: hidden;
+}
+.redeemHead,
+.redeemRow {
+	display: grid;
+	grid-template-columns: 132px minmax(132px, 1fr) 54px 54px minmax(70px, 0.7fr) minmax(110px, 0.9fr) 62px;
+	gap: 6px;
+	min-width: 620px;
+	padding: 8px 12px;
+}
+.redeemHead {
+	background: var(--MI_THEME-bg);
+	font-size: 0.78em;
+	font-weight: 700;
+	color: var(--MI_THEME-fgTransparentWeak);
+}
+.redeemRow {
+	border-top: solid 1px var(--MI_THEME-divider);
+	font-size: 0.83em;
+	align-items: center;
+	&:hover {
+		background: color-mix(in srgb, var(--MI_THEME-accent) 3%, transparent);
+	}
+}
+.colCreatedAt {
+	min-width: 140px;
+	font-variant-numeric: tabular-nums;
+	color: var(--MI_THEME-fgTransparentWeak);
+	font-size: 0.86em;
+}
+.colCode {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	font-size: 0.88em;
+	letter-spacing: 0.02em;
+}
+.colAmount {
+	min-width: 54px;
+	font-variant-numeric: tabular-nums;
+	font-weight: 600;
+	text-align: right;
+}
+.colStatus {
+	min-width: 54px;
+	font-weight: 600;
+	font-size: 0.85em;
+	text-align: center;
+}
+.colNote {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	color: var(--MI_THEME-fgTransparentWeak);
+	font-size: 0.88em;
+	text-align: center;
+}
+.colUser {
+	min-width: 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 4px;
+	overflow: hidden;
+}
+.colActions {
+	min-width: 52px;
+	display: flex;
+	justify-content: flex-end;
+}
+.revokeBtn {
+	white-space: nowrap;
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 4px 8px;
+	height: 26px;
+	border-radius: 6px;
+	font-size: 0.76em;
+	font-weight: 600;
+	color: var(--MI_THEME-error);
+	background: color-mix(in srgb, var(--MI_THEME-error) 12%, transparent);
+	border: solid 1px color-mix(in srgb, var(--MI_THEME-error) 35%, var(--MI_THEME-divider));
+	&:hover {
+		background: color-mix(in srgb, var(--MI_THEME-error) 18%, transparent);
+	}
+}
+@media (max-width: 1100px) {
+	.redeemHead,
+	.redeemRow {
+		grid-template-columns: 126px minmax(120px, 1fr) 52px 52px 62px 96px 58px;
+		min-width: 580px;
+	}
+	.redeemHead {
+		font-size: 0.74em;
+	}
+	.redeemRow {
+		padding: 7px 10px;
+		font-size: 0.82em;
+	}
+}
+
+/* 分页条（与 my-stats.vue 一致：native input，三无盒与左中栏对齐） */
+.pagerBar {
+	--pgh: 28px;
+	--pagerShellPad: 2px;
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: center;
+	gap: 8px 10px;
+	padding: 10px 0 4px;
+	width: 100%;
+	box-sizing: border-box;
+}
+.pagerSegGroup,
+.pagerNavGroup,
+.pagerGoGroup {
+	display: inline-flex;
+	align-items: stretch;
+	align-self: center;
+	box-sizing: border-box;
+	max-width: 100%;
+	overflow: hidden;
+	padding: var(--pagerShellPad);
+	border: solid 1px var(--MI_THEME-divider);
+	border-radius: 6px;
+	background: var(--MI_THEME-panel);
+	gap: 0;
+	flex-wrap: nowrap;
+}
+.pagerSegBtn {
+	min-width: 2.4rem;
+	height: var(--pgh);
+	max-height: var(--pgh);
+	padding: 0 0.5rem;
+	border: none;
+	border-right: solid 1px var(--MI_THEME-divider);
+	background: transparent;
+	font-size: 0.82em;
+	font-weight: 600;
+	font-variant-numeric: tabular-nums;
+	color: var(--MI_THEME-fgTransparentWeak);
+	cursor: pointer;
+	line-height: 1;
+	box-sizing: border-box;
+	flex: none;
+}
+.pagerSegBtn:last-child {
+	border-right: none;
+}
+.pagerSegBtn:hover:not(:disabled) {
+	background: var(--MI_THEME-buttonHoverBg);
+}
+.pagerSegBtnActive {
+	color: var(--MI_THEME-accent);
+	background: color-mix(in srgb, var(--MI_THEME-accent) 12%, transparent);
+}
+.pagerNavIconBtn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 2.15rem;
+	min-width: 2.15rem;
+	max-width: 2.15rem;
+	height: var(--pgh);
+	max-height: var(--pgh);
+	padding: 0;
+	border: none;
+	border-right: solid 1px var(--MI_THEME-divider);
+	background: transparent;
+	color: var(--MI_THEME-fg);
+	font-size: 1.05rem;
+	line-height: 1;
+	cursor: pointer;
+	box-sizing: border-box;
+	flex: none;
+}
+.pagerNavIconBtn:disabled {
+	opacity: 0.4;
+	cursor: default;
+}
+.pagerNavIconBtn:hover:not(:disabled) {
+	background: var(--MI_THEME-buttonHoverBg);
+}
+.pagerNavText {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 4.5em;
+	height: var(--pgh);
+	max-height: var(--pgh);
+	padding: 0 0.55rem;
+	font-size: 0.84em;
+	font-weight: 600;
+	font-variant-numeric: tabular-nums;
+	color: var(--MI_THEME-fg);
+	border-right: solid 1px var(--MI_THEME-divider);
+	user-select: none;
+	white-space: nowrap;
+	flex: none;
+	box-sizing: border-box;
+	line-height: 1;
+}
+.pagerNavGroup .pagerNavIconBtn:last-of-type {
+	border-right: none;
+}
+.pagerGoInputCell {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	flex: none;
+	min-width: 2.85rem;
+	height: var(--pgh);
+	max-height: var(--pgh);
+	padding: 0 0.42rem;
+	border: none;
+	border-right: solid 1px var(--MI_THEME-divider);
+	background: transparent;
+	box-sizing: border-box;
+}
+.pagerGoNativeInput {
+	display: block;
+	-moz-appearance: textfield;
+	appearance: textfield;
+	width: 100%;
+	align-self: stretch;
+	min-width: 1.85rem;
+	max-width: 3.75rem;
+	height: 100%;
+	min-height: 0;
+	margin: 0;
+	padding: 0 5px;
+	box-sizing: border-box;
+	line-height: 1.2;
+	font-family: inherit;
+	font-size: 0.82em;
+	font-weight: 600;
+	font-variant-numeric: tabular-nums;
+	color: var(--MI_THEME-fg);
+	background: transparent;
+	border: none;
+	outline: none;
+	box-shadow: none;
+	text-align: center;
+}
+.pagerGoNativeInput:disabled {
+	opacity: 0.45;
+	cursor: default;
+}
+.pagerGoNativeInput::-webkit-outer-spin-button,
+.pagerGoNativeInput::-webkit-inner-spin-button {
+	-webkit-appearance: none;
+	margin: 0;
+}
+.pagerGoJumpBtn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	flex: none;
+	min-width: 3rem;
+	height: var(--pgh);
+	max-height: var(--pgh);
+	padding: 0 0.52rem;
+	margin: 0;
+	border: none;
+	border-radius: 0;
+	background: transparent;
+	font-size: 0.82em;
+	font-weight: 600;
+	font-family: inherit;
+	font-variant-numeric: tabular-nums;
+	color: var(--MI_THEME-fgTransparentWeak);
+	cursor: pointer;
+	line-height: 1;
+	box-sizing: border-box;
+}
+.pagerGoJumpBtn:hover:not(:disabled) {
+	background: var(--MI_THEME-buttonHoverBg);
+	color: var(--MI_THEME-fg);
+}
+.pagerGoJumpBtn:disabled {
+	opacity: 0.4;
+	cursor: default;
+}
+.pagerGoGroup:focus-within {
+	border-color: var(--MI_THEME-accent);
+}
+@media (max-width: 600px) {
+	.pagerBar {
+		gap: 6px 8px;
+		padding: 8px 0 4px;
+	}
+	.pagerNavText {
+		min-width: 3.6em;
+		padding: 0 0.4rem;
+		font-size: 0.8em;
+	}
+	.pagerNavIconBtn {
+		width: 2rem;
+		min-width: 2rem;
+	}
+	.pagerGoInputCell {
+		min-width: 2.5rem;
+		padding: 0 0.28rem;
+	}
 }
 
 .reportTabRow {

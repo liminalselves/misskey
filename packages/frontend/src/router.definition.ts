@@ -533,14 +533,6 @@ export const ROUTE_DEF = [{
 		name: 'agents-review',
 		component: page(() => import('@/pages/admin/agents-review.vue')),
 	}, {
-		path: '/agents-redeem-codes',
-		name: 'agents-redeem-codes',
-		component: iAmAdmin ? page(() => import('@/pages/admin/agents-redeem-codes.vue')) : page(() => import('@/pages/not-found.vue')),
-	}, {
-		path: '/agents-reports',
-		name: 'agents-reports',
-		component: page(() => import('@/pages/admin/agents-reports.vue')),
-	}, {
 		path: '/branding',
 		name: 'branding',
 		component: page(() => import('@/pages/admin/branding.vue')),

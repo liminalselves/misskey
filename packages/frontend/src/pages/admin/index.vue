@@ -208,7 +208,7 @@ const menuDef = computed<SuperMenuDef[]>(() => [{
 		icon: 'ti ti-robot',
 		text: i18n.ts._agents.adminSettings,
 		to: '/admin/agents-settings',
-		active: ['agents-settings', 'agents-redeem-codes', 'agents-reports'].includes(String(currentPage.value?.route.name)),
+		active: currentPage.value?.route.name === 'agents-settings',
 	}, {
 		icon: 'ti ti-paint',
 		text: i18n.ts.branding,
