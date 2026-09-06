@@ -123,7 +123,9 @@ watch(rootEl, () => {
 	width: 100%;
 	max-width: 42px;
 	margin: auto;
-	align-content: center;
+	display: flex;
+	align-items: center;
+	justify-content: center;
 	border-radius: 100%;
 
 	&:hover {
