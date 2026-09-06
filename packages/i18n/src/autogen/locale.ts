@@ -14858,6 +14858,74 @@ export interface Locale extends ILocale {
          */
         "auditFeedbackBackToEdit": string;
         /**
+         * AIの返信を生成できませんでした
+         */
+        "modelFailureTitle": string;
+        /**
+         * 返信を生成できませんでした
+         */
+        "modelFailureTitleDefault": string;
+        /**
+         * モデルの呼び出しに失敗しました。送信した内容は入力欄に復元されているので、そのまま再送できます。
+         */
+        "modelFailureGuideDefault": string;
+        /**
+         * モデルの呼び出しに失敗しました。編集内容は入力欄に残っているので、そのまま再試行できます。
+         */
+        "modelFailureGuideEdit": string;
+        /**
+         * エラー種別
+         */
+        "modelFailureKind": string;
+        /**
+         * リクエストタイムアウト
+         */
+        "modelFailureKindTimeout": string;
+        /**
+         * 上流リクエスト失敗
+         */
+        "modelFailureKindUpstream": string;
+        /**
+         * モデルエンドポイント利用不可
+         */
+        "modelFailureKindUnsafeUrl": string;
+        /**
+         * モデル未設定
+         */
+        "modelFailureKindNotConfigured": string;
+        /**
+         * 不明なエラー
+         */
+        "modelFailureKindUnknown": string;
+        /**
+         * 上流の理由
+         */
+        "modelFailureReason": string;
+        /**
+         * HTTPステータス
+         */
+        "modelFailureHttpStatus": string;
+        /**
+         * 技術詳細
+         */
+        "modelFailureDetail": string;
+        /**
+         * エラーコード
+         */
+        "modelFailureCode": string;
+        /**
+         * 失敗した呼び出しは課金されません。後ほど再試行してください。繰り返し失敗する場合はエラーコードを添えて管理者にお問い合わせください。
+         */
+        "modelFailureNoticeDefault": string;
+        /**
+         * タイムアウトした呼び出しは課金されません。後ほど再試行してください。頻発する場合はコンテキストの短縮を試すか、管理者にお問い合わせください。
+         */
+        "modelFailureNoticeTimeout": string;
+        /**
+         * 再送信
+         */
+        "modelFailureRetry": string;
+        /**
          * ユーザー {name} を処理
          */
         "quickActionTitle": ParameterizedString<"name">;

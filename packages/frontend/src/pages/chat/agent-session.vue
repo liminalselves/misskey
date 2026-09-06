@@ -1131,6 +1131,7 @@ import MkTextarea from '@/components/MkTextarea.vue';
 import MkSelect from '@/components/MkSelect.vue';
 import MkMediaList from '@/components/MkMediaList.vue';
 import MkAgentAuditFeedbackDialog from '@/components/MkAgentAuditFeedbackDialog.vue';
+import MkAgentModelFailureDialog from '@/components/MkAgentModelFailureDialog.vue';
 import FormSplit from '@/components/form/split.vue';
 import { formatDateTimeString } from '@/utility/format-time-string.js';
 import { misskeyApi, formatApiError } from '@/utility/misskey-api.js';
@@ -1176,6 +1177,41 @@ function agentAuditFeedbackFromError(err: unknown): Omit<AgentAuditFeedback, 'ti
 		blockCode: typeof details.blockCode === 'string' ? details.blockCode : null,
 		category: typeof details.category === 'string' ? details.category : null,
 		reason: typeof details.reason === 'string' ? details.reason : null,
+	};
+}
+
+type AgentModelFailureFeedback = {
+	title?: string;
+	guide?: string;
+	code?: string | null;
+	reason?: string | null;
+	status?: number | null;
+	detail?: string | null;
+	retryable?: boolean;
+};
+
+/** 模型调用失败反馈（与外审拦截弹窗同一设计语言）；onRetry 存在且错误可重试时展示「重试发送」 */
+function showAgentModelFailureFeedback(feedback: AgentModelFailureFeedback, onRetry?: () => void) {
+	const { dispose } = os.popup(MkAgentModelFailureDialog, {
+		retryable: onRetry != null,
+		...feedback,
+	}, {
+		retry: () => onRetry?.(),
+		closed: () => dispose(),
+	});
+}
+
+function agentModelFailureFromError(err: unknown): Omit<AgentModelFailureFeedback, 'title' | 'guide'> {
+	const o = err != null && typeof err === 'object' ? err as { code?: unknown; message?: unknown; info?: unknown } : {};
+	const info = o.info != null && typeof o.info === 'object' ? o.info as Record<string, unknown> : {};
+	const code = typeof o.code === 'string' ? o.code : null;
+	return {
+		code,
+		reason: typeof info.reason === 'string' && info.reason ? info.reason : (typeof o.message === 'string' && o.message ? o.message : null),
+		status: typeof info.status === 'number' ? info.status : null,
+		detail: typeof info.detail === 'string' && info.detail ? info.detail : null,
+		// 模型未配置 / 模型地址不可用属于配置问题，重试无意义，不展示重试按钮
+		retryable: code !== 'AGENTS_MODEL_NOT_CONFIGURED' && code !== 'AGENTS_LLM_UNSAFE_URL',
 	};
 }
 
@@ -1893,7 +1929,12 @@ async function saveEditingMessage(text: string) {
 		os.toast(i18n.ts._agents.editingMessageSaved);
 		cancelEditingMessage();
 	} catch (e) {
-		os.alert({ type: 'error', text: formatApiError(e) });
+		showAgentModelFailureFeedback({
+			...agentModelFailureFromError(e),
+			guide: i18n.ts._agents.modelFailureGuideEdit,
+		}, () => {
+			void saveEditingMessage(content);
+		});
 	} finally {
 		editSaving.value = false;
 	}
@@ -4810,7 +4851,12 @@ async function onFormSubmit(payload: { text: string; file: DriveFile | null }) {
 			} else if (e != null && typeof e === 'object' && (e as { code?: string }).code === 'AGENT_INSUFFICIENT_CREDIT') {
 				os.alert({ type: 'error', text: i18n.ts._agents.insufficientAgentCredit });
 			} else {
-				os.alert({ type: 'error', text: formatApiError(e) });
+				showAgentModelFailureFeedback(agentModelFailureFromError(e), () => {
+					// 重试走表单自身的 submit：与手动再次发送完全一致（含清空草稿、附件一并重发）
+					formRef.value?.setText(trimmed);
+					formRef.value?.setAttachment(payload.file ?? null);
+					formRef.value?.submit();
+				});
 			}
 		}
 	} finally {

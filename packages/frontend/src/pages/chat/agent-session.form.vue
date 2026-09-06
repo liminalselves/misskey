@@ -222,6 +222,7 @@ defineExpose({
 	setAttachment: (next: DriveFile | null) => { file.value = next; },
 	clearText,
 	clearAttachment: () => { file.value = null; },
+	submit,
 });
 
 watch(() => props.editing?.id ?? null, async (id) => {
