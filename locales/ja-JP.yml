@@ -4550,6 +4550,7 @@ _agents:
   redeemCodesGenerateSuccess: "コードの生成に成功しました"
   redeemCodesList: "コード一覧"
   redeemCodesFilterStatus: "ステータスで絞り込み"
+  redeemCodesSearch: "コード・メモ・ユーザー名を検索"
   redeemCodesStatusAll: "すべて"
   redeemCodesStatusAvailable: "利用可能"
   redeemCodesStatusRedeemed: "引き換え済み"

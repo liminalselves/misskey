@@ -17233,6 +17233,10 @@ export interface Locale extends ILocale {
          */
         "redeemCodesFilterStatus": string;
         /**
+         * コード・メモ・ユーザー名を検索
+         */
+        "redeemCodesSearch": string;
+        /**
          * すべて
          */
         "redeemCodesStatusAll": string;

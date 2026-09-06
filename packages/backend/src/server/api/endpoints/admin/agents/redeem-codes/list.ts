@@ -5,12 +5,13 @@
 
 import ms from 'ms';
 import { Inject, Injectable } from '@nestjs/common';
-import { In } from 'typeorm';
+import { Brackets, In } from 'typeorm';
 import type { AgentRedeemCodesRepository, UsersRepository } from '@/models/_.js';
 import { Endpoint } from '@/server/api/endpoint-base.js';
 import { DI } from '@/di-symbols.js';
 import { QueryService } from '@/core/QueryService.js';
 import { UserEntityService } from '@/core/entities/UserEntityService.js';
+import { escapeIlikePattern } from '../governance/_utils.js';
 
 export const meta = {
 	tags: ['admin'],
@@ -45,6 +46,7 @@ export const paramDef = {
 	type: 'object',
 	properties: {
 		status: { type: 'string', enum: ['available', 'redeemed', 'expired', 'revoked'], nullable: true },
+		query: { type: 'string', minLength: 1, maxLength: 512, nullable: true },
 		limit: { type: 'integer', minimum: 1, maximum: 100, default: 30 },
 		untilId: { type: 'string', format: 'misskey:id', nullable: true },
 	},
@@ -74,7 +76,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 	) {
 		super(meta, paramDef, async (ps, me) => {
 			const q = this.queryService.makePaginationQuery(
-				this.agentRedeemCodesRepository.createQueryBuilder('c'),
+				this.agentRedeemCodesRepository.createQueryBuilder('c')
+					.leftJoin('c.redeemedBy', 'ru'),
 				null,
 				ps.untilId ?? null,
 			).take(ps.limit ?? 30);
@@ -92,6 +95,16 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				q.andWhere('c.revoked = false')
 					.andWhere('c.redeemedAt IS NULL')
 					.andWhere('(c.expiresAt IS NULL OR c.expiresAt >= NOW())');
+			}
+
+			if (ps.query) {
+				const pattern = `%${escapeIlikePattern(ps.query.trim())}%`;
+				q.andWhere(new Brackets(qb => {
+					qb.where('c.code ILIKE :pattern ESCAPE \'\\\'')
+						.orWhere('c.note ILIKE :pattern ESCAPE \'\\\'')
+						.orWhere('ru.username ILIKE :pattern ESCAPE \'\\\'')
+						.orWhere('ru.name ILIKE :pattern ESCAPE \'\\\'');
+				}), { pattern });
 			}
 
 			const rows = await q.getMany();

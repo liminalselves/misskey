@@ -4456,6 +4456,7 @@ _agents:
   redeemCodesGenerateSuccess: "卡密生成成功"
   redeemCodesList: "卡密列表"
   redeemCodesFilterStatus: "状态筛选"
+  redeemCodesSearch: "搜索卡密 / 备注 / 用户名"
   redeemCodesStatusAll: "全部"
   redeemCodesStatusAvailable: "可用"
   redeemCodesStatusRedeemed: "已兑换"
