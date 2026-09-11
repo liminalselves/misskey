@@ -313,6 +313,9 @@ export const paramDef = {
 		},
 		agentImageDefaultNegativePrompt: { type: 'string', nullable: true, maxLength: 20000 },
 		agentImageMaxPerReply: { type: 'integer', minimum: 0, maximum: 12 },
+		agentStickerEnabled: { type: 'boolean' },
+		agentStickerMaxPerMessage: { type: 'integer', minimum: 0, maximum: 10 },
+		agentEmojiPromptMaxCount: { type: 'integer', minimum: 1, maximum: 2000 },
 		agentImageCostPerCall: { type: 'number', minimum: 0, maximum: 1000000 },
 		agentImageDefaultArtistPresetId: { type: 'string', nullable: true, maxLength: 128 },
 		agentImageTokenMinPoints: { type: 'integer', minimum: 0, maximum: 1000000 },
@@ -1200,6 +1203,15 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			}
 			if (ps.agentImageMaxPerReply !== undefined) {
 				set.agentImageMaxPerReply = Math.max(0, Math.min(12, ps.agentImageMaxPerReply));
+			}
+			if (ps.agentStickerEnabled !== undefined) {
+				set.agentStickerEnabled = ps.agentStickerEnabled;
+			}
+			if (ps.agentStickerMaxPerMessage !== undefined) {
+				set.agentStickerMaxPerMessage = Math.max(0, Math.min(10, ps.agentStickerMaxPerMessage));
+			}
+			if (ps.agentEmojiPromptMaxCount !== undefined) {
+				set.agentEmojiPromptMaxCount = Math.max(1, Math.min(2000, ps.agentEmojiPromptMaxCount));
 			}
 			if (ps.agentImageCostPerCall !== undefined) {
 				set.agentImageCostPerCall = Math.max(0, ps.agentImageCostPerCall);

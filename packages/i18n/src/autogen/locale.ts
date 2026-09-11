@@ -12737,6 +12737,70 @@ export interface Locale extends ILocale {
              * 絵文字の更新・削除に失敗しました。詳細は登録ログをご確認ください。
              */
             "alertEmojisRegisterFailedDescription": string;
+            /**
+             * 名前
+             */
+            "columnName": string;
+            /**
+             * カテゴリ
+             */
+            "columnCategory": string;
+            /**
+             * エイリアス
+             */
+            "columnAliases": string;
+            /**
+             * ライセンス
+             */
+            "columnLicense": string;
+            /**
+             * センシティブ
+             */
+            "columnSensitive": string;
+            /**
+             * ローカルのみ
+             */
+            "columnLocalOnly": string;
+            /**
+             * ロール
+             */
+            "columnRole": string;
+            /**
+             * エージェント用説明
+             */
+            "columnAgentDescription": string;
+            /**
+             * ファイル形式
+             */
+            "columnType": string;
+            /**
+             * 更新日時
+             */
+            "columnUpdatedAt": string;
+            /**
+             * 更新日時（から）
+             */
+            "columnUpdatedAtFrom": string;
+            /**
+             * 更新日時（まで）
+             */
+            "columnUpdatedAtTo": string;
+            /**
+             * 公開URL
+             */
+            "columnPublicUrl": string;
+            /**
+             * オリジナルURL
+             */
+            "columnOriginalUrl": string;
+            /**
+             * ホスト
+             */
+            "columnHost": string;
+            /**
+             * URI
+             */
+            "columnUri": string;
         };
         "_logs": {
             /**
@@ -13878,6 +13942,150 @@ export interface Locale extends ILocale {
     };
     "_agents": {
         /**
+         * 説明が未入力のサイト絵文字すべてについて説明を生成します。費用は画像認識モデルの単価で現在のアカウントに課金されます。続行しますか？
+         */
+        "stickerBatchConfirmRun": string;
+        /**
+         * 説明を生成する必要がある絵文字はありません。
+         */
+        "stickerBatchNone": string;
+        /**
+         * スタンプ機能は既存のカスタム絵文字ライブラリを使用します：「エージェント用説明」が入力された絵文字のみエージェントに公開されます。説明は絵文字管理画面で個別または一括でAI生成でき、費用は画像認識モデルの単価に従います。
+         */
+        "stickerAdminIntro": string;
+        /**
+         * スタンプ設定が無効です：1回の上限は0〜10、注入上限は1〜2000にしてください。
+         */
+        "stickerAdminParamsInvalid": string;
+        /**
+         * キャラ専用スタンプ：説明に基づいてエージェントが適切な場面で送信します。縦横比は自由な画像またはアニメーション画像（5MiB以下）で、説明は必須です。AI生成は画像認識モデルの単価で残高から課金されます。
+         */
+        "characterStickerTabCaption": string;
+        /**
+         * 説明を生成中…
+         */
+        "stickerGenerating": string;
+        /**
+         * スタンプ {key} のキーが無効です：英数字・アンダースコア・ハイフンのみ、1〜32文字。
+         */
+        "characterStickerKeyInvalid": ParameterizedString<"key">;
+        /**
+         * スタンプキーが重複しています：{key}
+         */
+        "characterStickerKeyDuplicate": ParameterizedString<"key">;
+        /**
+         * スタンプ {key} の説明は必須です。モデルが使用場面を判断するために必要です。
+         */
+        "characterStickerDescriptionMissing": ParameterizedString<"key">;
+        /**
+         * スタンプ {key} には画像が選択されていません。
+         */
+        "characterStickerImageMissing": ParameterizedString<"key">;
+        /**
+         * スタンプ構文：サイト絵文字は :名前: を本文に埋め込みます（入力欄の絵文字ボタンで挿入可能）。キャラスタンプはエージェントが適切なタイミングでタグを送信し、統一サイズのスタンプ画像として単独の行に表示されます（分段出力有効時は独立した吹き出しになります）。
+         */
+        "syntaxGuideStickerIntro": string;
+        /**
+         * スタンプは無効です
+         */
+        "stickerUnavailable": string;
+        /**
+         * スタンプ
+         */
+        "stickerTabTitle": string;
+        /**
+         * エージェントスタンプを有効化
+         */
+        "stickerEnabled": string;
+        /**
+         * 有効にすると、ユーザーとエージェントがサイト絵文字を送信でき、エージェントは説明に基づいてサイト絵文字とキャラスタンプを選択します
+         */
+        "stickerEnabledCaption": string;
+        /**
+         * 1回の返信のスタンプ上限
+         */
+        "stickerMaxPerMessage": string;
+        /**
+         * サイト絵文字とキャラスタンプの合計上限。超過分は自動的に削除されます（0で無効）
+         */
+        "stickerMaxPerMessageCaption": string;
+        /**
+         * 絵文字注入上限
+         */
+        "emojiPromptMaxCount": string;
+        /**
+         * システムプロンプトに注入できる「説明付きサイト絵文字」の数上限
+         */
+        "emojiPromptMaxCountCaption": string;
+        /**
+         * エージェント用説明
+         */
+        "stickerAgentDescription": string;
+        /**
+         * 説明が入力された絵文字のみエージェントに公開されます
+         */
+        "stickerAgentDescriptionCaption": string;
+        /**
+         * AIで説明を生成
+         */
+        "stickerGenerateOne": string;
+        /**
+         * 未入力の説明を一括生成
+         */
+        "stickerGenerateBatch": string;
+        /**
+         * 絵文字説明の一括生成
+         */
+        "stickerBatchConfirmTitle": string;
+        /**
+         * 説明がない{n}個の絵文字について生成します。費用は画像認識モデルの単価で現在のアカウントに課金されます。続行しますか？
+         */
+        "stickerBatchConfirm": ParameterizedString<"n">;
+        /**
+         * 生成中 {done}/{total}（失敗 {failed}）
+         */
+        "stickerBatchRunning": ParameterizedString<"done" | "total" | "failed">;
+        /**
+         * 完了：成功 {done}、失敗 {failed}
+         */
+        "stickerBatchDone": ParameterizedString<"done" | "failed">;
+        /**
+         * スタンプを追加
+         */
+        "characterStickerAdd": string;
+        /**
+         * キー
+         */
+        "characterStickerKey": string;
+        /**
+         * 英数字・アンダースコア・ハイフンのみ。キャラ内で一意
+         */
+        "characterStickerKeyCaption": string;
+        /**
+         * 説明（必須）
+         */
+        "characterStickerDescription": string;
+        /**
+         * モデルが使用場面を判断するための説明です。必須
+         */
+        "characterStickerDescriptionCaption": string;
+        /**
+         * 画像またはアニメーション画像（5MiB以下）。縦横比は自由です
+         */
+        "characterStickerImageCaption": string;
+        /**
+         * スタンプはまだありません
+         */
+        "characterStickerEmpty": string;
+        /**
+         * 画像を選択
+         */
+        "characterStickerPickFile": string;
+        /**
+         * スタンプ
+         */
+        "reviewStickers": string;
+        /**
          * エージェント
          */
         "title": string;
@@ -14218,7 +14426,7 @@ export interface Locale extends ILocale {
          */
         "modelApiKey": string;
         /**
-         * https:// は省略可。保存時に補完して検証します。
+         * https:// は省略可。末尾が completions でない場合は /chat/completions を自動追加します。バージョン部分（/v1、/v4 など）はご自身で記入してください。
          */
         "fieldModelBaseUrlCaption": string;
         /**
@@ -14281,6 +14489,10 @@ export interface Locale extends ILocale {
          * 認識リクエスト URL
          */
         "adminVisionRequestUrl": string;
+        /**
+         * OpenAI 互換のベース URL を指定します。末尾が completions でない場合は /chat/completions を自動追加します（バージョン部分（/v1、/v4 など）はご自身で記入）。
+         */
+        "adminVisionRequestUrlCaption": string;
         /**
          * 認識 API キー
          */
@@ -15479,6 +15691,10 @@ export interface Locale extends ILocale {
          * アイコンを選ぶ
          */
         "avatarPick": string;
+        /**
+         * ドライブから選択
+         */
+        "pickFromDrive": string;
         /**
          * アイコンを外す
          */
@@ -16945,6 +17161,10 @@ export interface Locale extends ILocale {
          */
         "billingKindVisionUsage": string;
         /**
+         * 絵文字説明
+         */
+        "billingKindStickerDescriptionUsage": string;
+        /**
          * ランダム自発メッセージ
          */
         "billingKindProactiveRandomUsage": string;
@@ -16984,6 +17204,10 @@ export interface Locale extends ILocale {
          * 画像認識
          */
         "usageLogKindVision": string;
+        /**
+         * 絵文字説明
+         */
+        "usageLogKindStickerDescription": string;
         /**
          * ランダム自発メッセージ
          */

@@ -344,6 +344,45 @@ SPDX-License-Identifier: AGPL-3.0-only
 						<div><MkButton rounded inline :disabled="form.state.regexRules.length >= 64" @click="addRegexRule"><i class="ti ti-plus"></i> {{ agentText('addRegexRule', '添加正则') }}</MkButton></div>
 					</div>
 
+					<!-- Tab: Sticker -->
+					<div v-if="activeTab === 'sticker'" class="_gaps">
+						<div :class="$style.sectionTitle"><i class="ti ti-sticker"></i> {{ i18n.ts._agents.stickerTabTitle }}</div>
+						<p :class="$style.captionText">{{ i18n.ts._agents.characterStickerTabCaption }}</p>
+						<div v-if="form.state.stickers.length === 0" :class="$style.card">{{ i18n.ts._agents.characterStickerEmpty }}</div>
+						<div v-for="(sticker, i) in form.state.stickers" :key="i" :class="[$style.card, $style.stickerCard]">
+							<div :class="$style.stickerCardHeader">
+								<div :class="$style.sectionSubtitle">{{ i18n.ts._agents.stickerTabTitle }} {{ i + 1 }}</div>
+								<button class="_button" :class="$style.stickerDelete" :title="i18n.ts.remove" @click="removeSticker(i)">
+									<i class="ti ti-trash"></i>
+								</button>
+							</div>
+							<div :class="$style.stickerRow">
+								<div :class="$style.stickerThumb">
+									<img v-if="sticker.preview" :src="sticker.preview" alt="">
+									<div v-else :class="$style.stickerThumbFallback"><i class="ti ti-sticker"></i></div>
+								</div>
+								<div :class="$style.stickerKeyCol">
+									<MkInput v-model="sticker.key" :max-length="32">
+										<template #label>{{ i18n.ts._agents.characterStickerKey }}</template>
+										<template #caption>{{ i18n.ts._agents.characterStickerKeyCaption }}</template>
+									</MkInput>
+								</div>
+							</div>
+							<MkTextarea v-model="sticker.description" :rows="3">
+								<template #label>
+									<div :class="$style.stickerDescLabelRow">
+										<span>{{ i18n.ts._agents.characterStickerDescription }}</span>
+										<MkButton rounded inline small :disabled="sticker.fileId == null || stickerGenerating.has(i)" @click.stop="generateStickerDescription(i)">
+											<i class="ti ti-sparkles"></i> {{ i18n.ts._agents.stickerGenerateOne }}
+										</MkButton>
+									</div>
+								</template>
+								<template #caption>{{ i18n.ts._agents.characterStickerDescriptionCaption }}</template>
+							</MkTextarea>
+						</div>
+						<div><MkButton rounded inline :disabled="form.state.stickers.length >= STICKER_MAX" @click="addSticker"><i class="ti ti-plus"></i> {{ i18n.ts._agents.characterStickerAdd }}（{{ form.state.stickers.length }}/{{ STICKER_MAX }}）</MkButton></div>
+					</div>
+
 					<!-- Tab: Versions -->
 					<div v-if="activeTab === 'versions'" class="_gaps">
 						<div :class="$style.sectionTitle"><i class="ti ti-history"></i> 版本管理</div>
@@ -431,7 +470,8 @@ import MkButton from '@/components/MkButton.vue';
 import MkLoading from '@/components/global/MkLoading.vue';
 import MkTab from '@/components/MkTab.vue';
 import MkFormFooter from '@/components/MkFormFooter.vue';
-import { misskeyApi } from '@/utility/misskey-api.js';
+import { misskeyApi, formatApiError } from '@/utility/misskey-api.js';
+import { chooseDriveFile } from '@/utility/drive.js';
 import { agentI18nText } from '@/utility/agent-i18n.js';
 import { i18n } from '@/i18n.js';
 import { definePage } from '@/page.js';
@@ -461,7 +501,7 @@ const headerActions = computed<PageHeaderItem[]>(() => [{
 	},
 }]);
 
-type TabKey = 'basic' | 'persona' | 'dialogue' | 'worldbook' | 'rules' | 'regex' | 'versions';
+type TabKey = 'basic' | 'persona' | 'dialogue' | 'worldbook' | 'rules' | 'regex' | 'sticker' | 'versions';
 const activeTab = ref<TabKey>('basic');
 
 const navTabs: Array<{ key: TabKey; icon: string; label: string }> = [
@@ -471,6 +511,7 @@ const navTabs: Array<{ key: TabKey; icon: string; label: string }> = [
 	{ key: 'worldbook', icon: 'ti ti-book', label: '世界书' },
 	{ key: 'rules', icon: 'ti ti-shield-check', label: '规则' },
 	{ key: 'regex', icon: 'ti ti-filter', label: agentText('editCharacterRegex', '正则') },
+	{ key: 'sticker', icon: 'ti ti-sticker', label: i18n.ts._agents.stickerTabTitle },
 		{ key: 'versions', icon: 'ti ti-history', label: '版本管理' },
 ];
 
@@ -549,6 +590,17 @@ type WorldbookPayload = {
 };
 
 type RegexForm = { id: string; pattern: string; targets: { user: boolean; assistant: boolean }; effects: { hide: boolean; aiInvisible: boolean } };
+
+// 角色专属表情包：key 角色内唯一，描述必填（模型据此判断使用时机），图片为本人 Drive 中的图片/动图（比例不限）
+const STICKER_MAX = 50;
+const STICKER_KEY_RE = /^[a-zA-Z0-9_-]{1,32}$/;
+type StickerForm = {
+	key: string;
+	description: string;
+	fileId: string | null;
+	preview: string | null;
+	fileType: string | null;
+};
 
 type RuleForm = {
 	id: string;
@@ -680,6 +732,7 @@ const empty = () => ({
 	worldbook: [] as WorldbookForm[],
 	regexRules: [] as RegexForm[],
 	rules: [] as RuleForm[],
+	stickers: [] as StickerForm[],
 	forbiddenBehavior: '',
 	avatarFileId: null as string | null,
 	referenceImageFileIds: [] as string[],
@@ -710,6 +763,27 @@ const form = useForm(empty(), async (state) => {
 	}
 	const regexRules = buildRegexPayload(state.regexRules);
 	const rules = buildRulesPayload(state.rules);
+	// 表情包校验：key 格式/唯一、描述必填、文件已选
+	const stickerKeys = new Set<string>();
+	for (const sticker of state.stickers) {
+		if (!STICKER_KEY_RE.test(sticker.key.trim())) {
+			await os.alert({ type: 'error', text: i18n.tsx._agents.characterStickerKeyInvalid({ key: sticker.key || '(空)' }) });
+			return;
+		}
+		if (stickerKeys.has(sticker.key.trim())) {
+			await os.alert({ type: 'error', text: i18n.tsx._agents.characterStickerKeyDuplicate({ key: sticker.key.trim() }) });
+			return;
+		}
+		stickerKeys.add(sticker.key.trim());
+		if (sticker.description.trim() === '') {
+			await os.alert({ type: 'error', text: i18n.tsx._agents.characterStickerDescriptionMissing({ key: sticker.key.trim() }) });
+			return;
+		}
+		if (sticker.fileId == null) {
+			await os.alert({ type: 'error', text: i18n.tsx._agents.characterStickerImageMissing({ key: sticker.key.trim() }) });
+			return;
+		}
+	}
 	await misskeyApi('agents/characters/update', {
 		characterId: props.characterId,
 		name: state.name,
@@ -725,6 +799,11 @@ const form = useForm(empty(), async (state) => {
 		forbiddenBehavior: state.forbiddenBehavior,
 		avatarFileId: state.avatarFileId,
 		referenceImageFileIds: state.referenceImageFileIds,
+		stickers: state.stickers.map(sticker => ({
+			key: sticker.key.trim(),
+			fileId: sticker.fileId as string,
+			description: sticker.description.trim().slice(0, 200),
+		})),
 		promptOpenSourced: state.promptOpenSourced,
 	});
 	await Promise.all([loadVersions(), loadCharacterDiff()]);
@@ -775,6 +854,99 @@ function addRegexRule() {
 function removeRegexRule(index: number) {
 	form.state.regexRules.splice(index, 1);
 }
+
+//#region 角色表情包
+
+const stickerGenerating = ref<Set<number>>(new Set());
+
+function suggestStickerKey(): string {
+	const taken = new Set(form.state.stickers.map(s => s.key.trim()));
+	let i = 1;
+	while (taken.has(`sticker${i}`)) i++;
+	return `sticker${i}`;
+}
+
+function addSticker(ev: MouseEvent) {
+	if (form.state.stickers.length >= STICKER_MAX) return;
+	os.popupMenu([{
+		icon: 'ti ti-upload',
+		text: i18n.ts.upload,
+		action: () => { void addStickerFromPc(); },
+	}, {
+		icon: 'ti ti-cloud-download',
+		text: i18n.ts._agents.pickFromDrive,
+		action: () => { void addStickerFromDrive(); },
+	}], ev.currentTarget ?? ev.target);
+}
+
+const STICKER_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/apng'];
+const STICKER_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
+
+function pushSticker(fileId: string, preview: string | null, fileType: string | null) {
+	form.state.stickers.push({
+		key: suggestStickerKey(),
+		description: '',
+		fileId,
+		preview,
+		fileType,
+	});
+}
+
+async function addStickerFromPc() {
+	const files = await os.chooseFileFromPc({ multiple: false });
+	if (files.length === 0) return;
+	const picked = files[0];
+	if (!STICKER_IMAGE_TYPES.includes(picked.type)) {
+		await os.alert({ type: 'error', text: i18n.ts._agents.characterStickerImageCaption });
+		return;
+	}
+	if (picked.size > STICKER_IMAGE_MAX_BYTES) {
+		await os.alert({ type: 'error', text: i18n.ts._agents.characterStickerImageCaption });
+		return;
+	}
+	try {
+		const [df] = await os.launchUploader(files, { multiple: false });
+		pushSticker(df.id, df.thumbnailUrl ?? df.url ?? null, df.type ?? picked.type);
+	} catch {
+		// 用户取消上传
+	}
+}
+
+async function addStickerFromDrive() {
+	const files = await chooseDriveFile({ multiple: false });
+	const df = files[0];
+	if (df == null) return;
+	if (df.type == null || !STICKER_IMAGE_TYPES.includes(df.type) || df.size > STICKER_IMAGE_MAX_BYTES) {
+		await os.alert({ type: 'error', text: i18n.ts._agents.characterStickerImageCaption });
+		return;
+	}
+	pushSticker(df.id, df.thumbnailUrl ?? df.url ?? null, df.type);
+}
+
+function removeSticker(index: number) {
+	form.state.stickers.splice(index, 1);
+}
+
+async function generateStickerDescription(index: number) {
+	const sticker = form.state.stickers[index];
+	if (!sticker || sticker.fileId == null || stickerGenerating.value.has(index)) return;
+	stickerGenerating.value.add(index);
+	try {
+		const res = await os.promiseDialog(
+			misskeyApi('agents/characters/generate-sticker-description', { fileId: sticker.fileId }),
+			null,
+			(e) => { os.alert({ type: 'error', text: formatApiError(e) }); },
+			i18n.ts._agents.stickerGenerating,
+		);
+		if (typeof res?.description === 'string') sticker.description = res.description;
+	} catch {
+		// 错误已在 promiseDialog 回调中提示；此处仅结束生成状态
+	} finally {
+		stickerGenerating.value.delete(index);
+	}
+}
+
+//#endregion
 
 async function refreshAvatarPreview(fileId: string | null) {
 	if (!fileId) {
@@ -848,6 +1020,13 @@ async function load() {
 			})),
 			forbiddenBehavior: row.forbiddenBehavior ?? '',
 			avatarFileId: row.avatarFileId,
+			stickers: (row.stickers ?? []).map((sticker: any) => ({
+				key: sticker.key ?? '',
+				description: sticker.description ?? '',
+				fileId: sticker.file?.id ?? null,
+				preview: sticker.file?.thumbnailUrl ?? sticker.file?.url ?? null,
+				fileType: sticker.file?.type ?? null,
+			})),
 			referenceImageFileIds: Array.isArray(row.referenceImageFileIds)
 				? row.referenceImageFileIds.filter((id: unknown): id is string => typeof id === 'string').slice(0, 4)
 				: row.referenceImageFileId ? [row.referenceImageFileId] : [],
@@ -897,7 +1076,19 @@ definePage(computed(() => ({
 	icon: 'ti ti-user',
 })));
 
-async function pickAvatar() {
+function pickAvatar(ev: MouseEvent) {
+	os.popupMenu([{
+		icon: 'ti ti-upload',
+		text: i18n.ts.upload,
+		action: () => { void pickAvatarFromPc(); },
+	}, {
+		icon: 'ti ti-cloud-download',
+		text: i18n.ts._agents.pickFromDrive,
+		action: () => { void pickAvatarFromDrive(); },
+	}], ev.currentTarget ?? ev.target);
+}
+
+async function pickAvatarFromPc() {
 	const files = await os.chooseFileFromPc({ multiple: false });
 	if (files.length === 0) return;
 	try {
@@ -908,11 +1099,36 @@ async function pickAvatar() {
 	}
 }
 
+async function pickAvatarFromDrive() {
+	const files = await chooseDriveFile({ multiple: false });
+	const df = files[0];
+	if (df == null) return;
+	if (df.type == null || !df.type.startsWith('image/')) {
+		await os.alert({ type: 'error', text: i18n.ts._agents.characterReferenceImageInvalid });
+		return;
+	}
+	form.state.avatarFileId = df.id;
+}
+
 function clearAvatar() {
 	form.state.avatarFileId = null;
 }
 
-async function pickReferenceImages() {
+function pickReferenceImages(ev: MouseEvent) {
+	const remaining = 4 - form.state.referenceImageFileIds.length;
+	if (remaining <= 0) return;
+	os.popupMenu([{
+		icon: 'ti ti-upload',
+		text: i18n.ts.upload,
+		action: () => { void pickReferenceImagesFromPc(); },
+	}, {
+		icon: 'ti ti-cloud-download',
+		text: i18n.ts._agents.pickFromDrive,
+		action: () => { void pickReferenceImagesFromDrive(); },
+	}], ev.currentTarget ?? ev.target);
+}
+
+async function pickReferenceImagesFromPc() {
 	const remaining = 4 - form.state.referenceImageFileIds.length;
 	if (remaining <= 0) return;
 	const files = await os.chooseFileFromPc({ multiple: true });
@@ -928,6 +1144,19 @@ async function pickReferenceImages() {
 	} catch {
 		// user cancelled uploader
 	}
+}
+
+async function pickReferenceImagesFromDrive() {
+	const remaining = 4 - form.state.referenceImageFileIds.length;
+	if (remaining <= 0) return;
+	const files = await chooseDriveFile({ multiple: true });
+	if (files.length === 0) return;
+	const selected = files.slice(0, remaining);
+	if (selected.some(file => file.type == null || !file.type.startsWith('image/') || file.size > 5 * 1024 * 1024)) {
+		os.alert({ type: 'error', text: i18n.ts._agents.characterReferenceImageInvalid });
+		return;
+	}
+	form.state.referenceImageFileIds = [...new Set([...form.state.referenceImageFileIds, ...selected.map(file => file.id)])].slice(0, 4);
 }
 
 function removeReferenceImage(fileId: string) {
@@ -1325,6 +1554,82 @@ function computeDiffLines(key: string, publishedText: string, draftText: string)
 	gap: 12px;
 	align-items: flex-end;
 }
+
+/* 角色表情包卡片：标题行 + 缩略图/key 行 + 描述区 */
+.stickerCard {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+}
+
+.stickerCardHeader {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+}
+
+.stickerDelete {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 32px;
+	height: 32px;
+	border-radius: 8px;
+	font-size: 1rem;
+	color: var(--MI_THEME-error);
+	opacity: 0.75;
+	transition: opacity 0.15s, background 0.15s;
+
+	&:hover {
+		opacity: 1;
+		background: color-mix(in srgb, var(--MI_THEME-error) 12%, transparent);
+	}
+}
+
+.stickerRow {
+	display: flex;
+	gap: 14px;
+	align-items: flex-start;
+	flex-wrap: wrap;
+}
+
+.stickerThumb {
+	width: 96px;
+	height: 96px;
+	flex-shrink: 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	border-radius: 12px;
+	overflow: hidden;
+	background: color-mix(in srgb, var(--MI_THEME-panel) 85%, var(--MI_THEME-bg));
+	border: solid 1px var(--MI_THEME-divider);
+
+	> img {
+		width: 100%;
+		height: 100%;
+		object-fit: contain;
+	}
+}
+
+.stickerThumbFallback {
+	opacity: 0.5;
+	font-size: 28px;
+}
+
+.stickerKeyCol {
+	flex: 1;
+	min-width: min(240px, 100%);
+}
+
+.stickerDescLabelRow {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+}
+
 .cardHeaderInput {
 	flex: 1;
 	min-width: 0;

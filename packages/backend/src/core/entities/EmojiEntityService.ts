@@ -64,6 +64,7 @@ export class EmojiEntityService {
 			isSensitive: emoji.isSensitive,
 			localOnly: emoji.localOnly,
 			roleIdsThatCanBeUsedThisEmojiAsReaction: emoji.roleIdsThatCanBeUsedThisEmojiAsReaction,
+			agentDescription: emoji.agentDescription,
 		};
 	}
 
@@ -122,6 +123,7 @@ export class EmojiEntityService {
 			localOnly: emoji.localOnly,
 			isSensitive: emoji.isSensitive,
 			roleIdsThatCanBeUsedThisEmojiAsReaction: roles.map(it => ({ id: it.id, name: it.name })),
+			agentDescription: emoji.agentDescription,
 		};
 	}
 

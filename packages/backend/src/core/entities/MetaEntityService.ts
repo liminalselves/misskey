@@ -182,6 +182,8 @@ export class MetaEntityService {
 			agentImageConfigured: instance.agentImageGenerationEnabled === true && Array.isArray(instance.agentImageTokens) && instance.agentImageTokens.some(t => t.enabled !== false && typeof t.token === 'string' && t.token.trim().length > 0),
 			agentImageDefaultModel: instance.agentImageDefaultModel,
 			agentImageMaxPerReply: instance.agentImageMaxPerReply,
+			agentStickerEnabled: instance.agentStickerEnabled === true,
+			agentStickerMaxPerMessage: instance.agentStickerMaxPerMessage,
 			agentImageCostPerCall: instance.agentImageCostPerCall,
 			agentLongMemoryConfigured: instance.agentMem0Enabled === true && (instance.agentMem0ApiKey?.trim().length ?? 0) > 0,
 			agentMem0AddMemoryMaxRounds: (() => {

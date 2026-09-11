@@ -83,6 +83,7 @@ import { AgentProactiveMessageService } from './AgentProactiveMessageService.js'
 import { AgentMessageNotifyService } from './AgentMessageNotifyService.js';
 import { AgentImageService } from './AgentImageService.js';
 import { AgentVisionService } from './AgentVisionService.js';
+import { AgentStickerService } from './AgentStickerService.js';
 import { AgentExternalAuditService } from './AgentExternalAuditService.js';
 import { AgentCompressionMemoryService } from './AgentCompressionMemoryService.js';
 import { AgentTokenService } from './AgentTokenService.js';
@@ -246,6 +247,7 @@ const $ChannelMutingService: Provider = { provide: 'ChannelMutingService', useEx
 const $AgentService: Provider = { provide: 'AgentService', useExisting: AgentService };
 const $AgentImageService: Provider = { provide: 'AgentImageService', useExisting: AgentImageService };
 const $AgentVisionService: Provider = { provide: 'AgentVisionService', useExisting: AgentVisionService };
+const $AgentStickerService: Provider = { provide: 'AgentStickerService', useExisting: AgentStickerService };
 const $AgentExternalAuditService: Provider = { provide: 'AgentExternalAuditService', useExisting: AgentExternalAuditService };
 const $AgentPlazaReviewService: Provider = { provide: 'AgentPlazaReviewService', useExisting: AgentPlazaReviewService };
 const $AgentModelUsageService: Provider = { provide: 'AgentModelUsageService', useExisting: AgentModelUsageService };
@@ -414,6 +416,7 @@ const $ApQuestionService: Provider = { provide: 'ApQuestionService', useExisting
 		AgentMessageNotifyService,
 		AgentImageService,
 		AgentVisionService,
+		AgentStickerService,
 		AgentExternalAuditService,
 		AgentCompressionMemoryService,
 		AgentTokenService,
@@ -577,6 +580,7 @@ const $ApQuestionService: Provider = { provide: 'ApQuestionService', useExisting
 		$AgentService,
 		$AgentImageService,
 		$AgentVisionService,
+		$AgentStickerService,
 		$AgentExternalAuditService,
 		$AgentPlazaReviewService,
 		$AgentModelUsageService,
@@ -742,6 +746,7 @@ const $ApQuestionService: Provider = { provide: 'ApQuestionService', useExisting
 		AgentMessageNotifyService,
 		AgentImageService,
 		AgentVisionService,
+		AgentStickerService,
 		AgentExternalAuditService,
 		AgentCompressionMemoryService,
 		AgentTokenService,

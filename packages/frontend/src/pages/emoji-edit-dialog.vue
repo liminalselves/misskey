@@ -49,6 +49,15 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<MkInput v-model="license" :mfmAutocomplete="true">
 					<template #label>{{ i18n.ts.license }}</template>
 				</MkInput>
+				<MkTextarea v-model="agentDescription">
+					<template #label>{{ i18n.ts._agents.stickerAgentDescription }}</template>
+					<template #caption>{{ i18n.ts._agents.stickerAgentDescriptionCaption }}</template>
+				</MkTextarea>
+				<div v-if="emoji" style="text-align: center;">
+					<MkButton rounded inline :disabled="agentDescriptionGenerating" @click="generateAgentDescription">
+						<i class="ti ti-sparkles"></i> {{ i18n.ts._agents.stickerGenerateOne }}
+					</MkButton>
+				</div>
 				<MkFolder>
 					<template #label>{{ i18n.ts.rolesThatCanBeUsedThisEmojiAsReaction }}</template>
 					<template #suffix>{{ rolesThatCanBeUsedThisEmojiAsReaction.length === 0 ? i18n.ts.all : rolesThatCanBeUsedThisEmojiAsReaction.length }}</template>
@@ -84,10 +93,11 @@ import * as Misskey from 'misskey-js';
 import MkWindow from '@/components/MkWindow.vue';
 import MkButton from '@/components/MkButton.vue';
 import MkInput from '@/components/MkInput.vue';
+import MkTextarea from '@/components/MkTextarea.vue';
 import MkInfo from '@/components/MkInfo.vue';
 import MkFolder from '@/components/MkFolder.vue';
 import * as os from '@/os.js';
-import { misskeyApi } from '@/utility/misskey-api.js';
+import { misskeyApi, formatApiError } from '@/utility/misskey-api.js';
 import { i18n } from '@/i18n.js';
 import { customEmojiCategories } from '@/custom-emojis.js';
 import MkSwitch from '@/components/MkSwitch.vue';
@@ -113,6 +123,9 @@ const localOnly = ref(props.emoji ? props.emoji.localOnly : false);
 const roleIdsThatCanBeUsedThisEmojiAsReaction = ref(props.emoji ? props.emoji.roleIdsThatCanBeUsedThisEmojiAsReaction : []);
 const rolesThatCanBeUsedThisEmojiAsReaction = ref<Misskey.entities.Role[]>([]);
 const file = ref<Misskey.entities.DriveFile>();
+// 智能体表情包描述：填写的表情才进入智能体可用列表；AI 生成按识图模型单价扣当前账号
+const agentDescription = ref<string>(props.emoji?.agentDescription ?? '');
+const agentDescriptionGenerating = ref(false);
 
 watch(roleIdsThatCanBeUsedThisEmojiAsReaction, async () => {
 	rolesThatCanBeUsedThisEmojiAsReaction.value = (await Promise.all(roleIdsThatCanBeUsedThisEmojiAsReaction.value.map((id) => misskeyApi('admin/roles/show', { roleId: id }).catch(() => null)))).filter(x => x != null);
@@ -147,6 +160,19 @@ async function removeRole(role: Misskey.entities.RoleLite) {
 	rolesThatCanBeUsedThisEmojiAsReaction.value = rolesThatCanBeUsedThisEmojiAsReaction.value.filter(x => x.id !== role.id);
 }
 
+async function generateAgentDescription() {
+	if (!props.emoji || agentDescriptionGenerating.value) return;
+	agentDescriptionGenerating.value = true;
+	try {
+		const res = await misskeyApi('admin/emoji/generate-agent-description', { emojiId: props.emoji.id });
+		if (typeof res.description === 'string') agentDescription.value = res.description;
+	} catch (err) {
+		os.alert({ type: 'error', text: formatApiError(err) });
+	} finally {
+		agentDescriptionGenerating.value = false;
+	}
+}
+
 async function done() {
 	const params = {
 		name: name.value,
@@ -157,6 +183,7 @@ async function done() {
 		localOnly: localOnly.value,
 		roleIdsThatCanBeUsedThisEmojiAsReaction: rolesThatCanBeUsedThisEmojiAsReaction.value.map(x => x.id),
 		fileId: file.value ? file.value.id : undefined,
+		agentDescription: agentDescription.value.trim() === '' ? null : agentDescription.value.trim().slice(0, 200),
 	} satisfies Misskey.entities.AdminEmojiUpdateRequest;
 
 	if (props.emoji) {

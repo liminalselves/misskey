@@ -43,7 +43,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<footer :class="$style.footer">
 			<div :class="$style.buttons">
 				<button v-if="!editing" class="_button" :class="$style.button" type="button" :disabled="disabled || sending || !attachmentEnabled" :title="i18n.ts.selectFile" @click="chooseFile"><i class="ti ti-photo-plus"></i></button>
-				<button class="_button" :class="$style.button" type="button" @click="insertEmoji"><i class="ti ti-mood-happy"></i></button>
+				<!-- 智能体表情包关闭时隐藏表情入口：发出的 :name: 也只会按字面文本显示 -->
+				<button v-if="!editing && instance.agentStickerEnabled" class="_button" :class="$style.button" type="button" @click="insertEmoji"><i class="ti ti-mood-happy"></i></button>
 				<button
 					v-if="sending"
 					class="_button"
@@ -81,6 +82,7 @@ import { emojiPicker } from '@/utility/emoji-picker.js';
 import type { DriveFile } from 'misskey-js/entities.js';
 import { selectFile } from '@/utility/drive.js';
 import * as os from '@/os.js';
+import { instance } from '@/instance.js';
 import { miLocalStorage } from '@/local-storage.js';
 
 const props = defineProps<{

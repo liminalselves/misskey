@@ -354,7 +354,7 @@ import * as os from '@/os.js';
 import { lang, version } from '@@/js/config.js';
 import type { Locale } from 'i18n';
 
-type UsageKind = 'chat' | 'compression' | 'image_generation' | 'vision' | 'proactive_random' | 'proactive_scheduled' | 'checkin' | 'admin_reward' | 'credit_migration';
+type UsageKind = 'chat' | 'compression' | 'image_generation' | 'vision' | 'sticker_description' | 'proactive_random' | 'proactive_scheduled' | 'checkin' | 'admin_reward' | 'credit_migration';
 
 type RecentLog = {
 	id: string;
@@ -615,12 +615,14 @@ type AgentUsageLocaleKey =
 	| 'billingKindCompressionUsage'
 	| 'billingKindImageGenerationUsage'
 	| 'billingKindVisionUsage'
+	| 'billingKindStickerDescriptionUsage'
 	| 'billingKindProactiveRandomUsage'
 	| 'billingKindProactiveScheduledUsage'
 	| 'usageLogKindChat'
 	| 'usageLogKindCompression'
 	| 'usageLogKindImageGeneration'
 	| 'usageLogKindVision'
+	| 'usageLogKindStickerDescription'
 	| 'usageLogKindProactiveRandom'
 	| 'usageLogKindProactiveScheduled';
 
@@ -628,10 +630,12 @@ const agentUsageLocaleLabels = shallowRef<Partial<Record<AgentUsageLocaleKey, un
 const agentUsageLocaleKeys: AgentUsageLocaleKey[] = [
 	'billingKindImageGenerationUsage',
 	'billingKindVisionUsage',
+	'billingKindStickerDescriptionUsage',
 	'billingKindProactiveRandomUsage',
 	'billingKindProactiveScheduledUsage',
 	'usageLogKindImageGeneration',
 	'usageLogKindVision',
+	'usageLogKindStickerDescription',
 	'usageLogKindProactiveRandom',
 	'usageLogKindProactiveScheduled',
 ];
@@ -668,6 +672,7 @@ function agentUsageLocaleLabel(key: AgentUsageLocaleKey, fallbackKey: AgentUsage
 function usageLogKindLabel(usageKind: UsageKind | undefined): string {
 	if (usageKind === 'image_generation') return agentUsageLocaleLabel('usageLogKindImageGeneration', 'usageLogKindChat');
 	if (usageKind === 'vision') return agentUsageLocaleLabel('usageLogKindVision', 'usageLogKindChat');
+	if (usageKind === 'sticker_description') return agentUsageLocaleLabel('usageLogKindStickerDescription', 'usageLogKindVision');
 	if (usageKind === 'compression') return agentUsageLocaleLabel('usageLogKindCompression', 'usageLogKindChat');
 	if (usageKind === 'proactive_random') return agentUsageLocaleLabel('usageLogKindProactiveRandom', 'usageLogKindChat');
 	if (usageKind === 'proactive_scheduled') return agentUsageLocaleLabel('usageLogKindProactiveScheduled', 'usageLogKindChat');
@@ -685,6 +690,7 @@ function billingUsageSubkindLabel(item: BillingItem): string {
 	if (item.kind !== 'usage') return agentUsageLocaleLabel('billingKindUsage', 'usageLogKindChat');
 	if (item.usageKind === 'image_generation') return agentUsageLocaleLabel('billingKindImageGenerationUsage', 'billingKindUsage');
 	if (item.usageKind === 'vision') return agentUsageLocaleLabel('billingKindVisionUsage', 'billingKindUsage');
+	if (item.usageKind === 'sticker_description') return agentUsageLocaleLabel('billingKindStickerDescriptionUsage', 'billingKindVisionUsage');
 	if (item.usageKind === 'compression') return agentUsageLocaleLabel('billingKindCompressionUsage', 'billingKindUsage');
 	if (item.usageKind === 'proactive_random') return agentUsageLocaleLabel('billingKindProactiveRandomUsage', 'billingKindUsage');
 	if (item.usageKind === 'proactive_scheduled') return agentUsageLocaleLabel('billingKindProactiveScheduledUsage', 'billingKindUsage');

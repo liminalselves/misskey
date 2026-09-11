@@ -8,11 +8,12 @@ import { DI } from '@/di-symbols.js';
 import { bindThis } from '@/decorators.js';
 import type { MiMeta } from '@/models/Meta.js';
 import type { AgentCharactersRepository, AgentMessagesRepository, AgentUserStyleSubscriptionsRepository } from '@/models/_.js';
-import { MiAgentCharacter } from '@/models/AgentCharacter.js';
+import { MiAgentCharacter, type MiAgentCharacterSticker } from '@/models/AgentCharacter.js';
+import { normalizeCharacterStickerList } from '@/core/agent-sticker-utils.js';
 import { MiAgentDialogueStyle } from '@/models/AgentDialogueStyle.js';
 import { MiAgentMessage } from '@/models/AgentMessage.js';
 import { MiAgentSession, type AgentSessionKind } from '@/models/AgentSession.js';
-import { assertSafeLlmHttpsUrl, describeUnsafeLlmUrlReason, UnsafeLlmUrlError } from '@/misc/validate-llm-endpoint-url.js';
+import { assertSafeLlmHttpsUrl, describeUnsafeLlmUrlReason, normalizeChatCompletionsUrl, UnsafeLlmUrlError } from '@/misc/validate-llm-endpoint-url.js';
 import { readBodyWithLimit, UpstreamBodyTooLargeError } from '@/misc/read-body-with-limit.js';
 import { sanitizeLlmErrorDetail, extractSafeUpstreamErrorDetail } from '@/misc/llm-error-detail.js';
 import { getActiveLlmModels, getEffectiveLlmModels, isAgentLlmRunnable, type AgentLlmModelJson } from '@/misc/agent-llm-models.js';
@@ -143,6 +144,7 @@ export type AgentCharacterPublishedSnapshot = {
 	worldbook: AgentWorldbookEntry[];
 	regexRules: AgentRegexRule[];
 	rules: AgentCharacterRule[];
+	stickers: MiAgentCharacterSticker[];
 	draftRevision: number;
 };
 
@@ -1102,9 +1104,7 @@ export class AgentService {
 
 	@bindThis
 	public normalizeChatCompletionsUrl(baseRaw: string): string {
-		const base = baseRaw.trim().replace(/\/$/, '');
-		const withV1 = base.endsWith('/v1') ? base : `${base}/v1`;
-		return `${withV1}/chat/completions`;
+		return normalizeChatCompletionsUrl(baseRaw);
 	}
 
 	@bindThis
@@ -1167,7 +1167,7 @@ export class AgentService {
 				max_tokens: body.max_tokens,
 			};
 			// Server terminal output, not browser DevTools.
-			console.log('[MISSKEY_AGENTS_DEBUG_LLM] POST /v1/chat/completions payload:\n' + JSON.stringify(openAiStylePayload, null, 2));
+			console.log('[MISSKEY_AGENTS_DEBUG_LLM] POST chat/completions payload:\n' + JSON.stringify(openAiStylePayload, null, 2));
 		}
 
 		const ac = new AbortController();
@@ -1341,6 +1341,7 @@ export class AgentService {
 			worldbook: this.normalizeWorldbookEntries(row.worldbook),
 			regexRules: this.normalizeRegexRules(row.regexRules),
 			rules: this.normalizeRules(row.rules),
+			stickers: normalizeCharacterStickerList(row.stickers),
 			draftRevision: row.draftRevision ?? 1,
 		};
 	}
@@ -1372,6 +1373,7 @@ export class AgentService {
 		row.worldbook = snap.worldbook ?? [];
 		row.regexRules = snap.regexRules ?? [];
 		row.rules = snap.rules ?? [];
+		row.stickers = snap.stickers ?? [];
 		row.draftRevision = snap.draftRevision ?? (row.draftRevision ?? 1);
 		row.reviewStatus = row.publishedVersion == null ? 'draft' : 'published';
 		return true;
@@ -1420,7 +1422,14 @@ export class AgentService {
 			&& cur.avatarFileId === pub.avatarFileId
 			&& this.worldbookStableString(cur.worldbook) === this.worldbookStableString(pub.worldbook)
 			&& this.regexRulesStableString(cur.regexRules) === this.regexRulesStableString(pub.regexRules)
-			&& this.rulesStableString(cur.rules) === this.rulesStableString(pub.rules);
+			&& this.rulesStableString(cur.rules) === this.rulesStableString(pub.rules)
+			&& this.stickersStableString(cur.stickers) === this.stickersStableString(pub.stickers);
+	}
+
+	/** 稳定序列化表情库（key/fileId/description 按序比较），供发布一致性判断 */
+	@bindThis
+	private stickersStableString(stickers: MiAgentCharacterSticker[]): string {
+		return JSON.stringify((stickers ?? []).map(s => [s.key, s.fileId, s.description]));
 	}
 
 	@bindThis
@@ -1470,6 +1479,7 @@ export class AgentService {
 			worldbook,
 			regexRules,
 			rules,
+			stickers: normalizeCharacterStickerList(o.stickers),
 			draftRevision: typeof o.draftRevision === 'number' ? o.draftRevision : 1,
 		};
 	}
@@ -1520,6 +1530,7 @@ export class AgentService {
 			worldbook: snap.worldbook,
 			regexRules: snap.regexRules,
 			rules: snap.rules,
+			stickers: snap.stickers,
 			draftRevision: snap.draftRevision,
 		});
 	}

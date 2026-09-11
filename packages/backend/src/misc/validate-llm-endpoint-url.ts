@@ -118,6 +118,18 @@ export function hrefForStoredLlmBaseUrl(u: URL): string {
 }
 
 /**
+ * 把配置的 LLM Base URL 变成完整的 chat/completions 端点：
+ * - 已以 completions 结尾（含 completion 单数等拼写变体）→ 视为完整端点，原样使用；
+ * - 否则在末尾直接追加 `/chat/completions`。不猜测 `/v1` 等版本段——
+ *   上游可能是 /v4 或任意前缀，版本段由配置方自己写全。
+ */
+export function normalizeChatCompletionsUrl(baseRaw: string): string {
+	const base = baseRaw.trim().replace(/\/+$/, '');
+	if (/completions?$/i.test(base)) return base;
+	return `${base}/chat/completions`;
+}
+
+/**
  * 校验 OpenAI 兼容 API Base URL，降低 SSRF 风险（强制 https，禁止常见内网与元数据地址）。
  * @throws UnsafeLlmUrlError 校验失败时
  */

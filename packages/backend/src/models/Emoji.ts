@@ -83,4 +83,10 @@ export class MiEmoji {
 		array: true, length: 128, default: '{}',
 	})
 	public roleIdsThatCanBeUsedThisEmojiAsReaction: string[];
+
+	/** 智能体表情包描述（供 LLM 理解表情内容；空 = 不进入智能体可用表情列表） */
+	@Column('varchar', {
+		length: 200, nullable: true,
+	})
+	public agentDescription: string | null;
 }

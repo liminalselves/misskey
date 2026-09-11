@@ -74,6 +74,7 @@ export const paramDef = {
 				roleIdsThatCanBeUsedThisEmojiAsReaction: { type: 'array', items: {
 					type: 'string',
 				} },
+				agentDescription: { type: 'string', nullable: true, maxLength: 200 },
 			},
 		},
 	],
@@ -109,6 +110,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				isSensitive: ps.isSensitive,
 				localOnly: ps.localOnly,
 				roleIdsThatCanBeUsedThisEmojiAsReaction: ps.roleIdsThatCanBeUsedThisEmojiAsReaction,
+				agentDescription: ps.agentDescription !== undefined ? (ps.agentDescription?.trim() ? ps.agentDescription.trim().slice(0, 200) : null) : undefined,
 			}, me);
 
 			switch (error) {

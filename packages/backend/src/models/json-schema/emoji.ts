@@ -102,6 +102,10 @@ export const packedEmojiDetailedSchema = {
 				format: 'id',
 			},
 		},
+		agentDescription: {
+			type: 'string',
+			optional: true, nullable: true,
+		},
 	},
 } as const;
 
@@ -184,6 +188,10 @@ export const packedEmojiDetailedAdminSchema = {
 					},
 				},
 			},
+		},
+		agentDescription: {
+			type: 'string',
+			optional: true, nullable: true,
 		},
 	},
 } as const;

@@ -68,6 +68,7 @@ export const paramDef = {
 				type: 'string',
 			},
 		},
+		agentDescription: { type: 'string', nullable: true, maxLength: 200 },
 	},
 	required: ['name', 'fileId'],
 } as const;
@@ -101,6 +102,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				isSensitive: ps.isSensitive ?? false,
 				localOnly: ps.localOnly ?? false,
 				roleIdsThatCanBeUsedThisEmojiAsReaction: ps.roleIdsThatCanBeUsedThisEmojiAsReaction ?? [],
+				agentDescription: ps.agentDescription?.trim() ? ps.agentDescription.trim().slice(0, 200) : null,
 			}, me);
 
 			return this.emojiEntityService.packDetailed(emoji);

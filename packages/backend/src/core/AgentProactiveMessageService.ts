@@ -22,6 +22,7 @@ import { AgentProactiveScheduleService } from '@/core/AgentProactiveScheduleServ
 import { AgentExternalAuditService } from '@/core/AgentExternalAuditService.js';
 import { AgentModelUsageService } from '@/core/AgentModelUsageService.js';
 import { AgentImageService } from '@/core/AgentImageService.js';
+import { AgentStickerService } from '@/core/AgentStickerService.js';
 import { MetaService } from '@/core/MetaService.js';
 import { AgentMessageNotifyService } from '@/core/AgentMessageNotifyService.js';
 import { buildAgentProactiveNotificationText } from '@/core/agent-proactive-notification-text.js';
@@ -70,6 +71,7 @@ export class AgentProactiveMessageService {
 		private agentExternalAuditService: AgentExternalAuditService,
 		private agentModelUsageService: AgentModelUsageService,
 		private agentImageService: AgentImageService,
+		private agentStickerService: AgentStickerService,
 		private metaService: MetaService,
 		private agentMessageNotifyService: AgentMessageNotifyService,
 		private driveFileEntityService: DriveFileEntityService,
@@ -240,9 +242,11 @@ export class AgentProactiveMessageService {
 				timeAwarenessEnabled: true,
 				activeRules,
 			});
-			let system = session.scheduledProactiveEnabled
+			// 表情包协议与发送路径同构：同一注入、同一用户视图转义、同一入库前数量过滤
+			const stickerBlocks = await this.agentStickerService.buildSystemBlocks(instance, character);
+			let system = (session.scheduledProactiveEnabled
 				? `${systemBase}\n${this.agentProactiveScheduleService.systemPromptBlock}`
-				: systemBase;
+				: systemBase) + stickerBlocks.block;
 			if (this.agentImageService.resolveImageModel(instance, session.agentImageModelId) != null) {
 				system += `\n\n<agent_image_generation_protocol>\n${AGENT_IMAGE_WORLD_PROMPT}\n</agent_image_generation_protocol>`;
 			}
@@ -252,10 +256,13 @@ export class AgentProactiveMessageService {
 			const history = messages
 				.filter(message => message.role === 'user' || message.role === 'assistant')
 				.filter(message => message.id !== internalMessageId)
-				.map(message => ({
-					role: message.role as 'user' | 'assistant',
-					content: this.agentService.applyRegexRules(message.content, message.role as 'user' | 'assistant', 'aiInvisible', regexRules),
-				}));
+				.map(message => {
+					const content = this.agentService.applyRegexRules(message.content, message.role as 'user' | 'assistant', 'aiInvisible', regexRules);
+					return {
+						role: message.role as 'user' | 'assistant',
+						content: message.role === 'user' ? this.agentStickerService.convertUserTextForLlm(content, stickerBlocks.emojiList) : content,
+					};
+				});
 			const filteredTrigger = this.agentService.applyRegexRules(trigger, 'user', 'aiInvisible', regexRules);
 			const selectedWorldbook = this.agentService.selectWorldbookEntriesForPrompt(character, filteredTrigger);
 			const scheduledTrigger = await this.agentProactiveScheduleService.prependScheduleContext(filteredTrigger, session);
@@ -321,9 +328,15 @@ export class AgentProactiveMessageService {
 			}
 			const parsed = this.agentProactiveScheduleService.extractControl(rawAssistantText);
 			// 与发送路径一致：生图模型为「无」时过滤模型受历史诱导输出的 [[agent_draw ...]] 占位符
-			const visibleContent = this.agentImageService.resolveImageModel(instance, session.agentImageModelId) == null
+			const preStickerVisibleContent = this.agentImageService.resolveImageModel(instance, session.agentImageModelId) == null
 				? this.agentImageService.stripDrawPlaceholders(parsed.visibleContent)
 				: parsed.visibleContent;
+			const visibleContent = this.agentStickerService.enforceReplyLimits(preStickerVisibleContent, {
+				enabled: instance.agentStickerEnabled === true,
+				max: Math.max(0, Math.min(10, Math.trunc(Number(instance.agentStickerMaxPerMessage)))),
+				emojiNames: new Set(stickerBlocks.emojiList.map(e => e.name)),
+				stickerKeys: new Set(stickerBlocks.stickerKeys),
+			});
 			if (visibleContent.trim().length === 0) {
 				throw new ProactiveAttemptError('PROACTIVE_EMPTY_REPLY');
 			}

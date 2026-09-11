@@ -70,7 +70,7 @@ export type EmojiSearchQuery = {
 </script>
 
 <script setup lang="ts">
-import { computed, defineAsyncComponent, onMounted, ref, nextTick, useCssModule } from 'vue';
+import { computed, defineAsyncComponent, onMounted, onUnmounted, ref, nextTick, useCssModule } from 'vue';
 import * as Misskey from 'misskey-js';
 import type { RequestLogItem } from '@/pages/admin/custom-emojis-manager.impl.js';
 import type { GridCellValidationEvent, GridCellValueChangeEvent, GridEvent } from '@/components/grid/grid-event.js';
@@ -86,7 +86,7 @@ import MkGrid from '@/components/grid/MkGrid.vue';
 import { i18n } from '@/i18n.js';
 import MkButton from '@/components/MkButton.vue';
 import { validators } from '@/components/grid/cell-validators.js';
-import { misskeyApi } from '@/utility/misskey-api.js';
+import { misskeyApi, formatApiError } from '@/utility/misskey-api.js';
 import MkPagingButtons from '@/components/MkPagingButtons.vue';
 import { selectFile } from '@/utility/drive.js';
 import { copyGridDataToClipboard, removeDataFromGrid } from '@/components/grid/grid-utils.js';
@@ -101,6 +101,7 @@ type GridItem = {
 	category: string;
 	aliases: string;
 	license: string;
+	agentDescription: string;
 	isSensitive: boolean;
 	localOnly: boolean;
 	roleIdsThatCanBeUsedThisEmojiAsReaction: { id: string, name: string }[];
@@ -186,16 +187,17 @@ function setupGrid(): GridSetting {
 				},
 			},
 			{
-				bindTo: 'name', title: 'name', type: 'text', editable: true, width: 140,
+				bindTo: 'name', title: i18n.ts._customEmojisManager._gridCommon.columnName, type: 'text', editable: true, width: 140,
 				validators: [required, regex, unique],
 			},
-			{ bindTo: 'category', title: 'category', type: 'text', editable: true, width: 140 },
-			{ bindTo: 'aliases', title: 'aliases', type: 'text', editable: true, width: 140 },
-			{ bindTo: 'license', title: 'license', type: 'text', editable: true, width: 140 },
-			{ bindTo: 'isSensitive', title: 'sensitive', type: 'boolean', editable: true, width: 90 },
-			{ bindTo: 'localOnly', title: 'localOnly', type: 'boolean', editable: true, width: 90 },
+			{ bindTo: 'category', title: i18n.ts._customEmojisManager._gridCommon.columnCategory, type: 'text', editable: true, width: 140 },
+			{ bindTo: 'aliases', title: i18n.ts._customEmojisManager._gridCommon.columnAliases, type: 'text', editable: true, width: 140 },
+			{ bindTo: 'license', title: i18n.ts._customEmojisManager._gridCommon.columnLicense, type: 'text', editable: true, width: 140 },
+			{ bindTo: 'agentDescription', title: i18n.ts._customEmojisManager._gridCommon.columnAgentDescription, type: 'text', editable: true, width: 220 },
+			{ bindTo: 'isSensitive', title: i18n.ts._customEmojisManager._gridCommon.columnSensitive, type: 'boolean', editable: true, width: 90 },
+			{ bindTo: 'localOnly', title: i18n.ts._customEmojisManager._gridCommon.columnLocalOnly, type: 'boolean', editable: true, width: 90 },
 			{
-				bindTo: 'roleIdsThatCanBeUsedThisEmojiAsReaction', title: 'role', type: 'text', editable: true, width: 140,
+				bindTo: 'roleIdsThatCanBeUsedThisEmojiAsReaction', title: i18n.ts._customEmojisManager._gridCommon.columnRole, type: 'text', editable: true, width: 140,
 				valueTransformer(row) {
 					// バックエンドからからはIDと名前のペア配列で受け取るが、表示にIDがあると煩雑なので名前だけにする
 					return gridItems.value[row.index].roleIdsThatCanBeUsedThisEmojiAsReaction
@@ -228,10 +230,10 @@ function setupGrid(): GridSetting {
 					},
 				},
 			},
-			{ bindTo: 'type', type: 'text', editable: false, width: 90 },
-			{ bindTo: 'updatedAt', type: 'text', editable: false, width: 'auto' },
-			{ bindTo: 'publicUrl', type: 'text', editable: false, width: 180 },
-			{ bindTo: 'originalUrl', type: 'text', editable: false, width: 180 },
+			{ bindTo: 'type', title: i18n.ts._customEmojisManager._gridCommon.columnType, type: 'text', editable: false, width: 90 },
+			{ bindTo: 'updatedAt', title: i18n.ts._customEmojisManager._gridCommon.columnUpdatedAt, type: 'text', editable: false, width: 'auto' },
+			{ bindTo: 'publicUrl', title: i18n.ts._customEmojisManager._gridCommon.columnPublicUrl, type: 'text', editable: false, width: 180 },
+			{ bindTo: 'originalUrl', title: i18n.ts._customEmojisManager._gridCommon.columnOriginalUrl, type: 'text', editable: false, width: 180 },
 		],
 		cells: {
 			// セルのコンテキストメニュー設定
@@ -341,6 +343,7 @@ async function onUpdateButtonClicked() {
 					category: emptyStrToNull(item.category),
 					aliases: emptyStrToEmptyArray(item.aliases),
 					license: emptyStrToNull(item.license),
+					agentDescription: emptyStrToNull(item.agentDescription),
 					isSensitive: item.isSensitive,
 					localOnly: item.localOnly,
 					roleIdsThatCanBeUsedThisEmojiAsReaction: item.roleIdsThatCanBeUsedThisEmojiAsReaction.map(it => it.id),
@@ -506,6 +509,7 @@ function refreshGridItems() {
 		category: it.category ?? '',
 		aliases: it.aliases.join(' '),
 		license: it.license ?? '',
+		agentDescription: it.agentDescription ?? '',
 		isSensitive: it.isSensitive,
 		localOnly: it.localOnly,
 		roleIdsThatCanBeUsedThisEmojiAsReaction: it.roleIdsThatCanBeUsedThisEmojiAsReaction,
@@ -521,12 +525,68 @@ onMounted(async () => {
 	await refreshCustomEmojis();
 });
 
+// 批量为未填「智能体描述」的本站表情生成描述：走识图模型，费用按单价从当前账号扣除；
+// 后端内存队列串行执行，此处轮询进度并在完成后刷新列表
+let batchAgentDescriptionPollTimer: number | null = null;
+
+function stopBatchAgentDescriptionPoll() {
+	if (batchAgentDescriptionPollTimer != null) {
+		window.clearInterval(batchAgentDescriptionPollTimer);
+		batchAgentDescriptionPollTimer = null;
+	}
+}
+
+async function onBatchGenerateAgentDescriptions() {
+	if (batchAgentDescriptionPollTimer != null) return; // 已有批量任务在跑，避免重复轮询
+	const { canceled } = await os.confirm({
+		type: 'question',
+		title: i18n.ts._agents.stickerBatchConfirmTitle,
+		text: i18n.ts._agents.stickerBatchConfirmRun,
+	});
+	if (canceled) return;
+	try {
+		const res = await misskeyApi('admin/emoji/generate-agent-descriptions');
+		if ((res.queued ?? 0) === 0) {
+			os.alert({ type: 'info', text: i18n.ts._agents.stickerBatchNone });
+			return;
+		}
+	} catch (err) {
+		os.alert({ type: 'error', text: formatApiError(err) });
+		return;
+	}
+	batchAgentDescriptionPollTimer = window.setInterval(async () => {
+		try {
+			const status = await misskeyApi('admin/emoji/agent-description-status');
+			if (!status.running) {
+				stopBatchAgentDescriptionPoll();
+				os.alert({
+					type: status.failed > 0 ? 'warning' : 'success',
+					text: i18n.tsx._agents.stickerBatchDone({ done: status.done, failed: status.failed }),
+				});
+				void refreshCustomEmojis();
+			}
+		} catch {
+			stopBatchAgentDescriptionPoll();
+		}
+	}, 2000);
+}
+
+onUnmounted(() => {
+	stopBatchAgentDescriptionPoll();
+});
+
 const headerPageMetadata = computed(() => ({
 	title: i18n.ts._customEmojisManager._local.tabTitleList,
 	icon: 'ti ti-icons',
 }));
 
 const headerActions = computed<PageHeaderItem[]>(() => [{
+	icon: 'ti ti-sparkles',
+	text: i18n.ts._agents.stickerGenerateBatch,
+	handler: () => {
+		void onBatchGenerateAgentDescriptions();
+	},
+}, {
 	icon: 'ti ti-search',
 	text: i18n.ts.search,
 	handler: async () => {

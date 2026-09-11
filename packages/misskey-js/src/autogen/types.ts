@@ -409,6 +409,7 @@ export type paths = {
          * admin/agents/images/tokens/refresh
          * @description No description provided.
          *
+         *     **Internal Endpoint**: This endpoint is an API for the misskey mainframe and is not intended for use by third parties.
          *     **Credential required**: *Yes* / **Permission**: *write:admin:meta*
          */
         post: operations['admin___agents___images___tokens___refresh'];
@@ -418,6 +419,7 @@ export type paths = {
          * admin/agents/images/tokens/test
          * @description No description provided.
          *
+         *     **Internal Endpoint**: This endpoint is an API for the misskey mainframe and is not intended for use by third parties.
          *     **Credential required**: *Yes* / **Permission**: *write:admin:meta*
          */
         post: operations['admin___agents___images___tokens___test'];
@@ -734,6 +736,15 @@ export type paths = {
          */
         post: operations['admin___emoji___add-aliases-bulk'];
     };
+    '/admin/emoji/agent-description-status': {
+        /**
+         * admin/emoji/agent-description-status
+         * @description No description provided.
+         *
+         *     **Credential required**: *Yes* / **Permission**: *read:admin:emoji*
+         */
+        post: operations['admin___emoji___agent-description-status'];
+    };
     '/admin/emoji/copy': {
         /**
          * admin/emoji/copy
@@ -760,6 +771,24 @@ export type paths = {
          *     **Credential required**: *Yes* / **Permission**: *write:admin:emoji*
          */
         post: operations['admin___emoji___delete-bulk'];
+    };
+    '/admin/emoji/generate-agent-description': {
+        /**
+         * admin/emoji/generate-agent-description
+         * @description No description provided.
+         *
+         *     **Credential required**: *Yes* / **Permission**: *write:admin:emoji*
+         */
+        post: operations['admin___emoji___generate-agent-description'];
+    };
+    '/admin/emoji/generate-agent-descriptions': {
+        /**
+         * admin/emoji/generate-agent-descriptions
+         * @description No description provided.
+         *
+         *     **Credential required**: *Yes* / **Permission**: *write:admin:emoji*
+         */
+        post: operations['admin___emoji___generate-agent-descriptions'];
     };
     '/admin/emoji/import-zip': {
         /**
@@ -1453,6 +1482,15 @@ export type paths = {
          *     **Credential required**: *Yes* / **Permission**: *read:chat*
          */
         post: operations['agents___characters___diff'];
+    };
+    '/agents/characters/generate-sticker-description': {
+        /**
+         * agents/characters/generate-sticker-description
+         * @description No description provided.
+         *
+         *     **Credential required**: *Yes* / **Permission**: *write:chat*
+         */
+        post: operations['agents___characters___generate-sticker-description'];
     };
     '/agents/characters/list-mine': {
         /**
@@ -6561,6 +6599,7 @@ export type components = {
             isSensitive: boolean;
             localOnly: boolean;
             roleIdsThatCanBeUsedThisEmojiAsReaction: string[];
+            agentDescription?: string | null;
         };
         EmojiDetailedAdmin: {
             /** Format: id */
@@ -6584,6 +6623,7 @@ export type components = {
                 id: string;
                 name: string;
             }[];
+            agentDescription?: string | null;
         };
         Flash: {
             /**
@@ -6945,6 +6985,8 @@ export type components = {
             agentImageConfigured: boolean;
             agentImageDefaultModel: string;
             agentImageMaxPerReply: number;
+            agentStickerEnabled: boolean;
+            agentStickerMaxPerMessage: number;
             agentImageCostPerCall: number;
             agentLongMemoryConfigured: boolean;
             agentMem0AddMemoryMaxRounds: number;
@@ -6960,7 +7002,9 @@ export type components = {
                 maxContextTokens: number;
                 maxOutputTokensPerCall: number;
                 costPerCall: number;
+                group?: string | null;
             }[];
+            agentLlmModelGroups: string[];
             agentDefaultModelId: string | null;
             agentByokEnabled: boolean;
             agentByokProviders: {
@@ -9894,6 +9938,8 @@ export interface operations {
                     sessionId: string;
                     /** @default 80 */
                     limit?: number;
+                    /** @default 0 */
+                    offset?: number;
                     /** Format: misskey:id */
                     untilId?: string | null;
                 };
@@ -10813,6 +10859,7 @@ export interface operations {
                 'application/json': {
                     /** @enum {string|null} */
                     status?: 'available' | 'redeemed' | 'expired' | 'revoked' | null;
+                    query?: string | null;
                     /** @default 30 */
                     limit?: number;
                     /** Format: misskey:id */
@@ -10984,6 +11031,11 @@ export interface operations {
             content: {
                 'application/json': {
                     hours?: number;
+                    /** @enum {string} */
+                    bucket?: 'hour' | 'day';
+                    since?: string;
+                    until?: string;
+                    modelId?: string;
                 };
             };
         };
@@ -10995,6 +11047,12 @@ export interface operations {
                 };
                 content: {
                     'application/json': {
+                        /** @enum {string} */
+                        bucket: 'hour' | 'day';
+                        /** Format: date-time */
+                        since: string;
+                        /** Format: date-time */
+                        until: string;
                         overall: {
                             total: number;
                             success: number;
@@ -11002,6 +11060,22 @@ export interface operations {
                             aborted: number;
                             totalCost: number;
                             uniqueUsers: number;
+                            freeCalls: number;
+                            paidCalls: number;
+                            creditsCharged: number;
+                            avgDurationMs: number | null;
+                        };
+                        previousOverall: {
+                            total: number;
+                            success: number;
+                            failed: number;
+                            aborted: number;
+                            totalCost: number;
+                            uniqueUsers: number;
+                            freeCalls: number;
+                            paidCalls: number;
+                            creditsCharged: number;
+                            avgDurationMs: number | null;
                         };
                         byModel: {
                             modelId: string | null;
@@ -11012,14 +11086,48 @@ export interface operations {
                             aborted: number;
                             totalCost: number;
                             unlisted: boolean;
+                            freeCalls: number;
+                            paidCalls: number;
+                            creditsCharged: number;
+                            uniqueUsers: number;
+                            avgDurationMs: number | null;
                         }[];
-                        hourlyBuckets: {
+                        buckets: {
                             /** Format: date-time */
                             bucketStart: string;
                             total: number;
                             success: number;
                             failed: number;
                             aborted: number;
+                            freeCalls: number;
+                            paidCalls: number;
+                            creditsCharged: number;
+                            avgDurationMs: number | null;
+                        }[];
+                        byUsageKind: {
+                            usageKind: string;
+                            total: number;
+                            freeCalls: number;
+                            paidCalls: number;
+                            creditsCharged: number;
+                        }[];
+                        billing: {
+                            free: number;
+                            paid: number;
+                            failed: number;
+                            byok: number;
+                            zeroPriced: number;
+                            unassigned: number;
+                            other: number;
+                        };
+                        topUsers: {
+                            userId: string;
+                            username: string;
+                            name: string | null;
+                            total: number;
+                            freeCalls: number;
+                            paidCalls: number;
+                            creditsCharged: number;
                         }[];
                     };
                 };
@@ -13146,6 +13254,7 @@ export interface operations {
                     isSensitive?: boolean;
                     localOnly?: boolean;
                     roleIdsThatCanBeUsedThisEmojiAsReaction?: string[];
+                    agentDescription?: string | null;
                 };
             };
         };
@@ -13220,6 +13329,69 @@ export interface operations {
             204: {
                 headers: {
                     [name: string]: unknown;
+                };
+            };
+            /** @description Client error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Authentication error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Forbidden error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description I'm Ai */
+            418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+        };
+    };
+    'admin___emoji___agent-description-status': {
+        responses: {
+            /** @description OK (with results) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': {
+                        running: boolean;
+                        total: number;
+                        done: number;
+                        failed: number;
+                    };
                 };
             };
             /** @description Client error */
@@ -13445,6 +13617,143 @@ export interface operations {
             };
             /** @description I'm Ai */
             418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+        };
+    };
+    'admin___emoji___generate-agent-description': {
+        requestBody: {
+            content: {
+                'application/json': {
+                    /** Format: misskey:id */
+                    emojiId: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK (with results) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': {
+                        description: string;
+                    };
+                };
+            };
+            /** @description Client error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Authentication error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Forbidden error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description I'm Ai */
+            418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+        };
+    };
+    'admin___emoji___generate-agent-descriptions': {
+        responses: {
+            /** @description OK (with results) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': {
+                        queued: number;
+                    };
+                };
+            };
+            /** @description Client error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Authentication error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Forbidden error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description I'm Ai */
+            418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Too many requests */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -13951,6 +14260,7 @@ export interface operations {
                     isSensitive?: boolean;
                     localOnly?: boolean;
                     roleIdsThatCanBeUsedThisEmojiAsReaction?: string[];
+                    agentDescription?: string | null;
                 };
             };
         };
@@ -14809,6 +15119,9 @@ export interface operations {
                             [key: string]: unknown;
                         }[];
                         agentImageMaxPerReply: number;
+                        agentStickerEnabled: boolean;
+                        agentStickerMaxPerMessage: number;
+                        agentEmojiPromptMaxCount: number;
                         agentImageCostPerCall: number;
                         agentImageDefaultArtistPresetId: string | null;
                         agentImageTokenMinPoints: number;
@@ -18336,7 +18649,12 @@ export interface operations {
                         maxContextTokens: number;
                         maxOutputTokensPerCall: number;
                         unlisted?: boolean;
+                        groupId?: string | null;
                         costPerCall?: number;
+                    }[] | null;
+                    agentLlmModelGroups?: {
+                        id: string;
+                        name: string;
                     }[] | null;
                     agentDefaultModelId?: string | null;
                     agentByokEnabled?: boolean;
@@ -18387,7 +18705,7 @@ export interface operations {
                         name: string;
                         description?: string | null;
                         /** @enum {string} */
-                        provider: 'aurora' | 'openai';
+                        provider: 'aurora' | 'openai' | 'qwen';
                         enabled?: boolean;
                         apiModelName?: string | null;
                         apiUrl?: string | null;
@@ -18424,6 +18742,9 @@ export interface operations {
                     };
                     agentImageDefaultNegativePrompt?: string | null;
                     agentImageMaxPerReply?: number;
+                    agentStickerEnabled?: boolean;
+                    agentStickerMaxPerMessage?: number;
+                    agentEmojiPromptMaxCount?: number;
                     agentImageCostPerCall?: number;
                     agentImageDefaultArtistPresetId?: string | null;
                     agentImageTokenMinPoints?: number;
@@ -18849,7 +19170,7 @@ export interface operations {
                             amount: number;
                             modelName: string | null;
                             /** @enum {string|null} */
-                            usageKind: 'chat' | 'compression' | 'image_generation' | 'vision' | 'proactive_random' | 'proactive_scheduled' | 'checkin' | 'admin_reward' | 'credit_migration' | null;
+                            usageKind: 'chat' | 'compression' | 'image_generation' | 'vision' | 'sticker_description' | 'proactive_random' | 'proactive_scheduled' | 'checkin' | 'admin_reward' | 'credit_migration' | null;
                             status: string | null;
                             durationMs: number | null;
                             redeemCode: string | null;
@@ -19320,6 +19641,12 @@ export interface operations {
                     /** Format: misskey:id */
                     referenceImageFileId?: string | null;
                     referenceImageFileIds?: string[] | null;
+                    stickers?: {
+                        key: string;
+                        /** Format: misskey:id */
+                        fileId: string;
+                        description: string;
+                    }[] | null;
                     promptOpenSourced?: boolean;
                 };
             };
@@ -19500,6 +19827,83 @@ export interface operations {
                             draftPreview: string;
                             publishedPreview: string;
                         }[];
+                    };
+                };
+            };
+            /** @description Client error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Authentication error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Forbidden error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description I'm Ai */
+            418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+        };
+    };
+    'agents___characters___generate-sticker-description': {
+        requestBody: {
+            content: {
+                'application/json': {
+                    /** Format: misskey:id */
+                    fileId: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK (with results) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': {
+                        description: string;
                     };
                 };
             };
@@ -20111,6 +20515,11 @@ export interface operations {
                         referenceImage: components['schemas']['DriveFile'] | null;
                         referenceImageFileIds: string[];
                         referenceImages: components['schemas']['DriveFile'][];
+                        stickers?: {
+                            key: string;
+                            description: string;
+                            file: components['schemas']['DriveFile'] | null;
+                        }[];
                         promptOpenSourced: boolean;
                         /** Format: date-time */
                         createdAt: string;
@@ -20308,6 +20717,12 @@ export interface operations {
                     /** Format: misskey:id */
                     referenceImageFileId?: string | null;
                     referenceImageFileIds?: string[] | null;
+                    stickers?: {
+                        key: string;
+                        /** Format: misskey:id */
+                        fileId: string;
+                        description: string;
+                    }[] | null;
                     promptOpenSourced?: boolean;
                 };
             };
@@ -21537,7 +21952,7 @@ export interface operations {
                         name: string;
                         description: string | null;
                         /** @enum {string} */
-                        provider: 'aurora' | 'openai';
+                        provider: 'aurora' | 'openai' | 'qwen';
                         apiModelName: string | null;
                         supportsReferenceImage: boolean;
                         costPerCall: number;
@@ -23044,7 +23459,7 @@ export interface operations {
                             modelSource: 'official' | 'user' | null;
                             modelApiName: string | null;
                             /** @enum {string} */
-                            usageKind: 'chat' | 'compression' | 'image_generation' | 'vision' | 'proactive_random' | 'proactive_scheduled' | 'checkin' | 'admin_reward' | 'credit_migration';
+                            usageKind: 'chat' | 'compression' | 'image_generation' | 'vision' | 'sticker_description' | 'proactive_random' | 'proactive_scheduled' | 'checkin' | 'admin_reward' | 'credit_migration';
                             status: string;
                             cost: number;
                             promptTokens: number | null;
@@ -24612,6 +25027,10 @@ export interface operations {
                         sessionKind: 'draft_test' | 'community';
                         characterName: string;
                         characterAvatar: components['schemas']['DriveFile'] | null;
+                        characterStickers: {
+                            key: string;
+                            file: components['schemas']['DriveFile'] | null;
+                        }[];
                         /** Format: date-time */
                         lastMessageAt: string | null;
                         /** Format: date-time */

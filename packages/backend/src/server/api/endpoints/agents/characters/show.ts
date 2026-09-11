@@ -85,6 +85,17 @@ export const meta = {
 			referenceImage: { type: 'object', ref: 'DriveFile', nullable: true },
 			referenceImageFileIds: { type: 'array', items: { type: 'string', format: 'misskey:id' } },
 			referenceImages: { type: 'array', items: { type: 'object', ref: 'DriveFile' } },
+			stickers: {
+				type: 'array', optional: true,
+				items: {
+					type: 'object', optional: false, nullable: false,
+					properties: {
+						key: { type: 'string', optional: false, nullable: false },
+						description: { type: 'string', optional: false, nullable: false },
+						file: { type: 'object', ref: 'DriveFile', optional: false, nullable: true },
+					},
+				},
+			},
 			promptOpenSourced: { type: 'boolean' },
 			createdAt: { type: 'string', format: 'date-time' },
 			updatedAt: { type: 'string', format: 'date-time' },
@@ -185,6 +196,14 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				referenceImage: referenceImages[0] ?? null,
 				referenceImageFileIds,
 				referenceImages,
+				// 表情包描述属于提示词类内容：仅作者（或开源提示词时）可见，非作者由 sessions/show 获取渲染所需的 key+图片
+				...((isOwner || row.promptOpenSourced === true) ? {
+					stickers: (await Promise.all((Array.isArray(display.stickers) ? display.stickers : []).map(async sticker => ({
+						key: sticker.key,
+						description: sticker.description,
+						file: await this.driveFileEntityService.pack(sticker.fileId, {}).catch(() => null),
+					})))).filter(sticker => sticker.file != null),
+				} : {}),
 				promptOpenSourced: row.promptOpenSourced === true,
 				createdAt: row.createdAt.toISOString(),
 				updatedAt: row.updatedAt.toISOString(),

@@ -80,9 +80,12 @@ export * as 'admin/drive/files/set-blocked' from './endpoints/admin/drive/files/
 export * as 'admin/drive/show-file' from './endpoints/admin/drive/show-file.js';
 export * as 'admin/emoji/add' from './endpoints/admin/emoji/add.js';
 export * as 'admin/emoji/add-aliases-bulk' from './endpoints/admin/emoji/add-aliases-bulk.js';
+export * as 'admin/emoji/agent-description-status' from './endpoints/admin/emoji/agent-description-status.js';
 export * as 'admin/emoji/copy' from './endpoints/admin/emoji/copy.js';
 export * as 'admin/emoji/delete' from './endpoints/admin/emoji/delete.js';
 export * as 'admin/emoji/delete-bulk' from './endpoints/admin/emoji/delete-bulk.js';
+export * as 'admin/emoji/generate-agent-description' from './endpoints/admin/emoji/generate-agent-description.js';
+export * as 'admin/emoji/generate-agent-descriptions' from './endpoints/admin/emoji/generate-agent-descriptions.js';
 export * as 'admin/emoji/import-zip' from './endpoints/admin/emoji/import-zip.js';
 export * as 'admin/emoji/list' from './endpoints/admin/emoji/list.js';
 export * as 'admin/emoji/list-remote' from './endpoints/admin/emoji/list-remote.js';
@@ -161,6 +164,7 @@ export * as 'agents/characters/show' from './endpoints/agents/characters/show.js
 export * as 'agents/characters/plaza-detail' from './endpoints/agents/characters/plaza-detail.js';
 export * as 'agents/characters/versions' from './endpoints/agents/characters/versions.js';
 export * as 'agents/characters/diff' from './endpoints/agents/characters/diff.js';
+export * as 'agents/characters/generate-sticker-description' from './endpoints/agents/characters/generate-sticker-description.js';
 export * as 'agents/characters/rollback' from './endpoints/agents/characters/rollback.js';
 export * as 'agents/characters/worldbook-match-preview' from './endpoints/agents/characters/worldbook-match-preview.js';
 export * as 'agents/characters/unpublish' from './endpoints/agents/characters/unpublish.js';

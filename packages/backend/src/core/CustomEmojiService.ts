@@ -102,6 +102,8 @@ export class CustomEmojiService implements OnApplicationShutdown {
 		isSensitive: boolean;
 		localOnly: boolean;
 		roleIdsThatCanBeUsedThisEmojiAsReaction: MiRole['id'][];
+		/** 智能体表情包描述（空则不进入智能体可用表情列表） */
+		agentDescription?: string | null;
 	}, moderator?: MiUser): Promise<MiEmoji> {
 		const emoji = await this.emojisRepository.insertOne({
 			id: this.idService.gen(),
@@ -117,6 +119,7 @@ export class CustomEmojiService implements OnApplicationShutdown {
 			isSensitive: data.isSensitive,
 			localOnly: data.localOnly,
 			roleIdsThatCanBeUsedThisEmojiAsReaction: data.roleIdsThatCanBeUsedThisEmojiAsReaction,
+			agentDescription: data.agentDescription ?? null,
 		});
 
 		if (data.host == null) {
@@ -150,6 +153,7 @@ export class CustomEmojiService implements OnApplicationShutdown {
 		isSensitive?: boolean;
 		localOnly?: boolean;
 		roleIdsThatCanBeUsedThisEmojiAsReaction?: MiRole['id'][];
+		agentDescription?: string | null;
 	}, moderator?: MiUser): Promise<
 		null
 		| 'NO_SUCH_EMOJI'
@@ -180,6 +184,7 @@ export class CustomEmojiService implements OnApplicationShutdown {
 			publicUrl: data.publicUrl,
 			type: data.fileType,
 			roleIdsThatCanBeUsedThisEmojiAsReaction: data.roleIdsThatCanBeUsedThisEmojiAsReaction ?? undefined,
+			agentDescription: data.agentDescription,
 		});
 
 		this.localEmojisCache.refresh();

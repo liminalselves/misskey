@@ -30,6 +30,18 @@ export const meta = {
 			sessionKind: { type: 'string', enum: ['draft_test', 'community'] },
 			characterName: { type: 'string' },
 			characterAvatar: { type: 'object', ref: 'DriveFile', nullable: true },
+			characterStickers: {
+				type: 'array',
+				optional: false, nullable: false,
+				items: {
+					type: 'object',
+					optional: false, nullable: false,
+					properties: {
+						key: { type: 'string', optional: false, nullable: false },
+						file: { type: 'object', ref: 'DriveFile', optional: false, nullable: true },
+					},
+				},
+			},
 			lastMessageAt: { type: 'string', format: 'date-time', nullable: true },
 			createdAt: { type: 'string', format: 'date-time' },
 			agentModelId: { type: 'string', nullable: true },
@@ -120,6 +132,21 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				? await this.driveFileEntityService.pack(characterDisplay.avatarFileId, {})
 					.catch(() => null)
 				: null;
+			// 角色专属表情包：与 LLM 视图同源（社区会话走发布快照，测试会话跟随草稿），
+			// 供聊天气泡渲染 [[agent_sticker key=...]] 与输入区选择器使用。
+			// 快照缺失/损坏时退回草稿数据，避免表情包数据问题阻断整个会话页。
+			let effectiveCharacter = characterRow as MiAgentCharacter;
+			if (row.sessionKind === 'community') {
+				try {
+					effectiveCharacter = this.agentService.effectiveCharacterForLlm(characterRow as MiAgentCharacter, true);
+				} catch {
+					// fall through：使用草稿 stickers 兜底
+				}
+			}
+			const characterStickers = await Promise.all(effectiveCharacter.stickers.map(async sticker => ({
+				key: sticker.key,
+				file: await this.driveFileEntityService.pack(sticker.fileId, {}).catch(() => null),
+			})));
 			return {
 				id: row.id,
 				name: row.name,
@@ -128,6 +155,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				sessionKind: row.sessionKind,
 				characterName: characterDisplay.name,
 				characterAvatar,
+				characterStickers: characterStickers.filter(s => s.file != null),
 				lastMessageAt: row.lastMessageAt ? row.lastMessageAt.toISOString() : null,
 				createdAt: row.createdAt.toISOString(),
 				agentModelId: row.agentModelId,

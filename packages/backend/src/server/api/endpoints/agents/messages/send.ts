@@ -33,6 +33,7 @@ import { AgentCompressionMemoryService, AGENT_OVERVIEW_SCAN_LIMIT, type Compress
 import { AgentTokenService } from '@/core/AgentTokenService.js';
 import { AgentImageService } from '@/core/AgentImageService.js';
 import { AgentVisionService } from '@/core/AgentVisionService.js';
+import { AgentStickerService, type AgentStickerReplyContext } from '@/core/AgentStickerService.js';
 import { AgentExternalAuditService } from '@/core/AgentExternalAuditService.js';
 import { AgentProactiveScheduleService } from '@/core/AgentProactiveScheduleService.js';
 import { AgentMessageNotifyService } from '@/core/AgentMessageNotifyService.js';
@@ -132,6 +133,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 	private agentCompressionMemoryService: AgentCompressionMemoryService,
 	private agentImageService: AgentImageService,
 	private agentVisionService: AgentVisionService,
+	private agentStickerService: AgentStickerService,
 	private agentExternalAuditService: AgentExternalAuditService,
 	private agentProactiveScheduleService: AgentProactiveScheduleService,
 	private agentTokenService: AgentTokenService,
@@ -382,6 +384,11 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					timeAwarenessEnabled: session.timeAwarenessEnabled === true,
 					activeRules,
 				});
+				// 表情包协议（全站 :name: + 角色专属 [[agent_sticker]]）；emojiList/stickerKeys 同时用于
+				// 用户消息 LLM 视图转义与回复入库前的数量过滤，一次查询全程复用
+				const stickerBlocks = await this.agentStickerService.buildSystemBlocks(instanceMeta, character);
+				const emojiListForLlm = stickerBlocks.emojiList;
+				const convertUserStickersForLlm = (text: string) => this.agentStickerService.convertUserTextForLlm(text, emojiListForLlm);
 
 				let longTermMemorySearchUnavailable = false;
 				let longTermMemoryAddScheduled = false;
@@ -393,11 +400,12 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				const regexRules = this.agentService.normalizeRegexRules(character.regexRules);
 				const filterForAi = (text: string, role: 'user' | 'assistant') => this.agentService.applyRegexRules(text, role, 'aiInvisible', regexRules);
 				const filteredUserText = filterForAi(userText, 'user');
+				const llmUserText = convertUserStickersForLlm(filteredUserText);
 				const aiUserText = imageFileId == null
-					? filteredUserText
+					? llmUserText
 					: userMsg.imageRecognitionStatus === 'succeeded' && userMsg.imageRecognitionDescription
-						? `<image-recognition source="server" not-user-input="true">${escapeAgentXmlText(userMsg.imageRecognitionDescription)}</image-recognition>${filteredUserText.length > 0 ? `\n${filteredUserText}` : ''}`
-						: `<image-recognition source="server" not-user-input="true" status="unavailable" />${filteredUserText.length > 0 ? `\n${filteredUserText}` : ''}`;
+						? `<image-recognition source="server" not-user-input="true">${escapeAgentXmlText(userMsg.imageRecognitionDescription)}</image-recognition>${llmUserText.length > 0 ? `\n${llmUserText}` : ''}`
+						: `<image-recognition source="server" not-user-input="true" status="unavailable" />${llmUserText.length > 0 ? `\n${llmUserText}` : ''}`;
 				const cStickies = longMemProvider === 'compression'
 					? await this.agentCompressionMemoryService.listStickies(session.id)
 					: [];
@@ -407,14 +415,15 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					const bIds = actives.flatMap(s => [s.fromMessageId, s.toMessageId]);
 					const boundaries = await this.agentCompressionMemoryService.loadBoundaryMap(session.id, bIds);
 						pairs = this.agentCompressionMemoryService.buildPairsExcludingActiveCompression(
-						historyForApi.map(m => ({ ...m, content: filterForAi(m.content, m.role as 'user' | 'assistant') })),
+						historyForApi.map(m => ({ ...m, content: m.role === 'user' ? convertUserStickersForLlm(filterForAi(m.content, m.role as 'user' | 'assistant')) : filterForAi(m.content, m.role as 'user' | 'assistant') })),
 						actives,
 						boundaries,
 					);
 				} else {
 					for (const m of historyForApi) {
 						if (m.role === 'user' || m.role === 'assistant') {
-							pairs.push({ role: m.role, content: filterForAi(m.content, m.role) });
+							const content = filterForAi(m.content, m.role);
+							pairs.push({ role: m.role, content: m.role === 'user' ? convertUserStickersForLlm(content) : content });
 						}
 					}
 				}
@@ -443,7 +452,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					}
 				}
 
-				let system = systemBase;
+				let system = systemBase + stickerBlocks.block;
 				if (session.scheduledProactiveEnabled) {
 					system += `\n${this.agentProactiveScheduleService.systemPromptBlock}`;
 				}
@@ -514,9 +523,16 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				const proactiveControl = this.agentProactiveScheduleService.extractControl(rawAssistantText);
 				// 生图模型为「无」时协议未注入 system，但历史中的 [[agent_draw ...]] 占位符可能诱导
 				// 模型继续输出生图标记：落库前整体过滤本次回复（历史消息不动），如同模型从未输出。
-				const assistantText = activeImageModel == null
+				const preStickerAssistantText = activeImageModel == null
 					? this.agentImageService.stripDrawPlaceholders(proactiveControl.visibleContent)
 					: proactiveControl.visibleContent;
+				// 表情包数量上限/合法性过滤：功能关闭、超限、未知 key 一并剥离（历史消息不动）
+				const assistantText = this.agentStickerService.enforceReplyLimits(preStickerAssistantText, {
+					enabled: instanceMeta.agentStickerEnabled === true,
+					max: Math.max(0, Math.min(10, Math.trunc(Number(instanceMeta.agentStickerMaxPerMessage)))),
+					emojiNames: new Set(emojiListForLlm.map(e => e.name)),
+					stickerKeys: new Set(stickerBlocks.stickerKeys),
+				});
 				const hasVisibleAssistantText = assistantText.trim().length > 0;
 
 				const auditResult = await this.agentExternalAuditService.auditReply({

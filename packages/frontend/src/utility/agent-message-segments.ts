@@ -3,6 +3,9 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
+import { instance } from '@/instance.js';
+import { customEmojis } from '@/custom-emojis.js';
+
 const FENCE_RE = /^\s*(`{3,}|~{3,})/;
 const LIST_RE = /^\s*(?:[-+*]|\d+[.)])\s+/;
 const QUOTE_RE = /^\s*>/;
@@ -12,6 +15,34 @@ const VOID_HTML_TAGS = new Set([
 	'area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input',
 	'link', 'meta', 'param', 'source', 'track', 'wbr',
 ]);
+
+/** 表情包 token（角色标签按语法即有效；全站表情须命中表情表，功能关闭时全部视为普通文本） */
+const STICKER_TOKEN_RE = /\[\[agent_sticker\s+key=[a-zA-Z0-9_-]{1,32}\s*\]\]|:([a-zA-Z0-9_]+):/g;
+
+/**
+ * 普通文本行内按有效表情包 token 切分，使每个表情包独占一个气泡。
+ * 无效 token（如时间 12:30:45 的 :30:、未知名、功能关闭时）不切分，原样保留。
+ */
+function splitLineByStickerTokens(line: string): string[] {
+	const trimmed = line.trim();
+	if (trimmed === '') return [];
+	if (instance.agentStickerEnabled !== true) return [trimmed];
+	// 读取 ref 以建立响应式依赖（customEmojisMap 为普通 Map，表情列表加载后分段可重算）
+	const emojiList = customEmojis.value;
+	const out: string[] = [];
+	let cursor = 0;
+	for (const match of trimmed.matchAll(STICKER_TOKEN_RE)) {
+		if (match[1] !== undefined && !emojiList.some(emoji => emoji.name === match[1])) continue;
+		const start = match.index ?? 0;
+		const before = trimmed.slice(cursor, start).trim();
+		if (before !== '') out.push(before);
+		out.push(match[0]);
+		cursor = start + match[0].length;
+	}
+	const rest = trimmed.slice(cursor).trim();
+	if (rest !== '') out.push(rest);
+	return out;
+}
 
 /**
  * Split a stored assistant reply into presentation-only bubbles.
@@ -92,7 +123,15 @@ export function splitAgentMessageIntoSegments(source: string): string[] {
 			sawHtml = updateHtmlStack(lines[i]!, htmlStack) || sawHtml;
 			i++;
 		} while (sawHtml && htmlStack.length > 0 && i < lines.length);
-		push(start, i);
+		if (i - start === 1) {
+			// 单行普通文本：行内再按有效表情包 token 切分，让每个表情包独占一个气泡
+			for (const piece of splitLineByStickerTokens(lines[start]!)) {
+				segments.push(piece);
+			}
+		} else {
+			// 多行 HTML 块保持整体，不按 token 拆分
+			push(start, i);
+		}
 	}
 
 	return segments.length > 0 ? segments : (source.trim() === '' ? [] : [source.trim()]);

@@ -158,16 +158,16 @@ function setupGrid(): GridSetting {
 		cols: [
 			{ bindTo: 'url', icon: 'ti-icons', type: 'image', editable: false, width: 'auto', validators: [required] },
 			{
-				bindTo: 'name', title: 'name', type: 'text', editable: true, width: 140,
+				bindTo: 'name', title: i18n.ts._customEmojisManager._gridCommon.columnName, type: 'text', editable: true, width: 140,
 				validators: [required, regex, unique],
 			},
-			{ bindTo: 'category', title: 'category', type: 'text', editable: true, width: 140 },
-			{ bindTo: 'aliases', title: 'aliases', type: 'text', editable: true, width: 140 },
-			{ bindTo: 'license', title: 'license', type: 'text', editable: true, width: 140 },
-			{ bindTo: 'isSensitive', title: 'sensitive', type: 'boolean', editable: true, width: 90 },
-			{ bindTo: 'localOnly', title: 'localOnly', type: 'boolean', editable: true, width: 90 },
+			{ bindTo: 'category', title: i18n.ts._customEmojisManager._gridCommon.columnCategory, type: 'text', editable: true, width: 140 },
+			{ bindTo: 'aliases', title: i18n.ts._customEmojisManager._gridCommon.columnAliases, type: 'text', editable: true, width: 140 },
+			{ bindTo: 'license', title: i18n.ts._customEmojisManager._gridCommon.columnLicense, type: 'text', editable: true, width: 140 },
+			{ bindTo: 'isSensitive', title: i18n.ts._customEmojisManager._gridCommon.columnSensitive, type: 'boolean', editable: true, width: 90 },
+			{ bindTo: 'localOnly', title: i18n.ts._customEmojisManager._gridCommon.columnLocalOnly, type: 'boolean', editable: true, width: 90 },
 			{
-				bindTo: 'roleIdsThatCanBeUsedThisEmojiAsReaction', title: 'role', type: 'text', editable: true, width: 140,
+				bindTo: 'roleIdsThatCanBeUsedThisEmojiAsReaction', title: i18n.ts._customEmojisManager._gridCommon.columnRole, type: 'text', editable: true, width: 140,
 				valueTransformer: (row) => {
 					// バックエンドからからはIDと名前のペア配列で受け取るが、表示にIDがあると煩雑なので名前だけにする
 					return gridItems.value[row.index].roleIdsThatCanBeUsedThisEmojiAsReaction
@@ -200,7 +200,7 @@ function setupGrid(): GridSetting {
 					},
 				},
 			},
-			{ bindTo: 'type', type: 'text', editable: false, width: 90 },
+			{ bindTo: 'type', title: i18n.ts._customEmojisManager._gridCommon.columnType, type: 'text', editable: false, width: 90 },
 		],
 		cells: {
 			// セルのコンテキストメニュー設定

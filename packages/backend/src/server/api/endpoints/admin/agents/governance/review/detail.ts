@@ -57,7 +57,9 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				const user = await this.usersRepository.findOneBy({ id: row.userId });
 				const packedUser = user ? await this.userEntityService.pack(user, me, { schema: 'UserLite' }) : null;
 				const avatar = row.avatarFileId ? (await this.driveFileEntityService.packManyByIdsMap([row.avatarFileId], {})).get(row.avatarFileId) ?? null : null;
-				return packCharacterGovernanceDetail(this.agentService, row, packedUser, avatar);
+				const stickerIds = Array.isArray(row.stickers) ? row.stickers.map(sticker => sticker?.fileId).filter((id): id is string => typeof id === 'string') : [];
+				const stickerFiles = stickerIds.length > 0 ? await this.driveFileEntityService.packManyByIdsMap(stickerIds, {}) : new Map<string, unknown>();
+				return packCharacterGovernanceDetail(this.agentService, row, packedUser, avatar, stickerFiles);
 			}
 
 			const row = await this.agentDialogueStylesRepository.findOneBy({ id: ps.id });

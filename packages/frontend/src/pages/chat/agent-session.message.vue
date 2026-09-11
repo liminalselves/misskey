@@ -60,6 +60,22 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<div v-if="segment.content" :class="[$style.mdRoot, segment.drawOnly ? $style.drawSegmentContent : null, '_selectable']">
 					<template v-for="part in segment.parts" :key="part.key">
 						<div v-if="part.type === 'text'" v-html="part.html"></div>
+						<div v-else-if="part.type === 'emoji'" :class="$style.stickerWrap">
+							<!-- 复用站内 MkCustomEmoji：点击弹出与私信一致的表情菜单（复制/详情/静音/管理编辑）；
+							     智能体消息无表态功能，不传 menuReaction -->
+							<MkCustomEmoji :class="$style.stickerEmoji" :name="part.name" :menu="true" />
+						</div>
+						<div v-else-if="part.type === 'sticker'" :class="$style.stickerWrap">
+							<img
+								v-if="stickerUrl(part.stickerKey)"
+								:class="$style.stickerImg"
+								:src="stickerUrl(part.stickerKey)"
+								:alt="`表情包 ${part.stickerKey}`"
+								:title="part.stickerKey"
+								loading="lazy"
+							/>
+							<span v-else :class="$style.stickerMissing"><i class="ti ti-sticker-off"></i> {{ i18n.ts._agents.stickerUnavailable }}</span>
+						</div>
 						<div v-else :class="$style.drawCard">
 							<div :class="$style.drawCardHead">
 								<span><i class="ti ti-brush"></i> 配图</span>
@@ -123,11 +139,14 @@ import MkTime from '@/components/global/MkTime.vue';
 import * as os from '@/os.js';
 import { copyToClipboard } from '@/utility/copy-to-clipboard.js';
 import { prefer } from '@/preferences.js';
+import { instance } from '@/instance.js';
 import { misskeyApi, formatApiError } from '@/utility/misskey-api.js';
 import MkLoading from '@/components/global/MkLoading.vue';
 import MkButton from '@/components/MkButton.vue';
 import MkMediaList from '@/components/MkMediaList.vue';
+import MkCustomEmoji from '@/components/global/MkCustomEmoji.vue';
 import { splitAgentMessageIntoSegments } from '@/utility/agent-message-segments.js';
+import { customEmojisMap } from '@/custom-emojis.js';
 
 const $i = ensureSignin();
 
@@ -149,6 +168,8 @@ const props = defineProps<{
 	assistantName?: string | null;
 	assistantAvatarUrl?: string | null;
 	regexRules?: Array<{ id: string; pattern: string; targets: ('user' | 'assistant')[]; effects: ('hide' | 'aiInvisible')[] }>;
+	/** 角色专属表情包（来自 sessions/show，与 LLM 视图同源）；key → DriveFile */
+	characterStickers?: Array<{ key: string; file: DriveFile | null }>;
 	highlighted?: boolean;
 	segmentedOutputEnabled?: boolean;
 	visibleSegmentCount?: number;
@@ -207,7 +228,25 @@ const displayContent = computed(() => {
 });
 
 const systemHtml = computed(() => renderAgentChatMarkdown(props.message.content ?? ''));
-const AGENT_DRAW_RE = /\[\[agent_draw(?:\s+size=(portrait|landscape|square))?\s+tag=([\s\S]*?)\]\]/g;
+/** 统一切分：角色表情 / 全站表情 / 生图占位符 三种 token 一起扫描；
+ *  分支顺序与捕获组一一对应（sticker key=1，draw size=2、tag=3，emoji name=4） */
+const AGENT_STICKER_OR_DRAW_RE = /\[\[agent_sticker\s+key=([a-zA-Z0-9_-]{1,32})\s*\]\]|\[\[agent_draw(?:\s+size=(portrait|landscape|square))?\s+tag=([\s\S]*?)\]\]|:([a-zA-Z0-9_]+):/g;
+
+const stickerFileMap = computed(() => {
+	const map = new Map<string, DriveFile>();
+	for (const sticker of props.characterStickers ?? []) {
+		if (sticker.file) map.set(sticker.key, sticker.file);
+	}
+	return map;
+});
+
+/** 表情包展示 URL：动图用原图保持动画，其余优先缩略图 */
+function stickerUrl(key: string): string | undefined {
+	const file = stickerFileMap.value.get(key);
+	if (!file) return undefined;
+	if (file.type === 'image/gif' || file.type === 'image/apng') return file.url;
+	return file.thumbnailUrl ?? file.url ?? undefined;
+}
 
 type DrawResult = {
 	id: string;
@@ -226,7 +265,9 @@ type DrawResult = {
 
 type RenderPart =
 	| { type: 'text'; key: string; html: string }
-	| { type: 'draw'; key: string; index: number; tag: string; size: 'portrait' | 'landscape' | 'square' };
+	| { type: 'draw'; key: string; index: number; tag: string; size: 'portrait' | 'landscape' | 'square' }
+	| { type: 'sticker'; key: string; stickerKey: string }
+	| { type: 'emoji'; key: string; name: string; url: string };
 
 const drawResults = reactive<Record<number, DrawResult | undefined>>({});
 /** 待手动生成的占位符索引（超出自动生图上限或自动生图关闭） */
@@ -259,25 +300,44 @@ function renderParts(text: string, drawOffset: number): RenderPart[] {
 	const parts: RenderPart[] = [];
 	let lastIndex = 0;
 	let localDrawIndex = 0;
-	for (const match of text.matchAll(AGENT_DRAW_RE)) {
+	// sticker 标签仅 assistant 消息且实例开启表情包功能时渲染为图块（用户只能发全站表情）；其余保持字面文本
+	const renderSticker = props.message.role === 'assistant' && instance.agentStickerEnabled === true;
+	// 全站表情 :name: 开启功能且命中本站表情表时渲染为贴纸图块；未命中（如时间 12:30:45 的 :30:）不切分文本
+	const emojiEnabled = instance.agentStickerEnabled === true;
+	const pushText = (from: number, to: number) => {
+		if (to > from) parts.push({ type: 'text', key: `text:${from}`, html: renderAgentChatMarkdown(text.slice(from, to)) });
+	};
+	for (const match of text.matchAll(AGENT_STICKER_OR_DRAW_RE)) {
 		const start = match.index ?? 0;
-		if (start > lastIndex) {
-			parts.push({ type: 'text', key: `text:${lastIndex}`, html: renderAgentChatMarkdown(text.slice(lastIndex, start)) });
+		if (match[4] !== undefined) {
+			// 全站表情分支：仅命中表情表时才切分为贴纸图块
+			const emoji = emojiEnabled ? customEmojisMap.get(match[4]) : undefined;
+			if (!emoji || !emoji.url) continue;
+			pushText(lastIndex, start);
+			parts.push({ type: 'emoji', key: `emoji:${start}`, name: match[4], url: emoji.url });
+			lastIndex = start + match[0].length;
+		} else if (match[1] !== undefined) {
+			// 角色表情分支：不满足渲染条件时保持字面文本，不切分
+			if (!renderSticker) continue;
+			pushText(lastIndex, start);
+			parts.push({ type: 'sticker', key: `sticker:${start}`, stickerKey: match[1] });
+			lastIndex = start + match[0].length;
+		} else {
+			// 生图占位符分支（保持原有行为：始终切分为独立卡片）
+			pushText(lastIndex, start);
+			const size = match[2] === 'landscape' || match[2] === 'square' || match[2] === 'portrait' ? match[2] : 'portrait';
+			parts.push({
+				type: 'draw',
+				key: `draw:${drawOffset + localDrawIndex}`,
+				index: drawOffset + localDrawIndex,
+				size,
+				tag: String(match[3] ?? '').trim(),
+			});
+			localDrawIndex++;
+			lastIndex = start + match[0].length;
 		}
-		const size = match[1] === 'landscape' || match[1] === 'square' || match[1] === 'portrait' ? match[1] : 'portrait';
-		parts.push({
-			type: 'draw',
-			key: `draw:${drawOffset + localDrawIndex}`,
-			index: drawOffset + localDrawIndex,
-			size,
-			tag: String(match[2] ?? '').trim(),
-		});
-		localDrawIndex++;
-		lastIndex = start + match[0].length;
 	}
-	if (lastIndex < text.length) {
-		parts.push({ type: 'text', key: `text:${lastIndex}`, html: renderAgentChatMarkdown(text.slice(lastIndex)) });
-	}
+	pushText(lastIndex, text.length);
 	return parts.length > 0 ? parts : [{ type: 'text', key: 'text:all', html: renderAgentChatMarkdown(text) }];
 }
 
@@ -964,6 +1024,42 @@ async function confirmDelete() {
 	border-radius: 8px;
 	border: solid 1px var(--MI_THEME-divider);
 	background: color-mix(in srgb, var(--MI_THEME-panel) 92%, var(--MI_THEME-bg));
+}
+
+/* 全站/角色表情包统一贴纸展示：统一高度、宽度按原始比例，块级排布（自动独占一行；
+   分段模式下独占一行的表情包自然成为独立气泡） */
+.stickerWrap {
+	display: flex;
+	align-items: center;
+	margin: 0.5em 0;
+}
+
+.stickerImg {
+	height: 96px;
+	width: auto;
+	max-width: 100%;
+	border-radius: 8px;
+}
+
+/* 全站表情贴纸：复用 MkCustomEmoji（组件内部按 2em 定高、宽度随原始比例）。
+   通过自身字号把 2em 抬到 96px，与角色贴纸同尺寸；class 会透传到组件根元素 */
+.stickerEmoji {
+	font-size: 48px;
+	max-width: 100%;
+
+	/* MkCustomEmoji 根样式自带 :hover scale(1.2)（为行内小表情设计的反馈），
+	   96px 贴纸放大后会被气泡裁切；双写类名提高优先级以覆盖同特异性的组件内规则 */
+	&.stickerEmoji:hover {
+		transform: none;
+	}
+}
+
+.stickerMissing {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	font-size: 0.85em;
+	opacity: 0.7;
 }
 
 .drawCardHead {

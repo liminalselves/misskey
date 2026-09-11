@@ -44,7 +44,7 @@ export const meta = {
 						modelName: { type: 'string', nullable: true },
 						modelSource: { type: 'string', enum: ['official', 'user'], nullable: true },
 						modelApiName: { type: 'string', nullable: true },
-						usageKind: { type: 'string', enum: ['chat', 'compression', 'image_generation', 'vision', 'proactive_random', 'proactive_scheduled', 'checkin', 'admin_reward', 'credit_migration'] },
+						usageKind: { type: 'string', enum: ['chat', 'compression', 'image_generation', 'vision', 'sticker_description', 'proactive_random', 'proactive_scheduled', 'checkin', 'admin_reward', 'credit_migration'] },
 						status: { type: 'string' },
 						cost: { type: 'number' },
 						promptTokens: { type: 'integer', nullable: true },

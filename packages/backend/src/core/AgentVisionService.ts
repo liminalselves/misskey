@@ -6,14 +6,16 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { DI } from '@/di-symbols.js';
 import { bindThis } from '@/decorators.js';
+import fetch from 'node-fetch';
 import { DriveFileEntityService } from '@/core/entities/DriveFileEntityService.js';
 import { AgentModelUsageService } from '@/core/AgentModelUsageService.js';
+import { HttpRequestService } from '@/core/HttpRequestService.js';
 import type { DriveFilesRepository } from '@/models/_.js';
 import type { MiAgentSession } from '@/models/AgentSession.js';
 import type { MiMeta, MiAgentVisionModel } from '@/models/Meta.js';
 import type { MiUser } from '@/models/User.js';
 import { ApiError } from '@/server/api/error.js';
-import { assertSafeLlmHttpsUrl } from '@/misc/validate-llm-endpoint-url.js';
+import { assertSafeLlmHttpsUrl, normalizeChatCompletionsUrl } from '@/misc/validate-llm-endpoint-url.js';
 import { readBodyWithLimit } from '@/misc/read-body-with-limit.js';
 
 export const agentVisionErrors = {
@@ -42,6 +44,7 @@ export class AgentVisionService {
 
 		private driveFileEntityService: DriveFileEntityService,
 		private agentModelUsageService: AgentModelUsageService,
+		private httpRequestService: HttpRequestService,
 	) {}
 
 	@bindThis
@@ -116,15 +119,20 @@ export class AgentVisionService {
 				else external.addEventListener('abort', onExternalAbort, { once: true });
 			}
 			try {
-				const response = await fetch(this.driveFileEntityService.getPublicUrl(file), { signal: controller.signal });
+				// 出站请求统一走 HttpRequestService 的代理规则：实例配置 proxy 时经代理转发
+				// （proxyBypassHosts 例外直连），否则直连。与站内其余外联（联邦/媒体代理等）同口径。
+				const outboundAgent = (parsedUrl: URL) => this.httpRequestService.getAgentByUrl(parsedUrl);
+				const response = await fetch(this.driveFileEntityService.getPublicUrl(file), { signal: controller.signal, agent: outboundAgent });
 				if (!response.ok) throw new Error(`Cannot read image: ${response.status}`);
 				const bytes = await readBodyWithLimit(response, MAX_IMAGE_BYTES);
 				if (bytes.length === 0) throw new Error('Invalid image payload.');
 
+				// 与对话端点同一套归一化：以 completions 结尾视为完整端点，否则追加 /chat/completions（不猜测 /v1）
+				const endpoint = normalizeChatCompletionsUrl(params.model.apiUrl);
 				// 运行时再过一次 SSRF 闸门：防保存后 DNS 变化 / rebinding 的纵深防御
-				await assertSafeLlmHttpsUrl(params.model.apiUrl);
+				await assertSafeLlmHttpsUrl(endpoint);
 
-				const upstream = await fetch(params.model.apiUrl, {
+				const upstream = await fetch(endpoint, {
 					method: 'POST',
 					// 上游模型端点不允许重定向：校验后的 URL 经 302 跳向内网即构成 SSRF 旁路
 					redirect: 'error',
@@ -137,6 +145,7 @@ export class AgentVisionService {
 						] }],
 					}),
 					signal: controller.signal,
+					agent: outboundAgent,
 				});
 				if (!upstream.ok) throw new Error(`Vision upstream failed: ${upstream.status}`);
 				const bodyText = (await readBodyWithLimit(upstream, MAX_UPSTREAM_JSON_BYTES)).toString('utf8');

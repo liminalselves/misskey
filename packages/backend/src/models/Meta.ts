@@ -1162,6 +1162,25 @@ export class MiMeta {
 	})
 	public agentVisionDefaultModelId: string | null;
 
+	/** 是否启用智能体表情包（全站表情 + 角色专属表情包） */
+	@Column('boolean', {
+		default: false,
+	})
+	public agentStickerEnabled: boolean;
+
+	/** 智能体单条回复中表情包（全站 + 角色）合计数量上限，超出部分入库前剥离 */
+	@Column('integer', {
+		default: 3,
+	})
+	public agentStickerMaxPerMessage: number;
+
+	/** 系统提示中注入的全站表情（有描述者）数量上限，防止 prompt 膨胀 */
+	@Column('integer', {
+		default: 200,
+	})
+	public agentEmojiPromptMaxCount: number;
+
+
 	@Column('jsonb', {
 		default: [],
 	})

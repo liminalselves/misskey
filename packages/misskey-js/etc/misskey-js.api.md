@@ -426,6 +426,9 @@ type AdminEmojiAddRequest = operations['admin___emoji___add']['requestBody']['co
 type AdminEmojiAddResponse = operations['admin___emoji___add']['responses']['200']['content']['application/json'];
 
 // @public (undocumented)
+type AdminEmojiAgentDescriptionStatusResponse = operations['admin___emoji___agent-description-status']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
 type AdminEmojiCopyRequest = operations['admin___emoji___copy']['requestBody']['content']['application/json'];
 
 // @public (undocumented)
@@ -436,6 +439,15 @@ type AdminEmojiDeleteBulkRequest = operations['admin___emoji___delete-bulk']['re
 
 // @public (undocumented)
 type AdminEmojiDeleteRequest = operations['admin___emoji___delete']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AdminEmojiGenerateAgentDescriptionRequest = operations['admin___emoji___generate-agent-description']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AdminEmojiGenerateAgentDescriptionResponse = operations['admin___emoji___generate-agent-description']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type AdminEmojiGenerateAgentDescriptionsResponse = operations['admin___emoji___generate-agent-descriptions']['responses']['200']['content']['application/json'];
 
 // @public (undocumented)
 type AdminEmojiImportZipRequest = operations['admin___emoji___import-zip']['requestBody']['content']['application/json'];
@@ -717,6 +729,27 @@ type AgentsBillingLogsRequest = operations['agents___billing-logs']['requestBody
 type AgentsBillingLogsResponse = operations['agents___billing-logs']['responses']['200']['content']['application/json'];
 
 // @public (undocumented)
+type AgentsByokModelsCreateRequest = operations['agents___byok___models___create']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AgentsByokModelsCreateResponse = operations['agents___byok___models___create']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type AgentsByokModelsDeleteRequest = operations['agents___byok___models___delete']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AgentsByokModelsDeleteResponse = operations['agents___byok___models___delete']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type AgentsByokModelsListResponse = operations['agents___byok___models___list']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type AgentsByokModelsUpdateRequest = operations['agents___byok___models___update']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AgentsByokModelsUpdateResponse = operations['agents___byok___models___update']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
 type AgentsCharactersCreateRequest = operations['agents___characters___create']['requestBody']['content']['application/json'];
 
 // @public (undocumented)
@@ -733,6 +766,12 @@ type AgentsCharactersDiffRequest = operations['agents___characters___diff']['req
 
 // @public (undocumented)
 type AgentsCharactersDiffResponse = operations['agents___characters___diff']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type AgentsCharactersGenerateStickerDescriptionRequest = operations['agents___characters___generate-sticker-description']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AgentsCharactersGenerateStickerDescriptionResponse = operations['agents___characters___generate-sticker-description']['responses']['200']['content']['application/json'];
 
 // @public (undocumented)
 type AgentsCharactersListMineResponse = operations['agents___characters___list-mine']['responses']['200']['content']['application/json'];
@@ -2386,10 +2425,14 @@ declare namespace entities {
         AdminEmojiAddRequest,
         AdminEmojiAddResponse,
         AdminEmojiAddAliasesBulkRequest,
+        AdminEmojiAgentDescriptionStatusResponse,
         AdminEmojiCopyRequest,
         AdminEmojiCopyResponse,
         AdminEmojiDeleteRequest,
         AdminEmojiDeleteBulkRequest,
+        AdminEmojiGenerateAgentDescriptionRequest,
+        AdminEmojiGenerateAgentDescriptionResponse,
+        AdminEmojiGenerateAgentDescriptionsResponse,
         AdminEmojiImportZipRequest,
         AdminEmojiListRequest,
         AdminEmojiListResponse,
@@ -2483,12 +2526,21 @@ declare namespace entities {
         AdminUsersAgentSuccessRateResponse,
         AgentsBillingLogsRequest,
         AgentsBillingLogsResponse,
+        AgentsByokModelsCreateRequest,
+        AgentsByokModelsCreateResponse,
+        AgentsByokModelsDeleteRequest,
+        AgentsByokModelsDeleteResponse,
+        AgentsByokModelsListResponse,
+        AgentsByokModelsUpdateRequest,
+        AgentsByokModelsUpdateResponse,
         AgentsCharactersCreateRequest,
         AgentsCharactersCreateResponse,
         AgentsCharactersDeleteRequest,
         AgentsCharactersDeleteResponse,
         AgentsCharactersDiffRequest,
         AgentsCharactersDiffResponse,
+        AgentsCharactersGenerateStickerDescriptionRequest,
+        AgentsCharactersGenerateStickerDescriptionResponse,
         AgentsCharactersListMineResponse,
         AgentsCharactersPlazaDetailRequest,
         AgentsCharactersPlazaDetailResponse,
@@ -4024,10 +4076,13 @@ type ModerationLog = {
 } | {
     type: 'setAgentCharacterModerationBan';
     info: ModerationLogPayloads['setAgentCharacterModerationBan'];
+} | {
+    type: 'ignoreAgentExternalAuditReview';
+    info: ModerationLogPayloads['ignoreAgentExternalAuditReview'];
 });
 
 // @public (undocumented)
-export const moderationLogTypes: readonly ["updateServerSettings", "suspend", "unsuspend", "updateUserNote", "addCustomEmoji", "updateCustomEmoji", "deleteCustomEmoji", "assignRole", "unassignRole", "createRole", "updateRole", "deleteRole", "clearQueue", "promoteQueue", "deleteDriveFile", "deleteNote", "createGlobalAnnouncement", "createUserAnnouncement", "updateGlobalAnnouncement", "updateUserAnnouncement", "deleteGlobalAnnouncement", "deleteUserAnnouncement", "resetPassword", "suspendRemoteInstance", "unsuspendRemoteInstance", "updateRemoteInstanceNote", "markSensitiveDriveFile", "unmarkSensitiveDriveFile", "resolveAbuseReport", "forwardAbuseReport", "updateAbuseReportNote", "createInvitation", "createAd", "updateAd", "deleteAd", "createAvatarDecoration", "updateAvatarDecoration", "deleteAvatarDecoration", "unsetUserAvatar", "unsetUserBanner", "createSystemWebhook", "updateSystemWebhook", "deleteSystemWebhook", "createAbuseReportNotificationRecipient", "updateAbuseReportNotificationRecipient", "deleteAbuseReportNotificationRecipient", "deleteAccount", "deletePage", "deleteFlash", "deleteGalleryPost", "deleteChatRoom", "updateProxyAccountDescription", "resolveAgentReview", "setAgentSessionModerationBan", "setAgentCharacterModerationBan"];
+export const moderationLogTypes: readonly ["updateServerSettings", "suspend", "unsuspend", "updateUserNote", "addCustomEmoji", "updateCustomEmoji", "deleteCustomEmoji", "assignRole", "unassignRole", "createRole", "updateRole", "deleteRole", "clearQueue", "promoteQueue", "deleteDriveFile", "deleteNote", "createGlobalAnnouncement", "createUserAnnouncement", "updateGlobalAnnouncement", "updateUserAnnouncement", "deleteGlobalAnnouncement", "deleteUserAnnouncement", "resetPassword", "suspendRemoteInstance", "unsuspendRemoteInstance", "updateRemoteInstanceNote", "markSensitiveDriveFile", "unmarkSensitiveDriveFile", "resolveAbuseReport", "forwardAbuseReport", "updateAbuseReportNote", "createInvitation", "createAd", "updateAd", "deleteAd", "createAvatarDecoration", "updateAvatarDecoration", "deleteAvatarDecoration", "unsetUserAvatar", "unsetUserBanner", "createSystemWebhook", "updateSystemWebhook", "deleteSystemWebhook", "createAbuseReportNotificationRecipient", "updateAbuseReportNotificationRecipient", "deleteAbuseReportNotificationRecipient", "deleteAccount", "deletePage", "deleteFlash", "deleteGalleryPost", "deleteChatRoom", "updateProxyAccountDescription", "resolveAgentReview", "setAgentSessionModerationBan", "setAgentCharacterModerationBan", "ignoreAgentExternalAuditReview"];
 
 // @public (undocumented)
 type MuteCreateRequest = operations['mute___create']['requestBody']['content']['application/json'];

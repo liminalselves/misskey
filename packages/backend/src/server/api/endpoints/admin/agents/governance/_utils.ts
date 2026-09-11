@@ -4,11 +4,12 @@
  */
 
 import type { AgentService } from '@/core/AgentService.js';
-import type { MiAgentCharacter } from '@/models/AgentCharacter.js';
+import type { MiAgentCharacter, MiAgentCharacterSticker } from '@/models/AgentCharacter.js';
 import type { MiAgentDialogueStyle } from '@/models/AgentDialogueStyle.js';
 import type { UsersRepository } from '@/models/_.js';
 import { IsNull } from 'typeorm';
 import * as Acct from '@/misc/acct.js';
+import { normalizeCharacterStickerList } from '@/core/agent-sticker-utils.js';
 
 export const agentGovernanceLogTypes = ['resolveAgentReview', 'setAgentSessionModerationBan', 'setAgentCharacterModerationBan'] as const;
 
@@ -65,6 +66,11 @@ function extractTextFromRules(rules: Array<Record<string, unknown>> | null | und
 	]).join('\n');
 }
 
+function stickersPreview(stickers: MiAgentCharacterSticker[]): string {
+	if (stickers.length === 0) return '';
+	return stickers.map(s => `${s.key}: ${s.description}`).join('\n');
+}
+
 function riskTagsForText(params: {
 	text: string;
 	worldbookCount?: number;
@@ -90,6 +96,7 @@ export function packCharacterGovernanceRow(
 	avatar: unknown | null = null,
 ) {
 	const worldbook = agentService.normalizeWorldbookEntries(row.worldbook);
+	const stickers = normalizeCharacterStickerList(row.stickers);
 	const riskText = [
 		row.name,
 		row.summary ?? '',
@@ -101,6 +108,7 @@ export function packCharacterGovernanceRow(
 		row.forbiddenBehavior,
 		extractTextFromWorldbook(row.worldbook),
 		extractTextFromRules(row.rules),
+		stickersPreview(stickers),
 	].join('\n');
 
 	return {
@@ -122,6 +130,7 @@ export function packCharacterGovernanceRow(
 		user,
 		avatar,
 		worldbookCount: worldbook.length,
+		stickerCount: stickers.length,
 		riskTags: riskTagsForText({
 			text: riskText,
 			worldbookCount: worldbook.length,
@@ -181,6 +190,7 @@ export function buildCharacterReviewDiff(agentService: AgentService, row: MiAgen
 	push('avatarFileId', draft.avatarFileId ?? '', pub.avatarFileId ?? '');
 	push('worldbook', agentService.worldbookStableString(draft.worldbook), agentService.worldbookStableString(pub.worldbook));
 	push('rules', agentService.rulesStableString(draft.rules), agentService.rulesStableString(pub.rules));
+	push('stickers', stickersPreview(draft.stickers), stickersPreview(pub.stickers));
 	return { hasChanges: fields.length > 0, fields };
 }
 
@@ -197,7 +207,13 @@ export function buildStyleReviewDiff(agentService: AgentService, row: MiAgentDia
 	return { hasChanges: fields.length > 0, fields };
 }
 
-export function packCharacterGovernanceDetail(agentService: AgentService, row: MiAgentCharacter, user: unknown, avatar: unknown | null) {
+export function packCharacterGovernanceDetail(
+	agentService: AgentService,
+	row: MiAgentCharacter,
+	user: unknown,
+	avatar: unknown | null,
+	stickerFiles?: Map<string, unknown>,
+) {
 	const base = packCharacterGovernanceRow(agentService, row, user, avatar);
 	return {
 		...base,
@@ -209,6 +225,13 @@ export function packCharacterGovernanceDetail(agentService: AgentService, row: M
 		forbiddenBehavior: row.forbiddenBehavior,
 		worldbook: agentService.normalizeWorldbookEntries(row.worldbook),
 		rules: agentService.normalizeRules(row.rules),
+		// 审核视角需要看到表情图与描述；stickerFiles 由调用端 pack（fileId → DriveFile）
+		stickers: normalizeCharacterStickerList(row.stickers).map(sticker => ({
+			key: sticker.key,
+			fileId: sticker.fileId,
+			description: sticker.description,
+			file: stickerFiles?.get(sticker.fileId) ?? null,
+		})),
 		publishedSnapshot: row.publishedSnapshot ? agentService.parseCharacterSnapshot(row.publishedSnapshot) : null,
 		diff: buildCharacterReviewDiff(agentService, row),
 	};

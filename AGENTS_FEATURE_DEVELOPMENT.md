@@ -255,6 +255,44 @@
 
 以下能力在 §11.1 初版交付之后迭代落地，**详细行为、API 与迁移编号**以仓库根目录 **`CHANGELOG.md`** 中 **`## 2026.1.0`** 的 *Client* / *Note* / *Server* 小节为准。涉及迁移示例：`1771470000000-AgentSessionOptionalDialogueStyle`、`1771600000000-AgentPlazaReview`、`1771650000000-AgentPlazaStatsDialogueStyleSnapshot`、`1771700000000-AgentModerationBanned`（路径：`packages/backend/migration/`）。
 
+### 11.5 表情包能力（全站表情 + 角色专属表情包）
+
+在 §11.4 之后迭代落地，核心设计为「**一切表情语法都是 content 文本**」，消息表与导出格式零变更（导出 v1–v5 全兼容）。
+
+**数据模型**（迁移 `1783000000000-AgentStickerEmojiDescription.js`、`1783100000000-AgentCharacterStickers.js`）：
+
+- `emoji.agentDescription`（varchar 200，默认空）：全站表情的智能体描述；**只有填写了描述的表情才进入 LLM 注入列表**（防 prompt 膨胀 + 管理员可控白名单）。
+- `meta.agentStickerEnabled`（默认 false）/ `agentStickerMaxPerMessage`（默认 3）/ `agentEmojiPromptMaxCount`（默认 200）。
+- `agent_character.stickers` jsonb：`[{ key, fileId, description }]`，≤50 个，key `^[a-zA-Z0-9_-]{1,32}$` 角色内唯一，描述必填（模型据此择机），文件须为本人 Drive 图片/动图（比例不限）≤5MiB；进入发布快照（快照链路 5 处同步扩展）。
+
+**发送链路**（`AgentStickerService` + `agent-sticker-utils` 纯函数模块）：
+
+- 系统提示追加 `<agent_sticker_protocol>`：全站表情（name+描述，按注入上限截断）+ 角色表情（key+描述），声明每轮合计上限。
+- 用户消息 LLM 视图转义：`:name:` 命中有描述的表情 → `（表情 name：描述）`；入库原文不动；历史/压缩/记忆输入同口径。
+- 助手回复入库前 `enforceReplyLimits`：按出现顺序保留前 N 个合法标签（`[[agent_sticker key=]]` + 命中列表的 `:name:`），超限/编造/未启用一律剥离；发送与主动消息两条管线共用。
+- 通知预览经现有 `agentPreviewText` 剥离表情标签（`[[agent_*]]` 通配已覆盖）。
+
+**描述 AI 生成**（复用识图计费管线）：
+
+- `AgentVisionService` 同形状调用（base64 data URL + SSRF 闸门 + 120s 预算），`usageKind: 'sticker_description'`，`costOverride = 识图模型 costPerCall`，扣 `startLog.userId`（全站表情=操作管理员，角色表情=创作者）。
+- 端点：`admin/emoji/generate-agent-description`（单个）/ `generate-agent-descriptions`（批量，内存队列串行 + 防重入，重启可重入幂等）/ `agent-description-status`（轮询进度）/ `agents/characters/generate-sticker-description`（返回描述文本由创作者编辑后随表单保存）。
+
+**渲染**（前端）：
+
+- `:name:`：`agent-chat-markdown.ts` marked inline extension → `<img class="agent-emoji">`，命中全局 `customEmojisMap`（本地表情）才转；sanitizer img 白名单放行限定值 class；行内高 2em、宽随原始比例（与站内 MkCustomEmoji 同款）。
+- `[[agent_sticker key=]]`：`agent-session.message.vue` `renderParts` 新增 sticker RenderPart（仅 assistant 消息渲染，用户只能发全站表情）；max 140px 有界、保持原始比例，动图用原图保动画；数据来自 `agents/sessions/show` 新增 `characterStickers`（与 LLM 视图同源：社区会话走发布快照、测试会话跟随草稿）；key 失效显示占位。
+
+**管理/编辑/审核 UI**：
+
+- 控制面板-智能体-表情包 tab（启用开关 + 每轮上限 + 注入上限）。
+- emoji 编辑对话框：描述输入 + 单个 AI 生成按钮；表情管理列表页：批量生成按钮（确认框 + 2s 轮询进度 + 完成刷新）。
+- 角色编辑器新「表情包」tab：上传（客户端类型/大小预检，比例不限）+ key/描述编辑 + AI 生成。
+- 审核详情展示表情网格（缩略图 + key + 描述），列表行含 `stickerCount`，三处 diff（用户侧/管理侧/审核内部）新增 stickers 字段。
+
+**兼容性**：功能默认关闭时行为与现状一致；导出/导入零格式变更（旧客户端显示字面标签为可接受降级）；旧发布快照无 stickers 默认 `[]`；表情显示与站内惯例一致，按原始比例。
+
+
+
 ---
 
 *文档版本：修订稿（含实现进度 §11）*

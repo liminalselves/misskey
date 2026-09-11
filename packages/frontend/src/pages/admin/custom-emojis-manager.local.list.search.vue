@@ -23,21 +23,21 @@ SPDX-License-Identifier: AGPL-3.0-only
 						type="search"
 						autocapitalize="off"
 					>
-						<template #label>name</template>
+						<template #label>{{ i18n.ts._customEmojisManager._gridCommon.columnName }}</template>
 					</MkInput>
 					<MkInput
 						v-model="model.category"
 						type="search"
 						autocapitalize="off"
 					>
-						<template #label>category</template>
+						<template #label>{{ i18n.ts._customEmojisManager._gridCommon.columnCategory }}</template>
 					</MkInput>
 					<MkInput
 						v-model="model.aliases"
 						type="search"
 						autocapitalize="off"
 					>
-						<template #label>aliases</template>
+						<template #label>{{ i18n.ts._customEmojisManager._gridCommon.columnAliases }}</template>
 					</MkInput>
 
 					<MkInput
@@ -45,14 +45,14 @@ SPDX-License-Identifier: AGPL-3.0-only
 						type="search"
 						autocapitalize="off"
 					>
-						<template #label>type</template>
+						<template #label>{{ i18n.ts._customEmojisManager._gridCommon.columnType }}</template>
 					</MkInput>
 					<MkInput
 						v-model="model.license"
 						type="search"
 						autocapitalize="off"
 					>
-						<template #label>license</template>
+						<template #label>{{ i18n.ts._customEmojisManager._gridCommon.columnLicense }}</template>
 					</MkInput>
 					<MkSelect
 						v-model="model.sensitive"
@@ -62,7 +62,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 							{ label: 'false', value: 'false' },
 						]"
 					>
-						<template #label>sensitive</template>
+						<template #label>{{ i18n.ts._customEmojisManager._gridCommon.columnSensitive }}</template>
 					</MkSelect>
 
 					<MkSelect
@@ -73,21 +73,21 @@ SPDX-License-Identifier: AGPL-3.0-only
 							{ label: 'false', value: 'false' },
 						]"
 					>
-						<template #label>localOnly</template>
+						<template #label>{{ i18n.ts._customEmojisManager._gridCommon.columnLocalOnly }}</template>
 					</MkSelect>
 					<MkInput
 						v-model="model.updatedAtFrom"
 						type="date"
 						autocapitalize="off"
 					>
-						<template #label>updatedAt(from)</template>
+						<template #label>{{ i18n.ts._customEmojisManager._gridCommon.columnUpdatedAtFrom }}</template>
 					</MkInput>
 					<MkInput
 						v-model="model.updatedAtTo"
 						type="date"
 						autocapitalize="off"
 					>
-						<template #label>updatedAt(to)</template>
+						<template #label>{{ i18n.ts._customEmojisManager._gridCommon.columnUpdatedAtTo }}</template>
 					</MkInput>
 
 					<MkInput
@@ -97,7 +97,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 						autocapitalize="off"
 						@click="onQueryRolesEditClicked"
 					>
-						<template #label>role</template>
+						<template #label>{{ i18n.ts._customEmojisManager._gridCommon.columnRole }}</template>
 						<template #suffix><i class="ti ti-pencil"></i></template>
 					</MkInput>
 				</div>
@@ -107,6 +107,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<MkSortOrderEditor
 						:baseOrderKeyNames="gridSortOrderKeys"
 						:currentOrders="sortOrders"
+						:keyLabeler="gridColumnTitle"
 						@update="onSortOrderUpdate"
 					/>
 				</MkFolder>
@@ -127,6 +128,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
 import {
+	gridColumnTitle,
 	gridSortOrderKeys,
 } from './custom-emojis-manager.impl.js';
 import type { EmojiSearchQuery } from './custom-emojis-manager.local.list.vue';

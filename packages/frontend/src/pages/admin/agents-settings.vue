@@ -416,7 +416,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 						</FormSplit>
 						<MkInput v-model="row.baseUrl" type="text">
 							<template #label>请求端点</template>
-							<template #caption>填写 OpenAI 兼容 Base URL，例如 http://127.0.0.1:8000/v1。</template>
+							<template #caption>填写 OpenAI 兼容 Base URL（版本前缀如 /v1、/v4 请写全）；末尾不是 completions 时会自动追加 /chat/completions，已以 completions 结尾则原样使用。</template>
 							<template #prefix><i class="ti ti-link"></i></template>
 						</MkInput>
 						<FormSplit :minWidth="220">
@@ -663,6 +663,28 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</div>
 			</MkFolder>
 
+			<MkFolder v-if="activeTab === 'sticker'" :defaultOpen="true">
+				<template #icon><i class="ti ti-sticker"></i></template>
+				<template #label>{{ i18n.ts._agents.stickerTabTitle }}</template>
+				<div class="_gaps">
+					<MkInfo>{{ i18n.ts._agents.stickerAdminIntro }}</MkInfo>
+					<MkSwitch v-model="form.state.agentStickerEnabled">
+						<template #label>{{ i18n.ts._agents.stickerEnabled }}</template>
+						<template #caption>{{ i18n.ts._agents.stickerEnabledCaption }}</template>
+					</MkSwitch>
+					<FormSplit :minWidth="180">
+						<MkInput v-model="form.state.agentStickerMaxPerMessage" type="text">
+							<template #label>{{ i18n.ts._agents.stickerMaxPerMessage }}</template>
+							<template #caption>{{ i18n.ts._agents.stickerMaxPerMessageCaption }}</template>
+						</MkInput>
+						<MkInput v-model="form.state.agentEmojiPromptMaxCount" type="text">
+							<template #label>{{ i18n.ts._agents.emojiPromptMaxCount }}</template>
+							<template #caption>{{ i18n.ts._agents.emojiPromptMaxCountCaption }}</template>
+						</MkInput>
+					</FormSplit>
+				</div>
+			</MkFolder>
+
 			<MkFolder v-if="activeTab === 'vision'" :defaultOpen="true">
 				<template #icon><i class="ti ti-eye"></i></template>
 				<template #label>{{ i18n.ts._agents.adminVisionTitle }}</template>
@@ -672,7 +694,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<div v-for="(row, i) in form.state.agentVisionModelRows" :key="row.id" :class="$style.modelCard" class="_gaps_s">
 						<div :class="$style.modelCardHead"><b>{{ row.name.trim() || `${i18n.ts._agents.adminVisionModel} #${i + 1}` }}</b><button type="button" class="_button" :class="$style.iconWarn" @click="removeVisionModel(i)"><i class="ti ti-trash"></i></button></div>
 						<FormSplit :minWidth="220"><MkInput v-model="row.name"><template #label>{{ i18n.ts._agents.adminVisionModel }}</template></MkInput><MkSwitch v-model="row.enabled"><template #label>{{ i18n.ts.enabled }}</template></MkSwitch></FormSplit>
-						<FormSplit :minWidth="220"><MkInput v-model="row.apiUrl"><template #label>{{ i18n.ts._agents.adminVisionRequestUrl }}</template></MkInput><MkInput v-model="row.apiKey" type="password"><template #label>{{ i18n.ts._agents.adminVisionApiKey }}</template></MkInput></FormSplit>
+						<FormSplit :minWidth="220"><MkInput v-model="row.apiUrl"><template #label>{{ i18n.ts._agents.adminVisionRequestUrl }}</template><template #caption>{{ i18n.ts._agents.adminVisionRequestUrlCaption }}</template></MkInput><MkInput v-model="row.apiKey" type="password"><template #label>{{ i18n.ts._agents.adminVisionApiKey }}</template></MkInput></FormSplit>
 						<FormSplit :minWidth="220"><MkInput v-model="row.apiModelName"><template #label>{{ i18n.ts._agents.adminVisionUpstreamModel }}</template></MkInput><MkInput v-model="row.costPerCall" type="text"><template #label>{{ i18n.ts._agents.adminVisionCost }}</template></MkInput></FormSplit>
 					</div>
 					<MkButton rounded @click="addVisionModel"><i class="ti ti-plus"></i> {{ i18n.ts._agents.adminVisionAddModel }}</MkButton>
@@ -1033,7 +1055,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</div>
 			</MkFolder>
 
-			<div v-if="form.modified.value && ['basic', 'models', 'memory', 'compression', 'externalAudit', 'images', 'vision', 'credits', 'proactive'].includes(activeTab)" :class="$style.saveBar">
+			<div v-if="form.modified.value && ['basic', 'models', 'memory', 'compression', 'externalAudit', 'images', 'sticker', 'vision', 'credits', 'proactive'].includes(activeTab)" :class="$style.saveBar">
 				<MkFormFooter :form="form"/>
 			</div>
 		</div>
@@ -1503,6 +1525,9 @@ const form = useForm({
 	agentImageDefaultArtistPresetId: typeof meta.agentImageDefaultArtistPresetId === 'string' ? meta.agentImageDefaultArtistPresetId : '',
 	agentImageDefaultNegativePrompt: typeof meta.agentImageDefaultNegativePrompt === 'string' ? meta.agentImageDefaultNegativePrompt : (typeof meta.agentImageDefaultNegativePromptResolved === 'string' ? meta.agentImageDefaultNegativePromptResolved : ''),
 	agentImageMaxPerReply: String(numFromMeta(meta.agentImageMaxPerReply, 2)),
+	agentStickerEnabled: Boolean(meta.agentStickerEnabled),
+	agentStickerMaxPerMessage: String(numFromMeta(meta.agentStickerMaxPerMessage, 3)),
+	agentEmojiPromptMaxCount: String(numFromMeta(meta.agentEmojiPromptMaxCount, 200)),
 	agentImageCostPerCall: typeof meta.agentImageCostPerCall === 'number' ? String(meta.agentImageCostPerCall) : '0',
 	agentImageTokenMinPoints: String(numFromMeta(meta.agentImageTokenMinPoints, 1)),
 	agentImageTokenBalanceTtlSeconds: String(numFromMeta(meta.agentImageTokenBalanceTtlSeconds, 300)),
@@ -1780,6 +1805,16 @@ const form = useForm({
 		imageArtistPresetIds.add(row.id);
 	}
 	const imageMaxPerReply = Math.trunc(Number(state.agentImageMaxPerReply));
+	const stickerMaxPerMessage = Math.trunc(Number(state.agentStickerMaxPerMessage));
+	const emojiPromptMaxCount = Math.trunc(Number(state.agentEmojiPromptMaxCount));
+	if (!Number.isFinite(stickerMaxPerMessage) || stickerMaxPerMessage < 0 || stickerMaxPerMessage > 10) {
+		os.alert({ type: 'error', text: i18n.ts._agents.stickerAdminParamsInvalid });
+		throw new Error('invalid sticker max per message');
+	}
+	if (!Number.isFinite(emojiPromptMaxCount) || emojiPromptMaxCount < 1 || emojiPromptMaxCount > 2000) {
+		os.alert({ type: 'error', text: i18n.ts._agents.stickerAdminParamsInvalid });
+		throw new Error('invalid emoji prompt max count');
+	}
 	const imageCost = Number(state.agentImageCostPerCall);
 	const imageMinPoints = Math.trunc(Number(state.agentImageTokenMinPoints));
 	const imageTtl = Math.trunc(Number(state.agentImageTokenBalanceTtlSeconds));
@@ -1971,6 +2006,9 @@ const form = useForm({
 		},
 		agentImageDefaultNegativePrompt: state.agentImageDefaultNegativePrompt.trim() === '' ? null : state.agentImageDefaultNegativePrompt,
 		agentImageMaxPerReply: imageMaxPerReply,
+		agentStickerEnabled: state.agentStickerEnabled === true,
+		agentStickerMaxPerMessage: stickerMaxPerMessage,
+		agentEmojiPromptMaxCount: emojiPromptMaxCount,
 		agentImageCostPerCall: imageCost,
 		agentImageTokenMinPoints: imageMinPoints,
 		agentImageTokenBalanceTtlSeconds: imageTtl,
@@ -2786,6 +2824,10 @@ const headerTabs = computed(() => [{
 	key: 'images',
 	title: '绘图',
 	icon: 'ti ti-brush',
+}, {
+	key: 'sticker',
+	title: i18n.ts._agents.stickerTabTitle,
+	icon: 'ti ti-sticker',
 }, {
 	key: 'vision',
 	title: i18n.ts._agents.adminVisionTitle,

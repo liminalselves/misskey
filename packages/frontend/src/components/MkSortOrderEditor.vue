@@ -11,7 +11,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 			:key="order.key"
 			:iconClass="order.direction === '+' ? 'ti ti-arrow-up' : 'ti ti-arrow-down'"
 			:exButtonIconClass="'ti ti-x'"
-			:content="order.key"
+			:content="keyLabeler ? keyLabeler(order.key) : order.key"
 			:class="$style.sortOrderTag"
 			@click="onToggleSortOrderButtonClicked(order)"
 			@exButtonClick="onRemoveSortOrderButtonClicked(order)"
@@ -38,6 +38,8 @@ const emit = defineEmits<{
 const props = defineProps<{
 	baseOrderKeyNames: T[];
 	currentOrders: SortOrder<T>[];
+	// キー名をそのまま表示すると技術的な英語になるため、表示名へ変換する場合に指定する
+	keyLabeler?: (key: T) => string;
 }>();
 
 const { currentOrders } = toRefs(props);
@@ -55,19 +57,19 @@ function onToggleSortOrderButtonClicked(order: SortOrder<T>) {
 	emitOrder(currentOrders.value);
 }
 
-function onAddSortOrderButtonClicked(ev: PointerEvent) {
-	const menuItems: MenuItem[] = props.baseOrderKeyNames
-		.filter(baseKey => !currentOrders.value.map(it => it.key).includes(baseKey))
-		.map(it => {
-			return {
-				text: it,
-				action: () => {
-					emitOrder([...currentOrders.value, { key: it, direction: '+' }]);
-				},
-			};
-		});
-	os.contextMenu(menuItems, ev);
-}
+	function onAddSortOrderButtonClicked(ev: PointerEvent) {
+		const menuItems: MenuItem[] = props.baseOrderKeyNames
+			.filter(baseKey => !currentOrders.value.map(it => it.key).includes(baseKey))
+			.map(it => {
+				return {
+					text: props.keyLabeler ? props.keyLabeler(it) : it,
+					action: () => {
+						emitOrder([...currentOrders.value, { key: it, direction: '+' }]);
+					},
+				};
+			});
+		os.contextMenu(menuItems, ev);
+	}
 
 function onRemoveSortOrderButtonClicked(order: SortOrder<T>) {
 	emitOrder(currentOrders.value.filter(it => it.key !== order.key));

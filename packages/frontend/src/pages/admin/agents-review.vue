@@ -503,12 +503,14 @@ type ReviewDetailRow = ReviewRow & {
 	forbiddenBehavior?: string;
 	worldbook?: WorldbookEntry[];
 	rules?: CharacterRuleEntry[];
+	stickers?: StickerEntry[];
 	body?: string;
 	publishedSnapshot: Record<string, unknown> | null;
 	diff: { hasChanges: boolean; fields: { key: string; draftPreview: string; publishedPreview: string }[] };
 };
 type WorldbookEntry = { id: string; title: string; content: string; keywords: string[]; triggerMode: 'keyword' | 'manual' | 'always'; priority: number; enabled: boolean; revision: number };
 type CharacterRuleEntry = { id: string; name: string; content: string; description: string; type: 'persistent' | 'toggleable'; defaultEnabled: boolean };
+type StickerEntry = { key: string; fileId: string; description: string; file?: { url: string; thumbnailUrl?: string | null; type?: string | null } | null };
 type SessionRow = { id: string; createdAt: string; updatedAt: string; userId: string; name: string; characterId: string; dialogueStyleId: string | null; sessionKind: 'draft_test' | 'community'; lastMessageAt: string | null; agentReplyPending: boolean; moderationBanned: boolean; characterName: string; user: any | null; messageCount: number | null };
 type TimelineMsg = { id: string; role: 'user' | 'assistant' | 'system'; content: string; createdAt: string };
 type SessionDetailRow = { session: SessionRow; messages: TimelineMsg[]; totalCount: number; hasMore: boolean };
@@ -1339,6 +1341,7 @@ function reviewFieldLabel(key: string) {
 		forbiddenBehavior: '禁止行为',
 		worldbook: '世界书',
 		rules: '规则',
+		stickers: '表情包',
 		body: '风格提示词正文',
 		avatarFileId: '头像',
 	};
@@ -1481,6 +1484,21 @@ const ReviewDetail = defineComponent({
 				h('pre', worldbookText(props.detail.worldbook)),
 				h('h3', '规则'),
 				h('pre', rulesText(props.detail.rules)),
+				(props.detail.stickers?.length ?? 0) > 0 ? h('section', { class: 'review-stickers' }, [
+					h('h3', '表情包'),
+					...props.detail.stickers!.map(sticker => {
+						const stickerUrl = sticker.file ? (sticker.file.type === 'image/gif' ? sticker.file.url : sticker.file.thumbnailUrl ?? sticker.file.url) : null;
+						return h('div', { class: 'review-sticker-item', title: sticker.description }, [
+							stickerUrl
+								? h('img', { src: stickerUrl, alt: sticker.key, loading: 'lazy' })
+								: h('div', { class: 'review-sticker-fallback' }, sticker.key),
+							h('div', { class: 'review-sticker-meta' }, [
+								h('b', sticker.key),
+								h('span', sticker.description),
+							]),
+						]);
+					}),
+				]) : null,
 			]) : h('section', { class: 'review-block' }, [
 				h('h3', '风格提示词正文'),
 				h('pre', props.detail.body || '—'),
@@ -2201,6 +2219,49 @@ onUnmounted(() => {
 	border-radius: 8px;
 	overflow: hidden;
 	flex: 0 0 auto;
+}
+/* 角色表情包审核网格：缩略图（原始比例有界） + key/描述 */
+.review-stickers {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+	gap: 8px;
+}
+.review-sticker-item {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	padding: 8px;
+	border: solid 1px var(--MI_THEME-divider);
+	border-radius: 8px;
+	min-width: 0;
+}
+.review-sticker-item img,
+.review-sticker-fallback {
+	max-width: 100%;
+	max-height: 140px;
+	width: auto;
+	height: auto;
+	object-fit: contain;
+	border-radius: 6px;
+	background: var(--MI_THEME-panel);
+}
+.review-sticker-fallback {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	font-size: 0.85em;
+	color: var(--MI_THEME-fgTransparentWeak);
+	overflow: hidden;
+}
+.review-sticker-meta {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+}
+.review-sticker-meta span {
+	font-size: 0.85em;
+	color: var(--MI_THEME-fgTransparentWeak);
+	overflow-wrap: anywhere;
 }
 .review-title {
 	display: flex;

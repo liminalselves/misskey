@@ -14,6 +14,7 @@ import type { MiAgentExternalAuditModel, MiMeta } from '@/models/Meta.js';
 import type { AgentExternalAuditStatus } from '@/models/AgentExternalAuditLog.js';
 import type { MiUser } from '@/models/User.js';
 import type { MiAgentSession } from '@/models/AgentSession.js';
+import { normalizeChatCompletionsUrl } from '@/misc/validate-llm-endpoint-url.js';
 
 export const DEFAULT_AGENT_EXTERNAL_AUDIT_SYSTEM_PROMPT = `你是智能体内容的安全外审模型。你需要判断提交给你的用户内容和 AI/系统即将展示或执行的内容是否允许放行。
 
@@ -59,12 +60,6 @@ type AuditDecision = {
 type AuditCallResult =
 	| { ok: true; decision: AuditDecision; durationMs: number }
 	| { ok: false; errorCode: string; errorMessage: string; responseText?: string | null; durationMs: number };
-
-function normalizeChatCompletionsUrl(baseRaw: string): string {
-	const base = baseRaw.trim().replace(/\/$/, '');
-	const withV1 = base.endsWith('/v1') ? base : `${base}/v1`;
-	return `${withV1}/chat/completions`;
-}
 
 function normalizeBaseUrl(raw: string): string {
 	const trimmed = raw.trim().replace(/\/$/, '');

@@ -148,4 +148,16 @@ export class MiAgentCharacter {
 		default: false,
 	})
 	public promptOpenSourced: boolean;
+
+	/** 角色专属表情包库：key 角色内唯一，fileId 为正方形图片/动图的 Drive 文件，description 必填供 LLM 理解 */
+	@Column('jsonb', {
+		default: '[]',
+	})
+	public stickers: MiAgentCharacterSticker[];
 }
+
+export type MiAgentCharacterSticker = {
+	key: string;
+	fileId: MiDriveFile['id'];
+	description: string;
+};

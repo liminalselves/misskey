@@ -129,10 +129,14 @@ import type {
 	AdminEmojiAddRequest,
 	AdminEmojiAddResponse,
 	AdminEmojiAddAliasesBulkRequest,
+	AdminEmojiAgentDescriptionStatusResponse,
 	AdminEmojiCopyRequest,
 	AdminEmojiCopyResponse,
 	AdminEmojiDeleteRequest,
 	AdminEmojiDeleteBulkRequest,
+	AdminEmojiGenerateAgentDescriptionRequest,
+	AdminEmojiGenerateAgentDescriptionResponse,
+	AdminEmojiGenerateAgentDescriptionsResponse,
 	AdminEmojiImportZipRequest,
 	AdminEmojiListRequest,
 	AdminEmojiListResponse,
@@ -239,6 +243,8 @@ import type {
 	AgentsCharactersDeleteResponse,
 	AgentsCharactersDiffRequest,
 	AgentsCharactersDiffResponse,
+	AgentsCharactersGenerateStickerDescriptionRequest,
+	AgentsCharactersGenerateStickerDescriptionResponse,
 	AgentsCharactersListMineResponse,
 	AgentsCharactersPlazaDetailRequest,
 	AgentsCharactersPlazaDetailResponse,
@@ -996,9 +1002,12 @@ export type Endpoints = {
 	'admin/drive/show-file': { req: AdminDriveShowFileRequest; res: AdminDriveShowFileResponse };
 	'admin/emoji/add': { req: AdminEmojiAddRequest; res: AdminEmojiAddResponse };
 	'admin/emoji/add-aliases-bulk': { req: AdminEmojiAddAliasesBulkRequest; res: EmptyResponse };
+	'admin/emoji/agent-description-status': { req: EmptyRequest; res: AdminEmojiAgentDescriptionStatusResponse };
 	'admin/emoji/copy': { req: AdminEmojiCopyRequest; res: AdminEmojiCopyResponse };
 	'admin/emoji/delete': { req: AdminEmojiDeleteRequest; res: EmptyResponse };
 	'admin/emoji/delete-bulk': { req: AdminEmojiDeleteBulkRequest; res: EmptyResponse };
+	'admin/emoji/generate-agent-description': { req: AdminEmojiGenerateAgentDescriptionRequest; res: AdminEmojiGenerateAgentDescriptionResponse };
+	'admin/emoji/generate-agent-descriptions': { req: EmptyRequest; res: AdminEmojiGenerateAgentDescriptionsResponse };
 	'admin/emoji/import-zip': { req: AdminEmojiImportZipRequest; res: EmptyResponse };
 	'admin/emoji/list': { req: AdminEmojiListRequest; res: AdminEmojiListResponse };
 	'admin/emoji/list-remote': { req: AdminEmojiListRemoteRequest; res: AdminEmojiListRemoteResponse };
@@ -1075,6 +1084,7 @@ export type Endpoints = {
 	'agents/characters/create': { req: AgentsCharactersCreateRequest; res: AgentsCharactersCreateResponse };
 	'agents/characters/delete': { req: AgentsCharactersDeleteRequest; res: AgentsCharactersDeleteResponse };
 	'agents/characters/diff': { req: AgentsCharactersDiffRequest; res: AgentsCharactersDiffResponse };
+	'agents/characters/generate-sticker-description': { req: AgentsCharactersGenerateStickerDescriptionRequest; res: AgentsCharactersGenerateStickerDescriptionResponse };
 	'agents/characters/list-mine': { req: EmptyRequest; res: AgentsCharactersListMineResponse };
 	'agents/characters/plaza-detail': { req: AgentsCharactersPlazaDetailRequest; res: AgentsCharactersPlazaDetailResponse };
 	'agents/characters/public-list': { req: AgentsCharactersPublicListRequest; res: AgentsCharactersPublicListResponse };

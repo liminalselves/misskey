@@ -570,6 +570,7 @@ function usageKindLabel(kind: string): string {
 		case 'compression': return i18n.ts._agents.usageLogKindCompression;
 		case 'image_generation': return i18n.ts._agents.usageLogKindImageGeneration;
 		case 'vision': return i18n.ts._agents.usageLogKindVision;
+		case 'sticker_description': return i18n.ts._agents.usageLogKindStickerDescription;
 		case 'proactive_random': return i18n.ts._agents.usageLogKindProactiveRandom;
 		case 'proactive_scheduled': return i18n.ts._agents.usageLogKindProactiveScheduled;
 		default: return kind;

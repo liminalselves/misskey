@@ -10,6 +10,7 @@ import { Endpoint } from '@/server/api/endpoint-base.js';
 import { DI } from '@/di-symbols.js';
 import { ApiError } from '@/server/api/error.js';
 import { AgentService, AGENT_TEXT_FIELD_MAX, AGENT_EXAMPLE_TURN_CONTENT_MAX, AGENT_RULE_MAX, AGENT_RULE_NAME_MAX, AGENT_RULE_DESC_MAX } from '@/core/AgentService.js';
+import { AgentStickerService } from '@/core/AgentStickerService.js';
 
 export const meta = {
 	tags: ['agents'],
@@ -110,6 +111,18 @@ export const paramDef = {
 		avatarFileId: { type: 'string', format: 'misskey:id', nullable: true },
 		referenceImageFileId: { type: 'string', format: 'misskey:id', nullable: true },
 		referenceImageFileIds: { type: 'array', nullable: true, maxItems: 4, items: { type: 'string', format: 'misskey:id' } },
+		stickers: {
+			type: 'array', nullable: true, maxItems: 50,
+			items: {
+				type: 'object',
+				properties: {
+					key: { type: 'string', minLength: 1, maxLength: 32, pattern: '^[a-zA-Z0-9_-]+$' },
+					fileId: { type: 'string', format: 'misskey:id' },
+					description: { type: 'string', minLength: 1, maxLength: 200 },
+				},
+				required: ['key', 'fileId', 'description'],
+			},
+		},
 		promptOpenSourced: { type: 'boolean' },
 	},
 	required: ['name'],
@@ -125,10 +138,13 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		private driveFilesRepository: DriveFilesRepository,
 
 		private agentService: AgentService,
+
+		private agentStickerService: AgentStickerService,
 	) {
 		super(meta, paramDef, async (ps, me) => {
 			this.agentService.assertAgentsEnabled();
 
+			const stickers = await this.agentStickerService.validateCharacterStickersForOwner(ps.stickers ?? [], me.id);
 			if (ps.avatarFileId) {
 				const f = await this.driveFilesRepository.findOneBy({ id: ps.avatarFileId, userId: me.id });
 				if (!f) {
@@ -173,6 +189,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				avatarFileId: ps.avatarFileId ?? null,
 				referenceImageFileId: referenceImageFileIds[0] ?? null,
 				referenceImageFileIds,
+				stickers,
 				promptOpenSourced: ps.promptOpenSourced === true,
 			});
 

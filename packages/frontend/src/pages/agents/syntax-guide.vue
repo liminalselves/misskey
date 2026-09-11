@@ -55,6 +55,26 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<MkLink url="https://misskey-hub.net/en/docs/for-users/features/mfm/">{{ i18n.ts._agents.syntaxGuideOpenSpec }}</MkLink>
 				</div>
 			</MkFolder>
+			<!-- 表情包 -->
+			<MkFolder :defaultOpen="false">
+				<template #icon><i class="ti ti-sticker"></i></template>
+				<template #label>{{ i18n.ts._agents.stickerTabTitle }}</template>
+				<div class="_gaps_s">
+					<div :class="$style.intro">{{ i18n.ts._agents.syntaxGuideStickerIntro }}</div>
+
+					<div :class="$style.table">
+						<div :class="[$style.row, $style.head]">
+							<div :class="$style.cellSyntax">{{ i18n.ts._agents.syntaxGuideColSyntax }}</div>
+							<div :class="$style.cellPreview">{{ i18n.ts._agents.syntaxGuideColPreview }}</div>
+						</div>
+						<div v-for="(ex, i) in stickerExamples" :key="`sticker-${i}`" :class="$style.row">
+							<div :class="$style.cellSyntax"><pre :class="$style.code">{{ ex.syntax }}</pre></div>
+							<!-- eslint-disable-next-line vue/no-v-html -->
+							<div :class="[$style.cellPreview, $style.mdPreview]" v-html="renderMd(ex.preview)"></div>
+						</div>
+					</div>
+				</div>
+			</MkFolder>
 		</div>
 	</div>
 </PageWithHeader>
@@ -94,6 +114,11 @@ const mfmExamples = [
 	'> MFM 引用',
 	'?[隐藏链接](https://example.com)',
 	':emoji: 自定义表情（示例占位）',
+];
+
+const stickerExamples = [
+	{ syntax: ':emoji_name:', preview: '发送全站自定义表情：:emoji_name:（需实例已添加该表情）' },
+	{ syntax: '[[agent_sticker key=smug]]', preview: '角色专属表情包（智能体输出，单独成行展示为方形图块）' },
 ];
 
 function renderMd(src: string): string {

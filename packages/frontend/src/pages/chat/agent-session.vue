@@ -95,6 +95,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 							:sessionId="sessionId"
 							:message="item.data"
 							:regexRules="character?.regexRules ?? []"
+							:characterStickers="characterStickers"
 							:assistantName="character?.name ?? null"
 							:assistantAvatarUrl="assistantAvatarUrl"
 							:highlighted="highlightedMessageId === item.data.id"
@@ -1323,6 +1324,8 @@ const session = ref<{
 } | null>(null);
 
 const character = ref<{ name: string; avatarFileId: string | null; avatar?: DriveFile | null; referenceImageFileIds: string[]; referenceImages: DriveFile[]; regexRules: AgentRegexRule[] } | null>(null);
+/** 角色专属表情包（sessions/show 提供），供消息气泡渲染 [[agent_sticker]] */
+const characterStickers = ref<Array<{ key: string; file: DriveFile }>>([]);
 const assistantAvatarUrl = ref<string | null>(null);
 
 // ---- Aliya Web 推荐横幅 & 常驻板块 ----
@@ -2793,6 +2796,11 @@ async function loadSession() {
 	settingsHydrating.value = true;
 	try {
 		session.value = (await misskeyApi('agents/sessions/show', { sessionId })) as typeof session.value;
+		// 角色专属表情包（与 LLM 视图同源：社区会话走发布快照，测试会话跟随草稿）
+		const stickersRow = session.value as typeof session.value & { characterStickers?: Array<{ key: string; file: DriveFile | null }> };
+		characterStickers.value = Array.isArray(stickersRow.characterStickers)
+			? stickersRow.characterStickers.filter((s): s is { key: string; file: DriveFile } => s != null && typeof s.key === 'string' && s.file != null)
+			: [];
 		if (session.value) {
 			selectedModelId.value = displayModelIdForSession(session.value.agentModelId);
 			visionModelSelectionId.value = session.value.agentVisionModelId ?? visionModels.value.find(model => model.isDefault)?.id ?? '';

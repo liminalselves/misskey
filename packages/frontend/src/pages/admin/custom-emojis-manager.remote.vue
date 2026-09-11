@@ -32,36 +32,36 @@ SPDX-License-Identifier: AGPL-3.0-only
 							:class="[$style.col2, $style.row1]"
 							@enter="onSearchRequest"
 						>
-							<template #label>host</template>
-						</MkInput>
-						<MkInput
-							v-model="queryLicense"
-							type="search"
-							autocapitalize="off"
-							:class="[$style.col3, $style.row1]"
-							@enter="onSearchRequest"
-						>
-							<template #label>license</template>
-						</MkInput>
+						<template #label>{{ i18n.ts._customEmojisManager._gridCommon.columnHost }}</template>
+					</MkInput>
+					<MkInput
+						v-model="queryLicense"
+						type="search"
+						autocapitalize="off"
+						:class="[$style.col3, $style.row1]"
+						@enter="onSearchRequest"
+					>
+						<template #label>{{ i18n.ts._customEmojisManager._gridCommon.columnLicense }}</template>
+					</MkInput>
 
-						<MkInput
-							v-model="queryUri"
-							type="search"
-							autocapitalize="off"
-							:class="[$style.col1, $style.row2]"
-							@enter="onSearchRequest"
-						>
-							<template #label>uri</template>
-						</MkInput>
-						<MkInput
-							v-model="queryPublicUrl"
-							type="search"
-							autocapitalize="off"
-							:class="[$style.col2, $style.row2]"
-							@enter="onSearchRequest"
-						>
-							<template #label>publicUrl</template>
-						</MkInput>
+					<MkInput
+						v-model="queryUri"
+						type="search"
+						autocapitalize="off"
+						:class="[$style.col1, $style.row2]"
+						@enter="onSearchRequest"
+					>
+						<template #label>{{ i18n.ts._customEmojisManager._gridCommon.columnUri }}</template>
+					</MkInput>
+					<MkInput
+						v-model="queryPublicUrl"
+						type="search"
+						autocapitalize="off"
+						:class="[$style.col2, $style.row2]"
+						@enter="onSearchRequest"
+					>
+						<template #label>{{ i18n.ts._customEmojisManager._gridCommon.columnPublicUrl }}</template>
+					</MkInput>
 					</div>
 
 					<hr>
@@ -69,11 +69,12 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<MkFolder :spacerMax="8" :spacerMin="8">
 						<template #icon><i class="ti ti-arrows-sort"></i></template>
 						<template #label>{{ i18n.ts._customEmojisManager._gridCommon.sortOrder }}</template>
-						<MkSortOrderEditor
-							:baseOrderKeyNames="gridSortOrderKeys"
-							:currentOrders="sortOrders"
-							@update="onSortOrderUpdate"
-						/>
+					<MkSortOrderEditor
+						:baseOrderKeyNames="gridSortOrderKeys"
+						:currentOrders="sortOrders"
+						:keyLabeler="gridColumnTitle"
+						@update="onSortOrderUpdate"
+					/>
 					</MkFolder>
 
 					<MkInput
@@ -152,7 +153,7 @@ import { i18n } from '@/i18n.js';
 import MkButton from '@/components/MkButton.vue';
 import MkInput from '@/components/MkInput.vue';
 import MkGrid from '@/components/grid/MkGrid.vue';
-import { emptyStrToUndefined, gridSortOrderKeys } from '@/pages/admin/custom-emojis-manager.impl.js';
+import { emptyStrToUndefined, gridColumnTitle, gridSortOrderKeys } from '@/pages/admin/custom-emojis-manager.impl.js';
 import MkFolder from '@/components/MkFolder.vue';
 import XRegisterLogs from '@/pages/admin/custom-emojis-manager.logs.vue';
 import * as os from '@/os.js';
@@ -200,11 +201,11 @@ function setupGrid(): GridSetting {
 		cols: [
 			{ bindTo: 'checked', icon: 'ti-download', type: 'boolean', editable: true, width: 34 },
 			{ bindTo: 'url', icon: 'ti-icons', type: 'image', editable: false, width: 'auto' },
-			{ bindTo: 'name', title: 'name', type: 'text', editable: false, width: 'auto' },
-			{ bindTo: 'host', title: 'host', type: 'text', editable: false, width: 'auto' },
-			{ bindTo: 'license', title: 'license', type: 'text', editable: false, width: 200 },
-			{ bindTo: 'uri', title: 'uri', type: 'text', editable: false, width: 'auto' },
-			{ bindTo: 'publicUrl', title: 'publicUrl', type: 'text', editable: false, width: 'auto' },
+			{ bindTo: 'name', title: i18n.ts._customEmojisManager._gridCommon.columnName, type: 'text', editable: false, width: 'auto' },
+			{ bindTo: 'host', title: i18n.ts._customEmojisManager._gridCommon.columnHost, type: 'text', editable: false, width: 'auto' },
+			{ bindTo: 'license', title: i18n.ts._customEmojisManager._gridCommon.columnLicense, type: 'text', editable: false, width: 200 },
+			{ bindTo: 'uri', title: i18n.ts._customEmojisManager._gridCommon.columnUri, type: 'text', editable: false, width: 'auto' },
+			{ bindTo: 'publicUrl', title: i18n.ts._customEmojisManager._gridCommon.columnPublicUrl, type: 'text', editable: false, width: 'auto' },
 		],
 		cells: {
 			contextMenuFactory: (col, row, value, context) => {

@@ -11,6 +11,11 @@ import { DI } from '@/di-symbols.js';
 import { ApiError } from '@/server/api/error.js';
 import { AgentService } from '@/core/AgentService.js';
 
+/** 表情库 diff 预览：key: 描述逐行（空库为空串） */
+function stickersDiffPreview(stickers: { key: string; description: string }[]): string {
+	return stickers.map(s => `${s.key}: ${s.description}`).join('\n');
+}
+
 export const meta = {
 	tags: ['agents'],
 	requireCredential: true,
@@ -53,8 +58,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 
 		private agentService: AgentService,
 	) {
-		super(meta, paramDef, async (ps, me) => {
-			this.agentService.assertAgentsEnabled();
+		super(meta, paramDef, async (ps, me) => {			this.agentService.assertAgentsEnabled();
 			const row = await this.agentCharactersRepository.findOneBy({ id: ps.characterId });
 			if (!row || row.userId !== me.id) {
 				throw new ApiError({ message: 'No such character.', code: 'NO_SUCH_CHARACTER', id: '4fdde14f-bf96-45ba-8f04-556a5f368165' });
@@ -81,6 +85,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			pushIfDiff('avatarFileId', draft.avatarFileId ?? '', pub.avatarFileId ?? '');
 			pushIfDiff('worldbook', this.agentService.worldbookStableString(draft.worldbook), this.agentService.worldbookStableString(pub.worldbook));
 			pushIfDiff('rules', this.agentService.rulesStableString(draft.rules), this.agentService.rulesStableString(pub.rules));
+			pushIfDiff('stickers', stickersDiffPreview(draft.stickers), stickersDiffPreview(pub.stickers));
 			return {
 				hasChanges: fields.length > 0,
 				fields,

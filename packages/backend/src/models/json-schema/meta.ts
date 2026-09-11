@@ -413,6 +413,14 @@ export const packedMetaLiteSchema = {
 			type: 'number',
 			optional: false, nullable: false,
 		},
+		agentStickerEnabled: {
+			type: 'boolean',
+			optional: false, nullable: false,
+		},
+		agentStickerMaxPerMessage: {
+			type: 'number',
+			optional: false, nullable: false,
+		},
 		agentImageCostPerCall: {
 			type: 'number',
 			optional: false, nullable: false,
