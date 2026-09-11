@@ -27,3 +27,14 @@ describe('agent chat markdown sanitization', () => {
 		assert.equal(agentI18nTextFromLocale({ _agents: {} }, '_agents.proactiveMessages', 'fallback'), 'fallback');
 	});
 });
+
+describe('agent chat markdown emoji codes stay literal', () => {
+	// `:name:` 不在 markdown 层渲染：由 agent-session.message 的 renderParts 切成贴纸图块。
+	// markdown 工具须保持字面文本，且不产生任何 img。
+	test('keeps :name: as literal text without emitting images', () => {
+		const html = renderAgentChatMarkdown('你好 :agenttestsmile: 再见 与 12:30:45');
+		assert.isFalse(html.includes('<img'));
+		assert.match(html, /:agenttestsmile:/);
+		assert.match(html, /12:30:45/);
+	});
+});

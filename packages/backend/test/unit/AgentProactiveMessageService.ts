@@ -5,6 +5,8 @@
 
 import { AgentProactiveMessageService } from '@/core/AgentProactiveMessageService.js';
 import { jest } from '@jest/globals';
+// 依存チェーン上の ESM-only パッケージ（node-fetch / nanoid / chalk 等）は
+// jest.config.unit.cjs の moduleNameMapper で共通スタブに解決される
 
 type ProactivePrivate = {
 	processRandom: (session: Record<string, unknown>) => Promise<void>;
@@ -99,6 +101,12 @@ function createHarness(opts: { reply?: string; imageModelEnabled?: boolean; mode
 		resolveImageModel: jest.fn(() => opts.imageModelEnabled ? { id: 'image-model-id' } : null),
 		stripDrawPlaceholders: jest.fn((text: string) => text),
 	};
+	const stickerService = {
+		buildSystemBlocks: jest.fn(async () => ({ block: '', emojiList: [] as { name: string; description: string }[], stickerKeys: [] as string[] })),
+		convertUserTextForLlm: jest.fn((text: string) => text),
+		enforceReplyLimits: jest.fn((text: string) => text),
+		normalizeCharacterStickers: jest.fn(() => []),
+	};
 	const service = new AgentProactiveMessageService(
 		sessionsRepository as never,
 		messagesRepository as never,
@@ -111,6 +119,7 @@ function createHarness(opts: { reply?: string; imageModelEnabled?: boolean; mode
 		{ auditReply: jest.fn(async () => ({ blocked: false })) } as never,
 		usage as never,
 		imageService as never,
+		stickerService as never,
 		{ fetch: jest.fn(async () => ({ agentGlobalSystemPrompt: null })) } as never,
 		{ notifyAgentMessage: jest.fn(async () => undefined) } as never,
 		{} as never,
