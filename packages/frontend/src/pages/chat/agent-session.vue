@@ -1223,6 +1223,7 @@ type AgentMsg = {
 	role: string;
 	content: string;
 	createdAt: string;
+	timeTrusted?: boolean;
 	file?: DriveFile | null;
 	imageRecognitionStatus?: 'succeeded' | 'failed' | null;
 	imageRecognitionDescription?: string | null;
@@ -3919,10 +3920,11 @@ async function jumpToChatMessage(messageId: string) {
 }
 
 type SessionContextRole = 'user' | 'assistant';
-/** v5 消息行：新增图片附件与识别结果 */
+/** v6 消息行：可信原始发送时间仅在可用时导出 */
 type SessionContextRow = {
 	role: SessionContextRole;
 	content: string;
+	createdAt?: string;
 	imageFileId?: string | null;
 	imageRecognitionStatus?: 'succeeded' | 'failed' | null;
 	imageRecognitionDescription?: string | null;
@@ -3968,8 +3970,8 @@ type SessionExportCompressionSticky = {
 	sortIndex: number;
 };
 type SessionExportPayload = {
-	format: 'misskey-agent-session-export-v5';
-	version: 5;
+	format: 'misskey-agent-session-export-v6';
+	version: 6;
 	sessionId: string;
 	exportedAt: string;
 	source: {
@@ -3989,6 +3991,12 @@ type ParsedSessionImportPayload = {
 	legacy: boolean;
 };
 
+function normalizeImportedMessageCreatedAt(value: unknown): string | null {
+	if (typeof value !== 'string') return null;
+	const time = new Date(value).getTime();
+	return Number.isFinite(time) ? new Date(time).toISOString() : null;
+}
+
 function normalizeSessionContextRows(rows: AgentMsg[]): SessionContextRow[] {
 	const sortedAsc = [...rows].sort((a, b) => {
 		const ta = new Date(a.createdAt).getTime();
@@ -3999,10 +4007,12 @@ function normalizeSessionContextRows(rows: AgentMsg[]): SessionContextRow[] {
 	const out: SessionContextRow[] = [];
 	for (const row of sortedAsc) {
 		if (row.role !== 'user' && row.role !== 'assistant') continue;
+		const createdAt = row.timeTrusted === true ? normalizeImportedMessageCreatedAt(row.createdAt) : null;
 		// v5: 包含图片附件与识别结果（AgentMsg 使用 file 字段存储 DriveFile）
 		out.push({
 			role: row.role,
 			content: row.content,
+			...(createdAt != null ? { createdAt } : {}),
 			imageFileId: row.file?.id ?? null,
 			imageRecognitionStatus: row.imageRecognitionStatus ?? null,
 			imageRecognitionDescription: row.imageRecognitionDescription ?? null,
@@ -4123,8 +4133,8 @@ async function exportSessionContext() {
 		]);
 		const messagesForContext = normalizeSessionContextRows(all);
 		const payload: SessionExportPayload = {
-			format: 'misskey-agent-session-export-v5',
-			version: 5,
+			format: 'misskey-agent-session-export-v6',
+			version: 6,
 			sessionId,
 			exportedAt: new Date().toISOString(),
 			source: {
@@ -4185,13 +4195,15 @@ function parseImportedContext(text: string): ParsedSessionImportPayload {
 		if (content.length > SESSION_IMPORT_MAX_MESSAGE_CHARS) {
 			throw new Error(`导入失败：单条消息不能超过 ${SESSION_IMPORT_MAX_MESSAGE_CHARS} 字符。`);
 		}
-		// v5: 解析图片附件字段
+		// v6: 解析可用的原始发送时间，以及 v5 图片附件字段。
+		const createdAt = normalizeImportedMessageCreatedAt((row as { createdAt?: unknown }).createdAt);
 		const imageFileId = (row as { imageFileId?: unknown }).imageFileId;
 		const imageRecognitionStatus = (row as { imageRecognitionStatus?: unknown }).imageRecognitionStatus;
 		const imageRecognitionDescription = (row as { imageRecognitionDescription?: unknown }).imageRecognitionDescription;
 		out.push({
 			role,
 			content,
+			...(createdAt != null ? { createdAt } : {}),
 			imageFileId: typeof imageFileId === 'string' ? imageFileId : null,
 			imageRecognitionStatus: imageRecognitionStatus === 'succeeded' || imageRecognitionStatus === 'failed' ? imageRecognitionStatus : null,
 			imageRecognitionDescription: typeof imageRecognitionDescription === 'string' ? imageRecognitionDescription : null,
@@ -4207,7 +4219,8 @@ function parseImportedContext(text: string): ParsedSessionImportPayload {
 		|| format === 'misskey-agent-session-export-v3'
 		|| format === 'misskey-agent-session-export-v4'
 		|| format === 'misskey-agent-session-export-v5'
-		|| version === 1 || version === 2 || version === 3 || version === 4 || version === 5;
+		|| format === 'misskey-agent-session-export-v6'
+		|| version === 1 || version === 2 || version === 3 || version === 4 || version === 5 || version === 6;
 	const legacy = !isSessionExport;
 	if (out.length === 0 && (legacy || settings == null || Object.keys(settings).length === 0)) {
 		throw new Error(i18n.ts._agents.sessionMemoryImportContextInvalidFormat);

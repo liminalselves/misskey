@@ -49,6 +49,8 @@ export const paramDef = {
 				properties: {
 					role: { type: 'string', enum: ['user', 'assistant'] },
 					content: { type: 'string', minLength: 1, maxLength: 16000 },
+					// v6: 仅由导出文件保留的可信原始发送时间
+					createdAt: { type: 'string', nullable: true },
 					// v5 新增：图片附件与识别结果
 					imageFileId: { type: 'string', nullable: true, maxLength: 128 },
 					imageRecognitionStatus: { type: 'string', nullable: true },
@@ -89,7 +91,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			this.agentService.assertAgentUserSessionChatAllowed(characterRow, session);
 
 			const now = new Date();
-			let createdAtMs = now.getTime();
+			let fallbackCreatedAtMs = now.getTime();
+			let lastMessageAtMs = Number.NEGATIVE_INFINITY;
 			const rows: Array<{
 				id: string;
 				createdAt: Date;
@@ -105,7 +108,11 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				timeTrusted: boolean;
 			}> = [];
 			for (const msg of ps.messages) {
-				createdAtMs += 1;
+				const importedCreatedAtMs = msg.createdAt == null ? Number.NaN : new Date(msg.createdAt).getTime();
+				const timeTrusted = Number.isFinite(importedCreatedAtMs);
+				// 缺少可信原始时间的旧文件保持导入顺序，以导入时刻作为仅供排序的回退时间。
+				const createdAtMs = timeTrusted ? importedCreatedAtMs : ++fallbackCreatedAtMs;
+				lastMessageAtMs = Math.max(lastMessageAtMs, createdAtMs);
 				// v5: 验证并规范化图片识别状态
 				const imageRecognitionStatus = msg.imageRecognitionStatus === 'succeeded' || msg.imageRecognitionStatus === 'failed'
 					? msg.imageRecognitionStatus
@@ -134,14 +141,14 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					statsDialogueStyleId: session.dialogueStyleId ?? null,
 					promptTokens: null,
 					completionTokens: null,
-					// 导入的 createdAt 为导入时刻（逐条 +1ms），并非真实发送时间：标记不可信，禁止向 LLM 注入发送时间
-					timeTrusted: false,
+					// 仅导出文件提供且可解析的原始时间可用于 LLM 时间感知。
+					timeTrusted,
 				});
 			}
 
 			session.agentReplyPending = false;
 			session.updatedAt = now;
-			session.lastMessageAt = new Date(createdAtMs);
+			session.lastMessageAt = new Date(lastMessageAtMs);
 			await this.db.transaction(async transactionalEntityManager => {
 				await transactionalEntityManager.delete(MiAgentMessage, { sessionId: session.id });
 

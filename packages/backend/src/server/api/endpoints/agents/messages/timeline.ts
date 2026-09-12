@@ -30,6 +30,7 @@ export const meta = {
 				role: { type: 'string', enum: ['user', 'assistant', 'system'] },
 				content: { type: 'string' },
 				createdAt: { type: 'string', format: 'date-time' },
+				timeTrusted: { type: 'boolean' },
 				file: { type: 'object', ref: 'DriveFile', nullable: true },
 				imageRecognitionStatus: { type: 'string', nullable: true },
 				imageRecognitionDescription: { type: 'string', nullable: true },
@@ -76,7 +77,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				this.agentMessagesRepository.createQueryBuilder('m')
 					.where('m.sessionId = :sessionId', { sessionId: ps.sessionId })
 					.andWhere('m.isInternal = false')
-					.select(['m.id', 'm.role', 'm.content', 'm.createdAt', 'm.imageFileId', 'm.imageRecognitionStatus', 'm.imageRecognitionDescription', 'm.proactiveScheduleControlRaw', 'm.proactiveScheduleControlError']),
+					.select(['m.id', 'm.role', 'm.content', 'm.createdAt', 'm.timeTrusted', 'm.imageFileId', 'm.imageRecognitionStatus', 'm.imageRecognitionDescription', 'm.proactiveScheduleControlRaw', 'm.proactiveScheduleControlError']),
 				ps.sinceId ?? null,
 				ps.untilId ?? null,
 			).take(ps.limit ?? 30);
@@ -87,6 +88,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				role: m.role,
 				content: m.content,
 				createdAt: m.createdAt.toISOString(),
+				timeTrusted: m.timeTrusted,
 				file: m.imageFileId ? await this.driveFileEntityService.pack(m.imageFileId, {}).catch(() => null) : null,
 				imageRecognitionStatus: m.imageRecognitionStatus,
 				imageRecognitionDescription: m.imageRecognitionDescription,

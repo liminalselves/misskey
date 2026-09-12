@@ -22653,6 +22653,7 @@ export interface operations {
                         /** @enum {string} */
                         role: 'user' | 'assistant';
                         content: string;
+                        createdAt?: string | null;
                         imageFileId?: string | null;
                         imageRecognitionStatus?: string | null;
                         imageRecognitionDescription?: string | null;
@@ -23111,6 +23112,7 @@ export interface operations {
                         content: string;
                         /** Format: date-time */
                         createdAt: string;
+                        timeTrusted: boolean;
                         file: components['schemas']['DriveFile'] | null;
                         imageRecognitionStatus: string | null;
                         imageRecognitionDescription: string | null;
