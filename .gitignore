@@ -87,3 +87,4 @@ vite.config.local-dev.ts.timestamp-*
 .kilo
 .qoder
 .opencode
+.zcode
