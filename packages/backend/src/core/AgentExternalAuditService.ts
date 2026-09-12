@@ -14,7 +14,13 @@ import type { MiAgentExternalAuditModel, MiMeta } from '@/models/Meta.js';
 import type { AgentExternalAuditFailureKind, AgentExternalAuditStatus } from '@/models/AgentExternalAuditLog.js';
 import type { MiUser } from '@/models/User.js';
 import type { MiAgentSession } from '@/models/AgentSession.js';
-import { normalizeChatCompletionsUrl } from '@/misc/validate-llm-endpoint-url.js';
+import {
+	UnsafeLlmUrlError,
+	assertSafeLlmHttpsUrl,
+	describeUnsafeLlmUrlReason,
+	normalizeChatCompletionsUrl,
+} from '@/misc/validate-llm-endpoint-url.js';
+import { escapeAgentXmlText } from '@/core/AgentService.js';
 
 export const DEFAULT_AGENT_EXTERNAL_AUDIT_SYSTEM_PROMPT = `你是智能体内容的安全外审模型。你需要判断提交给你的用户内容和 AI/系统即将展示或执行的内容是否允许放行。
 
@@ -60,15 +66,6 @@ type AuditDecision = {
 type AuditCallResult =
 	| { ok: true; decision: AuditDecision; durationMs: number }
 	| { ok: false; errorCode: string; errorMessage: string; responseText?: string | null; durationMs: number };
-
-function normalizeBaseUrl(raw: string): string {
-	const trimmed = raw.trim().replace(/\/$/, '');
-	const u = new URL(trimmed);
-	if (u.protocol !== 'http:' && u.protocol !== 'https:') {
-		throw new Error('Only http and https endpoints are supported.');
-	}
-	return u.toString().replace(/\/$/, '');
-}
 
 function normalizeAuditModels(instance: MiMeta): MiAgentExternalAuditModel[] {
 	const raw = Array.isArray(instance.agentExternalAuditModels) ? instance.agentExternalAuditModels : [];
@@ -116,14 +113,40 @@ function classifyFailureKind(errorCode: string | null | undefined): AgentExterna
 	return 'api';
 }
 
+/** 从模型输出中提取第一个完整 JSON 对象（忽略字符串字面量内的花括号，容忍前后散文与多段大括号文本） */
+function extractFirstJsonObject(text: string): string | null {
+	const start = text.indexOf('{');
+	if (start < 0) return null;
+	let depth = 0;
+	let inString = false;
+	let escaped = false;
+	for (let i = start; i < text.length; i++) {
+		const ch = text[i];
+		if (inString) {
+			if (escaped) {
+				escaped = false;
+			} else if (ch === '\\') {
+				escaped = true;
+			} else if (ch === '"') {
+				inString = false;
+			}
+			continue;
+		}
+		if (ch === '"') {
+			inString = true;
+		} else if (ch === '{') {
+			depth++;
+		} else if (ch === '}') {
+			depth--;
+			if (depth === 0) return text.slice(start, i + 1);
+		}
+	}
+	return null;
+}
+
 function parseAuditDecision(rawText: string): AuditDecision | null {
-	const trimmed = rawText.trim();
-	const jsonText = (() => {
-		if (trimmed.startsWith('{') && trimmed.endsWith('}')) return trimmed;
-		const m = trimmed.match(/\{[\s\S]*\}/);
-		return m?.[0] ?? '';
-	})();
-	if (jsonText === '') return null;
+	const jsonText = extractFirstJsonObject(rawText.trim());
+	if (jsonText == null) return null;
 	let obj: unknown;
 	try {
 		obj = JSON.parse(jsonText);
@@ -185,7 +208,9 @@ export class AgentExternalAuditService {
 		}
 		const models = this.listConfiguredModels(instance);
 		if (models.length === 0) {
-			return { blocked: false, allFailed: false };
+			// 开关开着但没有可用模型（未配置/配置不完整/全部熔断禁用）→ 放行但必须留下运营可见的痕迹
+			await this.logNoAvailableModels(params);
+			return { blocked: false, allFailed: true };
 		}
 
 		const prompt = typeof instance.agentExternalAuditSystemPrompt === 'string' && instance.agentExternalAuditSystemPrompt.trim() !== ''
@@ -282,6 +307,51 @@ export class AgentExternalAuditService {
 		return { blocked: false, allFailed: true };
 	}
 
+	/**
+	 * 外审开启但无可用模型时记录一条 all_failed 日志；按小时节流，避免每条消息都写一行。
+	 * 该状态通常是配置问题（全部熔断禁用/字段缺失），管理端可通过 status=all_failed 过滤看到。
+	 */
+	private async logNoAvailableModels(params: AuditReplyParams): Promise<void> {
+		const since = new Date(Date.now() - 60 * 60 * 1000);
+		const recent = await this.agentExternalAuditLogsRepository
+			.createQueryBuilder('log')
+			.select('log.id', 'id')
+			.where('log.status = :status', { status: 'all_failed' })
+			.andWhere('log.errorCode = :errorCode', { errorCode: 'NO_AUDIT_MODELS_AVAILABLE' })
+			.andWhere('log.createdAt >= :since', { since })
+			.limit(1)
+			.getRawOne();
+		if (recent) return;
+		const now = new Date();
+		await this.agentExternalAuditLogsRepository.insertOne({
+			id: this.idService.gen(),
+			createdAt: now,
+			completedAt: now,
+			durationMs: null,
+			userId: params.user.id,
+			sessionId: params.session.id,
+			characterId: params.session.characterId,
+			dialogueStyleId: params.session.dialogueStyleId,
+			modelId: null,
+			modelName: null,
+			apiModelName: null,
+			baseUrl: null,
+			priority: 0,
+			attemptIndex: 0,
+			status: 'all_failed',
+			blockCode: null,
+			category: null,
+			reason: null,
+			confidence: null,
+			userText: null,
+			assistantText: null,
+			responseText: null,
+			failureKind: null,
+			errorCode: 'NO_AUDIT_MODELS_AVAILABLE',
+			errorMessage: 'External audit is enabled but no usable model is configured (none valid or all auto-disabled); content was allowed without audit.',
+		});
+	}
+
 	@bindThis
 	public async auditImagePrompt(params: AuditImagePromptParams): Promise<AgentExternalAuditResult> {
 		const tag = params.tag.trim();
@@ -298,15 +368,16 @@ export class AgentExternalAuditService {
 	}
 
 	private buildAuditUserPayload(userText: string, assistantText: string): string {
+		// 被审内容可能含用户输入（如生图 tag），转义尖括号防止伪造闭合标签逃逸出审核区块
 		return [
 			'请审核以下最新一轮智能体内容是否允许展示或执行。',
 			'',
 			'<latest_user_message>',
-			userText,
+			escapeAgentXmlText(userText),
 			'</latest_user_message>',
 			'',
 			'<assistant_reply>',
-			assistantText,
+			escapeAgentXmlText(assistantText),
 			'</assistant_reply>',
 		].join('\n');
 	}
@@ -321,12 +392,14 @@ export class AgentExternalAuditService {
 		const started = Date.now();
 		let url: string;
 		try {
-			url = normalizeChatCompletionsUrl(normalizeBaseUrl(model.baseUrl));
+			// 与其它 LLM/生图/视觉链路一致：强制 https、禁内网与元数据地址（含 DNS 解析校验）
+			const u = await assertSafeLlmHttpsUrl(model.baseUrl);
+			url = normalizeChatCompletionsUrl(u.toString());
 		} catch (err) {
 			return {
 				ok: false,
 				errorCode: 'INVALID_AUDIT_MODEL_URL',
-				errorMessage: err instanceof Error ? err.message : String(err),
+				errorMessage: err instanceof UnsafeLlmUrlError ? describeUnsafeLlmUrlReason(err.reason) : (err instanceof Error ? err.message : String(err)),
 				durationMs: Date.now() - started,
 			};
 		}
@@ -348,7 +421,7 @@ export class AgentExternalAuditService {
 						{ role: 'user', content: this.buildAuditUserPayload(userText, assistantText) },
 					],
 					temperature: 0,
-					max_tokens: 512,
+					max_tokens: 1024,
 				}),
 				signal: ac.signal,
 			});
@@ -487,18 +560,25 @@ export class AgentExternalAuditService {
 		if (total < minRequests) return;
 		const failureRate = (failed / total) * 100;
 		if (failureRate <= threshold) return;
-		if (model.autoDisabledAt) return;
+
+		// 基于最新快照写回：请求期间管理员可能增删改模型、并发请求可能熔断其它模型，
+		// 若直接用入参的陈旧快照整体替换 jsonb 数组会丢失这些修改
+		const fresh = await this.metaService.fetch(true);
+		const freshModels = normalizeAuditModels(fresh);
+		const target = freshModels.find(m => m.id === model.id);
+		if (!target || target.autoDisabledAt) return;
 
 		const disabledAt = new Date().toISOString();
 		const reason = `最近 1 小时失败率 ${failureRate.toFixed(1)}%（${failed}/${total}），超过阈值 ${threshold}%`;
-		const nextModels = normalizeAuditModels(instance).map(m => m.id === model.id ? {
+		const nextModels = freshModels.map(m => m.id === model.id ? {
 			...m,
 			autoDisabledAt: disabledAt,
 			autoDisabledReason: reason,
 			lastError: latestError,
 		} : m);
 		await this.metaService.update({ agentExternalAuditModels: nextModels } as Partial<MiMeta>);
-		await this.notifyAutoDisabled(instance, model, reason);
+		// 邮件发送不阻塞用户回复主路径
+		void this.notifyAutoDisabled(fresh, model, reason).catch(() => {});
 	}
 
 	private async notifyAutoDisabled(instance: MiMeta, model: MiAgentExternalAuditModel, reason: string): Promise<void> {

@@ -1233,6 +1233,13 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				const seen = new Set<string>();
 				set.agentExternalAuditModels = (ps.agentExternalAuditModels ?? []).map((m, i) => {
 					const id = String(m.id ?? '').trim();
+					if (id === '') {
+						throw new ApiError({
+							message: `External audit model #${i + 1}: id is required.`,
+							code: 'INVALID_PARAM',
+							id: '3f7c1a9e-5d2b-4c8f-9a1e-6b0d2f4c8a71',
+						});
+					}
 					if (seen.has(id)) {
 						throw new ApiError({
 							message: `Duplicate external audit model id: ${id}`,
@@ -1241,13 +1248,23 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 						});
 					}
 					seen.add(id);
+					const apiModelName = String(m.apiModelName ?? '').trim();
+					const apiKey = String(m.apiKey ?? '').trim();
 					const baseUrlRaw = String(m.baseUrl ?? '').trim().replace(/\/$/, '');
+					if (apiModelName === '' || baseUrlRaw === '' || apiKey === '') {
+						throw new ApiError({
+							message: `External audit model "${id}": apiModelName, baseUrl and apiKey are all required.`,
+							code: 'INVALID_PARAM',
+							id: '9e4b2c6a-1d3f-4a5b-8c7d-2e9f0a1b3c55',
+						});
+					}
 					try {
+						// 与运行时 assertSafeLlmHttpsUrl 口径一致：仅允许 https（内网/DNS 等校验在调用时执行）
 						const u = new URL(baseUrlRaw);
-						if (u.protocol !== 'http:' && u.protocol !== 'https:') throw new Error('Only http and https endpoints are supported.');
+						if (u.protocol !== 'https:') throw new Error('Only https endpoints are supported.');
 					} catch (e) {
 						throw new ApiError({
-							message: `External audit model "${id || i + 1}" base URL: ${e instanceof Error ? e.message : String(e)}`,
+							message: `External audit model "${id}" base URL: ${e instanceof Error ? e.message : String(e)}`,
 							code: 'INVALID_PARAM',
 							id: '8446fb08-2442-4ced-995f-8c538d79d6a2',
 						});
@@ -1255,9 +1272,9 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					return {
 						id,
 						name: String(m.name ?? '').trim(),
-						apiModelName: String(m.apiModelName ?? '').trim(),
+						apiModelName,
 						baseUrl: baseUrlRaw,
-						apiKey: String(m.apiKey ?? '').trim(),
+						apiKey,
 						priority: Number.isFinite(Number(m.priority)) ? Math.trunc(Number(m.priority)) : i,
 						enabled: m.enabled !== false,
 						autoDisabledAt: typeof m.autoDisabledAt === 'string' && m.autoDisabledAt.trim() !== '' ? m.autoDisabledAt.trim() : null,

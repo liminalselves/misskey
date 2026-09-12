@@ -548,9 +548,14 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 						}
 					}
 					const blockedAt = new Date();
+					// 窄列更新：LLM/外审调用期间用户可能并发修改会话（改名/切模型等），只写回本流程拥有的列
 					session.updatedAt = blockedAt;
 					session.agentReplyPending = false;
-					await this.agentSessionsRepository.save(session);
+					await this.agentSessionsRepository.createQueryBuilder()
+						.update()
+						.set({ updatedAt: blockedAt, agentReplyPending: false })
+						.where('id = :id', { id: session.id })
+						.execute();
 					await this.agentModelUsageService.finishLog(usageLog, instanceMeta, { status: 'success', ...llmUsageFields });
 					return {
 						userMessageId: null,

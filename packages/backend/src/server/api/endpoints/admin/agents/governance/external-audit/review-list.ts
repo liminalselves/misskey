@@ -86,9 +86,28 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 
 			if (userStats.length === 0) return [];
 
+			// 每条规则按自己的时间窗独立计数（聚合用最大窗口仅用于排序分页，不能套用到小窗口规则上）
+			const ruleCounts = new Map<string, Map<string, number>>();
+			for (const rule of rules) {
+				const ruleStart = new Date(Date.now() - rule.timeWindowMinutes * 60 * 1000);
+				const qb = this.agentExternalAuditLogsRepository
+					.createQueryBuilder('log')
+					.select('log.userId', 'userId')
+					.addSelect('COUNT(*)', 'blockCount')
+					.where('log.status = :status', { status: 'block' })
+					.andWhere('log.createdAt > :ruleStart', { ruleStart })
+					.andWhere('log.userId IS NOT NULL')
+					.andWhere('log.reviewIgnoredAt IS NULL')
+					.groupBy('log.userId');
+				if (filterUserId) qb.andWhere('log.userId = :filterUserId', { filterUserId });
+				const rows = await qb.getRawMany<{ userId: string; blockCount: string }>();
+				ruleCounts.set(rule.id, new Map(rows.map(r => [r.userId, parseInt(r.blockCount, 10) || 0])));
+			}
+			const ruleCountFor = (ruleId: string, userId: string): number => ruleCounts.get(ruleId)?.get(userId) ?? 0;
+
 			// 过滤出满足任一复审规则的用户
 			const qualifiedUserIds = userStats
-				.filter(stat => rules.some(rule => parseInt(stat.blockCount, 10) >= rule.blockThreshold))
+				.filter(stat => rules.some(rule => ruleCountFor(rule.id, stat.userId as string) >= rule.blockThreshold))
 				.map(stat => stat.userId as string);
 
 			if (qualifiedUserIds.length === 0) return [];
@@ -119,6 +138,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				.andWhere('log.userId IN (:...activeUserIds)', { activeUserIds })
 				.andWhere('log.reviewIgnoredAt IS NULL')
 				.orderBy('log.createdAt', 'DESC')
+				.take(500)
 				.getMany();
 
 			// 按用户分组
@@ -137,11 +157,12 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				: [];
 			const sessionBanMap = new Map(sessions.map(s => [s.id, s.moderationBanned]));
 
-			// 过滤掉所有会话均已被封禁的用户（已处理完毕的不再显示）
+			// 过滤掉所有涉事会话均已被封禁的用户（已处理完毕的不再显示）
 			const pendingUserIds = activeUserIds.filter(userId => {
 				const userLogs = logsByUser.get(userId) ?? [];
 				// 没有任何未忽略的日志则不显示
-				return userLogs.length > 0;
+				if (userLogs.length === 0) return false;
+				return userLogs.some(l => l.sessionId == null || !(sessionBanMap.get(l.sessionId) ?? false));
 			});
 
 			return pendingUserIds.map(userId => {
@@ -149,7 +170,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				const user = users.find(u => u.id === userId);
 				const profile = profileById.get(userId);
 				const userLogs = logsByUser.get(userId) ?? [];
-				const matchedRules = rules.filter(rule => parseInt(stat.blockCount, 10) >= rule.blockThreshold);
+				const matchedRules = rules.filter(rule => ruleCountFor(rule.id, userId) >= rule.blockThreshold);
 
 				return {
 					userId,
