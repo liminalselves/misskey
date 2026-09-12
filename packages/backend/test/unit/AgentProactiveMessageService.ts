@@ -70,7 +70,7 @@ function createHarness(opts: { reply?: string; imageModelEnabled?: boolean; mode
 		loadCharacterForAgentSessionOrThrow: jest.fn(async () => ({ regexRules: [], avatarFileId: null })),
 		assertAgentUserSessionChatAllowed: jest.fn(),
 		effectiveCharacterForLlm: jest.fn((character: unknown) => character),
-		effectiveStyleForLlm: jest.fn((style: unknown) => style),
+		effectiveStyleForSession: jest.fn((style: unknown) => style),
 		buildSystemPrompt: jest.fn(() => 'system'),
 		loadRecentMessagesForContextWithMeta: jest.fn(async () => ({ messages: [] })),
 		normalizeRegexRules: jest.fn(() => []),

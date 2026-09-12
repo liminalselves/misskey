@@ -98,9 +98,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					throw new ApiError({ message: 'No such style.', code: 'NO_SUCH_STYLE', id: 'b0c1d2e3-f4a5-6789-3456-890123456789' });
 				}
 				await this.agentService.assertCanUseDialogueStyle(me.id, style, { forNewSession: true });
-				if (sessionKind === 'community' && !this.agentService.isListedOnPlazaStyle(style)) {
-					throw new ApiError({ message: 'Style is not published.', code: 'STYLE_NOT_PUBLISHED', id: 'e3f4a5b6-c7d8-9012-6789-123456789012' });
-				}
+				this.agentService.assertSessionStylePolicy({ sessionKind, style, userId: me.id });
 				styleId = style.id;
 			}
 

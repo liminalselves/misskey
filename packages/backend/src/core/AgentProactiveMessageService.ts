@@ -209,7 +209,7 @@ export class AgentProactiveMessageService {
 
 			const usePublishedFace = session.sessionKind === 'community';
 			const character = this.agentService.effectiveCharacterForLlm(characterRow, usePublishedFace);
-			const style = this.agentService.effectiveStyleForLlm(styleRow, usePublishedFace);
+			const style = this.agentService.effectiveStyleForSession(styleRow, session);
 			const internal = await this.messagesRepository.insertOne({
 				id: this.agentService.newId(),
 				createdAt: now,

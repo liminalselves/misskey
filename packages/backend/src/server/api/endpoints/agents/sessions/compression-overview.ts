@@ -113,9 +113,10 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			const characterRow = await this.agentCharactersRepository.findOneByOrFail({ id: row.characterId });
 			this.agentService.assertAgentUserSessionChatAllowed(characterRow, row);
 			const styleRow = await this.agentDialogueStylesRepository.findOneByOrFail({ id: row.dialogueStyleId });
+			this.agentService.assertSessionStylePolicy({ sessionKind: row.sessionKind, style: styleRow, userId: me.id });
 			const usePublished = row.sessionKind === 'community';
 			const character = this.agentService.effectiveCharacterForLlm(characterRow, usePublished);
-			const style = this.agentService.effectiveStyleForLlm(styleRow, usePublished);
+			const style = this.agentService.effectiveStyleForSession(styleRow, row);
 			const instanceMeta = await this.metaService.fetch(true);
 			const longMemProvider = this.agentCompressionMemoryService.resolveEffectiveProvider(
 				row.agentLongMemoryProvider,

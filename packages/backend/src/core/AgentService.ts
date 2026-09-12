@@ -234,6 +234,11 @@ export const agentsErrors = {
 		code: 'AGENTS_LLM_UNSAFE_URL',
 		id: '424243ef-98e0-4aab-9b03-1acb4efab443',
 	},
+	styleNotPublished: {
+		message: 'Style is not published.',
+		code: 'STYLE_NOT_PUBLISHED',
+		id: '1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d',
+	},
 	llmAborted: {
 		message: 'LLM request was aborted by the client.',
 		code: 'AGENTS_LLM_ABORTED',
@@ -247,6 +252,23 @@ export const agentsErrors = {
 		httpStatusCode: 504,
 	},
 } as const;
+
+/**
+ * 会话应取文风的哪个版本喂给 LLM：
+ * - draft_test 会话一律草稿；
+ * - community 会话默认已发布快照（与广场玩家看到的正式内容一致）；
+ *   唯一例外：未发布文风的作者本人可自测自己的文风，回退草稿。
+ * 「未发布 + 非作者」仍返回 true（取快照必失败），保持 fail-closed，不向他人泄漏草稿内容。
+ */
+export function styleUsesPublishedFaceForSession(
+	sessionKind: AgentSessionKind,
+	style: Pick<MiAgentDialogueStyle, 'userId' | 'publishedVersion'>,
+	sessionUserId: string,
+): boolean {
+	if (sessionKind !== 'community') return false;
+	if (style.publishedVersion == null) return style.userId !== sessionUserId;
+	return true;
+}
 
 @Injectable()
 export class AgentService {
@@ -1634,6 +1656,15 @@ export class AgentService {
 		});
 	}
 
+	/**
+	 * 会话实际生效的文风（见 {@link styleUsesPublishedFaceForSession} 的版本判定）：
+	 * community 会话里未发布文风的作者本人会拿到草稿，其余情况维持旧的快照/草稿语义。
+	 */
+	@bindThis
+	public effectiveStyleForSession(row: MiAgentDialogueStyle, session: Pick<MiAgentSession, 'sessionKind' | 'userId'>): MiAgentDialogueStyle {
+		return this.effectiveStyleForLlm(row, styleUsesPublishedFaceForSession(session.sessionKind, row, session.userId));
+	}
+
 	/** Keep legacy listing/index flags in sync with publishedVersion. */
 	/** Plaza cards always render from the published snapshot. */
 	@bindThis
@@ -1678,6 +1709,23 @@ export class AgentService {
 		}
 		if (!this.isListedOnPlazaCharacter(params.character)) {
 			throw new Error('CHARACTER_NOT_PUBLISHED');
+		}
+	}
+
+	/**
+	 * community 会话要求文风已上架；唯一例外是文风作者本人的自测（可用自己未发布的文风）。
+	 * draft_test 会话对文风无上架要求（文风可用性由 assertCanUseDialogueStyle 把关）。
+	 */
+	@bindThis
+	public assertSessionStylePolicy(params: {
+		sessionKind: AgentSessionKind;
+		style: MiAgentDialogueStyle;
+		userId: string;
+	}): void {
+		if (params.sessionKind !== 'community') return;
+		if (params.style.userId === params.userId) return;
+		if (!this.isListedOnPlazaStyle(params.style)) {
+			throw new ApiError(agentsErrors.styleNotPublished);
 		}
 	}
 

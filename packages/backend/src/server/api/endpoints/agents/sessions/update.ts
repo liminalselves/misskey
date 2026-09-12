@@ -124,9 +124,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 						throw new ApiError({ message: 'No such style.', code: 'NO_SUCH_STYLE', id: 'b4c5d6e7-f8a9-0123-4567-890123456789' });
 					}
 					await this.agentService.assertCanUseDialogueStyle(me.id, style, { forNewSession: true });
-					if (row.sessionKind === 'community' && !this.agentService.isListedOnPlazaStyle(style)) {
-						throw new ApiError({ message: 'Style is not published.', code: 'STYLE_NOT_PUBLISHED', id: 'f5a6b7c8-d9e0-1234-8901-456789012345' });
-					}
+					this.agentService.assertSessionStylePolicy({ sessionKind: row.sessionKind, style, userId: me.id });
 					row.dialogueStyleId = style.id;
 					if (row.plazaStatsDialogueStyleId == null) {
 						row.plazaStatsDialogueStyleId = style.id;

@@ -232,15 +232,11 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				throw new ApiError({ message: 'Forbidden.', code: 'FORBIDDEN', id: 'e9f0a1b2-c3d4-5678-2345-789012345678' });
 			}
 
-			if (session.sessionKind === 'community') {
-				if (!this.agentService.isListedOnPlazaStyle(styleRow)) {
-					throw new ApiError({ message: 'Style is not published.', code: 'STYLE_NOT_PUBLISHED', id: 'f0a1b2c3-d4e5-6789-3456-890123456789' });
-				}
-			}
+			this.agentService.assertSessionStylePolicy({ sessionKind: session.sessionKind, style: styleRow, userId: me.id });
 
 			const usePublishedFace = session.sessionKind === 'community';
 			const character = this.agentService.effectiveCharacterForLlm(characterRow, usePublishedFace);
-			const style = this.agentService.effectiveStyleForLlm(styleRow, usePublishedFace);
+			const style = this.agentService.effectiveStyleForSession(styleRow, session);
 
 			// 关于「并发互斥」与「失败状态清理」的设计契约（修改前必读）：
 			//

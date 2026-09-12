@@ -93,18 +93,14 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				throw new ApiError({ message: 'Forbidden.', code: 'FORBIDDEN', id: 'd2e3f4a5-b6c7-8901-def0-234567890bcd' });
 			}
 
-			if (session.sessionKind === 'community') {
-				if (!this.agentService.isListedOnPlazaStyle(styleRow)) {
-					throw new ApiError({ message: 'Style is not published.', code: 'STYLE_NOT_PUBLISHED', id: 'e3f4a5b6-c7d8-9012-ef01-345678901cde' });
-				}
-			}
+			this.agentService.assertSessionStylePolicy({ sessionKind: session.sessionKind, style: styleRow, userId: me.id });
 
 			const instanceMeta = await this.metaService.fetch(true);
 			this.agentService.assertLlmConfigured(instanceMeta);
 
 			const usePublishedFace = session.sessionKind === 'community';
 			const character = this.agentService.effectiveCharacterForLlm(characterRow, usePublishedFace);
-			const style = this.agentService.effectiveStyleForLlm(styleRow, usePublishedFace);
+			const style = this.agentService.effectiveStyleForSession(styleRow, session);
 
 			// 与发信路径、压缩区带使用同一 H，确保分割线位置与实际上下文窗口完全对齐
 			const longMemProvider = this.agentCompressionMemoryService.resolveEffectiveProvider(
