@@ -3664,11 +3664,18 @@ onMounted(() => {
 .auditStatsTable {
 	display: grid;
 	gap: 8px;
+	width: 100%;
+	min-width: 0;
+	overflow-x: auto;
+	overflow-y: hidden;
+	overscroll-behavior-inline: contain;
+	padding-bottom: 4px;
 }
 
 .auditStatsHead,
 .auditStatsRow {
 	display: grid;
+	min-width: 720px;
 	grid-template-columns: minmax(140px, 1.4fr) minmax(70px, 0.8fr) minmax(56px, 0.5fr) minmax(72px, 0.6fr) minmax(72px, 0.6fr) minmax(56px, 0.5fr) minmax(72px, 0.7fr);
 	gap: 10px;
 	align-items: center;
@@ -3822,21 +3829,6 @@ onMounted(() => {
 	.simpleRow {
 		grid-template-columns: 1fr;
 		gap: 6px;
-	}
-
-	.auditStatsHead {
-		display: none;
-	}
-
-	.auditStatsRow {
-		grid-template-columns: 1fr;
-		gap: 6px;
-
-		> span[data-label]::before {
-			content: attr(data-label) '：';
-			font-weight: 700;
-			color: var(--MI_THEME-fgTransparentWeak);
-		}
 	}
 
 	.simpleHeadRow {
