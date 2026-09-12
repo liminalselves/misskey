@@ -13,6 +13,10 @@ import { MiAgentDialogueStyle } from './AgentDialogueStyle.js';
 export const agentExternalAuditStatuses = ['allow', 'block', 'failed', 'all_failed'] as const;
 export type AgentExternalAuditStatus = typeof agentExternalAuditStatuses[number];
 
+// api：请求阶段失败（URL 非法/超时/网络错误/HTTP 错误/响应体非 JSON）；parse：请求成功但回复内容缺失或无法解析为 allow|block JSON
+export const agentExternalAuditFailureKinds = ['api', 'parse'] as const;
+export type AgentExternalAuditFailureKind = typeof agentExternalAuditFailureKinds[number];
+
 @Entity('agent_external_audit_log')
 @Index('IDX_agent_external_audit_log_created_at', ['createdAt'])
 @Index('IDX_agent_external_audit_log_model_created_at', ['createdAt', 'modelId'])
@@ -102,6 +106,10 @@ export class MiAgentExternalAuditLog {
 
 	@Column('text', { nullable: true })
 	public responseText: string | null;
+
+	/** 失败分类，仅 status = failed 时有值 */
+	@Column('varchar', { length: 16, nullable: true })
+	public failureKind: AgentExternalAuditFailureKind | null;
 
 	@Column('varchar', { length: 128, nullable: true })
 	public errorCode: string | null;

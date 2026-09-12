@@ -474,19 +474,72 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 					<MkFolder :defaultOpen="true">
 						<template #icon><i class="ti ti-chart-bar"></i></template>
-						<template #label>最近 1 小时模型统计</template>
-						<MkLoading v-if="externalAuditStatsLoading"/>
-						<MkInfo v-else-if="externalAuditStats.length === 0">暂无外审模型统计。</MkInfo>
-						<div v-else :class="$style.auditStatsTable">
-							<div :class="$style.auditStatsHead">
-								<span>模型</span><span>状态</span><span>总数</span><span>失败率</span>
-							</div>
-							<div v-for="row in externalAuditStats" :key="row.id" :class="$style.auditStatsRow">
-								<span>{{ row.name }}</span>
-								<span>{{ externalAuditStatStatus(row) }}</span>
-								<span>{{ row.total }}</span>
-								<span>{{ (row.failureRate * 100).toFixed(1) }}%</span>
-							</div>
+						<template #label>外审运行统计</template>
+						<div class="_gaps">
+							<MkTabs
+								v-model:tab="externalAuditSubTab"
+								:tabs="[{
+									key: 'stats',
+									title: '健康统计',
+									icon: 'ti ti-chart-bar',
+								}, {
+									key: 'failures',
+									title: '失败记录',
+									icon: 'ti ti-alert-triangle',
+								}]"
+							/>
+							<template v-if="externalAuditSubTab === 'stats'">
+								<MkLoading v-if="externalAuditStatsLoading"/>
+								<MkInfo v-else-if="externalAuditStats.length === 0">暂无外审模型统计。</MkInfo>
+								<template v-else>
+									<MkInfo>统计范围为最近 1 小时；API 失败指请求阶段报错（超时/网络/HTTP 错误等），解析失败指模型回复内容缺失或无法解析为审核结论。</MkInfo>
+									<div :class="$style.auditStatsTable">
+										<div :class="$style.auditStatsHead">
+											<span>模型</span><span>状态</span><span>总数</span><span>API 失败</span><span>解析失败</span><span>总失败</span><span>失败率</span>
+										</div>
+										<div v-for="row in externalAuditStats" :key="row.id" :class="$style.auditStatsRow">
+											<span data-label="模型">{{ row.name }}</span>
+											<span data-label="状态">{{ externalAuditStatStatus(row) }}</span>
+											<span data-label="总数">{{ row.total }}</span>
+											<span data-label="API 失败">{{ row.apiFailed }}</span>
+											<span data-label="解析失败">{{ row.parseFailed }}</span>
+											<span data-label="总失败">{{ row.failed }}</span>
+											<span data-label="失败率">{{ (row.failureRate * 100).toFixed(1) }}%</span>
+										</div>
+									</div>
+								</template>
+							</template>
+							<template v-else>
+								<div :class="$style.auditFailuresToolbar">
+									<span :class="$style.auditFailuresHint">仅显示最近 50 条失败记录</span>
+									<MkButton rounded :disabled="externalAuditFailuresLoading" @click="loadExternalAuditFailures"><i class="ti ti-refresh"></i> 刷新</MkButton>
+								</div>
+								<MkLoading v-if="externalAuditFailuresLoading"/>
+								<MkInfo v-else-if="externalAuditFailures.length === 0">暂无失败记录。</MkInfo>
+								<div v-else :class="$style.auditFailureList">
+									<div v-for="row in externalAuditFailures" :key="row.id" :class="$style.auditFailureCard">
+										<div :class="$style.auditFailureHead">
+											<span :class="[$style.auditFailureKind, row.failureKind === 'parse' ? $style.auditFailureKindParse : $style.auditFailureKindApi]">{{ externalAuditFailureKindLabel(row.failureKind) }}</span>
+											<b :class="$style.auditFailureModel">{{ row.modelName || row.modelId || '未知模型' }}</b>
+											<time :class="$style.auditFailureTime">{{ formatExternalAuditFailureTime(row.createdAt) }}</time>
+										</div>
+										<template v-if="row.failureKind === 'parse'">
+											<div :class="$style.auditFailureReason">AI 回复内容无法解析为审核结论（allow/block JSON）：</div>
+											<pre :class="$style.auditFailurePre">{{ row.responseText || '（空回复）' }}</pre>
+										</template>
+										<template v-else>
+											<div :class="$style.auditFailureReason">
+												<code v-if="row.errorCode" :class="$style.auditFailureCode">{{ row.errorCode }}</code>
+												<span>{{ row.errorMessage || '未知错误' }}</span>
+											</div>
+											<template v-if="row.responseText">
+												<div :class="$style.auditFailureReason">响应体：</div>
+												<pre :class="$style.auditFailurePre">{{ row.responseText }}</pre>
+											</template>
+										</template>
+									</div>
+								</div>
+							</template>
 						</div>
 					</MkFolder>
 				</div>
@@ -1080,6 +1133,7 @@ import MkUserName from '@/components/global/MkUserName.vue';
 import MkAcct from '@/components/global/MkAcct.vue';
 import MkA from '@/components/global/MkA.vue';
 import FormSplit from '@/components/form/split.vue';
+import MkTabs from '@/components/MkTabs.vue';
 import XCheckinReports from './agents-checkin-reports.vue';
 import XModelReports from './agents-model-reports.vue';
 import * as os from '@/os.js';
@@ -1092,6 +1146,7 @@ import { genId } from '@/utility/id.js';
 import { useRouter } from '@/router.js';
 import { copyToClipboard } from '@/utility/copy-to-clipboard.js';
 import { selectFile } from '@/utility/drive.js';
+import { formatDateTimeString } from '@/utility/format-time-string.js';
 
 const router = useRouter();
 const activeTab = ref('overview');
@@ -1214,7 +1269,23 @@ type AgentExternalAuditModelStat = {
 	allow: number;
 	block: number;
 	failed: number;
+	/** 请求阶段失败数（URL 非法/超时/网络错误/HTTP 错误/响应体非 JSON） */
+	apiFailed: number;
+	/** 回复解析失败数（回复内容缺失或无法解析为 allow/block JSON） */
+	parseFailed: number;
 	failureRate: number;
+};
+
+type AgentExternalAuditFailureRow = {
+	id: string;
+	createdAt: string;
+	durationMs: number | null;
+	modelId: string | null;
+	modelName: string | null;
+	failureKind: 'api' | 'parse' | null;
+	errorCode: string | null;
+	errorMessage: string | null;
+	responseText: string | null;
 };
 
 type AgentByokProviderRow = {
@@ -2307,6 +2378,9 @@ function tokenizerFamilyLabel(family: string): string {
 
 const externalAuditStatsLoading = ref(false);
 const externalAuditStats = ref<AgentExternalAuditModelStat[]>([]);
+const externalAuditSubTab = ref<'stats' | 'failures'>('stats');
+const externalAuditFailuresLoading = ref(false);
+const externalAuditFailures = ref<AgentExternalAuditFailureRow[]>([]);
 const reportSuccessRate = computed(() => {
 	const d = reportsData.value;
 	if (!d || d.overall.total <= 0) return '—';
@@ -2521,6 +2595,25 @@ function externalAuditStatStatus(row: AgentExternalAuditModelStat) {
 	if (row.autoDisabledAt) return i18n.ts._agents.adminAuditAutoDisabled;
 	if (!row.enabled) return i18n.ts._agents.adminAuditDisabled;
 	return i18n.ts._agents.adminAuditEnabled;
+}
+
+async function loadExternalAuditFailures() {
+	externalAuditFailuresLoading.value = true;
+	try {
+		externalAuditFailures.value = await misskeyApi('admin/agents/external-audit/logs/list' as any, { status: 'failed', limit: 50 }) as AgentExternalAuditFailureRow[];
+	} catch (err) {
+		os.alert({ type: 'error', text: formatApiError(err) });
+	} finally {
+		externalAuditFailuresLoading.value = false;
+	}
+}
+
+function externalAuditFailureKindLabel(kind: AgentExternalAuditFailureRow['failureKind']) {
+	return kind === 'parse' ? '解析失败' : 'API 请求失败';
+}
+
+function formatExternalAuditFailureTime(v: string) {
+	return formatDateTimeString(new Date(v), 'yyyy-MM-dd HH:mm:ss');
 }
 
 /** 添加模型：先选择模型类型，再创建对应预置行 */
@@ -2887,9 +2980,14 @@ watch(redeemQuery, () => {
 	}, 300);
 });
 
+watch(externalAuditSubTab, sub => {
+	if (activeTab.value === 'externalAudit' && sub === 'failures' && externalAuditFailures.value.length === 0) void loadExternalAuditFailures();
+});
+
 watch(activeTab, tab => {
 	if (tab === 'overview' && reportsData.value == null) void loadReports();
 	if (tab === 'externalAudit' && externalAuditStats.value.length === 0) void loadExternalAuditStats();
+	if (tab === 'externalAudit' && externalAuditSubTab.value === 'failures' && externalAuditFailures.value.length === 0) void loadExternalAuditFailures();
 	if (tab === 'credits' && redeemCodes.value.length === 0) void loadRedeemListPage(1, true);
 	if (tab === 'migration' && migrationLogs.value.length === 0) void loadMigrationLogs();
 	if (tab === 'checkin' && roleItems.value.length === 0) void loadRolesForCheckin();
@@ -3571,7 +3669,7 @@ onMounted(() => {
 .auditStatsHead,
 .auditStatsRow {
 	display: grid;
-	grid-template-columns: minmax(180px, 1.5fr) minmax(90px, 0.8fr) minmax(80px, 0.6fr) minmax(90px, 0.7fr);
+	grid-template-columns: minmax(140px, 1.4fr) minmax(70px, 0.8fr) minmax(56px, 0.5fr) minmax(72px, 0.6fr) minmax(72px, 0.6fr) minmax(56px, 0.5fr) minmax(72px, 0.7fr);
 	gap: 10px;
 	align-items: center;
 	padding: 10px 12px;
@@ -3591,6 +3689,100 @@ onMounted(() => {
 	color: var(--MI_THEME-fgTransparentWeak);
 	background: color-mix(in srgb, var(--MI_THEME-panel) 86%, var(--MI_THEME-bg));
 	border-color: transparent;
+}
+
+.auditFailuresToolbar {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 10px;
+	flex-wrap: wrap;
+}
+
+.auditFailuresHint {
+	font-size: 0.85em;
+	color: var(--MI_THEME-fgTransparentWeak);
+}
+
+.auditFailureList {
+	display: grid;
+	gap: 8px;
+}
+
+.auditFailureCard {
+	display: grid;
+	gap: 6px;
+	padding: 10px 12px;
+	border-radius: 8px;
+	border: 1px solid var(--MI_THEME-divider);
+	background: var(--MI_THEME-panel);
+	font-size: 0.9em;
+}
+
+.auditFailureHead {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex-wrap: wrap;
+}
+
+.auditFailureKind {
+	flex-shrink: 0;
+	padding: 2px 8px;
+	border-radius: 6px;
+	font-size: 0.85em;
+	font-weight: 700;
+}
+
+.auditFailureKindApi {
+	background: color-mix(in srgb, var(--MI_THEME-error) 16%, transparent);
+	color: var(--MI_THEME-error);
+}
+
+.auditFailureKindParse {
+	background: color-mix(in srgb, var(--MI_THEME-warn) 18%, transparent);
+	color: var(--MI_THEME-warn);
+}
+
+.auditFailureModel {
+	min-width: 0;
+	word-break: break-word;
+}
+
+.auditFailureTime {
+	margin-left: auto;
+	flex-shrink: 0;
+	font-size: 0.85em;
+	color: var(--MI_THEME-fgTransparentWeak);
+}
+
+.auditFailureReason {
+	display: flex;
+	align-items: baseline;
+	gap: 8px;
+	flex-wrap: wrap;
+	color: var(--MI_THEME-fg);
+	word-break: break-word;
+}
+
+.auditFailureCode {
+	padding: 1px 6px;
+	border-radius: 4px;
+	background: color-mix(in srgb, var(--MI_THEME-fg) 10%, transparent);
+	font-size: 0.85em;
+}
+
+.auditFailurePre {
+	margin: 0;
+	padding: 8px 10px;
+	border-radius: 6px;
+	border: 1px solid var(--MI_THEME-divider);
+	background: color-mix(in srgb, var(--MI_THEME-panel) 70%, var(--MI_THEME-bg));
+	max-height: 200px;
+	overflow: auto;
+	white-space: pre-wrap;
+	word-break: break-word;
+	font-size: 0.85em;
 }
 
 .artistPresetGrid {
@@ -3639,6 +3831,12 @@ onMounted(() => {
 	.auditStatsRow {
 		grid-template-columns: 1fr;
 		gap: 6px;
+
+		> span[data-label]::before {
+			content: attr(data-label) '：';
+			font-weight: 700;
+			color: var(--MI_THEME-fgTransparentWeak);
+		}
 	}
 
 	.simpleHeadRow {

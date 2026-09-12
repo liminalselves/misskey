@@ -10,7 +10,7 @@ import { Endpoint } from '@/server/api/endpoint-base.js';
 import { DI } from '@/di-symbols.js';
 import { AgentService } from '@/core/AgentService.js';
 import { MetaService } from '@/core/MetaService.js';
-import type { AgentExternalAuditStatus } from '@/models/AgentExternalAuditLog.js';
+import type { AgentExternalAuditFailureKind, AgentExternalAuditStatus } from '@/models/AgentExternalAuditLog.js';
 
 export const meta = {
 	tags: ['admin'],
@@ -53,26 +53,32 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			const rows = await this.agentExternalAuditLogsRepository.createQueryBuilder('log')
 				.select('log.modelId', 'modelId')
 				.addSelect('log.status', 'status')
+				.addSelect('log.failureKind', 'failureKind')
 				.addSelect('COUNT(*)::int', 'count')
 				.where('log.createdAt >= :since', { since })
 				.andWhere('log.modelId IS NOT NULL')
 				.andWhere('log.status IN (:...statuses)', { statuses: ['allow', 'block', 'failed'] })
 				.groupBy('log.modelId')
 				.addGroupBy('log.status')
-				.getRawMany<{ modelId: string; status: AgentExternalAuditStatus; count: number }>();
-			const byModel = new Map<string, { total: number; allow: number; block: number; failed: number }>();
+				.addGroupBy('log.failureKind')
+				.getRawMany<{ modelId: string; status: AgentExternalAuditStatus; failureKind: AgentExternalAuditFailureKind | null; count: number }>();
+			const byModel = new Map<string, { total: number; allow: number; block: number; failed: number; apiFailed: number; parseFailed: number }>();
 			for (const row of rows) {
-				const bucket = byModel.get(row.modelId) ?? { total: 0, allow: 0, block: 0, failed: 0 };
+				const bucket = byModel.get(row.modelId) ?? { total: 0, allow: 0, block: 0, failed: 0, apiFailed: 0, parseFailed: 0 };
 				const count = Number(row.count) || 0;
 				bucket.total += count;
 				if (row.status === 'allow') bucket.allow += count;
 				if (row.status === 'block') bucket.block += count;
-				if (row.status === 'failed') bucket.failed += count;
+				if (row.status === 'failed') {
+					bucket.failed += count;
+					if (row.failureKind === 'parse') bucket.parseFailed += count;
+					else bucket.apiFailed += count;
+				}
 				byModel.set(row.modelId, bucket);
 			}
 			return models.map((m, i) => {
 				const id = typeof m.id === 'string' ? m.id : `model-${i + 1}`;
-				const b = byModel.get(id) ?? { total: 0, allow: 0, block: 0, failed: 0 };
+				const b = byModel.get(id) ?? { total: 0, allow: 0, block: 0, failed: 0, apiFailed: 0, parseFailed: 0 };
 				return {
 					id,
 					name: typeof m.name === 'string' ? m.name : id,
@@ -86,6 +92,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					allow: b.allow,
 					block: b.block,
 					failed: b.failed,
+					apiFailed: b.apiFailed,
+					parseFailed: b.parseFailed,
 					failureRate: b.total > 0 ? b.failed / b.total : 0,
 				};
 			}).sort((a, b) => a.priority - b.priority || a.name.localeCompare(b.name));

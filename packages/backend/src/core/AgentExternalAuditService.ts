@@ -11,7 +11,7 @@ import { MetaService } from '@/core/MetaService.js';
 import { EmailService } from '@/core/EmailService.js';
 import type { AgentExternalAuditLogsRepository } from '@/models/_.js';
 import type { MiAgentExternalAuditModel, MiMeta } from '@/models/Meta.js';
-import type { AgentExternalAuditStatus } from '@/models/AgentExternalAuditLog.js';
+import type { AgentExternalAuditFailureKind, AgentExternalAuditStatus } from '@/models/AgentExternalAuditLog.js';
 import type { MiUser } from '@/models/User.js';
 import type { MiAgentSession } from '@/models/AgentSession.js';
 import { normalizeChatCompletionsUrl } from '@/misc/validate-llm-endpoint-url.js';
@@ -108,6 +108,12 @@ function clipText(text: string | null | undefined, max: number): string | null {
 function parseNotifyEmails(raw: string | null | undefined): string[] {
 	if (!raw) return [];
 	return [...new Set(raw.split(/[,\n;]/g).map(x => x.trim()).filter(x => x.includes('@')))];
+}
+
+/** 请求成功但回复内容异常（缺 content 或无法解析为 allow/block JSON）归为 parse，其余请求阶段错误归为 api */
+function classifyFailureKind(errorCode: string | null | undefined): AgentExternalAuditFailureKind {
+	if (errorCode === 'AUDIT_MODEL_UNPARSEABLE_DECISION' || errorCode === 'AUDIT_MODEL_EMPTY_RESPONSE') return 'parse';
+	return 'api';
 }
 
 function parseAuditDecision(rawText: string): AuditDecision | null {
@@ -268,6 +274,7 @@ export class AgentExternalAuditService {
 				userText: null,
 				assistantText: null,
 				responseText: null,
+				failureKind: null,
 				errorCode: 'ALL_AUDIT_MODELS_FAILED',
 				errorMessage: 'All external audit models failed; reply was allowed by fail-open policy.',
 			});
@@ -452,6 +459,7 @@ export class AgentExternalAuditService {
 			userText: params.includeTexts ? params.params.userText : null,
 			assistantText: params.includeTexts ? params.params.assistantText : null,
 			responseText: clipText(params.responseText ?? null, 12000),
+			failureKind: params.status === 'failed' ? classifyFailureKind(params.errorCode) : null,
 			errorCode: params.errorCode ?? null,
 			errorMessage: params.errorMessage ? clipText(params.errorMessage, 1024) : null,
 		});

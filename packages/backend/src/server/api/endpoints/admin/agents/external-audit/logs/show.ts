@@ -81,6 +81,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				userText: r.userText,
 				assistantText: r.assistantText,
 				responseText: r.responseText,
+				failureKind: r.failureKind,
 				errorCode: r.errorCode,
 				errorMessage: r.errorMessage,
 			};
