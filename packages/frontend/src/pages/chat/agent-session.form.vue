@@ -118,6 +118,13 @@ function saveDraft() {
 	const key = getDraftKey();
 	if (!key) return;
 
+	// 空内容不留草稿条目：发送/清空后 watch 会以空值再触发一次保存，若照写会留下
+	// {text:'',file:null} 的空壳，下次挂载又被当成有效草稿读取
+	if (text.value === '' && file.value == null) {
+		deleteDraft();
+		return;
+	}
+
 	const drafts = JSON.parse(miLocalStorage.getItem('chatMessageDrafts') || '{}');
 	drafts[key] = {
 		updatedAt: new Date(),
@@ -149,8 +156,17 @@ function restoreDraftFromStorage() {
 	}
 }
 
+// 程序化回填（中断、发送失败、重试、编辑消息）置位：这些内容来自“已发出”的消息，
+// 只回显到输入框供修改，不得写入草稿。否则服务端仍在生成（agentReplyPending）时
+// 刷新页面，草稿恢复会让输入框残留旧内容，与“正在请求”状态互相矛盾。
+let suppressDraftSave = false;
+
 // 监听文本和文件变化，自动保存草稿
 watch([text, file], () => {
+	if (suppressDraftSave) {
+		suppressDraftSave = false;
+		return;
+	}
 	// 编辑模式下不保存草稿（编辑有独立的恢复机制）
 	if (!props.editing) {
 		saveDraft();
@@ -205,10 +221,12 @@ function onAbortClick() {
 }
 
 function restoreDraft(t: string) {
+	suppressDraftSave = true;
 	text.value = t;
 }
 
 function setText(t: string) {
+	suppressDraftSave = true;
 	text.value = t;
 }
 
@@ -221,7 +239,7 @@ defineExpose({
 	focus: () => textareaEl.value?.focus(),
 	restoreDraft,
 	setText,
-	setAttachment: (next: DriveFile | null) => { file.value = next; },
+	setAttachment: (next: DriveFile | null) => { suppressDraftSave = true; file.value = next; },
 	clearText,
 	clearAttachment: () => { file.value = null; },
 	submit,
