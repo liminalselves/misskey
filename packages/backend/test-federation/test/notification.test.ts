@@ -39,7 +39,17 @@ describe('Notification', () => {
 			);
 		});
 
-		afterAll(async () => await bob.client.request('following/delete', { userId: aliceInB.id }));
+		afterAll(async () => {
+			// Accept アクティビティのinbox処理が一時的なユーザー解決失敗でスキップされると
+			// フォローがリクエスト状態のまま残り following/delete は NOT_FOLLOWING になる。
+			// これはクリーンアップなので、その場合だけは失敗しないものとする。
+			try {
+				await bob.client.request('following/delete', { userId: aliceInB.id });
+			} catch (err: unknown) {
+				// misskey-js のAPIエラーは Error ではなく code を持つプレーンオブジェクト
+				if (!(typeof err === 'object' && err !== null && (err as { code?: unknown }).code === 'NOT_FOLLOWING')) throw err;
+			}
+		});
 	});
 
 	describe('Note', () => {

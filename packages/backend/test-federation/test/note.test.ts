@@ -152,15 +152,15 @@ describe('Note', () => {
 					const note = (await bob.client.request('notes/create', { text: 'I\'m Bob.' })).createdNote;
 					const noteInA = await resolveRemoteNote('b.test', note.id, carol);
 					await bob.client.request('notes/delete', { noteId: note.id });
-					await sleep();
 
-					await rejects(
+					// 削除アクティビティの配送はキュー処理のタイミング次第で遅れることがあるためポーリングする
+					await waitForFederation(() => rejects(
 						async () => await carol.client.request('notes/show', { noteId: noteInA.id }),
 						(err: any) => {
 							strictEqual(err.code, 'NO_SUCH_NOTE');
 							return true;
 						},
-					);
+					));
 				});
 
 				afterAll(async () => {
@@ -177,15 +177,15 @@ describe('Note', () => {
 					await sleep();
 
 					await bob.client.request('notes/delete', { noteId: note.id });
-					await sleep();
 
-					await rejects(
+					// 削除アクティビティの配送はキュー処理のタイミング次第で遅れることがあるためポーリングする
+					await waitForFederation(() => rejects(
 						async () => await alice.client.request('notes/show', { noteId: noteInA.id }),
 						(err: any) => {
 							strictEqual(err.code, 'NO_SUCH_NOTE');
 							return true;
 						},
-					);
+					));
 				});
 			});
 
@@ -197,15 +197,15 @@ describe('Note', () => {
 					await sleep();
 
 					await bob.client.request('notes/delete', { noteId: note.id });
-					await sleep();
 
-					await rejects(
+					// 削除アクティビティの配送はキュー処理のタイミング次第で遅れることがあるためポーリングする
+					await waitForFederation(() => rejects(
 						async () => await alice.client.request('notes/show', { noteId: noteInA.id }),
 						(err: any) => {
 							strictEqual(err.code, 'NO_SUCH_NOTE');
 							return true;
 						},
-					);
+					));
 				});
 			});
 

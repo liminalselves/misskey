@@ -1,6 +1,6 @@
 import assert, { rejects, strictEqual } from 'node:assert';
 import * as Misskey from 'misskey-js';
-import { createAccount, deepStrictEqualWithExcludedFields, fetchAdmin, relogin, type LoginUser, resolveRemoteNote, resolveRemoteUser, sleep } from './utils.js';
+import { createAccount, deepStrictEqualWithExcludedFields, fetchAdmin, relogin, type LoginUser, resolveRemoteNote, resolveRemoteUser, sleep, waitForFederation } from './utils.js';
 
 const [aAdmin, bAdmin] = await Promise.all([
 	fetchAdmin('a.test'),
@@ -380,18 +380,20 @@ describe('User', () => {
 				strictEqual(followers.length, 1); // followed by Bob
 
 				await alice.client.request('i/delete-account', { password: alice.password });
-				await sleep();
 
-				const following = await bob.client.request('users/following', { userId: bob.id });
-				strictEqual(following.length, 0); // no following relation
+				// アカウント削除のDeleteアクティビティの配送はキュー処理のタイミング次第で遅れることがあるためポーリングする
+				await waitForFederation(async () => {
+					const following = await bob.client.request('users/following', { userId: bob.id });
+					strictEqual(following.length, 0); // no following relation
+				});
 
-				await rejects(
+				await waitForFederation(() => rejects(
 					async () => await bob.client.request('following/create', { userId: aliceInB.id }),
 					(err: any) => {
 						strictEqual(err.code, 'NO_SUCH_USER');
 						return true;
 					},
-				);
+				));
 			});
 		});
 
