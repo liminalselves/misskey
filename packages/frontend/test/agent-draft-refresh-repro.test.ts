@@ -4,7 +4,7 @@
  */
 
 import { assert, describe, test, vi } from 'vitest';
-import { createApp, h, nextTick, defineComponent } from 'vue';
+import { createApp, defineComponent, h, nextTick, ref, vShow, withDirectives } from 'vue';
 
 // 桩掉组件依赖的重模块，只保留草稿逻辑
 vi.mock('@/os.js', () => ({ alert: vi.fn(), toast: vi.fn() }));
@@ -50,6 +50,25 @@ async function unmount(m: FormHandle) {
 	await nextTick();
 }
 
+async function mountFormWithVisibility(sessionId: string, onSubmit: (p: { text: string; file: unknown }) => void) {
+	const host = document.createElement('div');
+	document.body.appendChild(host);
+	const visible = ref(true);
+	let form: FormExposed | null = null;
+	const app = createApp(defineComponent({
+		setup() {
+			return () => withDirectives(h(AgentSessionForm, {
+				ref: (i: unknown) => { form = i as FormExposed; },
+				sessionId,
+				onSubmit,
+			}), [[vShow, visible.value]]);
+		},
+	}));
+	app.mount(host);
+	await nextTick();
+	return { host, app, visible, form: form! };
+}
+
 async function type(textarea: HTMLTextAreaElement, value: string) {
 	textarea.value = value;
 	textarea.dispatchEvent(new Event('input', { bubbles: true }));
@@ -74,7 +93,7 @@ async function refresh(onSubmit: (p: { text: string; file: unknown }) => void): 
 	return await mountForm('sess1', onSubmit);
 }
 
-describe('agent 聊天表单草稿：请求中刷新页面不应残留已发送内容', () => {
+describe('agent 聊天表单草稿：刷新恢复与发送状态', () => {
 	test('正常发送（请求在飞）→ 刷新：输入框为空，且不残留空草稿条目', async () => {
 		window.localStorage.clear();
 		const onSubmit = () => new Promise<void>(() => {}); // 永不 settle = 请求中
@@ -91,27 +110,29 @@ describe('agent 聊天表单草稿：请求中刷新页面不应残留已发送�
 		await unmount(m2);
 	});
 
-	test('中断回填（restoreDraft）→ 刷新：输入框为空（内容不落草稿）', async () => {
+	test('中断回填（restoreDraft）→ 刷新：输入框恢复内容与附件', async () => {
 		window.localStorage.clear();
 		const onSubmit = () => new Promise<void>(() => {});
+		const file = { id: 'file1', name: 'image.png', thumbnailUrl: 'https://example.com/thumb.png', url: 'https://example.com/image.png' };
 
 		const m1 = await mountForm('sess1', onSubmit);
 		await type(m1.textarea, '被中断的消息');
 		await clickSend(m1);
 		// 模拟 onAbortRequest 的中断回填
-		m1.form.restoreDraft('被中断的消息');
-		await nextTick();
+		m1.form.restoreDraft('被中断的消息', file as never);
 		await nextTick();
 		assert.equal(m1.textarea.value, '被中断的消息', '中断后内容应回到输入框');
-		assert.equal(drafts()['agent:sess1'], undefined, '中断回填不应写入草稿');
+		assert.equal(drafts()['agent:sess1']?.data.text, '被中断的消息', '中断回填应写入草稿');
+		assert.deepEqual(drafts()['agent:sess1']?.data.file, file, '中断回填应写入附件');
 
 		await unmount(m1);
 		const m2 = await refresh(onSubmit);
-		assert.equal(m2.textarea.value, '', '刷新后输入框不应残留中断回填的内容');
+		assert.equal(m2.textarea.value, '被中断的消息', '刷新后应恢复中断回填的内容');
+		assert.ok(m2.host.querySelector('img[src="https://example.com/thumb.png"]'), '刷新后应恢复中断回填的附件');
 		await unmount(m2);
 	});
 
-	test('发送失败回填 → 刷新：输入框为空', async () => {
+	test('发送失败回填 → 刷新：输入框恢复内容', async () => {
 		window.localStorage.clear();
 		const onSubmit = () => new Promise<void>(() => {});
 
@@ -121,11 +142,48 @@ describe('agent 聊天表单草稿：请求中刷新页面不应残留已发送�
 		// 模拟 catch 分支的失败回填
 		m1.form.restoreDraft('发送失败的消息');
 		await nextTick();
-		await nextTick();
+		assert.equal(drafts()['agent:sess1']?.data.text, '发送失败的消息', '失败回填应写入草稿');
 
 		await unmount(m1);
 		const m2 = await refresh(onSubmit);
-		assert.equal(m2.textarea.value, '', '刷新后输入框不应残留失败回填的内容');
+		assert.equal(m2.textarea.value, '发送失败的消息', '刷新后应恢复失败回填的内容');
+		await unmount(m2);
+	});
+
+	test('发送失败回填 → 切换 Tab 后返回：内容保持且保留草稿', async () => {
+		window.localStorage.clear();
+		const onSubmit = () => new Promise<void>(() => {});
+		const m = await mountFormWithVisibility('sess1', onSubmit);
+		const textarea = m.host.querySelector('textarea') as HTMLTextAreaElement;
+
+		m.form.restoreDraft('发送失败的消息');
+		await nextTick();
+		assert.equal(textarea.value, '发送失败的消息', '失败后内容应回到输入框');
+		assert.equal(drafts()['agent:sess1']?.data.text, '发送失败的消息', '失败回填应写入草稿');
+
+		m.visible.value = false;
+		await nextTick();
+		m.visible.value = true;
+		await nextTick();
+		assert.equal(textarea.value, '发送失败的消息', '切换 Tab 后返回仍应保留失败回填内容');
+		assert.equal(drafts()['agent:sess1']?.data.text, '发送失败的消息', '切换 Tab 后应保留失败回填草稿');
+
+		m.app.unmount();
+		m.host.remove();
+	});
+
+	test('临时 setText → 刷新：输入框为空', async () => {
+		window.localStorage.clear();
+		const onSubmit = () => new Promise<void>(() => {});
+
+		const m1 = await mountForm('sess1', onSubmit);
+		m1.form.setText('编辑或重试时的临时内容');
+		await nextTick();
+		assert.equal(drafts()['agent:sess1'], undefined, '临时填充不应写入草稿');
+
+		await unmount(m1);
+		const m2 = await refresh(onSubmit);
+		assert.equal(m2.textarea.value, '', '刷新后不应恢复临时填充内容');
 		await unmount(m2);
 	});
 

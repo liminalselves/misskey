@@ -1090,7 +1090,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 	</div>
 
 	<template #footer>
-		<div v-if="tab === 'chat' && !loading && session" :class="$style.footer">
+		<div v-if="!loading && session" v-show="tab === 'chat'" :class="$style.footer">
 			<MkInfo v-if="moderationLocksSessionWrites" warn :class="$style.composeStyleHint">{{ moderationBlockUserMessage }}</MkInfo>
 			<MkInfo v-else-if="chatComposeBlockedNeedStyle" :class="$style.composeStyleHint">{{ i18n.ts._agents.chatComposeNeedStyleHint }}</MkInfo>
 			<div v-if="memoryAddHintVisible" :class="$style.memAddHint" role="status">
@@ -4758,7 +4758,7 @@ async function onFormSubmit(payload: { text: string; file: DriveFile | null }) {
 		}
 		if (res.auditBlocked === true) {
 			messages.value = messages.value.filter(m => m.id !== optimisticId);
-			formRef.value?.restoreDraft(trimmed);
+			formRef.value?.restoreDraft(trimmed, payload.file ?? null);
 			void loadAgentCreditBalance();
 			showAgentAuditFeedback({
 				title: 'AI 回复未通过外审',
@@ -4772,7 +4772,7 @@ async function onFormSubmit(payload: { text: string; file: DriveFile | null }) {
 		if (res.aborted === true || !res.userMessageId) {
 			// 服务端已回滚用户消息，回填文本到输入框
 			messages.value = messages.value.filter(m => m.id !== optimisticId);
-			formRef.value?.restoreDraft(trimmed);
+			formRef.value?.restoreDraft(trimmed, payload.file ?? null);
 			return;
 		}
 		// 与私信一致：用户已在本页收到回复，立即清未读标记，避免 3 秒延迟事件误触发声音/徽标；
@@ -4860,9 +4860,9 @@ async function onFormSubmit(payload: { text: string; file: DriveFile | null }) {
 			setStoredPendingRequestId(sessionId, previousPendingRequestId);
 		} else if (isAborted) {
 			// 服务端已回滚用户消息，回填文本到输入框
-			formRef.value?.restoreDraft(trimmed);
+			formRef.value?.restoreDraft(trimmed, payload.file ?? null);
 		} else {
-			formRef.value?.restoreDraft(trimmed);
+			formRef.value?.restoreDraft(trimmed, payload.file ?? null);
 			try {
 				await loadInitialTimeline();
 			} catch {
@@ -5018,8 +5018,7 @@ async function onAbortRequest() {
 		// 中断即回滚：被中断的用户消息会被服务端撤销，这里先把内容（含附件）回填
 		// 到输入框，让用户可以修改后重新发送。必须在下方 await 之前同步完成：
 		// 否则旧 send 请求若抢先 settle 并移除乐观气泡，文本将无处可寻。
-		if (optimisticMsg.content) formRef.value?.restoreDraft(optimisticMsg.content);
-		formRef.value?.setAttachment(optimisticMsg.file ?? null);
+		if (optimisticMsg.content) formRef.value?.restoreDraft(optimisticMsg.content, optimisticMsg.file ?? null);
 	}
 
 	let serverAborted = true;
@@ -5041,8 +5040,7 @@ async function onAbortRequest() {
 		// 刷新后场景：服务端确认回滚后才回填并移除气泡。若 aborted=false，说明服务端
 		// 已无此在途请求（生成已结束），消息应保留、内容不回填，避免气泡与输入框重复
 		if (optimisticMsg == null && rollbackMsg != null) {
-			if (rollbackMsg.content) formRef.value?.restoreDraft(rollbackMsg.content);
-			formRef.value?.setAttachment(rollbackMsg.file ?? null);
+			if (rollbackMsg.content) formRef.value?.restoreDraft(rollbackMsg.content, rollbackMsg.file ?? null);
 			messages.value = messages.value.filter(m => m.id !== rollbackMsg.id);
 		}
 	}

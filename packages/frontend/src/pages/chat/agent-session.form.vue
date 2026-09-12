@@ -156,9 +156,8 @@ function restoreDraftFromStorage() {
 	}
 }
 
-// 程序化回填（中断、发送失败、重试、编辑消息）置位：这些内容来自“已发出”的消息，
-// 只回显到输入框供修改，不得写入草稿。否则服务端仍在生成（agentReplyPending）时
-// 刷新页面，草稿恢复会让输入框残留旧内容，与“正在请求”状态互相矛盾。
+// 编辑消息和一键重试等临时程序化输入不应写入草稿。
+// 失败或回滚后的消息通过 restoreDraft 显式保存，确保刷新后仍可恢复。
 let suppressDraftSave = false;
 
 // 监听文本和文件变化，自动保存草稿
@@ -220,9 +219,11 @@ function onAbortClick() {
 	emit('abort');
 }
 
-function restoreDraft(t: string) {
+function restoreDraft(t: string, f?: DriveFile | null) {
 	suppressDraftSave = true;
 	text.value = t;
+	if (f !== undefined) file.value = f;
+	if (!props.editing) saveDraft();
 }
 
 function setText(t: string) {
