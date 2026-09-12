@@ -27,8 +27,6 @@ export type Tab<T = string> = {
 </script>
 
 <script setup lang="ts" generic="const T extends Tab">
-import { defineProps, defineEmits } from 'vue';
-
 defineProps<{
 	tabs: T[];
 }>();
