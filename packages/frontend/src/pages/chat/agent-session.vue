@@ -1145,6 +1145,7 @@ import { makeDateSeparatedTimelineComputedRef } from '@/utility/timeline-date-se
 import { useMutationObserver } from '@/composables/use-mutation-observer.js';
 import { prefer } from '@/preferences.js';
 import { agentSegmentDelayMs, splitAgentMessageIntoSegments } from '@/utility/agent-message-segments.js';
+import { getStoredPendingRequestId, setStoredPendingRequestId } from '@/utility/agent-pending-requests.js';
 import { agentI18nText } from '@/utility/agent-i18n.js';
 import { useStream } from '@/stream.js';
 
@@ -1998,6 +1999,8 @@ function startReplyPendingPoll() {
 		await pollSessionReplyState();
 		if (!session.value?.agentReplyPending) {
 			stopReplyPendingPoll();
+			// 服务端生成已结束，持久化的在途 ID 不再有效
+			setStoredPendingRequestId(sessionId, null);
 			try {
 				const previousIds = new Set(messages.value.map(message => message.id));
 				const list = await loadInitialTimeline();
@@ -3530,7 +3533,13 @@ onMounted(async () => {
 	}
 	if (session.value?.agentReplyPending) {
 		sending.value = true;
+		// 刷新前发出的请求仍在服务端生成：恢复其 clientRequestId，让中断按钮
+		// 能通过 abort 端点真正终止生成并回滚用户消息，而不是只停本地轮询
+		currentClientRequestId = getStoredPendingRequestId(sessionId);
 		startReplyPendingPoll();
+	} else {
+		// 会话不在生成中：清掉可能残留的过期在途 ID（如生成在页面关闭期间已完成）
+		setStoredPendingRequestId(sessionId, null);
 	}
 	await nextTick();
 	formRef.value?.focus();
@@ -4521,7 +4530,7 @@ async function onContextImportFileChange(ev: Event) {
 
 const OPTIMISTIC_MESSAGE_ID_PREFIX = 'agent-opt:';
 
-/** 当前正在进行的发送请求 ID；由 abort 端点使用 */
+/** 当前正在进行的发送请求 ID；由 abort 端点使用；跨刷新持久化见 utility/agent-pending-requests.js */
 let currentClientRequestId: string | null = null;
 /**
  * 已被用户主动中断的请求 ID 集合（兜底守卫）。
@@ -4700,6 +4709,10 @@ async function onFormSubmit(payload: { text: string; file: DriveFile | null }) {
 	let leaveSendingSpinner = false;
 	const clientRequestId = crypto.randomUUID();
 	currentClientRequestId = clientRequestId;
+	// 持久化在途 ID（刷新后中断依赖）；若本请求因 AGENT_REPLY_PENDING 被拒，
+	// 真正在途的是更早的请求，catch 里要用旧值恢复
+	const previousPendingRequestId = getStoredPendingRequestId(sessionId);
+	setStoredPendingRequestId(sessionId, clientRequestId);
 	// 为本次 send 建立可取消的 HTTP 连接：中断时 abort 它，浏览器立即断开，
 	// pendingApiRequestsCount 递减，右上角全局加载转圈随之停止。
 	sendAbortController?.abort();
@@ -4843,6 +4856,8 @@ async function onFormSubmit(payload: { text: string; file: DriveFile | null }) {
 			os.toast(i18n.ts._agents.replyStillGenerating);
 			leaveSendingSpinner = true;
 			startReplyPendingPoll();
+			// 本请求被拒未注册到服务端：在途的仍是更早的请求，恢复其 ID 供中断使用
+			setStoredPendingRequestId(sessionId, previousPendingRequestId);
 		} else if (isAborted) {
 			// 服务端已回滚用户消息，回填文本到输入框
 			formRef.value?.restoreDraft(trimmed);
@@ -4875,6 +4890,9 @@ async function onFormSubmit(payload: { text: string; file: DriveFile | null }) {
 			currentClientRequestId = null;
 			if (!leaveSendingSpinner) {
 				sending.value = false;
+				// 请求已落定（成功/中断/失败），服务端不再有对应的在途生成，清掉持久化 ID。
+				// leaveSendingSpinner 时在途的是更早的请求，其 ID 已在 catch 中恢复，不得覆盖。
+				setStoredPendingRequestId(sessionId, null);
 			}
 		}
 		if (sendAbortController?.signal === sendSignal) {
@@ -4964,15 +4982,19 @@ async function onAbortRequest() {
 	if (playback) {
 		finishSegmentPlayback();
 		currentClientRequestId = null;
+		// 播放中断时 send 的 finally 会因 currentClientRequestId 已被清空而跳过清理，这里补上
+		setStoredPendingRequestId(sessionId, null);
 		sending.value = false;
 		return;
 	}
 
-	const reqId = currentClientRequestId;
+	// 刷新后 currentClientRequestId 已丢失：从 localStorage 恢复刷新前发出的在途 ID，
+	// 让中断依旧能真正终止服务端生成（未恢复到时才退化为仅停止本地轮询）
+	const reqId = currentClientRequestId ?? getStoredPendingRequestId(sess.id);
 	if (!reqId) {
-		// 无 clientRequestId 的两种恢复路径：
-		//  (a) 页面在「回复生成中」时重新进入，sending 被置 true 但从未设定 clientRequestId；
-		//  (b) 发送遭遇 AGENT_REPLY_PENDING 后转入回复轮询，finally 已将 clientRequestId 清空。
+		// 无 clientRequestId 的两种残留路径：
+		//  (a) 会话的生成由其它端（或主动消息等）触发，本页从未持有其 clientRequestId；
+		//  (b) 发送遭遇 AGENT_REPLY_PENDING 后转入回复轮询，且存储中亦无在途 ID。
 		// 此时无法调用 abort 端点；若不止血，X 按钮会静默失效、sending 永久为 true（死锁）。
 		stopReplyPendingPoll();
 		sending.value = false;
@@ -4987,22 +5009,42 @@ async function onAbortRequest() {
 	// 都会被 onFormSubmit 的兜底守卫拦截，不会再渲染气泡。
 	abortedRequestIds.add(reqId);
 
-	// 中断即回滚：被中断的用户消息会被服务端撤销，这里先把内容（含附件）回填
-	// 到输入框，让用户可以修改后重新发送。必须在下方 await 之前同步完成：
-	// 否则旧 send 请求若抢先 settle 并移除乐观气泡，文本将无处可寻。
-	const optimisticMsg = messages.value.find(m => m.id.startsWith(OPTIMISTIC_MESSAGE_ID_PREFIX) && m.role === 'user');
+	// 回滚目标：未刷新时是乐观气泡；刷新后乐观气泡已不存在，在途生成由服务端
+	// 已入库的最新用户消息触发，abort 成功后该消息会被服务端回滚删除
+	const optimisticMsg = messages.value.find(m => m.id.startsWith(OPTIMISTIC_MESSAGE_ID_PREFIX) && m.role === 'user') ?? null;
+	const rollbackMsg = optimisticMsg ?? (messages.value.find(m => m.role === 'user') ?? null);
+
 	if (optimisticMsg != null) {
+		// 中断即回滚：被中断的用户消息会被服务端撤销，这里先把内容（含附件）回填
+		// 到输入框，让用户可以修改后重新发送。必须在下方 await 之前同步完成：
+		// 否则旧 send 请求若抢先 settle 并移除乐观气泡，文本将无处可寻。
 		if (optimisticMsg.content) formRef.value?.restoreDraft(optimisticMsg.content);
 		formRef.value?.setAttachment(optimisticMsg.file ?? null);
 	}
 
+	let serverAborted = true;
 	try {
-		await misskeyApi(
+		const res = await misskeyApi(
 			'agents/messages/abort' as Parameters<typeof misskeyApi>[0],
 			{ sessionId: sess.id, clientRequestId: reqId } as any,
-		);
+		) as { aborted?: boolean };
+		serverAborted = res.aborted !== false;
 	} catch {
 		// 中断请求本身失败时静默处理（服务端可能已经完成了）
+	}
+
+	if (serverAborted) {
+		// 已真正终止：停掉刷新场景的 pending 轮询（否则 2.5s 后还会无谓地重拉时间线）；
+		// aborted=false 时生成其实已结束，保留轮询让它自然收尾（补拉回复、清存储 ID）
+		stopReplyPendingPoll();
+		setStoredPendingRequestId(sessionId, null);
+		// 刷新后场景：服务端确认回滚后才回填并移除气泡。若 aborted=false，说明服务端
+		// 已无此在途请求（生成已结束），消息应保留、内容不回填，避免气泡与输入框重复
+		if (optimisticMsg == null && rollbackMsg != null) {
+			if (rollbackMsg.content) formRef.value?.restoreDraft(rollbackMsg.content);
+			formRef.value?.setAttachment(rollbackMsg.file ?? null);
+			messages.value = messages.value.filter(m => m.id !== rollbackMsg.id);
+		}
 	}
 
 	// 真正取消 send 的 HTTP 连接：浏览器立即断开，pendingApiRequestsCount 递减，

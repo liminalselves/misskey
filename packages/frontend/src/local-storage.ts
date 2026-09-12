@@ -28,6 +28,7 @@ export type Keys = (
 	'themeCachedVersion' |
 	'customCss' |
 	'chatMessageDrafts' |
+	'agentPendingRequests' |
 	'scratchpad' |
 	'debug' |
 	'preferences' |
