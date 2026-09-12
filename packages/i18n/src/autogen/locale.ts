@@ -16424,6 +16424,18 @@ export interface Locale extends ILocale {
          */
         "compressionBandScaleCaption": ParameterizedString<"t1" | "t1" | "t2" | "t2" | "h" | "h">;
         /**
+         * ウィンドウ内
+         */
+        "compressionBandInWindow": string;
+        /**
+         * ウィンドウ上限は {h} です。最新のメッセージから累計し、上限を超えたものは「ウィンドウ外」となり、モデルには送信されません。
+         */
+        "compressionBandScaleCaptionSimple": ParameterizedString<"h">;
+        /**
+         * まだメッセージがありません。
+         */
+        "compressionMessageBandsEmpty": string;
+        /**
          * 当メッセージ {msg} · 累計 {cum}
          */
         "compressionBandMsgTokens": ParameterizedString<"msg" | "cum">;
@@ -16520,6 +16532,10 @@ export interface Locale extends ILocale {
          * 記憶設定を保存
          */
         "sessionMemorySaveAction": string;
+        /**
+         * 記憶パラメータ
+         */
+        "sessionMemoryParamsTitle": string;
         /**
          * 記憶設定を保存しました
          */

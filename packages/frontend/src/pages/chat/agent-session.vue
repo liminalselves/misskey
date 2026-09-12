@@ -570,13 +570,15 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<div v-else :class="['_gaps', $style.memPage]">
 			<MkInfo v-if="session == null">{{ i18n.ts.somethingHappened }}</MkInfo>
 			<template v-else>
-				<div v-panel :class="$style.settingHero">
-					<FormSplit :minWidth="280">
-						<MkSelect v-model="memProvider" :items="longMemoryProviderItems" :disabled="memSaving || moderationLocksSessionWrites">
-							<template #label>{{ i18n.ts._agents.sessionLongMemoryProvider }}</template>
-							<template #caption>{{ i18n.ts._agents.sessionLongMemoryProviderCaption }}</template>
-						</MkSelect>
-					</FormSplit>
+				<section v-panel :class="$style.memSection">
+					<header :class="$style.memSectionHead">
+						<i class="ti ti-brain" :class="$style.memSectionIcon"></i>
+						<div :class="$style.memSectionHeadText">
+							<div :class="$style.memSectionTitle">{{ i18n.ts._agents.sessionLongMemoryProvider }}</div>
+							<div :class="$style.memSectionCaption">{{ i18n.ts._agents.sessionLongMemoryProviderCaption }}</div>
+						</div>
+					</header>
+					<MkSelect v-model="memProvider" :items="longMemoryProviderItems" :disabled="memSaving || moderationLocksSessionWrites"/>
 					<p :class="$style.memProviderDesc">{{ memProviderDescription }}</p>
 					<div v-if="memoryProviderSelectionDirty" :class="$style.memProviderSaveRow">
 						<MkButton primary rounded :disabled="memSaving || moderationLocksSessionWrites" @click="saveSessionLongMemoryMode">
@@ -584,7 +586,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 							<template v-else>{{ i18n.ts._agents.saveSessionLongMemoryMode }}</template>
 						</MkButton>
 					</div>
-				</div>
+				</section>
 				<MkInfo v-if="longMemoryConfigured && memProvider === 'aliyun'">
 					<span :class="$style.sessionMemoryHint">{{ i18n.ts._agents.sessionMemoryHint }}</span>
 				</MkInfo>
@@ -593,117 +595,130 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</MkInfo>
 				<MkInfo v-if="moderationLocksSessionWrites" warn>{{ moderationBlockUserMessage }}</MkInfo>
 				<template v-if="longMemoryConfigured && memProvider === 'aliyun'">
-					<MkSwitch v-model="memLongMemoryEnabled" :disabled="memSaving || moderationLocksSessionWrites">
-						<template #label>{{ i18n.ts._agents.sessionMemoryEnable }}</template>
-					</MkSwitch>
-					<div :class="$style.memEnableCaption">{{ i18n.ts._agents.sessionMemoryEnableCaption }}</div>
-					<FormSplit :minWidth="260">
-						<MkInput v-model="memTopK" type="text" :disabled="memSaving || moderationLocksSessionWrites">
-							<template #label>{{ i18n.ts._agents.sessionMemoryTopK }}</template>
-							<template #caption>{{ i18n.ts._agents.sessionMemoryTopKCaption }}</template>
+					<section v-panel :class="$style.memSection">
+						<header :class="$style.memSectionHead">
+							<i class="ti ti-adjustments" :class="$style.memSectionIcon"></i>
+							<div :class="$style.memSectionHeadText">
+								<div :class="$style.memSectionTitle">{{ i18n.ts._agents.sessionMemoryParamsTitle }}</div>
+							</div>
+						</header>
+						<MkSwitch v-model="memLongMemoryEnabled" :disabled="memSaving || moderationLocksSessionWrites">
+							<template #label>{{ i18n.ts._agents.sessionMemoryEnable }}</template>
+						</MkSwitch>
+						<div :class="$style.memEnableCaption">{{ i18n.ts._agents.sessionMemoryEnableCaption }}</div>
+						<FormSplit :minWidth="260">
+							<MkInput v-model="memTopK" type="text" :disabled="memSaving || moderationLocksSessionWrites">
+								<template #label>{{ i18n.ts._agents.sessionMemoryTopK }}</template>
+								<template #caption>{{ i18n.ts._agents.sessionMemoryTopKCaption }}</template>
+							</MkInput>
+							<MkInput v-model="memInject" type="text" :disabled="memSaving || moderationLocksSessionWrites">
+								<template #label>{{ i18n.ts._agents.sessionMemoryInjectMaxChars }}</template>
+							</MkInput>
+						</FormSplit>
+						<MkInput v-model="memAddMaxRounds" type="text" :disabled="memSaving || moderationLocksSessionWrites">
+							<template #label>{{ i18n.ts._agents.sessionMemoryAddMaxRounds }}</template>
+							<template #caption>{{ addMemRoundsCaption }}</template>
 						</MkInput>
-						<MkInput v-model="memInject" type="text" :disabled="memSaving || moderationLocksSessionWrites">
-							<template #label>{{ i18n.ts._agents.sessionMemoryInjectMaxChars }}</template>
+						<MkInput v-model="memAddEveryN" type="text" :disabled="memSaving || moderationLocksSessionWrites">
+							<template #label>{{ i18n.ts._agents.sessionMemoryAddEveryNRounds }}</template>
+							<template #caption>{{ addMemEveryNCaption }}</template>
 						</MkInput>
-					</FormSplit>
-					<MkInput v-model="memAddMaxRounds" type="text" :disabled="memSaving || moderationLocksSessionWrites">
-						<template #label>{{ i18n.ts._agents.sessionMemoryAddMaxRounds }}</template>
-						<template #caption>{{ addMemRoundsCaption }}</template>
-					</MkInput>
-					<MkInput v-model="memAddEveryN" type="text" :disabled="memSaving || moderationLocksSessionWrites">
-						<template #label>{{ i18n.ts._agents.sessionMemoryAddEveryNRounds }}</template>
-						<template #caption>{{ addMemEveryNCaption }}</template>
-					</MkInput>
-					<MkInput v-model="memMinScore" type="text" :disabled="memSaving || moderationLocksSessionWrites">
-						<template #label>{{ i18n.ts._agents.sessionMemoryMinScore }}</template>
-						<template #caption>{{ i18n.ts._agents.sessionMemoryMinScoreCaption }}</template>
-					</MkInput>
-					<div>
-						<MkButton primary rounded :disabled="memSaving || moderationLocksSessionWrites" @click="saveMemorySessionSettings">
-							<template v-if="memSaving"><MkLoading :em="true"/></template>
-							<template v-else>{{ i18n.ts._agents.sessionMemorySaveAction }}</template>
-						</MkButton>
-					</div>
+						<MkInput v-model="memMinScore" type="text" :disabled="memSaving || moderationLocksSessionWrites">
+							<template #label>{{ i18n.ts._agents.sessionMemoryMinScore }}</template>
+							<template #caption>{{ i18n.ts._agents.sessionMemoryMinScoreCaption }}</template>
+						</MkInput>
+						<div>
+							<MkButton primary rounded :disabled="memSaving || moderationLocksSessionWrites" @click="saveMemorySessionSettings">
+								<template v-if="memSaving"><MkLoading :em="true"/></template>
+								<template v-else>{{ i18n.ts._agents.sessionMemorySaveAction }}</template>
+							</MkButton>
+						</div>
+					</section>
 
-					<hr :class="$style.memDivider">
+					<section v-panel :class="$style.memSection">
+						<header :class="$style.memSectionHead">
+							<i class="ti ti-notes" :class="$style.memSectionIcon"></i>
+							<div :class="$style.memSectionHeadText">
+								<div :class="$style.memSectionTitle">{{ i18n.ts._agents.sessionMemoryNodesTitle }}</div>
+							</div>
+							<button type="button" class="_button" :class="$style.memSectionHeadBtn" :disabled="memoryListLoading" :title="i18n.ts.reload" @click="loadMemoryNodes">
+								<i class="ti ti-refresh"></i>
+							</button>
+						</header>
+						<MkInfo warn>{{ i18n.ts._agents.sessionMemoryNodesHint }}</MkInfo>
 
-					<div class="_gaps_s">
-						<div :class="$style.memNodesHeader">
-							<span :class="$style.settingLabel">{{ i18n.ts._agents.sessionMemoryNodesTitle }}</span>
-							<div :class="$style.memNodesActions">
-								<MkButton rounded small :disabled="memoryListLoading" @click="loadMemoryNodes">
-									<i class="ti ti-refresh"></i>
+						<div v-if="memoryListLoading" class="_gaps">
+							<MkLoading/>
+						</div>
+						<template v-else>
+							<div class="_gaps">
+								<MkTextarea v-model="newMemoryText" :disabled="memoryMutating || moderationLocksSessionWrites" tall pre>
+									<template #label>{{ i18n.ts._agents.sessionMemoryAddLabel }}</template>
+								</MkTextarea>
+								<MkButton primary rounded :disabled="memoryMutating || moderationLocksSessionWrites || newMemoryText.trim() === ''" @click="submitNewMemory">
+									<template v-if="memoryMutating"><MkLoading :em="true"/></template>
+									<template v-else>{{ i18n.ts._agents.sessionMemoryAddSubmit }}</template>
 								</MkButton>
 							</div>
-						</div>
-						<MkInfo warn>{{ i18n.ts._agents.sessionMemoryNodesHint }}</MkInfo>
-					</div>
 
-					<div v-if="memoryListLoading" class="_gaps">
-						<MkLoading/>
-					</div>
-					<template v-else>
-						<div :class="['_gaps', $style.memAddPanel]">
-							<MkTextarea v-model="newMemoryText" :disabled="memoryMutating || moderationLocksSessionWrites" tall pre>
-								<template #label>{{ i18n.ts._agents.sessionMemoryAddLabel }}</template>
-							</MkTextarea>
-							<MkButton primary rounded :disabled="memoryMutating || moderationLocksSessionWrites || newMemoryText.trim() === ''" @click="submitNewMemory">
-								<template v-if="memoryMutating"><MkLoading :em="true"/></template>
-								<template v-else>{{ i18n.ts._agents.sessionMemoryAddSubmit }}</template>
-							</MkButton>
-						</div>
-
-						<div v-if="memoryNodes.length === 0" class="_note">{{ i18n.ts._agents.sessionMemoryNodesEmpty }}</div>
-						<div v-else :class="['_gaps', $style.memNodesList]">
-							<div
-								v-for="node in memoryNodes"
-								:key="node.memoryNodeId"
-								:class="$style.memCard"
-							>
-								<div v-if="editingMemoryId === node.memoryNodeId" class="_gaps">
-									<MkTextarea v-model="editingMemoryText" :disabled="memoryMutating || moderationLocksSessionWrites" tall pre/>
-									<div :class="$style.memCardActions">
-										<MkButton rounded :disabled="memoryMutating || moderationLocksSessionWrites" @click="cancelEditMemory">{{ i18n.ts.cancel }}</MkButton>
-										<MkButton primary rounded :disabled="memoryMutating || moderationLocksSessionWrites || editingMemoryText.trim() === ''" @click="submitEditMemory(node.memoryNodeId)">
-											<template v-if="memoryMutating"><MkLoading :em="true"/></template>
-											<template v-else>{{ i18n.ts.save }}</template>
-										</MkButton>
+							<div v-if="memoryNodes.length === 0" class="_note">{{ i18n.ts._agents.sessionMemoryNodesEmpty }}</div>
+							<div v-else :class="['_gaps', $style.memNodesList]">
+								<div
+									v-for="node in memoryNodes"
+									:key="node.memoryNodeId"
+									:class="$style.memCard"
+								>
+									<div v-if="editingMemoryId === node.memoryNodeId" class="_gaps">
+										<MkTextarea v-model="editingMemoryText" :disabled="memoryMutating || moderationLocksSessionWrites" tall pre/>
+										<div :class="$style.memCardActions">
+											<MkButton rounded :disabled="memoryMutating || moderationLocksSessionWrites" @click="cancelEditMemory">{{ i18n.ts.cancel }}</MkButton>
+											<MkButton primary rounded :disabled="memoryMutating || moderationLocksSessionWrites || editingMemoryText.trim() === ''" @click="submitEditMemory(node.memoryNodeId)">
+												<template v-if="memoryMutating"><MkLoading :em="true"/></template>
+												<template v-else>{{ i18n.ts.save }}</template>
+											</MkButton>
+										</div>
 									</div>
+									<template v-else>
+										<div :class="$style.memMeta">
+											<span v-if="node.updatedAt != null" :class="$style.memTimeChip">{{ formatMemTs(node.updatedAt) }}</span>
+											<span v-else-if="node.createdAt != null" :class="$style.memTimeChip">{{ formatMemTs(node.createdAt) }}</span>
+										</div>
+										<div :class="$style.memContent">{{ node.content }}</div>
+										<div :class="$style.memCardActions">
+											<MkButton rounded danger :disabled="memoryMutating || moderationLocksSessionWrites" @click="confirmDeleteMemory(node.memoryNodeId)">
+												{{ i18n.ts.delete }}
+											</MkButton>
+											<MkButton rounded :disabled="memoryMutating || moderationLocksSessionWrites" @click="startEditMemory(node)">
+												{{ i18n.ts.edit }}
+											</MkButton>
+										</div>
+									</template>
 								</div>
-								<template v-else>
-									<div :class="$style.memMeta">
-										<span v-if="node.updatedAt != null" :class="$style.memTimeChip">{{ formatMemTs(node.updatedAt) }}</span>
-										<span v-else-if="node.createdAt != null" :class="$style.memTimeChip">{{ formatMemTs(node.createdAt) }}</span>
-									</div>
-									<div :class="$style.memContent">{{ node.content }}</div>
-									<div :class="$style.memCardActions">
-										<MkButton rounded danger :disabled="memoryMutating || moderationLocksSessionWrites" @click="confirmDeleteMemory(node.memoryNodeId)">
-											{{ i18n.ts.delete }}
-										</MkButton>
-										<MkButton rounded :disabled="memoryMutating || moderationLocksSessionWrites" @click="startEditMemory(node)">
-											{{ i18n.ts.edit }}
-										</MkButton>
-									</div>
-								</template>
 							</div>
-						</div>
 
-						<div v-if="memoryTotalPages > 1" :class="$style.memPager">
-							<MkButton rounded small :disabled="memoryMutating || moderationLocksSessionWrites || memoryPage <= 1" @click="memoryPrevPage">
-								{{ i18n.ts._agents.sessionMemoryPrevPage }}
-							</MkButton>
-							<span>{{ memoryPage }} / {{ memoryTotalPages }}</span>
-							<MkButton rounded small :disabled="memoryMutating || moderationLocksSessionWrites || memoryPage >= memoryTotalPages" @click="memoryNextPage">
-								{{ i18n.ts._agents.sessionMemoryNextPage }}
-							</MkButton>
-						</div>
-					</template>
+							<div v-if="memoryTotalPages > 1" :class="$style.memPager">
+								<MkButton rounded small :disabled="memoryMutating || moderationLocksSessionWrites || memoryPage <= 1" @click="memoryPrevPage">
+									{{ i18n.ts._agents.sessionMemoryPrevPage }}
+								</MkButton>
+								<span>{{ memoryPage }} / {{ memoryTotalPages }}</span>
+								<MkButton rounded small :disabled="memoryMutating || moderationLocksSessionWrites || memoryPage >= memoryTotalPages" @click="memoryNextPage">
+									{{ i18n.ts._agents.sessionMemoryNextPage }}
+								</MkButton>
+							</div>
+						</template>
+					</section>
 				</template>
 
 				<template v-if="memProvider === 'compression' && session.dialogueStyleId">
-					<div :class="$style.compressionMemorySheet">
-						<MkInfo v-if="memoryProviderSelectionDirty" :class="$style.compressionMemoryNote">{{ i18n.ts._agents.compressionPendingSaveHint }}</MkInfo>
-						<FormSplit v-if="instance.agentLlmConfigured" :minWidth="280">
+					<section v-panel :class="$style.memSection">
+						<header :class="$style.memSectionHead">
+							<i class="ti ti-bookmarks" :class="$style.memSectionIcon"></i>
+							<div :class="$style.memSectionHeadText">
+								<div :class="$style.memSectionTitle">{{ i18n.ts._agents.sessionLongMemoryProviderCompression }}</div>
+							</div>
+						</header>
+						<MkInfo v-if="memoryProviderSelectionDirty">{{ i18n.ts._agents.compressionPendingSaveHint }}</MkInfo>
+						<template v-if="instance.agentLlmConfigured">
 							<MkSelect
 								v-model="memCompressionModelId"
 								:items="compressionModelSelectItems"
@@ -711,35 +726,27 @@ SPDX-License-Identifier: AGPL-3.0-only
 							>
 								<template #label>{{ i18n.ts._agents.compressionModelForSession }}</template>
 							</MkSelect>
-						</FormSplit>
-						<p v-if="instance.agentLlmConfigured" :class="$style.compressionBillingNote">{{ i18n.ts._agents.compressionModelSessionBillingLine }}</p>
+							<p :class="$style.compressionBillingNote">{{ i18n.ts._agents.compressionModelSessionBillingLine }}</p>
+						</template>
 						<XCompression
 							ref="compressionRef"
 							:sessionId="sessionId"
-							:memProviderDirty="memoryProviderSelectionDirty"
 							:moderationLocked="moderationLocksSessionWrites"
 							@jumpToMessage="jumpToChatMessage"
 						/>
-					</div>
+					</section>
 				</template>
 				<MkInfo v-else-if="memProvider === 'compression'" warn>{{ i18n.ts._agents.compressionNeedDialogueStyle }}</MkInfo>
 
-				<div :class="$style.memDividerLocate">
-					<span :class="$style.memDividerLocateText">
-						<i class="ti ti-scissors" :class="$style.memDividerLocateIcon"></i>
-						<span>{{ i18n.ts._agents.sessionMemoryContextDividerDesc }}</span>
-					</span>
-					<MkButton
-						v-tooltip="contextDividerButtonTooltip"
-						rounded
-						small
-						:disabled="!canLocateContextDivider"
-						@click="scrollToContextWindowDivider"
-					>
-						<i class="ti ti-focus-2"></i>
-						{{ i18n.ts._agents.sessionMemoryLocateContextDivider }}
-					</MkButton>
-				</div>
+				<XMessageBands
+					ref="bandsRef"
+					:sessionId="sessionId"
+					:detailed="memProvider === 'compression'"
+					:canLocateDivider="canLocateContextDivider"
+					:locateTooltip="contextDividerButtonTooltip"
+					@jumpToMessage="jumpToChatMessage"
+					@locateDivider="scrollToContextWindowDivider"
+				/>
 			</template>
 		</div>
 	</div>
@@ -1114,6 +1121,7 @@ import XAgentMessage from './agent-session.message.vue';
 import XForm from './agent-session.form.vue';
 import XAgentSearch from './agent-session.search.vue';
 import XCompression from './agent-session.compression.vue';
+import XMessageBands from './agent-session.message-bands.vue';
 import type { PageHeaderItem } from '@/types/page-header.js';
 import type { DateSeparetedTimelineItem } from '@/utility/timeline-date-separate.js';
 import type { AgentsStylesListUsableResponse, DriveFile } from 'misskey-js/entities.js';
@@ -1711,6 +1719,7 @@ const memProviderDescription = computed((): string => {
 import type { CompressionOverviewPayload } from './agent-session.compression.vue';
 
 const compressionRef = useTemplateRef<InstanceType<typeof XCompression>>('compressionRef');
+const bandsRef = useTemplateRef<InstanceType<typeof XMessageBands>>('bandsRef');
 
 const addMemRoundsCaption = computed(() => {
 	const raw = instance.agentMem0AddMemoryMaxRounds;
@@ -2455,7 +2464,7 @@ watch(
 		if (memProvider.value === 'compression') {
 			void loadAgentCreditBalance();
 		}
-		if (memProvider.value === 'compression' && session.value.dialogueStyleId) {
+		if (session.value.dialogueStyleId) {
 			void loadCompressionOverview();
 		}
 	},
@@ -2465,13 +2474,13 @@ let compressionOverviewMessagesDebounce: number | null = null;
 watch(
 	[() => messages.value[0]?.id, () => messages.value.length],
 	() => {
-		if (tab.value !== 'memory' || memProvider.value !== 'compression' || !session.value?.dialogueStyleId) return;
+		if (tab.value !== 'memory' || !session.value?.dialogueStyleId) return;
 		if (compressionOverviewMessagesDebounce != null) {
 			window.clearTimeout(compressionOverviewMessagesDebounce);
 		}
 		compressionOverviewMessagesDebounce = window.setTimeout(() => {
 			compressionOverviewMessagesDebounce = null;
-			if (tab.value === 'memory' && memProvider.value === 'compression' && session.value?.dialogueStyleId) {
+			if (tab.value === 'memory' && session.value?.dialogueStyleId) {
 				void loadCompressionOverview();
 			}
 		}, 900);
@@ -3707,7 +3716,7 @@ async function saveSessionLongMemoryMode() {
 				: null,
 		});
 		await loadSession();
-		if (memProvider.value === 'compression' && session.value?.dialogueStyleId) {
+		if (session.value?.dialogueStyleId) {
 			void loadCompressionOverview();
 		}
 		os.toast(i18n.ts._agents.sessionLongMemoryModeSaved);
@@ -3781,7 +3790,7 @@ async function saveMemorySessionSettings() {
 				: null,
 		});
 		await loadSession();
-		if (session.value?.agentLongMemoryProvider === 'compression' && session.value.dialogueStyleId) {
+		if (session.value?.dialogueStyleId) {
 			void loadCompressionOverview();
 		}
 		os.toast(i18n.ts._agents.sessionMemorySaved);
@@ -3795,8 +3804,11 @@ async function saveMemorySessionSettings() {
 
 async function loadCompressionOverview() {
 	if (!session.value?.dialogueStyleId) return;
-	if (memProvider.value !== 'compression') return;
-	await compressionRef.value?.refresh();
+	// 消息分段在所有记忆方式下都展示；便签列表仅在便签压缩模式下挂载
+	await Promise.all([
+		bandsRef.value?.refresh(),
+		memProvider.value === 'compression' ? compressionRef.value?.refresh() : undefined,
+	]);
 }
 
 async function persistMemCompressionModelId() {
@@ -3833,7 +3845,7 @@ watch(memCompressionModelId, () => {
 	void persistMemCompressionModelId();
 });
 
-/** 发送后便签在后台写出，多次延迟刷新记忆总览，让便签列表与消息区带尽快与服务器一致 */
+/** 发送后便签在后台写出，多次延迟刷新记忆总览，让便签列表与消息分段尽快与服务器一致 */
 let compressionOverviewSidecarTimeoutIds: number[] = [];
 
 function scheduleCompressionOverviewAfterSidecar() {
@@ -3841,11 +3853,12 @@ function scheduleCompressionOverviewAfterSidecar() {
 		window.clearTimeout(id);
 	}
 	compressionOverviewSidecarTimeoutIds = [];
-	const delaysMs = [1200, 3500, 8000];
+	// 便签模式需等多轮侧车写入；其余模式仅消息分段随新消息变化，两次刷新足够
+	const delaysMs = memProvider.value === 'compression' ? [1200, 3500, 8000] : [1500, 6000];
 	for (const ms of delaysMs) {
 		const tid = window.setTimeout(() => {
 			compressionOverviewSidecarTimeoutIds = compressionOverviewSidecarTimeoutIds.filter(x => x !== tid);
-			if (memProvider.value === 'compression' && session.value?.dialogueStyleId) {
+			if (session.value?.dialogueStyleId) {
 				void loadCompressionOverview();
 			}
 		}, ms);
@@ -3892,8 +3905,11 @@ function startCompressionLlmProgressPoll(baselineCount: number, baselineMaxUpdat
 				if (failedSettled && !successSettled) {
 					os.alert({ type: 'error', text: i18n.ts._agents.compressionSidecarLlmFailed });
 				}
-				if (memProvider.value === 'compression' && session.value?.dialogueStyleId) {
-					compressionRef.value?.setOverview(ov);
+				if (session.value?.dialogueStyleId) {
+					bandsRef.value?.setOverview(ov);
+					if (memProvider.value === 'compression') {
+						compressionRef.value?.setOverview(ov);
+					}
 				}
 				return;
 			}
@@ -4846,7 +4862,7 @@ async function onFormSubmit(payload: { text: string; file: DriveFile | null }) {
 		await scrollToLatest();
 		await loadSession();
 		void loadAgentCreditBalance();
-		if (session.value?.agentLongMemoryProvider === 'compression' && session.value.dialogueStyleId) {
+		if (session.value?.dialogueStyleId) {
 			scheduleCompressionOverviewAfterSidecar();
 		}
 	} catch (e) {
@@ -5592,18 +5608,6 @@ async function onAbortRequest() {
 	}
 }
 
-.memDividerLocate {
-	display: flex;
-	flex-wrap: wrap;
-	align-items: center;
-	justify-content: space-between;
-	gap: 0.5em 0.75em;
-	padding: 0.65em 0.85em;
-	border-radius: 12px;
-	border: solid 1px var(--MI_THEME-divider);
-	background: var(--MI_THEME-panel);
-}
-
 .memPage {
 	width: 100%;
 	max-width: min(100%, 720px);
@@ -5611,12 +5615,58 @@ async function onAbortRequest() {
 	padding-bottom: 0.15em;
 }
 
-.memAddPanel {
+/* 记忆 tab 分区卡片：统一 Misskey 面板风格（图标 + 标题 + 说明） */
+.memSection {
+	display: flex;
+	flex-direction: column;
+	gap: 0.75em;
 	padding: 0.95em 1.05em;
 	border-radius: 12px;
-	border: solid 1px var(--MI_THEME-divider);
-	background: var(--MI_THEME-panel);
-	box-shadow: 0 1px 0 color-mix(in srgb, var(--MI_THEME-fg) 2.5%, transparent);
+}
+
+.memSectionHead {
+	display: flex;
+	align-items: center;
+	gap: 0.55em;
+	padding-bottom: 0.6em;
+	border-bottom: solid 1px color-mix(in srgb, var(--MI_THEME-divider) 70%, transparent);
+}
+
+.memSectionIcon {
+	flex-shrink: 0;
+	font-size: 1.1em;
+	color: var(--MI_THEME-accent);
+}
+
+.memSectionHeadText {
+	display: flex;
+	flex-direction: column;
+	gap: 0.1em;
+	min-width: 0;
+	flex: 1;
+}
+
+.memSectionTitle {
+	font-weight: 700;
+	font-size: 0.95em;
+	line-height: 1.3;
+}
+
+.memSectionCaption {
+	font-size: 0.78em;
+	line-height: 1.4;
+	color: var(--MI_THEME-fgTransparentWeak);
+}
+
+.memSectionHeadBtn {
+	flex-shrink: 0;
+	padding: 0.35em;
+	border-radius: 6px;
+	color: var(--MI_THEME-fgTransparentWeak);
+	transition: color 0.12s ease;
+	@media (hover: hover) {
+		&:hover { color: var(--MI_THEME-accent); }
+	}
 }
 
 .memPorterPanel {
@@ -5675,23 +5725,6 @@ async function onAbortRequest() {
 	font-size: 0.82em;
 	line-height: 1.45;
 	color: var(--MI_THEME-fgTransparentWeak);
-}
-
-.memDividerLocateText {
-	display: flex;
-	align-items: flex-start;
-	gap: 0.5em;
-	min-width: 0;
-	flex: 1 1 14em;
-	font-size: 0.84em;
-	line-height: 1.45;
-	color: var(--MI_THEME-fgTransparentWeak);
-}
-
-.memDividerLocateIcon {
-	flex-shrink: 0;
-	margin-top: 0.12em;
-	color: var(--MI_THEME-accent);
 }
 
 .settingValue {
@@ -6102,43 +6135,11 @@ async function onAbortRequest() {
 	line-height: 1.55;
 }
 
-.compressionMemorySheet {
-	display: flex;
-	flex-direction: column;
-	gap: 0.65em;
-}
-
-.compressionMemoryNote {
-	margin-block: 0;
-}
-
 .compressionBillingNote {
 	margin: 0;
 	font-size: 0.84em;
 	line-height: 1.45;
 	color: var(--MI_THEME-fgTransparentWeak);
-}
-
-.memDivider {
-	margin: 0.85em 0 1.15em;
-	border: none;
-	border-top: solid 1px color-mix(in srgb, var(--MI_THEME-fg) 10%, var(--MI_THEME-divider) 90%);
-}
-
-.memNodesHeader {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	gap: 0.75em;
-	padding-bottom: 0.4em;
-	margin-bottom: 0.1em;
-	border-bottom: solid 1px color-mix(in srgb, var(--MI_THEME-divider) 90%, var(--MI_THEME-accent) 6%);
-}
-
-.memNodesActions {
-	display: flex;
-	gap: 0.35em;
-	flex-shrink: 0;
 }
 
 .memCard {
