@@ -8,6 +8,7 @@ import { ref } from 'vue';
 import { apiUrl } from '@@/js/config.js';
 import { $i } from '@/i.js';
 import { i18n } from '@/i18n.js';
+import { getAgentControlRuntimeToken, notifyAgentControlApiSuccess, notifyAgentControlAuthenticationFailure } from '@/utility/agent-control-embed.js';
 export const pendingApiRequestsCount = ref(0);
 
 let handlingSuspendedAccount = false;
@@ -75,7 +76,12 @@ export function misskeyApi<
 
 	const promise = new Promise<_ResT>((resolve, reject) => {
 		// Append a credential
-		if ($i) data.i = $i.token;
+		const runtimeToken = getAgentControlRuntimeToken();
+		if (runtimeToken != null) {
+			data.i = runtimeToken;
+		} else if ($i) {
+			data.i = $i.token;
+		}
 		if (token !== undefined) data.i = token;
 
 		// Send request
@@ -92,10 +98,15 @@ export function misskeyApi<
 			const body = res.status === 204 ? null : await res.json();
 
 			if (res.status === 200) {
+				notifyAgentControlApiSuccess(endpoint);
 				resolve(body);
 			} else if (res.status === 204) {
+				notifyAgentControlApiSuccess(endpoint);
 				resolve(undefined as _ResT); // void -> undefined
 			} else {
+				if (body?.error?.code === 'AUTHENTICATION_FAILED') {
+					notifyAgentControlAuthenticationFailure(body.error.message ?? 'Authentication failed');
+				}
 				void handleSuspendedAccount(body.error);
 				reject(body.error);
 			}
@@ -135,10 +146,15 @@ export function misskeyApiGet<
 			const body = res.status === 204 ? null : await res.json();
 
 			if (res.status === 200) {
+				notifyAgentControlApiSuccess(endpoint);
 				resolve(body);
 			} else if (res.status === 204) {
+				notifyAgentControlApiSuccess(endpoint);
 				resolve(undefined as _ResT); // void -> undefined
 			} else {
+				if (body?.error?.code === 'AUTHENTICATION_FAILED') {
+					notifyAgentControlAuthenticationFailure(body.error.message ?? 'Authentication failed');
+				}
 				void handleSuspendedAccount(body.error);
 				reject(body.error);
 			}

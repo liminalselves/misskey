@@ -4,25 +4,25 @@ SPDX-License-Identifier: AGPL-3.0-only
 -->
 
 <template>
-<div ref="rootEl" :class="reversed ? '_pageScrollableReversed' : '_pageScrollable'">
-	<MkStickyContainer>
-		<template #header>
-			<!-- チャット等 narrowMergedRow かつ狭い幅では頂部にタブを出す（底タブと二重にならないようにする） -->
-			<MkPageHeader v-if="useBottomTabsInFooter" v-bind="pageHeaderPropsWithoutTabs"/>
-			<MkPageHeader v-else v-model:tab="tab" v-bind="pageHeaderProps"/>
-		</template>
-		<div :class="$style.body">
-			<MkSwiper v-if="prefer.s.enableHorizontalSwipe && swipable && (props.tabs?.length ?? 1) > 1" v-model:tab="tab" :class="$style.swiper" :tabs="props.tabs ?? []">
-				<slot></slot>
-			</MkSwiper>
-			<slot v-else></slot>
-		</div>
-		<template #footer>
-			<slot name="footer"></slot>
-			<div v-if="useBottomTabsInFooter" :class="$style.footerTabs">
-				<MkTabs v-model:tab="tab" :tabs="props.tabs" :centered="true" :tabHighlightUpper="true"/>
+<div ref="rootEl" :class="[reversed ? '_pageScrollableReversed' : '_pageScrollable', fitContent && $style.fitContent]">
+		<MkStickyContainer>
+			<template v-if="!hideHeader" #header>
+				<!-- チャット等 narrowMergedRow かつ狭い幅では頂部にタブを出す（底タブと二重にならないようにする） -->
+				<MkPageHeader v-if="useBottomTabsInFooter" v-bind="pageHeaderPropsWithoutTabs"/>
+				<MkPageHeader v-else v-model:tab="tab" v-bind="pageHeaderProps"/>
+			</template>
+			<div :class="$style.body">
+				<MkSwiper v-if="prefer.s.enableHorizontalSwipe && swipable && (props.tabs?.length ?? 1) > 1" v-model:tab="tab" :class="$style.swiper" :tabs="props.tabs ?? []">
+					<slot></slot>
+				</MkSwiper>
+				<slot v-else></slot>
 			</div>
-		</template>
+			<template #footer>
+				<slot name="footer"></slot>
+				<div v-if="!hideHeader && useBottomTabsInFooter" :class="$style.footerTabs">
+					<MkTabs v-model:tab="tab" :tabs="props.tabs" :centered="true" :tabHighlightUpper="true"/>
+				</div>
+			</template>
 	</MkStickyContainer>
 </div>
 </template>
@@ -40,9 +40,13 @@ import MkTabs from '@/components/MkTabs.vue';
 const props = withDefaults(defineProps<PageHeaderProps & {
 	reversed?: boolean;
 	swipable?: boolean;
+	hideHeader?: boolean;
+	fitContent?: boolean;
 }>(), {
 	reversed: false,
 	swipable: true,
+	hideHeader: false,
+	fitContent: false,
 });
 
 /** MkPageHeader.narrow と同じ閾値：狭い画面ではチャット頂部タブを優先 */
@@ -68,12 +72,12 @@ const useBottomTabsInFooter = computed(() =>
 );
 
 const pageHeaderProps = computed(() => {
-	const { reversed, tab, swipable, ...rest } = props;
+	const { reversed, tab, swipable, hideHeader, fitContent, ...rest } = props;
 	return rest;
 });
 
 const pageHeaderPropsWithoutTabs = computed(() => {
-	const { reversed, tabs, swipable, ...rest } = props;
+	const { reversed, tabs, swipable, hideHeader, fitContent, ...rest } = props;
 	return rest;
 });
 
@@ -98,6 +102,17 @@ defineExpose({
 </script>
 
 <style lang="scss" module>
+.fitContent {
+	height: auto;
+	min-height: 0;
+	overflow: visible;
+}
+
+.fitContent .body,
+.fitContent .swiper {
+	min-height: 0;
+}
+
 .body, .swiper {
 	min-height: calc(100cqh - (var(--MI-stickyTop, 0px) + var(--MI-stickyBottom, 0px)));
 }

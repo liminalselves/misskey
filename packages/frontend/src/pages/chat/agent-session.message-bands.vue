@@ -22,9 +22,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 	<Transition :name="prefer.s.animation ? 'bands-toggle' : ''">
 		<div v-show="bandsOpen" :class="$style.bandsBody">
-			<div v-if="loading && overview == null" :class="$style.bandsLoading">
-				<MkLoading/>
-			</div>
+				<div v-if="loading && overview == null" :class="$style.bandsLoading">
+					<XControlLoading v-if="embedded" compact/>
+					<MkLoading v-else/>
+				</div>
 			<template v-else-if="overview">
 				<template v-if="overview.messages.length > 0">
 					<!-- 区带进度条 -->
@@ -120,17 +121,21 @@ import { computed, onMounted, ref } from 'vue';
 import type { CompressionOverviewPayload } from './agent-session.compression.vue';
 import MkLoading from '@/components/global/MkLoading.vue';
 import MkButton from '@/components/MkButton.vue';
+import XControlLoading from '@/pages/agents/control-embed-loading.vue';
 import { misskeyApi } from '@/utility/misskey-api.js';
 import { i18n } from '@/i18n.js';
 import { prefer } from '@/preferences.js';
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
 	sessionId: string;
 	/** true = 便签记忆：四区带（窗口/排队较前/排队较后/窗外）；false = 仅按上下文窗口分「窗口内/窗口外」两组 */
 	detailed: boolean;
 	canLocateDivider: boolean;
 	locateTooltip?: string;
-}>();
+	embedded?: boolean;
+}>(), {
+	embedded: false,
+});
 
 const emit = defineEmits<{
 	(ev: 'jumpToMessage', id: string): void;

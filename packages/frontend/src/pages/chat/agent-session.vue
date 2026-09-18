@@ -24,8 +24,12 @@ SPDX-License-Identifier: AGPL-3.0-only
 		</div>
 	</div>
 </div>
-<PageWithHeader v-else v-model:tab="tab" :reversed="tab === 'chat'" :tabs="headerTabs" narrowMergedRow showBack :actions="headerActions">
-	<div v-if="tab === 'chat'" :class="['_spacer', $style.chatSpacer]" style="--MI_SPACER-w: 700px;">
+<PageWithHeader v-else v-model:tab="tab" :reversed="tab === 'chat'" :tabs="headerTabs" :hideHeader="isEmbeddedControl" :fitContent="isEmbeddedControl" narrowMergedRow :showBack="!isEmbeddedControl" :actions="headerActions">
+		<div v-if="isEmbeddedControl && loading" class="_spacer" style="--MI_SPACER-w: 760px;">
+			<XControlLoading/>
+		</div>
+
+		<div v-else-if="tab === 'chat'" :class="['_spacer', $style.chatSpacer]" style="--MI_SPACER-w: 700px;">
 		<!-- Aliya Web 推荐横幅：每个会话仅首次打开时显示，状态存 cookie -->
 		<Transition :name="prefer.s.animation ? 'fade' : ''">
 			<div v-if="showAliyaBanner" :class="$style.aliyaBanner">
@@ -211,7 +215,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 						<i class="ti ti-refresh"></i>
 					</MkButton>
 				</div>
-				<MkLoading v-if="proactiveSchedulesLoading"/>
+					<XControlLoading v-if="proactiveSchedulesLoading && isEmbeddedControl" compact/>
+					<MkLoading v-else-if="proactiveSchedulesLoading"/>
 				<MkInfo v-else-if="proactiveSchedules.length === 0">{{ proactiveScheduleEmpty }}</MkInfo>
 				<div v-else :class="$style.proactiveScheduleList">
 					<div v-for="schedule in proactiveSchedules" :key="schedule.id" v-panel :class="$style.proactiveScheduleCard">
@@ -247,9 +252,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 	</div>
 
 	<div v-else-if="tab === 'worldbook'" class="_spacer" style="--MI_SPACER-w: 760px;">
-		<div v-if="loading || worldbookListLoading" class="_gaps">
-			<MkLoading/>
-		</div>
+			<div v-if="loading || worldbookListLoading" class="_gaps">
+				<XControlLoading v-if="isEmbeddedControl" compact/>
+				<MkLoading v-else/>
+			</div>
 		<div v-else class="_gaps">
 			<div v-panel :class="$style.worldbookOverview">
 				<div :class="$style.worldbookOverviewIcon"><i class="ti ti-book"></i></div>
@@ -290,9 +296,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 	</div>
 
 	<div v-else-if="tab === 'rules'" class="_spacer" style="--MI_SPACER-w: 760px;">
-		<div v-if="loading || sessionRulesLoading" class="_gaps">
-			<MkLoading/>
-		</div>
+			<div v-if="loading || sessionRulesLoading" class="_gaps">
+				<XControlLoading v-if="isEmbeddedControl" compact/>
+				<MkLoading v-else/>
+			</div>
 		<div v-else class="_gaps">
 			<MkInfo v-if="sessionRules.length === 0">当前会话使用的角色没有配置规则。</MkInfo>
 			<template v-else>
@@ -339,7 +346,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<MkInfo>
 				<div :class="$style.drawInfoContent">
 					<span>生成的图片会保存到网盘里的“AI 智能体生成图片”文件夹。该文件夹使用独立 AI 生图额度；空间不足时系统会自动清理最旧图片，聊天中会显示“图片已自动清理”。</span>
-					<MkButton small rounded @click="router.push('/my/drive' as any)"><i class="ti ti-folder"></i> 前往网盘查看</MkButton>
+					<MkButton small rounded @click="openAgentControlRelatedPage('/my/drive')"><i class="ti ti-folder"></i> 前往网盘查看</MkButton>
 				</div>
 			</MkInfo>
 			<div v-panel :class="$style.drawPanel">
@@ -647,9 +654,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 						</header>
 						<MkInfo warn>{{ i18n.ts._agents.sessionMemoryNodesHint }}</MkInfo>
 
-						<div v-if="memoryListLoading" class="_gaps">
-							<MkLoading/>
-						</div>
+							<div v-if="memoryListLoading" class="_gaps">
+								<XControlLoading v-if="isEmbeddedControl" compact/>
+								<MkLoading v-else/>
+							</div>
 						<template v-else>
 							<div class="_gaps">
 								<MkTextarea v-model="newMemoryText" :disabled="memoryMutating || moderationLocksSessionWrites" tall pre>
@@ -728,20 +736,22 @@ SPDX-License-Identifier: AGPL-3.0-only
 							</MkSelect>
 							<p :class="$style.compressionBillingNote">{{ i18n.ts._agents.compressionModelSessionBillingLine }}</p>
 						</template>
-						<XCompression
-							ref="compressionRef"
-							:sessionId="sessionId"
-							:moderationLocked="moderationLocksSessionWrites"
+							<XCompression
+								ref="compressionRef"
+								:sessionId="sessionId"
+								:moderationLocked="moderationLocksSessionWrites"
+								:embedded="isEmbeddedControl"
 							@jumpToMessage="jumpToChatMessage"
 						/>
 					</section>
 				</template>
 				<MkInfo v-else-if="memProvider === 'compression'" warn>{{ i18n.ts._agents.compressionNeedDialogueStyle }}</MkInfo>
 
-				<XMessageBands
-					ref="bandsRef"
-					:sessionId="sessionId"
-					:detailed="memProvider === 'compression'"
+					<XMessageBands
+						ref="bandsRef"
+						:sessionId="sessionId"
+						:detailed="memProvider === 'compression'"
+						:embedded="isEmbeddedControl"
 					:canLocateDivider="canLocateContextDivider"
 					:locateTooltip="contextDividerButtonTooltip"
 					@jumpToMessage="jumpToChatMessage"
@@ -1122,6 +1132,7 @@ import XForm from './agent-session.form.vue';
 import XAgentSearch from './agent-session.search.vue';
 import XCompression from './agent-session.compression.vue';
 import XMessageBands from './agent-session.message-bands.vue';
+import XControlLoading from '@/pages/agents/control-embed-loading.vue';
 import type { PageHeaderItem } from '@/types/page-header.js';
 import type { DateSeparetedTimelineItem } from '@/utility/timeline-date-separate.js';
 import type { AgentsStylesListUsableResponse, DriveFile } from 'misskey-js/entities.js';
@@ -1156,12 +1167,16 @@ import { agentSegmentDelayMs, splitAgentMessageIntoSegments } from '@/utility/ag
 import { getStoredPendingRequestId, setStoredPendingRequestId } from '@/utility/agent-pending-requests.js';
 import { agentI18nText } from '@/utility/agent-i18n.js';
 import { useStream } from '@/stream.js';
+import { requestAgentControlClose, requestAgentControlNavigation, requestAgentControlOpenUrl } from '@/utility/agent-control-embed.js';
+import type { AgentControlPanel } from '@/utility/agent-control-embed.js';
 
 const props = defineProps<{
 	sessionId: string;
 	messageId?: string;
+	embeddedPanel?: AgentControlPanel;
 }>();
 const sessionId = props.sessionId;
+const isEmbeddedControl = computed(() => props.embeddedPanel != null);
 const router = useRouter();
 
 const PAGE_LIMIT = 30;
@@ -1586,7 +1601,7 @@ function styleUsableAverageText(avg: number | null | undefined): string {
 
 const selectedModelId = ref('');
 const selectedStyleId = ref('');
-const tab = ref('chat');
+const tab = ref<AgentControlPanel | 'chat' | 'search'>(props.embeddedPanel ?? 'chat');
 type AgentImageArtistPreset = {
 	id: string;
 	name: string;
@@ -2351,6 +2366,7 @@ function getSuccessRateClass(success: number, total: number): string {
 }
 
 const headerTabs = computed(() => {
+	if (props.embeddedPanel != null) return [];
 	const tabs = [
 		{
 			key: 'chat',
@@ -2412,7 +2428,7 @@ function openDrawTab() {
 	tab.value = 'draw';
 }
 
-const headerActions = computed<PageHeaderItem[]>(() => [
+const headerActions = computed<PageHeaderItem[]>(() => isEmbeddedControl.value ? [] : [
 	{
 		icon: 'ti ti-help-circle',
 		text: i18n.ts._agents.syntaxGuideShort,
@@ -2791,7 +2807,11 @@ async function deleteAgentSession() {
 		if (r.aliyunMemoryProviderError === true) {
 			await os.alert({ type: 'warning', text: i18n.ts._agents.deleteSessionAliyunWarn });
 		}
-		await router.push('/chat');
+		if (isEmbeddedControl.value) {
+			requestAgentControlClose('session-deleted');
+		} else {
+			await router.push('/chat');
+		}
 	} catch (e) {
 		os.alert({ type: 'error', text: formatApiError(e) });
 	}
@@ -3067,8 +3087,20 @@ function chooseStyle(styleId: string) {
 }
 
 /** 跳转到智能体广场的「对话风格」子标签（风格广场） */
+function openAgentControlRelatedPage(path: string): void {
+	if (isEmbeddedControl.value) {
+		requestAgentControlOpenUrl(path);
+	} else {
+		void router.push(path as any);
+	}
+}
+
 function goStylePlaza() {
-	router.push('/agents', { query: { view: 'square', sub: 'stylesPlaza' } });
+	if (isEmbeddedControl.value) {
+		requestAgentControlOpenUrl('/agents?view=square&sub=stylesPlaza');
+	} else {
+		router.push('/agents', { query: { view: 'square', sub: 'stylesPlaza' } });
+	}
 }
 
 function chooseModel(modelId: string) {
@@ -3333,6 +3365,10 @@ function clearContextDividerHighlight() {
 async function scrollToContextWindowDivider() {
 	const boundary = contextWindowBoundaryId.value;
 	if (!contextWindowTruncated.value || boundary == null || boundary === '') return;
+	if (isEmbeddedControl.value) {
+		requestAgentControlNavigation('context-divider', boundary);
+		return;
+	}
 
 	clearContextDividerHighlight();
 
@@ -3508,32 +3544,62 @@ async function loadDrawArtistPresets() {
 	}
 }
 
+async function loadEmbeddedPanelResources(panel: AgentControlPanel): Promise<void> {
+	if (panel === 'model') {
+		await Promise.all([
+			loadUserModels(),
+			loadVisionModels(),
+			loadModelSuccessRates(),
+			loadModelFreeQuota(),
+			loadAgentCreditBalance(),
+		]);
+	} else if (panel === 'draw') {
+		await Promise.all([loadDrawArtistPresets(), loadDrawImageModels()]);
+	} else if (panel === 'style') {
+		await loadUsableStyles();
+	} else if (panel === 'proactive') {
+		await loadProactiveSchedules();
+	} else if (panel === 'memory') {
+		await loadAgentCreditBalance();
+		await refreshContextWindow();
+		if (longMemoryConfigured.value) await loadMemoryNodes();
+		if (session.value?.dialogueStyleId) await loadCompressionOverview();
+	}
+}
+
 onMounted(async () => {
-	const connection = useStream().useChannel('main');
-	connection.on('newAgentMessage', onNewAgentMessage);
-	proactiveNotificationConnection = connection;
-	// 进入会话页即清未读（与私信房间行为一致）
-	void markAgentSessionRead();
+	if (!isEmbeddedControl.value) {
+		const connection = useStream().useChannel('main');
+		connection.on('newAgentMessage', onNewAgentMessage);
+		proactiveNotificationConnection = connection;
+		// 进入会话页即清未读（与私信房间行为一致）
+		void markAgentSessionRead();
+	}
 	try {
 		await fetchInstance(true);
-		await loadUsableStyles();
-		void loadModelSuccessRates();
-		void loadModelFreeQuota();
-		void loadAgentCreditBalance();
-		void loadUserModels();
-		void loadDrawArtistPresets();
-		void loadDrawImageModels();
-		await loadVisionModels();
-		await loadSession();
-		// 被封禁会话：不加载聊天记录与会话内容，仅展示专用封禁页
-		if (!isSessionBannedPage.value) {
-			if (props.messageId) {
-				await loadContextAround(props.messageId);
-				await nextTick();
-				await new Promise(r => window.setTimeout(r, 300));
-				await scrollToMessage(props.messageId);
-			} else {
-				await loadInitialTimeline();
+		if (props.embeddedPanel != null) {
+			await loadSession();
+			if (!isSessionBannedPage.value) await loadEmbeddedPanelResources(props.embeddedPanel);
+		} else {
+			await loadUsableStyles();
+			void loadModelSuccessRates();
+			void loadModelFreeQuota();
+			void loadAgentCreditBalance();
+			void loadUserModels();
+			void loadDrawArtistPresets();
+			void loadDrawImageModels();
+			await loadVisionModels();
+			await loadSession();
+			// 被封禁会话：不加载聊天记录与会话内容，仅展示专用封禁页
+			if (!isSessionBannedPage.value) {
+				if (props.messageId) {
+					await loadContextAround(props.messageId);
+					await nextTick();
+					await new Promise(r => window.setTimeout(r, 300));
+					await scrollToMessage(props.messageId);
+				} else {
+					await loadInitialTimeline();
+				}
 			}
 		}
 	} catch (e) {
@@ -3541,22 +3607,25 @@ onMounted(async () => {
 	} finally {
 		loading.value = false;
 	}
-	if (session.value?.agentReplyPending) {
-		sending.value = true;
-		// 刷新前发出的请求仍在服务端生成：恢复其 clientRequestId，让中断按钮
-		// 能通过 abort 端点真正终止生成并回滚用户消息，而不是只停本地轮询
-		currentClientRequestId = getStoredPendingRequestId(sessionId);
-		startReplyPendingPoll();
-	} else {
-		// 会话不在生成中：清掉可能残留的过期在途 ID（如生成在页面关闭期间已完成）
-		setStoredPendingRequestId(sessionId, null);
+	if (!isEmbeddedControl.value) {
+		if (session.value?.agentReplyPending) {
+			sending.value = true;
+			// 刷新前发出的请求仍在服务端生成：恢复其 clientRequestId，让中断按钮
+			// 能通过 abort 端点真正终止生成并回滚用户消息，而不是只停本地轮询
+			currentClientRequestId = getStoredPendingRequestId(sessionId);
+			startReplyPendingPoll();
+		} else {
+			// 会话不在生成中：清掉可能残留的过期在途 ID（如生成在页面关闭期间已完成）
+			setStoredPendingRequestId(sessionId, null);
+		}
+		await nextTick();
+		formRef.value?.focus();
 	}
-	await nextTick();
-	formRef.value?.focus();
 });
 
 onActivated(() => {
 	isPageActivated = true;
+	if (isEmbeddedControl.value) return;
 	// KeepAlive 缓存页重新进入时 onMounted 不会再次执行：与首次进入一致，看到会话即清未读
 	void markAgentSessionRead();
 	// 返回本页时若回复仍在生成则恢复轮询（onDeactivated 已将其停止）
@@ -3928,6 +3997,10 @@ function startCompressionLlmProgressPoll(baselineCount: number, baselineMaxUpdat
 }
 
 async function jumpToChatMessage(messageId: string) {
+	if (isEmbeddedControl.value) {
+		requestAgentControlNavigation('message', messageId);
+		return;
+	}
 	tab.value = 'chat';
 	await nextTick();
 	await nextTick();

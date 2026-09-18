@@ -6,9 +6,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 <template>
 <div :class="$style.root">
 	<!-- 加载状态 -->
-	<div v-if="loading" class="_gaps">
-		<MkLoading/>
-	</div>
+		<div v-if="loading" class="_gaps">
+			<XControlLoading v-if="embedded" compact/>
+			<MkLoading v-else/>
+		</div>
 
 	<template v-else-if="overview">
 		<!-- 压缩进行中提示 -->
@@ -147,6 +148,7 @@ import { computed, onMounted, ref } from 'vue';
 import MkLoading from '@/components/global/MkLoading.vue';
 import MkButton from '@/components/MkButton.vue';
 import MkTextarea from '@/components/MkTextarea.vue';
+import XControlLoading from '@/pages/agents/control-embed-loading.vue';
 import { misskeyApi, formatApiError } from '@/utility/misskey-api.js';
 import { i18n } from '@/i18n.js';
 import * as os from '@/os.js';
@@ -180,10 +182,13 @@ export type CompressionOverviewPayload = {
 	compressionSidecarFailedAt?: string | null;
 };
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
 	sessionId: string;
 	moderationLocked: boolean;
-}>();
+	embedded?: boolean;
+}>(), {
+	embedded: false,
+});
 
 const emit = defineEmits<{
 	(ev: 'jumpToMessage', id: string): void;

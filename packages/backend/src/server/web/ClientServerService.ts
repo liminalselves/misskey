@@ -414,12 +414,18 @@ export class ClientServerService {
 		// Manifest
 		fastify.get('/manifest.json', async (request, reply) => await this.manifestHandler(reply));
 
-		// Embed Javascript
-		fastify.get('/embed.js', async (request, reply) => {
-			return await reply.sendFile('/embed.js', staticAssets, {
-				maxAge: ms('1 day'),
+			// Embed Javascript
+			fastify.get('/embed.js', async (request, reply) => {
+				return await reply.sendFile('/embed.js', staticAssets, {
+					maxAge: ms('1 day'),
+				});
 			});
-		});
+
+			fastify.get('/agent-control-embed.js', async (request, reply) => {
+				return await reply.sendFile('/agent-control-embed.js', staticAssets, {
+					maxAge: ms('1 day'),
+				});
+			});
 
 		fastify.get('/robots.txt', async (request, reply) => {
 			return await reply.sendFile('/robots.txt', staticAssets);
@@ -443,8 +449,8 @@ export class ClientServerService {
 
 		//#endregion
 
-		const renderBase = async (reply: FastifyReply, data: Partial<Parameters<typeof BasePage>[0]> = {}) => {
-			reply.header('Cache-Control', 'public, max-age=30');
+			const renderBase = async (reply: FastifyReply, data: Partial<Parameters<typeof BasePage>[0]> = {}, cacheControl = 'public, max-age=30') => {
+				reply.header('Cache-Control', cacheControl);
 			return await HtmlTemplateService.replyHtml(reply, BasePage({
 				img: this.meta.bannerUrl ?? undefined,
 				title: this.meta.name ?? 'Misskey',
@@ -795,9 +801,14 @@ export class ClientServerService {
 		});
 		//#endregion
 
-		//#region embed pages
-		fastify.get<{ Params: { user: string; } }>('/embed/user-timeline/:user', async (request, reply) => {
-			reply.removeHeader('X-Frame-Options');
+			//#region embed pages
+			fastify.get<{ Params: { sessionId: string; panel: string; } }>('/agents/embed/:sessionId/:panel', async (request, reply) => {
+				reply.removeHeader('X-Frame-Options');
+				return await renderBase(reply, { noindex: true, hideSplash: true }, 'private, no-store');
+			});
+
+			fastify.get<{ Params: { user: string; } }>('/embed/user-timeline/:user', async (request, reply) => {
+				reply.removeHeader('X-Frame-Options');
 
 			const user = await this.usersRepository.findOneBy({
 				id: request.params.user,

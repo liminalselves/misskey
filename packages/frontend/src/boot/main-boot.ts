@@ -40,6 +40,7 @@ export async function mainBoot() {
 
 		if (!$i) uiStyle = 'visitor';
 
+		if (window.location.pathname.startsWith('/agents/embed/')) uiStyle = 'zen';
 		if (searchParams.has('zen')) uiStyle = 'zen';
 		if (uiStyle === 'deck' && prefer.s['deck.useSimpleUiForNonRootPages'] && window.location.pathname !== '/') uiStyle = 'zen';
 

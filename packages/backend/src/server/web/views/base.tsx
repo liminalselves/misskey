@@ -18,6 +18,7 @@ export function Layout(props: PropsWithChildren<CommonProps<{
 	notFoundImageUrl?: string;
 	metaJson?: string;
 	clientCtxJson?: string;
+	hideSplash?: boolean;
 
 	titleSlot?: Children;
 	descSlot?: Children;
@@ -76,9 +77,10 @@ export function Layout(props: PropsWithChildren<CommonProps<{
 						</>
 					)}
 
-					{props.frontendBootloaderCss != null ? <style safe>{props.frontendBootloaderCss}</style> : <link rel="stylesheet" href="/vite/loader/style.css" />}
+						{props.frontendBootloaderCss != null ? <style safe>{props.frontendBootloaderCss}</style> : <link rel="stylesheet" href="/vite/loader/style.css" />}
+						{props.hideSplash ? <style id="agent-control-bootstrap-style" safe>{'html,body{background:transparent!important}'}</style> : null}
 
-					<script>
+						<script>
 						const VERSION = '{props.version}';
 						const CLIENT_ENTRY = {JSON.stringify(props.config.frontendEntry.file)};
 						const LANGS = {JSON.stringify(props.langs)};
@@ -99,7 +101,7 @@ export function Layout(props: PropsWithChildren<CommonProps<{
 							Please turn on your JavaScript
 						</p>
 					</noscript>
-					<Splash icon={props.icon} />
+						{props.hideSplash ? null : <Splash icon={props.icon} />}
 					{props.children}
 				</body>
 			</html>
