@@ -209,6 +209,44 @@ export function buildOpenAiImageGenerationRequestInit(apiKey: string, model: str
 	};
 }
 
+// tiptotip 网关主流国内通道（火山 seedream 等）要求总像素不低于 2K（3686400），分辨率取 2K 档
+export function tiptotipImageResolution(size: AgentImageSize): string {
+	switch (size) {
+		case 'portrait': return '1728x2304'; // 3:4
+		case 'landscape': return '2304x1728'; // 4:3
+		case 'square': return '2048x2048'; // 1:1
+	}
+}
+
+// tiptotip 网关（https://ai.tiptotip.cn）兼容 OpenAI 生图协议，但分辨率参数用 resolution，
+// 且需显式指定 response_format: b64_json 才返回 Base64 数据
+export function buildTiptotipImageGenerationRequest(model: string, prompt: string, size: AgentImageSize, referenceImages?: AgentReferenceImage | AgentReferenceImage[] | null): Record<string, unknown> {
+	const images = normalizeReferenceImages(referenceImages).map(referenceImageDataUrl);
+	return {
+		model,
+		prompt,
+		n: 1,
+		resolution: tiptotipImageResolution(size),
+		response_format: 'b64_json',
+		...(images.length === 1 ? { image: images[0] } : images.length > 1 ? { image: images } : {}),
+	};
+}
+
+export function buildTiptotipImageGenerationRequestInit(apiKey: string, model: string, prompt: string, size: AgentImageSize, referenceImages?: AgentReferenceImage | AgentReferenceImage[] | null): {
+	method: 'POST';
+	headers: Record<string, string>;
+	body: string;
+} {
+	return {
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/json',
+			Authorization: `Bearer ${apiKey}`,
+		},
+		body: JSON.stringify(buildTiptotipImageGenerationRequest(model, prompt, size, referenceImages)),
+	};
+}
+
 export function buildOpenAiChatImageGenerationRequest(model: string, prompt: string, referenceImages?: AgentReferenceImage | AgentReferenceImage[] | null): Record<string, unknown> {
 	const content: Array<Record<string, unknown>> = [{ type: 'text', text: prompt }];
 	for (const referenceImage of normalizeReferenceImages(referenceImages)) {
@@ -404,7 +442,7 @@ export class AgentImageService {
 	public listAvailableImageModels(instance: MiMeta, includeDisabled = false): MiAgentImageModel[] {
 		const configured = Array.isArray(instance.agentImageModels) ? instance.agentImageModels : [];
 		const models = configured
-			.filter(m => typeof m?.id === 'string' && m.id.trim() !== '' && (m.provider === 'aurora' || m.provider === 'openai' || m.provider === 'qwen'))
+			.filter(m => typeof m?.id === 'string' && m.id.trim() !== '' && (m.provider === 'aurora' || m.provider === 'openai' || m.provider === 'tiptotip' || m.provider === 'qwen'))
 			.map(m => ({
 				id: m.id.trim(),
 				name: typeof m.name === 'string' && m.name.trim() !== '' ? m.name.trim() : m.id.trim(),
@@ -414,7 +452,7 @@ export class AgentImageService {
 				apiModelName: typeof m.apiModelName === 'string' && m.apiModelName.trim() !== '' ? m.apiModelName.trim() : instance.agentImageDefaultModel,
 				apiUrl: typeof m.apiUrl === 'string' && m.apiUrl.trim() !== '' ? m.apiUrl.trim() : null,
 				apiKey: typeof m.apiKey === 'string' && m.apiKey.trim() !== '' ? m.apiKey.trim() : null,
-				supportsReferenceImage: m.provider === 'openai' && m.supportsReferenceImage === true,
+				supportsReferenceImage: (m.provider === 'openai' || m.provider === 'tiptotip') && m.supportsReferenceImage === true,
 				costPerCall: typeof m.costPerCall === 'number' ? m.costPerCall : instance.agentImageCostPerCall,
 				dailyFreeQuota: typeof m.dailyFreeQuota === 'number' && m.dailyFreeQuota > 0 ? Math.trunc(m.dailyFreeQuota) : null,
 				defaultParams: normalizeImageParams(m.defaultParams ?? instance.agentImageDefaultParams),
@@ -781,7 +819,8 @@ export class AgentImageService {
 			case 'aurora':
 				return await this.fetchAuroraAndStoreImage(params);
 			case 'openai':
-				return await this.fetchOpenAiAndStoreImage(params);
+			case 'tiptotip':
+				return await this.fetchOpenAiCompatibleAndStoreImage(params);
 			case 'qwen':
 				return await this.fetchQwenAndStoreImage(params);
 			default:
@@ -861,7 +900,7 @@ export class AgentImageService {
 		}
 	}
 
-	private async fetchOpenAiAndStoreImage(params: FetchImageParams) {
+	private async fetchOpenAiCompatibleAndStoreImage(params: FetchImageParams) {
 		const apiUrl = params.imageModel.apiUrl?.trim();
 		const apiKey = params.imageModel.apiKey?.trim();
 		const apiModelName = params.imageModel.apiModelName?.trim();
@@ -884,7 +923,9 @@ export class AgentImageService {
 			const res = await fetch(endpoint, {
 				...(isChatCompletions
 					? buildOpenAiChatImageGenerationRequestInit(apiKey, apiModelName, params.tag, params.referenceImages)
-					: buildOpenAiImageGenerationRequestInit(apiKey, apiModelName, params.tag, params.size, params.referenceImages)),
+					: params.imageModel.provider === 'tiptotip'
+						? buildTiptotipImageGenerationRequestInit(apiKey, apiModelName, params.tag, params.size, params.referenceImages)
+						: buildOpenAiImageGenerationRequestInit(apiKey, apiModelName, params.tag, params.size, params.referenceImages)),
 				redirect: 'error',
 				signal: ac.signal,
 			});

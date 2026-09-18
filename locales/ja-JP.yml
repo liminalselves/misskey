@@ -3902,6 +3902,7 @@ _agents:
   adminOpenaiImageRequired: "OpenAI 互換画像モデルにはリクエスト URL、API キー、上流モデル名が必要です。"
   adminOpenaiImageSize: "画像サイズ"
   imageProviderOpenai: "OpenAI 互換"
+  imageProviderTiptotip: "Tiptotip ゲートウェイ"
   imageProviderQwen: "Qwen（Alibaba）"
   adminQwenImageRequestUrl: "画像生成リクエスト URL"
   adminQwenImageRequestUrlCaption: "完全な Qwen-Image（DashScope スタイル）images/generations エンドポイントです。保存時に安全性を検証します。"

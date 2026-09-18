@@ -9,6 +9,7 @@ import {
 	buildOpenAiChatImageGenerationRequest,
 	buildQwenImageGenerationRequest,
 	buildQwenImageGenerationRequestInit,
+	buildTiptotipImageGenerationRequest,
 	getAgentImageErrorDiagnostic,
 	openAiImageSize,
 	parseOpenAiChatImageResult,
@@ -36,6 +37,16 @@ describe('OpenAI-compatible image generation helpers', () => {
 			Authorization: 'Bearer secret',
 		});
 		expect(JSON.parse(init.body)).toEqual(expect.objectContaining({ n: 1, size: '1536x1024' }));
+	});
+
+	test('builds tiptotip requests with resolution and b64_json response format', () => {
+		expect(buildTiptotipImageGenerationRequest('seedream-4.0', '1girl, solo', 'square')).toEqual({
+			model: 'seedream-4.0',
+			prompt: '1girl, solo',
+			n: 1,
+			resolution: '2048x2048',
+			response_format: 'b64_json',
+		});
 	});
 
 	test('adds the default reference image to images generations requests', () => {

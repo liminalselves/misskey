@@ -554,56 +554,82 @@ SPDX-License-Identifier: AGPL-3.0-only
 					</MkSwitch>
 					<MkInfo>默认不提供任何生图模型。先添加模型，填写显示名称并选择提供商；选择 Aurora 后才会展开 Aurora 专属配置。</MkInfo>
 					<MkInfo v-if="form.state.agentImageModelRows.length === 0">当前没有生图模型。用户聊天界面会显示“无”，即关闭生图。</MkInfo>
-					<div v-for="(row, i) in form.state.agentImageModelRows" :key="row.id" :class="$style.modelCard" class="_gaps_s">
+					<div v-for="(row, i) in form.state.agentImageModelRows" :key="row.id" :class="[$style.modelCard, row.enabled ? null : $style.modelCardUnlisted]" class="_gaps_s">
 						<div :class="$style.modelCardHead">
-							<b>{{ row.name.trim() || `生图模型 #${i + 1}` }}</b>
-							<button type="button" class="_button" :class="$style.iconWarn" @click="removeImageModel(i)"><i class="ti ti-trash"></i></button>
+							<span :class="$style.modelCardTitle">
+								{{ row.name.trim() || `生图模型 #${i + 1}` }}
+								<span v-if="!row.enabled" :class="$style.unlistedBadge">{{ i18n.ts._agents.adminModelUnlistedBadge }}</span>
+							</span>
+							<div :class="$style.modelCardActions">
+								<button type="button" class="_button" :class="$style.iconMuted" :title="i18n.ts._agents.adminModelCopy" @click="copyImageModelRow(i)">
+									<i class="ti ti-copy"></i>
+								</button>
+								<button type="button" class="_button" :class="$style.iconMuted" :disabled="i === 0" :title="i18n.ts._agents.adminModelMoveUp" @click="moveImageModelRow(i, -1)">
+									<i class="ti ti-arrow-up"></i>
+								</button>
+								<button type="button" class="_button" :class="$style.iconMuted" :disabled="i === form.state.agentImageModelRows.length - 1" :title="i18n.ts._agents.adminModelMoveDown" @click="moveImageModelRow(i, 1)">
+									<i class="ti ti-arrow-down"></i>
+								</button>
+								<button v-if="row.enabled" type="button" class="_button" :class="$style.iconWarn" :title="i18n.ts._agents.adminModelUnlist" @click="toggleImageModelEnabled(i, false)">
+									<i class="ti ti-archive"></i>
+								</button>
+								<button v-else type="button" class="_button" :class="$style.iconMuted" :title="i18n.ts._agents.adminModelRelist" @click="toggleImageModelEnabled(i, true)">
+									<i class="ti ti-eye"></i>
+								</button>
+								<button type="button" class="_button" :class="$style.iconDanger" title="删除生图模型" @click="removeImageModel(i)">
+									<i class="ti ti-trash"></i>
+								</button>
+							</div>
+						</div>
+						<div v-if="row.id.trim() !== ''" :class="$style.internalIdRow">
+							<span :class="$style.internalIdLabel">{{ i18n.ts._agents.fieldModelInternalId }}</span>
+							<code :class="$style.internalIdValue">{{ row.id }}</code>
+							<p :class="$style.internalIdCaption">{{ i18n.ts._agents.fieldModelInternalIdCaption }}</p>
 						</div>
 						<FormSplit :minWidth="220">
-							<MkInput v-model="row.name"><template #label>显示名称</template></MkInput>
-							<MkSelect v-model="row.provider" :items="agentImageProviderItems"><template #label>模型提供商</template></MkSelect>
+							<MkInput v-model="row.name" :readonly="!row.enabled"><template #label>显示名称</template></MkInput>
+							<MkSelect v-model="row.provider" :items="agentImageProviderItems" :readonly="!row.enabled"><template #label>模型提供商</template></MkSelect>
 						</FormSplit>
-						<MkSwitch v-model="row.enabled"><template #label>启用</template></MkSwitch>
-						<MkTextarea v-model="row.description">
+						<MkTextarea v-model="row.description" :readonly="!row.enabled">
 							<template #label>{{ i18n.ts._agents.adminImageModelDescription }}</template>
 							<template #caption>{{ i18n.ts._agents.adminImageModelDescriptionCaption }}</template>
 						</MkTextarea>
 						<template v-if="row.provider === 'aurora'">
 							<FormSplit :minWidth="220">
-								<MkInput v-model="row.apiModelName"><template #label>Aurora 上游模型名</template></MkInput>
-								<MkInput v-model="row.costPerCall" type="text"><template #label>每张扣费</template></MkInput>
+								<MkInput v-model="row.apiModelName" :readonly="!row.enabled"><template #label>Aurora 上游模型名</template></MkInput>
+								<MkInput v-model="row.costPerCall" type="text" :readonly="!row.enabled"><template #label>每张扣费</template></MkInput>
 							</FormSplit>
-							<MkInput v-model="row.dailyFreeQuota" type="text">
+							<MkInput v-model="row.dailyFreeQuota" type="text" :readonly="!row.enabled">
 								<template #label>每日免费次数</template>
 								<template #caption>设为 0 则无免费额度；每日 0 点（北京时间）重置</template>
 							</MkInput>
-							<MkInput v-model="row.defaultArtistPresetId"><template #label>默认画师串 ID</template></MkInput>
+							<MkInput v-model="row.defaultArtistPresetId" :readonly="!row.enabled"><template #label>默认画师串 ID</template></MkInput>
 							<MkInfo warn>以下是 Aurora 参数。不了解时保持默认；会话页可在此基础上个性化覆盖。</MkInfo>
 							<FormSplit :minWidth="180">
-								<MkInput v-model="row.steps" type="text"><template #label>Steps</template></MkInput>
-								<MkInput v-model="row.scale" type="text"><template #label>Scale</template></MkInput>
-								<MkInput v-model="row.cfgRescale" type="text"><template #label>CFG Rescale</template></MkInput>
+								<MkInput v-model="row.steps" type="text" :readonly="!row.enabled"><template #label>Steps</template></MkInput>
+								<MkInput v-model="row.scale" type="text" :readonly="!row.enabled"><template #label>Scale</template></MkInput>
+								<MkInput v-model="row.cfgRescale" type="text" :readonly="!row.enabled"><template #label>CFG Rescale</template></MkInput>
 							</FormSplit>
 							<FormSplit :minWidth="220">
-								<MkInput v-model="row.sampler"><template #label>Sampler</template></MkInput>
-								<MkInput v-model="row.noiseSchedule"><template #label>Noise Schedule</template></MkInput>
+								<MkInput v-model="row.sampler" :readonly="!row.enabled"><template #label>Sampler</template></MkInput>
+								<MkInput v-model="row.noiseSchedule" :readonly="!row.enabled"><template #label>Noise Schedule</template></MkInput>
 							</FormSplit>
-							<MkTextarea v-model="row.promptPrefix"><template #label>Prompt Prefix</template></MkTextarea>
-							<MkTextarea v-model="row.promptSuffix"><template #label>Prompt Suffix</template></MkTextarea>
+							<MkTextarea v-model="row.promptPrefix" :readonly="!row.enabled"><template #label>Prompt Prefix</template></MkTextarea>
+							<MkTextarea v-model="row.promptSuffix" :readonly="!row.enabled"><template #label>Prompt Suffix</template></MkTextarea>
 						</template>
 						<template v-else-if="row.provider === 'qwen'">
 							<FormSplit :minWidth="220">
-								<MkInput v-model="row.apiUrl">
+								<MkInput v-model="row.apiUrl" :readonly="!row.enabled">
 									<template #label>{{ i18n.ts._agents.adminQwenImageRequestUrl }}</template>
 									<template #caption>{{ i18n.ts._agents.adminQwenImageRequestUrlCaption }}</template>
 								</MkInput>
-								<MkInput v-model="row.apiKey" type="password"><template #label>{{ i18n.ts._agents.adminQwenImageApiKey }}</template></MkInput>
+								<MkInput v-model="row.apiKey" type="password" :readonly="!row.enabled"><template #label>{{ i18n.ts._agents.adminQwenImageApiKey }}</template></MkInput>
 							</FormSplit>
 							<FormSplit :minWidth="220">
-								<MkInput v-model="row.apiModelName"><template #label>{{ i18n.ts._agents.adminQwenImageModelName }}</template></MkInput>
-								<MkInput v-model="row.costPerCall" type="text"><template #label>{{ i18n.ts._agents.adminImageModelCost }}</template></MkInput>
+								<MkInput v-model="row.apiModelName" :readonly="!row.enabled"><template #label>{{ i18n.ts._agents.adminQwenImageModelName }}</template></MkInput>
+								<MkInput v-model="row.costPerCall" type="text" :readonly="!row.enabled"><template #label>{{ i18n.ts._agents.adminImageModelCost }}</template></MkInput>
 							</FormSplit>
-							<MkInput v-model="row.dailyFreeQuota" type="text">
+							<MkInput v-model="row.dailyFreeQuota" type="text" :readonly="!row.enabled">
 								<template #label>每日免费次数</template>
 								<template #caption>设为 0 则无免费额度；每日 0 点（北京时间）重置</template>
 							</MkInput>
@@ -611,27 +637,29 @@ SPDX-License-Identifier: AGPL-3.0-only
 						</template>
 						<template v-else>
 							<FormSplit :minWidth="220">
-								<MkInput v-model="row.apiUrl">
+								<MkInput v-model="row.apiUrl" :readonly="!row.enabled">
 									<template #label>{{ i18n.ts._agents.adminOpenaiImageRequestUrl }}</template>
 									<template #caption>{{ i18n.ts._agents.adminOpenaiImageRequestUrlCaption }}</template>
 								</MkInput>
-								<MkInput v-model="row.apiKey" type="password"><template #label>{{ i18n.ts._agents.adminOpenaiImageApiKey }}</template></MkInput>
+								<MkInput v-model="row.apiKey" type="password" :readonly="!row.enabled"><template #label>{{ i18n.ts._agents.adminOpenaiImageApiKey }}</template></MkInput>
 							</FormSplit>
 							<FormSplit :minWidth="220">
-								<MkInput v-model="row.apiModelName"><template #label>{{ i18n.ts._agents.adminOpenaiImageModelName }}</template></MkInput>
-								<MkInput v-model="row.costPerCall" type="text"><template #label>{{ i18n.ts._agents.adminImageModelCost }}</template></MkInput>
+								<MkInput v-model="row.apiModelName" :readonly="!row.enabled"><template #label>{{ i18n.ts._agents.adminOpenaiImageModelName }}</template></MkInput>
+								<MkInput v-model="row.costPerCall" type="text" :readonly="!row.enabled"><template #label>{{ i18n.ts._agents.adminImageModelCost }}</template></MkInput>
 							</FormSplit>
-							<MkInput v-model="row.dailyFreeQuota" type="text">
+							<MkInput v-model="row.dailyFreeQuota" type="text" :readonly="!row.enabled">
 								<template #label>每日免费次数</template>
 								<template #caption>设为 0 则无免费额度；每日 0 点（北京时间）重置</template>
 							</MkInput>
-							<MkSwitch v-model="row.supportsReferenceImage">
+							<MkSwitch v-model="row.supportsReferenceImage" :disabled="!row.enabled">
 								<template #label>{{ i18n.ts._agents.adminImageModelReferenceImage }}</template>
 								<template #caption>{{ i18n.ts._agents.adminImageModelReferenceImageCaption }}</template>
 							</MkSwitch>
 						</template>
 					</div>
-					<MkButton rounded @click="addImageModel"><i class="ti ti-plus"></i> 添加生图模型</MkButton>
+					<div>
+						<MkButton rounded @click="onAddImageModelMenu"><i class="ti ti-plus"></i> 添加生图模型</MkButton>
+					</div>
 					<div v-if="hasAuroraImageModel" v-panel :class="$style.modelCard" class="_gaps_s">
 						<div :class="$style.modelCardHead">
 							<b>Aurora 提供商配置</b>
@@ -1217,7 +1245,7 @@ type AgentImageModelRow = {
 	id: string;
 	name: string;
 	description: string;
-	provider: 'aurora' | 'openai' | 'qwen';
+	provider: 'aurora' | 'openai' | 'tiptotip' | 'qwen';
 	enabled: boolean;
 	apiModelName: string;
 	apiUrl: string;
@@ -1310,6 +1338,7 @@ type AgentReviewTriggerRule = {
 const agentImageProviderItems: MkSelectItem[] = [
 	{ value: 'aurora', label: 'Aurora / Naval AI' },
 	{ value: 'openai', label: i18n.ts._agents.imageProviderOpenai },
+	{ value: 'tiptotip', label: i18n.ts._agents.imageProviderTiptotip },
 	{ value: 'qwen', label: i18n.ts._agents.imageProviderQwen },
 ];
 
@@ -1474,12 +1503,12 @@ function initAgentImageModelRows(): AgentImageModelRow[] {
 			id: typeof o.id === 'string' && o.id ? o.id : genId(),
 			name: typeof o.name === 'string' ? o.name : '',
 			description: typeof o.description === 'string' ? o.description : '',
-			provider: o.provider === 'openai' ? 'openai' : o.provider === 'qwen' ? 'qwen' : 'aurora',
+			provider: o.provider === 'openai' ? 'openai' : o.provider === 'tiptotip' ? 'tiptotip' : o.provider === 'qwen' ? 'qwen' : 'aurora',
 			enabled: o.enabled !== false,
 			apiModelName: typeof o.apiModelName === 'string' ? o.apiModelName : '',
 			apiUrl: typeof o.apiUrl === 'string' ? o.apiUrl : '',
 			apiKey: typeof o.apiKey === 'string' ? o.apiKey : '',
-			supportsReferenceImage: o.provider === 'openai' && o.supportsReferenceImage === true,
+			supportsReferenceImage: (o.provider === 'openai' || o.provider === 'tiptotip') && o.supportsReferenceImage === true,
 			costPerCall: typeof o.costPerCall === 'number' ? String(o.costPerCall) : '',
 			dailyFreeQuota: typeof o.dailyFreeQuota === 'number' ? String(o.dailyFreeQuota) : '0',
 			defaultArtistPresetId: typeof o.defaultArtistPresetId === 'string' ? o.defaultArtistPresetId : '',
@@ -1784,9 +1813,9 @@ const form = useForm({
 				provider: row.provider,
 				enabled: row.enabled,
 				apiModelName: row.apiModelName.trim() === '' ? null : row.apiModelName.trim(),
-				apiUrl: (row.provider === 'openai' || row.provider === 'qwen') && row.apiUrl.trim() !== '' ? row.apiUrl.trim() : null,
-				apiKey: (row.provider === 'openai' || row.provider === 'qwen') && row.apiKey.trim() !== '' ? row.apiKey.trim() : null,
-				supportsReferenceImage: row.provider === 'openai' && row.supportsReferenceImage,
+				apiUrl: (row.provider === 'openai' || row.provider === 'tiptotip' || row.provider === 'qwen') && row.apiUrl.trim() !== '' ? row.apiUrl.trim() : null,
+				apiKey: (row.provider === 'openai' || row.provider === 'tiptotip' || row.provider === 'qwen') && row.apiKey.trim() !== '' ? row.apiKey.trim() : null,
+				supportsReferenceImage: (row.provider === 'openai' || row.provider === 'tiptotip') && row.supportsReferenceImage,
 				costPerCall: row.costPerCall.trim() === '' ? null : Number(row.costPerCall),
 				dailyFreeQuota: row.dailyFreeQuota.trim() !== '' && Number(row.dailyFreeQuota) > 0 ? Number(row.dailyFreeQuota) : null,
 				defaultArtistPresetId: row.defaultArtistPresetId.trim() === '' ? null : row.defaultArtistPresetId.trim(),
@@ -1813,6 +1842,10 @@ const form = useForm({
 			if (row.provider === 'openai' && (!row.apiModelName || !row.apiUrl || !row.apiKey)) {
 				os.alert({ type: 'error', text: i18n.ts._agents.adminOpenaiImageRequired });
 				throw new Error('invalid openai image model configuration');
+			}
+			if (row.provider === 'tiptotip' && (!row.apiModelName || !row.apiUrl || !row.apiKey)) {
+				os.alert({ type: 'error', text: i18n.ts._agents.adminOpenaiImageRequired });
+				throw new Error('invalid tiptotip image model configuration');
 			}
 			if (row.provider === 'qwen' && (!row.apiModelName || !row.apiUrl || !row.apiKey)) {
 				os.alert({ type: 'error', text: i18n.ts._agents.adminQwenImageRequired });
@@ -2803,15 +2836,31 @@ function removeImageToken(index: number) {
 	form.state.agentImageTokenRows.splice(index, 1);
 }
 
-function addImageModel() {
+/** 添加生图模型：先选提供商模板，再创建对应预置行 */
+function onAddImageModelMenu(ev: MouseEvent) {
+	const items: MenuItem[] = [
+		{ type: 'button', icon: 'ti ti-plus', text: '自定义模型', caption: '空白模型，手动填写全部配置', action: () => addImageModel() },
+		{ type: 'divider' },
+		{ type: 'label', text: '提供商预置' },
+		{ type: 'button', icon: 'ti ti-bolt', text: 'Tiptotip 网关', caption: '预填 ai.tiptotip.cn 生图端点，补 Key 与模型名即可', action: () => addImageModel('tiptotip') },
+		{ type: 'button', icon: 'ti ti-bolt', text: 'OpenAI 官方', caption: '预填 api.openai.com 生图端点，补 Key 与模型名即可', action: () => addImageModel('openai') },
+	];
+	os.popupMenu(items, ev.currentTarget ?? ev.target);
+}
+
+function addImageModel(providerPreset?: 'tiptotip' | 'openai') {
 	form.state.agentImageModelRows.push({
 		id: genId(),
 		name: '',
 		description: '',
-		provider: 'aurora',
+		provider: providerPreset ?? 'aurora',
 		enabled: true,
-		apiModelName: form.state.agentImageDefaultModel || 'nai-diffusion-4-5-full',
-		apiUrl: '',
+		apiModelName: providerPreset != null ? '' : (form.state.agentImageDefaultModel || 'nai-diffusion-4-5-full'),
+		apiUrl: providerPreset === 'tiptotip'
+			? 'https://ai.tiptotip.cn/v1/images/generations'
+			: providerPreset === 'openai'
+				? 'https://api.openai.com/v1/images/generations'
+				: '',
 		apiKey: '',
 		supportsReferenceImage: false,
 		costPerCall: form.state.agentImageCostPerCall || '',
@@ -2829,6 +2878,42 @@ function addImageModel() {
 
 function removeImageModel(index: number) {
 	form.state.agentImageModelRows.splice(index, 1);
+}
+
+/** 复制生图模型：深拷贝该行并生成新 id，插入到原模型之后 */
+function copyImageModelRow(index: number) {
+	const src = form.state.agentImageModelRows[index];
+	if (!src) return;
+	const copy: AgentImageModelRow = {
+		...src,
+		id: genId(),
+		name: `${src.name.trim()}${i18n.ts._agents.adminModelCopySuffix}`,
+		enabled: true,
+	};
+	form.state.agentImageModelRows.splice(index + 1, 0, copy);
+}
+
+/** 移动生图模型顺序：dir 为 -1（上移）或 1（下移），列表顺序即用户侧展示顺序 */
+function moveImageModelRow(index: number, dir: -1 | 1) {
+	const rows = form.state.agentImageModelRows;
+	const target = index + dir;
+	if (target < 0 || target >= rows.length) return;
+	const [row] = rows.splice(index, 1);
+	rows.splice(target, 0, row);
+}
+
+/** 下架生图模型：保留配置但用户侧不可选，取消下架即恢复 */
+async function toggleImageModelEnabled(index: number, next: boolean) {
+	const row = form.state.agentImageModelRows[index];
+	if (!row) return;
+	if (next === false) {
+		const ok = await os.confirm({
+			type: 'warning',
+			text: i18n.tsx._agents.adminModelUnlistConfirm({ name: row.name.trim() || row.id }),
+		});
+		if (ok.canceled) return;
+	}
+	row.enabled = next;
 }
 
 function addImageArtistPreset() {

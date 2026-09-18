@@ -3810,6 +3810,7 @@ _agents:
   adminImageParamsInvalid: "图片生成参数无效，请检查数值范围（步数 1-80、Scale 0-30、CFG Rescale 0-1）。"
   adminOpenaiImageSize: "图片尺寸"
   imageProviderOpenai: "OpenAI 兼容"
+  imageProviderTiptotip: "Tiptotip 网关"
   imageProviderQwen: "通义千问 Qwen"
   adminQwenImageRequestUrl: "生图请求 URL"
   adminQwenImageRequestUrlCaption: "填写完整的 Qwen-Image（DashScope 风格）images/generations 接口地址，保存时会进行安全校验。"

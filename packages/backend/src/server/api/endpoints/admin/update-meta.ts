@@ -259,7 +259,7 @@ export const paramDef = {
 					id: { type: 'string', minLength: 1, maxLength: 128 },
 					name: { type: 'string', minLength: 1, maxLength: 256 },
 					description: { type: 'string', nullable: true, maxLength: 2048 },
-					provider: { type: 'string', enum: ['aurora', 'openai', 'qwen'] },
+					provider: { type: 'string', enum: ['aurora', 'openai', 'tiptotip', 'qwen'] },
 					enabled: { type: 'boolean' },
 					apiModelName: { type: 'string', nullable: true, maxLength: 128 },
 					apiUrl: { type: 'string', nullable: true, maxLength: 2048 },
@@ -1091,7 +1091,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					}
 					let apiUrl: string | null = null;
 					let apiKey: string | null = null;
-					if (m.provider === 'openai' || m.provider === 'qwen') {
+					if (m.provider === 'openai' || m.provider === 'tiptotip' || m.provider === 'qwen') {
 						if (typeof m.apiModelName !== 'string' || m.apiModelName.trim() === ''
 							|| typeof m.apiUrl !== 'string' || m.apiUrl.trim() === ''
 							|| typeof m.apiKey !== 'string' || m.apiKey.trim() === '') {
@@ -1122,7 +1122,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 						apiModelName: typeof m.apiModelName === 'string' && m.apiModelName.trim() !== '' ? m.apiModelName.trim() : null,
 						apiUrl,
 						apiKey,
-						supportsReferenceImage: m.provider === 'openai' && m.supportsReferenceImage === true,
+						supportsReferenceImage: (m.provider === 'openai' || m.provider === 'tiptotip') && m.supportsReferenceImage === true,
 						costPerCall: typeof m.costPerCall === 'number' ? Math.max(0, m.costPerCall) : null,
 						dailyFreeQuota: typeof m.dailyFreeQuota === 'number' && m.dailyFreeQuota > 0 ? Math.trunc(m.dailyFreeQuota) : null,
 						defaultParams: m.defaultParams ?? null,

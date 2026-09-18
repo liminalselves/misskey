@@ -13692,6 +13692,15 @@ export interface operations {
                     'application/json': components['schemas']['Error'];
                 };
             };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
             /** @description Internal server error */
             500: {
                 headers: {
@@ -18705,7 +18714,7 @@ export interface operations {
                         name: string;
                         description?: string | null;
                         /** @enum {string} */
-                        provider: 'aurora' | 'openai' | 'qwen';
+                        provider: 'aurora' | 'openai' | 'tiptotip' | 'qwen';
                         enabled?: boolean;
                         apiModelName?: string | null;
                         apiUrl?: string | null;
@@ -21952,7 +21961,7 @@ export interface operations {
                         name: string;
                         description: string | null;
                         /** @enum {string} */
-                        provider: 'aurora' | 'openai' | 'qwen';
+                        provider: 'aurora' | 'openai' | 'tiptotip' | 'qwen';
                         apiModelName: string | null;
                         supportsReferenceImage: boolean;
                         costPerCall: number;

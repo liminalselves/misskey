@@ -3798,6 +3798,7 @@ _agents:
   adminImageParamsInvalid: "Invalid image generation parameters. Check the value ranges (steps 1-80, scale 0-30, CFG rescale 0-1)."
   adminOpenaiImageSize: "Image size"
   imageProviderOpenai: "OpenAI compatible"
+  imageProviderTiptotip: "Tiptotip gateway"
   modelApiName: "Model id (API \"model\" parameter)"
   maxContextTokens: "Max context tokens"
   maxOutputTokens: "Max output tokens per reply"

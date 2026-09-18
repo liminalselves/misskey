@@ -44,7 +44,7 @@ export type MiAgentImageDefaultParams = {
 	promptSuffix?: string;
 };
 
-export type MiAgentImageProvider = 'aurora' | 'openai' | 'qwen';
+export type MiAgentImageProvider = 'aurora' | 'openai' | 'tiptotip' | 'qwen';
 
 export type MiAgentImageModel = {
 	id: string;

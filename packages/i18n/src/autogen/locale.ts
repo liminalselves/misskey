@@ -14646,6 +14646,10 @@ export interface Locale extends ILocale {
          */
         "imageProviderOpenai": string;
         /**
+         * Tiptotip ゲートウェイ
+         */
+        "imageProviderTiptotip": string;
+        /**
          * Qwen（Alibaba）
          */
         "imageProviderQwen": string;
