@@ -1163,7 +1163,7 @@ import { useRouter } from '@/router.js';
 import { makeDateSeparatedTimelineComputedRef } from '@/utility/timeline-date-separate.js';
 import { useMutationObserver } from '@/composables/use-mutation-observer.js';
 import { prefer } from '@/preferences.js';
-import { agentSegmentDelayMs, splitAgentMessageIntoSegments } from '@/utility/agent-message-segments.js';
+import { agentSegmentDelayMs, splitAgentMessageIntoSegments, stripAgentCueTokens } from '@/utility/agent-message-segments.js';
 import { getStoredPendingRequestId, setStoredPendingRequestId } from '@/utility/agent-pending-requests.js';
 import { agentI18nText } from '@/utility/agent-i18n.js';
 import { useStream } from '@/stream.js';
@@ -4661,7 +4661,8 @@ let segmentPlaybackToken = 0;
 
 function playableSegmentsFor(content: string): string[] {
 	if (session.value?.segmentedOutputEnabled !== true) return [];
-	const segments = splitAgentMessageIntoSegments(content);
+	// 表演指令只服务桌宠：网页的逐气泡回放取段前先剥离，避免把指令当正文念出
+	const segments = splitAgentMessageIntoSegments(stripAgentCueTokens(content));
 	return segments.length > 1 ? segments : [];
 }
 
@@ -5613,7 +5614,7 @@ async function onAbortRequest() {
 .composeStyleHint {
 	margin: 0 auto;
 	width: 100%;
-	max-width: 700px;
+	max-width: var(--agent-control-content-max-width, 700px);
 	box-sizing: border-box;
 	font-size: 0.9em;
 	line-height: 1.5;
@@ -5623,7 +5624,7 @@ async function onAbortRequest() {
 .form {
 	margin: 0 auto;
 	width: 100%;
-	max-width: 700px;
+	max-width: var(--agent-control-content-max-width, 700px);
 	box-sizing: border-box;
 	min-width: 0;
 }
@@ -5638,7 +5639,7 @@ async function onAbortRequest() {
 	justify-content: center;
 	gap: 0.65em;
 	width: 100%;
-	max-width: 700px;
+	max-width: var(--agent-control-content-max-width, 700px);
 	margin: 0.35em auto;
 	padding: 0 0.25em;
 	box-sizing: border-box;
@@ -5683,7 +5684,7 @@ async function onAbortRequest() {
 
 .memPage {
 	width: 100%;
-	max-width: min(100%, 720px);
+	max-width: min(100%, var(--agent-control-content-max-width, 720px));
 	margin-inline: auto;
 	padding-bottom: 0.15em;
 }
@@ -6319,7 +6320,7 @@ async function onAbortRequest() {
 	color: var(--MI_THEME-accent);
 	margin: 0 auto;
 	width: 100%;
-	max-width: 700px;
+	max-width: var(--agent-control-content-max-width, 700px);
 	box-sizing: border-box;
 }
 

@@ -28,6 +28,7 @@ import { AgentMessageNotifyService } from '@/core/AgentMessageNotifyService.js';
 import { buildAgentProactiveNotificationText } from '@/core/agent-proactive-notification-text.js';
 import { DriveFileEntityService } from '@/core/entities/DriveFileEntityService.js';
 import { AGENT_IMAGE_WORLD_PROMPT } from '@/core/agent-image-presets.js';
+import { stripPerformanceCues } from '@/core/agent-performance-cue.js';
 
 const MAX_DUE_PER_TICK = 20;
 
@@ -257,7 +258,9 @@ export class AgentProactiveMessageService {
 				.filter(message => message.role === 'user' || message.role === 'assistant')
 				.filter(message => message.id !== internalMessageId)
 				.map(message => {
-					const content = this.agentService.applyRegexRules(message.content, message.role as 'user' | 'assistant', 'aiInvisible', regexRules);
+					let content = this.agentService.applyRegexRules(message.content, message.role as 'user' | 'assistant', 'aiInvisible', regexRules);
+					// 主动消息无桌宠请求上下文：历史中的表演指令一律剥离，避免诱导输出
+					if (message.role === 'assistant') content = stripPerformanceCues(content);
 					return {
 						role: message.role as 'user' | 'assistant',
 						content: message.role === 'user' ? this.agentStickerService.convertUserTextForLlm(content, stickerBlocks.emojiList) : content,
@@ -331,12 +334,14 @@ export class AgentProactiveMessageService {
 			const preStickerVisibleContent = this.agentImageService.resolveImageModel(instance, session.agentImageModelId) == null
 				? this.agentImageService.stripDrawPlaceholders(parsed.visibleContent)
 				: parsed.visibleContent;
-			const visibleContent = this.agentStickerService.enforceReplyLimits(preStickerVisibleContent, {
+			const stickerVisibleContent = this.agentStickerService.enforceReplyLimits(preStickerVisibleContent, {
 				enabled: instance.agentStickerEnabled === true,
 				max: Math.max(0, Math.min(10, Math.trunc(Number(instance.agentStickerMaxPerMessage)))),
 				emojiNames: new Set(stickerBlocks.emojiList.map(e => e.name)),
 				stickerKeys: new Set(stickerBlocks.stickerKeys),
 			});
+			// 主动消息不支持表演指令：无论历史如何，回复中的 [[agent_cue]] 一律剥离
+			const visibleContent = stripPerformanceCues(stickerVisibleContent);
 			if (visibleContent.trim().length === 0) {
 				throw new ProactiveAttemptError('PROACTIVE_EMPTY_REPLY');
 			}

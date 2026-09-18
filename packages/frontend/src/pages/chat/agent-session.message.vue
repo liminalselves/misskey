@@ -145,7 +145,7 @@ import MkLoading from '@/components/global/MkLoading.vue';
 import MkButton from '@/components/MkButton.vue';
 import MkMediaList from '@/components/MkMediaList.vue';
 import MkCustomEmoji from '@/components/global/MkCustomEmoji.vue';
-import { splitAgentMessageIntoSegments } from '@/utility/agent-message-segments.js';
+import { splitAgentMessageIntoSegments, stripAgentCueTokens } from '@/utility/agent-message-segments.js';
 import { customEmojisMap } from '@/custom-emojis.js';
 
 const $i = ensureSignin();
@@ -224,7 +224,8 @@ const displayContent = computed(() => {
 		if (!rule.targets.includes(role) || !rule.effects.includes('hide')) continue;
 		try { content = content.replace(new RegExp(rule.pattern, 'gu'), ''); } catch { /* Invalid rules are ignored in the client too. */ }
 	}
-	return content;
+	// 表演指令只服务桌宠客户端，网页展示一律剥离（编辑视图仍读原文）
+	return stripAgentCueTokens(content);
 });
 
 const systemHtml = computed(() => renderAgentChatMarkdown(props.message.content ?? ''));

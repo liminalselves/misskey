@@ -142,6 +142,20 @@ export function agentSegmentDelayMs(segment: string): number {
 	return Math.max(1000, Math.min(3000, 1000 + visibleChars * 20));
 }
 
+/**
+ * 展示剥离桌宠表演指令（AI 回复内嵌的 [[agent_cue …]]，仅桌宠客户端解析执行）：
+ * 独占行连同换行移除、行内残留清理、空行收敛。存储原文与编辑视图不受影响。
+ */
+export function stripAgentCueTokens(text: string): string {
+	if (!text) return text;
+	if (!/\[\[agent_cue\b[^\]\n]*\]\]/iu.test(text)) return text;
+	return text
+		.replace(/^[ \t]*\[\[agent_cue\b[^\]\n]*\]\][ \t]*\r?\n?/gimu, '')
+		.replace(/\[\[agent_cue\b[^\]\n]*\]\]/giu, '')
+		.replace(/\n{3,}/gu, '\n\n')
+		.trim();
+}
+
 function updateHtmlStack(line: string, stack: string[]): boolean {
 	let sawHtml = false;
 	for (const match of line.matchAll(/<!--[\s\S]*?-->|<\/?([A-Za-z][\w:-]*)(?:\s[^<>]*?)?\/?>/g)) {

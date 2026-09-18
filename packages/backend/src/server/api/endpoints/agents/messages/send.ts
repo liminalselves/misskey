@@ -40,6 +40,13 @@ import { AgentMessageNotifyService } from '@/core/AgentMessageNotifyService.js';
 import { buildAgentProactiveNotificationText } from '@/core/agent-proactive-notification-text.js';
 import { DriveFileEntityService } from '@/core/entities/DriveFileEntityService.js';
 import { AGENT_IMAGE_WORLD_PROMPT } from '@/core/agent-image-presets.js';
+import {
+	buildPerformanceSystemBlock,
+	enforcePerformanceCues,
+	normalizePerformanceCapabilities,
+	performanceAllowedNames,
+	stripPerformanceCues,
+} from '@/core/agent-performance-cue.js';
 
 export const meta = {
 	tags: ['agents'],
@@ -86,9 +93,38 @@ export const paramDef = {
 		sessionId: { type: 'string', format: 'misskey:id' },
 		text: { type: 'string', minLength: 0, maxLength: 16000, nullable: true },
 		fileId: { type: 'string', format: 'misskey:id', nullable: true },
-		/** 前端生成的客户端请求 ID；用于请求幂等与通过 agents/messages/abort 取消本次请求 */
-		clientRequestId: { type: 'string', minLength: 1, maxLength: 64 },
-	},
+			/** 前端生成的客户端请求 ID；用于请求幂等与通过 agents/messages/abort 取消本次请求 */
+			clientRequestId: { type: 'string', minLength: 1, maxLength: 64 },
+			/** 桌宠表演能力清单；携带即桌宠环境：注入表演协议、历史保留指令，缺失则全程剥离 */
+			performance: {
+				type: 'object',
+				nullable: true,
+				properties: {
+					expressions: {
+						type: 'array', maxItems: 32,
+						items: {
+							type: 'object',
+							properties: {
+								name: { type: 'string', minLength: 1, maxLength: 64 },
+								hint: { type: 'string', maxLength: 64 },
+							},
+							required: ['name'],
+						},
+					},
+					actions: {
+						type: 'array', maxItems: 32,
+						items: {
+							type: 'object',
+							properties: {
+								name: { type: 'string', minLength: 1, maxLength: 64 },
+								hint: { type: 'string', maxLength: 64 },
+							},
+							required: ['name'],
+						},
+					},
+				},
+			},
+		},
 	required: ['sessionId'],
 } as const;
 
@@ -145,6 +181,9 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			await this.chatService.checkChatAvailability(me.id, 'write');
 			const userText = typeof ps.text === 'string' ? ps.text : '';
 			const imageFileId = typeof ps.fileId === 'string' && ps.fileId.trim() !== '' ? ps.fileId : null;
+			// 携带表演清单即桌宠环境；网页端（无清单）从 system 注入、历史到落库全程剥离指令
+			const performance = normalizePerformanceCapabilities(ps.performance);
+			const performanceNames = performance != null ? performanceAllowedNames(performance) : null;
 			if (userText.trim() === '' && imageFileId == null) {
 				throw new ApiError({ message: 'A message must contain text or one image.', code: 'AGENT_MESSAGE_EMPTY', id: 'bc0ef6d8-644f-4d2e-83f7-a44c06ea3ed2', kind: 'client', httpStatusCode: 400 });
 			}
@@ -395,6 +434,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				const historyForApi = history.filter(m => (m.role === 'user' || m.role === 'assistant') && m.id !== userMsg!.id);
 				const regexRules = this.agentService.normalizeRegexRules(character.regexRules);
 				const filterForAi = (text: string, role: 'user' | 'assistant') => this.agentService.applyRegexRules(text, role, 'aiInvisible', regexRules);
+				// 网页端没有表演协议：assistant 历史中的 [[agent_cue]] 指令一并剥离，避免诱导输出
+				const historyForAi = (text: string, role: 'user' | 'assistant') => role === 'assistant' && performance == null ? stripPerformanceCues(text) : text;
 				const filteredUserText = filterForAi(userText, 'user');
 				const llmUserText = convertUserStickersForLlm(filteredUserText);
 				const aiUserText = imageFileId == null
@@ -411,22 +452,22 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					const bIds = actives.flatMap(s => [s.fromMessageId, s.toMessageId]);
 					const boundaries = await this.agentCompressionMemoryService.loadBoundaryMap(session.id, bIds);
 						pairs = this.agentCompressionMemoryService.buildPairsExcludingActiveCompression(
-						historyForApi.map(m => ({ ...m, content: m.role === 'user' ? convertUserStickersForLlm(filterForAi(m.content, m.role as 'user' | 'assistant')) : filterForAi(m.content, m.role as 'user' | 'assistant') })),
+						historyForApi.map(m => ({ ...m, content: m.role === 'user' ? convertUserStickersForLlm(filterForAi(m.content, m.role as 'user' | 'assistant')) : historyForAi(filterForAi(m.content, m.role as 'user' | 'assistant'), m.role as 'user' | 'assistant') })),
 						actives,
 						boundaries,
 					);
 				} else {
 					for (const m of historyForApi) {
 						if (m.role === 'user' || m.role === 'assistant') {
-							const content = filterForAi(m.content, m.role);
-							pairs.push({ role: m.role, content: m.role === 'user' ? convertUserStickersForLlm(content) : content });
+					const content = filterForAi(m.content, m.role);
+						pairs.push({ role: m.role, content: m.role === 'user' ? convertUserStickersForLlm(content) : historyForAi(content, m.role) });
 						}
 					}
 				}
 				pairs = normalizeAgentLlmTurns(pairs);
 
-				// 记忆检索/写入复用 pairs 但剥离历史发送时间 XML（与现有 runtime-directive「不进记忆」原则一致）
-				const memPairs: { role: 'user' | 'assistant'; content: string }[] = pairs.map(p => ({ role: p.role, content: stripHistoricTimePrefix(p.content) }));
+				// 记忆检索/写入复用 pairs 但剥离历史发送时间 XML 与表演指令（与现有 runtime-directive「不进记忆」原则一致）
+				const memPairs: { role: 'user' | 'assistant'; content: string }[] = pairs.map(p => ({ role: p.role, content: stripPerformanceCues(stripHistoricTimePrefix(p.content)) }));
 
 				let memoryBlock = '';
 				if (memActive) {
@@ -458,6 +499,9 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					system += AGENT_IMAGE_WORLD_PROMPT;
 					system += '\n';
 					system += '</agent_image_generation_protocol>';
+				}
+				if (performance != null) {
+					system += '\n\n' + buildPerformanceSystemBlock(performance);
 				}
 				if (memoryBlock.length > 0) {
 					system += AGENT_LLM_MEMORY_XML_OPEN + escapeAgentXmlText(memoryBlock) + AGENT_LLM_MEMORY_XML_CLOSE;
@@ -523,12 +567,15 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					? this.agentImageService.stripDrawPlaceholders(proactiveControl.visibleContent)
 					: proactiveControl.visibleContent;
 				// 表情包数量上限/合法性过滤：功能关闭、超限、未知 key 一并剥离（历史消息不动）
-				const assistantText = this.agentStickerService.enforceReplyLimits(preStickerAssistantText, {
+				const stickerAssistantText = this.agentStickerService.enforceReplyLimits(preStickerAssistantText, {
 					enabled: instanceMeta.agentStickerEnabled === true,
 					max: Math.max(0, Math.min(10, Math.trunc(Number(instanceMeta.agentStickerMaxPerMessage)))),
 					emojiNames: new Set(emojiListForLlm.map(e => e.name)),
 					stickerKeys: new Set(stickerBlocks.stickerKeys),
 				});
+				// 表演指令落库前过滤：网页端整体剥离（协议未注入，历史残留可能诱导输出）；
+				// 桌宠端只保留清单内名字的合法指令（对齐表情包 enforceReplyLimits 的先例）
+				const assistantText = enforcePerformanceCues(stickerAssistantText, performanceNames);
 				const hasVisibleAssistantText = assistantText.trim().length > 0;
 
 				const auditResult = await this.agentExternalAuditService.auditReply({

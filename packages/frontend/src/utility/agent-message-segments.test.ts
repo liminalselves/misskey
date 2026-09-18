@@ -4,7 +4,7 @@
  */
 
 import { describe, expect, test } from 'vitest';
-import { agentSegmentDelayMs, splitAgentMessageIntoSegments } from './agent-message-segments.js';
+import { agentSegmentDelayMs, splitAgentMessageIntoSegments, stripAgentCueTokens } from './agent-message-segments.js';
 
 describe('splitAgentMessageIntoSegments', () => {
 	test('splits ordinary non-empty lines and ignores empty lines', () => {
@@ -106,5 +106,23 @@ describe('agentSegmentDelayMs', () => {
 	test('stays between one and three seconds', () => {
 		expect(agentSegmentDelayMs('短')).toBeGreaterThanOrEqual(1000);
 		expect(agentSegmentDelayMs('x'.repeat(1000))).toBe(3000);
+	});
+});
+
+describe('stripAgentCueTokens', () => {
+	test('removes own-line cues together with their newline and collapses blanks', () => {
+		expect(stripAgentCueTokens('你好\n[[agent_cue express=happy]]\n打扰了\n[[agent_cue express=shy]]\n没事～'))
+			.toBe('你好\n打扰了\n没事～');
+		expect(stripAgentCueTokens('a\n\n\n[[agent_cue play=wave]]\n\n\nb')).toBe('a\n\nb');
+	});
+
+	test('strips inline residues and malformed variants', () => {
+		expect(stripAgentCueTokens('x [[agent_cue express=happy play=wave]] y')).toBe('x  y');
+		expect(stripAgentCueTokens('[[agent_cue]]\n[[agent_cue foo=bar]]\ntext')).toBe('text');
+	});
+
+	test('keeps other tokens and plain text untouched', () => {
+		expect(stripAgentCueTokens('')).toBe('');
+		expect(stripAgentCueTokens('普通文本 :30: [[agent_draw size=landscape tag=test]]')).toBe('普通文本 :30: [[agent_draw size=landscape tag=test]]');
 	});
 });

@@ -22905,6 +22905,16 @@ export interface operations {
                     /** Format: misskey:id */
                     fileId?: string | null;
                     clientRequestId?: string;
+                    performance?: {
+                        expressions?: {
+                            name: string;
+                            hint?: string;
+                        }[];
+                        actions?: {
+                            name: string;
+                            hint?: string;
+                        }[];
+                    } | null;
                 };
             };
         };
