@@ -108,6 +108,12 @@ control.setAppearance({
 control.setToken(await getFreshAgentControlToken());
 ```
 
+切换面板也无需重载，iframe 内部直接跳转路由，远快于销毁重建：
+
+```js
+control.setPanel('worldbook');
+```
+
 ## 构造参数
 
 | 参数 | 类型 | 说明 |
@@ -172,6 +178,7 @@ window.addEventListener('message', event => {
 - `misskey:agent-control:configure`: 首次提供 `token` 和可选 `appearance`
 - `misskey:agent-control:update-appearance`: 运行时更新 `appearance`
 - `misskey:agent-control:update-token`: 运行时更新 `token`
+- `misskey:agent-control:set-panel`: 切换面板（携带 `panel`），嵌入页内部跳转路由，不重载 iframe
 
 iframe 会发送：
 

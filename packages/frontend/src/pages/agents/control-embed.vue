@@ -65,21 +65,21 @@ onBeforeUnmount(() => {
 <style lang="scss" module>
 :global(html),
 :global(body) {
-	min-height: 100%;
 	background: var(--MI_THEME-bg);
 	font-family: var(--agent-control-font-family, inherit);
 	font-size: var(--agent-control-font-size, inherit);
 }
 
+// 嵌入页只在 iframe 内使用：不能有任何视口相对的最小高度，
+// 否则 iframe 变高后 scrollHeight 被地板顶住，autoHeight 再也无法收缩。
 .root {
-	min-height: 100dvh;
 	background: var(--MI_THEME-bg);
 	color: var(--MI_THEME-fg);
 }
 
 .pending {
 	box-sizing: border-box;
-	width: min(100%, var(--agent-control-content-max-width, 760px));
+	width: min(100%, var(--agent-control-content-max-width, 100%));
 	margin-inline: auto;
 	padding: var(--agent-control-spacing, var(--MI-margin));
 }

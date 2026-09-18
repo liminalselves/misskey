@@ -121,6 +121,20 @@
 			});
 		}
 
+		/**
+		 * 切换当前面板。iframe 内部路由跳转，不重新加载页面，远快于销毁重建。
+		 * @param {'model' | 'draw' | 'proactive' | 'memory' | 'worldbook' | 'rules' | 'style' | 'operations'} panel
+		 */
+		setPanel(panel) {
+			if (!panels.has(panel)) throw new TypeError(`Unknown panel: ${panel}`);
+			if (panel === this.panel) return;
+			this.panel = panel;
+			this.iframe.contentWindow?.postMessage({
+				type: 'misskey:agent-control:set-panel',
+				panel,
+			}, this.origin);
+		}
+
 		destroy() {
 			window.removeEventListener('message', this._onMessage);
 			this.iframe.remove();

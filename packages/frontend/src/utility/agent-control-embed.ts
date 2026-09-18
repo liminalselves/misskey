@@ -42,6 +42,9 @@ export type AgentControlParentMessage = {
 } | {
 	type: 'misskey:agent-control:update-token';
 	token: string;
+} | {
+	type: 'misskey:agent-control:set-panel';
+	panel: string;
 };
 
 export type AgentControlEmbedMessage = {

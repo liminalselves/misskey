@@ -25,11 +25,11 @@ SPDX-License-Identifier: AGPL-3.0-only
 	</div>
 </div>
 <PageWithHeader v-else v-model:tab="tab" :reversed="tab === 'chat'" :tabs="headerTabs" :hideHeader="isEmbeddedControl" :fitContent="isEmbeddedControl" narrowMergedRow :showBack="!isEmbeddedControl" :actions="headerActions">
-		<div v-if="isEmbeddedControl && loading" class="_spacer" style="--MI_SPACER-w: 760px;">
+		<div v-if="isEmbeddedControl && loading" class="_spacer" style="--MI_SPACER-w: var(--agent-control-content-max-width, 760px);">
 			<XControlLoading/>
 		</div>
 
-		<div v-else-if="tab === 'chat'" :class="['_spacer', $style.chatSpacer]" style="--MI_SPACER-w: 700px;">
+		<div v-else-if="tab === 'chat'" :class="['_spacer', $style.chatSpacer]" style="--MI_SPACER-w: var(--agent-control-content-max-width, 700px);">
 		<!-- Aliya Web 推荐横幅：每个会话仅首次打开时显示，状态存 cookie -->
 		<Transition :name="prefer.s.animation ? 'fade' : ''">
 			<div v-if="showAliyaBanner" :class="$style.aliyaBanner">
@@ -137,7 +137,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		</div>
 	</div>
 
-	<div v-else-if="tab === 'search'" class="_spacer" style="--MI_SPACER-w: 700px;">
+	<div v-else-if="tab === 'search'" class="_spacer" style="--MI_SPACER-w: var(--agent-control-content-max-width, 700px);">
 		<XAgentSearch
 			:sessionId="sessionId"
 			:assistantName="character?.name ?? null"
@@ -147,7 +147,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		/>
 	</div>
 
-	<div v-else-if="tab === 'proactive'" class="_spacer" style="--MI_SPACER-w: 720px;">
+	<div v-else-if="tab === 'proactive'" class="_spacer" style="--MI_SPACER-w: var(--agent-control-content-max-width, 720px);">
 		<div v-if="loading" class="_gaps">
 			<MkLoading/>
 		</div>
@@ -251,7 +251,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		</div>
 	</div>
 
-	<div v-else-if="tab === 'worldbook'" class="_spacer" style="--MI_SPACER-w: 760px;">
+	<div v-else-if="tab === 'worldbook'" class="_spacer" style="--MI_SPACER-w: var(--agent-control-content-max-width, 760px);">
 			<div v-if="loading || worldbookListLoading" class="_gaps">
 				<XControlLoading v-if="isEmbeddedControl" compact/>
 				<MkLoading v-else/>
@@ -295,7 +295,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		</div>
 	</div>
 
-	<div v-else-if="tab === 'rules'" class="_spacer" style="--MI_SPACER-w: 760px;">
+	<div v-else-if="tab === 'rules'" class="_spacer" style="--MI_SPACER-w: var(--agent-control-content-max-width, 760px);">
 			<div v-if="loading || sessionRulesLoading" class="_gaps">
 				<XControlLoading v-if="isEmbeddedControl" compact/>
 				<MkLoading v-else/>
@@ -341,7 +341,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		</div>
 	</div>
 
-	<div v-else-if="tab === 'draw'" class="_spacer" style="--MI_SPACER-w: 760px;">
+	<div v-else-if="tab === 'draw'" class="_spacer" style="--MI_SPACER-w: var(--agent-control-content-max-width, 760px);">
 		<div class="_gaps">
 			<MkInfo>
 				<div :class="$style.drawInfoContent">
@@ -570,7 +570,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		</div>
 	</div>
 
-	<div v-else-if="tab === 'memory'" class="_spacer" style="--MI_SPACER-w: 720px;">
+	<div v-else-if="tab === 'memory'" class="_spacer" style="--MI_SPACER-w: var(--agent-control-content-max-width, 720px);">
 		<div v-if="loading" class="_gaps">
 			<MkLoading/>
 		</div>
@@ -761,7 +761,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		</div>
 	</div>
 
-	<div v-else-if="tab === 'operations'" class="_spacer" style="--MI_SPACER-w: 720px;">
+	<div v-else-if="tab === 'operations'" class="_spacer" style="--MI_SPACER-w: var(--agent-control-content-max-width, 720px);">
 		<div class="_gaps">
 			<!-- Aliya Web 常驻推荐板块：不可关闭 -->
 			<div v-if="isAliyaSession" :class="$style.aliyaPanel">
@@ -835,7 +835,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		</div>
 	</div>
 
-	<div v-else-if="tab === 'style'" class="_spacer" style="--MI_SPACER-w: 700px;">
+	<div v-else-if="tab === 'style'" class="_spacer" style="--MI_SPACER-w: var(--agent-control-content-max-width, 700px);">
 		<div v-if="loading" class="_gaps">
 			<MkLoading/>
 		</div>
@@ -939,7 +939,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		</div>
 	</div>
 
-	<div v-else-if="tab === 'model'" class="_spacer" style="--MI_SPACER-w: 700px;">
+	<div v-else-if="tab === 'model'" class="_spacer" style="--MI_SPACER-w: var(--agent-control-content-max-width, 700px);">
 		<div v-if="loading" class="_gaps">
 			<MkLoading/>
 		</div>
@@ -1611,7 +1611,7 @@ type AgentImageModel = {
 	id: string;
 	name: string;
 	description: string | null;
-	provider: 'aurora' | 'openai' | 'qwen';
+	provider: 'aurora' | 'openai' | 'tiptotip' | 'qwen';
 	supportsReferenceImage: boolean;
 	apiModelName: string | null;
 	costPerCall: number;
@@ -3115,6 +3115,7 @@ function chooseDrawImageModel(modelId: string) {
 function imageProviderLabel(provider: AgentImageModel['provider']): string {
 	if (provider === 'aurora') return 'Aurora';
 	if (provider === 'openai') return i18n.ts._agents.imageProviderOpenai;
+	if (provider === 'tiptotip') return i18n.ts._agents.imageProviderTiptotip;
 	if (provider === 'qwen') return i18n.ts._agents.imageProviderQwen;
 	return provider;
 }
