@@ -13962,7 +13962,7 @@ export interface Locale extends ILocale {
          */
         "characterStickerTabCaption": string;
         /**
-         * 説明を生成中…
+         * 説明を生成中
          */
         "stickerGenerating": string;
         /**
@@ -14077,6 +14077,18 @@ export interface Locale extends ILocale {
          * スタンプはまだありません
          */
         "characterStickerEmpty": string;
+        /**
+         * {n}枚をスキップしました（フォーマットまたはサイズ不正、上限超過）
+         */
+        "characterStickerBatchSkipped": ParameterizedString<"n">;
+        /**
+         * 説明を生成するスタンプはありません
+         */
+        "characterStickerBatchNone": string;
+        /**
+         * 説明未入力のスタンプ{n}枚に対してAI説明を生成します。費用は画像認識モデルの単価でアカウント残高から差し引かれます。続行しますか？
+         */
+        "characterStickerBatchConfirm": ParameterizedString<"n">;
         /**
          * 画像を選択
          */

@@ -372,7 +372,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 								<template #label>
 									<div :class="$style.stickerDescLabelRow">
 										<span>{{ i18n.ts._agents.characterStickerDescription }}</span>
-										<MkButton rounded inline small :disabled="sticker.fileId == null || stickerGenerating.has(i)" @click.stop="generateStickerDescription(i)">
+										<MkButton rounded inline small :disabled="sticker.fileId == null || stickerGenerating.has(i) || stickerBatchStatus != null" @click.stop="generateStickerDescription(i)">
 											<i class="ti ti-sparkles"></i> {{ i18n.ts._agents.stickerGenerateOne }}
 										</MkButton>
 									</div>
@@ -380,7 +380,13 @@ SPDX-License-Identifier: AGPL-3.0-only
 								<template #caption>{{ i18n.ts._agents.characterStickerDescriptionCaption }}</template>
 							</MkTextarea>
 						</div>
-						<div><MkButton rounded inline :disabled="form.state.stickers.length >= STICKER_MAX" @click="addSticker"><i class="ti ti-plus"></i> {{ i18n.ts._agents.characterStickerAdd }}（{{ form.state.stickers.length }}/{{ STICKER_MAX }}）</MkButton></div>
+						<div :class="$style.stickerActions">
+							<MkButton rounded inline :disabled="form.state.stickers.length >= STICKER_MAX || stickerBatchStatus != null" @click="addSticker"><i class="ti ti-plus"></i> {{ i18n.ts._agents.characterStickerAdd }}（{{ form.state.stickers.length }}/{{ STICKER_MAX }}）</MkButton>
+							<MkButton rounded inline :disabled="stickerBatchStatus != null" @click="generateEmptyStickerDescriptions">
+								<i class="ti ti-sparkles"></i>
+								{{ stickerBatchStatus == null ? i18n.ts._agents.stickerGenerateBatch : i18n.tsx._agents.stickerBatchRunning({ done: stickerBatchStatus.done, total: stickerBatchStatus.total, failed: stickerBatchStatus.failed }) }}
+							</MkButton>
+						</div>
 					</div>
 
 					<!-- Tab: Versions -->
@@ -858,6 +864,7 @@ function removeRegexRule(index: number) {
 //#region 角色表情包
 
 const stickerGenerating = ref<Set<number>>(new Set());
+const stickerBatchStatus = ref<{ done: number; total: number; failed: number } | null>(null);
 
 function suggestStickerKey(): string {
 	const taken = new Set(form.state.stickers.map(s => s.key.trim()));
@@ -892,35 +899,55 @@ function pushSticker(fileId: string, preview: string | null, fileType: string | 
 	});
 }
 
+function filterStickerFiles<T extends { type?: string | null; size?: number | null }>(files: T[], capacity: number): { accepted: T[]; skipped: number } {
+	const accepted: T[] = [];
+	let skipped = 0;
+	for (const file of files) {
+		if (accepted.length >= capacity || file.type == null || !STICKER_IMAGE_TYPES.includes(file.type) || (file.size ?? 0) > STICKER_IMAGE_MAX_BYTES) {
+			skipped++;
+			continue;
+		}
+		accepted.push(file);
+	}
+	return { accepted, skipped };
+}
+
+async function alertSkippedStickers(skipped: number) {
+	if (skipped > 0) {
+		await os.alert({ type: 'warning', text: i18n.tsx._agents.characterStickerBatchSkipped({ n: skipped }) });
+	}
+}
+
+function pushStickerFiles<T extends { id: string; thumbnailUrl?: string | null; url: string; type: string | null }>(driveFiles: T[]) {
+	for (const df of driveFiles) {
+		pushSticker(df.id, df.thumbnailUrl ?? df.url ?? null, df.type);
+	}
+}
+
 async function addStickerFromPc() {
-	const files = await os.chooseFileFromPc({ multiple: false });
+	const capacity = STICKER_MAX - form.state.stickers.length;
+	if (capacity <= 0) return;
+	const files = await os.chooseFileFromPc({ multiple: true });
 	if (files.length === 0) return;
-	const picked = files[0];
-	if (!STICKER_IMAGE_TYPES.includes(picked.type)) {
-		await os.alert({ type: 'error', text: i18n.ts._agents.characterStickerImageCaption });
-		return;
-	}
-	if (picked.size > STICKER_IMAGE_MAX_BYTES) {
-		await os.alert({ type: 'error', text: i18n.ts._agents.characterStickerImageCaption });
-		return;
-	}
+	const { accepted, skipped } = filterStickerFiles(files, capacity);
+	await alertSkippedStickers(skipped);
+	if (accepted.length === 0) return;
 	try {
-		const [df] = await os.launchUploader(files, { multiple: false });
-		pushSticker(df.id, df.thumbnailUrl ?? df.url ?? null, df.type ?? picked.type);
+		const driveFiles = await os.launchUploader(accepted, { multiple: true });
+		pushStickerFiles(driveFiles);
 	} catch {
 		// 用户取消上传
 	}
 }
 
 async function addStickerFromDrive() {
-	const files = await chooseDriveFile({ multiple: false });
-	const df = files[0];
-	if (df == null) return;
-	if (df.type == null || !STICKER_IMAGE_TYPES.includes(df.type) || df.size > STICKER_IMAGE_MAX_BYTES) {
-		await os.alert({ type: 'error', text: i18n.ts._agents.characterStickerImageCaption });
-		return;
-	}
-	pushSticker(df.id, df.thumbnailUrl ?? df.url ?? null, df.type);
+	const capacity = STICKER_MAX - form.state.stickers.length;
+	if (capacity <= 0) return;
+	const files = await chooseDriveFile({ multiple: true });
+	if (files.length === 0) return;
+	const { accepted, skipped } = filterStickerFiles(files, capacity);
+	await alertSkippedStickers(skipped);
+	pushStickerFiles(accepted);
 }
 
 function removeSticker(index: number) {
@@ -929,7 +956,7 @@ function removeSticker(index: number) {
 
 async function generateStickerDescription(index: number) {
 	const sticker = form.state.stickers[index];
-	if (!sticker || sticker.fileId == null || stickerGenerating.value.has(index)) return;
+	if (!sticker || sticker.fileId == null || stickerGenerating.value.has(index) || stickerBatchStatus.value != null) return;
 	stickerGenerating.value.add(index);
 	try {
 		const res = await os.promiseDialog(
@@ -943,6 +970,45 @@ async function generateStickerDescription(index: number) {
 		// 错误已在 promiseDialog 回调中提示；此处仅结束生成状态
 	} finally {
 		stickerGenerating.value.delete(index);
+	}
+}
+
+async function generateEmptyStickerDescriptions() {
+	if (stickerBatchStatus.value != null) return;
+	const targets = form.state.stickers.filter(sticker => sticker.fileId != null && sticker.description.trim() === '');
+	if (targets.length === 0) {
+		await os.alert({ type: 'info', text: i18n.ts._agents.characterStickerBatchNone });
+		return;
+	}
+	const { canceled } = await os.confirm({
+		type: 'question',
+		title: i18n.ts._agents.stickerGenerateBatch,
+		text: i18n.tsx._agents.characterStickerBatchConfirm({ n: targets.length }),
+	});
+	if (canceled) return;
+	const status = { done: 0, total: targets.length, failed: 0 };
+	stickerBatchStatus.value = status;
+	try {
+		for (const sticker of targets) {
+			try {
+				const res = await misskeyApi('agents/characters/generate-sticker-description', { fileId: sticker.fileId as string });
+				if (typeof res?.description === 'string') sticker.description = res.description;
+				status.done++;
+			} catch (e: any) {
+				status.failed++;
+				if (e?.info?.code === 'AGENT_STICKER_DESC_INSUFFICIENT_CREDIT') {
+					// 余额不足时后续必然继续失败，直接中止并提示原因
+					await os.alert({ type: 'error', text: formatApiError(e) });
+					return;
+				}
+			}
+		}
+		await os.alert({
+			type: status.failed > 0 ? 'warning' : 'success',
+			text: i18n.tsx._agents.stickerBatchDone({ done: status.done, failed: status.failed }),
+		});
+	} finally {
+		stickerBatchStatus.value = null;
 	}
 }
 
@@ -1592,6 +1658,13 @@ function computeDiffLines(key: string, publishedText: string, draftText: string)
 	gap: 14px;
 	align-items: flex-start;
 	flex-wrap: wrap;
+}
+
+.stickerActions {
+	display: flex;
+	gap: 10px;
+	flex-wrap: wrap;
+	align-items: center;
 }
 
 .stickerThumb {
