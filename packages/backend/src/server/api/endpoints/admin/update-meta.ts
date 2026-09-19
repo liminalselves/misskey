@@ -14,6 +14,7 @@ import { assertSafeLlmHttpsUrl, describeUnsafeLlmUrlReason, hrefForStoredLlmBase
 import { getActiveLlmModels, normalizeAgentLlmModelGroupsParam, normalizeAgentLlmModelsParam } from '@/misc/agent-llm-models.js';
 import { normalizeAgentByokProvidersParam } from '@/core/AgentUserModelService.js';
 import { AgentCompressionMemoryService } from '@/core/AgentCompressionMemoryService.js';
+import { GlobalEventService } from '@/core/GlobalEventService.js';
 
 function normalizeObjectStorageConfigValue(value: string | null | undefined): string | null {
 	const trimmed = value?.trim();
@@ -499,6 +500,23 @@ export const paramDef = {
 	required: [],
 } as const;
 
+/** 触发前端「模型配置已变更」广播的 meta 字段及其归属域（对话/绘图） */
+const agentModelFieldKinds: Record<string, 'chat' | 'image'> = {
+	agentLlmModels: 'chat',
+	agentLlmModelGroups: 'chat',
+	agentDefaultModelId: 'chat',
+	agentCompressionDefaultModelId: 'chat',
+	agentImageGenerationEnabled: 'image',
+	agentImageBaseUrl: 'image',
+	agentImageTokens: 'image',
+	agentImageModels: 'image',
+	agentImageArtistPresets: 'image',
+	agentImageDefaultModel: 'image',
+	agentImageDefaultParams: 'image',
+	agentImageMaxPerReply: 'image',
+	agentImageCostPerCall: 'image',
+};
+
 @Injectable()
 export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-disable-line import/no-default-export
 	constructor(
@@ -508,6 +526,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		private metaService: MetaService,
 		private moderationLogService: ModerationLogService,
 		private agentCompressionMemoryService: AgentCompressionMemoryService,
+		private globalEventService: GlobalEventService,
 	) {
 		super(meta, paramDef, async (ps, me) => {
 			const set = {} as Partial<MiMeta>;
@@ -1666,9 +1685,21 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				set.showRoleBadgesOfRemoteUsers = ps.showRoleBadgesOfRemoteUsers;
 			}
 
-			const before = metaEntityForModerationLog(await this.metaService.fetch(true));
+			const beforeMeta = await this.metaService.fetch(true);
+			const before = metaEntityForModerationLog(beforeMeta);
+			// 保存前快照模型相关字段，保存后对比出实际变更的域（对话/绘图）并广播给所有在线客户端
+			const agentModelSnapshot = Object.fromEntries(
+				Object.keys(agentModelFieldKinds).map(k => [k, JSON.stringify((beforeMeta as unknown as Record<string, unknown>)[k] ?? null)]),
+			);
 
 			await this.metaService.update(set);
+
+			const changedKinds = new Set<'chat' | 'image'>();
+			for (const [field, kind] of Object.entries(agentModelFieldKinds)) {
+				const next = set[field as keyof MiMeta];
+				if (next === undefined) continue;
+				if (JSON.stringify(next ?? null) !== agentModelSnapshot[field]) changedKinds.add(kind);
+			}
 
 			const after = metaEntityForModerationLog(await this.metaService.fetch(true));
 
@@ -1676,6 +1707,10 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				before,
 				after,
 			});
+
+			for (const kind of changedKinds) {
+				this.globalEventService.publishBroadcastStream('agentModelsChanged', { kind });
+			}
 		});
 	}
 }

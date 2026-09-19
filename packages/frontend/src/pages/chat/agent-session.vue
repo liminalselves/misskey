@@ -211,7 +211,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 						<div :class="$style.proactiveTitle">{{ proactiveScheduleListLabel }}</div>
 						<div :class="$style.proactiveCaption">{{ proactiveScheduleListCaption }}</div>
 					</div>
-					<MkButton rounded small :disabled="proactiveSchedulesLoading" @click="loadProactiveSchedules">
+					<MkButton rounded small :disabled="proactiveSchedulesLoading" @click="loadProactiveSchedules()">
 						<i class="ti ti-refresh"></i>
 					</MkButton>
 				</div>
@@ -353,11 +353,21 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<div :class="$style.drawHead">
 					<div>
 						<div :class="$style.drawTitle">生图配置</div>
-						<div :class="$style.drawCaption">配置当前会话的智能体自动插图能力。模型选择为“无”时关闭生图。</div>
+						<div :class="$style.drawCaption">配置当前会话的智能体自动插图能力，更改后自动保存。模型选择为“无”时关闭生图。</div>
 					</div>
-					<MkButton rounded primary :disabled="drawSaving || !drawConfigDirty" @click="saveAgentImageSettings">
-						<i class="ti ti-device-floppy"></i> 保存配置
-					</MkButton>
+					<div
+						v-if="drawSaveStateLabel"
+						:class="[$style.drawAutoSaveState, drawAutoSaveState === 'error' && $style.drawAutoSaveStateError]"
+						role="status"
+					>
+						<i
+							:class="[
+								drawAutoSaveState === 'saving' ? 'ti ti-loader-2' : drawAutoSaveState === 'saved' ? 'ti ti-check' : drawAutoSaveState === 'error' ? 'ti ti-alert-triangle' : 'ti ti-clock-edit',
+								drawAutoSaveState === 'saving' && $style.drawAutoSaveSpin,
+							]"
+						></i>
+						{{ drawSaveStateLabel }}
+					</div>
 				</div>
 				<div class="_gaps">
 					<div :class="$style.drawModelChooser">
@@ -387,7 +397,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 										<MkButton
 											rounded
 											:primary="drawImageModelId !== ''"
-											:disabled="drawSaving || drawImageModelId === ''"
+											:disabled="drawImageModelId === ''"
 											@click="chooseDrawImageModel('')"
 										>
 											{{ drawImageModelId === '' ? i18n.ts.enabled : i18n.ts._agents.sessionPickButton }}
@@ -459,7 +469,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 										<MkButton
 											rounded
 											:primary="drawImageModelId !== m.id"
-											:disabled="drawSaving || drawImageModelId === m.id"
+											:disabled="drawImageModelId === m.id"
 											@click="chooseDrawImageModel(m.id)"
 										>
 											{{ drawImageModelId === m.id ? i18n.ts.enabled : i18n.ts._agents.sessionPickButton }}
@@ -480,10 +490,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 						</div>
 					</div>
 					<div :class="$style.drawAutoDraw">
-						<MkSwitch v-model="drawAutoDraw" :disabled="drawSaving">
+						<MkSwitch v-model="drawAutoDraw">
 							<template #label>{{ i18n.ts._agents.imageAutoDrawLabel }}</template>
 						</MkSwitch>
-						<MkInput v-model="drawAutoDrawCount" type="text" :disabled="drawSaving || !drawAutoDraw">
+						<MkInput v-model="drawAutoDrawCount" type="text" :disabled="!drawAutoDraw">
 							<template #label>{{ i18n.ts._agents.imageAutoDrawCountLabel }}</template>
 							<template #caption>{{ i18n.ts._agents.imageAutoDrawCountCaption }}</template>
 						</MkInput>
@@ -549,7 +559,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<div :class="$style.drawHead">
 					<div>
 						<div :class="$style.drawTitle">测试生图</div>
-						<div :class="$style.drawCaption">使用上方已保存配置生成测试图，结果仅在此处显示并保存到你的网盘。</div>
+							<div :class="$style.drawCaption">使用上方当前配置生成测试图，结果仅在此处显示并保存到你的网盘。</div>
 					</div>
 					<MkButton rounded :disabled="drawGenerating || drawTag.trim().length === 0" @click="generateAgentImage">
 						<i class="ti ti-brush"></i> 生成
@@ -945,14 +955,15 @@ SPDX-License-Identifier: AGPL-3.0-only
 		</div>
 		<div v-else class="_gaps">
 			<MkInfo v-if="session == null">{{ i18n.ts.somethingHappened }}</MkInfo>
-			<template v-else>
-				<MkInfo v-if="moderationLocksSessionWrites" warn>{{ moderationBlockUserMessage }}</MkInfo>
-					<div v-if="agentModels.length > 0" class="_gaps_s">
+				<template v-else>
+					<MkInfo v-if="moderationLocksSessionWrites" warn>{{ moderationBlockUserMessage }}</MkInfo>
+					<MkInfo v-if="sessionModelUnavailable" warn>{{ i18n.ts._agents.sessionModelUnavailable }}</MkInfo>
+						<div v-if="agentModels.length > 0" class="_gaps_s">
 						<div v-panel :class="[$style.settingHero, $style.modelHeroCompact]">
 							<div :class="$style.modelHeroSummary">
 								<span :class="$style.modelHeroSummaryItem">
-									<span :class="$style.settingLabel">{{ i18n.ts._agents.sessionModel }}</span>
-									<span :class="$style.modelHeroSummaryValue">{{ selectedModelMeta?.name ?? '-' }}</span>
+										<span :class="$style.settingLabel">{{ i18n.ts._agents.sessionModel }}</span>
+										<span :class="$style.modelHeroSummaryValue">{{ selectedModelDisplayName }}</span>
 								</span>
 								<span v-if="agentCreditBalance != null" :class="$style.modelHeroSummaryItem">
 									<span :class="$style.settingLabel">{{ i18n.ts._agents.myStatsCreditBalance }}</span>
@@ -1235,8 +1246,8 @@ function agentModelFailureFromError(err: unknown): Omit<AgentModelFailureFeedbac
 		reason: typeof info.reason === 'string' && info.reason ? info.reason : (typeof o.message === 'string' && o.message ? o.message : null),
 		status: typeof info.status === 'number' ? info.status : null,
 		detail: typeof info.detail === 'string' && info.detail ? info.detail : null,
-		// 模型未配置 / 模型地址不可用属于配置问题，重试无意义，不展示重试按钮
-		retryable: code !== 'AGENTS_MODEL_NOT_CONFIGURED' && code !== 'AGENTS_LLM_UNSAFE_URL',
+		// 模型未配置 / 已下架 / 模型地址不可用属于配置问题，重试无意义，不展示重试按钮
+		retryable: code !== 'AGENTS_MODEL_NOT_CONFIGURED' && code !== 'AGENTS_MODEL_UNAVAILABLE' && code !== 'AGENTS_LLM_UNSAFE_URL',
 	};
 }
 
@@ -2166,11 +2177,13 @@ const resolvedInstanceDefaultModelId = computed(() => {
 });
 
 function displayModelIdForSession(agentModelId: string | null | undefined): string {
-	const fallback = resolvedInstanceDefaultModelId.value;
-	if (agentModelId && agentModels.value.some(m => m.id === agentModelId)) {
-		return agentModelId;
+	const stored = typeof agentModelId === 'string' ? agentModelId.trim() : '';
+	if (stored !== '') {
+		// 会话明确保存过模型时，只认该模型本身；已下架/停用不得静默回退到默认模型，
+		// 否则 UI 会误显示另一个模型已启用，而实际发送仍携带悬空 id 并失败。
+		return agentModels.value.some(m => m.id === stored) ? stored : '';
 	}
-	return fallback;
+	return resolvedInstanceDefaultModelId.value;
 }
 
 const resolvedSiteCompressionDefaultModelId = computed(() => {
@@ -2220,8 +2233,15 @@ const styleCardSelectionId = computed(() => {
 	return id;
 });
 
+/** 会话明确保存的模型已不在可用列表中：要求用户主动选择，不静默改用默认模型。 */
+const sessionModelUnavailable = computed(() => {
+	const stored = session.value?.agentModelId?.trim() ?? '';
+	return stored !== '' && !agentModels.value.some(m => m.id === stored);
+});
+
 const selectedStyleMeta = computed(() => usableStyles.value.find(s => s.id === selectedStyleId.value) ?? null);
 const selectedModelMeta = computed(() => agentModels.value.find(m => m.id === selectedModelId.value) ?? null);
+const selectedModelDisplayName = computed(() => selectedModelMeta.value?.name ?? i18n.ts._agents.sessionModelNotSelected);
 
 /** 主对话单次扣点示意：按会话当前模型单价换算；按量计费模型无法预知单次费用，不显示 */
 const expectedCallCostForSession = computed(() => {
@@ -2453,25 +2473,83 @@ watch(tab, (v) => {
 				void refreshContextWindow();
 			}
 		});
-	} else if (v === 'memory' && session.value != null) {
-		void loadAgentCreditBalance();
-		void refreshContextWindow();
-		if (longMemoryConfigured.value) {
-			void loadMemoryNodes();
-		}
-	} else if (v === 'worldbook' && session.value != null) {
-		void loadWorldbookEntries();
-	} else if (v === 'rules' && session.value != null) {
-		void loadSessionRules();
-	} else if (v === 'model') {
-		void loadModelSuccessRates();
-		void loadModelFreeQuota();
-		void loadAgentCreditBalance();
-	} else if (v === 'proactive') {
-		void loadSession();
-		void loadProactiveSchedules();
+	} else {
+		refreshPanelLiveData(v, 'enter');
 	}
 });
+
+/**
+ * 子面板动态数据统一刷新入口。
+ * - enter：切到该面板时刷新全部数据（含世界书条目等重数据）
+ * - live：驻留轮询 / 页面重新可见时的轻量刷新，静默进行，跳过会打断编辑或闪加载态的数据
+ */
+function refreshPanelLiveData(panel: AgentControlPanel | 'chat' | 'search', mode: 'enter' | 'live') {
+	if (isComponentUnmounted || isSessionBannedPage.value) return;
+	if (mode === 'live' && (!isPageActivated || window.document.hidden)) return;
+	switch (panel) {
+		case 'model':
+			void loadModelSuccessRates();
+			void loadModelFreeQuota();
+			void loadAgentCreditBalance();
+			break;
+		case 'draw': {
+			void loadAgentCreditBalance();
+			// 配置未落库（防抖等待或保存在途）时跳过列表重载：水合会用会话值覆盖正在编辑的输入
+			if (!drawConfigDirty.value && drawAutoSaveTimer == null && !drawSaving.value) {
+				void loadDrawImageModels();
+				void loadDrawArtistPresets();
+			}
+			break;
+		}
+		case 'style':
+			void loadUsableStyles();
+			break;
+		case 'proactive':
+			// 静默刷新不切换加载态，避免列表被 loading 反复替换
+			void loadProactiveSchedules(mode === 'live');
+			if (mode === 'enter') void loadSession();
+			break;
+		case 'memory':
+			void loadAgentCreditBalance();
+			if (mode === 'enter' && session.value != null) {
+				void refreshContextWindow();
+				if (longMemoryConfigured.value) {
+					void loadMemoryNodes();
+				}
+			}
+			break;
+		case 'worldbook':
+			if (mode === 'enter' && session.value != null) void loadWorldbookEntries();
+			break;
+		case 'rules':
+			if (mode === 'enter' && session.value != null) void loadSessionRules();
+			break;
+	}
+}
+
+/** 驻留面板的易变数据（成功率/免费额度/余额等）轮询周期 */
+const PANEL_LIVE_REFRESH_INTERVAL_MS = 60_000;
+let panelLiveRefreshTimer: number | null = null;
+
+function startPanelLiveDataRefresh() {
+	if (panelLiveRefreshTimer != null) return;
+	panelLiveRefreshTimer = window.setInterval(() => {
+		refreshPanelLiveData(tab.value, 'live');
+	}, PANEL_LIVE_REFRESH_INTERVAL_MS);
+}
+
+function stopPanelLiveDataRefresh() {
+	if (panelLiveRefreshTimer != null) {
+		window.clearInterval(panelLiveRefreshTimer);
+		panelLiveRefreshTimer = null;
+	}
+}
+
+function onDocumentVisibilityForPanelRefresh() {
+	if (window.document.visibilityState !== 'visible') return;
+	// 回到页面立即刷新当前面板的易变数据，不必等下一个轮询周期
+	refreshPanelLiveData(tab.value, 'live');
+}
 
 watch(
 	[tab, memProvider, () => session.value?.dialogueStyleId],
@@ -2512,14 +2590,13 @@ watch(showLongMemoryTab, (v) => {
 /** Instance meta（含 agentModels）晚于会话加载时，或本地 id 已不在列表中时，与会话解析结果对齐。 */
 watch(
 	[agentModels, () => session.value?.agentModelId],
-	() => {
-		if (!session.value || settingsHydrating.value || savingSettings.value) return;
-		const resolved = displayModelIdForSession(session.value.agentModelId);
-		if (resolved === '') return;
-		if (selectedModelId.value === '' || !agentModels.value.some(m => m.id === selectedModelId.value)) {
-			selectedModelId.value = resolved;
-		}
-	},
+		() => {
+			if (!session.value || settingsHydrating.value || savingSettings.value) return;
+			const resolved = displayModelIdForSession(session.value.agentModelId);
+			if (selectedModelId.value !== resolved) {
+				selectedModelId.value = resolved;
+			}
+		},
 );
 
 watch(drawImageModelId, (next, prev) => {
@@ -2528,6 +2605,15 @@ watch(drawImageModelId, (next, prev) => {
 		applyAgentImageDefaultsForModel(drawSelectedImageModel.value);
 	}
 });
+
+// 生图配置自动保存：模型、尺寸、参数、自动生图开关等任何变化都进入防抖队列。
+// schedule 内用 drawConfigDirty 兜底，水合回填造成的输入变化不会误触发保存。
+watch(
+	[drawImageModelId, drawCurrentSettings],
+	() => {
+		if (!settingsHydrating.value) scheduleDrawSettingsSave();
+	},
+);
 
 async function saveSegmentedOutputSetting(enabled: boolean) {
 	if (!session.value || segmentedOutputSaving.value || moderationLocksSessionWrites.value) return;
@@ -2691,19 +2777,22 @@ async function resetProactiveParams() {
 	}
 }
 
-async function loadProactiveSchedules() {
-	if (!session.value || proactiveSchedulesLoading.value) return;
-	proactiveSchedulesLoading.value = true;
+async function loadProactiveSchedules(silent = false) {
+	if (!session.value || (!silent && proactiveSchedulesLoading.value)) return;
+	if (!silent) proactiveSchedulesLoading.value = true;
 	try {
 		proactiveSchedules.value = await (misskeyApi as unknown as (
 			endpoint: 'agents/proactive-schedules/list',
 			data: { sessionId: string },
 		) => Promise<ProactiveSchedule[]>)('agents/proactive-schedules/list', { sessionId });
 	} catch (e) {
-		proactiveSchedules.value = [];
-		os.alert({ type: 'error', text: formatApiError(e) });
+		// 静默轮询失败保留旧列表且不弹窗，避免后台刷新打扰
+		if (!silent) {
+			proactiveSchedules.value = [];
+			os.alert({ type: 'error', text: formatApiError(e) });
+		}
 	} finally {
-		proactiveSchedulesLoading.value = false;
+		if (!silent) proactiveSchedulesLoading.value = false;
 	}
 }
 
@@ -3237,6 +3326,8 @@ async function fetchNewerMessages() {
 }
 
 let proactiveNotificationConnection: { dispose: () => void } | null = null;
+/** 根流引用：仅用于卸载时解绑 agentModelsChanged 广播监听（根流本身是全局单例，不 dispose） */
+let agentModelsNotificationStream: { off: (type: 'agentModelsChanged', handler: (payload: { kind: 'chat' | 'image' }) => void) => void } | null = null;
 let proactiveMessageSyncing = false;
 
 // 清除本会话的智能体消息未读标记（与私信 chat/read 对齐），后端会广播 agentRead 更新全局徽标
@@ -3493,22 +3584,91 @@ function resetAgentImageDefaults() {
 	applyAgentImageDefaultsForModel(drawSelectedImageModel.value);
 }
 
-async function saveAgentImageSettings(): Promise<boolean> {
-	if (!session.value || drawSaving.value) return false;
+/** 生图配置自动保存：输入停止 800ms 后触发，连点/连输只发一次请求 */
+const DRAW_AUTO_SAVE_DEBOUNCE_MS = 800;
+const drawAutoSaveState = ref<'idle' | 'pending' | 'saving' | 'saved' | 'error'>('idle');
+let drawAutoSaveTimer: number | null = null;
+/** 模型配置广播到达时生图配置尚未落库：延后到保存完成再重载列表 */
+let drawModelsStale = false;
+
+/** 管理员变更模型配置（下架/调价/改默认等）的广播：不刷新页面即时更新模型数据 */
+function onAgentModelsChanged(payload: { kind: 'chat' | 'image' }) {
+	if (isComponentUnmounted || isSessionBannedPage.value) return;
+	// 对话模型打包在 instance meta，由 main-boot 的全局监听统一 fetchInstance 刷新
+	if (payload.kind !== 'image') return;
+	if (drawConfigDirty.value || drawAutoSaveTimer != null || drawSaving.value) {
+		// 绘图配置未落库时延后重载，避免水合用会话值覆盖正在编辑的输入
+		drawModelsStale = true;
+	} else {
+		void loadDrawImageModels();
+		void loadDrawArtistPresets();
+	}
+}
+
+const drawSaveStateLabel = computed(() => {
+	switch (drawAutoSaveState.value) {
+		case 'pending': return '待自动保存';
+		case 'saving': return '正在保存…';
+		case 'saved': return '已自动保存';
+		case 'error': return '自动保存失败';
+		default: return '更改后自动保存';
+	}
+});
+
+function clearDrawAutoSaveTimer() {
+	if (drawAutoSaveTimer != null) {
+		window.clearTimeout(drawAutoSaveTimer);
+		drawAutoSaveTimer = null;
+	}
+}
+
+function scheduleDrawSettingsSave() {
+	if (isComponentUnmounted || settingsHydrating.value || moderationLocksSessionWrites.value) return;
+	if (!drawConfigDirty.value) return;
+	drawAutoSaveState.value = 'pending';
+	clearDrawAutoSaveTimer();
+	drawAutoSaveTimer = window.setTimeout(() => {
+		drawAutoSaveTimer = null;
+		void flushDrawSettingsSave();
+	}, DRAW_AUTO_SAVE_DEBOUNCE_MS);
+}
+
+/** 立即保存未落库的生图配置（测试生图、离开页面前调用）；干净时直接视为成功 */
+async function flushDrawSettingsSave(): Promise<boolean> {
+	clearDrawAutoSaveTimer();
+	if (drawSaving.value) {
+		// 上一笔保存在途：稍后重试，避免并发覆盖
+		scheduleDrawSettingsSave();
+		return false;
+	}
+	if (!session.value || settingsHydrating.value || moderationLocksSessionWrites.value) return false;
+	if (!drawConfigDirty.value) return true;
 	drawSaving.value = true;
+	drawAutoSaveState.value = 'saving';
 	try {
-		await misskeyApi(
+		const res = await misskeyApi(
 			'agents/sessions/update' as Parameters<typeof misskeyApi>[0],
 			{
 				sessionId,
 				agentImageModelId: drawImageModelId.value === '' ? null : drawImageModelId.value,
-				agentImageSettings: drawImageModelId.value === '' ? {} : drawCurrentSettings.value,
+				agentImageSettings: drawCurrentSettings.value,
 			} as any,
-		);
-		await loadSession();
-		os.toast('生图配置已保存');
+		) as { agentImageModelId?: string | null; agentImageSettings?: Record<string, unknown> };
+		if (session.value) {
+			session.value.agentImageModelId = res.agentImageModelId ?? null;
+			session.value.agentImageSettings = res.agentImageSettings ?? {};
+			// 后端会 clamp（如每轮张数上限），回填输入避免「输入 20 → 存 12」的脏状态循环重存
+			hydrateAgentImageSettingsFromSession();
+		}
+		drawAutoSaveState.value = 'saved';
+		if (drawModelsStale) {
+			drawModelsStale = false;
+			void loadDrawImageModels();
+			void loadDrawArtistPresets();
+		}
 		return true;
 	} catch (e) {
+		drawAutoSaveState.value = 'error';
 		os.alert({ type: 'error', text: formatApiError(e) });
 		return false;
 	} finally {
@@ -3524,8 +3684,14 @@ async function loadDrawImageModels() {
 		) as AgentImageModel[];
 		drawImageModels.value = Array.isArray(rows) ? rows : [];
 		hydrateAgentImageSettingsFromSession();
+		// 已选模型被管理员下架：自动切回「无」，watcher 会触发自动保存；不处理会留下
+		// 悬空 id —— 前端无高亮卡片、后端保存与生成都会拒绝该模型
+		const savedId = session.value?.agentImageModelId ?? '';
+		if (savedId !== '' && !drawImageModels.value.some(m => m.id === savedId)) {
+			drawImageModelId.value = '';
+		}
 	} catch {
-		drawImageModels.value = [];
+		// 首次加载失败保持空（展示无模型提示）；驻留轮询失败保留旧列表，避免界面闪空
 	}
 }
 
@@ -3541,7 +3707,7 @@ async function loadDrawArtistPresets() {
 		}
 		hydrateAgentImageSettingsFromSession();
 	} catch {
-		drawArtistPresets.value = [];
+		// 同上：轮询失败保留旧列表
 	}
 }
 
@@ -3570,9 +3736,13 @@ async function loadEmbeddedPanelResources(panel: AgentControlPanel): Promise<voi
 
 onMounted(async () => {
 	if (!isEmbeddedControl.value) {
-		const connection = useStream().useChannel('main');
+		const stream = useStream();
+		const connection = stream.useChannel('main');
 		connection.on('newAgentMessage', onNewAgentMessage);
 		proactiveNotificationConnection = connection;
+		agentModelsNotificationStream = stream;
+		// 模型配置广播（管理员下架/调价等）挂在根流上，离开页面时解绑
+		stream.on('agentModelsChanged', onAgentModelsChanged);
 		// 进入会话页即清未读（与私信房间行为一致）
 		void markAgentSessionRead();
 	}
@@ -3608,6 +3778,9 @@ onMounted(async () => {
 	} finally {
 		loading.value = false;
 	}
+	// 当前驻留面板的易变数据（成功率/额度/余额/计划等）驻留轮询 + 回到页面即时刷新
+	window.document.addEventListener('visibilitychange', onDocumentVisibilityForPanelRefresh);
+	startPanelLiveDataRefresh();
 	if (!isEmbeddedControl.value) {
 		if (session.value?.agentReplyPending) {
 			sending.value = true;
@@ -3626,6 +3799,9 @@ onMounted(async () => {
 
 onActivated(() => {
 	isPageActivated = true;
+	// KeepAlive 缓存页重进：恢复面板数据轮询，并立即刷一次当前面板（离开期间数据可能已变化）
+	startPanelLiveDataRefresh();
+	refreshPanelLiveData(tab.value, 'live');
 	if (isEmbeddedControl.value) return;
 	// KeepAlive 缓存页重新进入时 onMounted 不会再次执行：与首次进入一致，看到会话即清未读
 	void markAgentSessionRead();
@@ -3638,6 +3814,9 @@ onDeactivated(() => {
 	isPageActivated = false;
 	// 后台页不再需要 2.5s 轮询会话状态，避免多个缓存页叠加出后台请求风暴
 	stopReplyPendingPoll();
+	stopPanelLiveDataRefresh();
+	// 离开页面时把仍在防抖等待的生图配置立刻落库
+	if (drawConfigDirty.value && !drawSaving.value) void flushDrawSettingsSave();
 });
 
 onBeforeUnmount(() => {
@@ -3645,7 +3824,14 @@ onBeforeUnmount(() => {
 	isComponentUnmounted = true;
 	proactiveNotificationConnection?.dispose();
 	proactiveNotificationConnection = null;
+	agentModelsNotificationStream?.off('agentModelsChanged', onAgentModelsChanged);
+	agentModelsNotificationStream = null;
 	stopReplyPendingPoll();
+	stopPanelLiveDataRefresh();
+	window.document.removeEventListener('visibilitychange', onDocumentVisibilityForPanelRefresh);
+	clearDrawAutoSaveTimer();
+	// 卸载前冲刷未保存的生图配置；drawSaving 中则交由在飞请求完成
+	if (drawConfigDirty.value && !drawSaving.value) void flushDrawSettingsSave();
 	finishSegmentPlayback(false);
 	clearContextDividerHighlight();
 	if (memoryAddHintTimer != null) {
@@ -4975,10 +5161,20 @@ async function onFormSubmit(payload: { text: string; file: DriveFile | null }) {
 			if (e != null && typeof e === 'object' && (e as { code?: string }).code === 'AGENT_DIALOGUE_STYLE_REQUIRED') {
 				os.alert({ type: 'info', text: i18n.ts._agents.needDialogueStyleBeforeSend });
 				tab.value = 'style';
-			} else if (e != null && typeof e === 'object' && (e as { code?: string }).code === 'AGENT_INSUFFICIENT_CREDIT') {
-				os.alert({ type: 'error', text: i18n.ts._agents.insufficientAgentCredit });
-			} else {
-				showAgentModelFailureFeedback(agentModelFailureFromError(e), () => {
+				} else if (e != null && typeof e === 'object' && (e as { code?: string }).code === 'AGENT_INSUFFICIENT_CREDIT') {
+					os.alert({ type: 'error', text: i18n.ts._agents.insufficientAgentCredit });
+				} else if (e != null && typeof e === 'object' && (e as { code?: string }).code === 'AGENTS_MODEL_UNAVAILABLE') {
+					// 已下架模型不允许静默切默认模型：明确要求用户在模型 tab 重新选择。
+					selectedModelId.value = '';
+					tab.value = 'model';
+					showAgentModelFailureFeedback({
+						...agentModelFailureFromError(e),
+						title: i18n.ts._agents.modelFailureTitleUnavailable,
+						guide: i18n.ts._agents.modelFailureGuideUnavailable,
+						reason: i18n.ts._agents.sessionModelUnavailable,
+					});
+				} else {
+					showAgentModelFailureFeedback(agentModelFailureFromError(e), () => {
 					// 重试走表单自身的 submit：与手动再次发送完全一致（含清空草稿、附件一并重发）
 					formRef.value?.setText(trimmed);
 					formRef.value?.setAttachment(payload.file ?? null);
@@ -5040,17 +5236,16 @@ async function generateAgentImage() {
 	const tag = drawTag.value.trim();
 	if (!tag || drawGenerating.value) return;
 	if (drawImageModelId.value === '') {
-		os.alert({ type: 'info', text: '请先选择并保存生图模型。' });
+		os.alert({ type: 'info', text: '请先选择生图模型。' });
 		return;
 	}
 	drawGenerating.value = true;
 	drawLastUrl.value = null;
 	drawLastFile.value = null;
 	try {
-		if (drawConfigDirty.value) {
-			const saved = await saveAgentImageSettings();
-			if (!saved) return;
-		}
+		// 生成前确保配置已落库（含仍在防抖等待的更改）
+		const saved = await flushDrawSettingsSave();
+		if (!saved) return;
 		const res = await misskeyApi(
 			'agents/images/generate' as Parameters<typeof misskeyApi>[0],
 			{
@@ -6373,6 +6568,27 @@ async function onAbortRequest() {
 	margin-top: 4px;
 	font-size: 0.9em;
 	opacity: 0.72;
+}
+.drawAutoSaveState {
+	display: inline-flex;
+	flex-shrink: 0;
+	align-items: center;
+	gap: 6px;
+	margin-top: 2px;
+	font-size: 0.85em;
+	color: var(--MI_THEME-fgTransparentWeak);
+	white-space: nowrap;
+}
+.drawAutoSaveStateError {
+	color: var(--MI_THEME-error);
+}
+.drawAutoSaveSpin {
+	animation: drawAutoSaveSpin 1s linear infinite;
+}
+@keyframes drawAutoSaveSpin {
+	to {
+		transform: rotate(360deg);
+	}
 }
 .drawAutoDraw {
 	display: flex;

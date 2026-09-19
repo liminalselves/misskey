@@ -13,6 +13,7 @@ import type { Keymap } from '@/utility/hotkey.js';
 import { i18n } from '@/i18n.js';
 import { alert, confirm, popup, post } from '@/os.js';
 import { useStream } from '@/stream.js';
+import { fetchInstance } from '@/instance.js';
 import * as sound from '@/utility/sound.js';
 import { $i } from '@/i.js';
 import { instance } from '@/instance.js';
@@ -338,6 +339,14 @@ export async function mainBoot() {
 			});
 
 			stream.on('announcementCreated', onAnnouncementCreated);
+
+			// 管理员变更对话模型配置（下架/调价/改默认等）：刷新全局 instance，
+			// 所有响应式引用模型列表/默认模型/分组的页面即时更新，无需手动刷新
+			stream.on('agentModelsChanged', payload => {
+				if (payload.kind === 'chat') {
+					void fetchInstance(true);
+				}
+			});
 
 			const main = markRaw(stream.useChannel('main', null, 'System'));
 

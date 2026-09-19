@@ -338,4 +338,10 @@ export type BroadcastEvents = {
 	emojiUpdated: (payload: EmojiUpdated) => void;
 	emojiDeleted: (payload: EmojiDeleted) => void;
 	announcementCreated: (payload: AnnouncementCreated) => void;
+	agentModelsChanged: (payload: AgentModelsChanged) => void;
+};
+
+/** 管理员变更智能体模型配置（对话/绘图）时广播，客户端应重新拉取对应模型列表 */
+export type AgentModelsChanged = {
+	kind: 'chat' | 'image';
 };

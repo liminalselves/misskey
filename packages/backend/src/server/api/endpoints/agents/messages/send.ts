@@ -307,9 +307,12 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 						throw new ApiError({ message: 'Insufficient agent credit for image recognition.', code: 'AGENT_VISION_INSUFFICIENT_CREDIT', id: 'b3f23fcc-0b08-4400-8cbf-cf2f9a57bc24', kind: 'client', httpStatusCode: 402 });
 					}
 				}
-			}
-			// 余额预检（发信/压缩侧车/主动消息共用口径）：usage 按量模式要求余额 > 0；per_call 要求余额 >= 按次价；免费额度剩余时放行
-			if (!await this.agentModelUsageService.canAffordModelCall(instanceMeta, session.agentModelId, me.id)) {
+				}
+				// 会话显式保存的模型可能已被管理员下架。余额预检会把无效模型视为零费用，
+				// 因此必须先做可用性校验，确保返回 AGENTS_MODEL_UNAVAILABLE 而不是进入后续调用才报模糊错误。
+				await this.agentService.resolveModelApiNameForUser(instanceMeta, session.agentModelId ?? null, me.id);
+				// 余额预检（发信/压缩侧车/主动消息共用口径）：usage 按量模式要求余额 > 0；per_call 要求余额 >= 按次价；免费额度剩余时放行
+				if (!await this.agentModelUsageService.canAffordModelCall(instanceMeta, session.agentModelId, me.id)) {
 				throw new ApiError({
 					message: 'Insufficient agent model credit for this call.',
 					code: 'AGENT_INSUFFICIENT_CREDIT',

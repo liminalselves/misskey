@@ -224,6 +224,13 @@ export const agentsErrors = {
 		code: 'AGENTS_MODEL_NOT_CONFIGURED',
 		id: '2bc325b6-364f-4840-b0ae-91cf199f0f12',
 	},
+	modelUnavailable: {
+		message: 'The model selected for this session is no longer available. Please choose another model.',
+		code: 'AGENTS_MODEL_UNAVAILABLE',
+		id: 'cc0b5ec0-1d14-4db8-b55d-0d09331cd991',
+		kind: 'client' as const,
+		httpStatusCode: 400,
+	},
 	llmRequestFailed: {
 		message: 'Upstream LLM request failed.',
 		code: 'AGENTS_LLM_FAILED',
@@ -358,11 +365,7 @@ export class AgentService {
 			? models.find(m => m.id === modelId)
 			: models.find(m => m.id === instance.agentDefaultModelId) ?? models[0];
 		if (!pick) {
-			throw new ApiError({
-				message: 'Invalid LLM model id.',
-				code: 'INVALID_PARAM',
-				id: 'e1f2a3b4-c5d6-7890-ef01-234567890abc',
-			});
+			throw new ApiError(agentsErrors.modelUnavailable);
 		}
 		return pick;
 	}

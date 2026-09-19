@@ -15126,7 +15126,7 @@ export interface Locale extends ILocale {
          */
         "modelFailureKindUnknown": string;
         /**
-         * 上流の理由
+         * エラーの理由
          */
         "modelFailureReason": string;
         /**
@@ -15867,6 +15867,30 @@ export interface Locale extends ILocale {
          * デフォルト
          */
         "sessionModelDefault": string;
+        /**
+         * 未選択
+         */
+        "sessionModelNotSelected": string;
+        /**
+         * 以前選択したモデルは公開停止または利用不可になりました。メッセージを送信する前に、別のモデルを選択してください。
+         */
+        "sessionModelUnavailable": string;
+        /**
+         * 選択したモデルは利用できません
+         */
+        "modelFailureTitleUnavailable": string;
+        /**
+         * このセッションで以前選択したモデルは公開停止または無効になりました。入力内容は復元されています。「モデル」タブで別のモデルを選択してから送信してください。
+         */
+        "modelFailureGuideUnavailable": string;
+        /**
+         * モデルが存在しません
+         */
+        "modelFailureKindUnavailable": string;
+        /**
+         * 今回の失敗では料金は発生しません。利用可能なモデルを選択すると会話を続けられます。
+         */
+        "modelFailureNoticeUnavailable": string;
         /**
          * 1回の送信の目安
          */

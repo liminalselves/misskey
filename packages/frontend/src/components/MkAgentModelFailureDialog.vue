@@ -92,6 +92,7 @@ const kindLabel = computed(() => {
 		case 'AGENTS_LLM_TIMEOUT': return i18n.ts._agents.modelFailureKindTimeout;
 		case 'AGENTS_LLM_UNSAFE_URL': return i18n.ts._agents.modelFailureKindUnsafeUrl;
 		case 'AGENTS_MODEL_NOT_CONFIGURED': return i18n.ts._agents.modelFailureKindNotConfigured;
+		case 'AGENTS_MODEL_UNAVAILABLE': return i18n.ts._agents.modelFailureKindUnavailable;
 		case 'AGENTS_LLM_FAILED': return i18n.ts._agents.modelFailureKindUpstream;
 		default: return i18n.ts._agents.modelFailureKindUnknown;
 	}
@@ -100,9 +101,11 @@ const kindLabel = computed(() => {
 /** 超时用时钟图标、其余用感叹号，与外审弹窗的盾牌图标同规格 */
 const heroIcon = computed(() => props.code === 'AGENTS_LLM_TIMEOUT' ? 'ti ti-clock-x' : 'ti ti-alert-triangle');
 
-const notice = computed(() => props.code === 'AGENTS_LLM_TIMEOUT'
-	? i18n.ts._agents.modelFailureNoticeTimeout
-	: i18n.ts._agents.modelFailureNoticeDefault);
+const notice = computed(() => {
+	if (props.code === 'AGENTS_LLM_TIMEOUT') return i18n.ts._agents.modelFailureNoticeTimeout;
+	if (props.code === 'AGENTS_MODEL_UNAVAILABLE') return i18n.ts._agents.modelFailureNoticeUnavailable;
+	return i18n.ts._agents.modelFailureNoticeDefault;
+});
 
 function close() {
 	dialog.value?.close();

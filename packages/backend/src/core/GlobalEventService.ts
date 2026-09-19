@@ -43,6 +43,10 @@ export interface BroadcastTypes {
 	announcementCreated: {
 		announcement: Packed<'Announcement'>;
 	};
+	/** 管理员变更智能体模型配置（下架/调价/改默认等）时广播，客户端无需刷新页面即可拉到最新列表 */
+	agentModelsChanged: {
+		kind: 'chat' | 'image';
+	};
 }
 
 export interface MainEventTypes {
