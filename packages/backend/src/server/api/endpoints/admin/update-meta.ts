@@ -12,6 +12,8 @@ import { MetaService } from '@/core/MetaService.js';
 import { ApiError } from '@/server/api/error.js';
 import { assertSafeLlmHttpsUrl, describeUnsafeLlmUrlReason, hrefForStoredLlmBaseUrl, UnsafeLlmUrlError } from '@/misc/validate-llm-endpoint-url.js';
 import { getActiveLlmModels, normalizeAgentLlmModelGroupsParam, normalizeAgentLlmModelsParam } from '@/misc/agent-llm-models.js';
+import { AGENT_IMAGE_PROVIDER_IDS } from '@/models/AgentImageProvider.js';
+import { getAgentImageProviderDefinition } from '@/core/agent-image-providers.js';
 import { normalizeAgentByokProvidersParam } from '@/core/AgentUserModelService.js';
 import { AgentCompressionMemoryService } from '@/core/AgentCompressionMemoryService.js';
 import { GlobalEventService } from '@/core/GlobalEventService.js';
@@ -266,7 +268,7 @@ export const paramDef = {
 					id: { type: 'string', minLength: 1, maxLength: 128 },
 					name: { type: 'string', minLength: 1, maxLength: 256 },
 					description: { type: 'string', nullable: true, maxLength: 2048 },
-					provider: { type: 'string', enum: ['aurora', 'openai', 'tiptotip', 'qwen'] },
+					provider: { type: 'string', enum: AGENT_IMAGE_PROVIDER_IDS },
 					enabled: { type: 'boolean' },
 					apiModelName: { type: 'string', nullable: true, maxLength: 128 },
 					apiUrl: { type: 'string', nullable: true, maxLength: 2048 },
@@ -1116,9 +1118,10 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 							id: 'b779a54b-01bf-4276-b48b-cff148ad9839',
 						});
 					}
+					const provider = getAgentImageProviderDefinition(m.provider);
 					let apiUrl: string | null = null;
 					let apiKey: string | null = null;
-					if (m.provider === 'openai' || m.provider === 'tiptotip' || m.provider === 'qwen') {
+					if (provider.requiresEndpointCredentials) {
 						if (typeof m.apiModelName !== 'string' || m.apiModelName.trim() === ''
 							|| typeof m.apiUrl !== 'string' || m.apiUrl.trim() === ''
 							|| typeof m.apiKey !== 'string' || m.apiKey.trim() === '') {
@@ -1149,7 +1152,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 						apiModelName: typeof m.apiModelName === 'string' && m.apiModelName.trim() !== '' ? m.apiModelName.trim() : null,
 						apiUrl,
 						apiKey,
-						supportsReferenceImage: (m.provider === 'openai' || m.provider === 'tiptotip') && m.supportsReferenceImage === true,
+						supportsReferenceImage: provider.capabilities.supportsReferenceImage && m.supportsReferenceImage === true,
 						costPerCall: typeof m.costPerCall === 'number' ? Math.max(0, m.costPerCall) : null,
 						dailyFreeQuota: typeof m.dailyFreeQuota === 'number' && m.dailyFreeQuota > 0 ? Math.trunc(m.dailyFreeQuota) : null,
 						defaultParams: m.defaultParams ?? null,

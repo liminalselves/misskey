@@ -502,12 +502,12 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<MkInfo v-if="drawSelectedImageModel?.provider === 'aurora'" warn>
 						Naval AI 参数会直接影响出图质量、费用和稳定性。不了解时请保持默认，或使用“恢复默认设置”。
 					</MkInfo>
-					<div v-if="drawSelectedImageModel?.provider === 'openai' || drawSelectedImageModel?.provider === 'qwen'" :class="$style.drawSizeRow">
+					<div v-if="drawSelectedImageModel?.supportsSizeSelection && !drawSelectedImageModel.supportsAdvancedParams" :class="$style.drawSizeRow">
 						<MkSelect v-model="drawSize" :items="drawSizeItems">
 							<template #label>{{ i18n.ts._agents.adminOpenaiImageSize }}</template>
 						</MkSelect>
 					</div>
-					<template v-if="drawSelectedImageModel?.provider === 'aurora'">
+					<template v-if="drawSelectedImageModel?.supportsAdvancedParams">
 						<div :class="$style.drawSizeRow">
 							<MkSelect v-model="drawSize" :items="drawSizeItems">
 								<template #label>默认尺寸</template>
@@ -1648,6 +1648,9 @@ type AgentImageModel = {
 	description: string | null;
 	provider: 'aurora' | 'openai' | 'tiptotip' | 'qwen';
 	supportsReferenceImage: boolean;
+	supportsSizeSelection: boolean;
+	supportsAdvancedParams: boolean;
+	supportsArtistPreset: boolean;
 	apiModelName: string | null;
 	costPerCall: number;
 	freeQuotaUsed?: number;
@@ -1680,7 +1683,7 @@ const drawSizeItems: MkSelectItem[] = [
 ];
 const drawSelectedImageModel = computed(() => drawImageModels.value.find(m => m.id === drawImageModelId.value) ?? null);
 const drawCurrentSettings = computed(() => {
-	const base = drawSelectedImageModel.value?.provider !== 'aurora'
+	const base = !drawSelectedImageModel.value?.supportsAdvancedParams
 		? { size: drawSize.value }
 		: {
 			size: drawSize.value,

@@ -4,6 +4,7 @@
  */
 
 import { Entity, Column, PrimaryColumn, ManyToOne } from 'typeorm';
+import type { AgentImageProvider } from './AgentImageProvider.js';
 import { id } from './util/id.js';
 import { MiUser } from './User.js';
 
@@ -44,7 +45,7 @@ export type MiAgentImageDefaultParams = {
 	promptSuffix?: string;
 };
 
-export type MiAgentImageProvider = 'aurora' | 'openai' | 'tiptotip' | 'qwen';
+export type MiAgentImageProvider = AgentImageProvider;
 
 export type MiAgentImageModel = {
 	id: string;

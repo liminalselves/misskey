@@ -23,10 +23,35 @@ import { ApiError } from '@/server/api/error.js';
 import { IdentifiableError } from '@/misc/identifiable-error.js';
 import { assertSafeLlmHttpsUrl, describeUnsafeLlmUrlReason, UnsafeLlmUrlError } from '@/misc/validate-llm-endpoint-url.js';
 import { readBodyWithLimit, UpstreamBodyTooLargeError } from '@/misc/read-body-with-limit.js';
+import { isAgentImageProvider } from '@/models/AgentImageProvider.js';
 import { getAgentImagePreset } from './agent-image-presets.js';
 import { resolveAgentImageNegativePrompt } from './agent-image-defaults.js';
+import {
+	getAgentImageProviderDefinition,
+	type AgentImageResult,
+	type AgentImageSize,
+	type AgentReferenceImage,
+} from './agent-image-providers.js';
 
-export type AgentImageSize = 'portrait' | 'landscape' | 'square';
+export {
+	agentImageProviderIds,
+	buildOpenAiChatImageGenerationRequest,
+	buildOpenAiChatImageGenerationRequestInit,
+	buildOpenAiImageGenerationRequest,
+	buildOpenAiImageGenerationRequestInit,
+	buildQwenImageGenerationRequest,
+	buildQwenImageGenerationRequestInit,
+	buildTiptotipImageGenerationRequest,
+	buildTiptotipImageGenerationRequestInit,
+	getAgentImageProviderDefinition,
+	openAiImageSize,
+	parseOpenAiChatImageResult,
+	parseOpenAiImageResult,
+	parseQwenImageResult,
+	qwenImageSize,
+	tiptotipImageResolution,
+} from './agent-image-providers.js';
+export type { AgentImageProviderCapabilities, AgentImageResult, AgentImageSize, AgentReferenceImage } from './agent-image-providers.js';
 
 export type AgentDrawRequest = {
 	tag: string;
@@ -42,11 +67,6 @@ type FetchImageParams = {
 	size: AgentImageSize;
 	imageSettings?: Record<string, unknown> | null;
 	referenceImages?: AgentReferenceImage[];
-};
-
-export type AgentReferenceImage = {
-	contentType: string;
-	data: Buffer;
 };
 
 const AGENT_DRAW_RE = /\[\[agent_draw(?:\s+size=(portrait|landscape|square))?\s+tag=([\s\S]*?)\]\]/g;
@@ -173,220 +193,6 @@ function normalizeSize(size: string | null | undefined): AgentImageSize {
 	return size === 'landscape' || size === 'square' || size === 'portrait' ? size : 'portrait';
 }
 
-export function openAiImageSize(size: AgentImageSize): string {
-	switch (size) {
-		case 'portrait': return '1024x1536';
-		case 'landscape': return '1536x1024';
-		case 'square': return '1024x1024';
-	}
-}
-
-function referenceImageDataUrl(referenceImage: AgentReferenceImage): string {
-	return `data:${referenceImage.contentType};base64,${referenceImage.data.toString('base64')}`;
-}
-
-function normalizeReferenceImages(referenceImages?: AgentReferenceImage | AgentReferenceImage[] | null): AgentReferenceImage[] {
-	if (referenceImages == null) return [];
-	return (Array.isArray(referenceImages) ? referenceImages : [referenceImages]).slice(0, 4);
-}
-
-export function buildOpenAiImageGenerationRequest(model: string, prompt: string, size: AgentImageSize, referenceImages?: AgentReferenceImage | AgentReferenceImage[] | null): Record<string, unknown> {
-	const images = normalizeReferenceImages(referenceImages).map(referenceImageDataUrl);
-	return {
-		model,
-		prompt,
-		n: 1,
-		size: openAiImageSize(size),
-		...(images.length === 1 ? { image: images[0] } : images.length > 1 ? { image: images } : {}),
-	};
-}
-
-export function buildOpenAiImageGenerationRequestInit(apiKey: string, model: string, prompt: string, size: AgentImageSize, referenceImages?: AgentReferenceImage | AgentReferenceImage[] | null): {
-	method: 'POST';
-	headers: Record<string, string>;
-	body: string;
-} {
-	return {
-		method: 'POST',
-		headers: {
-			'Content-Type': 'application/json',
-			Authorization: `Bearer ${apiKey}`,
-		},
-		body: JSON.stringify(buildOpenAiImageGenerationRequest(model, prompt, size, referenceImages)),
-	};
-}
-
-// tiptotip 网关主流国内通道（火山 seedream 等）要求总像素不低于 2K（3686400），分辨率取 2K 档
-export function tiptotipImageResolution(size: AgentImageSize): string {
-	switch (size) {
-		case 'portrait': return '1728x2304'; // 3:4
-		case 'landscape': return '2304x1728'; // 4:3
-		case 'square': return '2048x2048'; // 1:1
-	}
-}
-
-// tiptotip 网关（https://ai.tiptotip.cn）兼容 OpenAI 生图协议，但分辨率参数用 resolution，
-// 且需显式指定 response_format: b64_json 才返回 Base64 数据
-export function buildTiptotipImageGenerationRequest(model: string, prompt: string, size: AgentImageSize, referenceImages?: AgentReferenceImage | AgentReferenceImage[] | null): Record<string, unknown> {
-	const images = normalizeReferenceImages(referenceImages).map(referenceImageDataUrl);
-	return {
-		model,
-		prompt,
-		n: 1,
-		resolution: tiptotipImageResolution(size),
-		response_format: 'b64_json',
-		...(images.length === 1 ? { image: images[0] } : images.length > 1 ? { image: images } : {}),
-	};
-}
-
-export function buildTiptotipImageGenerationRequestInit(apiKey: string, model: string, prompt: string, size: AgentImageSize, referenceImages?: AgentReferenceImage | AgentReferenceImage[] | null): {
-	method: 'POST';
-	headers: Record<string, string>;
-	body: string;
-} {
-	return {
-		method: 'POST',
-		headers: {
-			'Content-Type': 'application/json',
-			Authorization: `Bearer ${apiKey}`,
-		},
-		body: JSON.stringify(buildTiptotipImageGenerationRequest(model, prompt, size, referenceImages)),
-	};
-}
-
-export function buildOpenAiChatImageGenerationRequest(model: string, prompt: string, referenceImages?: AgentReferenceImage | AgentReferenceImage[] | null): Record<string, unknown> {
-	const content: Array<Record<string, unknown>> = [{ type: 'text', text: prompt }];
-	for (const referenceImage of normalizeReferenceImages(referenceImages)) {
-		content.push({ type: 'image_url', image_url: { url: referenceImageDataUrl(referenceImage) } });
-	}
-	return {
-		model,
-		stream: false,
-		messages: [{ role: 'user', content }],
-	};
-}
-
-export function buildOpenAiChatImageGenerationRequestInit(apiKey: string, model: string, prompt: string, referenceImages?: AgentReferenceImage | AgentReferenceImage[] | null): {
-	method: 'POST';
-	headers: Record<string, string>;
-	body: string;
-} {
-	return {
-		method: 'POST',
-		headers: {
-			'Content-Type': 'application/json',
-			Authorization: `Bearer ${apiKey}`,
-		},
-		body: JSON.stringify(buildOpenAiChatImageGenerationRequest(model, prompt, referenceImages)),
-	};
-}
-
-export type OpenAiImageResult =
-	| { type: 'base64'; value: string }
-	| { type: 'url'; value: string };
-
-export function parseOpenAiImageResult(value: unknown): OpenAiImageResult {
-	if (value == null || typeof value !== 'object') throw new Error('Invalid OpenAI image response.');
-	const data = (value as { data?: unknown }).data;
-	if (!Array.isArray(data) || data.length === 0 || data[0] == null || typeof data[0] !== 'object') {
-		throw new Error('OpenAI image response has no image data.');
-	}
-	const first = data[0] as { b64_json?: unknown; url?: unknown };
-	if (typeof first.b64_json === 'string' && first.b64_json.trim() !== '') {
-		return { type: 'base64', value: first.b64_json.trim() };
-	}
-	if (typeof first.url === 'string' && first.url.trim() !== '') {
-		return { type: 'url', value: first.url.trim() };
-	}
-	throw new Error('OpenAI image response has no supported image value.');
-}
-
-export function parseOpenAiChatImageResult(value: unknown): OpenAiImageResult {
-	try {
-		return parseOpenAiImageResult(value);
-	} catch {
-		// Some OpenAI-compatible gateways return the generated image in chat content.
-	}
-	const message = (value as { choices?: Array<{ message?: { content?: unknown; image_url?: unknown; images?: unknown } }> })?.choices?.[0]?.message;
-	const content = message?.content;
-	const contentImageUrl = Array.isArray(content)
-		? content.find(item => typeof item === 'object' && item != null && typeof (item as { image_url?: { url?: unknown } }).image_url?.url === 'string') as { image_url: { url: string } } | undefined
-		: undefined;
-	const messageImageUrl = typeof (message?.image_url as { url?: unknown } | undefined)?.url === 'string'
-		? (message?.image_url as { url: string }).url
-		: Array.isArray(message?.images) && typeof (message.images[0] as { url?: unknown } | undefined)?.url === 'string'
-			? (message.images[0] as { url: string }).url
-			: null;
-	const text = typeof content === 'string'
-		? content.trim()
-		: Array.isArray(content)
-			? content.map(item => typeof item === 'object' && item != null ? String((item as { text?: unknown }).text ?? '') : '').join('').trim()
-			: '';
-	const markdownUrl = text.match(/!\[[^\]]*\]\((?:https:\/\/|data:image\/)[^)\s]+\)/)?.[0]?.replace(/^!\[[^\]]*\]\(|\)$/g, '');
-	const candidate = contentImageUrl?.image_url.url ?? messageImageUrl ?? markdownUrl ?? text;
-	const dataUrl = candidate.match(/^data:image\/[^;]+;base64,([A-Za-z0-9+/=\s]+)$/i)?.[1];
-	if (dataUrl) return { type: 'base64', value: dataUrl };
-	if (/^https:\/\//i.test(candidate)) return { type: 'url', value: candidate };
-	if (/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(candidate)) {
-		return { type: 'base64', value: candidate };
-	}
-	throw new Error('OpenAI chat response has no supported image value.');
-}
-
-export function qwenImageSize(size: AgentImageSize): string {
-	switch (size) {
-		case 'portrait': return '1728*2368'; // 3:4
-		case 'landscape': return '2368*1728'; // 4:3
-		case 'square': return '2048*2048'; // 1:1
-	}
-}
-
-export function buildQwenImageGenerationRequest(model: string, prompt: string, negativePrompt: string | null, size: AgentImageSize): Record<string, unknown> {
-	return {
-		model,
-		input: { prompt },
-		parameters: {
-			n: 1,
-			size: qwenImageSize(size),
-			...(negativePrompt != null && negativePrompt.trim() !== '' ? { negative_prompt: negativePrompt.trim().slice(0, 500) } : {}),
-		},
-	};
-}
-
-export function buildQwenImageGenerationRequestInit(apiKey: string, model: string, prompt: string, negativePrompt: string | null, size: AgentImageSize): {
-	method: 'POST';
-	headers: Record<string, string>;
-	body: string;
-} {
-	return {
-		method: 'POST',
-		headers: {
-			'Content-Type': 'application/json',
-			Authorization: `Bearer ${apiKey}`,
-		},
-		body: JSON.stringify(buildQwenImageGenerationRequest(model, prompt, negativePrompt, size)),
-	};
-}
-
-export function parseQwenImageResult(value: unknown): OpenAiImageResult {
-	if (value == null || typeof value !== 'object') throw new Error('Invalid Qwen image response.');
-	const output = (value as { output?: unknown }).output;
-	if (output == null || typeof output !== 'object') throw new Error('Qwen image response has no output.');
-	const o = output as { task_status?: unknown; results?: unknown };
-	const status = typeof o.task_status === 'string' ? o.task_status.trim().toLowerCase() : '';
-	if (status !== '' && status !== 'succeeded' && status !== 'success') {
-		throw new Error(`Qwen image task did not succeed (task_status: ${o.task_status}).`);
-	}
-	const results = Array.isArray(o.results) ? o.results : [];
-	const first = results.find(item => {
-		if (typeof item === 'string' && item.trim() !== '') return true;
-		return typeof item === 'object' && item != null && typeof (item as { url?: unknown }).url === 'string' && (item as { url: string }).url.trim() !== '';
-	});
-	if (typeof first === 'string') return { type: 'url', value: first.trim() };
-	if (typeof first === 'object' && first != null) return { type: 'url', value: (first as { url: string }).url.trim() };
-	throw new Error('Qwen image response has no image URL in output.results.');
-}
-
 function safeNumber(v: unknown, fallback: number, min: number, max: number): number {
 	const n = Number(v);
 	if (!Number.isFinite(n)) return fallback;
@@ -449,22 +255,25 @@ export class AgentImageService {
 	public listAvailableImageModels(instance: MiMeta, includeDisabled = false): MiAgentImageModel[] {
 		const configured = Array.isArray(instance.agentImageModels) ? instance.agentImageModels : [];
 		const models = configured
-			.filter(m => typeof m?.id === 'string' && m.id.trim() !== '' && (m.provider === 'aurora' || m.provider === 'openai' || m.provider === 'tiptotip' || m.provider === 'qwen'))
-			.map(m => ({
-				id: m.id.trim(),
-				name: typeof m.name === 'string' && m.name.trim() !== '' ? m.name.trim() : m.id.trim(),
-				description: typeof m.description === 'string' && m.description.trim() !== '' ? m.description.trim() : null,
-				provider: m.provider,
-				enabled: m.enabled !== false,
-				apiModelName: typeof m.apiModelName === 'string' && m.apiModelName.trim() !== '' ? m.apiModelName.trim() : instance.agentImageDefaultModel,
-				apiUrl: typeof m.apiUrl === 'string' && m.apiUrl.trim() !== '' ? m.apiUrl.trim() : null,
-				apiKey: typeof m.apiKey === 'string' && m.apiKey.trim() !== '' ? m.apiKey.trim() : null,
-				supportsReferenceImage: (m.provider === 'openai' || m.provider === 'tiptotip') && m.supportsReferenceImage === true,
-				costPerCall: typeof m.costPerCall === 'number' ? m.costPerCall : instance.agentImageCostPerCall,
-				dailyFreeQuota: typeof m.dailyFreeQuota === 'number' && m.dailyFreeQuota > 0 ? Math.trunc(m.dailyFreeQuota) : null,
-				defaultParams: normalizeImageParams(m.defaultParams ?? instance.agentImageDefaultParams),
-				defaultArtistPresetId: typeof m.defaultArtistPresetId === 'string' ? m.defaultArtistPresetId : instance.agentImageDefaultArtistPresetId,
-			}));
+			.filter((m): m is MiAgentImageModel => typeof m?.id === 'string' && m.id.trim() !== '' && isAgentImageProvider(m.provider))
+			.map(m => {
+				const provider = getAgentImageProviderDefinition(m.provider);
+				return {
+					id: m.id.trim(),
+					name: typeof m.name === 'string' && m.name.trim() !== '' ? m.name.trim() : m.id.trim(),
+					description: typeof m.description === 'string' && m.description.trim() !== '' ? m.description.trim() : null,
+					provider: m.provider,
+					enabled: m.enabled !== false,
+					apiModelName: typeof m.apiModelName === 'string' && m.apiModelName.trim() !== '' ? m.apiModelName.trim() : instance.agentImageDefaultModel,
+					apiUrl: typeof m.apiUrl === 'string' && m.apiUrl.trim() !== '' ? m.apiUrl.trim() : null,
+					apiKey: typeof m.apiKey === 'string' && m.apiKey.trim() !== '' ? m.apiKey.trim() : null,
+					supportsReferenceImage: provider.capabilities.supportsReferenceImage && m.supportsReferenceImage === true,
+					costPerCall: typeof m.costPerCall === 'number' ? m.costPerCall : instance.agentImageCostPerCall,
+					dailyFreeQuota: typeof m.dailyFreeQuota === 'number' && m.dailyFreeQuota > 0 ? Math.trunc(m.dailyFreeQuota) : null,
+					defaultParams: normalizeImageParams(m.defaultParams ?? instance.agentImageDefaultParams),
+					defaultArtistPresetId: typeof m.defaultArtistPresetId === 'string' ? m.defaultArtistPresetId : instance.agentImageDefaultArtistPresetId,
+				};
+			});
 		const enabledModels = includeDisabled ? models : models.filter(m => m.enabled !== false);
 		return enabledModels;
 	}
@@ -825,17 +634,10 @@ export class AgentImageService {
 	}
 
 	private async fetchAndStoreImage(params: FetchImageParams) {
-		switch (params.imageModel.provider) {
-			case 'aurora':
-				return await this.fetchAuroraAndStoreImage(params);
-			case 'openai':
-			case 'tiptotip':
-				return await this.fetchOpenAiCompatibleAndStoreImage(params);
-			case 'qwen':
-				return await this.fetchQwenAndStoreImage(params);
-			default:
-				throw new ApiError(agentImageErrors.notConfigured);
+		if (params.imageModel.provider === 'aurora') {
+			return await this.fetchAuroraAndStoreImage(params);
 		}
+		return await this.fetchEndpointProviderAndStoreImage(params);
 	}
 
 	private async ensureAgentImageFolder(userId: MiUser['id']): Promise<MiDriveFolder> {
@@ -910,11 +712,15 @@ export class AgentImageService {
 		}
 	}
 
-	private async fetchOpenAiCompatibleAndStoreImage(params: FetchImageParams) {
+	private async fetchEndpointProviderAndStoreImage(params: FetchImageParams) {
+		const provider = getAgentImageProviderDefinition(params.imageModel.provider);
 		const apiUrl = params.imageModel.apiUrl?.trim();
 		const apiKey = params.imageModel.apiKey?.trim();
 		const apiModelName = params.imageModel.apiModelName?.trim();
-		if (!apiUrl || !apiKey || !apiModelName) throw new ApiError(agentImageErrors.notConfigured);
+		if (!provider.requiresEndpointCredentials || !provider.buildRequest || !provider.parseResult || !provider.parseExpectation
+			|| !apiUrl || !apiKey || !apiModelName) {
+			throw new ApiError(agentImageErrors.notConfigured);
+		}
 
 		let endpoint: URL;
 		try {
@@ -922,88 +728,45 @@ export class AgentImageService {
 		} catch (err) {
 			const diagnostic = err instanceof UnsafeLlmUrlError
 				? describeUnsafeLlmUrlReason(err.reason)
-				: 'The configured OpenAI-compatible endpoint URL is invalid.';
+				: 'The configured image endpoint URL is invalid.';
 			throw new ApiError(agentImageErrors.notConfigured, { diagnostic });
 		}
 
-		const ac = new AbortController();
-		const timeout = setTimeout(() => ac.abort(), 180_000);
-		try {
-			const isChatCompletions = endpoint.pathname.replace(/\/+$/, '').endsWith('/chat/completions');
-			const res = await fetch(endpoint, {
-				...(isChatCompletions
-					? buildOpenAiChatImageGenerationRequestInit(apiKey, apiModelName, params.tag, params.referenceImages)
-					: params.imageModel.provider === 'tiptotip'
-						? buildTiptotipImageGenerationRequestInit(apiKey, apiModelName, params.tag, params.size, params.referenceImages)
-						: buildOpenAiImageGenerationRequestInit(apiKey, apiModelName, params.tag, params.size, params.referenceImages)),
-				redirect: 'error',
-				signal: ac.signal,
-			});
-			if (!res.ok) throw upstreamImageError(await describeImageUpstreamHttpError(res));
-
-			let result: OpenAiImageResult;
-			try {
-				const body = JSON.parse((await readBodyWithLimit(res, OPENAI_IMAGE_JSON_BODY_LIMIT_BYTES)).toString('utf8')) as unknown;
-				result = isChatCompletions ? parseOpenAiChatImageResult(body) : parseOpenAiImageResult(body);
-			} catch (err) {
-				if (err instanceof UpstreamBodyTooLargeError) {
-					throw upstreamImageError(`Upstream response exceeded the ${OPENAI_IMAGE_JSON_BODY_LIMIT_BYTES} byte read limit.`);
-				}
-				const expected = isChatCompletions
-					? 'choices[0].message content containing a Base64 image or HTTPS image URL'
-					: 'data[0].b64_json or data[0].url';
-				const detail = err instanceof Error ? err.message : 'Unknown response parsing error.';
-				throw upstreamImageError(`Upstream response could not be parsed. Expected ${expected}. ${detail}`);
-			}
-
-			return await this.storeGeneratedImageResult(params, result, ac.signal);
-		} catch (err) {
-			if (err instanceof ApiError) throw err;
-			throw upstreamImageError(describeImageRequestFailure(err, ac.signal.aborted));
-		} finally {
-			clearTimeout(timeout);
-		}
-	}
-
-	private async fetchQwenAndStoreImage(params: FetchImageParams) {
-		const apiUrl = params.imageModel.apiUrl?.trim();
-		const apiKey = params.imageModel.apiKey?.trim();
-		const apiModelName = params.imageModel.apiModelName?.trim();
-		if (!apiUrl || !apiKey || !apiModelName) throw new ApiError(agentImageErrors.notConfigured);
-
-		let endpoint: URL;
-		try {
-			endpoint = await assertSafeLlmHttpsUrl(apiUrl);
-		} catch (err) {
-			const diagnostic = err instanceof UnsafeLlmUrlError
-				? describeUnsafeLlmUrlReason(err.reason)
-				: 'The configured Qwen image endpoint URL is invalid.';
-			throw new ApiError(agentImageErrors.notConfigured, { diagnostic });
-		}
-
+		const isChatCompletions = endpoint.pathname.replace(/\/+$/, '').endsWith('/chat/completions');
 		// Qwen-Image 的 parameters.negative_prompt 上限 500 字符，过长会被上游截断
-		const negativePrompt = resolveAgentImageNegativePrompt(params.instance.agentImageDefaultNegativePrompt).slice(0, 500);
+		const negativePrompt = params.imageModel.provider === 'qwen'
+			? resolveAgentImageNegativePrompt(params.instance.agentImageDefaultNegativePrompt).slice(0, 500)
+			: null;
+		const requestContext = {
+			apiKey,
+			model: apiModelName,
+			prompt: params.tag,
+			size: params.size,
+			referenceImages: params.referenceImages,
+			negativePrompt,
+			isChatCompletions,
+		};
 
 		const ac = new AbortController();
 		const timeout = setTimeout(() => ac.abort(), 180_000);
 		try {
 			const res = await fetch(endpoint, {
-				...buildQwenImageGenerationRequestInit(apiKey, apiModelName, params.tag, negativePrompt, params.size),
+				...provider.buildRequest(requestContext),
 				redirect: 'error',
 				signal: ac.signal,
 			});
 			if (!res.ok) throw upstreamImageError(await describeImageUpstreamHttpError(res));
 
-			let result: OpenAiImageResult;
+			let result: AgentImageResult;
 			try {
 				const body = JSON.parse((await readBodyWithLimit(res, OPENAI_IMAGE_JSON_BODY_LIMIT_BYTES)).toString('utf8')) as unknown;
-				result = parseQwenImageResult(body);
+				result = provider.parseResult(body, requestContext);
 			} catch (err) {
 				if (err instanceof UpstreamBodyTooLargeError) {
 					throw upstreamImageError(`Upstream response exceeded the ${OPENAI_IMAGE_JSON_BODY_LIMIT_BYTES} byte read limit.`);
 				}
 				const detail = err instanceof Error ? err.message : 'Unknown response parsing error.';
-				throw upstreamImageError(`Upstream response could not be parsed. Expected output.results containing image URLs. ${detail}`);
+				throw upstreamImageError(`Upstream response could not be parsed. Expected ${provider.parseExpectation(requestContext)}. ${detail}`);
 			}
 
 			return await this.storeGeneratedImageResult(params, result, ac.signal);
@@ -1015,7 +778,7 @@ export class AgentImageService {
 		}
 	}
 
-	private async storeGeneratedImageResult(params: FetchImageParams, result: OpenAiImageResult, signal: AbortSignal) {
+	private async storeGeneratedImageResult(params: FetchImageParams, result: AgentImageResult, signal: AbortSignal) {
 		if (result.type === 'base64') {
 			const normalized = result.value.replace(/\s+/g, '');
 			if (!/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(normalized)) {

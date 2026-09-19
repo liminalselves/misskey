@@ -1282,7 +1282,8 @@ type AgentImageModelRow = {
 	id: string;
 	name: string;
 	description: string;
-	provider: 'aurora' | 'openai' | 'tiptotip' | 'qwen';
+	/** 保留 meta 中的原始字符串：未知提供商（如新版后端先发布）不回退改写，保存时显式校验 */
+	provider: string;
 	enabled: boolean;
 	apiModelName: string;
 	apiUrl: string;
@@ -1378,6 +1379,8 @@ const agentImageProviderItems: MkSelectItem[] = [
 	{ value: 'tiptotip', label: i18n.ts._agents.imageProviderTiptotip },
 	{ value: 'qwen', label: i18n.ts._agents.imageProviderQwen },
 ];
+
+const agentImageProviderValues = new Set(agentImageProviderItems.flatMap(item => 'value' in item ? [item.value] : []));
 
 const billingModeItems: MkSelectItem[] = [
 	{ value: 'per_call', label: i18n.ts._agents.billingModePerCall },
@@ -1546,7 +1549,7 @@ function initAgentImageModelRows(): AgentImageModelRow[] {
 			id: typeof o.id === 'string' && o.id ? o.id : genId(),
 			name: typeof o.name === 'string' ? o.name : '',
 			description: typeof o.description === 'string' ? o.description : '',
-			provider: o.provider === 'openai' ? 'openai' : o.provider === 'tiptotip' ? 'tiptotip' : o.provider === 'qwen' ? 'qwen' : 'aurora',
+			provider: typeof o.provider === 'string' && o.provider !== '' ? o.provider : 'aurora',
 			enabled: o.enabled !== false,
 			apiModelName: typeof o.apiModelName === 'string' ? o.apiModelName : '',
 			apiUrl: typeof o.apiUrl === 'string' ? o.apiUrl : '',
@@ -1860,7 +1863,8 @@ const form = useForm({
 				id: row.id.trim() || genId(),
 				name: row.name.trim(),
 				description: row.description.trim() === '' ? null : row.description.trim(),
-				provider: row.provider,
+				// 未识别的 provider 在下方校验循环被拦截，这里必为已知值
+				provider: row.provider as 'aurora' | 'openai' | 'tiptotip' | 'qwen',
 				enabled: row.enabled,
 				apiModelName: row.apiModelName.trim() === '' ? null : row.apiModelName.trim(),
 				apiUrl: (row.provider === 'openai' || row.provider === 'tiptotip' || row.provider === 'qwen') && row.apiUrl.trim() !== '' ? row.apiUrl.trim() : null,
@@ -1884,6 +1888,10 @@ const form = useForm({
 		if (!row.id || !row.name || !row.provider) {
 			os.alert({ type: 'error', text: i18n.ts._agents.adminImageModelInvalid });
 			throw new Error('invalid image model row');
+		}
+		if (!agentImageProviderValues.has(row.provider)) {
+			os.alert({ type: 'error', text: `生图模型「${row.name}」的提供商「${row.provider}」无法识别，请为其重新选择提供商后再保存` });
+			throw new Error('unknown image model provider');
 		}
 		if (row.provider === 'aurora' && !row.apiModelName) {
 			os.alert({ type: 'error', text: i18n.ts._agents.adminImageModelInvalid });
