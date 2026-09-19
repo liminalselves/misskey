@@ -766,6 +766,22 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</div>
 			</MkFolder>
 
+			<MkFolder v-if="activeTab === 'pet'" :defaultOpen="true">
+				<template #icon><i class="ti ti-paw"></i></template>
+				<template #label>桌宠表演</template>
+				<div class="_gaps">
+					<MkInfo>桌宠客户端（Live2D 桌面宠物）发消息时会携带可用的表情与动作清单，后端据此注入表演协议，让回复中穿插 [[agent_cue]] 指令驱动角色表演。网页端会话不受影响。</MkInfo>
+					<MkSwitch v-model="form.state.agentPerformanceEnabled">
+						<template #label>启用桌宠表演协议</template>
+						<template #caption>关闭后，即使请求携带表情与动作清单，也按普通网页会话处理：不注入表演协议，回复中的表演指令一律剥离。</template>
+					</MkSwitch>
+					<MkTextarea v-model="form.state.agentPerformanceSystemPrompt">
+						<template #label>桌宠默认提示词</template>
+						<template #caption>桌宠会话注入表演协议时追加的自定义提示词，位于 system 提示末尾的桌宠协议块内（示例之后）；留空不追加。</template>
+					</MkTextarea>
+				</div>
+			</MkFolder>
+
 			<MkFolder v-if="activeTab === 'vision'" :defaultOpen="true">
 				<template #icon><i class="ti ti-eye"></i></template>
 				<template #label>{{ i18n.ts._agents.adminVisionTitle }}</template>
@@ -1136,7 +1152,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</div>
 			</MkFolder>
 
-			<div v-if="form.modified.value && ['basic', 'models', 'memory', 'compression', 'externalAudit', 'images', 'sticker', 'vision', 'credits', 'proactive'].includes(activeTab)" :class="$style.saveBar">
+			<div v-if="form.modified.value && ['basic', 'models', 'memory', 'compression', 'externalAudit', 'images', 'sticker', 'pet', 'vision', 'credits', 'proactive'].includes(activeTab)" :class="$style.saveBar">
 				<MkFormFooter :form="form"/>
 			</div>
 		</div>
@@ -1628,6 +1644,8 @@ const form = useForm({
 	agentStickerEnabled: Boolean(meta.agentStickerEnabled),
 	agentStickerMaxPerMessage: String(numFromMeta(meta.agentStickerMaxPerMessage, 3)),
 	agentEmojiPromptMaxCount: String(numFromMeta(meta.agentEmojiPromptMaxCount, 200)),
+	agentPerformanceEnabled: meta.agentPerformanceEnabled !== false,
+	agentPerformanceSystemPrompt: typeof meta.agentPerformanceSystemPrompt === 'string' ? meta.agentPerformanceSystemPrompt : '',
 	agentImageCostPerCall: typeof meta.agentImageCostPerCall === 'number' ? String(meta.agentImageCostPerCall) : '0',
 	agentImageTokenMinPoints: String(numFromMeta(meta.agentImageTokenMinPoints, 1)),
 	agentImageTokenBalanceTtlSeconds: String(numFromMeta(meta.agentImageTokenBalanceTtlSeconds, 300)),
@@ -2113,6 +2131,8 @@ const form = useForm({
 		agentStickerEnabled: state.agentStickerEnabled === true,
 		agentStickerMaxPerMessage: stickerMaxPerMessage,
 		agentEmojiPromptMaxCount: emojiPromptMaxCount,
+		agentPerformanceEnabled: state.agentPerformanceEnabled === true,
+		agentPerformanceSystemPrompt: state.agentPerformanceSystemPrompt.trim() === '' ? null : state.agentPerformanceSystemPrompt,
 		agentImageCostPerCall: imageCost,
 		agentImageTokenMinPoints: imageMinPoints,
 		agentImageTokenBalanceTtlSeconds: imageTtl,
@@ -3006,6 +3026,10 @@ const headerTabs = computed(() => [{
 	key: 'sticker',
 	title: i18n.ts._agents.stickerTabTitle,
 	icon: 'ti ti-sticker',
+}, {
+	key: 'pet',
+	title: '桌宠',
+	icon: 'ti ti-paw',
 }, {
 	key: 'vision',
 	title: i18n.ts._agents.adminVisionTitle,

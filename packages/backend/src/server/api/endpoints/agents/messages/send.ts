@@ -181,9 +181,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			await this.chatService.checkChatAvailability(me.id, 'write');
 			const userText = typeof ps.text === 'string' ? ps.text : '';
 			const imageFileId = typeof ps.fileId === 'string' && ps.fileId.trim() !== '' ? ps.fileId : null;
-			// 携带表演清单即桌宠环境；网页端（无清单）从 system 注入、历史到落库全程剥离指令
-			const performance = normalizePerformanceCapabilities(ps.performance);
-			const performanceNames = performance != null ? performanceAllowedNames(performance) : null;
+			// 请求携带表演清单即桌宠客户端；是否生效还取决于全站开关（见 instanceMeta.agentPerformanceEnabled）
+			const performanceRequested = normalizePerformanceCapabilities(ps.performance);
 			if (userText.trim() === '' && imageFileId == null) {
 				throw new ApiError({ message: 'A message must contain text or one image.', code: 'AGENT_MESSAGE_EMPTY', id: 'bc0ef6d8-644f-4d2e-83f7-a44c06ea3ed2', kind: 'client', httpStatusCode: 400 });
 			}
@@ -294,6 +293,9 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			//      catch 据它们是否为 null 决定清理动作，finally 兜底取消注册 abort。
 
 			const instanceMeta = await this.metaService.fetch(true);
+			// 全站桌宠开关关闭时视为普通网页会话：协议不注入、历史与落库全程剥离指令
+			const performance = instanceMeta.agentPerformanceEnabled === false ? null : performanceRequested;
+			const performanceNames = performance != null ? performanceAllowedNames(performance) : null;
 			let visionModel = null;
 			if (imageFileId != null) {
 				await this.agentVisionService.assertImageFileOwnedByUser(imageFileId, me.id);
@@ -501,7 +503,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					system += '</agent_image_generation_protocol>';
 				}
 				if (performance != null) {
-					system += '\n\n' + buildPerformanceSystemBlock(performance);
+					system += '\n\n' + buildPerformanceSystemBlock(performance, instanceMeta.agentPerformanceSystemPrompt);
 				}
 				if (memoryBlock.length > 0) {
 					system += AGENT_LLM_MEMORY_XML_OPEN + escapeAgentXmlText(memoryBlock) + AGENT_LLM_MEMORY_XML_CLOSE;

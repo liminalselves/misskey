@@ -118,5 +118,19 @@ describe('agent-performance-cue', () => {
 			expect(block).not.toContain('<expressions>');
 			expect(block).toContain('<actions>');
 		});
+
+		test('appends extra prompt inside the block and escapes XML characters', () => {
+			const block = buildPerformanceSystemBlock(caps, '你是<windows>&桌宠');
+			expect(block).toContain('<pet_custom_instructions>\n你是&lt;windows&gt;&amp;桌宠\n</pet_custom_instructions>');
+			expect(block.indexOf('<pet_custom_instructions>')).toBeGreaterThan(block.indexOf('示例：'));
+			expect(block.endsWith('</agent_performance_protocol>')).toBe(true);
+		});
+
+		test('omits extra prompt section when blank or absent', () => {
+			expect(buildPerformanceSystemBlock(caps, '')).not.toContain('<pet_custom_instructions>');
+			expect(buildPerformanceSystemBlock(caps, '   \n ')).not.toContain('<pet_custom_instructions>');
+			expect(buildPerformanceSystemBlock(caps)).not.toContain('<pet_custom_instructions>');
+			expect(buildPerformanceSystemBlock(caps, null)).not.toContain('<pet_custom_instructions>');
+		});
 	});
 });

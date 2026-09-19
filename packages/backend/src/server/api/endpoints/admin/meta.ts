@@ -585,6 +585,14 @@ export const meta = {
 				type: 'number',
 				optional: false, nullable: false,
 			},
+			agentPerformanceEnabled: {
+				type: 'boolean',
+				optional: false, nullable: false,
+			},
+			agentPerformanceSystemPrompt: {
+				type: 'string',
+				optional: false, nullable: true,
+			},
 			agentImageCostPerCall: {
 				type: 'number',
 				optional: false, nullable: false,
@@ -1192,6 +1200,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				agentStickerEnabled: instance.agentStickerEnabled,
 				agentStickerMaxPerMessage: instance.agentStickerMaxPerMessage,
 				agentEmojiPromptMaxCount: instance.agentEmojiPromptMaxCount,
+				agentPerformanceEnabled: instance.agentPerformanceEnabled,
+				agentPerformanceSystemPrompt: instance.agentPerformanceSystemPrompt ?? null,
 				agentImageDefaultArtistPresetId: instance.agentImageDefaultArtistPresetId,
 				agentImageTokenMinPoints: instance.agentImageTokenMinPoints,
 				agentImageTokenBalanceTtlSeconds: instance.agentImageTokenBalanceTtlSeconds,

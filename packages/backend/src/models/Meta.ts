@@ -1180,6 +1180,18 @@ export class MiMeta {
 	})
 	public agentEmojiPromptMaxCount: number;
 
+	/** 是否启用桌宠表演协议；关闭后携带 performance 清单的请求也按普通网页会话处理 */
+	@Column('boolean', {
+		default: true,
+	})
+	public agentPerformanceEnabled: boolean;
+
+	/** 桌宠环境注入表演协议块时追加的管理员自定义提示词；空则不追加 */
+	@Column('text', {
+		nullable: true,
+	})
+	public agentPerformanceSystemPrompt: string | null;
+
 
 	@Column('jsonb', {
 		default: [],

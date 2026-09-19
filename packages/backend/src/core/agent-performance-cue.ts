@@ -95,11 +95,17 @@ export function enforcePerformanceCues(text: string, allowed: Set<string> | null
 		.trim();
 }
 
+/** 与 AgentService.escapeAgentXmlText 同款；本地实现以保持本模块零依赖（单测直接引入） */
+function escapePerformanceXmlText(s: string): string {
+	return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
 /**
  * 构建表演协议系统提示块（仅桌宠请求注入）。
  * 行文对齐 AgentStickerService.buildSystemBlocks：中文说明 + `- name —— hint` 清单。
+ * extraPrompt 为管理员在控制台配置的桌宠默认提示词，非空时追加在示例之后、闭合标签之前。
  */
-export function buildPerformanceSystemBlock(capabilities: AgentPerformanceCapabilities): string {
+export function buildPerformanceSystemBlock(capabilities: AgentPerformanceCapabilities, extraPrompt?: string | null): string {
 	const list = (title: 'expressions' | 'actions', items: AgentPerformanceItem[]): string => {
 		if (items.length === 0) return '';
 		return `<${title}>\n` + items.map(item => `- ${item.name}${item.hint !== '' ? ` —— ${item.hint}` : ''}`).join('\n') + `\n</${title}>\n`;
@@ -117,6 +123,10 @@ export function buildPerformanceSystemBlock(capabilities: AgentPerformanceCapabi
 	block += list('expressions', capabilities.expressions);
 	block += list('actions', capabilities.actions);
 	block += '示例：\n[[agent_cue express=happy play=wave]]\n你想看表情？好呀，那我一个一个给你变，你可看仔细了。\n\n这个是开心的。\n[[agent_cue express=shy]]\n你看，一说到给你看这个，我自己就先笑出来了。因为每次你凑过来说要看我表情的时候，眼睛都亮晶晶的。\n\n这个是害羞的。\n[[agent_cue express=angry play=shake]]\n……你别一直盯着看啦。我一被你这样看着就没辙，脸也不听话地发热。\n\n这个是生气的。\n[[agent_cue express=happy]]\n这个，是我现在最想给你的——就是很安心、很踏实的笑。\n\n看完了没有？可要记得，我最想让你记住的是最后一个。\n';
+	const extra = (extraPrompt ?? '').trim();
+	if (extra !== '') {
+		block += `\n<pet_custom_instructions>\n${escapePerformanceXmlText(extra)}\n</pet_custom_instructions>\n`;
+	}
 	block += '</agent_performance_protocol>';
 	return block;
 }
