@@ -117,125 +117,143 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<div class="_gaps">
 					<MkInfo>{{ i18n.ts._agents.adminModelListHint }}</MkInfo>
 
-					<div v-if="form.state.agentLlmModelRows.length === 0" :class="$style.emptyModels">
-						{{ i18n.ts._agents.adminModelListEmpty }}
-					</div>
-
-					<div v-for="(row, i) in form.state.agentLlmModelRows" :key="i" :class="[$style.modelCard, row.unlisted ? $style.modelCardUnlisted : null]" class="_gaps_s">
-						<div :class="$style.modelCardHead">
-							<span :class="$style.modelCardTitle">
-								{{ i18n.ts._agents.adminModelRowPrefix }} #{{ i + 1 }}
+					<template v-for="section in llmModelSections" :key="section.key">
+						<div v-if="section.key === 'active' || section.rows.length > 0" :class="[$style.modelSectionHead, section.key === 'unlisted' ? $style.modelSectionHeadMuted : null]">
+							<span>{{ section.label }}<span :class="$style.modelSectionCount">{{ section.rows.length }}</span></span>
+							<MkButton v-if="section.key === 'active'" small rounded @click="onAddModelMenu"><i class="ti ti-plus"></i> {{ i18n.ts._agents.addAgentModel }}</MkButton>
+						</div>
+						<div v-if="section.key === 'active' && section.rows.length === 0" :class="$style.emptyModels">
+							{{ i18n.ts._agents.adminModelListEmpty }}
+						</div>
+						<div v-for="row in section.rows" :key="row.id" :data-model-row-id="section.key === 'active' ? row.id : undefined" :class="[$style.modelRow, row.unlisted ? $style.modelRowUnlisted : null, modelRowDrag?.id === row.id ? $style.modelRowDragging : null, modelRowDrag?.id === row.id && modelRowDrag.snapping ? $style.modelRowSnapping : null, modelRowDrag != null && modelRowDrag.id !== row.id ? $style.modelRowShiftable : null, modelRowDrag != null && modelRowDrag.overId === row.id ? (modelRowDrag.overPos === 'before' ? $style.modelRowDropBefore : $style.modelRowDropAfter) : null]" :style="modelRowDragStyle(row.id)">
+							<div :class="$style.modelRowHead" @click="toggleLlmModelExpanded(row.id)">
+								<i class="ti ti-chevron-right" :class="[$style.modelRowChevron, isLlmModelExpanded(row.id) ? $style.modelRowChevronOpen : null]"></i>
+								<span :class="$style.modelRowTitle">{{ row.name.trim() || '未命名模型' }}</span>
 								<span v-if="row.unlisted" :class="$style.unlistedBadge">{{ i18n.ts._agents.adminModelUnlistedBadge }}</span>
-							</span>
-							<div :class="$style.modelCardActions">
-								<button type="button" class="_button" :class="$style.iconMuted" :title="i18n.ts._agents.adminModelCopy" @click="copyModelRow(i)">
-									<i class="ti ti-copy"></i>
-								</button>
-								<button type="button" class="_button" :class="$style.iconMuted" :disabled="i === 0" :title="i18n.ts._agents.adminModelMoveUp" @click="moveModelRow(i, -1)">
-									<i class="ti ti-arrow-up"></i>
-								</button>
-								<button type="button" class="_button" :class="$style.iconMuted" :disabled="i === form.state.agentLlmModelRows.length - 1" :title="i18n.ts._agents.adminModelMoveDown" @click="moveModelRow(i, 1)">
-									<i class="ti ti-arrow-down"></i>
-								</button>
-								<button v-if="row.unlisted" type="button" class="_button" :class="$style.iconMuted" :title="i18n.ts._agents.adminModelRelist" @click="toggleUnlist(i, false)">
-									<i class="ti ti-eye"></i>
-								</button>
-								<button v-else type="button" class="_button" :class="$style.iconWarn" :title="i18n.ts._agents.adminModelUnlist" @click="toggleUnlist(i, true)">
-									<i class="ti ti-archive"></i>
-								</button>
+								<span :class="$style.modelRowMeta">{{ llmModelRowMeta(row) }}</span>
+								<div :class="$style.modelCardActions" @click.stop>
+									<button type="button" class="_button" :class="$style.iconMuted" :title="i18n.ts._agents.adminModelCopy" @click="copyModelRow(row)">
+										<i class="ti ti-copy"></i>
+									</button>
+									<template v-if="!row.unlisted">
+										<button type="button" class="_button" :class="$style.iconWarn" :title="i18n.ts._agents.adminModelUnlist" @click="toggleUnlist(row, true)">
+											<i class="ti ti-archive"></i>
+										</button>
+										<span :class="$style.modelRowGrip" title="长按拖动排序" @pointerdown="onModelRowGripPointerDown($event, 'llm', row)" @contextmenu.prevent>
+											<i class="ti ti-grip-vertical"></i>
+										</span>
+									</template>
+									<button v-else type="button" class="_button" :class="$style.iconMuted" :title="i18n.ts._agents.adminModelRelist" @click="toggleUnlist(row, false)">
+										<i class="ti ti-eye"></i>
+									</button>
+								</div>
+							</div>
+							<div v-if="isLlmModelExpanded(row.id)" :class="$style.modelRowBody" class="_gaps_s">
+								<MkInput v-model="row.name" :readonly="row.unlisted">
+									<template #label>{{ i18n.ts._agents.modelDisplayName }}</template>
+								</MkInput>
+								<div v-if="row.id.trim() !== ''" :class="$style.internalIdRow">
+									<span :class="$style.internalIdLabel">{{ i18n.ts._agents.fieldModelInternalId }}</span>
+									<code :class="$style.internalIdValue">{{ row.id }}</code>
+									<p :class="$style.internalIdCaption">{{ i18n.ts._agents.fieldModelInternalIdCaption }}</p>
+								</div>
+								<MkSelect v-model="row.groupId" :items="modelGroupItems" :readonly="row.unlisted">
+									<template #label>{{ i18n.ts._agents.modelGroup }}</template>
+								</MkSelect>
+								<MkTextarea v-model="row.description" :readonly="row.unlisted">
+									<template #label>{{ i18n.ts._agents.modelDescription }}</template>
+								</MkTextarea>
+								<MkInput v-model="row.baseUrl" type="text" :readonly="row.unlisted">
+									<template #label>{{ i18n.ts._agents.modelBaseUrl }}</template>
+									<template #caption>{{ i18n.ts._agents.fieldModelBaseUrlCaption }}</template>
+									<template #prefix><i class="ti ti-link"></i></template>
+								</MkInput>
+									<MkSwitch v-model="row.multiKeyEnabled" :disabled="row.unlisted">
+										<template #label>{{ i18n.ts._agents.modelMultiKeyEnabled }}</template>
+										<template #caption>{{ i18n.ts._agents.modelMultiKeyEnabledCaption }}</template>
+									</MkSwitch>
+									<MkInput v-if="!row.multiKeyEnabled" v-model="row.apiKeys[0]" type="password" :readonly="row.unlisted">
+										<template #label>{{ i18n.ts._agents.modelApiKey }}</template>
+										<template #caption>{{ i18n.ts._agents.modelSingleKeyCaption }}</template>
+									</MkInput>
+									<div v-else :class="$style.multiKeyList">
+										<div v-for="(_, keyIndex) in row.apiKeys" :key="keyIndex" :class="$style.multiKeyRow">
+											<MkInput v-model="row.apiKeys[keyIndex]" type="password" :readonly="row.unlisted">
+												<template #label>{{ i18n.tsx._agents.modelApiKeyNumber({ n: keyIndex + 1 }) }}</template>
+											</MkInput>
+											<button type="button" class="_button" :class="$style.iconWarn" :disabled="row.unlisted || row.apiKeys.length <= 1" :title="i18n.ts._agents.modelApiKeyRemove" @click="removeLlmApiKey(row, keyIndex)">
+												<i class="ti ti-trash"></i>
+											</button>
+										</div>
+										<MkButton small rounded :disabled="row.unlisted" @click="addLlmApiKey(row)"><i class="ti ti-plus"></i> {{ i18n.ts._agents.modelApiKeyAdd }}</MkButton>
+									</div>
+									<MkInput v-model="row.apiModelName" :readonly="row.unlisted">
+									<template #label>{{ i18n.ts._agents.modelApiName }}</template>
+									<template #caption>{{ i18n.ts._agents.fieldApiModelNameCaption }}</template>
+								</MkInput>
+								<FormSplit :minWidth="260">
+									<MkInput v-model="row.maxContextTokens" type="text" :readonly="row.unlisted">
+										<template #label>{{ i18n.ts._agents.maxContextTokens }}</template>
+									</MkInput>
+									<MkInput v-model="row.maxOutputTokensPerCall" type="text" :readonly="row.unlisted">
+										<template #label>{{ i18n.ts._agents.maxOutputTokens }}</template>
+									</MkInput>
+								</FormSplit>
+								<MkSelect v-model="row.billingMode" :items="billingModeItems" :readonly="row.unlisted">
+									<template #label>{{ i18n.ts._agents.billingMode }}</template>
+									<template #caption>{{ i18n.ts._agents.billingModeCaption }}</template>
+								</MkSelect>
+								<template v-if="row.billingMode === 'usage'">
+									<FormSplit :minWidth="200">
+										<MkInput v-model="row.pricePerMillionInputCacheHitTokens" type="text" :readonly="row.unlisted">
+											<template #label>{{ i18n.ts._agents.billingInputCacheHit }}</template>
+											<template #caption>{{ i18n.ts._agents.billingPerMillionTokens }}</template>
+											<template #prefix><i class="ti ti-coin"></i></template>
+										</MkInput>
+										<MkInput v-model="row.pricePerMillionInputCacheMissTokens" type="text" :readonly="row.unlisted">
+											<template #label>{{ i18n.ts._agents.billingInputCacheMiss }}</template>
+											<template #caption>{{ i18n.ts._agents.billingPerMillionTokens }}</template>
+											<template #prefix><i class="ti ti-coin"></i></template>
+										</MkInput>
+										<MkInput v-model="row.pricePerMillionOutputTokens" type="text" :readonly="row.unlisted">
+											<template #label>{{ i18n.ts._agents.billingOutput }}</template>
+											<template #caption>{{ i18n.ts._agents.billingPerMillionTokens }}</template>
+											<template #prefix><i class="ti ti-coin"></i></template>
+										</MkInput>
+									</FormSplit>
+									<MkInput v-model="row.costPerCall" type="text" :readonly="row.unlisted">
+										<template #label>{{ i18n.ts._agents.modelCostPerCall }}</template>
+										<template #caption>{{ i18n.ts._agents.billingFallbackCostCaption }}</template>
+										<template #prefix><i class="ti ti-coin"></i></template>
+									</MkInput>
+									<MkInput v-model="row.peakPriceMultiplier" type="text" :readonly="row.unlisted">
+										<template #label>{{ i18n.ts._agents.billingPeakMultiplier }}</template>
+										<template #caption>{{ i18n.ts._agents.billingPeakMultiplierCaption }}</template>
+										<template #prefix><i class="ti ti-chart-line"></i></template>
+									</MkInput>
+								</template>
+								<MkInput v-else v-model="row.costPerCall" type="text" :readonly="row.unlisted">
+									<template #label>{{ i18n.ts._agents.modelCostPerCall }}</template>
+									<template #caption>{{ i18n.ts._agents.modelCostPerCallCaption }}</template>
+									<template #prefix><i class="ti ti-coin"></i></template>
+								</MkInput>
+								<MkInput v-model="row.dailyFreeQuota" type="text" :readonly="row.unlisted">
+									<template #label>每日免费次数</template>
+									<template #caption>设为 0 则无免费额度；每日 0 点（北京时间）重置</template>
+								</MkInput>
+								<FormSplit :minWidth="260">
+									<MkSelect v-model="row.tokenizerEncoding" :items="tokenizerEncodingItems" :readonly="row.unlisted">
+										<template #label>Token 编码器</template>
+										<template #caption>tiktoken/Gemini/GLM/DeepSeek 为精确计数（GLM/DeepSeek 需镜像预置词表，缺失时自动降级近似）；Claude 为兼容近似（≈）；不选则字符估算</template>
+									</MkSelect>
+									<MkSelect v-model="row.charsPerToken" :items="charsPerTokenItems" :readonly="row.unlisted">
+										<template #label>{{ i18n.ts._agents.adminCharsPerToken }}</template>
+										<template #caption>{{ i18n.ts._agents.adminCharsPerTokenCaption }}</template>
+									</MkSelect>
+								</FormSplit>
 							</div>
 						</div>
-						<MkInput v-model="row.name" :readonly="row.unlisted">
-							<template #label>{{ i18n.ts._agents.modelDisplayName }}</template>
-						</MkInput>
-						<div v-if="row.id.trim() !== ''" :class="$style.internalIdRow">
-							<span :class="$style.internalIdLabel">{{ i18n.ts._agents.fieldModelInternalId }}</span>
-							<code :class="$style.internalIdValue">{{ row.id }}</code>
-							<p :class="$style.internalIdCaption">{{ i18n.ts._agents.fieldModelInternalIdCaption }}</p>
-						</div>
-						<MkSelect v-model="row.groupId" :items="modelGroupItems" :readonly="row.unlisted">
-							<template #label>{{ i18n.ts._agents.modelGroup }}</template>
-						</MkSelect>
-						<MkTextarea v-model="row.description" :readonly="row.unlisted">
-							<template #label>{{ i18n.ts._agents.modelDescription }}</template>
-						</MkTextarea>
-						<MkInput v-model="row.baseUrl" type="text" :readonly="row.unlisted">
-							<template #label>{{ i18n.ts._agents.modelBaseUrl }}</template>
-							<template #caption>{{ i18n.ts._agents.fieldModelBaseUrlCaption }}</template>
-							<template #prefix><i class="ti ti-link"></i></template>
-						</MkInput>
-						<MkInput v-model="row.apiKey" type="password" :readonly="row.unlisted">
-							<template #label>{{ i18n.ts._agents.modelApiKey }}</template>
-						</MkInput>
-						<MkInput v-model="row.apiModelName" :readonly="row.unlisted">
-							<template #label>{{ i18n.ts._agents.modelApiName }}</template>
-							<template #caption>{{ i18n.ts._agents.fieldApiModelNameCaption }}</template>
-						</MkInput>
-						<FormSplit :minWidth="260">
-							<MkInput v-model="row.maxContextTokens" type="text" :readonly="row.unlisted">
-								<template #label>{{ i18n.ts._agents.maxContextTokens }}</template>
-							</MkInput>
-							<MkInput v-model="row.maxOutputTokensPerCall" type="text" :readonly="row.unlisted">
-								<template #label>{{ i18n.ts._agents.maxOutputTokens }}</template>
-							</MkInput>
-						</FormSplit>
-						<MkSelect v-model="row.billingMode" :items="billingModeItems" :readonly="row.unlisted">
-							<template #label>{{ i18n.ts._agents.billingMode }}</template>
-							<template #caption>{{ i18n.ts._agents.billingModeCaption }}</template>
-						</MkSelect>
-						<template v-if="row.billingMode === 'usage'">
-							<FormSplit :minWidth="200">
-								<MkInput v-model="row.pricePerMillionInputCacheHitTokens" type="text" :readonly="row.unlisted">
-									<template #label>{{ i18n.ts._agents.billingInputCacheHit }}</template>
-									<template #caption>{{ i18n.ts._agents.billingPerMillionTokens }}</template>
-									<template #prefix><i class="ti ti-coin"></i></template>
-								</MkInput>
-								<MkInput v-model="row.pricePerMillionInputCacheMissTokens" type="text" :readonly="row.unlisted">
-									<template #label>{{ i18n.ts._agents.billingInputCacheMiss }}</template>
-									<template #caption>{{ i18n.ts._agents.billingPerMillionTokens }}</template>
-									<template #prefix><i class="ti ti-coin"></i></template>
-								</MkInput>
-								<MkInput v-model="row.pricePerMillionOutputTokens" type="text" :readonly="row.unlisted">
-									<template #label>{{ i18n.ts._agents.billingOutput }}</template>
-									<template #caption>{{ i18n.ts._agents.billingPerMillionTokens }}</template>
-									<template #prefix><i class="ti ti-coin"></i></template>
-								</MkInput>
-							</FormSplit>
-							<MkInput v-model="row.costPerCall" type="text" :readonly="row.unlisted">
-								<template #label>{{ i18n.ts._agents.modelCostPerCall }}</template>
-								<template #caption>{{ i18n.ts._agents.billingFallbackCostCaption }}</template>
-								<template #prefix><i class="ti ti-coin"></i></template>
-							</MkInput>
-							<MkInput v-model="row.peakPriceMultiplier" type="text" :readonly="row.unlisted">
-								<template #label>{{ i18n.ts._agents.billingPeakMultiplier }}</template>
-								<template #caption>{{ i18n.ts._agents.billingPeakMultiplierCaption }}</template>
-								<template #prefix><i class="ti ti-chart-line"></i></template>
-							</MkInput>
-						</template>
-						<MkInput v-else v-model="row.costPerCall" type="text" :readonly="row.unlisted">
-							<template #label>{{ i18n.ts._agents.modelCostPerCall }}</template>
-							<template #caption>{{ i18n.ts._agents.modelCostPerCallCaption }}</template>
-							<template #prefix><i class="ti ti-coin"></i></template>
-						</MkInput>
-						<MkInput v-model="row.dailyFreeQuota" type="text" :readonly="row.unlisted">
-							<template #label>每日免费次数</template>
-							<template #caption>设为 0 则无免费额度；每日 0 点（北京时间）重置</template>
-						</MkInput>
-						<FormSplit :minWidth="260">
-							<MkSelect v-model="row.tokenizerEncoding" :items="tokenizerEncodingItems" :readonly="row.unlisted">
-								<template #label>Token 编码器</template>
-								<template #caption>tiktoken/Gemini/GLM/DeepSeek 为精确计数（GLM/DeepSeek 需镜像预置词表，缺失时自动降级近似）；Claude 为兼容近似（≈）；不选则字符估算</template>
-							</MkSelect>
-							<MkSelect v-model="row.charsPerToken" :items="charsPerTokenItems" :readonly="row.unlisted">
-								<template #label>{{ i18n.ts._agents.adminCharsPerToken }}</template>
-								<template #caption>{{ i18n.ts._agents.adminCharsPerTokenCaption }}</template>
-							</MkSelect>
-						</FormSplit>
-					</div>
-
-					<div>
-						<MkButton rounded @click="onAddModelMenu"><i class="ti ti-plus"></i> {{ i18n.ts._agents.addAgentModel }}</MkButton>
-					</div>
+					</template>
 
 				<MkSelect v-model="form.state.agentDefaultModelId" :items="defaultModelItems">
 					<template #label>{{ i18n.ts._agents.agentDefaultModelId }}</template>
@@ -554,181 +572,183 @@ SPDX-License-Identifier: AGPL-3.0-only
 					</MkSwitch>
 					<MkInfo>默认不提供任何生图模型。先添加模型，填写显示名称并选择提供商；选择 Aurora 后才会展开 Aurora 专属配置。</MkInfo>
 					<MkInfo v-if="form.state.agentImageModelRows.length === 0">当前没有生图模型。用户聊天界面会显示“无”，即关闭生图。</MkInfo>
-					<div v-for="(row, i) in form.state.agentImageModelRows" :key="row.id" :class="[$style.modelCard, row.enabled ? null : $style.modelCardUnlisted]" class="_gaps_s">
-						<div :class="$style.modelCardHead">
-							<span :class="$style.modelCardTitle">
-								{{ row.name.trim() || `生图模型 #${i + 1}` }}
+					<template v-for="section in imageModelSections" :key="section.key">
+						<div v-if="section.key === 'active' || section.rows.length > 0" :class="[$style.modelSectionHead, section.key === 'unlisted' ? $style.modelSectionHeadMuted : null]">
+							<span>{{ section.label }}<span :class="$style.modelSectionCount">{{ section.rows.length }}</span></span>
+							<MkButton v-if="section.key === 'active'" small rounded @click="onAddImageModelMenu"><i class="ti ti-plus"></i> 添加生图模型</MkButton>
+						</div>
+						<div v-for="row in section.rows" :key="row.id" :data-model-row-id="section.key === 'active' ? row.id : undefined" :class="[$style.modelRow, row.enabled ? null : $style.modelRowUnlisted, modelRowDrag?.id === row.id ? $style.modelRowDragging : null, modelRowDrag?.id === row.id && modelRowDrag.snapping ? $style.modelRowSnapping : null, modelRowDrag != null && modelRowDrag.id !== row.id ? $style.modelRowShiftable : null, modelRowDrag != null && modelRowDrag.overId === row.id ? (modelRowDrag.overPos === 'before' ? $style.modelRowDropBefore : $style.modelRowDropAfter) : null]" :style="modelRowDragStyle(row.id)">
+							<div :class="$style.modelRowHead" @click="toggleImageModelExpanded(row.id)">
+								<i class="ti ti-chevron-right" :class="[$style.modelRowChevron, isImageModelExpanded(row.id) ? $style.modelRowChevronOpen : null]"></i>
+								<span :class="$style.modelRowTitle">{{ row.name.trim() || '未命名生图模型' }}</span>
 								<span v-if="!row.enabled" :class="$style.unlistedBadge">{{ i18n.ts._agents.adminModelUnlistedBadge }}</span>
-							</span>
-							<div :class="$style.modelCardActions">
-								<button type="button" class="_button" :class="$style.iconMuted" :title="i18n.ts._agents.adminModelCopy" @click="copyImageModelRow(i)">
-									<i class="ti ti-copy"></i>
-								</button>
-								<button type="button" class="_button" :class="$style.iconMuted" :disabled="i === 0" :title="i18n.ts._agents.adminModelMoveUp" @click="moveImageModelRow(i, -1)">
-									<i class="ti ti-arrow-up"></i>
-								</button>
-								<button type="button" class="_button" :class="$style.iconMuted" :disabled="i === form.state.agentImageModelRows.length - 1" :title="i18n.ts._agents.adminModelMoveDown" @click="moveImageModelRow(i, 1)">
-									<i class="ti ti-arrow-down"></i>
-								</button>
-								<button v-if="row.enabled" type="button" class="_button" :class="$style.iconWarn" :title="i18n.ts._agents.adminModelUnlist" @click="toggleImageModelEnabled(i, false)">
-									<i class="ti ti-archive"></i>
-								</button>
-								<button v-else type="button" class="_button" :class="$style.iconMuted" :title="i18n.ts._agents.adminModelRelist" @click="toggleImageModelEnabled(i, true)">
-									<i class="ti ti-eye"></i>
-								</button>
-								<button type="button" class="_button" :class="$style.iconDanger" title="删除生图模型" @click="removeImageModel(i)">
-									<i class="ti ti-trash"></i>
-								</button>
-							</div>
-						</div>
-						<div v-if="row.id.trim() !== ''" :class="$style.internalIdRow">
-							<span :class="$style.internalIdLabel">{{ i18n.ts._agents.fieldModelInternalId }}</span>
-							<code :class="$style.internalIdValue">{{ row.id }}</code>
-							<p :class="$style.internalIdCaption">{{ i18n.ts._agents.fieldModelInternalIdCaption }}</p>
-						</div>
-						<FormSplit :minWidth="220">
-							<MkInput v-model="row.name" :readonly="!row.enabled"><template #label>显示名称</template></MkInput>
-							<MkSelect v-model="row.provider" :items="agentImageProviderItems" :readonly="!row.enabled"><template #label>模型提供商</template></MkSelect>
-						</FormSplit>
-						<MkTextarea v-model="row.description" :readonly="!row.enabled">
-							<template #label>{{ i18n.ts._agents.adminImageModelDescription }}</template>
-							<template #caption>{{ i18n.ts._agents.adminImageModelDescriptionCaption }}</template>
-						</MkTextarea>
-						<template v-if="row.provider === 'aurora'">
-							<FormSplit :minWidth="220">
-								<MkInput v-model="row.apiModelName" :readonly="!row.enabled"><template #label>Aurora 上游模型名</template></MkInput>
-								<MkInput v-model="row.costPerCall" type="text" :readonly="!row.enabled"><template #label>每张扣费</template></MkInput>
-							</FormSplit>
-							<MkInput v-model="row.dailyFreeQuota" type="text" :readonly="!row.enabled">
-								<template #label>每日免费次数</template>
-								<template #caption>设为 0 则无免费额度；每日 0 点（北京时间）重置</template>
-							</MkInput>
-							<MkInput v-model="row.defaultArtistPresetId" :readonly="!row.enabled"><template #label>默认画师串 ID</template></MkInput>
-							<MkInfo warn>以下是 Aurora 参数。不了解时保持默认；会话页可在此基础上个性化覆盖。</MkInfo>
-							<FormSplit :minWidth="180">
-								<MkInput v-model="row.steps" type="text" :readonly="!row.enabled"><template #label>Steps</template></MkInput>
-								<MkInput v-model="row.scale" type="text" :readonly="!row.enabled"><template #label>Scale</template></MkInput>
-								<MkInput v-model="row.cfgRescale" type="text" :readonly="!row.enabled"><template #label>CFG Rescale</template></MkInput>
-							</FormSplit>
-							<FormSplit :minWidth="220">
-								<MkInput v-model="row.sampler" :readonly="!row.enabled"><template #label>Sampler</template></MkInput>
-								<MkInput v-model="row.noiseSchedule" :readonly="!row.enabled"><template #label>Noise Schedule</template></MkInput>
-							</FormSplit>
-							<MkTextarea v-model="row.promptPrefix" :readonly="!row.enabled"><template #label>Prompt Prefix</template></MkTextarea>
-							<MkTextarea v-model="row.promptSuffix" :readonly="!row.enabled"><template #label>Prompt Suffix</template></MkTextarea>
-						</template>
-						<template v-else-if="row.provider === 'qwen'">
-							<FormSplit :minWidth="220">
-								<MkInput v-model="row.apiUrl" :readonly="!row.enabled">
-									<template #label>{{ i18n.ts._agents.adminQwenImageRequestUrl }}</template>
-									<template #caption>{{ i18n.ts._agents.adminQwenImageRequestUrlCaption }}</template>
-								</MkInput>
-								<MkInput v-model="row.apiKey" type="password" :readonly="!row.enabled"><template #label>{{ i18n.ts._agents.adminQwenImageApiKey }}</template></MkInput>
-							</FormSplit>
-							<FormSplit :minWidth="220">
-								<MkInput v-model="row.apiModelName" :readonly="!row.enabled"><template #label>{{ i18n.ts._agents.adminQwenImageModelName }}</template></MkInput>
-								<MkInput v-model="row.costPerCall" type="text" :readonly="!row.enabled"><template #label>{{ i18n.ts._agents.adminImageModelCost }}</template></MkInput>
-							</FormSplit>
-							<MkInput v-model="row.dailyFreeQuota" type="text" :readonly="!row.enabled">
-								<template #label>每日免费次数</template>
-								<template #caption>设为 0 则无免费额度；每日 0 点（北京时间）重置</template>
-							</MkInput>
-							<MkInfo warn>Qwen-Image 接口使用 DashScope 风格协议（input/parameters），同步返回 output.results 图片地址，不支持参考图。</MkInfo>
-						</template>
-						<template v-else>
-							<FormSplit :minWidth="220">
-								<MkInput v-model="row.apiUrl" :readonly="!row.enabled">
-									<template #label>{{ i18n.ts._agents.adminOpenaiImageRequestUrl }}</template>
-									<template #caption>{{ i18n.ts._agents.adminOpenaiImageRequestUrlCaption }}</template>
-								</MkInput>
-								<MkInput v-model="row.apiKey" type="password" :readonly="!row.enabled"><template #label>{{ i18n.ts._agents.adminOpenaiImageApiKey }}</template></MkInput>
-							</FormSplit>
-							<FormSplit :minWidth="220">
-								<MkInput v-model="row.apiModelName" :readonly="!row.enabled"><template #label>{{ i18n.ts._agents.adminOpenaiImageModelName }}</template></MkInput>
-								<MkInput v-model="row.costPerCall" type="text" :readonly="!row.enabled"><template #label>{{ i18n.ts._agents.adminImageModelCost }}</template></MkInput>
-							</FormSplit>
-							<MkInput v-model="row.dailyFreeQuota" type="text" :readonly="!row.enabled">
-								<template #label>每日免费次数</template>
-								<template #caption>设为 0 则无免费额度；每日 0 点（北京时间）重置</template>
-							</MkInput>
-							<MkSwitch v-model="row.supportsReferenceImage" :disabled="!row.enabled">
-								<template #label>{{ i18n.ts._agents.adminImageModelReferenceImage }}</template>
-								<template #caption>{{ i18n.ts._agents.adminImageModelReferenceImageCaption }}</template>
-							</MkSwitch>
-						</template>
-					</div>
-					<div>
-						<MkButton rounded @click="onAddImageModelMenu"><i class="ti ti-plus"></i> 添加生图模型</MkButton>
-					</div>
-					<div v-if="hasAuroraImageModel" v-panel :class="$style.modelCard" class="_gaps_s">
-						<div :class="$style.modelCardHead">
-							<b>Aurora 提供商配置</b>
-						</div>
-						<MkInput v-model="form.state.agentImageBaseUrl">
-							<template #label>Aurora Base URL</template>
-						</MkInput>
-						<div v-for="(row, i) in form.state.agentImageTokenRows" :key="row.id" :class="$style.tokenCard" class="_gaps_s">
-							<div :class="$style.modelCardHead">
-								<b>Token #{{ i + 1 }}</b>
-								<button type="button" class="_button" :class="$style.iconWarn" @click="removeImageToken(i)"><i class="ti ti-trash"></i></button>
-							</div>
-							<FormSplit :minWidth="220">
-								<MkInput v-model="row.name"><template #label>备注</template></MkInput>
-								<MkInput v-model="row.token" type="password"><template #label>Token</template></MkInput>
-							</FormSplit>
-							<FormSplit :minWidth="180">
-								<MkInput v-model="row.sortOrder" type="text"><template #label>排序</template></MkInput>
-								<MkSwitch v-model="row.enabled"><template #label>启用</template></MkSwitch>
-							</FormSplit>
-							<div :class="$style.tokenMeta">
-								<span>余额：{{ row.points === '' ? '未知' : row.points }}</span>
-								<span>最后使用：{{ row.lastUsedAt || '未知' }}</span>
-								<span v-if="row.lastError">错误：{{ row.lastError }}</span>
-							</div>
-						</div>
-						<div class="_buttons">
-							<MkButton rounded @click="addImageToken"><i class="ti ti-plus"></i> 添加 Token</MkButton>
-							<MkButton rounded :disabled="imageTokenRefreshing" @click="refreshImageTokens"><i class="ti ti-refresh"></i> 刷新余额</MkButton>
-						</div>
-						<MkFolder :defaultOpen="true">
-							<template #icon><i class="ti ti-brush"></i></template>
-							<template #label>画师串管理</template>
-							<div class="_gaps">
-								<MkInfo>这些画师串只作用于 Aurora / Naval AI 模型。用户和智能体只选择名称，实际前缀、后缀、负面提示词由后端填充。</MkInfo>
-								<div v-if="form.state.agentImageArtistPresetRows.length === 0" :class="$style.emptyModels">当前没有画师串，聊天页将没有可选画师串。</div>
-								<div :class="$style.artistPresetGrid">
-									<div v-for="(preset, presetIndex) in form.state.agentImageArtistPresetRows" :key="preset.id" :class="$style.artistPresetCard" class="_gaps_s">
-										<div :class="$style.modelCardHead">
-											<b>{{ preset.name.trim() || `画师串 #${presetIndex + 1}` }}</b>
-											<button type="button" class="_button" :class="$style.iconWarn" title="删除画师串" @click="removeImageArtistPreset(presetIndex)">
-												<i class="ti ti-trash"></i>
-											</button>
-										</div>
-										<div :class="$style.artistPresetPreview">
-											<img v-if="preset.thumbnailUrl" :src="preset.thumbnailUrl" alt=""/>
-											<i v-else class="ti ti-brush"></i>
-										</div>
-										<div class="_buttons">
-											<MkButton small rounded @click="selectImageArtistPresetThumbnail(presetIndex, $event)"><i class="ti ti-photo-plus"></i> 选择预览图</MkButton>
-											<MkButton v-if="preset.thumbnailUrl" small rounded @click="clearImageArtistPresetThumbnail(presetIndex)"><i class="ti ti-x"></i> 清除</MkButton>
-										</div>
-										<FormSplit :minWidth="220">
-											<MkInput v-model="preset.name"><template #label>名称</template></MkInput>
-											<MkInput v-model="preset.id"><template #label>ID</template><template #caption>用于模型默认画师串和会话配置引用。</template></MkInput>
-										</FormSplit>
-										<MkInput v-model="preset.thumbnailUrl">
-											<template #label>预览图 URL</template>
-											<template #caption>可通过上方按钮上传到 Drive，也可以粘贴已有图片地址。</template>
-										</MkInput>
-										<MkTextarea v-model="preset.promptPrefix"><template #label>Prompt Prefix</template></MkTextarea>
-										<MkTextarea v-model="preset.promptSuffix"><template #label>Prompt Suffix</template></MkTextarea>
-										<MkTextarea v-model="preset.negativePrompt"><template #label>Negative Prompt</template></MkTextarea>
-									</div>
+								<span :class="$style.modelRowMeta">{{ imageModelRowMeta(row) }}</span>
+								<div :class="$style.modelCardActions" @click.stop>
+									<button type="button" class="_button" :class="$style.iconMuted" :title="i18n.ts._agents.adminModelCopy" @click="copyImageModelRow(row)">
+										<i class="ti ti-copy"></i>
+									</button>
+									<template v-if="row.enabled">
+										<button type="button" class="_button" :class="$style.iconWarn" :title="i18n.ts._agents.adminModelUnlist" @click="toggleImageModelEnabled(row, false)">
+											<i class="ti ti-archive"></i>
+										</button>
+										<span :class="$style.modelRowGrip" title="长按拖动排序" @pointerdown="onModelRowGripPointerDown($event, 'image', row)" @contextmenu.prevent>
+											<i class="ti ti-grip-vertical"></i>
+										</span>
+									</template>
+									<button v-else type="button" class="_button" :class="$style.iconMuted" :title="i18n.ts._agents.adminModelRelist" @click="toggleImageModelEnabled(row, true)">
+										<i class="ti ti-eye"></i>
+									</button>
 								</div>
-								<MkButton rounded @click="addImageArtistPreset"><i class="ti ti-plus"></i> 添加画师串</MkButton>
 							</div>
-						</MkFolder>
-					</div>
+							<div v-if="isImageModelExpanded(row.id)" :class="$style.modelRowBody" class="_gaps_s">
+								<div v-if="row.id.trim() !== ''" :class="$style.internalIdRow">
+									<span :class="$style.internalIdLabel">{{ i18n.ts._agents.fieldModelInternalId }}</span>
+									<code :class="$style.internalIdValue">{{ row.id }}</code>
+									<p :class="$style.internalIdCaption">{{ i18n.ts._agents.fieldModelInternalIdCaption }}</p>
+								</div>
+								<FormSplit :minWidth="220">
+									<MkInput v-model="row.name" :readonly="!row.enabled"><template #label>显示名称</template></MkInput>
+									<MkSelect v-model="row.provider" :items="agentImageProviderItems" :readonly="!row.enabled"><template #label>模型提供商</template></MkSelect>
+								</FormSplit>
+								<MkTextarea v-model="row.description" :readonly="!row.enabled">
+									<template #label>{{ i18n.ts._agents.adminImageModelDescription }}</template>
+									<template #caption>{{ i18n.ts._agents.adminImageModelDescriptionCaption }}</template>
+								</MkTextarea>
+								<template v-if="row.provider === 'aurora'">
+									<FormSplit :minWidth="220">
+										<MkInput v-model="row.apiModelName" :readonly="!row.enabled"><template #label>Aurora 上游模型名</template></MkInput>
+										<MkInput v-model="row.costPerCall" type="text" :readonly="!row.enabled"><template #label>每张扣费</template></MkInput>
+									</FormSplit>
+									<MkInput v-model="row.dailyFreeQuota" type="text" :readonly="!row.enabled">
+										<template #label>每日免费次数</template>
+										<template #caption>设为 0 则无免费额度；每日 0 点（北京时间）重置</template>
+									</MkInput>
+									<MkInput v-model="row.defaultArtistPresetId" :readonly="!row.enabled"><template #label>默认画师串 ID</template></MkInput>
+									<MkInfo warn>以下是 Aurora 参数。不了解时保持默认；会话页可在此基础上个性化覆盖。</MkInfo>
+									<FormSplit :minWidth="180">
+										<MkInput v-model="row.steps" type="text" :readonly="!row.enabled"><template #label>Steps</template></MkInput>
+										<MkInput v-model="row.scale" type="text" :readonly="!row.enabled"><template #label>Scale</template></MkInput>
+										<MkInput v-model="row.cfgRescale" type="text" :readonly="!row.enabled"><template #label>CFG Rescale</template></MkInput>
+									</FormSplit>
+									<FormSplit :minWidth="220">
+										<MkInput v-model="row.sampler" :readonly="!row.enabled"><template #label>Sampler</template></MkInput>
+										<MkInput v-model="row.noiseSchedule" :readonly="!row.enabled"><template #label>Noise Schedule</template></MkInput>
+									</FormSplit>
+									<MkTextarea v-model="row.promptPrefix" :readonly="!row.enabled"><template #label>Prompt Prefix</template></MkTextarea>
+									<MkTextarea v-model="row.promptSuffix" :readonly="!row.enabled"><template #label>Prompt Suffix</template></MkTextarea>
+								</template>
+								<template v-else-if="row.provider === 'qwen'">
+									<FormSplit :minWidth="220">
+										<MkInput v-model="row.apiUrl" :readonly="!row.enabled">
+											<template #label>{{ i18n.ts._agents.adminQwenImageRequestUrl }}</template>
+											<template #caption>{{ i18n.ts._agents.adminQwenImageRequestUrlCaption }}</template>
+										</MkInput>
+										<MkInput v-model="row.apiKey" type="password" :readonly="!row.enabled"><template #label>{{ i18n.ts._agents.adminQwenImageApiKey }}</template></MkInput>
+									</FormSplit>
+									<FormSplit :minWidth="220">
+										<MkInput v-model="row.apiModelName" :readonly="!row.enabled"><template #label>{{ i18n.ts._agents.adminQwenImageModelName }}</template></MkInput>
+										<MkInput v-model="row.costPerCall" type="text" :readonly="!row.enabled"><template #label>{{ i18n.ts._agents.adminImageModelCost }}</template></MkInput>
+									</FormSplit>
+									<MkInput v-model="row.dailyFreeQuota" type="text" :readonly="!row.enabled">
+										<template #label>每日免费次数</template>
+										<template #caption>设为 0 则无免费额度；每日 0 点（北京时间）重置</template>
+									</MkInput>
+									<MkInfo warn>Qwen-Image 接口使用 DashScope 风格协议（input/parameters），同步返回 output.results 图片地址，不支持参考图。</MkInfo>
+								</template>
+								<template v-else>
+									<FormSplit :minWidth="220">
+										<MkInput v-model="row.apiUrl" :readonly="!row.enabled">
+											<template #label>{{ i18n.ts._agents.adminOpenaiImageRequestUrl }}</template>
+											<template #caption>{{ i18n.ts._agents.adminOpenaiImageRequestUrlCaption }}</template>
+										</MkInput>
+										<MkInput v-model="row.apiKey" type="password" :readonly="!row.enabled"><template #label>{{ i18n.ts._agents.adminOpenaiImageApiKey }}</template></MkInput>
+									</FormSplit>
+									<FormSplit :minWidth="220">
+										<MkInput v-model="row.apiModelName" :readonly="!row.enabled"><template #label>{{ i18n.ts._agents.adminOpenaiImageModelName }}</template></MkInput>
+										<MkInput v-model="row.costPerCall" type="text" :readonly="!row.enabled"><template #label>{{ i18n.ts._agents.adminImageModelCost }}</template></MkInput>
+									</FormSplit>
+									<MkInput v-model="row.dailyFreeQuota" type="text" :readonly="!row.enabled">
+										<template #label>每日免费次数</template>
+										<template #caption>设为 0 则无免费额度；每日 0 点（北京时间）重置</template>
+									</MkInput>
+									<MkSwitch v-model="row.supportsReferenceImage" :disabled="!row.enabled">
+										<template #label>{{ i18n.ts._agents.adminImageModelReferenceImage }}</template>
+										<template #caption>{{ i18n.ts._agents.adminImageModelReferenceImageCaption }}</template>
+									</MkSwitch>
+								</template>
+							</div>
+						</div>
+					</template>
+					<MkFolder v-if="hasAuroraImageModel">
+						<template #icon><i class="ti ti-cloud-cog"></i></template>
+						<template #label>Aurora 提供商配置</template>
+						<div class="_gaps">
+							<MkInput v-model="form.state.agentImageBaseUrl">
+								<template #label>Aurora Base URL</template>
+							</MkInput>
+							<div v-for="(row, i) in form.state.agentImageTokenRows" :key="row.id" :class="$style.tokenCard" class="_gaps_s">
+								<div :class="$style.modelCardHead">
+									<b>Token #{{ i + 1 }}</b>
+									<button type="button" class="_button" :class="$style.iconWarn" @click="removeImageToken(i)"><i class="ti ti-trash"></i></button>
+								</div>
+								<FormSplit :minWidth="220">
+									<MkInput v-model="row.name"><template #label>备注</template></MkInput>
+									<MkInput v-model="row.token" type="password"><template #label>Token</template></MkInput>
+								</FormSplit>
+								<FormSplit :minWidth="180">
+									<MkInput v-model="row.sortOrder" type="text"><template #label>排序</template></MkInput>
+									<MkSwitch v-model="row.enabled"><template #label>启用</template></MkSwitch>
+								</FormSplit>
+								<div :class="$style.tokenMeta">
+									<span>余额：{{ row.points === '' ? '未知' : row.points }}</span>
+									<span>最后使用：{{ row.lastUsedAt || '未知' }}</span>
+									<span v-if="row.lastError">错误：{{ row.lastError }}</span>
+								</div>
+							</div>
+							<div class="_buttons">
+								<MkButton rounded @click="addImageToken"><i class="ti ti-plus"></i> 添加 Token</MkButton>
+								<MkButton rounded :disabled="imageTokenRefreshing" @click="refreshImageTokens"><i class="ti ti-refresh"></i> 刷新余额</MkButton>
+							</div>
+							<MkFolder :defaultOpen="true">
+								<template #icon><i class="ti ti-brush"></i></template>
+								<template #label>画师串管理</template>
+								<div class="_gaps">
+									<MkInfo>这些画师串只作用于 Aurora / Naval AI 模型。用户和智能体只选择名称，实际前缀、后缀、负面提示词由后端填充。</MkInfo>
+									<div v-if="form.state.agentImageArtistPresetRows.length === 0" :class="$style.emptyModels">当前没有画师串，聊天页将没有可选画师串。</div>
+									<div :class="$style.artistPresetGrid">
+										<div v-for="(preset, presetIndex) in form.state.agentImageArtistPresetRows" :key="preset.id" :class="$style.artistPresetCard" class="_gaps_s">
+											<div :class="$style.modelCardHead">
+												<b>{{ preset.name.trim() || `画师串 #${presetIndex + 1}` }}</b>
+												<button type="button" class="_button" :class="$style.iconWarn" title="删除画师串" @click="removeImageArtistPreset(presetIndex)">
+													<i class="ti ti-trash"></i>
+												</button>
+											</div>
+											<div :class="$style.artistPresetPreview">
+												<img v-if="preset.thumbnailUrl" :src="preset.thumbnailUrl" alt=""/>
+												<i v-else class="ti ti-brush"></i>
+											</div>
+											<div class="_buttons">
+												<MkButton small rounded @click="selectImageArtistPresetThumbnail(presetIndex, $event)"><i class="ti ti-photo-plus"></i> 选择预览图</MkButton>
+												<MkButton v-if="preset.thumbnailUrl" small rounded @click="clearImageArtistPresetThumbnail(presetIndex)"><i class="ti ti-x"></i> 清除</MkButton>
+											</div>
+											<FormSplit :minWidth="220">
+												<MkInput v-model="preset.name"><template #label>名称</template></MkInput>
+												<MkInput v-model="preset.id"><template #label>ID</template><template #caption>用于模型默认画师串和会话配置引用。</template></MkInput>
+											</FormSplit>
+											<MkInput v-model="preset.thumbnailUrl">
+												<template #label>预览图 URL</template>
+												<template #caption>可通过上方按钮上传到 Drive，也可以粘贴已有图片地址。</template>
+											</MkInput>
+											<MkTextarea v-model="preset.promptPrefix"><template #label>Prompt Prefix</template></MkTextarea>
+											<MkTextarea v-model="preset.promptSuffix"><template #label>Prompt Suffix</template></MkTextarea>
+											<MkTextarea v-model="preset.negativePrompt"><template #label>Negative Prompt</template></MkTextarea>
+										</div>
+									</div>
+									<MkButton rounded @click="addImageArtistPreset"><i class="ti ti-plus"></i> 添加画师串</MkButton>
+								</div>
+							</MkFolder>
+						</div>
+					</MkFolder>
 					<FormSplit :minWidth="180">
 						<MkInput v-model="form.state.agentImageMaxPerReply" type="text">
 							<template #label>每轮最多图片</template>
@@ -1161,7 +1181,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { computed, onMounted, reactive, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import type { MkSelectItem } from '@/components/MkSelect.vue';
 import type { MenuItem } from '@/types/menu.js';
 import MkInput from '@/components/MkInput.vue';
@@ -1220,7 +1240,8 @@ type AgentLlmModelRow = {
 	name: string;
 	description: string;
 	baseUrl: string;
-	apiKey: string;
+	apiKeys: string[];
+	multiKeyEnabled: boolean;
 	apiModelName: string;
 	maxContextTokens: string;
 	maxOutputTokensPerCall: string;
@@ -1426,12 +1447,18 @@ function initAgentLlmModelRows(): AgentLlmModelRow[] {
 		if (!name.trim() || !apiModelName.trim()) continue;
 		let description = '';
 		if (typeof o.description === 'string') description = o.description;
+		const apiKeys = Array.isArray(o.apiKeys)
+			? o.apiKeys.filter((key): key is string => typeof key === 'string')
+			: [];
+		const legacyApiKey = typeof o.apiKey === 'string' ? o.apiKey : '';
+		if (apiKeys.length === 0) apiKeys.push(legacyApiKey);
 		rows.push({
 			id: idRaw || genId(),
 			name,
 			description,
 			baseUrl: typeof o.baseUrl === 'string' ? o.baseUrl : '',
-			apiKey: typeof o.apiKey === 'string' ? o.apiKey : '',
+			apiKeys,
+			multiKeyEnabled: o.multiKeyEnabled === true,
 			apiModelName,
 			maxContextTokens: String(numFromMeta(o.maxContextTokens, 8192)),
 			maxOutputTokensPerCall: String(numFromMeta(o.maxOutputTokensPerCall, 2048)),
@@ -1453,7 +1480,7 @@ function initAgentLlmModelRows(): AgentLlmModelRow[] {
 
 function rowIsBlank(row: AgentLlmModelRow): boolean {
 	return !row.name.trim() && !row.description.trim() && !row.baseUrl.trim()
-		&& !row.apiKey.trim() && !row.apiModelName.trim();
+		&& !row.apiKeys.some(key => key.trim() !== '') && !row.apiModelName.trim();
 }
 
 function initAgentLlmModelGroupRows(): AgentLlmModelGroupRow[] {
@@ -1694,6 +1721,8 @@ const form = useForm({
 		description: string | null;
 		baseUrl: string;
 		apiKey: string;
+		apiKeys: string[];
+		multiKeyEnabled: boolean;
 		apiModelName: string;
 		maxContextTokens: number;
 		maxOutputTokensPerCall: number;
@@ -1720,7 +1749,8 @@ const form = useForm({
 		}
 		const name = row.name.trim();
 		const baseUrl = row.baseUrl.trim();
-		const apiKey = row.apiKey.trim();
+		const apiKeys = [...new Set(row.apiKeys.map(key => key.trim()).filter(key => key !== ''))];
+		const apiKey = apiKeys[0] ?? '';
 		const apiModelName = row.apiModelName.trim();
 		const descRaw = row.description.trim();
 		const maxCtx = Math.trunc(Number(row.maxContextTokens));
@@ -1773,6 +1803,8 @@ const form = useForm({
 			description: descRaw === '' ? null : descRaw,
 			baseUrl,
 			apiKey,
+			apiKeys,
+			multiKeyEnabled: row.multiKeyEnabled,
 			apiModelName,
 			maxContextTokens: maxCtx,
 			maxOutputTokensPerCall: maxOut,
@@ -2682,13 +2714,24 @@ function onAddModelMenu(ev: MouseEvent) {
 	os.popupMenu(items, ev.currentTarget ?? ev.target);
 }
 
+function addLlmApiKey(row: AgentLlmModelRow) {
+	row.apiKeys.push('');
+}
+
+function removeLlmApiKey(row: AgentLlmModelRow, index: number) {
+	if (row.apiKeys.length <= 1) return;
+	row.apiKeys.splice(index, 1);
+}
+
 function addRow() {
+	const id = genId();
 	form.state.agentLlmModelRows.push({
-		id: genId(),
+		id,
 		name: '',
 		description: '',
 		baseUrl: '',
-		apiKey: '',
+		apiKeys: [''],
+		multiKeyEnabled: false,
 		apiModelName: '',
 		maxContextTokens: '8192',
 		maxOutputTokensPerCall: '2048',
@@ -2704,6 +2747,7 @@ function addRow() {
 		tokenizerEncoding: '',
 		dailyFreeQuota: '0',
 	});
+	expandedLlmModelIds.value.push(id);
 }
 
 function onAddByokProvider() {
@@ -2725,12 +2769,14 @@ function addDeepSeekOfficialRow(variant: 'flash' | 'pro') {
 	const preset = variant === 'flash'
 		? { name: 'DeepSeek-V4-Flash（官方）', apiModelName: 'deepseek-v4-flash', tokenizerEncoding: 'deepseek:deepseek-v4-flash', hit: '0.02', miss: '1', output: '2' }
 		: { name: 'DeepSeek-V4-Pro（官方）', apiModelName: 'deepseek-v4-pro', tokenizerEncoding: 'deepseek:deepseek-v4-pro', hit: '0.025', miss: '3', output: '6' };
+	const id = genId();
 	form.state.agentLlmModelRows.push({
-		id: genId(),
+		id,
 		name: preset.name,
 		description: i18n.ts._agents.billingDeepseekPresetDesc,
 		baseUrl: 'https://api.deepseek.com',
-		apiKey: '',
+		apiKeys: [''],
+		multiKeyEnabled: false,
 		apiModelName: preset.apiModelName,
 		maxContextTokens: '1000000',
 		maxOutputTokensPerCall: '32768',
@@ -2746,10 +2792,10 @@ function addDeepSeekOfficialRow(variant: 'flash' | 'pro') {
 		tokenizerEncoding: preset.tokenizerEncoding,
 		dailyFreeQuota: '0',
 	});
+	expandedLlmModelIds.value.push(id);
 }
 
-async function toggleUnlist(index: number, next: boolean) {
-	const row = form.state.agentLlmModelRows[index];
+async function toggleUnlist(row: AgentLlmModelRow, next: boolean) {
 	if (next === true) {
 		const ok = await os.confirm({
 			type: 'warning',
@@ -2766,6 +2812,60 @@ async function toggleUnlist(index: number, next: boolean) {
 	row.unlisted = next;
 }
 
+/** 模型卡片展开态（按内部 id 记录；下架区卡片同样可展开查看） */
+const expandedLlmModelIds = ref<string[]>([]);
+const expandedImageModelIds = ref<string[]>([]);
+
+function isLlmModelExpanded(id: string): boolean {
+	return expandedLlmModelIds.value.includes(id);
+}
+
+function toggleLlmModelExpanded(id: string) {
+	if (isLlmModelExpanded(id)) {
+		expandedLlmModelIds.value = expandedLlmModelIds.value.filter(x => x !== id);
+	} else {
+		expandedLlmModelIds.value.push(id);
+	}
+}
+
+function isImageModelExpanded(id: string): boolean {
+	return expandedImageModelIds.value.includes(id);
+}
+
+function toggleImageModelExpanded(id: string) {
+	if (isImageModelExpanded(id)) {
+		expandedImageModelIds.value = expandedImageModelIds.value.filter(x => x !== id);
+	} else {
+		expandedImageModelIds.value.push(id);
+	}
+}
+
+/** 列表分区：上架中在前，已下架统一沉底 */
+const llmModelSections = computed(() => [
+	{ key: 'active', label: '上架中', rows: form.state.agentLlmModelRows.filter(r => !r.unlisted) },
+	{ key: 'unlisted', label: '已下架', rows: form.state.agentLlmModelRows.filter(r => r.unlisted) },
+]);
+
+const imageModelSections = computed(() => [
+	{ key: 'active', label: '上架中', rows: form.state.agentImageModelRows.filter(r => r.enabled) },
+	{ key: 'unlisted', label: '已下架', rows: form.state.agentImageModelRows.filter(r => !r.enabled) },
+]);
+
+/** 卡片折叠态的一行摘要 */
+function llmModelRowMeta(row: AgentLlmModelRow): string {
+	const group = form.state.agentLlmModelGroupRows.find(g => g.id === row.groupId);
+	const billing = row.billingMode === 'usage'
+		? i18n.ts._agents.billingModeUsage
+		: `${i18n.ts._agents.billingModePerCall} ${row.costPerCall || '0'}`;
+	return [row.apiModelName.trim() || '未填上游模型', group ? (group.name.trim() || group.id) : i18n.ts._agents.modelGroupNone, billing].join(' · ');
+}
+
+function imageModelRowMeta(row: AgentImageModelRow): string {
+	const providerItem = agentImageProviderItems.find(p => 'value' in p && p.value === row.provider);
+	const provider = providerItem && 'value' in providerItem ? providerItem.label : row.provider;
+	return [provider, row.apiModelName.trim() || '未填模型名', `每次 ${row.costPerCall || '0'}`].join(' · ');
+}
+
 /** 模型卡片「分组」下拉选项：无分组 + 现有分组 */
 const modelGroupItems = computed<MkSelectItem[]>(() => [
 	{ value: '', label: i18n.ts._agents.modelGroupNone },
@@ -2773,26 +2873,199 @@ const modelGroupItems = computed<MkSelectItem[]>(() => [
 ]);
 
 /** 复制模型：深拷贝该行并生成新 id，插入到原模型之后 */
-function copyModelRow(index: number) {
-	const src = form.state.agentLlmModelRows[index];
-	if (!src) return;
+function copyModelRow(src: AgentLlmModelRow) {
+	const index = form.state.agentLlmModelRows.indexOf(src);
+	if (index < 0) return;
 	const copy: AgentLlmModelRow = {
 		...src,
 		id: genId(),
 		name: `${src.name.trim()}${i18n.ts._agents.adminModelCopySuffix}`,
+		apiKeys: [...src.apiKeys],
 		unlisted: false,
 	};
 	form.state.agentLlmModelRows.splice(index + 1, 0, copy);
+	expandedLlmModelIds.value.push(copy.id);
 }
 
-/** 移动模型顺序：dir 为 -1（上移）或 1（下移），重排后整批保存 */
-function moveModelRow(index: number, dir: -1 | 1) {
-	const rows = form.state.agentLlmModelRows;
-	const target = index + dir;
-	if (target < 0 || target >= rows.length) return;
-	const [row] = rows.splice(index, 1);
-	rows.splice(target, 0, row);
+/** 长按拖动手柄排序：按住手柄 400ms 进入拖拽（行跟随指针、其余行实时让位），松手吸附落位；仅上架区可拖 */
+const MODEL_ROW_DRAG_HOLD_MS = 400;
+const MODEL_ROW_SNAP_MS = 170;
+
+type ModelRowDrag = {
+	kind: 'llm' | 'image';
+	id: string;
+	startY: number;
+	dy: number;
+	overId: string | null;
+	overPos: 'before' | 'after';
+	/** 拖动行在上架区（含自身）的原始索引 */
+	from: number;
+	/** 行距（行高 + 间距），让位与吸附的位移单位 */
+	rowH: number;
+	/** 插入点在不包含拖动行的上架区数组中的索引 */
+	insertIndex: number;
+	/** 松手后的吸附动画中：锁定 dy，不再响应指针移动 */
+	snapping: boolean;
+};
+
+const modelRowDrag = ref<ModelRowDrag | null>(null);
+
+let dragHoldTimer: number | null = null;
+let dragSnapTimer: number | null = null;
+
+function onModelRowGripPointerDown(ev: PointerEvent, kind: 'llm' | 'image', row: { id: string }) {
+	if (ev.pointerType === 'mouse' && ev.button !== 0) return;
+	ev.preventDefault();
+	const startX = ev.clientX;
+	const startY = ev.clientY;
+	const onHoldMove = (e: PointerEvent) => {
+		// 按住期间明显移动视为滚动/选择意图，取消长按判定
+		if (Math.hypot(e.clientX - startX, e.clientY - startY) > 8) cancelHold();
+	};
+	const cancelHold = () => {
+		if (dragHoldTimer != null) window.clearTimeout(dragHoldTimer);
+		dragHoldTimer = null;
+		window.removeEventListener('pointermove', onHoldMove);
+		window.removeEventListener('pointerup', cancelHold);
+		window.removeEventListener('pointercancel', cancelHold);
+	};
+	dragHoldTimer = window.setTimeout(() => {
+		cancelHold();
+		beginModelRowDrag(kind, row.id, startY);
+	}, MODEL_ROW_DRAG_HOLD_MS);
+	window.addEventListener('pointermove', onHoldMove);
+	window.addEventListener('pointerup', cancelHold);
+	window.addEventListener('pointercancel', cancelHold);
 }
+
+function activeModelRowEls(kind: 'llm' | 'image'): HTMLElement[] {
+	const activeIds = new Set((kind === 'llm' ? llmModelSections.value[0].rows : imageModelSections.value[0].rows).map(r => r.id));
+	return Array.from(document.querySelectorAll<HTMLElement>('[data-model-row-id]')).filter(el => activeIds.has(el.dataset.modelRowId!));
+}
+
+function beginModelRowDrag(kind: 'llm' | 'image', id: string, startY: number) {
+	const rows = kind === 'llm' ? llmModelSections.value[0].rows : imageModelSections.value[0].rows;
+	const from = rows.findIndex(r => r.id === id);
+	// 行距 = 行高 + 间距，用相邻行 offsetTop 差量取（不受 transform 影响）；量不到时退化为自身高度
+	const els = activeModelRowEls(kind);
+	const selfIndex = els.findIndex(el => el.dataset.modelRowId === id);
+	const self = selfIndex >= 0 ? els[selfIndex] : null;
+	let rowH = 0;
+	if (self) {
+		if (selfIndex < els.length - 1) rowH = els[selfIndex + 1].offsetTop - self.offsetTop;
+		else if (selfIndex > 0) rowH = self.offsetTop - els[selfIndex - 1].offsetTop;
+		else rowH = self.offsetHeight;
+	}
+	modelRowDrag.value = { kind, id, startY, dy: 0, overId: null, overPos: 'before', from, rowH, insertIndex: from, snapping: false };
+	window.addEventListener('pointermove', onModelRowDragMove, { passive: false });
+	window.addEventListener('pointerup', endModelRowDrag);
+	window.addEventListener('pointercancel', cancelModelRowDrag);
+}
+
+function onModelRowDragMove(ev: PointerEvent) {
+	const drag = modelRowDrag.value;
+	if (!drag || drag.snapping) return;
+	ev.preventDefault();
+	drag.dy = ev.clientY - drag.startY;
+	// 用 offsetTop（布局坐标）而非 getBoundingClientRect：让位行的 transform 不能反馈影响命中计算，否则会抖动
+	const els = activeModelRowEls(drag.kind).filter(el => el.dataset.modelRowId !== drag.id);
+	const parent = els[0]?.offsetParent as HTMLElement | null;
+	let overId: string | null = null;
+	let overPos: 'before' | 'after' = 'before';
+	if (parent) {
+		const pointerY = ev.clientY - parent.getBoundingClientRect().top;
+		for (const el of els) {
+			const center = el.offsetTop + el.offsetHeight / 2;
+			if (pointerY < center) {
+				overId = el.dataset.modelRowId!;
+				overPos = 'before';
+				break;
+			}
+			overId = el.dataset.modelRowId!;
+			overPos = 'after';
+		}
+	}
+	drag.overId = overId;
+	drag.overPos = overPos;
+	if (overId == null) {
+		drag.insertIndex = drag.from;
+	} else {
+		const others = (drag.kind === 'llm' ? llmModelSections.value[0].rows : imageModelSections.value[0].rows).filter(r => r.id !== drag.id);
+		const k = others.findIndex(r => r.id === overId);
+		drag.insertIndex = k < 0 ? drag.from : k + (overPos === 'after' ? 1 : 0);
+	}
+}
+
+function endModelRowDrag() {
+	const drag = modelRowDrag.value;
+	cleanupModelRowDragListeners();
+	if (!drag) return;
+	// 吸附：先动画到目标格位，再一次性提交重排并清除 transform——新 flow 位置恰好等于吸附落点，视觉无缝
+	const noMove = drag.overId == null || drag.overId === drag.id;
+	snapModelRowDrag(drag, noMove ? 0 : (drag.insertIndex - drag.from) * drag.rowH, () => {
+		if (noMove) return;
+		if (drag.kind === 'llm') {
+			reorderModelRowById(form.state.agentLlmModelRows, drag.id, drag.overId!, drag.overPos);
+		} else {
+			reorderModelRowById(form.state.agentImageModelRows, drag.id, drag.overId!, drag.overPos);
+		}
+	});
+}
+
+function cancelModelRowDrag() {
+	const drag = modelRowDrag.value;
+	cleanupModelRowDragListeners();
+	if (!drag) return;
+	snapModelRowDrag(drag, 0, () => {});
+}
+
+function snapModelRowDrag(drag: ModelRowDrag, targetDy: number, commit: () => void) {
+	drag.snapping = true;
+	drag.dy = targetDy;
+	dragSnapTimer = window.setTimeout(() => {
+		dragSnapTimer = null;
+		modelRowDrag.value = null;
+		commit();
+	}, MODEL_ROW_SNAP_MS);
+}
+
+/** 拖拽中某行的位移样式：拖动行跟随指针；被跨越的行反向让出拖动行的高度（自身高度无关，跨过即平移一个行距） */
+function modelRowDragStyle(rowId: string): { transform: string } | null {
+	const drag = modelRowDrag.value;
+	if (!drag) return null;
+	if (drag.id === rowId) return { transform: `translateY(${drag.dy}px)` };
+	const rows = drag.kind === 'llm' ? llmModelSections.value[0].rows : imageModelSections.value[0].rows;
+	const j = rows.filter(r => r.id !== drag.id).findIndex(r => r.id === rowId);
+	if (j < 0) return null;
+	if (j >= drag.from && j < drag.insertIndex) return { transform: `translateY(${-drag.rowH}px)` };
+	if (j >= drag.insertIndex && j < drag.from) return { transform: `translateY(${drag.rowH}px)` };
+	return null;
+}
+
+/** 把 fromId 行移动到 overId 行的前/后；目标缺失时放回原位 */
+function reorderModelRowById<T extends { id: string }>(rows: T[], fromId: string, overId: string, overPos: 'before' | 'after') {
+	const from = rows.findIndex(r => r.id === fromId);
+	if (from < 0) return;
+	const [row] = rows.splice(from, 1);
+	const target = rows.findIndex(r => r.id === overId);
+	if (target < 0) {
+		rows.splice(from, 0, row);
+		return;
+	}
+	rows.splice(overPos === 'after' ? target + 1 : target, 0, row);
+}
+
+function cleanupModelRowDragListeners() {
+	window.removeEventListener('pointermove', onModelRowDragMove);
+	window.removeEventListener('pointerup', endModelRowDrag);
+	window.removeEventListener('pointercancel', cancelModelRowDrag);
+}
+
+onBeforeUnmount(() => {
+	if (dragHoldTimer != null) window.clearTimeout(dragHoldTimer);
+	if (dragSnapTimer != null) window.clearTimeout(dragSnapTimer);
+	cleanupModelRowDragListeners();
+});
 
 const newGroupName = ref('');
 
@@ -2869,8 +3142,9 @@ function onAddImageModelMenu(ev: MouseEvent) {
 }
 
 function addImageModel(providerPreset?: 'tiptotip' | 'openai') {
+	const id = genId();
 	form.state.agentImageModelRows.push({
-		id: genId(),
+		id,
 		name: '',
 		description: '',
 		provider: providerPreset ?? 'aurora',
@@ -2894,16 +3168,13 @@ function addImageModel(providerPreset?: 'tiptotip' | 'openai') {
 		promptPrefix: form.state.agentImagePromptPrefix || '',
 		promptSuffix: form.state.agentImagePromptSuffix || 'masterpiece,best quality,very aesthetic,highres,absurdres',
 	});
-}
-
-function removeImageModel(index: number) {
-	form.state.agentImageModelRows.splice(index, 1);
+	expandedImageModelIds.value.push(id);
 }
 
 /** 复制生图模型：深拷贝该行并生成新 id，插入到原模型之后 */
-function copyImageModelRow(index: number) {
-	const src = form.state.agentImageModelRows[index];
-	if (!src) return;
+function copyImageModelRow(src: AgentImageModelRow) {
+	const index = form.state.agentImageModelRows.indexOf(src);
+	if (index < 0) return;
 	const copy: AgentImageModelRow = {
 		...src,
 		id: genId(),
@@ -2911,21 +3182,11 @@ function copyImageModelRow(index: number) {
 		enabled: true,
 	};
 	form.state.agentImageModelRows.splice(index + 1, 0, copy);
+	expandedImageModelIds.value.push(copy.id);
 }
 
-/** 移动生图模型顺序：dir 为 -1（上移）或 1（下移），列表顺序即用户侧展示顺序 */
-function moveImageModelRow(index: number, dir: -1 | 1) {
-	const rows = form.state.agentImageModelRows;
-	const target = index + dir;
-	if (target < 0 || target >= rows.length) return;
-	const [row] = rows.splice(index, 1);
-	rows.splice(target, 0, row);
-}
-
-/** 下架生图模型：保留配置但用户侧不可选，取消下架即恢复 */
-async function toggleImageModelEnabled(index: number, next: boolean) {
-	const row = form.state.agentImageModelRows[index];
-	if (!row) return;
+/** 下架生图模型：保留配置但用户侧不可选，取消下架即恢复；不提供删除，避免用量等历史记录成为脏数据 */
+async function toggleImageModelEnabled(row: AgentImageModelRow, next: boolean) {
 	if (next === false) {
 		const ok = await os.confirm({
 			type: 'warning',
@@ -3177,15 +3438,150 @@ onMounted(() => {
 	}
 }
 
-.modelCardUnlisted {
-	opacity: 0.82;
-	background: color-mix(in srgb, var(--MI_THEME-panel) 85%, var(--MI_THEME-warn) 15%);
-}
-
 .modelCardActions {
 	display: flex;
 	gap: 4px;
 	align-items: center;
+	flex-shrink: 0;
+}
+
+.modelSectionHead {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	font-size: 0.92em;
+	font-weight: 600;
+}
+
+.modelSectionHeadMuted {
+	opacity: 0.7;
+}
+
+.modelSectionCount {
+	margin-left: 6px;
+	padding: 1px 8px;
+	border-radius: 999px;
+	font-size: 0.78em;
+	font-weight: 600;
+	background: color-mix(in srgb, var(--MI_THEME-fg) 10%, transparent);
+	opacity: 0.85;
+}
+
+.modelRow {
+	position: relative;
+	border-radius: 10px;
+	border: solid 1px var(--MI_THEME-divider);
+	background: var(--MI_THEME-panel);
+	overflow: hidden;
+}
+
+.modelRowDragging {
+	z-index: 4;
+	border-color: var(--MI_THEME-accent);
+	box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+	cursor: grabbing;
+}
+
+/* 拖拽中被跨越的行平滑让位 */
+.modelRowShiftable {
+	transition: transform 0.16s ease;
+}
+
+/* 松手后被拖行吸附到目标格位 */
+.modelRowSnapping {
+	transition: transform 0.16s ease;
+}
+
+.modelRowDropBefore,
+.modelRowDropAfter {
+	&::after {
+		content: '';
+		position: absolute;
+		left: 8px;
+		right: 8px;
+		height: 2px;
+		border-radius: 999px;
+		background: var(--MI_THEME-accent);
+		z-index: 3;
+		pointer-events: none;
+	}
+}
+
+.modelRowDropBefore::after {
+	top: 0;
+}
+
+.modelRowDropAfter::after {
+	bottom: 0;
+}
+
+.modelRowGrip {
+	display: inline-flex;
+	align-items: center;
+	padding: 4px 2px;
+	cursor: grab;
+	opacity: 0.55;
+	color: var(--MI_THEME-fg);
+	touch-action: none;
+	-webkit-touch-callout: none;
+
+	&:hover {
+		opacity: 0.95;
+	}
+}
+
+.modelRowUnlisted {
+	opacity: 0.78;
+	background: color-mix(in srgb, var(--MI_THEME-panel) 88%, var(--MI_THEME-warn) 12%);
+}
+
+.modelRowHead {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 10px 12px;
+	cursor: pointer;
+	user-select: none;
+
+	&:hover {
+		background: color-mix(in srgb, var(--MI_THEME-fg) 4%, transparent);
+	}
+}
+
+.modelRowChevron {
+	font-size: 0.85em;
+	opacity: 0.6;
+	flex-shrink: 0;
+	transition: transform 0.15s ease;
+}
+
+.modelRowChevronOpen {
+	transform: rotate(90deg);
+}
+
+.modelRowTitle {
+	font-size: 0.92em;
+	font-weight: 600;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	min-width: 0;
+}
+
+.modelRowMeta {
+	flex: 1;
+	min-width: 0;
+	font-size: 0.8em;
+	opacity: 0.6;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.modelRowBody {
+	padding: 12px 14px;
+	border-top: solid 1px var(--MI_THEME-divider);
 }
 
 .groupRow {
@@ -3798,6 +4194,27 @@ onMounted(() => {
 		min-width: 0;
 		word-break: break-word;
 	}
+}
+
+.multiKeyList {
+	display: grid;
+	gap: 10px;
+}
+
+.multiKeyRow {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	align-items: end;
+	gap: 10px;
+}
+
+.multiKeyRow > button {
+	display: grid;
+	place-items: center;
+	width: 36px;
+	height: 36px;
+	margin-bottom: 2px;
+	border-radius: 8px;
 }
 
 .auditStatsHead {
