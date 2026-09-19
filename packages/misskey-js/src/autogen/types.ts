@@ -15077,6 +15077,8 @@ export interface operations {
                             apiModelName: string;
                             baseUrl: string;
                             apiKey: string;
+                            apiKeys: string[];
+                            multiKeyEnabled: boolean;
                             maxContextTokens: number;
                             maxOutputTokensPerCall: number;
                         }[] | null;
@@ -18655,6 +18657,8 @@ export interface operations {
                         apiModelName: string;
                         baseUrl: string;
                         apiKey: string;
+                        apiKeys?: string[];
+                        multiKeyEnabled?: boolean;
                         maxContextTokens: number;
                         maxOutputTokensPerCall: number;
                         unlisted?: boolean;

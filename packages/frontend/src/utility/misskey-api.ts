@@ -31,7 +31,7 @@ async function handleSuspendedAccount(error: { code?: string; info?: unknown }):
 /** Use in catch() when misskeyApi rejects with `{ message, code, id, info? }` — avoid String(err) → "[object Object]". */
 export function formatApiError(err: unknown): string {
 	if (err != null && typeof err === 'object' && 'message' in err) {
-		const o = err as { message?: unknown; code?: string; info?: { reason?: string; status?: number; detail?: string } | null };
+		const o = err as { message?: unknown; code?: string; info?: { reason?: string; status?: number; detail?: string; attempts?: unknown[] } | null };
 		if (typeof o.message === 'string') {
 			// 已知错误码映射为用户友好的中文提示
 			const head = o.code === 'AGENTS_LLM_FAILED'
@@ -49,7 +49,19 @@ export function formatApiError(err: unknown): string {
 				if (info.detail) parts.push(String(info.detail));
 			}
 			const codeLine = parts.length > 0 ? `\n[${parts.join(' · ')}]` : '';
-			return head + codeLine;
+			const attemptLines = info != null && Array.isArray(info.attempts)
+				? info.attempts.flatMap((raw, index) => {
+					if (raw == null || typeof raw !== 'object') return [];
+					const attempt = raw as { index?: unknown; code?: unknown; reason?: unknown; status?: unknown; detail?: unknown };
+					const attemptParts: string[] = [];
+					if (typeof attempt.code === 'string') attemptParts.push(attempt.code);
+					if (typeof attempt.status === 'number') attemptParts.push(`HTTP ${attempt.status}`);
+					if (typeof attempt.detail === 'string' && attempt.detail) attemptParts.push(attempt.detail);
+					else if (typeof attempt.reason === 'string' && attempt.reason) attemptParts.push(attempt.reason);
+					return attemptParts.length > 0 ? [`#${typeof attempt.index === 'number' ? attempt.index : index + 1}：${attemptParts.join(' · ')}`] : [];
+				})
+				: [];
+			return head + codeLine + (attemptLines.length > 0 ? `\n${attemptLines.join('\n')}` : '');
 		}
 	}
 	return String(err);

@@ -24,21 +24,29 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<dl :class="$style.details">
 			<dt>{{ i18n.ts._agents.modelFailureKind }}</dt>
 			<dd><i :class="['ti ti-circle-filled', $style.kindDot]"></i> {{ kindLabel }}</dd>
-			<template v-if="reason">
-				<dt>{{ i18n.ts._agents.modelFailureReason }}</dt>
-				<dd>{{ reason }}</dd>
-			</template>
-			<template v-if="status != null">
-				<dt>{{ i18n.ts._agents.modelFailureHttpStatus }}</dt>
-				<dd><code>HTTP {{ status }}</code></dd>
-			</template>
-			<template v-if="detail">
-				<dt>{{ i18n.ts._agents.modelFailureDetail }}</dt>
-				<dd :class="$style.detail">{{ detail }}</dd>
-			</template>
-			<dt>{{ i18n.ts._agents.modelFailureCode }}</dt>
-			<dd><code>{{ code || i18n.ts._agents.auditFeedbackUnknown }}</code></dd>
-		</dl>
+				<template v-if="reason">
+					<dt>{{ i18n.ts._agents.modelFailureReason }}</dt>
+					<dd>{{ reason }}</dd>
+				</template>
+				<template v-if="status != null">
+					<dt>{{ i18n.ts._agents.modelFailureHttpStatus }}</dt>
+					<dd><code>HTTP {{ status }}</code></dd>
+				</template>
+				<template v-if="detail">
+					<dt>{{ i18n.ts._agents.modelFailureDetail }}</dt>
+					<dd :class="$style.detail">{{ detail }}</dd>
+				</template>
+				<template v-if="attempts.length > 0">
+					<dt>{{ i18n.ts._agents.modelFailureAttempts }}</dt>
+					<dd :class="$style.attempts">
+						<div v-for="attempt in attempts" :key="attempt.index" :class="$style.attempt">
+							<b>#{{ attempt.index }}：</b>{{ formatAttempt(attempt) }}
+						</div>
+					</dd>
+				</template>
+				<dt>{{ i18n.ts._agents.modelFailureCode }}</dt>
+				<dd><code>{{ code || i18n.ts._agents.auditFeedbackUnknown }}</code></dd>
+			</dl>
 
 		<div :class="$style.notice">
 			<i class="ti ti-bulb"></i>
@@ -68,6 +76,13 @@ const props = withDefaults(defineProps<{
 	reason?: string | null;
 	status?: number | null;
 	detail?: string | null;
+	attempts?: Array<{
+		index: number;
+		code: string;
+		reason: string | null;
+		status: number | null;
+		detail: string | null;
+	}>;
 	/** 关闭按钮旁是否提供「重试」 */
 	retryable?: boolean;
 }>(), {
@@ -77,6 +92,7 @@ const props = withDefaults(defineProps<{
 	reason: null,
 	status: null,
 	detail: null,
+	attempts: () => [],
 	retryable: true,
 });
 
@@ -106,6 +122,14 @@ const notice = computed(() => {
 	if (props.code === 'AGENTS_MODEL_UNAVAILABLE') return i18n.ts._agents.modelFailureNoticeUnavailable;
 	return i18n.ts._agents.modelFailureNoticeDefault;
 });
+
+function formatAttempt(attempt: typeof props.attempts[number]): string {
+	const parts = [attempt.code];
+	if (attempt.status != null) parts.push(`HTTP ${attempt.status}`);
+	if (attempt.detail) parts.push(attempt.detail);
+	else if (attempt.reason) parts.push(attempt.reason);
+	return parts.join(' · ');
+}
 
 function close() {
 	dialog.value?.close();
@@ -175,6 +199,17 @@ function retry() {
 	margin: 0;
 	white-space: pre-wrap;
 	overflow-wrap: anywhere;
+}
+
+.attempts {
+	display: grid;
+	gap: 0.55em;
+}
+
+.attempt {
+	padding: 0.55em 0.65em;
+	border-radius: 6px;
+	background: color-mix(in srgb, var(--MI_THEME-error) 7%, transparent);
 }
 
 .kindDot {

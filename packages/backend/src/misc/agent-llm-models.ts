@@ -21,7 +21,12 @@ export type AgentLlmModelJson = {
 	name: string;
 	description: string | null;
 	baseUrl: string;
+	/** 首个有效 Key 的兼容镜像；旧代码与旧配置继续读取此字段 */
 	apiKey: string;
+	/** 按管理员配置顺序保存的有效 Key 列表 */
+	apiKeys: string[];
+	/** 启用时按请求轮询 apiKeys；关闭时仅使用第一项 */
+	multiKeyEnabled: boolean;
 	apiModelName: string;
 	maxContextTokens: number;
 	maxOutputTokensPerCall: number;
@@ -97,6 +102,28 @@ function parseMillionTokenPrice(raw: unknown): number {
 	return v;
 }
 
+/** 保留填写顺序地清洗 Key；旧配置的 apiKey 作为列表回退。 */
+export function normalizeAgentLlmApiKeys(rawKeys: unknown, legacyApiKey: unknown): string[] | null {
+	const source = Array.isArray(rawKeys) ? rawKeys : [legacyApiKey];
+	const keys: string[] = [];
+	const seen = new Set<string>();
+	for (const raw of source) {
+		if (typeof raw !== 'string') return null;
+		const key = raw.trim();
+		if (key === '') continue;
+		if (key.length > 8192) return null;
+		if (seen.has(key)) continue;
+		seen.add(key);
+		keys.push(key);
+	}
+	if (keys.length === 0 && Array.isArray(rawKeys) && typeof legacyApiKey === 'string') {
+		const legacy = legacyApiKey.trim();
+		if (legacy.length > 8192) return null;
+		if (legacy !== '') keys.push(legacy);
+	}
+	return keys.length > 0 ? keys : null;
+}
+
 export function isAgentLlmRunnable(meta: MiMeta): boolean {
 	return getEffectiveLlmModels(meta).length > 0;
 }
@@ -117,10 +144,12 @@ export function getEffectiveLlmModels(meta: MiMeta): AgentLlmModelJson[] {
 		const id = typeof o.id === 'string' ? o.id.trim() : '';
 		const name = typeof o.name === 'string' ? o.name.trim() : '';
 		const baseUrl = typeof o.baseUrl === 'string' ? o.baseUrl.trim() : '';
-		const apiKey = typeof o.apiKey === 'string' ? o.apiKey.trim() : '';
+		const apiKeys = normalizeAgentLlmApiKeys(o.apiKeys, o.apiKey);
+		const apiKey = apiKeys?.[0] ?? '';
+		const multiKeyEnabled = o.multiKeyEnabled === true;
 		const apiModelName = typeof o.apiModelName === 'string' ? o.apiModelName.trim() : '';
-		if (!id || !name || !baseUrl || !apiKey || !apiModelName) continue;
-		if (id.length > 64 || name.length > 256 || baseUrl.length > 512 || apiKey.length > 8192 || apiModelName.length > 256) {
+		if (!id || !name || !baseUrl || !apiKeys || !apiModelName) continue;
+		if (id.length > 64 || name.length > 256 || baseUrl.length > 512 || apiModelName.length > 256) {
 			continue;
 		}
 		let description: string | null = null;
@@ -172,6 +201,8 @@ export function getEffectiveLlmModels(meta: MiMeta): AgentLlmModelJson[] {
 			description,
 			baseUrl,
 			apiKey,
+			apiKeys,
+			multiKeyEnabled,
 			apiModelName,
 			maxContextTokens,
 			maxOutputTokensPerCall,
@@ -265,13 +296,18 @@ export function normalizeAgentLlmModelsParam(input: unknown): { ok: true; value:
 		}
 		const name = typeof o.name === 'string' ? o.name.trim() : '';
 		const baseUrl = typeof o.baseUrl === 'string' ? o.baseUrl.trim() : '';
-		const apiKey = typeof o.apiKey === 'string' ? o.apiKey.trim() : '';
+		const apiKeys = normalizeAgentLlmApiKeys(o.apiKeys, o.apiKey);
+		const apiKey = apiKeys?.[0] ?? '';
+		const multiKeyEnabled = o.multiKeyEnabled === true;
+		if (o.multiKeyEnabled != null && typeof o.multiKeyEnabled !== 'boolean') {
+			return { ok: false };
+		}
 		const apiModelName = typeof o.apiModelName === 'string' ? o.apiModelName.trim() : '';
 		if (id.length > 64 || seen.has(id) || !name || name.length > 256) {
 			return { ok: false };
 		}
 		seen.add(id);
-		if (!baseUrl || baseUrl.length > 512 || !apiKey || apiKey.length > 8192) {
+		if (!baseUrl || baseUrl.length > 512 || !apiKeys) {
 			return { ok: false };
 		}
 		if (!apiModelName || apiModelName.length > 256) {
@@ -384,6 +420,8 @@ export function normalizeAgentLlmModelsParam(input: unknown): { ok: true; value:
 			description,
 			baseUrl,
 			apiKey,
+			apiKeys,
+			multiKeyEnabled,
 			apiModelName,
 			maxContextTokens: Math.trunc(maxContextTokens),
 			maxOutputTokensPerCall: Math.trunc(maxOutputTokensPerCall),

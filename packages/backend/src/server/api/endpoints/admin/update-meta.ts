@@ -172,6 +172,12 @@ export const paramDef = {
 					apiModelName: { type: 'string', minLength: 1, maxLength: 256 },
 					baseUrl: { type: 'string', minLength: 1, maxLength: 512 },
 					apiKey: { type: 'string', minLength: 1, maxLength: 8192 },
+					apiKeys: {
+						type: 'array',
+						minItems: 1,
+						items: { type: 'string', minLength: 1, maxLength: 8192 },
+					},
+					multiKeyEnabled: { type: 'boolean' },
 					maxContextTokens: { type: 'integer', minimum: 256, maximum: 2000000 },
 					maxOutputTokensPerCall: { type: 'integer', minimum: 1, maximum: 128000 },
 					unlisted: { type: 'boolean' },

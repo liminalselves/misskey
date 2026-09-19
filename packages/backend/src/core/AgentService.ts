@@ -4,6 +4,7 @@
  */
 
 import { Inject, Injectable, Logger } from '@nestjs/common';
+import Redis from 'ioredis';
 import { DI } from '@/di-symbols.js';
 import { bindThis } from '@/decorators.js';
 import type { MiMeta } from '@/models/Meta.js';
@@ -185,6 +186,70 @@ export type AgentLlmUsage = {
 	promptCacheMissTokens?: number;
 };
 
+export type AgentLlmAttemptError = {
+	index: number;
+	code: string;
+	reason: string | null;
+	status: number | null;
+	detail: string | null;
+};
+
+export function rotateAgentLlmApiKeys(keys: readonly string[], counter: number): string[] {
+	if (keys.length <= 1) return [...keys];
+	const start = ((Math.trunc(counter) - 1) % keys.length + keys.length) % keys.length;
+	return [...keys.slice(start), ...keys.slice(0, start)];
+}
+
+export function agentLlmAttemptErrorFrom(error: ApiError, index: number): AgentLlmAttemptError {
+	const info = error.info != null && typeof error.info === 'object' ? error.info as Record<string, unknown> : {};
+	return {
+		index,
+		code: error.code,
+		reason: typeof info.reason === 'string' && info.reason !== '' ? info.reason : null,
+		status: typeof info.status === 'number' && Number.isFinite(info.status) ? info.status : null,
+		detail: typeof info.detail === 'string' && info.detail !== '' ? info.detail : null,
+	};
+}
+
+export async function invokeAgentLlmApiKeys<T>(apiKeys: readonly string[], invoke: (apiKey: string, index: number) => Promise<T>): Promise<T> {
+	const attempts: AgentLlmAttemptError[] = [];
+	for (const [index, apiKey] of apiKeys.entries()) {
+		try {
+			return await invoke(apiKey, index);
+		} catch (error) {
+			if (!(error instanceof ApiError)) throw error;
+			if (error.code === agentsErrors.llmAborted.code || error.code === agentsErrors.llmUnsafeUrl.code) throw error;
+			attempts.push(agentLlmAttemptErrorFrom(error, index + 1));
+		}
+	}
+	if (attempts.length === 1) {
+		const attempt = attempts[0];
+		if (attempt.code === agentsErrors.llmTimeout.code) {
+			throw new ApiError(agentsErrors.llmTimeout);
+		}
+		throw new ApiError(agentsErrors.llmRequestFailed, {
+			reason: attempt.reason,
+			...(attempt.status != null ? { status: attempt.status } : {}),
+			...(attempt.detail != null ? { detail: attempt.detail } : {}),
+		});
+	}
+	throw new ApiError(agentsErrors.llmRequestFailed, {
+		reason: 'ALL_KEYS_FAILED',
+		attempts,
+	});
+}
+
+type AgentInvokeChatCompletionsParams = {
+	system: string;
+	prefixMessages?: { role: 'user' | 'assistant'; content: string }[];
+	messages: { role: 'user' | 'assistant'; content: string }[];
+	userText: string;
+	sessionModelId: string | null;
+	userId?: string;
+	externalAbortSignal?: AbortSignal;
+	maxTokens?: number;
+};
+
 /** 安全解析响应 usage：字段缺失/非法时返回 null（调用方按策略兜底） */
 function parseLlmUsageFromResponse(json: unknown): AgentLlmUsage | null {
 	const usage = (json as { usage?: unknown })?.usage;
@@ -293,6 +358,9 @@ export class AgentService {
 
 		@Inject(DI.agentUserStyleSubscriptionsRepository)
 		private agentUserStyleSubscriptionsRepository: AgentUserStyleSubscriptionsRepository,
+
+		@Inject(DI.redis)
+		private redisClient: Redis.Redis,
 
 		private metaService: MetaService,
 		private idService: IdService,
@@ -431,9 +499,12 @@ export class AgentService {
 
 	@bindThis
 	public resolveModelConnection(instance: MiMeta, modelId: string | null): {
+		modelId: string;
 		apiModelName: string;
 		baseUrlRaw: string;
 		apiKeyRaw: string;
+		apiKeysRaw: string[];
+		multiKeyEnabled: boolean;
 		maxContextTokens: number;
 		maxOutputTokensPerCall: number;
 		charsPerToken: number;
@@ -441,14 +512,18 @@ export class AgentService {
 		this.assertLlmConfigured(instance);
 		const pick = this.pickModelOrThrow(instance, modelId);
 		const baseUrlRaw = pick.baseUrl.trim();
-		const apiKeyRaw = pick.apiKey.trim();
+		const apiKeysRaw = pick.apiKeys.map(key => key.trim()).filter(key => key !== '');
+		const apiKeyRaw = apiKeysRaw[0] ?? '';
 		if (!baseUrlRaw || !apiKeyRaw) {
 			throw new ApiError(agentsErrors.modelNotConfigured);
 		}
 		return {
+			modelId: pick.id,
 			apiModelName: pick.apiModelName,
 			baseUrlRaw,
 			apiKeyRaw,
+			apiKeysRaw,
+			multiKeyEnabled: pick.multiKeyEnabled === true,
 			maxContextTokens: pick.maxContextTokens,
 			maxOutputTokensPerCall: pick.maxOutputTokensPerCall,
 			charsPerToken: Number.isFinite(pick.charsPerToken) && pick.charsPerToken! >= 1 ? pick.charsPerToken! : AGENT_LLM_APPROX_CHARS_PER_TOKEN,
@@ -1133,29 +1208,42 @@ export class AgentService {
 	}
 
 	@bindThis
-	public async invokeChatCompletions(params: {
-		system: string;
-		/** Messages inserted after system and before real history. */
-		prefixMessages?: { role: 'user' | 'assistant'; content: string }[];
-		messages: { role: 'user' | 'assistant'; content: string }[];
-		userText: string;
-		sessionModelId: string | null;
-		/** 会话归属用户（BYOK 用户自定义模型解析必需）。 */
-		userId?: string;
-		/** Caller-provided cancellation signal. */
-		externalAbortSignal?: AbortSignal;
-		/** Per-call max_tokens override, capped by model/site settings. */
-		maxTokens?: number;
-	}): Promise<{ text: string; usage: AgentLlmUsage | null }> {
+	public async invokeChatCompletions(params: AgentInvokeChatCompletionsParams): Promise<{ text: string; usage: AgentLlmUsage | null }> {
 		const instance = await this.metaService.fetch(true);
 		this.assertLlmConfigured(instance);
-		const { apiModelName, baseUrlRaw, apiKeyRaw, maxOutputTokensPerCall } = params.userId
-			? await this.resolveModelConnectionForUser(instance, params.sessionModelId, params.userId)
-			: this.resolveModelConnection(instance, params.sessionModelId);
+		const isByok = params.sessionModelId != null && isAgentUserModelId(params.sessionModelId);
+		if (isByok) {
+			if (!params.userId) throw new ApiError(agentsErrors.modelUnavailable);
+			const connection = await this.resolveModelConnectionForUser(instance, params.sessionModelId, params.userId);
+			return this.invokeChatCompletionsWithKey(params, {
+				apiModelName: connection.apiModelName,
+				safeBase: await this.resolveSafeLlmBaseUrl(connection.baseUrlRaw),
+				apiKeyRaw: connection.apiKeyRaw,
+				maxOutputTokensPerCall: connection.maxOutputTokensPerCall,
+				isByok: true,
+			});
+		}
 
-		let safeBase: URL;
+		const connection = this.resolveModelConnection(instance, params.sessionModelId);
+		const configuredKeys = connection.multiKeyEnabled ? connection.apiKeysRaw : [connection.apiKeyRaw];
+		let apiKeys = configuredKeys;
+		if (configuredKeys.length > 1) {
+			const counter = await this.redisClient.incr(`agent:llm:key-round-robin:${connection.modelId}`);
+			apiKeys = rotateAgentLlmApiKeys(configuredKeys, counter);
+		}
+		const safeBase = await this.resolveSafeLlmBaseUrl(connection.baseUrlRaw);
+		return invokeAgentLlmApiKeys(apiKeys, apiKeyRaw => this.invokeChatCompletionsWithKey(params, {
+			apiModelName: connection.apiModelName,
+			safeBase,
+			apiKeyRaw,
+			maxOutputTokensPerCall: connection.maxOutputTokensPerCall,
+			isByok: false,
+		}));
+	}
+
+	private async resolveSafeLlmBaseUrl(baseUrlRaw: string): Promise<URL> {
 		try {
-			safeBase = await assertSafeLlmHttpsUrl(baseUrlRaw);
+			return await assertSafeLlmHttpsUrl(baseUrlRaw);
 		} catch (e) {
 			if (e instanceof UnsafeLlmUrlError) {
 				throw new ApiError({
@@ -1165,7 +1253,16 @@ export class AgentService {
 			}
 			throw new ApiError(agentsErrors.llmUnsafeUrl);
 		}
+	}
 
+	private async invokeChatCompletionsWithKey(params: AgentInvokeChatCompletionsParams, connection: {
+		apiModelName: string;
+		safeBase: URL;
+		apiKeyRaw: string;
+		maxOutputTokensPerCall: number;
+		isByok: boolean;
+	}): Promise<{ text: string; usage: AgentLlmUsage | null }> {
+		const { apiModelName, safeBase, apiKeyRaw, maxOutputTokensPerCall, isByok } = connection;
 		const url = this.normalizeChatCompletionsUrl(safeBase.toString());
 		let maxOut = Math.max(1, Math.min(maxOutputTokensPerCall, 128000));
 		if (params.maxTokens != null && Number.isFinite(params.maxTokens)) {
@@ -1219,7 +1316,6 @@ export class AgentService {
 		if (ac.signal.aborted) onAcAbort();
 		else ac.signal.addEventListener('abort', onAcAbort, { once: true });
 		// BYOK 上游是用户自己的端点与密钥；官方模型上游错误体可能原样回显管理员配置的密钥
-		const isByok = params.sessionModelId != null && isAgentUserModelId(params.sessionModelId);
 		try {
 			let res: Response;
 			try {

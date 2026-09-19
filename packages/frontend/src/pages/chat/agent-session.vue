@@ -1216,6 +1216,14 @@ function agentAuditFeedbackFromError(err: unknown): Omit<AgentAuditFeedback, 'ti
 	};
 }
 
+type AgentModelFailureAttempt = {
+	index: number;
+	code: string;
+	reason: string | null;
+	status: number | null;
+	detail: string | null;
+};
+
 type AgentModelFailureFeedback = {
 	title?: string;
 	guide?: string;
@@ -1223,6 +1231,7 @@ type AgentModelFailureFeedback = {
 	reason?: string | null;
 	status?: number | null;
 	detail?: string | null;
+	attempts?: AgentModelFailureAttempt[];
 	retryable?: boolean;
 };
 
@@ -1241,11 +1250,26 @@ function agentModelFailureFromError(err: unknown): Omit<AgentModelFailureFeedbac
 	const o = err != null && typeof err === 'object' ? err as { code?: unknown; message?: unknown; info?: unknown } : {};
 	const info = o.info != null && typeof o.info === 'object' ? o.info as Record<string, unknown> : {};
 	const code = typeof o.code === 'string' ? o.code : null;
+	const attempts = Array.isArray(info.attempts)
+		? info.attempts.flatMap((raw): AgentModelFailureAttempt[] => {
+			if (raw == null || typeof raw !== 'object') return [];
+			const attempt = raw as Record<string, unknown>;
+			if (typeof attempt.index !== 'number' || typeof attempt.code !== 'string') return [];
+			return [{
+				index: attempt.index,
+				code: attempt.code,
+				reason: typeof attempt.reason === 'string' ? attempt.reason : null,
+				status: typeof attempt.status === 'number' ? attempt.status : null,
+				detail: typeof attempt.detail === 'string' ? attempt.detail : null,
+			}];
+		})
+		: [];
 	return {
 		code,
 		reason: typeof info.reason === 'string' && info.reason ? info.reason : (typeof o.message === 'string' && o.message ? o.message : null),
 		status: typeof info.status === 'number' ? info.status : null,
 		detail: typeof info.detail === 'string' && info.detail ? info.detail : null,
+		attempts,
 		// 模型未配置 / 已下架 / 模型地址不可用属于配置问题，重试无意义，不展示重试按钮
 		retryable: code !== 'AGENTS_MODEL_NOT_CONFIGURED' && code !== 'AGENTS_MODEL_UNAVAILABLE' && code !== 'AGENTS_LLM_UNSAFE_URL',
 	};

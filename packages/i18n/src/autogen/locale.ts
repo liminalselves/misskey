@@ -14438,6 +14438,30 @@ export interface Locale extends ILocale {
          */
         "modelApiKey": string;
         /**
+         * 複数キーの均等負荷分散を有効化
+         */
+        "modelMultiKeyEnabled": string;
+        /**
+         * 新しいリクエストごとに開始キーを順番に切り替え、失敗時は残りのキーを順に試します。
+         */
+        "modelMultiKeyEnabledCaption": string;
+        /**
+         * 複数キーモードを無効にすると先頭のキーだけを使用し、残りのキーは保持されます。
+         */
+        "modelSingleKeyCaption": string;
+        /**
+         * APIキー #{n}
+         */
+        "modelApiKeyNumber": ParameterizedString<"n">;
+        /**
+         * キーを追加
+         */
+        "modelApiKeyAdd": string;
+        /**
+         * キーを削除
+         */
+        "modelApiKeyRemove": string;
+        /**
          * https:// は省略可。末尾が completions でない場合は /chat/completions を自動追加します。バージョン部分（/v1、/v4 など）はご自身で記入してください。
          */
         "fieldModelBaseUrlCaption": string;
@@ -15137,6 +15161,10 @@ export interface Locale extends ILocale {
          * 技術詳細
          */
         "modelFailureDetail": string;
+        /**
+         * 各キーのエラー
+         */
+        "modelFailureAttempts": string;
         /**
          * エラーコード
          */

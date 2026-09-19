@@ -13,6 +13,7 @@ import { SystemAccountService } from '@/core/SystemAccountService.js';
 import { resolveAgentImageNegativePrompt } from '@/core/agent-image-defaults.js';
 import { resolveAgentImageArtistPresets } from '@/core/agent-image-presets.js';
 import { DEFAULT_AGENT_EXTERNAL_AUDIT_SYSTEM_PROMPT } from '@/core/AgentExternalAuditService.js';
+import { normalizeAgentLlmApiKeys } from '@/misc/agent-llm-models.js';
 
 export const meta = {
 	tags: ['meta'],
@@ -403,6 +404,11 @@ export const meta = {
 						apiModelName: { type: 'string' },
 						baseUrl: { type: 'string' },
 						apiKey: { type: 'string' },
+						apiKeys: {
+							type: 'array',
+							items: { type: 'string' },
+						},
+						multiKeyEnabled: { type: 'boolean' },
 						maxContextTokens: { type: 'number' },
 						maxOutputTokensPerCall: { type: 'number' },
 					},
@@ -1152,18 +1158,22 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 						changelog: Array.isArray(n.changelog) ? n.changelog : [],
 						announcement: n.announcement ?? null,
 					};
-				})(),
-				agentFeatureEnabled: instance.agentFeatureEnabled,
-				agentGlobalSystemPrompt: instance.agentGlobalSystemPrompt,
-				agentOpenaiCompatibleBaseUrl: instance.agentOpenaiCompatibleBaseUrl,
-				agentOpenaiCompatibleApiKey: instance.agentOpenaiCompatibleApiKey,
-				agentModelDisplayName: instance.agentModelDisplayName,
-				agentModelDescription: instance.agentModelDescription,
-				agentModelApiName: instance.agentModelApiName,
-				agentLlmModels: instance.agentLlmModels,
-				agentLlmModelGroups: instance.agentLlmModelGroups ?? [],
-				agentDefaultModelId: instance.agentDefaultModelId,
-				agentByokEnabled: instance.agentByokEnabled === true,
+					})(),
+					agentFeatureEnabled: instance.agentFeatureEnabled,
+					agentGlobalSystemPrompt: instance.agentGlobalSystemPrompt,
+					agentOpenaiCompatibleBaseUrl: instance.agentOpenaiCompatibleBaseUrl,
+					agentOpenaiCompatibleApiKey: instance.agentOpenaiCompatibleApiKey,
+					agentModelDisplayName: instance.agentModelDisplayName,
+					agentModelDescription: instance.agentModelDescription,
+					agentModelApiName: instance.agentModelApiName,
+					agentLlmModels: instance.agentLlmModels?.map(model => ({
+						...model,
+						apiKeys: normalizeAgentLlmApiKeys(model.apiKeys, model.apiKey) ?? [],
+						multiKeyEnabled: model.multiKeyEnabled === true,
+					})) ?? null,
+					agentLlmModelGroups: instance.agentLlmModelGroups ?? [],
+					agentDefaultModelId: instance.agentDefaultModelId,
+					agentByokEnabled: instance.agentByokEnabled === true,
 				agentByokProviders: instance.agentByokProviders ?? null,
 				agentByokMaxUserModels: Math.max(1, Math.min(500, instance.agentByokMaxUserModels ?? 20)),
 				agentCompressionDefaultModelId: instance.agentCompressionDefaultModelId,

@@ -952,9 +952,14 @@ export class MiMeta {
 		name: string;
 		description?: string | null;
 		apiModelName: string;
-		baseUrl: string;
-		apiKey: string;
-		maxContextTokens: number;
+			baseUrl: string;
+			/** 首个有效 Key 的兼容镜像 */
+			apiKey: string;
+			/** 按配置顺序保存的有效 Key 列表 */
+			apiKeys?: string[];
+			/** 是否对 apiKeys 启用轮询负载 */
+			multiKeyEnabled?: boolean;
+			maxContextTokens: number;
 		maxOutputTokensPerCall: number;
 		/** 下架后仅保留在控制面板；对用户侧与新会话不可见 */
 		unlisted?: boolean;
@@ -1191,7 +1196,6 @@ export class MiMeta {
 		nullable: true,
 	})
 	public agentPerformanceSystemPrompt: string | null;
-
 
 	@Column('jsonb', {
 		default: [],
