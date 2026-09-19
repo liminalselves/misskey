@@ -107,6 +107,8 @@ export function buildTiptotipImageGenerationRequest(model: string, prompt: strin
 		n: 1,
 		resolution: tiptotipImageResolution(size),
 		response_format: 'b64_json',
+		// 网关扩展参数（火山、阿里百炼等部分通道支持）：显式关水印，不传则走通道默认
+		watermark: false,
 		...(images.length === 1 ? { image: images[0] } : images.length > 1 ? { image: images } : {}),
 	};
 }
