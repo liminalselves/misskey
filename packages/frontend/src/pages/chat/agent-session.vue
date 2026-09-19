@@ -5214,6 +5214,16 @@ function formatAgentImageError(err: unknown): string {
 		: null;
 	let message: string;
 	switch (code) {
+		case 'AGENT_IMAGE_MODEL_UNAVAILABLE':
+		case 'NO_SUCH_AGENT_IMAGE_MODEL':
+			message = '所选生图模型已下架，请重新选择后再试。';
+			break;
+		case 'AGENT_IMAGE_DISABLED':
+			message = '生图功能未开启。';
+			break;
+		case 'AGENT_IMAGE_NOT_CONFIGURED':
+			message = '生图功能尚未配置。';
+			break;
 		case 'AGENT_IMAGE_NO_FREE_DRIVE_SPACE':
 			message = i18n.ts._agents.agentImageErrorNoSpace;
 			break;

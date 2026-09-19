@@ -61,6 +61,13 @@ export const agentImageErrors = {
 		code: 'AGENT_IMAGE_DISABLED',
 		id: '0e7c38a8-7b74-41a1-97a6-4f25155c8bd2',
 	},
+	modelUnavailable: {
+		message: 'The image model selected for this session is no longer available. Please choose another model.',
+		code: 'AGENT_IMAGE_MODEL_UNAVAILABLE',
+		id: 'b5a3f4ae-61c2-4f9d-8a30-4f0c4bfa5638',
+		kind: 'client' as const,
+		httpStatusCode: 400,
+	},
 	notConfigured: {
 		message: 'Agent image generation is not configured.',
 		code: 'AGENT_IMAGE_NOT_CONFIGURED',
@@ -615,7 +622,10 @@ export class AgentImageService {
 	}): Promise<{ url: string; fileId: string; cost: number }> {
 		const instance = await this.metaService.fetch(true);
 		const imageModel = this.resolveImageModel(instance, params.imageModelId);
-		if (!imageModel) throw new ApiError(agentImageErrors.disabled);
+		if (!imageModel) {
+			// 区分「会话保存的模型已下架」与「生图功能关闭」：前者需要用户重新选择模型
+			throw new ApiError(params.imageModelId ? agentImageErrors.modelUnavailable : agentImageErrors.disabled);
+		}
 		const cost = Math.max(0, Number(imageModel.costPerCall ?? instance.agentImageCostPerCall) || 0);
 		if (cost > 0 && !await this.agentModelUsageService.hasFreeQuotaRemaining(params.user.id, imageModel.id, instance)) {
 			const profile = await this.userProfilesRepository.findOneBy({ userId: params.user.id });

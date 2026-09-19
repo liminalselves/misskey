@@ -11,7 +11,7 @@ import { DI } from '@/di-symbols.js';
 import { Endpoint } from '@/server/api/endpoint-base.js';
 import { ApiError } from '@/server/api/error.js';
 import { AgentService } from '@/core/AgentService.js';
-import { AgentImageService, getAgentImageErrorDiagnostic } from '@/core/AgentImageService.js';
+import { AgentImageService, agentImageErrors, getAgentImageErrorDiagnostic } from '@/core/AgentImageService.js';
 import { DriveFileEntityService } from '@/core/entities/DriveFileEntityService.js';
 import type { MiAgentImageGeneration } from '@/models/AgentImageGeneration.js';
 
@@ -117,7 +117,10 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 
 			const instance = await this.agentImageService.fetchMetaForImageGeneration();
 			const imageModel = this.agentImageService.resolveImageModel(instance, session.agentImageModelId);
-			if (!imageModel) throw new ApiError({ message: 'Agent image generation is disabled.', code: 'AGENT_IMAGE_DISABLED', id: '20fb60fa-e9cf-4f8f-af52-f3782cb7faaf' });
+			if (!imageModel) {
+				// 区分「会话保存的模型已下架」与「生图功能关闭」：前者需要用户重新选择模型
+				throw new ApiError(session.agentImageModelId ? agentImageErrors.modelUnavailable : agentImageErrors.disabled);
+			}
 
 			let regenerationOfId: MiAgentImageGeneration['id'] | null = null;
 			if (ps.regenerate) {

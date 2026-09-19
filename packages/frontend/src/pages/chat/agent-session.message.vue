@@ -365,8 +365,16 @@ function drawFileList(index: number): DriveFile[] {
 	return file ? [file] : [];
 }
 
-function drawErrorText(code: string | null): string {
+/** 已知错误码的中文文案；未知码返回 null（此时才展示技术诊断信息） */
+function knownDrawErrorText(code: string | null): string | null {
 	switch (code) {
+		case 'AGENT_IMAGE_MODEL_UNAVAILABLE':
+		case 'NO_SUCH_AGENT_IMAGE_MODEL':
+			return '生图模型已下架，请前往「生图」标签重新选择';
+		case 'AGENT_IMAGE_DISABLED':
+			return '生图功能未开启';
+		case 'AGENT_IMAGE_NOT_CONFIGURED':
+			return '生图功能尚未配置';
 		case 'AGENT_IMAGE_NO_FREE_DRIVE_SPACE':
 			return '网盘空间不足，无法保存生成图片';
 		case 'AGENT_IMAGE_MAX_FILE_SIZE_EXCEEDED':
@@ -375,14 +383,18 @@ function drawErrorText(code: string | null): string {
 			return '图片文件类型不允许上传';
 		case 'AGENT_IMAGE_INSUFFICIENT_CREDIT':
 			return '智能体额度不足';
-		case 'AGENT_IMAGE_DISABLED':
-			return '生图模型未启用';
-		case null:
-		case '':
-			return '生成失败';
+		case 'AGENT_IMAGE_UPSTREAM_FAILED':
+		case 'AGENT_IMAGE_FAILED':
+			return '生图服务暂时不可用，请稍后重试';
+		case 'AGENT_IMAGE_GENERATION_INTERRUPTED':
+			return '生成已中断，可重新生成';
 		default:
-			return code;
+			return null;
 	}
+}
+
+function drawErrorText(code: string | null): string {
+	return knownDrawErrorText(code) ?? '图片生成失败';
 }
 
 function drawStatusText(index: number): string {
@@ -397,7 +409,9 @@ function drawStatusText(index: number): string {
 
 function drawErrorDiagnostic(index: number): string | null {
 	const state = drawState(index);
-	return state?.status === 'failed' && state.errorMessage ? state.errorMessage : null;
+	if (state?.status !== 'failed' || !state.errorMessage) return null;
+	// 已有中文文案的已知错误不展示英文技术诊断，避免同一失败重复且中英混杂
+	return knownDrawErrorText(state.errorCode) == null ? state.errorMessage : null;
 }
 
 async function generateDraw(index: number, regenerate = false) {
@@ -432,9 +446,9 @@ async function generateDraw(index: number, regenerate = false) {
 		) as DrawResult;
 		drawResults[index] = res;
 	} catch (e) {
-		const errorCode = e != null && typeof e === 'object' && 'code' in e ? String((e as { code?: unknown }).code ?? '') : '';
+		const errCode = e != null && typeof e === 'object' && 'code' in e ? String((e as { code?: unknown }).code ?? '') : '';
 		// 兜底：生图不可用（模型为「无」或未配置）时不落失败态，回到「尚未生成」待手动（与关闭自动生图一致）
-		if (!regenerate && (errorCode === 'AGENT_IMAGE_DISABLED' || errorCode === 'AGENT_IMAGE_NOT_CONFIGURED')) {
+		if (!regenerate && (errCode === 'AGENT_IMAGE_DISABLED' || errCode === 'AGENT_IMAGE_NOT_CONFIGURED')) {
 			delete drawResults[index];
 			manualPending[index] = true;
 			return;
@@ -443,7 +457,8 @@ async function generateDraw(index: number, regenerate = false) {
 			...drawResults[index]!,
 			status: 'failed',
 			file: null,
-			errorCode: formatApiError(e),
+			// 只存纯错误码：中文文案映射按码查找，存整段错误文本会让映射失效并露出英文原文
+			errorCode: errCode || 'AGENT_IMAGE_FAILED',
 			errorMessage: e != null && typeof e === 'object' && typeof (e as { info?: { diagnostic?: unknown } }).info?.diagnostic === 'string'
 				? (e as { info: { diagnostic: string } }).info.diagnostic
 				: null,
@@ -462,7 +477,7 @@ function isManualPending(index: number): boolean {
 
 function manualGenerate(index: number) {
 	if (props.drawModelReady === false) {
-		os.alert({ type: 'info', text: '请先选择并保存生图模型。' });
+		os.alert({ type: 'info', text: '请先在「生图」标签选择生图模型。' });
 		return;
 	}
 	delete manualPending[index];
