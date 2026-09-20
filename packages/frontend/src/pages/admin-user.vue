@@ -201,6 +201,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 			</div>
 		</div>
 
+		<div v-else-if="tab === 'agentUsage'">
+			<MkAgentUsageForAdmin :userId="props.userId"/>
+		</div>
+
 		<div v-else-if="tab === 'raw'" class="_gaps_m">
 			<MkObjectView v-if="info && $i.isAdmin" tall :value="info">
 			</MkObjectView>
@@ -228,6 +232,7 @@ import MkFolder from '@/components/MkFolder.vue';
 import MkKeyValue from '@/components/MkKeyValue.vue';
 import MkSelect from '@/components/MkSelect.vue';
 import MkFileListForAdmin from '@/components/MkFileListForAdmin.vue';
+import MkAgentUsageForAdmin from '@/components/MkAgentUsageForAdmin.vue';
 import MkInfo from '@/components/MkInfo.vue';
 import * as os from '@/os.js';
 import { misskeyApi } from '@/utility/misskey-api.js';
@@ -611,7 +616,12 @@ const headerTabs = computed(() => isSystem.value ? [{
 	key: 'chart',
 	title: i18n.ts.charts,
 	icon: 'ti ti-chart-line',
-}, {
+	// 智能体为本地功能，仅本地用户有模型用量记录
+}, ...(user.value.host == null ? [{
+	key: 'agentUsage',
+	title: '模型用量',
+	icon: 'ti ti-coin',
+}] : []), {
 	key: 'raw',
 	title: 'Raw',
 	icon: 'ti ti-code',

@@ -522,9 +522,10 @@ export class AgentModelUsageService {
 	/**
 	 * 按时间窗求总体统计，供管理端报表卡片。
 	 * modelCallsOnly 时排除签到/管理员奖励/额度迁移等非模型调用记录。
+	 * userId 限定单用户，供管理端用户详情页的模型用量统计。
 	 */
 	@bindThis
-	public async overallStats(opts: { since: Date; until?: Date; modelCallsOnly?: boolean } & ModelReportFilter): Promise<{
+	public async overallStats(opts: { since: Date; until?: Date; userId?: MiUser['id']; modelCallsOnly?: boolean } & ModelReportFilter): Promise<{
 		total: number;
 		success: number;
 		failed: number;
@@ -550,6 +551,9 @@ export class AgentModelUsageService {
 			.where('log.requestedAt >= :since', { since: opts.since });
 		if (opts.until != null) {
 			qb.andWhere('log.requestedAt < :until', { until: opts.until });
+		}
+		if (opts.userId != null) {
+			qb.andWhere('log.userId = :uid', { uid: opts.userId });
 		}
 		if (opts.modelCallsOnly === true) {
 			qb.andWhere('log.usageKind NOT IN (:...nonModelKinds)', { nonModelKinds: nonModelUsageKinds });
