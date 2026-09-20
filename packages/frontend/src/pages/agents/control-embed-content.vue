@@ -278,8 +278,8 @@ onBeforeUnmount(() => {
 	window.removeEventListener('misskey:agent-control:close-requested', onCloseRequested);
 	colorSchemeMedia.removeEventListener('change', onColorSchemeChange);
 	resizeObserver?.disconnect();
-	setAgentControlEmbedActive(false);
-	setAgentControlRuntimeToken(null);
+	// runtime token 与 embedActive 是 iframe 文档级共享状态：KeepAlive 缓存淘汰旧面板时也会走到这里，
+	// 清掉会砸掉当前活跃面板正在使用的 token（宿主只在新实例挂载发 ready 时才重新下发）
 	for (const property of managedCssProperties) window.document.documentElement.style.removeProperty(property);
 });
 </script>
