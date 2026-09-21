@@ -3282,11 +3282,23 @@ async function applyStyle() {
 	}
 }
 
+function normalizeAgentMessage(message: Omit<AgentMsg, 'imageRecognitionStatus'> & { imageRecognitionStatus?: string | null }): AgentMsg {
+	const imageRecognitionStatus = message.imageRecognitionStatus;
+	return {
+		...message,
+		imageRecognitionStatus: imageRecognitionStatus === 'succeeded' || imageRecognitionStatus === 'failed' ? imageRecognitionStatus : null,
+	};
+}
+
+function normalizeAgentMessages(messages: (Omit<AgentMsg, 'imageRecognitionStatus'> & { imageRecognitionStatus?: string | null })[]): AgentMsg[] {
+	return messages.map(normalizeAgentMessage);
+}
+
 async function loadInitialTimeline(): Promise<AgentMsg[]> {
-	const list = await misskeyApi('agents/messages/timeline', {
+	const list = normalizeAgentMessages(await misskeyApi('agents/messages/timeline', {
 		sessionId,
 		limit: PAGE_LIMIT,
-	});
+	}));
 	messages.value = list;
 	canFetchMore.value = list.length === PAGE_LIMIT;
 	canFetchNewer.value = false;
