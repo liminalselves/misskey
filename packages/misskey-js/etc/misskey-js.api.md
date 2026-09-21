@@ -114,6 +114,12 @@ type AdminAgentsCharactersSetModerationBannedRequest = operations['admin___agent
 type AdminAgentsCharactersSetModerationBannedResponse = operations['admin___agents___characters___set-moderation-banned']['responses']['200']['content']['application/json'];
 
 // @public (undocumented)
+type AdminAgentsCheckinMakeupRequest = operations['admin___agents-checkin-makeup']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AdminAgentsCheckinMakeupResponse = operations['admin___agents-checkin-makeup']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
 type AdminAgentsCheckinReportsRequest = operations['admin___agents-checkin-reports']['requestBody']['content']['application/json'];
 
 // @public (undocumented)
@@ -721,6 +727,12 @@ type AdminUsersAgentSuccessRateRequest = operations['admin___users___agent-succe
 
 // @public (undocumented)
 type AdminUsersAgentSuccessRateResponse = operations['admin___users___agent-success-rate']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type AdminUsersAgentUsageRequest = operations['admin___users___agent-usage']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AdminUsersAgentUsageResponse = operations['admin___users___agent-usage']['responses']['200']['content']['application/json'];
 
 // @public (undocumented)
 type AgentsBillingLogsRequest = operations['agents___billing-logs']['requestBody']['content']['application/json'];
@@ -2319,6 +2331,8 @@ declare namespace entities {
         AdminAdListRequest,
         AdminAdListResponse,
         AdminAdUpdateRequest,
+        AdminAgentsCheckinMakeupRequest,
+        AdminAgentsCheckinMakeupResponse,
         AdminAgentsCheckinReportsRequest,
         AdminAgentsCheckinReportsResponse,
         AdminAgentsCheckinRevokeTodayResponse,
@@ -2524,6 +2538,8 @@ declare namespace entities {
         AdminUpdateUserNoteRequest,
         AdminUsersAgentSuccessRateRequest,
         AdminUsersAgentSuccessRateResponse,
+        AdminUsersAgentUsageRequest,
+        AdminUsersAgentUsageResponse,
         AgentsBillingLogsRequest,
         AgentsBillingLogsResponse,
         AgentsByokModelsCreateRequest,

@@ -15430,6 +15430,38 @@ export interface Locale extends ILocale {
          */
         "adminCheckinRevoked": ParameterizedString<"count" | "amount">;
         /**
+         * 管理者による再チェックイン
+         */
+        "adminCheckinMakeupTitle": string;
+        /**
+         * 指定ユーザーが未チェックインの過去日を補完します。ユーザー画面には管理者による再チェックインとして表示され、クレジットも月間回数も消費しません。
+         */
+        "adminCheckinMakeupCaption": string;
+        /**
+         * 対象ユーザー
+         */
+        "adminCheckinMakeupUser": string;
+        /**
+         * ユーザー ID または @username / @username@host
+         */
+        "adminCheckinMakeupUserCaption": string;
+        /**
+         * 補完する日付
+         */
+        "adminCheckinMakeupDate": string;
+        /**
+         * 再チェックインを追加
+         */
+        "adminCheckinMakeupButton": string;
+        /**
+         * {user} の {date} をチェックイン済みにしますか？クレジットも再チェックイン回数も消費しません。
+         */
+        "adminCheckinMakeupConfirm": ParameterizedString<"user" | "date">;
+        /**
+         * {user} の {date} を再チェックインとして追加しました
+         */
+        "adminCheckinMakeupSuccess": ParameterizedString<"user" | "date">;
+        /**
          * 報酬を発行
          */
         "adminIssueRewardTitle": string;

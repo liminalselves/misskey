@@ -124,6 +124,16 @@ export type paths = {
          */
         post: operations['admin___ad___update'];
     };
+    '/admin/agents-checkin-makeup': {
+        /**
+         * admin/agents-checkin-makeup
+         * @description No description provided.
+         *
+         *     **Internal Endpoint**: This endpoint is an API for the misskey mainframe and is not intended for use by third parties.
+         *     **Credential required**: *Yes* / **Permission**: *write:admin*
+         */
+        post: operations['admin___agents-checkin-makeup'];
+    };
     '/admin/agents-checkin-reports': {
         /**
          * admin/agents-checkin-reports
@@ -1410,6 +1420,16 @@ export type paths = {
          *     **Credential required**: *Yes* / **Permission**: *read:admin*
          */
         post: operations['admin___users___agent-success-rate'];
+    };
+    '/admin/users/agent-usage': {
+        /**
+         * admin/users/agent-usage
+         * @description No description provided.
+         *
+         *     **Internal Endpoint**: This endpoint is an API for the misskey mainframe and is not intended for use by third parties.
+         *     **Credential required**: *Yes* / **Permission**: *read:admin*
+         */
+        post: operations['admin___users___agent-usage'];
     };
     '/agents/billing-logs': {
         /**
@@ -8141,6 +8161,84 @@ export interface operations {
             };
         };
     };
+    'admin___agents-checkin-makeup': {
+        requestBody: {
+            content: {
+                'application/json': {
+                    userId: string;
+                    date: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK (with results) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': {
+                        userId: string;
+                        date: string;
+                    };
+                };
+            };
+            /** @description Client error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Authentication error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Forbidden error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description I'm Ai */
+            418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+        };
+    };
     'admin___agents-checkin-reports': {
         requestBody: {
             content: {
@@ -8197,6 +8295,8 @@ export interface operations {
                             dayMultiplier: number;
                             isMakeup: boolean;
                             makeupCost: number | null;
+                            /** @enum {string|null} */
+                            makeupSource: 'user' | 'admin' | null;
                             createdAt: string;
                         }[];
                         totalCount: number;
@@ -15133,6 +15233,8 @@ export interface operations {
                         agentStickerEnabled: boolean;
                         agentStickerMaxPerMessage: number;
                         agentEmojiPromptMaxCount: number;
+                        agentPerformanceEnabled: boolean;
+                        agentPerformanceSystemPrompt: string | null;
                         agentImageCostPerCall: number;
                         agentImageDefaultArtistPresetId: string | null;
                         agentImageTokenMinPoints: number;
@@ -18758,6 +18860,8 @@ export interface operations {
                     agentStickerEnabled?: boolean;
                     agentStickerMaxPerMessage?: number;
                     agentEmojiPromptMaxCount?: number;
+                    agentPerformanceEnabled?: boolean;
+                    agentPerformanceSystemPrompt?: string | null;
                     agentImageCostPerCall?: number;
                     agentImageDefaultArtistPresetId?: string | null;
                     agentImageTokenMinPoints?: number;
@@ -19094,6 +19198,161 @@ export interface operations {
                         aborted: number;
                         successRate: number | null;
                     }[];
+                };
+            };
+            /** @description Client error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Authentication error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Forbidden error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description I'm Ai */
+            418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+        };
+    };
+    'admin___users___agent-usage': {
+        requestBody: {
+            content: {
+                'application/json': {
+                    /** Format: misskey:id */
+                    userId: string;
+                    hours?: number;
+                    /** @default 1 */
+                    logsPage?: number;
+                    /** @default 20 */
+                    logsPageSize?: number;
+                };
+            };
+        };
+        responses: {
+            /** @description OK (with results) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': {
+                        creditBalance: number;
+                        since: string;
+                        hours: number;
+                        overall: {
+                            total: number;
+                            success: number;
+                            failed: number;
+                            aborted: number;
+                            totalCost: number;
+                            freeCalls: number;
+                            paidCalls: number;
+                            creditsCharged: number;
+                            avgDurationMs: number | null;
+                        };
+                        byModel: {
+                            modelId: string | null;
+                            modelName: string | null;
+                            /** @enum {string|null} */
+                            modelSource: 'official' | 'user' | null;
+                            total: number;
+                            success: number;
+                            failed: number;
+                            aborted: number;
+                            totalCost: number;
+                            freeCalls: number;
+                            paidCalls: number;
+                            creditsCharged: number;
+                            avgDurationMs: number | null;
+                        }[];
+                        recentLogs: {
+                            id: string;
+                            requestedAt: string;
+                            completedAt: string | null;
+                            durationMs: number | null;
+                            modelId: string | null;
+                            modelName: string | null;
+                            /** @enum {string|null} */
+                            modelSource: 'official' | 'user' | null;
+                            modelApiName: string | null;
+                            /** @enum {string} */
+                            usageKind: 'chat' | 'compression' | 'image_generation' | 'vision' | 'sticker_description' | 'proactive_random' | 'proactive_scheduled' | 'checkin' | 'admin_reward' | 'credit_migration';
+                            status: string;
+                            cost: number;
+                            promptTokens: number | null;
+                            completionTokens: number | null;
+                            usedFreeQuota: boolean | null;
+                            freeQuotaUsedAtCall: number | null;
+                            freeQuotaTotalAtCall: number | null;
+                        }[];
+                        recentLogsTotal: number;
+                        recentLogsPage: number;
+                        recentLogsPageSize: number;
+                        /** @enum {string} */
+                        bucket: 'hour' | 'day';
+                        buckets: {
+                            bucketStart: string;
+                            total: number;
+                            success: number;
+                            failed: number;
+                            aborted: number;
+                            freeCalls: number;
+                            paidCalls: number;
+                            creditsCharged: number;
+                            promptTokens: number;
+                            completionTokens: number;
+                            avgDurationMs: number | null;
+                        }[];
+                        byUsageKind: {
+                            usageKind: string;
+                            total: number;
+                            freeCalls: number;
+                            paidCalls: number;
+                            creditsCharged: number;
+                        }[];
+                    };
                 };
             };
             /** @description Client error */
@@ -21157,6 +21416,8 @@ export interface operations {
                             roleMultiplier: number;
                             dayMultiplier: number;
                             makeupCost: number | null;
+                            /** @enum {string|null} */
+                            makeupSource: 'user' | 'admin' | null;
                             createdAt: string;
                         }[];
                         monthCount: number;
@@ -21968,6 +22229,9 @@ export interface operations {
                         provider: 'aurora' | 'openai' | 'tiptotip' | 'qwen';
                         apiModelName: string | null;
                         supportsReferenceImage: boolean;
+                        supportsSizeSelection: boolean;
+                        supportsAdvancedParams: boolean;
+                        supportsArtistPreset: boolean;
                         costPerCall: number;
                         freeQuotaUsed: number;
                         freeQuotaTotal: number;
@@ -23524,6 +23788,26 @@ export interface operations {
                             total: number;
                         }[];
                         dialogueStyleStatsTotal: number;
+                        buckets: {
+                            bucketStart: string;
+                            total: number;
+                            success: number;
+                            failed: number;
+                            aborted: number;
+                            freeCalls: number;
+                            paidCalls: number;
+                            creditsCharged: number;
+                            promptTokens: number;
+                            completionTokens: number;
+                            avgDurationMs: number | null;
+                        }[];
+                        byUsageKind: {
+                            usageKind: string;
+                            total: number;
+                            freeCalls: number;
+                            paidCalls: number;
+                            creditsCharged: number;
+                        }[];
                     };
                 };
             };

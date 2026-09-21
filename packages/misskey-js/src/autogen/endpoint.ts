@@ -23,6 +23,8 @@ import type {
 	AdminAdListRequest,
 	AdminAdListResponse,
 	AdminAdUpdateRequest,
+	AdminAgentsCheckinMakeupRequest,
+	AdminAgentsCheckinMakeupResponse,
 	AdminAgentsCheckinReportsRequest,
 	AdminAgentsCheckinReportsResponse,
 	AdminAgentsCheckinRevokeTodayResponse,
@@ -228,6 +230,8 @@ import type {
 	AdminUpdateUserNoteRequest,
 	AdminUsersAgentSuccessRateRequest,
 	AdminUsersAgentSuccessRateResponse,
+	AdminUsersAgentUsageRequest,
+	AdminUsersAgentUsageResponse,
 	AgentsBillingLogsRequest,
 	AgentsBillingLogsResponse,
 	AgentsByokModelsCreateRequest,
@@ -939,6 +943,7 @@ export type Endpoints = {
 	'admin/ad/delete': { req: AdminAdDeleteRequest; res: EmptyResponse };
 	'admin/ad/list': { req: AdminAdListRequest; res: AdminAdListResponse };
 	'admin/ad/update': { req: AdminAdUpdateRequest; res: EmptyResponse };
+	'admin/agents-checkin-makeup': { req: AdminAgentsCheckinMakeupRequest; res: AdminAgentsCheckinMakeupResponse };
 	'admin/agents-checkin-reports': { req: AdminAgentsCheckinReportsRequest; res: AdminAgentsCheckinReportsResponse };
 	'admin/agents-checkin-revoke-today': { req: EmptyRequest; res: AdminAgentsCheckinRevokeTodayResponse };
 	'admin/agents/characters/set-moderation-banned': { req: AdminAgentsCharactersSetModerationBannedRequest; res: AdminAgentsCharactersSetModerationBannedResponse };
@@ -1076,6 +1081,7 @@ export type Endpoints = {
 	'admin/update-proxy-account': { req: AdminUpdateProxyAccountRequest; res: AdminUpdateProxyAccountResponse };
 	'admin/update-user-note': { req: AdminUpdateUserNoteRequest; res: EmptyResponse };
 	'admin/users/agent-success-rate': { req: AdminUsersAgentSuccessRateRequest; res: AdminUsersAgentSuccessRateResponse };
+	'admin/users/agent-usage': { req: AdminUsersAgentUsageRequest; res: AdminUsersAgentUsageResponse };
 	'agents/billing-logs': { req: AgentsBillingLogsRequest; res: AgentsBillingLogsResponse };
 	'agents/byok/models/create': { req: AgentsByokModelsCreateRequest; res: AgentsByokModelsCreateResponse };
 	'agents/byok/models/delete': { req: AgentsByokModelsDeleteRequest; res: AgentsByokModelsDeleteResponse };
