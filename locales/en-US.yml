@@ -4376,6 +4376,8 @@ _agents:
   myStatsCost: "Cost"
   myStatsTokens: "Tokens"
   myStatsNoLogs: "No records yet"
+  myStatsCharts: "Usage Charts"
+  myStatsTokensTrend: "Token Usage Trend"
   modelsTab: "Models"
   modelsTabOfficial: "Official models"
   modelsTabCustom: "My custom models"

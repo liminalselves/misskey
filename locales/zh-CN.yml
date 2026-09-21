@@ -4414,6 +4414,8 @@ _agents:
   myStatsCost: "费用"
   myStatsTokens: "Token"
   myStatsNoLogs: "暂无记录"
+  myStatsCharts: "用量图表"
+  myStatsTokensTrend: "Token 用量趋势"
   modelsTab: "模型"
   modelsTabOfficial: "官方模型"
   modelsTabCustom: "我的自定义模型"

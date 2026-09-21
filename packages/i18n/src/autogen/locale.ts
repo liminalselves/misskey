@@ -17065,6 +17065,14 @@ export interface Locale extends ILocale {
          */
         "myStatsNoLogs": string;
         /**
+         * 利用チャート
+         */
+        "myStatsCharts": string;
+        /**
+         * トークン利用量の推移
+         */
+        "myStatsTokensTrend": string;
+        /**
          * モデル
          */
         "modelsTab": string;

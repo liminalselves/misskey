@@ -54,6 +54,36 @@ SPDX-License-Identifier: AGPL-3.0-only
 			</div>
 		</div>
 
+		<!-- 用量图表 -->
+		<MkFolder :defaultOpen="true">
+			<template #icon><i class="ti ti-chart-line"></i></template>
+			<template #label>{{ i18n.ts._agents.myStatsCharts }}（{{ i18n.tsx.recentNDays({ n: 30 }) }}）</template>
+			<div class="_gaps_m">
+				<div>
+					<div :class="$style.chartLabel">{{ i18n.ts._agents.adminReportsRequestsTrend }}</div>
+					<MkInfo v-if="summary.buckets.length === 0">{{ i18n.ts._agents.noDataAvailable }}</MkInfo>
+					<div v-else :class="$style.chartBox"><canvas ref="requestsChartEl"></canvas></div>
+				</div>
+				<div :class="$style.chartGrid">
+					<div>
+						<div :class="$style.chartLabel">{{ i18n.ts._agents.adminReportsCreditsTrend }}</div>
+						<MkInfo v-if="summary.buckets.length === 0">{{ i18n.ts._agents.noDataAvailable }}</MkInfo>
+						<div v-else :class="$style.chartBox"><canvas ref="creditsChartEl"></canvas></div>
+					</div>
+					<div>
+						<div :class="$style.chartLabel">{{ i18n.ts._agents.myStatsTokensTrend }}</div>
+						<MkInfo v-if="summary.buckets.length === 0">{{ i18n.ts._agents.noDataAvailable }}</MkInfo>
+						<div v-else :class="$style.chartBox"><canvas ref="tokensChartEl"></canvas></div>
+					</div>
+				</div>
+				<div>
+					<div :class="$style.chartLabel">{{ i18n.ts._agents.adminReportsUsageKindComposition }}</div>
+					<MkInfo v-if="usageKindTotal === 0">{{ i18n.ts._agents.noDataAvailable }}</MkInfo>
+					<div v-else :class="$style.chartBoxDoughnut"><canvas ref="usageKindChartEl"></canvas></div>
+				</div>
+			</div>
+		</MkFolder>
+
 		<!-- 消费日志 -->
 		<MkFolder :defaultOpen="true">
 			<template #icon><i class="ti ti-receipt"></i></template>
@@ -340,7 +370,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { computed, onMounted, ref, shallowRef, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, useTemplateRef, watch } from 'vue';
 import MkLoading from '@/components/global/MkLoading.vue';
 import MkInfo from '@/components/MkInfo.vue';
 import MkFolder from '@/components/MkFolder.vue';
@@ -353,6 +383,11 @@ import { i18n, updateI18n } from '@/i18n.js';
 import * as os from '@/os.js';
 import { lang, version } from '@@/js/config.js';
 import type { Locale } from 'i18n';
+import { AgentUsageCharts } from '@/utility/agent-usage-charts.js';
+import type { AgentUsageBucket, AgentUsageKindRow } from '@/utility/agent-usage-charts.js';
+import { initChart } from '@/utility/init-chart.js';
+
+initChart();
 
 type UsageKind = 'chat' | 'compression' | 'image_generation' | 'vision' | 'sticker_description' | 'proactive_random' | 'proactive_scheduled' | 'checkin' | 'admin_reward' | 'credit_migration';
 
@@ -390,6 +425,8 @@ type UsageSummary = {
 	characterStatsTotal: number;
 	dialogueStyleStats: StyleStat[];
 	dialogueStyleStatsTotal: number;
+	buckets: AgentUsageBucket[];
+	byUsageKind: AgentUsageKindRow[];
 };
 
 type BillingItem = {
@@ -423,6 +460,26 @@ const summary = ref<UsageSummary | null>(null);
 const overallTotal = computed(() => summary.value?.modelStats.reduce((s, m) => s + m.total, 0) ?? 0);
 const overallSuccess = computed(() => summary.value?.modelStats.reduce((s, m) => s + m.success, 0) ?? 0);
 const overallCost = computed(() => summary.value?.modelStats.reduce((s, m) => s + m.totalCost, 0) ?? 0);
+const usageKindTotal = computed(() => (summary.value?.byUsageKind ?? []).reduce((s, k) => s + k.total, 0));
+
+const requestsChartEl = useTemplateRef('requestsChartEl');
+const creditsChartEl = useTemplateRef('creditsChartEl');
+const tokensChartEl = useTemplateRef('tokensChartEl');
+const usageKindChartEl = useTemplateRef('usageKindChartEl');
+const charts = new AgentUsageCharts({
+	get requests() { return requestsChartEl.value; },
+	get credits() { return creditsChartEl.value; },
+	get tokens() { return tokensChartEl.value; },
+	get usageKind() { return usageKindChartEl.value; },
+});
+
+async function renderCharts() {
+	await nextTick();
+	if (summary.value != null) {
+		// 用户侧固定近 30 天按天桶
+		charts.render(summary.value.buckets, 'day', summary.value.byUsageKind);
+	}
+}
 
 const redeemCode = ref('');
 const redeeming = ref(false);
@@ -748,6 +805,12 @@ onMounted(async () => {
 	} finally {
 		loading.value = false;
 	}
+	// loading 置 false 后内容分支（含图表 canvas）才挂载，须在 finally 之后渲染
+	await renderCharts();
+});
+
+onBeforeUnmount(() => {
+	charts.destroy();
 });
 </script>
 
@@ -898,6 +961,33 @@ onMounted(async () => {
 .colorOk { color: var(--MI_THEME-success); }
 .colorErr { color: var(--MI_THEME-error); }
 .colorWarn { color: var(--MI_THEME-warn); }
+
+.chartLabel {
+	font-size: 0.85em;
+	font-weight: 600;
+	opacity: 0.7;
+	margin-bottom: 6px;
+}
+
+.chartGrid {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 16px;
+
+	@media (max-width: 600px) {
+		grid-template-columns: 1fr;
+	}
+}
+
+.chartBox {
+	position: relative;
+}
+
+.chartBoxDoughnut {
+	position: relative;
+	max-width: 460px;
+	margin-inline: auto;
+}
 
 .badge {
 	display: inline-block;

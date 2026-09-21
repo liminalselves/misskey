@@ -107,6 +107,40 @@ export const meta = {
 				},
 			},
 			dialogueStyleStatsTotal: { type: 'integer' },
+			buckets: {
+				type: 'array',
+				items: {
+					type: 'object',
+					properties: {
+						bucketStart: { type: 'string' },
+						total: { type: 'integer' },
+						success: { type: 'integer' },
+						failed: { type: 'integer' },
+						aborted: { type: 'integer' },
+						freeCalls: { type: 'integer' },
+						paidCalls: { type: 'integer' },
+						creditsCharged: { type: 'number' },
+						promptTokens: { type: 'integer' },
+						completionTokens: { type: 'integer' },
+						avgDurationMs: { type: 'number', nullable: true },
+					},
+					required: ['bucketStart', 'total', 'success', 'failed', 'aborted', 'freeCalls', 'paidCalls', 'creditsCharged', 'promptTokens', 'completionTokens', 'avgDurationMs'],
+				},
+			},
+			byUsageKind: {
+				type: 'array',
+				items: {
+					type: 'object',
+					properties: {
+						usageKind: { type: 'string' },
+						total: { type: 'integer' },
+						freeCalls: { type: 'integer' },
+						paidCalls: { type: 'integer' },
+						creditsCharged: { type: 'number' },
+					},
+					required: ['usageKind', 'total', 'freeCalls', 'paidCalls', 'creditsCharged'],
+				},
+			},
 		},
 	},
 } as const;
@@ -165,7 +199,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 
 			const since30d = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
-			const [recentLogsRaw, recentLogsTotal, modelStatsRaw, freeQuota30dMap, characterStatsRaw, dialogueStyleStatsRaw, characterStatsTotal, dialogueStyleStatsTotal, instanceMeta] = await Promise.all([
+			const [recentLogsRaw, recentLogsTotal, modelStatsRaw, freeQuota30dMap, characterStatsRaw, dialogueStyleStatsRaw, characterStatsTotal, dialogueStyleStatsTotal, instanceMeta, buckets, byUsageKind] = await Promise.all([
 				this.agentModelUsageService.listUserRecent(me.id, { limit: fetchLimit, untilDate, offset: recentLogsOffset }),
 				this.agentModelUsageService.countUserLogs(me.id),
 				this.agentModelUsageService.aggregateByModel({ userId: me.id, since: since30d }),
@@ -175,6 +209,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				this.agentModelUsageService.countDistinctCharacters({ userId: me.id, since: since30d }),
 				this.agentModelUsageService.countDistinctDialogueStyles({ userId: me.id, since: since30d }),
 				this.metaService.fetch(true),
+				this.agentModelUsageService.timeBuckets({ userId: me.id, since: since30d, unit: 'day', modelCallsOnly: true }),
+				this.agentModelUsageService.aggregateByUsageKind({ userId: me.id, since: since30d }),
 			]);
 
 			const recentLogsHasMore = recentLogsRaw.length > recentLogsPageSize;
@@ -295,6 +331,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					total: r.total,
 				})),
 				dialogueStyleStatsTotal,
+				buckets,
+				byUsageKind,
 			};
 		});
 	}

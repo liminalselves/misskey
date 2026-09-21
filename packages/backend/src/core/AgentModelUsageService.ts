@@ -588,9 +588,10 @@ export class AgentModelUsageService {
 	/**
 	 * 按小时/天分桶的请求状态与免费/付费/扣费分布，供管理端报表趋势图。
 	 * modelCallsOnly 时排除签到/管理员奖励/额度迁移等非模型调用记录。
+	 * userId 限定单用户；token 分桶汇总取自 OpenAI 响应 usage（无 usage 的调用计 0），供 token 趋势图。
 	 */
 	@bindThis
-	public async timeBuckets(opts: { since: Date; until?: Date; unit: 'hour' | 'day'; modelCallsOnly?: boolean } & ModelReportFilter): Promise<Array<{
+	public async timeBuckets(opts: { since: Date; until?: Date; userId?: MiUser['id']; unit: 'hour' | 'day'; modelCallsOnly?: boolean } & ModelReportFilter): Promise<Array<{
 		bucketStart: string;
 		total: number;
 		success: number;
@@ -599,6 +600,8 @@ export class AgentModelUsageService {
 		freeCalls: number;
 		paidCalls: number;
 		creditsCharged: number;
+		promptTokens: number;
+		completionTokens: number;
 		avgDurationMs: number | null;
 	}>> {
 		const qb = this.agentModelUsageLogsRepository.createQueryBuilder('log')
@@ -610,12 +613,17 @@ export class AgentModelUsageService {
 			.addSelect('SUM(CASE WHEN log.usedFreeQuota = TRUE THEN 1 ELSE 0 END)::int', 'freeCalls')
 			.addSelect('SUM(CASE WHEN log.cost > 0 THEN 1 ELSE 0 END)::int', 'paidCalls')
 			.addSelect('COALESCE(SUM(CASE WHEN log.cost > 0 THEN log.cost ELSE 0 END), 0)', 'creditsCharged')
+			.addSelect('COALESCE(SUM(log.promptTokens), 0)::int', 'promptTokens')
+			.addSelect('COALESCE(SUM(log.completionTokens), 0)::int', 'completionTokens')
 			.addSelect('AVG(log.durationMs)', 'avgDurationMs')
 			.where('log.requestedAt >= :since', { since: opts.since })
 			.groupBy('bucketstart')
 			.orderBy('bucketstart', 'ASC');
 		if (opts.until != null) {
 			qb.andWhere('log.requestedAt < :until', { until: opts.until });
+		}
+		if (opts.userId != null) {
+			qb.andWhere('log.userId = :uid', { uid: opts.userId });
 		}
 		if (opts.modelCallsOnly === true) {
 			qb.andWhere('log.usageKind NOT IN (:...nonModelKinds)', { nonModelKinds: nonModelUsageKinds });
@@ -630,6 +638,8 @@ export class AgentModelUsageService {
 			freeCalls: number;
 			paidCalls: number;
 			creditsCharged: string | number;
+			promptTokens: number;
+			completionTokens: number;
 			avgDurationMs: string | number | null;
 		}>();
 		return rows.map(r => ({
@@ -641,6 +651,8 @@ export class AgentModelUsageService {
 			freeCalls: Number(r.freeCalls) || 0,
 			paidCalls: Number(r.paidCalls) || 0,
 			creditsCharged: Number(r.creditsCharged) || 0,
+			promptTokens: Number(r.promptTokens) || 0,
+			completionTokens: Number(r.completionTokens) || 0,
 			avgDurationMs: r.avgDurationMs != null ? Number(r.avgDurationMs) : null,
 		}));
 	}
@@ -693,17 +705,17 @@ export class AgentModelUsageService {
 
 	/**
 	 * 按用途（聊天/识图/生图/主动消息/压缩）聚合请求量、免费次数与扣费，供管理端用量构成分析。
-	 * 仅统计模型调用类记录。
+	 * 仅统计模型调用类记录。userId 限定单用户。
 	 */
 	@bindThis
-	public async aggregateByUsageKind(opts: { since: Date; until?: Date }): Promise<Array<{
+	public async aggregateByUsageKind(opts: { since: Date; until?: Date; userId?: MiUser['id'] }): Promise<Array<{
 		usageKind: AgentModelUsageKind;
 		total: number;
 		freeCalls: number;
 		paidCalls: number;
 		creditsCharged: number;
 	}>> {
-		const rows = await this.agentModelUsageLogsRepository.createQueryBuilder('log')
+		const qb = this.agentModelUsageLogsRepository.createQueryBuilder('log')
 			.select('log.usageKind', 'usageKind')
 			.addSelect('COUNT(*)::int', 'total')
 			.addSelect('SUM(CASE WHEN log.usedFreeQuota = TRUE THEN 1 ELSE 0 END)::int', 'freeCalls')
@@ -712,8 +724,14 @@ export class AgentModelUsageService {
 			.where('log.requestedAt >= :since', { since: opts.since })
 			.andWhere('log.usageKind NOT IN (:...nonModelKinds)', { nonModelKinds: nonModelUsageKinds })
 			.groupBy('log.usageKind')
-			.orderBy('total', 'DESC')
-			.getRawMany<{
+			.orderBy('total', 'DESC');
+		if (opts.until != null) {
+			qb.andWhere('log.requestedAt < :until', { until: opts.until });
+		}
+		if (opts.userId != null) {
+			qb.andWhere('log.userId = :uid', { uid: opts.userId });
+		}
+		const rows = await qb.getRawMany<{
 			usageKind: AgentModelUsageKind;
 			total: number;
 			freeCalls: number;

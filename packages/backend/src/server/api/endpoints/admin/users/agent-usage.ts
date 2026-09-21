@@ -95,8 +95,43 @@ export const meta = {
 			recentLogsTotal: { type: 'integer' },
 			recentLogsPage: { type: 'integer' },
 			recentLogsPageSize: { type: 'integer' },
+			bucket: { type: 'string', enum: ['hour', 'day'] },
+			buckets: {
+				type: 'array',
+				items: {
+					type: 'object',
+					properties: {
+						bucketStart: { type: 'string' },
+						total: { type: 'integer' },
+						success: { type: 'integer' },
+						failed: { type: 'integer' },
+						aborted: { type: 'integer' },
+						freeCalls: { type: 'integer' },
+						paidCalls: { type: 'integer' },
+						creditsCharged: { type: 'number' },
+						promptTokens: { type: 'integer' },
+						completionTokens: { type: 'integer' },
+						avgDurationMs: { type: 'number', nullable: true },
+					},
+					required: ['bucketStart', 'total', 'success', 'failed', 'aborted', 'freeCalls', 'paidCalls', 'creditsCharged', 'promptTokens', 'completionTokens', 'avgDurationMs'],
+				},
+			},
+			byUsageKind: {
+				type: 'array',
+				items: {
+					type: 'object',
+					properties: {
+						usageKind: { type: 'string' },
+						total: { type: 'integer' },
+						freeCalls: { type: 'integer' },
+						paidCalls: { type: 'integer' },
+						creditsCharged: { type: 'number' },
+					},
+					required: ['usageKind', 'total', 'freeCalls', 'paidCalls', 'creditsCharged'],
+				},
+			},
 		},
-		required: ['creditBalance', 'since', 'hours', 'overall', 'byModel', 'recentLogs', 'recentLogsTotal', 'recentLogsPage', 'recentLogsPageSize'],
+		required: ['creditBalance', 'since', 'hours', 'overall', 'byModel', 'recentLogs', 'recentLogsTotal', 'recentLogsPage', 'recentLogsPageSize', 'bucket', 'buckets', 'byUsageKind'],
 	},
 } as const;
 
@@ -133,8 +168,10 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			const logsPage = ps.logsPage ?? 1;
 			const logsPageSize = ps.logsPageSize ?? 20;
 			const logsOffset = (logsPage - 1) * logsPageSize;
+			// 分桶粒度：短窗口（≤7 天）按小时，长窗口按天
+			const bucketUnit: 'hour' | 'day' = hours <= 168 ? 'hour' : 'day';
 
-			const [profile, instanceMeta, userModels, overall, byModelRaw, recentLogsRaw, recentLogsTotal] = await Promise.all([
+			const [profile, instanceMeta, userModels, overall, byModelRaw, recentLogsRaw, recentLogsTotal, buckets, byUsageKind] = await Promise.all([
 				this.userProfilesRepository.findOneBy({ userId: ps.userId }),
 				this.metaService.fetch(true),
 				this.agentUserModelsRepository.find({ where: { userId: ps.userId } }),
@@ -142,6 +179,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				this.agentModelUsageService.aggregateByModel({ userId: ps.userId, since }),
 				this.agentModelUsageService.listUserRecent(ps.userId, { limit: logsPageSize, offset: logsOffset }),
 				this.agentModelUsageService.countUserLogs(ps.userId),
+				this.agentModelUsageService.timeBuckets({ since, userId: ps.userId, unit: bucketUnit, modelCallsOnly: true }),
+				this.agentModelUsageService.aggregateByUsageKind({ since, userId: ps.userId }),
 			]);
 
 			// 名称映射使用全量模型（含已下架/禁用），避免历史用量记录因模型下架而显示为「—」
@@ -213,6 +252,9 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				recentLogsTotal,
 				recentLogsPage: logsPage,
 				recentLogsPageSize: logsPageSize,
+				bucket: bucketUnit,
+				buckets,
+				byUsageKind,
 			};
 		});
 	}

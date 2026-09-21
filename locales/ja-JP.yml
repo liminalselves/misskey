@@ -4508,6 +4508,8 @@ _agents:
   myStatsCost: "Cost"
   myStatsTokens: "Tokens"
   myStatsNoLogs: "No records yet"
+  myStatsCharts: "利用チャート"
+  myStatsTokensTrend: "トークン利用量の推移"
   modelsTab: "モデル"
   modelsTabOfficial: "公式モデル"
   modelsTabCustom: "マイカスタムモデル"

@@ -56,6 +56,33 @@ SPDX-License-Identifier: AGPL-3.0-only
 		</div>
 
 		<MkFolder :defaultOpen="true">
+			<template #icon><i class="ti ti-chart-line"></i></template>
+			<template #label>{{ i18n.ts._agents.myStatsCharts }}（{{ rangeLabel }}）</template>
+			<div class="_gaps_m">
+				<div>
+					<div :class="$style.chartLabel">{{ i18n.ts._agents.adminReportsRequestsTrend }}</div>
+					<MkInfo v-if="data.buckets.length === 0">{{ i18n.ts._agents.noDataAvailable }}</MkInfo>
+					<div v-else :class="$style.chartBox"><canvas ref="requestsChartEl"></canvas></div>
+				</div>
+				<div>
+					<div :class="$style.chartLabel">{{ i18n.ts._agents.adminReportsCreditsTrend }}</div>
+					<MkInfo v-if="data.buckets.length === 0">{{ i18n.ts._agents.noDataAvailable }}</MkInfo>
+					<div v-else :class="$style.chartBox"><canvas ref="creditsChartEl"></canvas></div>
+				</div>
+				<div>
+					<div :class="$style.chartLabel">{{ i18n.ts._agents.myStatsTokensTrend }}</div>
+					<MkInfo v-if="data.buckets.length === 0">{{ i18n.ts._agents.noDataAvailable }}</MkInfo>
+					<div v-else :class="$style.chartBox"><canvas ref="tokensChartEl"></canvas></div>
+				</div>
+				<div>
+					<div :class="$style.chartLabel">{{ i18n.ts._agents.adminReportsUsageKindComposition }}</div>
+					<MkInfo v-if="usageKindTotal === 0">{{ i18n.ts._agents.noDataAvailable }}</MkInfo>
+					<div v-else :class="$style.chartBoxDoughnut"><canvas ref="usageKindChartEl"></canvas></div>
+				</div>
+			</div>
+		</MkFolder>
+
+		<MkFolder :defaultOpen="true">
 			<template #icon><i class="ti ti-chart-bar"></i></template>
 			<template #label>{{ i18n.ts._agents.adminReportsByModel }}（{{ rangeLabel }}）</template>
 			<MkInfo v-if="data.byModel.length === 0">{{ i18n.ts._agents.noDataAvailable }}</MkInfo>
@@ -143,7 +170,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { computed, onMounted, ref } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, useTemplateRef } from 'vue';
 import MkButton from '@/components/MkButton.vue';
 import MkFolder from '@/components/MkFolder.vue';
 import MkInfo from '@/components/MkInfo.vue';
@@ -151,6 +178,11 @@ import MkNumber from '@/components/MkNumber.vue';
 import MkLoading from '@/components/global/MkLoading.vue';
 import { misskeyApi } from '@/utility/misskey-api.js';
 import { i18n } from '@/i18n.js';
+import { AgentUsageCharts, agentUsageKindLabel } from '@/utility/agent-usage-charts.js';
+import type { AgentUsageBucket, AgentUsageKindRow } from '@/utility/agent-usage-charts.js';
+import { initChart } from '@/utility/init-chart.js';
+
+initChart();
 
 type UsageKind = 'chat' | 'compression' | 'image_generation' | 'vision' | 'sticker_description' | 'proactive_random' | 'proactive_scheduled' | 'checkin' | 'admin_reward' | 'credit_migration';
 
@@ -208,6 +240,9 @@ type UsageResponse = {
 	recentLogsTotal: number;
 	recentLogsPage: number;
 	recentLogsPageSize: number;
+	bucket: 'hour' | 'day';
+	buckets: AgentUsageBucket[];
+	byUsageKind: AgentUsageKindRow[];
 };
 
 const LOGS_PAGE_SIZE = 20;
@@ -229,6 +264,25 @@ const data = ref<UsageResponse | null>(null);
 const loading = ref(false);
 const logsPage = ref(1);
 const logsTotalPages = computed(() => Math.max(1, Math.ceil((data.value?.recentLogsTotal ?? 0) / LOGS_PAGE_SIZE)));
+const usageKindTotal = computed(() => (data.value?.byUsageKind ?? []).reduce((s, k) => s + k.total, 0));
+
+const requestsChartEl = useTemplateRef('requestsChartEl');
+const creditsChartEl = useTemplateRef('creditsChartEl');
+const tokensChartEl = useTemplateRef('tokensChartEl');
+const usageKindChartEl = useTemplateRef('usageKindChartEl');
+const charts = new AgentUsageCharts({
+	get requests() { return requestsChartEl.value; },
+	get credits() { return creditsChartEl.value; },
+	get tokens() { return tokensChartEl.value; },
+	get usageKind() { return usageKindChartEl.value; },
+});
+
+async function renderCharts() {
+	await nextTick();
+	if (data.value != null) {
+		charts.render(data.value.buckets, data.value.bucket, data.value.byUsageKind);
+	}
+}
 
 async function fetchUsage(page: number): Promise<UsageResponse> {
 	return await misskeyApi('admin/users/agent-usage' as any, {
@@ -244,6 +298,7 @@ async function loadAll() {
 	try {
 		data.value = await fetchUsage(1);
 		logsPage.value = data.value.recentLogsPage;
+		await renderCharts();
 	} finally {
 		loading.value = false;
 	}
@@ -267,19 +322,7 @@ function setRange(h: number) {
 }
 
 function usageKindLabel(kind: UsageKind): string {
-	const t = i18n.ts._agents;
-	switch (kind) {
-		case 'compression': return t.usageLogKindCompression;
-		case 'image_generation': return t.usageLogKindImageGeneration;
-		case 'vision': return t.usageLogKindVision;
-		case 'sticker_description': return t.usageLogKindStickerDescription;
-		case 'proactive_random': return t.usageLogKindProactiveRandom;
-		case 'proactive_scheduled': return t.usageLogKindProactiveScheduled;
-		case 'checkin': return t.checkinLog;
-		case 'admin_reward': return t.billingKindUsage;
-		case 'credit_migration': return t.billingKindUsage;
-		default: return t.usageLogKindChat;
-	}
+	return agentUsageKindLabel(kind);
 }
 
 function statusLabel(status: RecentLog['status']): string {
@@ -291,6 +334,10 @@ function statusLabel(status: RecentLog['status']): string {
 }
 
 onMounted(loadAll);
+
+onBeforeUnmount(() => {
+	charts.destroy();
+});
 </script>
 
 <style lang="scss" module>
@@ -443,6 +490,23 @@ onMounted(loadAll);
 .colorOk { color: var(--MI_THEME-success); }
 .colorErr { color: var(--MI_THEME-error); }
 .colorWarn { color: var(--MI_THEME-warn); }
+
+.chartLabel {
+	font-size: 0.85em;
+	font-weight: 600;
+	opacity: 0.7;
+	margin-bottom: 6px;
+}
+
+.chartBox {
+	position: relative;
+}
+
+.chartBoxDoughnut {
+	position: relative;
+	max-width: 460px;
+	margin-inline: auto;
+}
 
 .badge {
 	display: inline-block;
