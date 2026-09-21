@@ -1714,6 +1714,19 @@ const effectiveAutoDrawCount = computed(() => {
 	return Number.isFinite(n) && n >= 0 ? n : Infinity;
 });
 const settingsHydrating = ref(false);
+let settingsHydrationDepth = 0;
+
+function beginSettingsHydration() {
+	settingsHydrationDepth++;
+	settingsHydrating.value = true;
+}
+
+async function endSettingsHydration() {
+	await nextTick();
+	settingsHydrationDepth = Math.max(0, settingsHydrationDepth - 1);
+	settingsHydrating.value = settingsHydrationDepth > 0;
+}
+
 const memSaving = ref(false);
 const memLongMemoryEnabled = ref(false);
 const memTopK = ref('8');
@@ -2627,8 +2640,9 @@ watch(
 );
 
 watch(drawImageModelId, (next, prev) => {
-	if (next === prev) return;
-	if (!settingsHydrating.value) {
+	if (next === prev || settingsHydrating.value) return;
+	// 会话水合也会改变模型 id；只有偏离已保存模型时才视为用户切换并应用默认参数。
+	if (next !== (session.value?.agentImageModelId ?? '')) {
 		applyAgentImageDefaultsForModel(drawSelectedImageModel.value);
 	}
 });
@@ -2942,7 +2956,7 @@ async function scrollToLatest() {
 }
 
 async function loadSession() {
-	settingsHydrating.value = true;
+	beginSettingsHydration();
 	try {
 		session.value = (await misskeyApi('agents/sessions/show', { sessionId })) as typeof session.value;
 		// 角色专属表情包（与 LLM 视图同源：社区会话走发布快照，测试会话跟随草稿）
@@ -2981,7 +2995,7 @@ async function loadSession() {
 			proactiveSavedMaxWindow.value = proactiveMaxWindow.value;
 			proactiveSavedDaytimeWeight.value = proactiveDaytimeWeight.value;
 			proactiveSavedRecencyBias.value = proactiveRecencyBias.value;
-			hydrateAgentImageSettingsFromSession();
+			await hydrateAgentImageSettingsFromSession();
 			await loadCharacter(session.value.characterId);
 			if (tab.value === 'worldbook') {
 				await loadWorldbookEntries();
@@ -2997,8 +3011,7 @@ async function loadSession() {
 		contextWindowTruncated.value = false;
 		contextWindowBoundaryId.value = null;
 	} finally {
-		await nextTick();
-		settingsHydrating.value = false;
+		await endSettingsHydration();
 	}
 	if (tab.value === 'chat' && session.value != null && messages.value.length > 0) {
 		void refreshContextWindow();
@@ -3582,9 +3595,9 @@ function applyAgentImageDefaultsForModel(model: AgentImageModel | null) {
 	});
 }
 
-function hydrateAgentImageSettingsFromSession() {
+async function hydrateAgentImageSettingsFromSession() {
 	if (!session.value) return;
-	settingsHydrating.value = true;
+	beginSettingsHydration();
 	try {
 		drawImageModelId.value = session.value.agentImageModelId ?? '';
 		const model = drawImageModels.value.find(m => m.id === drawImageModelId.value) ?? null;
@@ -3603,7 +3616,7 @@ function hydrateAgentImageSettingsFromSession() {
 		const autoDrawCount = Number(autoDrawSettings.autoDrawCount);
 		drawAutoDrawCount.value = Number.isFinite(autoDrawCount) ? String(autoDrawCount) : '';
 	} finally {
-		settingsHydrating.value = false;
+		await endSettingsHydration();
 	}
 }
 
@@ -3650,8 +3663,12 @@ function clearDrawAutoSaveTimer() {
 }
 
 function scheduleDrawSettingsSave() {
-	if (isComponentUnmounted || settingsHydrating.value || moderationLocksSessionWrites.value) return;
-	if (!drawConfigDirty.value) return;
+	if (isComponentUnmounted || moderationLocksSessionWrites.value) return;
+	if (!drawConfigDirty.value) {
+		clearDrawAutoSaveTimer();
+		return;
+	}
+	if (settingsHydrating.value) return;
 	drawAutoSaveState.value = 'pending';
 	clearDrawAutoSaveTimer();
 	drawAutoSaveTimer = window.setTimeout(() => {
@@ -3681,14 +3698,14 @@ async function flushDrawSettingsSave(): Promise<boolean> {
 				agentImageSettings: drawCurrentSettings.value,
 			} as any,
 		) as { agentImageModelId?: string | null; agentImageSettings?: Record<string, unknown> };
-		if (session.value) {
-			session.value.agentImageModelId = res.agentImageModelId ?? null;
-			session.value.agentImageSettings = res.agentImageSettings ?? {};
-			// 后端会 clamp（如每轮张数上限），回填输入避免「输入 20 → 存 12」的脏状态循环重存
-			hydrateAgentImageSettingsFromSession();
-		}
-		drawAutoSaveState.value = 'saved';
-		if (drawModelsStale) {
+			if (session.value) {
+				session.value.agentImageModelId = res.agentImageModelId ?? null;
+				session.value.agentImageSettings = res.agentImageSettings ?? {};
+				// 后端会 clamp（如每轮张数上限），回填输入避免「输入 20 → 存 12」的脏状态循环重存
+				await hydrateAgentImageSettingsFromSession();
+			}
+			drawAutoSaveState.value = 'saved';
+			if (drawModelsStale) {
 			drawModelsStale = false;
 			void loadDrawImageModels();
 			void loadDrawArtistPresets();
@@ -3710,7 +3727,7 @@ async function loadDrawImageModels() {
 			{} as any,
 		) as AgentImageModel[];
 		drawImageModels.value = Array.isArray(rows) ? rows : [];
-		hydrateAgentImageSettingsFromSession();
+		await hydrateAgentImageSettingsFromSession();
 		// 已选模型被管理员下架：自动切回「无」，watcher 会触发自动保存；不处理会留下
 		// 悬空 id —— 前端无高亮卡片、后端保存与生成都会拒绝该模型
 		const savedId = session.value?.agentImageModelId ?? '';
@@ -3732,7 +3749,7 @@ async function loadDrawArtistPresets() {
 		if (drawArtistPresetId.value == null && drawArtistPresets.value.length > 0) {
 			drawArtistPresetId.value = drawArtistPresets.value[0]!.id;
 		}
-		hydrateAgentImageSettingsFromSession();
+		await hydrateAgentImageSettingsFromSession();
 	} catch {
 		// 同上：轮询失败保留旧列表
 	}
