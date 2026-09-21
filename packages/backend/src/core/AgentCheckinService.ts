@@ -193,6 +193,7 @@ export class AgentCheckinService {
 				dayMultiplier,
 				isMakeup: false,
 				makeupCost: null,
+				makeupSource: null,
 				createdAt: now,
 			});
 		} catch (e) {
@@ -265,6 +266,7 @@ export class AgentCheckinService {
 		const monthRecords = await this.checkinRecordsRepository.createQueryBuilder('r')
 			.where('r.userId = :userId', { userId })
 			.andWhere('r.isMakeup = true')
+			.andWhere("COALESCE(r.makeupSource, 'user') = 'user'")
 			.andWhere('r.date LIKE :prefix', { prefix: `${monthPrefix}%` })
 			.getCount();
 		if (monthRecords >= settings.makeupMaxPerMonth) {
@@ -290,6 +292,7 @@ export class AgentCheckinService {
 				dayMultiplier: 1,
 				isMakeup: true,
 				makeupCost: cost,
+				makeupSource: 'user',
 				createdAt: now,
 			});
 		} catch (e) {
@@ -334,6 +337,45 @@ export class AgentCheckinService {
 		return { ok: true, cost };
 	}
 
+	/** 管理员强制补签：不扣额度，不占用用户补签次数 */
+	@bindThis
+	public async performAdminMakeup(userId: MiUser['id'], date: string): Promise<{ ok: true } | { ok: false; reason: string }> {
+		const now = new Date();
+		const today = this.beijingDateStr(now);
+
+		if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return { ok: false, reason: '日期格式无效' };
+		const target = new Date(date + 'T00:00:00+08:00');
+		if (Number.isNaN(target.getTime()) || this.beijingDateStr(target) !== date) {
+			return { ok: false, reason: '日期格式无效' };
+		}
+		if (date >= today) return { ok: false, reason: '只能为过去的日期补签' };
+
+		try {
+			await this.checkinRecordsRepository.insertOne({
+				id: this.idService.gen(),
+				userId,
+				date,
+				reward: 0,
+				streakAtCheckin: 0,
+				baseValue: 0,
+				streakMultiplier: 1,
+				roleMultiplier: 1,
+				dayMultiplier: 1,
+				isMakeup: true,
+				makeupCost: 0,
+				makeupSource: 'admin',
+				createdAt: now,
+			});
+		} catch (e) {
+			if (isDuplicateKeyValueError(e)) {
+				return { ok: false, reason: '该日期已签到' };
+			}
+			throw e;
+		}
+
+		return { ok: true };
+	}
+
 	/** 查询月度签到状态 */
 	@bindThis
 	public async getMonthStatus(userId: MiUser['id'], yearMonth: string, instance: MiMeta) {
@@ -341,23 +383,31 @@ export class AgentCheckinService {
 		const now = new Date();
 		const today = this.beijingDateStr(now);
 
-		const records = await this.checkinRecordsRepository.find({
-			where: { userId },
-			order: { date: 'DESC' },
-			take: 400,
-		});
-
-		const todayCheckedIn = records.some(r => r.date === today);
+		const todayCheckedIn = await this.checkinRecordsRepository.existsBy({ userId, date: today });
 		const streak = todayCheckedIn
 			? await this.calcStreak(userId, today)
 			: await this.calcStreak(userId, this.beijingDateStr(new Date(now.getTime() - 86400_000)));
 
-		const monthRecords = records.filter(r => r.date.startsWith(yearMonth));
+		const monthRecords = await this.checkinRecordsRepository.createQueryBuilder('r')
+			.where('r.userId = :userId', { userId })
+			.andWhere('r.date LIKE :prefix', { prefix: `${yearMonth}%` })
+			.orderBy('r.date', 'DESC')
+			.getMany();
 		const monthCount = monthRecords.length;
-		const totalEarned = records.reduce((s, r) => s + r.reward, 0);
+		const totalEarnedRow = await this.checkinRecordsRepository.createQueryBuilder('r')
+			.select('COALESCE(SUM(r.reward), 0)', 'total')
+			.where('r.userId = :userId', { userId })
+			.getRawOne();
+		const totalEarned = Number(totalEarnedRow?.total ?? 0);
 
-		// 本月补签次数
-		const monthMakeupCount = monthRecords.filter(r => r.isMakeup).length;
+		// 当前月用户自助补签次数；管理员补签不占用次数，切换日历月份也不改变额度提示
+		const currentMonthPrefix = today.slice(0, 7);
+		const monthMakeupCount = await this.checkinRecordsRepository.createQueryBuilder('r')
+			.where('r.userId = :userId', { userId })
+			.andWhere('r.isMakeup = true')
+			.andWhere("COALESCE(r.makeupSource, 'user') = 'user'")
+			.andWhere('r.date LIKE :prefix', { prefix: `${currentMonthPrefix}%` })
+			.getCount();
 		const makeupRemaining = Math.max(0, settings.makeupMaxPerMonth - monthMakeupCount);
 
 		return {
@@ -372,6 +422,7 @@ export class AgentCheckinService {
 				roleMultiplier: r.roleMultiplier,
 				dayMultiplier: r.dayMultiplier,
 				makeupCost: r.makeupCost,
+				makeupSource: r.makeupSource,
 				createdAt: r.createdAt.toISOString(),
 			})),
 			monthCount,

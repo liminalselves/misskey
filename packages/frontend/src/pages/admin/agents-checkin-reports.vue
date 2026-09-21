@@ -138,8 +138,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 							<span :class="$style.recUser">{{ r.username }}</span>
 							<span>{{ r.date }}</span>
 							<span :class="$style.recFormula">{{ formatFormula(r) }}</span>
-							<span :class="r.isMakeup ? $style.makeupColor : $style.rewardColor">{{ r.isMakeup ? `-${(r.makeupCost ?? 0).toFixed(2)}` : `+${r.reward.toFixed(2)}` }}</span>
-							<span>{{ r.isMakeup ? '补签' : '签到' }}</span>
+							<span :class="r.isMakeup ? $style.makeupColor : $style.rewardColor">{{ r.isMakeup ? (r.makeupSource === 'admin' ? '免费' : `-${(r.makeupCost ?? 0).toFixed(2)}`) : `+${r.reward.toFixed(2)}` }}</span>
+							<span>{{ r.isMakeup ? (r.makeupSource === 'admin' ? '管理员补签' : '补签') : '签到' }}</span>
 						</div>
 						<MkInfo v-if="records.length === 0">暂无记录</MkInfo>
 					</div>
@@ -171,7 +171,7 @@ type ReportData = {
 	dailyStats: { date: string; totalReward: number; userCount: number }[];
 	trend: { date: string; totalReward: number; userCount: number }[];
 	topUsers: { userId: string; username: string; totalReward: number; checkinCount: number }[];
-	records: { userId: string; username: string; date: string; reward: number; baseValue: number; streakMultiplier: number; roleMultiplier: number; dayMultiplier: number; isMakeup: boolean; makeupCost: number | null; createdAt: string }[];
+	records: { userId: string; username: string; date: string; reward: number; baseValue: number; streakMultiplier: number; roleMultiplier: number; dayMultiplier: number; isMakeup: boolean; makeupCost: number | null; makeupSource: 'user' | 'admin' | null; createdAt: string }[];
 	totalCount: number;
 };
 
@@ -275,7 +275,7 @@ function heatColor(ratio: number): string {
 }
 
 function formatFormula(r: ReportData['records'][0]): string {
-	if (r.isMakeup) return `补签（消耗 ${r.makeupCost?.toFixed(2) ?? 0}）`;
+	if (r.isMakeup) return r.makeupSource === 'admin' ? '管理员补签（不计次数）' : `补签（消耗 ${r.makeupCost?.toFixed(2) ?? 0}）`;
 	let f = `手气${r.baseValue.toFixed(2)} × 连续×${r.streakMultiplier.toFixed(2)}`;
 	if (r.roleMultiplier > 1) f += ` × 身份组×${r.roleMultiplier.toFixed(2)}`;
 	if (r.dayMultiplier > 1) f += ` × 节日×${r.dayMultiplier.toFixed(0)}`;

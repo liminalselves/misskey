@@ -870,6 +870,23 @@ SPDX-License-Identifier: AGPL-3.0-only
 						</MkInput>
 					</FormSplit>
 					<hr>
+					<MkFolder>
+						<template #icon><i class="ti ti-calendar-plus"></i></template>
+						<template #label>{{ i18n.ts._agents.adminCheckinMakeupTitle }}</template>
+						<div class="_gaps">
+							<MkInfo>{{ i18n.ts._agents.adminCheckinMakeupCaption }}</MkInfo>
+							<MkInput v-model="checkinMakeupForm.userId" type="text">
+								<template #label>{{ i18n.ts._agents.adminCheckinMakeupUser }}</template>
+								<template #caption>{{ i18n.ts._agents.adminCheckinMakeupUserCaption }}</template>
+							</MkInput>
+							<MkInput v-model="checkinMakeupForm.date" type="date">
+								<template #label>{{ i18n.ts._agents.adminCheckinMakeupDate }}</template>
+							</MkInput>
+							<MkButton primary rounded :disabled="checkinMakeupSubmitting || !checkinMakeupForm.userId.trim() || !checkinMakeupForm.date" @click="adminMakeupCheckin">
+								<i class="ti ti-calendar-plus"></i> {{ i18n.ts._agents.adminCheckinMakeupButton }}
+							</MkButton>
+						</div>
+					</MkFolder>
 					<MkButton danger rounded @click="revokeTodayCheckin"><i class="ti ti-rotate-back"></i> 撤销当日签到（测试用）</MkButton>
 				</div>
 			</MkFolder>
@@ -2268,6 +2285,36 @@ function initCheckinRoleRows(meta: Record<string, any>) {
 	checkinRoleRows.length = 0;
 	for (const [roleId, mul] of Object.entries(rm)) {
 		checkinRoleRows.push({ roleId, multiplier: String(mul) });
+	}
+}
+
+const checkinMakeupForm = reactive({
+	userId: '',
+	date: '',
+});
+const checkinMakeupSubmitting = ref(false);
+
+async function adminMakeupCheckin() {
+	const userId = checkinMakeupForm.userId.trim();
+	const date = checkinMakeupForm.date;
+	if (!userId || !date) return;
+
+	const { canceled } = await os.confirm({
+		type: 'question',
+		title: i18n.ts._agents.adminCheckinMakeupTitle,
+		text: i18n.tsx._agents.adminCheckinMakeupConfirm({ user: userId, date }),
+	});
+	if (canceled) return;
+
+	checkinMakeupSubmitting.value = true;
+	try {
+		await misskeyApi('admin/agents-checkin-makeup', { userId, date });
+		os.alert({ type: 'success', text: i18n.tsx._agents.adminCheckinMakeupSuccess({ user: userId, date }) });
+		checkinMakeupForm.date = '';
+	} catch (err) {
+		os.alert({ type: 'error', text: formatApiError(err) });
+	} finally {
+		checkinMakeupSubmitting.value = false;
 	}
 }
 

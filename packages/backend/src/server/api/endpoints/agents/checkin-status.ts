@@ -32,6 +32,7 @@ export const meta = {
 						roleMultiplier: { type: 'number' },
 						dayMultiplier: { type: 'number' },
 						makeupCost: { type: 'number', nullable: true },
+						makeupSource: { type: 'string', nullable: true, enum: ['user', 'admin'] },
 						createdAt: { type: 'string' },
 					},
 				},

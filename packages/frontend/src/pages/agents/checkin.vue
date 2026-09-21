@@ -97,10 +97,11 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<span v-if="r.isMakeup" :class="$style.recordMakeupBadge">补签</span>
 			</div>
 			<span :class="$style.recordFormula">
-				<template v-if="r.isMakeup">{{ new Date(new Date(r.createdAt).getTime() + 8*3600000).toISOString().slice(5, 10) }} 操作 · 消耗额度</template>
+				<template v-if="r.isMakeup && r.makeupSource === 'admin'">管理员补签 · 不消耗补签次数</template>
+				<template v-else-if="r.isMakeup">{{ new Date(new Date(r.createdAt).getTime() + 8*3600000).toISOString().slice(5, 10) }} 操作 · 消耗额度</template>
 				<template v-else>手气{{ r.baseValue.toFixed(2) }} × 连续×{{ r.streakMultiplier.toFixed(2) }}<template v-if="r.roleMultiplier > 1"> × 身份组×{{ r.roleMultiplier.toFixed(2) }}</template><template v-if="r.dayMultiplier > 1"> × 节日×{{ r.dayMultiplier.toFixed(1) }}</template></template>
 			</span>
-			<span :class="[$style.recordReward, r.isMakeup ? $style.recordCost : '']">{{ r.isMakeup ? `-${(r.makeupCost ?? 0).toFixed(2)}` : `+${r.reward.toFixed(2)}` }}</span>
+			<span :class="[$style.recordReward, r.isMakeup && r.makeupSource !== 'admin' ? $style.recordCost : '']">{{ r.isMakeup ? (r.makeupSource === 'admin' ? '免费' : `-${(r.makeupCost ?? 0).toFixed(2)}`) : `+${r.reward.toFixed(2)}` }}</span>
 		</div>
 	</div>
 </div>
@@ -120,6 +121,7 @@ type MonthRecord = {
 	roleMultiplier: number;
 	dayMultiplier: number;
 	makeupCost: number | null;
+	makeupSource: 'user' | 'admin' | null;
 	createdAt: string;
 };
 
@@ -197,7 +199,9 @@ function cellTitle(cell: CalCell): string {
 	if (!cell.date) return '';
 	if (cell.record) {
 		return cell.record.isMakeup
-			? `${cell.date} · 补签（消耗 ${(cell.record.makeupCost ?? 0).toFixed(2)} 额度）`
+			? (cell.record.makeupSource === 'admin'
+				? `${cell.date} · 管理员补签（不消耗补签次数）`
+				: `${cell.date} · 补签（消耗 ${(cell.record.makeupCost ?? 0).toFixed(2)} 额度）`)
 			: `${cell.date} · 签到 +${cell.record.reward.toFixed(2)} 额度`;
 	}
 	if (cell.canMakeup) return `${cell.date} · 点击补签`;

@@ -7,6 +7,8 @@ import { Entity, Index, Column, PrimaryColumn, JoinColumn, ManyToOne } from 'typ
 import { id } from './util/id.js';
 import { MiUser } from './User.js';
 
+export type AgentCheckinMakeupSource = 'user' | 'admin';
+
 @Entity('agent_checkin_record')
 @Index('IDX_agent_checkin_record_userId_date', ['date', 'userId'])
 @Index('IDX_agent_checkin_record_userId_date_unique', ['date', 'userId'], { unique: true })
@@ -53,9 +55,13 @@ export class MiAgentCheckinRecord {
 	@Column('boolean', { default: false })
 	public isMakeup: boolean;
 
-	/** 补签消耗额度（补签时 > 0） */
+	/** 补签消耗额度；管理员补签时为 0 */
 	@Column('double precision', { nullable: true, default: null })
 	public makeupCost: number | null;
+
+	/** 补签来源；仅补签记录有值 */
+	@Column('varchar', { length: 16, nullable: true, default: null })
+	public makeupSource: AgentCheckinMakeupSource | null;
 
 	@Column('timestamp with time zone')
 	public createdAt: Date;

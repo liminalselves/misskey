@@ -194,6 +194,7 @@ export * as 'agents/models/success-rates' from './endpoints/agents/models/succes
 export * as 'agents/models/free-quota' from './endpoints/agents/models/free-quota.js';
 export * as 'admin/agents/reports/overview' from './endpoints/admin/agents/reports/overview.js';
 export * as 'admin/agents-checkin-reports' from './endpoints/admin/agents-checkin-reports.js';
+export * as 'admin/agents-checkin-makeup' from './endpoints/admin/agents-checkin-makeup.js';
 export * as 'admin/agents-checkin-revoke-today' from './endpoints/admin/agents-checkin-revoke-today.js';
 export * as 'admin/agents/redeem-codes/generate' from './endpoints/admin/agents/redeem-codes/generate.js';
 export * as 'admin/agents/redeem-codes/list' from './endpoints/admin/agents/redeem-codes/list.js';

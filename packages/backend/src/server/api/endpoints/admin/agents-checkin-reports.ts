@@ -87,6 +87,7 @@ export const meta = {
 						dayMultiplier: { type: 'number' },
 						isMakeup: { type: 'boolean' },
 						makeupCost: { type: 'number', nullable: true },
+						makeupSource: { type: 'string', nullable: true, enum: ['user', 'admin'] },
 						createdAt: { type: 'string' },
 					},
 				},
@@ -274,6 +275,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				dayMultiplier: r.dayMultiplier,
 				isMakeup: r.isMakeup,
 				makeupCost: r.makeupCost,
+				makeupSource: r.makeupSource,
 				createdAt: r.createdAt.toISOString(),
 			}));
 
