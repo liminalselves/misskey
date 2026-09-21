@@ -442,6 +442,7 @@ export const ROUTE_DEF = [{
 }, {
 	path: '/admin/user/:userId',
 	component: iAmModerator ? page(() => import('@/pages/admin-user.vue')) : page(() => import('@/pages/not-found.vue')),
+	hash: 'initialTab',
 }, {
 	path: '/admin/file/:fileId',
 	component: iAmModerator ? page(() => import('@/pages/admin-file.vue')) : page(() => import('@/pages/not-found.vue')),

@@ -705,10 +705,10 @@ export class AgentModelUsageService {
 
 	/**
 	 * 按用途（聊天/识图/生图/主动消息/压缩）聚合请求量、免费次数与扣费，供管理端用量构成分析。
-	 * 仅统计模型调用类记录。userId 限定单用户。
+	 * 仅统计模型调用类记录。userId 限定单用户，支持单模型/BYOK/未关联模型筛选。
 	 */
 	@bindThis
-	public async aggregateByUsageKind(opts: { since: Date; until?: Date; userId?: MiUser['id'] }): Promise<Array<{
+	public async aggregateByUsageKind(opts: { since: Date; until?: Date; userId?: MiUser['id'] } & ModelReportFilter): Promise<Array<{
 		usageKind: AgentModelUsageKind;
 		total: number;
 		freeCalls: number;
@@ -731,6 +731,7 @@ export class AgentModelUsageService {
 		if (opts.userId != null) {
 			qb.andWhere('log.userId = :uid', { uid: opts.userId });
 		}
+		applyModelReportFilter(qb, opts);
 		const rows = await qb.getRawMany<{
 			usageKind: AgentModelUsageKind;
 			total: number;
@@ -749,9 +750,10 @@ export class AgentModelUsageService {
 
 	/**
 	 * 时间窗内扣减额度最多的用户排行，供管理端定位成本大头。仅统计实际扣费（cost>0）的模型调用。
+	 * 支持单模型/BYOK/未关联模型筛选与 offset/limit 翻页。
 	 */
 	@bindThis
-	public async topUsersByCharged(opts: { since: Date; until?: Date; limit?: number }): Promise<Array<{
+	public async topUsersByCharged(opts: { since: Date; until?: Date; limit?: number; offset?: number } & ModelReportFilter): Promise<Array<{
 		userId: MiUser['id'];
 		username: string;
 		name: string | null;
@@ -760,7 +762,7 @@ export class AgentModelUsageService {
 		paidCalls: number;
 		creditsCharged: number;
 	}>> {
-		const rows = await this.agentModelUsageLogsRepository.createQueryBuilder('log')
+		const qb = this.agentModelUsageLogsRepository.createQueryBuilder('log')
 			.innerJoin('log.user', 'user')
 			.select('log.userId', 'userId')
 			.addSelect('user.username', 'username')
@@ -778,7 +780,12 @@ export class AgentModelUsageService {
 			.orderBy('"creditsCharged"', 'DESC')
 			.addOrderBy('total', 'DESC')
 			.limit(opts.limit ?? 10)
-			.getRawMany<{
+			.offset(opts.offset ?? 0);
+		if (opts.until != null) {
+			qb.andWhere('log.requestedAt < :until', { until: opts.until });
+		}
+		applyModelReportFilter(qb, opts);
+		const rows = await qb.getRawMany<{
 			userId: MiUser['id'];
 			username: string;
 			name: string | null;
@@ -796,5 +803,22 @@ export class AgentModelUsageService {
 			paidCalls: Number(r.paidCalls) || 0,
 			creditsCharged: Number(r.creditsCharged) || 0,
 		}));
+	}
+
+	/**
+	 * 时间窗内有模型调用记录的去重用户数，与 topUsersByCharged 同口径，供翻页计算总页数。
+	 */
+	@bindThis
+	public async countModelUsageUsers(opts: { since: Date; until?: Date } & ModelReportFilter): Promise<number> {
+		const qb = this.agentModelUsageLogsRepository.createQueryBuilder('log')
+			.select('COUNT(DISTINCT log."userId")::int', 'cnt')
+			.where('log.requestedAt >= :since', { since: opts.since })
+			.andWhere('log.usageKind NOT IN (:...nonModelKinds)', { nonModelKinds: nonModelUsageKinds });
+		if (opts.until != null) {
+			qb.andWhere('log.requestedAt < :until', { until: opts.until });
+		}
+		applyModelReportFilter(qb, opts);
+		const row = await qb.getRawOne<{ cnt: number }>();
+		return Number(row?.cnt) || 0;
 	}
 }

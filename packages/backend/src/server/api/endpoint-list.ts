@@ -193,6 +193,7 @@ export * as 'agents/proactive-schedules/import' from './endpoints/agents/proacti
 export * as 'agents/models/success-rates' from './endpoints/agents/models/success-rates.js';
 export * as 'agents/models/free-quota' from './endpoints/agents/models/free-quota.js';
 export * as 'admin/agents/reports/overview' from './endpoints/admin/agents/reports/overview.js';
+export * as 'admin/agents/reports/top-users' from './endpoints/admin/agents/reports/top-users.js';
 export * as 'admin/agents-checkin-reports' from './endpoints/admin/agents-checkin-reports.js';
 export * as 'admin/agents-checkin-makeup' from './endpoints/admin/agents-checkin-makeup.js';
 export * as 'admin/agents-checkin-revoke-today' from './endpoints/admin/agents-checkin-revoke-today.js';

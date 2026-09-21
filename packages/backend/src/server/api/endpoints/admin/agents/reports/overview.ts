@@ -134,24 +134,8 @@ export const meta = {
 				},
 				required: ['free', 'paid', 'failed', 'byok', 'zeroPriced', 'unassigned', 'other'],
 			},
-			topUsers: {
-				type: 'array',
-				items: {
-					type: 'object',
-					properties: {
-						userId: { type: 'string' },
-						username: { type: 'string' },
-						name: { type: 'string', nullable: true },
-						total: { type: 'integer' },
-						freeCalls: { type: 'integer' },
-						paidCalls: { type: 'integer' },
-						creditsCharged: { type: 'number' },
-					},
-					required: ['userId', 'username', 'name', 'total', 'freeCalls', 'paidCalls', 'creditsCharged'],
-				},
-			},
 		},
-		required: ['bucket', 'since', 'until', 'overall', 'previousOverall', 'byModel', 'buckets', 'byUsageKind', 'billing', 'topUsers'],
+		required: ['bucket', 'since', 'until', 'overall', 'previousOverall', 'byModel', 'buckets', 'byUsageKind', 'billing'],
 	},
 } as const;
 
@@ -190,7 +174,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			// 分桶粒度：未指定时短窗口（≤7 天）按小时，长窗口按天
 			const bucketUnit: 'hour' | 'day' = ps.bucket ?? ((until.getTime() - since.getTime()) <= 168 * 60 * 60 * 1000 ? 'hour' : 'day');
 
-			// 单模型筛选：仅作用于 overall 与 buckets（byModel 始终返回全量列表供切换）
+			// 单模型筛选：作用于 overall/buckets/byUsageKind/billing（byModel 始终返回全量列表供切换）
 			const modelFilter = ps.modelId === BYOK_MERGED_MODEL_ID
 				? { byokOnly: true as const }
 				: (ps.modelId === UNASSIGNED_MODEL_ID
@@ -212,14 +196,13 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			const spanMs = until.getTime() - since.getTime();
 			const prevSince = new Date(since.getTime() - spanMs);
 
-			const [overall, previousOverall, byModel, buckets, byUsageKind, billing, topUsers, byokStats, unassignedStats] = await Promise.all([
+			const [overall, previousOverall, byModel, buckets, byUsageKind, billing, byokStats, unassignedStats] = await Promise.all([
 				this.agentModelUsageService.overallStats({ since, until, modelCallsOnly: true, ...modelFilter }),
 				this.agentModelUsageService.overallStats({ since: prevSince, until: since, modelCallsOnly: true, ...modelFilter }),
 				this.agentModelUsageService.aggregateByModel({ since, until }),
 				this.agentModelUsageService.timeBuckets({ since, until, unit: bucketUnit, modelCallsOnly: true, ...modelFilter }),
-				this.agentModelUsageService.aggregateByUsageKind({ since, until }),
+				this.agentModelUsageService.aggregateByUsageKind({ since, until, ...modelFilter }),
 				this.agentModelUsageService.billingBreakdown({ since, until, ...modelFilter }),
-				this.agentModelUsageService.topUsersByCharged({ since, until, limit: 10 }),
 				// BYOK 合并行的 uniqueUsers/avgDurationMs 无法由分组行求和得出，单独按前缀聚合一次
 				this.agentModelUsageService.overallStats({ since, until, modelCallsOnly: true, byokOnly: true }),
 				// “未关联模型”合并行同理，单独按 modelId IS NULL 聚合一次
@@ -314,7 +297,6 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				buckets,
 				byUsageKind,
 				billing,
-				topUsers,
 			};
 		});
 	}

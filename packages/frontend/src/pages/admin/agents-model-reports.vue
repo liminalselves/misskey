@@ -191,33 +191,43 @@ SPDX-License-Identifier: AGPL-3.0-only
 			</div>
 		</MkFolder>
 
-		<!-- 扣额度 TOP 用户 -->
+		<!-- 扣额度 TOP 用户（独立翻页，点击行跳转该用户的模型用量页） -->
 		<MkFolder :defaultOpen="true">
 			<template #icon><i class="ti ti-podium"></i></template>
 			<template #label>{{ i18n.ts._agents.adminReportsTopUsers }}</template>
-			<MkInfo v-if="data.topUsers.length === 0">{{ i18n.ts._agents.noDataAvailable }}</MkInfo>
-			<div v-else :class="$style.modelTableWrap">
-				<div :class="$style.topUserTable">
-					<div :class="$style.topUserHeader">
-						<span>#</span>
-						<span>{{ i18n.ts._agents.adminReportsUsersColumn }}</span>
-						<span>{{ i18n.ts._agents.adminReportsCallsColumn }}</span>
-						<span>{{ i18n.ts._agents.adminReportsFreeColumn }}</span>
-						<span>{{ i18n.ts._agents.adminReportsPaidColumn }}</span>
-						<span>{{ i18n.ts._agents.adminReportsCreditsCharged }}</span>
+			<div class="_gaps_s">
+				<div v-if="topUsers == null" :class="$style.topUsersLoading"><MkLoading/></div>
+				<MkInfo v-else-if="topUsers.users.length === 0">{{ i18n.ts._agents.noDataAvailable }}</MkInfo>
+				<template v-else>
+					<div :class="[$style.modelTableWrap, topUsersLoading ? $style.contentLoading : null]">
+						<div :class="$style.topUserTable">
+							<div :class="$style.topUserHeader">
+								<span>#</span>
+								<span>{{ i18n.ts._agents.adminReportsUsersColumn }}</span>
+								<span>{{ i18n.ts._agents.adminReportsCallsColumn }}</span>
+								<span>{{ i18n.ts._agents.adminReportsFreeColumn }}</span>
+								<span>{{ i18n.ts._agents.adminReportsPaidColumn }}</span>
+								<span>{{ i18n.ts._agents.adminReportsCreditsCharged }}</span>
+							</div>
+							<div v-for="(u, idx) in topUsers.users" :key="u.userId" :class="$style.topUserRow" @click="goUserUsage(u)">
+								<span :class="$style.topUserRank">{{ (topUsersPage - 1) * TOP_USERS_PAGE_SIZE + idx + 1 }}</span>
+								<span :class="$style.topUserName">
+									{{ u.name ?? u.username }}
+									<small :class="$style.muted">@{{ u.username }}</small>
+								</span>
+								<span>{{ u.total }}</span>
+								<span :class="$style.success">{{ u.freeCalls }}</span>
+								<span :class="u.paidCalls > 0 ? $style.aborted : ''">{{ u.paidCalls }}</span>
+								<span :class="$style.charged">{{ fmtCredits(u.creditsCharged) }}</span>
+							</div>
+						</div>
 					</div>
-					<div v-for="(u, idx) in data.topUsers" :key="u.userId" :class="$style.topUserRow">
-						<span :class="$style.topUserRank">{{ idx + 1 }}</span>
-						<span :class="$style.topUserName">
-							{{ u.name ?? u.username }}
-							<small :class="$style.muted">@{{ u.username }}</small>
-						</span>
-						<span>{{ u.total }}</span>
-						<span :class="$style.success">{{ u.freeCalls }}</span>
-						<span :class="u.paidCalls > 0 ? $style.aborted : ''">{{ u.paidCalls }}</span>
-						<span :class="$style.charged">{{ fmtCredits(u.creditsCharged) }}</span>
+					<div v-if="topUsersTotalPages > 1" :class="$style.pagination">
+						<button class="_button" :class="$style.pageBtn" :disabled="topUsersPage <= 1 || topUsersLoading" @click="goTopUsersPage(topUsersPage - 1)"><i class="ti ti-chevron-left"></i></button>
+						<span :class="$style.pageInfo">{{ topUsersPage }} / {{ topUsersTotalPages }}</span>
+						<button class="_button" :class="$style.pageBtn" :disabled="topUsersPage >= topUsersTotalPages || topUsersLoading" @click="goTopUsersPage(topUsersPage + 1)"><i class="ti ti-chevron-right"></i></button>
 					</div>
-				</div>
+				</template>
 			</div>
 		</MkFolder>
 	</div>
@@ -237,8 +247,11 @@ import { misskeyApi, formatApiError } from '@/utility/misskey-api.js';
 import { i18n } from '@/i18n.js';
 import * as os from '@/os.js';
 import { initChart } from '@/utility/init-chart.js';
+import { useRouter } from '@/router.js';
 
 initChart();
+
+const router = useRouter();
 
 type OverallStats = {
 	total: number; success: number; failed: number; aborted: number;
@@ -276,7 +289,16 @@ type ReportsOverview = {
 	}[];
 	byUsageKind: { usageKind: string; total: number; freeCalls: number; paidCalls: number; creditsCharged: number }[];
 	billing: { free: number; paid: number; failed: number; byok: number; zeroPriced: number; unassigned: number; other: number };
-	topUsers: { userId: string; username: string; name: string | null; total: number; freeCalls: number; paidCalls: number; creditsCharged: number }[];
+};
+
+type TopUserRow = {
+	userId: string; username: string; name: string | null;
+	total: number; freeCalls: number; paidCalls: number; creditsCharged: number;
+};
+
+type TopUsersResponse = {
+	total: number;
+	users: TopUserRow[];
 };
 
 const ALL_MODELS = '__all__';
@@ -290,6 +312,12 @@ const granularity = ref<'hour' | 'day'>('hour');
 const selectedModelId = ref<string>(ALL_MODELS);
 const loading = ref(false);
 const data = ref<ReportsOverview | null>(null);
+
+// 扣额度用户排行：独立于 overview 翻页加载
+const TOP_USERS_PAGE_SIZE = 10;
+const topUsers = ref<TopUsersResponse | null>(null);
+const topUsersPage = ref(1);
+const topUsersLoading = ref(false);
 
 const rangeOptions = computed(() => [
 	{ key: 'today' as const, label: i18n.ts._agents.adminReportsWindowToday },
@@ -371,6 +399,39 @@ async function load() {
 	} finally {
 		loading.value = false;
 	}
+	// 时间窗/模型变化后排行回到第一页
+	topUsersPage.value = 1;
+	loadTopUsers();
+}
+
+async function loadTopUsers() {
+	topUsersLoading.value = true;
+	try {
+		topUsers.value = await misskeyApi('admin/agents/reports/top-users' as any, {
+			...buildParams(),
+			page: topUsersPage.value,
+			limit: TOP_USERS_PAGE_SIZE,
+		}) as TopUsersResponse;
+	} catch (err) {
+		os.alert({ type: 'error', text: formatApiError(err) });
+	} finally {
+		topUsersLoading.value = false;
+	}
+}
+
+const topUsersTotalPages = computed(() => Math.max(1, Math.ceil((topUsers.value?.total ?? 0) / TOP_USERS_PAGE_SIZE)));
+
+function goTopUsersPage(p: number) {
+	if (topUsersLoading.value || p < 1 || p > topUsersTotalPages.value) return;
+	topUsersPage.value = p;
+	loadTopUsers();
+}
+
+function goUserUsage(u: TopUserRow) {
+	router.push('/admin/user/:userId', {
+		params: { userId: u.userId },
+		hash: 'agentUsage',
+	});
 }
 
 function setRange(key: RangeKey) {
@@ -1200,10 +1261,51 @@ onBeforeUnmount(() => {
 	font-size: 0.88em;
 	align-items: center;
 	font-variant-numeric: tabular-nums;
+	cursor: pointer;
 
 	&:not(:last-child) {
 		border-bottom: solid 1px var(--MI_THEME-divider);
 	}
+
+	&:hover {
+		background: color-mix(in srgb, var(--MI_THEME-accent) 6%, transparent);
+	}
+}
+
+.topUsersLoading {
+	display: flex;
+	justify-content: center;
+	padding: 16px 0;
+}
+
+.pagination {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 12px;
+}
+
+.pageBtn {
+	padding: 6px 12px;
+	border-radius: 8px;
+	border: solid 1px var(--MI_THEME-divider);
+	background: var(--MI_THEME-panel);
+	cursor: pointer;
+
+	&:disabled {
+		opacity: 0.3;
+		cursor: default;
+	}
+
+	&:hover:not(:disabled) {
+		border-color: var(--MI_THEME-accent);
+	}
+}
+
+.pageInfo {
+	font-size: 0.88em;
+	font-weight: 600;
+	opacity: 0.72;
 }
 
 .topUserRank {
