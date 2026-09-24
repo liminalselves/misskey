@@ -18,7 +18,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				{{ r.label }}
 			</button>
 		</div>
-		<MkButton rounded :disabled="loading" @click="loadAll"><i class="ti ti-refresh"></i> {{ i18n.ts.reload }}</MkButton>
+			<MkButton rounded :disabled="loading" @click="reloadAll"><i class="ti ti-refresh"></i> {{ i18n.ts.reload }}</MkButton>
 	</div>
 
 	<MkLoading v-if="loading && data == null"/>
@@ -82,36 +82,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 			</div>
 		</MkFolder>
 
-		<MkFolder :defaultOpen="true">
-			<template #icon><i class="ti ti-chart-bar"></i></template>
-			<template #label>{{ i18n.ts._agents.adminReportsByModel }}（{{ rangeLabel }}）</template>
-			<MkInfo v-if="data.byModel.length === 0">{{ i18n.ts._agents.noDataAvailable }}</MkInfo>
-			<div v-else :class="$style.table">
-				<div :class="[$style.row, $style.headRow, $style.modelCols]">
-					<span>{{ i18n.ts._agents.myStatsModel }}</span>
-					<span :class="$style.num">{{ i18n.ts._agents.adminReportsRequestsColumn }}</span>
-					<span :class="$style.num">{{ i18n.ts._agents.myStatsStatusSuccess }}</span>
-					<span :class="$style.num">{{ i18n.ts._agents.myStatsStatusFailed }}</span>
-					<span :class="$style.num">{{ i18n.ts._agents.myStatsStatusAborted }}</span>
-					<span :class="$style.num">{{ i18n.ts._agents.adminReportsFreeColumn }}</span>
-					<span :class="$style.num">{{ i18n.ts._agents.myStatsCost }}</span>
-				</div>
-				<div v-for="m in data.byModel" :key="m.modelId ?? '__null__'" :class="[$style.row, $style.rowData, $style.modelCols]">
-					<span :class="$style.name" :title="m.modelName ?? undefined">
-						{{ m.modelName ?? '—' }}
-						<span v-if="m.modelSource === 'user'" :class="$style.customBadge">{{ i18n.ts._agents.byokCustomBadge }}</span>
-					</span>
-					<span :class="$style.num">{{ m.total }}</span>
-					<span :class="[$style.num, $style.colorOk]">{{ m.success }}</span>
-					<span :class="[$style.num, m.failed > 0 ? $style.colorErr : null]">{{ m.failed }}</span>
-					<span :class="[$style.num, m.aborted > 0 ? $style.colorWarn : null]">{{ m.aborted }}</span>
-					<span :class="$style.num">{{ m.freeCalls > 0 ? m.freeCalls : '—' }}</span>
-					<span :class="$style.num">{{ m.creditsCharged.toFixed(4) }}</span>
-				</div>
-			</div>
-		</MkFolder>
-
-		<MkFolder :defaultOpen="true">
+			<MkAgentUsageDetailsForAdmin ref="detailsRef" :userId="props.userId" :hours="hours" :rangeLabel="rangeLabel">
+				<template #recentLogs>
+					<MkFolder :defaultOpen="false">
 			<template #icon><i class="ti ti-history"></i></template>
 			<template #label>{{ i18n.ts._agents.myStatsRecentLogs }}（{{ data.recentLogsTotal }}）</template>
 			<MkInfo v-if="data.recentLogs.length === 0">{{ i18n.ts._agents.myStatsNoLogs }}</MkInfo>
@@ -164,14 +137,17 @@ SPDX-License-Identifier: AGPL-3.0-only
 					</button>
 				</div>
 			</template>
-		</MkFolder>
-	</template>
-</div>
+					</MkFolder>
+				</template>
+			</MkAgentUsageDetailsForAdmin>
+		</template>
+	</div>
 </template>
 
 <script lang="ts" setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, useTemplateRef } from 'vue';
 import MkButton from '@/components/MkButton.vue';
+import MkAgentUsageDetailsForAdmin from '@/components/MkAgentUsageDetailsForAdmin.vue';
 import MkFolder from '@/components/MkFolder.vue';
 import MkInfo from '@/components/MkInfo.vue';
 import MkNumber from '@/components/MkNumber.vue';
@@ -265,6 +241,7 @@ const loading = ref(false);
 const logsPage = ref(1);
 const logsTotalPages = computed(() => Math.max(1, Math.ceil((data.value?.recentLogsTotal ?? 0) / LOGS_PAGE_SIZE)));
 const usageKindTotal = computed(() => (data.value?.byUsageKind ?? []).reduce((s, k) => s + k.total, 0));
+const detailsRef = useTemplateRef('detailsRef');
 
 const requestsChartEl = useTemplateRef('requestsChartEl');
 const creditsChartEl = useTemplateRef('creditsChartEl');
@@ -302,6 +279,13 @@ async function loadAll() {
 	} finally {
 		loading.value = false;
 	}
+}
+
+async function reloadAll() {
+	await Promise.all([
+		loadAll(),
+		detailsRef.value?.reload(),
+	]);
 }
 
 async function loadLogs(page: number) {
