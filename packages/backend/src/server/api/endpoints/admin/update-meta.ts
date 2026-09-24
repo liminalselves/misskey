@@ -1131,10 +1131,15 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 								id: '4b9f0af0-aec5-4151-bff6-239b0c639baa',
 							});
 						}
-						try {
-							apiUrl = hrefForStoredLlmBaseUrl(await assertSafeLlmHttpsUrl(m.apiUrl));
-						} catch (err) {
-							const reason = err instanceof UnsafeLlmUrlError ? describeUnsafeLlmUrlReason(err.reason) : 'Invalid URL.';
+							try {
+								apiUrl = hrefForStoredLlmBaseUrl(await assertSafeLlmHttpsUrl(m.apiUrl));
+								if (m.provider === 'sensenova' && !new URL(apiUrl).pathname.replace(/\/+$/, '').endsWith('/images/generations')) {
+									throw new Error('SenseNova image endpoint must end with /images/generations.');
+								}
+							} catch (err) {
+								const reason = err instanceof UnsafeLlmUrlError
+									? describeUnsafeLlmUrlReason(err.reason)
+									: err instanceof Error ? err.message : 'Invalid URL.';
 							throw new ApiError({
 								message: `Image model URL is invalid: ${reason}`,
 								code: 'INVALID_PARAM',

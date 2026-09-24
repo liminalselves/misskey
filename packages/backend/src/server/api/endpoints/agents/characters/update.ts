@@ -111,7 +111,7 @@ export const paramDef = {
 		},
 		avatarFileId: { type: 'string', format: 'misskey:id', nullable: true },
 		referenceImageFileId: { type: 'string', format: 'misskey:id', nullable: true },
-		referenceImageFileIds: { type: 'array', nullable: true, maxItems: 4, items: { type: 'string', format: 'misskey:id' } },
+		referenceImageFileIds: { type: 'array', nullable: true, maxItems: 5, items: { type: 'string', format: 'misskey:id' } },
 		stickers: {
 			type: 'array', nullable: true, maxItems: 50,
 			items: {
@@ -163,7 +163,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				}
 			}
 			const referenceImageFileIds = ps.referenceImageFileIds !== undefined
-				? [...new Set(ps.referenceImageFileIds ?? [])].slice(0, 4)
+				? [...new Set(ps.referenceImageFileIds ?? [])].slice(0, 5)
 				: ps.referenceImageFileId !== undefined ? (ps.referenceImageFileId ? [ps.referenceImageFileId] : []) : null;
 			for (const referenceImageFileId of referenceImageFileIds ?? []) {
 				const f = await this.driveFilesRepository.findOneBy({ id: referenceImageFileId, userId: me.id });

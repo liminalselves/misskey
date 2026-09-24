@@ -18820,7 +18820,7 @@ export interface operations {
                         name: string;
                         description?: string | null;
                         /** @enum {string} */
-                        provider: 'aurora' | 'openai' | 'tiptotip' | 'qwen';
+                        provider: 'aurora' | 'openai' | 'tiptotip' | 'qwen' | 'sensenova';
                         enabled?: boolean;
                         apiModelName?: string | null;
                         apiUrl?: string | null;
@@ -22226,7 +22226,7 @@ export interface operations {
                         name: string;
                         description: string | null;
                         /** @enum {string} */
-                        provider: 'aurora' | 'openai' | 'tiptotip' | 'qwen';
+                        provider: 'aurora' | 'openai' | 'tiptotip' | 'qwen' | 'sensenova';
                         apiModelName: string | null;
                         supportsReferenceImage: boolean;
                         supportsSizeSelection: boolean;

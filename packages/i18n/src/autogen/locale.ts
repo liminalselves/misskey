@@ -14690,6 +14690,38 @@ export interface Locale extends ILocale {
          */
         "imageProviderQwen": string;
         /**
+         * SenseNova（日日新）
+         */
+        "imageProviderSenseNova": string;
+        /**
+         * テキスト画像生成リクエスト URL
+         */
+        "adminSenseNovaImageRequestUrl": string;
+        /**
+         * 完全な SenseNova /v1/images/generations エンドポイントです。参照画像がある場合は同じパスの /v1/images/edits に自動で切り替えます。
+         */
+        "adminSenseNovaImageRequestUrlCaption": string;
+        /**
+         * SenseNova モデル ID
+         */
+        "adminSenseNovaImageModelName": string;
+        /**
+         * SenseNova 画像モデルにはテキスト画像生成 URL、API キー、モデル ID が必要です。
+         */
+        "adminSenseNovaImageRequired": string;
+        /**
+         * SenseNova のテキスト画像生成 URL は /images/generations で終わる必要があります。
+         */
+        "adminSenseNovaImageRequestUrlInvalid": string;
+        /**
+         * 有効にすると、キャラクターに参照画像が実際にある場合だけ画像編集エンドポイントを使用します。参照画像がない場合はテキスト画像生成を使用します。
+         */
+        "adminSenseNovaReferenceImageCaption": string;
+        /**
+         * 参照画像なしでは /v1/images/generations、参照画像ありでは /v1/images/edits を使用し、最大5枚送信します。
+         */
+        "adminSenseNovaImageModeCaption": string;
+        /**
          * 画像生成リクエスト URL
          */
         "adminQwenImageRequestUrl": string;
@@ -15644,7 +15676,7 @@ export interface Locale extends ILocale {
          */
         "characterReferenceImage": string;
         /**
-         * 最大4枚、各5 MiBまでです。参照画像をサポートする画像モデルを選択した場合にのみ送信されます。
+         * 最大5枚、各5 MiBまでです。参照画像をサポートする画像モデルを選択した場合にのみ送信されます。
          */
         "characterReferenceImageCaption": string;
         /**

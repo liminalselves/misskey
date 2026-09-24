@@ -365,7 +365,7 @@ function drawFileList(index: number): DriveFile[] {
 	return file ? [file] : [];
 }
 
-/** 已知错误码的中文文案；未知码返回 null（此时才展示技术诊断信息） */
+/** 已知错误码的中文文案；未知码返回 null。 */
 function knownDrawErrorText(code: string | null): string | null {
 	switch (code) {
 		case 'AGENT_IMAGE_MODEL_UNAVAILABLE':
@@ -409,9 +409,10 @@ function drawStatusText(index: number): string {
 
 function drawErrorDiagnostic(index: number): string | null {
 	const state = drawState(index);
-	if (state?.status !== 'failed' || !state.errorMessage) return null;
-	// 已有中文文案的已知错误不展示英文技术诊断，避免同一失败重复且中英混杂
-	return knownDrawErrorText(state.errorCode) == null ? state.errorMessage : null;
+	if (state?.status !== 'failed') return null;
+	const code = state.errorCode?.trim() || 'AGENT_IMAGE_FAILED';
+	const diagnostic = state.errorMessage?.trim();
+	return diagnostic ? `错误码：${code}\n详细原因：${diagnostic}` : `错误码：${code}`;
 }
 
 async function generateDraw(index: number, regenerate = false) {

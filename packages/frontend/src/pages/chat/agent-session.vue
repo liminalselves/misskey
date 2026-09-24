@@ -1646,7 +1646,7 @@ type AgentImageModel = {
 	id: string;
 	name: string;
 	description: string | null;
-	provider: 'aurora' | 'openai' | 'tiptotip' | 'qwen';
+	provider: 'aurora' | 'openai' | 'tiptotip' | 'qwen' | 'sensenova';
 	supportsReferenceImage: boolean;
 	supportsSizeSelection: boolean;
 	supportsAdvancedParams: boolean;
@@ -3078,10 +3078,10 @@ async function loadCharacter(characterId: string) {
 			avatarFileId: c.avatarFileId,
 			avatar,
 			referenceImageFileIds: Array.isArray(c.referenceImageFileIds)
-				? c.referenceImageFileIds.filter((id): id is string => typeof id === 'string').slice(0, 4)
+				? c.referenceImageFileIds.filter((id): id is string => typeof id === 'string').slice(0, 5)
 				: c.referenceImageFileId ? [c.referenceImageFileId] : [],
 			referenceImages: Array.isArray(c.referenceImages)
-				? c.referenceImages.filter((file): file is DriveFile => file != null).slice(0, 4)
+				? c.referenceImages.filter((file): file is DriveFile => file != null).slice(0, 5)
 				: c.referenceImage ? [c.referenceImage] : [],
 			regexRules: Array.isArray(c.regexRules) ? c.regexRules : [],
 		};
@@ -3246,6 +3246,7 @@ function imageProviderLabel(provider: AgentImageModel['provider']): string {
 	if (provider === 'openai') return i18n.ts._agents.imageProviderOpenai;
 	if (provider === 'tiptotip') return i18n.ts._agents.imageProviderTiptotip;
 	if (provider === 'qwen') return i18n.ts._agents.imageProviderQwen;
+	if (provider === 'sensenova') return i18n.ts._agents.imageProviderSenseNova;
 	return provider;
 }
 

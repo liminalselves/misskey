@@ -58,6 +58,7 @@ export type MiAgentImageModel = {
 	 * Full endpoint URL.
 	 * - openai: OpenAI-compatible /images/generations or /chat/completions.
 	 * - qwen: DashScope-style /images/generations (Qwen-Image).
+	 * - sensenova: /v1/images/generations; reference-image requests are routed to the sibling /v1/images/edits endpoint.
 	 */
 	apiUrl?: string | null;
 	/** Per-model credential for the image endpoint. */

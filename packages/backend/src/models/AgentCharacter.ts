@@ -131,7 +131,7 @@ export class MiAgentCharacter {
 	})
 	public referenceImageFileId: MiDriveFile['id'] | null;
 
-	/** Up to four default reference images used by compatible image-generation models. */
+	/** Up to five default reference images used by compatible image-generation models. */
 	@Column('jsonb', {
 		default: '[]',
 	})

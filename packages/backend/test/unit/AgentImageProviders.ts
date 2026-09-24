@@ -16,6 +16,7 @@ describe('agent image provider registry', () => {
 		expect([...agentImageProviderIds]).toEqual([...AGENT_IMAGE_PROVIDER_IDS]);
 		expect(isAgentImageProvider('aurora')).toBe(true);
 		expect(isAgentImageProvider('qwen')).toBe(true);
+		expect(isAgentImageProvider('sensenova')).toBe(true);
 		expect(isAgentImageProvider('gemini')).toBe(false);
 		expect(isAgentImageProvider(null)).toBe(false);
 	});
@@ -56,6 +57,10 @@ describe('agent image provider registry', () => {
 			supportsReferenceImage: false,
 			supportsAdvancedParams: false,
 		});
+		expect(getAgentImageProviderDefinition('sensenova').capabilities).toMatchObject({
+			supportsReferenceImage: true,
+			supportsAdvancedParams: false,
+		});
 	});
 });
 
@@ -80,10 +85,13 @@ describe('AgentImageService.listAvailableImageModels', () => {
 		const models = service.listAvailableImageModels(buildInstance([
 			{ id: 'qwen-model', name: 'Qwen', provider: 'qwen', supportsReferenceImage: true },
 			{ id: 'openai-model', name: 'OpenAI', provider: 'openai', supportsReferenceImage: true },
+			{ id: 'sensenova-model', name: 'SenseNova', provider: 'sensenova', supportsReferenceImage: true },
 		]));
 		const qwen = models.find(m => m.id === 'qwen-model');
 		const openai = models.find(m => m.id === 'openai-model');
+		const senseNova = models.find(m => m.id === 'sensenova-model');
 		expect(qwen?.supportsReferenceImage).toBe(false);
 		expect(openai?.supportsReferenceImage).toBe(true);
+		expect(senseNova?.supportsReferenceImage).toBe(true);
 	});
 });

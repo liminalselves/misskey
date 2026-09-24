@@ -84,7 +84,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 								<div :class="$style.referenceImageTitle">{{ i18n.ts._agents.characterReferenceImage }}</div>
 								<div :class="$style.referenceImageCaption">{{ i18n.ts._agents.characterReferenceImageCaption }}</div>
 								<div :class="$style.referenceImageActions">
-									<MkButton rounded :disabled="form.state.referenceImageFileIds.length >= 4" @click="pickReferenceImages"><i class="ti ti-upload"></i> {{ i18n.ts._agents.characterReferenceImagePick }}</MkButton>
+									<MkButton rounded :disabled="form.state.referenceImageFileIds.length >= 5" @click="pickReferenceImages"><i class="ti ti-upload"></i> {{ i18n.ts._agents.characterReferenceImagePick }}</MkButton>
 									<MkButton v-if="form.state.referenceImageFileIds.length > 0" rounded @click="clearReferenceImages">{{ i18n.ts._agents.characterReferenceImageClear }}</MkButton>
 								</div>
 							</div>
@@ -1094,7 +1094,7 @@ async function load() {
 				fileType: sticker.file?.type ?? null,
 			})),
 			referenceImageFileIds: Array.isArray(row.referenceImageFileIds)
-				? row.referenceImageFileIds.filter((id: unknown): id is string => typeof id === 'string').slice(0, 4)
+				? row.referenceImageFileIds.filter((id: unknown): id is string => typeof id === 'string').slice(0, 5)
 				: row.referenceImageFileId ? [row.referenceImageFileId] : [],
 			promptOpenSourced: row.promptOpenSourced === true,
 			publishedVersion: row.publishedVersion ?? null,
@@ -1181,7 +1181,7 @@ function clearAvatar() {
 }
 
 function pickReferenceImages(ev: MouseEvent) {
-	const remaining = 4 - form.state.referenceImageFileIds.length;
+	const remaining = 5 - form.state.referenceImageFileIds.length;
 	if (remaining <= 0) return;
 	os.popupMenu([{
 		icon: 'ti ti-upload',
@@ -1195,7 +1195,7 @@ function pickReferenceImages(ev: MouseEvent) {
 }
 
 async function pickReferenceImagesFromPc() {
-	const remaining = 4 - form.state.referenceImageFileIds.length;
+	const remaining = 5 - form.state.referenceImageFileIds.length;
 	if (remaining <= 0) return;
 	const files = await os.chooseFileFromPc({ multiple: true });
 	if (files.length === 0) return;
@@ -1206,14 +1206,14 @@ async function pickReferenceImagesFromPc() {
 	}
 	try {
 		const uploaded = await os.launchUploader(selected, { multiple: true });
-		form.state.referenceImageFileIds = [...new Set([...form.state.referenceImageFileIds, ...uploaded.map(file => file.id)])].slice(0, 4);
+		form.state.referenceImageFileIds = [...new Set([...form.state.referenceImageFileIds, ...uploaded.map(file => file.id)])].slice(0, 5);
 	} catch {
 		// user cancelled uploader
 	}
 }
 
 async function pickReferenceImagesFromDrive() {
-	const remaining = 4 - form.state.referenceImageFileIds.length;
+	const remaining = 5 - form.state.referenceImageFileIds.length;
 	if (remaining <= 0) return;
 	const files = await chooseDriveFile({ multiple: true });
 	if (files.length === 0) return;
@@ -1222,7 +1222,7 @@ async function pickReferenceImagesFromDrive() {
 		os.alert({ type: 'error', text: i18n.ts._agents.characterReferenceImageInvalid });
 		return;
 	}
-	form.state.referenceImageFileIds = [...new Set([...form.state.referenceImageFileIds, ...selected.map(file => file.id)])].slice(0, 4);
+	form.state.referenceImageFileIds = [...new Set([...form.state.referenceImageFileIds, ...selected.map(file => file.id)])].slice(0, 5);
 }
 
 function removeReferenceImage(fileId: string) {
@@ -1268,7 +1268,7 @@ async function rollbackToVersion(version: number, isCurrentPublished: boolean) {
 }
 
 async function refreshReferenceImagePreviews(fileIds: string[]) {
-	referenceImagePreviews.value = await Promise.all(fileIds.slice(0, 4).map(async (fileId) => {
+	referenceImagePreviews.value = await Promise.all(fileIds.slice(0, 5).map(async (fileId) => {
 		try {
 			const file = await misskeyApi('drive/files/show', { fileId });
 			return { id: fileId, url: file.thumbnailUrl ?? file.url };

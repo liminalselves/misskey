@@ -41,6 +41,9 @@ export {
 	buildOpenAiImageGenerationRequestInit,
 	buildQwenImageGenerationRequest,
 	buildQwenImageGenerationRequestInit,
+	buildSenseNovaImageEditRequest,
+	buildSenseNovaImageGenerationRequest,
+	buildSenseNovaImageRequestInit,
 	buildTiptotipImageGenerationRequest,
 	buildTiptotipImageGenerationRequestInit,
 	getAgentImageProviderDefinition,
@@ -49,6 +52,7 @@ export {
 	parseOpenAiImageResult,
 	parseQwenImageResult,
 	qwenImageSize,
+	senseNovaImageSize,
 	tiptotipImageResolution,
 } from './agent-image-providers.js';
 export type { AgentImageProviderCapabilities, AgentImageResult, AgentImageSize, AgentReferenceImage } from './agent-image-providers.js';
@@ -187,6 +191,27 @@ function describeImageRequestFailure(err: unknown, timedOut: boolean): string {
 	if (timedOut) return 'Upstream request timed out after 180 seconds.';
 	const message = err instanceof Error ? err.message : 'Unknown network error.';
 	return `Upstream request failed: ${message}`;
+}
+
+export function isValidBase64ImageData(value: string): boolean {
+	if (value.length === 0 || value.length % 4 !== 0) return false;
+	let padding = 0;
+	if (value.endsWith('==')) padding = 2;
+	else if (value.endsWith('=')) padding = 1;
+	const contentLength = value.length - padding;
+	for (let i = 0; i < contentLength; i++) {
+		const code = value.charCodeAt(i);
+		const valid = (code >= 48 && code <= 57)
+			|| (code >= 65 && code <= 90)
+			|| (code >= 97 && code <= 122)
+			|| code === 43
+			|| code === 47;
+		if (!valid) return false;
+	}
+	for (let i = contentLength; i < value.length; i++) {
+		if (value.charCodeAt(i) !== 61) return false;
+	}
+	return true;
 }
 
 function normalizeSize(size: string | null | undefined): AgentImageSize {
@@ -738,6 +763,7 @@ export class AgentImageService {
 			? resolveAgentImageNegativePrompt(params.instance.agentImageDefaultNegativePrompt).slice(0, 500)
 			: null;
 		const requestContext = {
+			apiUrl: endpoint.toString(),
 			apiKey,
 			model: apiModelName,
 			prompt: params.tag,
@@ -750,8 +776,21 @@ export class AgentImageService {
 		const ac = new AbortController();
 		const timeout = setTimeout(() => ac.abort(), 180_000);
 		try {
-			const res = await fetch(endpoint, {
-				...provider.buildRequest(requestContext),
+			const request = provider.buildRequest(requestContext);
+			const { url: requestUrl, ...requestInit } = request;
+			let requestEndpoint = endpoint;
+			if (requestUrl != null) {
+				try {
+					requestEndpoint = await assertSafeLlmHttpsUrl(requestUrl);
+				} catch (err) {
+					const diagnostic = err instanceof UnsafeLlmUrlError
+						? describeUnsafeLlmUrlReason(err.reason)
+						: 'The image provider generated an invalid endpoint URL.';
+					throw new ApiError(agentImageErrors.notConfigured, { diagnostic });
+				}
+			}
+			const res = await fetch(requestEndpoint, {
+				...requestInit,
 				redirect: 'error',
 				signal: ac.signal,
 			});
@@ -778,15 +817,15 @@ export class AgentImageService {
 		}
 	}
 
-	private async storeGeneratedImageResult(params: FetchImageParams, result: AgentImageResult, signal: AbortSignal) {
-		if (result.type === 'base64') {
-			const normalized = result.value.replace(/\s+/g, '');
-			if (!/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(normalized)) {
-				throw upstreamImageError('Upstream response contains invalid Base64 image data.');
+		private async storeGeneratedImageResult(params: FetchImageParams, result: AgentImageResult, signal: AbortSignal) {
+			if (result.type === 'base64') {
+				const normalized = result.value.replace(/\s+/g, '');
+				if (!isValidBase64ImageData(normalized)) {
+					throw upstreamImageError('Upstream response contains invalid Base64 image data.');
+				}
+				const buf = Buffer.from(normalized, 'base64');
+				return await this.storeGeneratedImage(params, buf, 'image/png');
 			}
-			const buf = Buffer.from(normalized, 'base64');
-			return await this.storeGeneratedImage(params, buf, 'image/png');
-		}
 
 		let imageUrl: URL;
 		try {
@@ -821,7 +860,7 @@ export class AgentImageService {
 		const ids = [...new Set((Array.isArray(character?.referenceImageFileIds)
 			? character.referenceImageFileIds
 			: character?.referenceImageFileId ? [character.referenceImageFileId] : [])
-			.filter((id): id is string => typeof id === 'string' && id !== ''))].slice(0, 4);
+			.filter((id): id is string => typeof id === 'string' && id !== ''))].slice(0, 5);
 		return (await Promise.all(ids.map(async (id): Promise<AgentReferenceImage | null> => {
 			const file = await this.driveFilesRepository.findOneBy({ id });
 			if (!file || !file.type.startsWith('image/') || file.size <= 0 || file.size > 5 * 1024 * 1024) return null;

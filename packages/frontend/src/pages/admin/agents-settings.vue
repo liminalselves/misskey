@@ -655,16 +655,16 @@ SPDX-License-Identifier: AGPL-3.0-only
 									</MkInput>
 									<MkInfo warn>Qwen-Image 接口使用 DashScope 风格协议（input/parameters），同步返回 output.results 图片地址，不支持参考图。</MkInfo>
 								</template>
-								<template v-else>
+								<template v-else-if="row.provider === 'sensenova'">
 									<FormSplit :minWidth="220">
 										<MkInput v-model="row.apiUrl" :readonly="!row.enabled">
-											<template #label>{{ i18n.ts._agents.adminOpenaiImageRequestUrl }}</template>
-											<template #caption>{{ i18n.ts._agents.adminOpenaiImageRequestUrlCaption }}</template>
+											<template #label>{{ i18n.ts._agents.adminSenseNovaImageRequestUrl }}</template>
+											<template #caption>{{ i18n.ts._agents.adminSenseNovaImageRequestUrlCaption }}</template>
 										</MkInput>
 										<MkInput v-model="row.apiKey" type="password" :readonly="!row.enabled"><template #label>{{ i18n.ts._agents.adminOpenaiImageApiKey }}</template></MkInput>
 									</FormSplit>
 									<FormSplit :minWidth="220">
-										<MkInput v-model="row.apiModelName" :readonly="!row.enabled"><template #label>{{ i18n.ts._agents.adminOpenaiImageModelName }}</template></MkInput>
+										<MkInput v-model="row.apiModelName" :readonly="!row.enabled"><template #label>{{ i18n.ts._agents.adminSenseNovaImageModelName }}</template></MkInput>
 										<MkInput v-model="row.costPerCall" type="text" :readonly="!row.enabled"><template #label>{{ i18n.ts._agents.adminImageModelCost }}</template></MkInput>
 									</FormSplit>
 									<MkInput v-model="row.dailyFreeQuota" type="text" :readonly="!row.enabled">
@@ -673,9 +673,31 @@ SPDX-License-Identifier: AGPL-3.0-only
 									</MkInput>
 									<MkSwitch v-model="row.supportsReferenceImage" :disabled="!row.enabled">
 										<template #label>{{ i18n.ts._agents.adminImageModelReferenceImage }}</template>
-										<template #caption>{{ i18n.ts._agents.adminImageModelReferenceImageCaption }}</template>
+										<template #caption>{{ i18n.ts._agents.adminSenseNovaReferenceImageCaption }}</template>
 									</MkSwitch>
+									<MkInfo>{{ i18n.ts._agents.adminSenseNovaImageModeCaption }}</MkInfo>
 								</template>
+									<template v-else>
+										<FormSplit :minWidth="220">
+											<MkInput v-model="row.apiUrl" :readonly="!row.enabled">
+												<template #label>{{ i18n.ts._agents.adminOpenaiImageRequestUrl }}</template>
+												<template #caption>{{ i18n.ts._agents.adminOpenaiImageRequestUrlCaption }}</template>
+											</MkInput>
+											<MkInput v-model="row.apiKey" type="password" :readonly="!row.enabled"><template #label>{{ i18n.ts._agents.adminOpenaiImageApiKey }}</template></MkInput>
+										</FormSplit>
+										<FormSplit :minWidth="220">
+											<MkInput v-model="row.apiModelName" :readonly="!row.enabled"><template #label>{{ i18n.ts._agents.adminOpenaiImageModelName }}</template></MkInput>
+											<MkInput v-model="row.costPerCall" type="text" :readonly="!row.enabled"><template #label>{{ i18n.ts._agents.adminImageModelCost }}</template></MkInput>
+										</FormSplit>
+										<MkInput v-model="row.dailyFreeQuota" type="text" :readonly="!row.enabled">
+											<template #label>每日免费次数</template>
+											<template #caption>设为 0 则无免费额度；每日 0 点（北京时间）重置</template>
+										</MkInput>
+										<MkSwitch v-model="row.supportsReferenceImage" :disabled="!row.enabled">
+											<template #label>{{ i18n.ts._agents.adminImageModelReferenceImage }}</template>
+											<template #caption>{{ i18n.ts._agents.adminImageModelReferenceImageCaption }}</template>
+										</MkSwitch>
+									</template>
 							</div>
 						</div>
 					</template>
@@ -1395,6 +1417,7 @@ const agentImageProviderItems: MkSelectItem[] = [
 	{ value: 'openai', label: i18n.ts._agents.imageProviderOpenai },
 	{ value: 'tiptotip', label: i18n.ts._agents.imageProviderTiptotip },
 	{ value: 'qwen', label: i18n.ts._agents.imageProviderQwen },
+	{ value: 'sensenova', label: i18n.ts._agents.imageProviderSenseNova },
 ];
 
 const agentImageProviderValues = new Set(agentImageProviderItems.flatMap(item => 'value' in item ? [item.value] : []));
@@ -1571,7 +1594,7 @@ function initAgentImageModelRows(): AgentImageModelRow[] {
 			apiModelName: typeof o.apiModelName === 'string' ? o.apiModelName : '',
 			apiUrl: typeof o.apiUrl === 'string' ? o.apiUrl : '',
 			apiKey: typeof o.apiKey === 'string' ? o.apiKey : '',
-			supportsReferenceImage: (o.provider === 'openai' || o.provider === 'tiptotip') && o.supportsReferenceImage === true,
+			supportsReferenceImage: (o.provider === 'openai' || o.provider === 'tiptotip' || o.provider === 'sensenova') && o.supportsReferenceImage === true,
 			costPerCall: typeof o.costPerCall === 'number' ? String(o.costPerCall) : '',
 			dailyFreeQuota: typeof o.dailyFreeQuota === 'number' ? String(o.dailyFreeQuota) : '0',
 			defaultArtistPresetId: typeof o.defaultArtistPresetId === 'string' ? o.defaultArtistPresetId : '',
@@ -1881,12 +1904,12 @@ const form = useForm({
 				name: row.name.trim(),
 				description: row.description.trim() === '' ? null : row.description.trim(),
 				// 未识别的 provider 在下方校验循环被拦截，这里必为已知值
-				provider: row.provider as 'aurora' | 'openai' | 'tiptotip' | 'qwen',
+				provider: row.provider as 'aurora' | 'openai' | 'tiptotip' | 'qwen' | 'sensenova',
 				enabled: row.enabled,
 				apiModelName: row.apiModelName.trim() === '' ? null : row.apiModelName.trim(),
-				apiUrl: (row.provider === 'openai' || row.provider === 'tiptotip' || row.provider === 'qwen') && row.apiUrl.trim() !== '' ? row.apiUrl.trim() : null,
-				apiKey: (row.provider === 'openai' || row.provider === 'tiptotip' || row.provider === 'qwen') && row.apiKey.trim() !== '' ? row.apiKey.trim() : null,
-				supportsReferenceImage: (row.provider === 'openai' || row.provider === 'tiptotip') && row.supportsReferenceImage,
+				apiUrl: (row.provider === 'openai' || row.provider === 'tiptotip' || row.provider === 'qwen' || row.provider === 'sensenova') && row.apiUrl.trim() !== '' ? row.apiUrl.trim() : null,
+				apiKey: (row.provider === 'openai' || row.provider === 'tiptotip' || row.provider === 'qwen' || row.provider === 'sensenova') && row.apiKey.trim() !== '' ? row.apiKey.trim() : null,
+				supportsReferenceImage: (row.provider === 'openai' || row.provider === 'tiptotip' || row.provider === 'sensenova') && row.supportsReferenceImage,
 				costPerCall: row.costPerCall.trim() === '' ? null : Number(row.costPerCall),
 				dailyFreeQuota: row.dailyFreeQuota.trim() !== '' && Number(row.dailyFreeQuota) > 0 ? Number(row.dailyFreeQuota) : null,
 				defaultArtistPresetId: row.defaultArtistPresetId.trim() === '' ? null : row.defaultArtistPresetId.trim(),
@@ -1914,22 +1937,30 @@ const form = useForm({
 			os.alert({ type: 'error', text: i18n.ts._agents.adminImageModelInvalid });
 			throw new Error('invalid aurora image model api name');
 		}
-			if (row.provider === 'openai' && (!row.apiModelName || !row.apiUrl || !row.apiKey)) {
-				os.alert({ type: 'error', text: i18n.ts._agents.adminOpenaiImageRequired });
-				throw new Error('invalid openai image model configuration');
-			}
-			if (row.provider === 'tiptotip' && (!row.apiModelName || !row.apiUrl || !row.apiKey)) {
-				os.alert({ type: 'error', text: i18n.ts._agents.adminOpenaiImageRequired });
-				throw new Error('invalid tiptotip image model configuration');
-			}
-			if (row.provider === 'qwen' && (!row.apiModelName || !row.apiUrl || !row.apiKey)) {
-				os.alert({ type: 'error', text: i18n.ts._agents.adminQwenImageRequired });
-				throw new Error('invalid qwen image model configuration');
-			}
-		if (row.costPerCall != null && (!Number.isFinite(row.costPerCall) || row.costPerCall < 0)) {
-			os.alert({ type: 'error', text: i18n.ts._agents.adminImageModelInvalid });
-			throw new Error('invalid image model cost');
+		if (row.provider === 'openai' && (!row.apiModelName || !row.apiUrl || !row.apiKey)) {
+			os.alert({ type: 'error', text: i18n.ts._agents.adminOpenaiImageRequired });
+			throw new Error('invalid openai image model configuration');
 		}
+		if (row.provider === 'tiptotip' && (!row.apiModelName || !row.apiUrl || !row.apiKey)) {
+			os.alert({ type: 'error', text: i18n.ts._agents.adminOpenaiImageRequired });
+			throw new Error('invalid tiptotip image model configuration');
+		}
+		if (row.provider === 'qwen' && (!row.apiModelName || !row.apiUrl || !row.apiKey)) {
+			os.alert({ type: 'error', text: i18n.ts._agents.adminQwenImageRequired });
+			throw new Error('invalid qwen image model configuration');
+		}
+		if (row.provider === 'sensenova' && (!row.apiModelName || !row.apiUrl || !row.apiKey)) {
+			os.alert({ type: 'error', text: i18n.ts._agents.adminSenseNovaImageRequired });
+			throw new Error('invalid sensenova image model configuration');
+		}
+		if (row.provider === 'sensenova' && !/\/images\/generations\/?$/.test(row.apiUrl ?? '')) {
+			os.alert({ type: 'error', text: i18n.ts._agents.adminSenseNovaImageRequestUrlInvalid });
+			throw new Error('invalid sensenova image generations endpoint');
+		}
+			if (row.costPerCall != null && (!Number.isFinite(row.costPerCall) || row.costPerCall < 0)) {
+				os.alert({ type: 'error', text: i18n.ts._agents.adminImageModelInvalid });
+				throw new Error('invalid image model cost');
+			}
 		if (row.provider === 'aurora' && row.defaultParams != null) {
 			if (!Number.isFinite(row.defaultParams.steps) || row.defaultParams.steps < 1 || row.defaultParams.steps > 80) {
 				os.alert({ type: 'error', text: i18n.ts._agents.adminImageParamsInvalid });
@@ -3190,28 +3221,35 @@ function onAddImageModelMenu(ev: MouseEvent) {
 		{ type: 'button', icon: 'ti ti-plus', text: '自定义模型', caption: '空白模型，手动填写全部配置', action: () => addImageModel() },
 		{ type: 'divider' },
 		{ type: 'label', text: '提供商预置' },
+		{ type: 'button', icon: 'ti ti-bolt', text: 'SenseNova U1.5 Lite', caption: '预填日日新生图端点、模型名与参考图能力，补 API Key 即可', action: () => addImageModel('sensenova-lite') },
+		{ type: 'button', icon: 'ti ti-bolt', text: 'SenseNova U1.5 Fast', caption: '预填日日新加速版生图端点、模型名与参考图能力，补 API Key 即可', action: () => addImageModel('sensenova-fast') },
 		{ type: 'button', icon: 'ti ti-bolt', text: 'Tiptotip 网关', caption: '预填 ai.tiptotip.cn 生图端点，补 Key 与模型名即可', action: () => addImageModel('tiptotip') },
 		{ type: 'button', icon: 'ti ti-bolt', text: 'OpenAI 官方', caption: '预填 api.openai.com 生图端点，补 Key 与模型名即可', action: () => addImageModel('openai') },
 	];
 	os.popupMenu(items, ev.currentTarget ?? ev.target);
 }
 
-function addImageModel(providerPreset?: 'tiptotip' | 'openai') {
+function addImageModel(providerPreset?: 'tiptotip' | 'openai' | 'sensenova-lite' | 'sensenova-fast') {
 	const id = genId();
+	const isSenseNova = providerPreset === 'sensenova-lite' || providerPreset === 'sensenova-fast';
 	form.state.agentImageModelRows.push({
 		id,
-		name: '',
+		name: isSenseNova ? (providerPreset === 'sensenova-fast' ? 'SenseNova U1.5 Fast' : 'SenseNova U1.5 Lite') : '',
 		description: '',
-		provider: providerPreset ?? 'aurora',
+		provider: isSenseNova ? 'sensenova' : (providerPreset ?? 'aurora'),
 		enabled: true,
-		apiModelName: providerPreset != null ? '' : (form.state.agentImageDefaultModel || 'nai-diffusion-4-5-full'),
+		apiModelName: isSenseNova
+			? (providerPreset === 'sensenova-fast' ? 'sensenova-u1.5-fast' : 'sensenova-u1.5-lite')
+			: providerPreset != null ? '' : (form.state.agentImageDefaultModel || 'nai-diffusion-4-5-full'),
 		apiUrl: providerPreset === 'tiptotip'
 			? 'https://ai.tiptotip.cn/v1/images/generations'
 			: providerPreset === 'openai'
 				? 'https://api.openai.com/v1/images/generations'
-				: '',
+				: isSenseNova
+					? 'https://token.sensenova.cn/v1/images/generations'
+					: '',
 		apiKey: '',
-		supportsReferenceImage: false,
+		supportsReferenceImage: isSenseNova,
 		costPerCall: form.state.agentImageCostPerCall || '',
 		dailyFreeQuota: '0',
 		defaultArtistPresetId: form.state.agentImageDefaultArtistPresetId || '',

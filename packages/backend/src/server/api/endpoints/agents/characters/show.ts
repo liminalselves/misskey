@@ -16,7 +16,7 @@ function referenceImageFileIdsOf(character: { referenceImageFileIds?: unknown; r
 	const raw = Array.isArray(character.referenceImageFileIds)
 		? character.referenceImageFileIds
 		: character.referenceImageFileId ? [character.referenceImageFileId] : [];
-	return [...new Set(raw.filter((id): id is string => typeof id === 'string' && id !== ''))].slice(0, 4);
+	return [...new Set(raw.filter((id): id is string => typeof id === 'string' && id !== ''))].slice(0, 5);
 }
 
 export const meta = {

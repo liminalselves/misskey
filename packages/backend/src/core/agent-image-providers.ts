@@ -25,6 +25,7 @@ export type AgentImageProviderCapabilities = {
 };
 
 type AgentImageRequestContext = {
+	apiUrl: string;
 	apiKey: string;
 	model: string;
 	prompt: string;
@@ -44,6 +45,7 @@ export type AgentImageProviderDefinition = {
 };
 
 export type AgentImageRequestInit = {
+	url?: string;
 	method: 'POST';
 	headers: Record<string, string>;
 	body: string;
@@ -53,9 +55,9 @@ function referenceImageDataUrl(referenceImage: AgentReferenceImage): string {
 	return `data:${referenceImage.contentType};base64,${referenceImage.data.toString('base64')}`;
 }
 
-function normalizeReferenceImages(referenceImages?: AgentReferenceImage | AgentReferenceImage[] | null): AgentReferenceImage[] {
+function normalizeReferenceImages(referenceImages?: AgentReferenceImage | AgentReferenceImage[] | null, limit = 4): AgentReferenceImage[] {
 	if (referenceImages == null) return [];
-	return (Array.isArray(referenceImages) ? referenceImages : [referenceImages]).slice(0, 4);
+	return (Array.isArray(referenceImages) ? referenceImages : [referenceImages]).slice(0, limit);
 }
 
 export function openAiImageSize(size: AgentImageSize): string {
@@ -195,6 +197,62 @@ export function parseOpenAiChatImageResult(value: unknown): AgentImageResult {
 	throw new Error('OpenAI chat response has no supported image value.');
 }
 
+export function senseNovaImageSize(size: AgentImageSize): string {
+	switch (size) {
+		case 'portrait': return '1664x2496';
+		case 'landscape': return '2496x1664';
+		case 'square': return '2048x2048';
+	}
+}
+
+function senseNovaEditsUrl(generationsUrl: string): string {
+	const url = new URL(generationsUrl);
+	const pathname = url.pathname.replace(/\/+$/, '');
+	if (!pathname.endsWith('/images/generations')) {
+		throw new Error('SenseNova image endpoint must end with /images/generations.');
+	}
+	url.pathname = `${pathname.slice(0, -'/generations'.length)}/edits`;
+	return url.toString();
+}
+
+export function buildSenseNovaImageGenerationRequest(model: string, prompt: string, size: AgentImageSize): Record<string, unknown> {
+	return {
+		model,
+		prompt,
+		n: 1,
+		size: senseNovaImageSize(size),
+		output_format: 'png',
+		response_format: 'b64_json',
+		watermark: false,
+		prompt_extend: true,
+	};
+}
+
+export function buildSenseNovaImageEditRequest(model: string, prompt: string, size: AgentImageSize, referenceImages: AgentReferenceImage | AgentReferenceImage[]): Record<string, unknown> {
+	return {
+		...buildSenseNovaImageGenerationRequest(model, prompt, size),
+		images: normalizeReferenceImages(referenceImages, 5).map(referenceImage => ({
+			image_url: referenceImageDataUrl(referenceImage),
+		})),
+	};
+}
+
+export function buildSenseNovaImageRequestInit(generationsUrl: string, apiKey: string, model: string, prompt: string, size: AgentImageSize, referenceImages?: AgentReferenceImage | AgentReferenceImage[] | null): AgentImageRequestInit {
+	const editsUrl = senseNovaEditsUrl(generationsUrl);
+	const images = normalizeReferenceImages(referenceImages, 5);
+	return {
+		...(images.length > 0 ? { url: editsUrl } : {}),
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/json',
+			Authorization: `Bearer ${apiKey}`,
+		},
+		body: JSON.stringify(images.length > 0
+			? buildSenseNovaImageEditRequest(model, prompt, size, images)
+			: buildSenseNovaImageGenerationRequest(model, prompt, size)),
+	};
+}
+
 export function qwenImageSize(size: AgentImageSize): string {
 	switch (size) {
 		case 'portrait': return '1728*2368';
@@ -299,6 +357,14 @@ const AGENT_IMAGE_PROVIDERS: Record<AgentImageProvider, AgentImageProviderDefini
 		buildRequest: context => buildQwenImageGenerationRequestInit(context.apiKey, context.model, context.prompt, context.negativePrompt ?? null, context.size),
 		parseResult: value => parseQwenImageResult(value),
 		parseExpectation: () => 'output.results containing image URLs',
+	},
+	sensenova: {
+		id: 'sensenova',
+		capabilities: endpointCapabilities,
+		requiresEndpointCredentials: true,
+		buildRequest: context => buildSenseNovaImageRequestInit(context.apiUrl, context.apiKey, context.model, context.prompt, context.size, context.referenceImages),
+		parseResult: value => parseOpenAiImageResult(value),
+		parseExpectation: () => 'data[0].b64_json or data[0].url',
 	},
 };
 

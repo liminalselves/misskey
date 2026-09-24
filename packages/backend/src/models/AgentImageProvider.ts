@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
-export const AGENT_IMAGE_PROVIDER_IDS = ['aurora', 'openai', 'tiptotip', 'qwen'] as const;
+export const AGENT_IMAGE_PROVIDER_IDS = ['aurora', 'openai', 'tiptotip', 'qwen', 'sensenova'] as const;
 
 export type AgentImageProvider = typeof AGENT_IMAGE_PROVIDER_IDS[number];
 

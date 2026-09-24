@@ -9,13 +9,16 @@ import {
 	buildOpenAiChatImageGenerationRequest,
 	buildQwenImageGenerationRequest,
 	buildQwenImageGenerationRequestInit,
+	buildSenseNovaImageRequestInit,
 	buildTiptotipImageGenerationRequest,
 	getAgentImageErrorDiagnostic,
+	isValidBase64ImageData,
 	openAiImageSize,
 	parseOpenAiChatImageResult,
 	parseOpenAiImageResult,
 	parseQwenImageResult,
 	qwenImageSize,
+	senseNovaImageSize,
 } from '@/core/AgentImageService.js';
 import { ApiError } from '@/server/api/error.js';
 
@@ -91,6 +94,13 @@ describe('OpenAI-compatible image generation helpers', () => {
 		expect(chatRequest.messages[0]?.content).toHaveLength(5);
 	});
 
+	test('validates multi-megabyte Base64 image data without recursive regular expressions', () => {
+		const large = Buffer.alloc(4 * 1024 * 1024, 1).toString('base64');
+		expect(isValidBase64ImageData(large)).toBe(true);
+		expect(isValidBase64ImageData(`${large.slice(0, -1)}!`)).toBe(false);
+		expect(isValidBase64ImageData('aGVsbG8')).toBe(false);
+	});
+
 	test('accepts base64 and URL image response forms', () => {
 		expect(parseOpenAiImageResult({ data: [{ b64_json: 'aGVsbG8=' }] })).toEqual({ type: 'base64', value: 'aGVsbG8=' });
 		expect(parseOpenAiImageResult({ data: [{ url: 'https://example.com/image.png' }] })).toEqual({ type: 'url', value: 'https://example.com/image.png' });
@@ -111,6 +121,53 @@ describe('OpenAI-compatible image generation helpers', () => {
 			diagnostic: 'Upstream returned HTTP 401: Authorization: Bearer secret-token-value, api_key=another-secret, https://images.example.test/v1/images/generations',
 		});
 		expect(getAgentImageErrorDiagnostic(error)).toBe('Upstream returned HTTP 401: Authorization: [redacted], api_key=[redacted], [redacted URL]');
+	});
+});
+
+describe('SenseNova image generation helpers', () => {
+	const generationsUrl = 'https://token.sensenova.cn/v1/images/generations';
+
+	test('maps agent image sizes to SenseNova 2K dimensions', () => {
+		expect(senseNovaImageSize('portrait')).toBe('1664x2496');
+		expect(senseNovaImageSize('landscape')).toBe('2496x1664');
+		expect(senseNovaImageSize('square')).toBe('2048x2048');
+	});
+
+	test('uses the configured generations endpoint when no reference image is available', () => {
+		const init = buildSenseNovaImageRequestInit(generationsUrl, 'secret', 'sensenova-u1.5-lite', '一只海豹', 'square');
+		expect(init.url).toBeUndefined();
+		expect(init.headers.Authorization).toBe('Bearer secret');
+		expect(JSON.parse(init.body)).toEqual({
+			model: 'sensenova-u1.5-lite',
+			prompt: '一只海豹',
+			n: 1,
+			size: '2048x2048',
+			output_format: 'png',
+			response_format: 'b64_json',
+			watermark: false,
+			prompt_extend: true,
+		});
+	});
+
+	test('switches to the edits endpoint only when reference images are present', () => {
+		const references = [1, 2, 3, 4, 5, 6].map(index => ({
+			contentType: 'image/png',
+			data: Buffer.from(`reference ${index}`),
+		}));
+		const init = buildSenseNovaImageRequestInit(generationsUrl, 'secret', 'sensenova-u1.5-fast', '改成雪地背景', 'landscape', references);
+		expect(init.url).toBe('https://token.sensenova.cn/v1/images/edits');
+		expect(JSON.parse(init.body)).toEqual(expect.objectContaining({
+			model: 'sensenova-u1.5-fast',
+			prompt: '改成雪地背景',
+			size: '2496x1664',
+			images: references.slice(0, 5).map(reference => ({
+				image_url: `data:image/png;base64,${reference.data.toString('base64')}`,
+			})),
+		}));
+	});
+
+	test('requires the configured endpoint to be the generations endpoint', () => {
+		expect(() => buildSenseNovaImageRequestInit('https://token.sensenova.cn/v1/images/edits', 'secret', 'sensenova-u1.5-lite', '一只海豹', 'square')).toThrow('/images/generations');
 	});
 });
 
