@@ -651,19 +651,22 @@ export class AgentCompressionMemoryService {
 		await this.stickyRepository.delete({ sessionId });
 	}
 
-	/**
-	 * v4 导入：批量重建压缩便签。
-	 * 先清空会话现有便签，再按导入数据批量插入。
-	 * fromMessageId/toMessageId 使用 'imported' 占位，因为导入时没有原始消息 ID。
-	 */
 	@bindThis
 	public async importStickies(
 		sessionId: string,
 		stickies: Array<{
+			createdAt?: string | null;
+			updatedAt?: string | null;
+			fromMessageId?: string | null;
+			toMessageId?: string | null;
 			summaryText: string;
 			state: AgentCompressionStickyState;
 			userOverridden: boolean;
+			sourceFingerprint?: string | null;
+			errorMessage?: string | null;
+			lastModelId?: string | null;
 			sortIndex: number;
+			retryCount?: number;
 		}>,
 		userId: string,
 		sessionUserId: string,
@@ -671,28 +674,37 @@ export class AgentCompressionMemoryService {
 		if (sessionUserId !== userId) {
 			throw new ApiError({ message: 'Access denied.', code: 'ACCESS_DENIED', id: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890' });
 		}
-		// 先删除现有便签
-		await this.stickyRepository.delete({ sessionId });
-		if (stickies.length === 0) return 0;
 		const now = new Date();
-		const rows = stickies.map(s => ({
-			id: this.agentService.newId(),
-			createdAt: now,
-			updatedAt: now,
-			sessionId,
-			fromMessageId: 'imported',
-			toMessageId: 'imported',
-			summaryText: s.summaryText,
-			state: s.state,
-			userOverridden: s.userOverridden,
-			sourceFingerprint: null,
-			errorMessage: null,
-			lastModelId: null,
-			sortIndex: s.sortIndex,
-			retryCount: 0,
-		}));
-		await this.stickyRepository.insert(rows);
+		const rows = stickies.map(s => {
+			const createdAt = this.parseImportedDate(s.createdAt) ?? now;
+			return {
+				id: this.agentService.newId(),
+				createdAt,
+				updatedAt: this.parseImportedDate(s.updatedAt) ?? createdAt,
+				sessionId,
+				fromMessageId: s.fromMessageId ?? 'imported',
+				toMessageId: s.toMessageId ?? 'imported',
+				summaryText: s.summaryText,
+				state: s.state,
+				userOverridden: s.userOverridden,
+				sourceFingerprint: s.sourceFingerprint ?? null,
+				errorMessage: s.errorMessage ?? null,
+				lastModelId: s.lastModelId ?? null,
+				sortIndex: s.sortIndex,
+				retryCount: Math.max(0, Math.trunc(s.retryCount ?? 0)),
+			};
+		});
+		await this.stickyRepository.manager.transaction(async manager => {
+			await manager.delete(MiAgentSessionCompressionSticky, { sessionId });
+			if (rows.length > 0) await manager.insert(MiAgentSessionCompressionSticky, rows);
+		});
 		return rows.length;
+	}
+
+	private parseImportedDate(value: string | null | undefined): Date | null {
+		if (typeof value !== 'string') return null;
+		const date = new Date(value);
+		return Number.isFinite(date.getTime()) ? date : null;
 	}
 
 	@bindThis

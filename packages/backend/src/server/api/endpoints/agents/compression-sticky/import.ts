@@ -32,20 +32,28 @@ export const paramDef = {
 	type: 'object',
 	properties: {
 		sessionId: { type: 'string', format: 'misskey:id' },
-		stickies: {
-			type: 'array',
-			maxItems: 500,
-			items: {
-				type: 'object',
-				properties: {
-					summaryText: { type: 'string', minLength: 1, maxLength: 50000 },
-					state: { type: 'string', enum: agentCompressionStickyStates },
-					userOverridden: { type: 'boolean' },
-					sortIndex: { type: 'number' },
+			stickies: {
+				type: 'array',
+				maxItems: 500,
+				items: {
+					type: 'object',
+					properties: {
+						createdAt: { type: 'string', nullable: true },
+						updatedAt: { type: 'string', nullable: true },
+						fromMessageId: { type: 'string', nullable: true, maxLength: 128 },
+						toMessageId: { type: 'string', nullable: true, maxLength: 128 },
+						summaryText: { type: 'string', minLength: 1, maxLength: 50000 },
+						state: { type: 'string', enum: agentCompressionStickyStates },
+						userOverridden: { type: 'boolean' },
+						sourceFingerprint: { type: 'string', nullable: true, maxLength: 128 },
+						errorMessage: { type: 'string', nullable: true, maxLength: 50000 },
+						lastModelId: { type: 'string', nullable: true, maxLength: 64 },
+						sortIndex: { type: 'integer' },
+						retryCount: { type: 'integer', minimum: 0 },
+					},
+					required: ['summaryText', 'state', 'userOverridden', 'sortIndex'],
 				},
-				required: ['summaryText', 'state', 'userOverridden', 'sortIndex'],
 			},
-		},
 	},
 	required: ['sessionId', 'stickies'],
 } as const;

@@ -601,6 +601,18 @@ declare module '../api.js' {
      * **Internal Endpoint**: This endpoint is an API for the misskey mainframe and is not intended for use by third parties.
      * **Credential required**: *Yes* / **Permission**: *read:admin*
      */
+    request<E extends 'admin/agents/reports/top-users', P extends Endpoints[E]['req']>(
+      endpoint: E,
+      params: P,
+      credential?: string | null,
+    ): Promise<SwitchCaseResponseType<E, P>>;
+
+    /**
+     * No description provided.
+     *
+     * **Internal Endpoint**: This endpoint is an API for the misskey mainframe and is not intended for use by third parties.
+     * **Credential required**: *Yes* / **Permission**: *read:admin*
+     */
     request<E extends 'admin/agents/review/diff', P extends Endpoints[E]['req']>(
       endpoint: E,
       params: P,
@@ -1718,6 +1730,18 @@ declare module '../api.js' {
      * **Internal Endpoint**: This endpoint is an API for the misskey mainframe and is not intended for use by third parties.
      * **Credential required**: *Yes* / **Permission**: *read:admin*
      */
+    request<E extends 'admin/users/agent-billing-logs', P extends Endpoints[E]['req']>(
+      endpoint: E,
+      params: P,
+      credential?: string | null,
+    ): Promise<SwitchCaseResponseType<E, P>>;
+
+    /**
+     * No description provided.
+     *
+     * **Internal Endpoint**: This endpoint is an API for the misskey mainframe and is not intended for use by third parties.
+     * **Credential required**: *Yes* / **Permission**: *read:admin*
+     */
     request<E extends 'admin/users/agent-success-rate', P extends Endpoints[E]['req']>(
       endpoint: E,
       params: P,
@@ -1739,6 +1763,18 @@ declare module '../api.js' {
     /**
      * No description provided.
      * 
+     * **Internal Endpoint**: This endpoint is an API for the misskey mainframe and is not intended for use by third parties.
+     * **Credential required**: *Yes* / **Permission**: *read:admin*
+     */
+    request<E extends 'admin/users/agent-usage-details', P extends Endpoints[E]['req']>(
+      endpoint: E,
+      params: P,
+      credential?: string | null,
+    ): Promise<SwitchCaseResponseType<E, P>>;
+
+    /**
+     * No description provided.
+     *
      * **Credential required**: *Yes* / **Permission**: *read:account*
      */
     request<E extends 'agents/billing-logs', P extends Endpoints[E]['req']>(
@@ -2422,6 +2458,17 @@ declare module '../api.js' {
     /**
      * No description provided.
      * 
+     * **Credential required**: *Yes* / **Permission**: *read:chat*
+     */
+    request<E extends 'agents/sessions/export', P extends Endpoints[E]['req']>(
+      endpoint: E,
+      params: P,
+      credential?: string | null,
+    ): Promise<SwitchCaseResponseType<E, P>>;
+
+    /**
+     * No description provided.
+     *
      * **Credential required**: *Yes* / **Permission**: *read:chat*
      */
     request<E extends 'agents/sessions/list-mine', P extends Endpoints[E]['req']>(

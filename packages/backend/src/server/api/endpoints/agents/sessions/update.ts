@@ -29,6 +29,7 @@ export const meta = {
 			id: { type: 'string', format: 'misskey:id' },
 			name: { type: 'string' },
 			dialogueStyleId: { type: 'string', format: 'misskey:id', nullable: true },
+			plazaStatsDialogueStyleId: { type: 'string', format: 'misskey:id', nullable: true },
 			agentModelId: { type: 'string', nullable: true },
 			agentLongMemoryEnabled: { type: 'boolean' },
 			agentLongMemoryTopK: { type: 'number' },
@@ -53,8 +54,9 @@ export const paramDef = {
 	properties: {
 		sessionId: { type: 'string', format: 'misskey:id' },
 		name: { type: 'string', minLength: 1, maxLength: 256, nullable: true },
-		dialogueStyleId: { type: 'string', format: 'misskey:id', nullable: true },
-		agentModelId: { type: 'string', nullable: true, maxLength: 64 },
+			dialogueStyleId: { type: 'string', format: 'misskey:id', nullable: true },
+			plazaStatsDialogueStyleId: { type: 'string', format: 'misskey:id', nullable: true },
+			agentModelId: { type: 'string', nullable: true, maxLength: 64 },
 		agentLongMemoryEnabled: { type: 'boolean', nullable: true },
 		agentLongMemoryTopK: { type: 'integer', minimum: 1, maximum: 100, nullable: true },
 		agentLongMemoryMinScore: { type: 'number', minimum: 0, maximum: 1, nullable: true },
@@ -132,7 +134,20 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					}
 				}
 			}
-			if (ps.agentModelId !== undefined) {
+				if (ps.plazaStatsDialogueStyleId !== undefined) {
+					if (ps.plazaStatsDialogueStyleId === null) {
+						row.plazaStatsDialogueStyleId = null;
+					} else {
+						const style = await this.agentDialogueStylesRepository.findOneBy({ id: ps.plazaStatsDialogueStyleId });
+						if (!style) {
+							throw new ApiError({ message: 'No such plaza statistics style.', code: 'NO_SUCH_PLAZA_STATS_STYLE', id: '6ee792d0-b5c6-4a2a-a112-2b8345c53e17' });
+						}
+						await this.agentService.assertCanUseDialogueStyle(me.id, style, { forNewSession: true });
+						this.agentService.assertSessionStylePolicy({ sessionKind: row.sessionKind, style, userId: me.id });
+						row.plazaStatsDialogueStyleId = style.id;
+					}
+				}
+				if (ps.agentModelId !== undefined) {
 				const mid = ps.agentModelId === '' ? null : ps.agentModelId;
 				if (mid) {
 					await this.agentService.resolveModelApiNameForUser(instanceMeta, mid, me.id);
@@ -318,8 +333,9 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			return {
 				id: row.id,
 				name: row.name,
-				dialogueStyleId: row.dialogueStyleId,
-				agentModelId: row.agentModelId,
+					dialogueStyleId: row.dialogueStyleId,
+					plazaStatsDialogueStyleId: row.plazaStatsDialogueStyleId,
+					agentModelId: row.agentModelId,
 				agentLongMemoryEnabled: row.agentLongMemoryEnabled,
 				agentLongMemoryTopK: row.agentLongMemoryTopK,
 				agentLongMemoryMinScore: row.agentLongMemoryMinScore,

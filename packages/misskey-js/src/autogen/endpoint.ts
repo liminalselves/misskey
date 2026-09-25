@@ -92,6 +92,8 @@ import type {
 	AdminAgentsRedeemCodesRevokeResponse,
 	AdminAgentsReportsOverviewRequest,
 	AdminAgentsReportsOverviewResponse,
+	AdminAgentsReportsTopUsersRequest,
+	AdminAgentsReportsTopUsersResponse,
 	AdminAgentsReviewDiffRequest,
 	AdminAgentsReviewDiffResponse,
 	AdminAgentsReviewListPendingRequest,
@@ -228,10 +230,14 @@ import type {
 	AdminUpdateProxyAccountRequest,
 	AdminUpdateProxyAccountResponse,
 	AdminUpdateUserNoteRequest,
+	AdminUsersAgentBillingLogsRequest,
+	AdminUsersAgentBillingLogsResponse,
 	AdminUsersAgentSuccessRateRequest,
 	AdminUsersAgentSuccessRateResponse,
 	AdminUsersAgentUsageRequest,
 	AdminUsersAgentUsageResponse,
+	AdminUsersAgentUsageDetailsRequest,
+	AdminUsersAgentUsageDetailsResponse,
 	AgentsBillingLogsRequest,
 	AgentsBillingLogsResponse,
 	AgentsByokModelsCreateRequest,
@@ -349,6 +355,8 @@ import type {
 	AgentsSessionsCreateResponse,
 	AgentsSessionsDeleteRequest,
 	AgentsSessionsDeleteResponse,
+	AgentsSessionsExportRequest,
+	AgentsSessionsExportResponse,
 	AgentsSessionsListMineResponse,
 	AgentsSessionsPreviewModelChangeRequest,
 	AgentsSessionsPreviewModelChangeResponse,
@@ -980,6 +988,7 @@ export type Endpoints = {
 	'admin/agents/redeem-codes/list': { req: AdminAgentsRedeemCodesListRequest; res: AdminAgentsRedeemCodesListResponse };
 	'admin/agents/redeem-codes/revoke': { req: AdminAgentsRedeemCodesRevokeRequest; res: AdminAgentsRedeemCodesRevokeResponse };
 	'admin/agents/reports/overview': { req: AdminAgentsReportsOverviewRequest; res: AdminAgentsReportsOverviewResponse };
+	'admin/agents/reports/top-users': { req: AdminAgentsReportsTopUsersRequest; res: AdminAgentsReportsTopUsersResponse };
 	'admin/agents/review/diff': { req: AdminAgentsReviewDiffRequest; res: AdminAgentsReviewDiffResponse };
 	'admin/agents/review/list-pending': { req: AdminAgentsReviewListPendingRequest; res: AdminAgentsReviewListPendingResponse };
 	'admin/agents/review/logs': { req: AdminAgentsReviewLogsRequest; res: AdminAgentsReviewLogsResponse };
@@ -1080,8 +1089,10 @@ export type Endpoints = {
 	'admin/update-meta': { req: AdminUpdateMetaRequest; res: EmptyResponse };
 	'admin/update-proxy-account': { req: AdminUpdateProxyAccountRequest; res: AdminUpdateProxyAccountResponse };
 	'admin/update-user-note': { req: AdminUpdateUserNoteRequest; res: EmptyResponse };
+	'admin/users/agent-billing-logs': { req: AdminUsersAgentBillingLogsRequest; res: AdminUsersAgentBillingLogsResponse };
 	'admin/users/agent-success-rate': { req: AdminUsersAgentSuccessRateRequest; res: AdminUsersAgentSuccessRateResponse };
 	'admin/users/agent-usage': { req: AdminUsersAgentUsageRequest; res: AdminUsersAgentUsageResponse };
+	'admin/users/agent-usage-details': { req: AdminUsersAgentUsageDetailsRequest; res: AdminUsersAgentUsageDetailsResponse };
 	'agents/billing-logs': { req: AgentsBillingLogsRequest; res: AgentsBillingLogsResponse };
 	'agents/byok/models/create': { req: AgentsByokModelsCreateRequest; res: AgentsByokModelsCreateResponse };
 	'agents/byok/models/delete': { req: AgentsByokModelsDeleteRequest; res: AgentsByokModelsDeleteResponse };
@@ -1144,6 +1155,7 @@ export type Endpoints = {
 	'agents/sessions/context-window': { req: AgentsSessionsContextWindowRequest; res: AgentsSessionsContextWindowResponse };
 	'agents/sessions/create': { req: AgentsSessionsCreateRequest; res: AgentsSessionsCreateResponse };
 	'agents/sessions/delete': { req: AgentsSessionsDeleteRequest; res: AgentsSessionsDeleteResponse };
+	'agents/sessions/export': { req: AgentsSessionsExportRequest; res: AgentsSessionsExportResponse };
 	'agents/sessions/list-mine': { req: EmptyRequest; res: AgentsSessionsListMineResponse };
 	'agents/sessions/preview-model-change': { req: AgentsSessionsPreviewModelChangeRequest; res: AgentsSessionsPreviewModelChangeResponse };
 	'agents/sessions/read': { req: AgentsSessionsReadRequest; res: EmptyResponse };

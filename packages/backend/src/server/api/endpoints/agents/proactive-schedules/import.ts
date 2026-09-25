@@ -10,8 +10,8 @@ import { Endpoint } from '@/server/api/endpoint-base.js';
 import { DI } from '@/di-symbols.js';
 import { ApiError } from '@/server/api/error.js';
 import { AgentService } from '@/core/AgentService.js';
-import { AgentProactiveScheduleService } from '@/core/AgentProactiveScheduleService.js';
-import type { AgentProactiveScheduleTrigger } from '@/models/AgentProactiveSchedule.js';
+import { AgentProactiveScheduleService, ScheduleControlError } from '@/core/AgentProactiveScheduleService.js';
+import { agentProactiveScheduleStatuses, type AgentProactiveScheduleTrigger } from '@/models/AgentProactiveSchedule.js';
 
 export const meta = {
 	tags: ['agents'],
@@ -31,19 +31,24 @@ export const paramDef = {
 	type: 'object',
 	properties: {
 		sessionId: { type: 'string', format: 'misskey:id' },
-		schedules: {
-			type: 'array',
-			maxItems: 20,
-			items: {
-				type: 'object',
-				properties: {
-					description: { type: 'string', minLength: 1, maxLength: 80 },
-					status: { type: 'string', enum: ['active', 'paused'] },
-					trigger: { type: 'object', additionalProperties: true },
+			schedules: {
+				type: 'array',
+				maxItems: 5000,
+				items: {
+					type: 'object',
+					properties: {
+						description: { type: 'string', minLength: 1, maxLength: 80 },
+						status: { type: 'string', enum: agentProactiveScheduleStatuses },
+						trigger: { type: 'object', additionalProperties: true },
+						createdAt: { type: 'string', nullable: true },
+						updatedAt: { type: 'string', nullable: true },
+						nextRunAt: { type: 'string', nullable: true },
+						lastRunAt: { type: 'string', nullable: true },
+						remainingRuns: { type: 'integer', nullable: true, minimum: 0 },
+					},
+					required: ['description', 'status', 'trigger'],
 				},
-				required: ['description', 'status', 'trigger'],
 			},
-		},
 	},
 	required: ['sessionId', 'schedules'],
 } as const;
@@ -83,16 +88,38 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			const session = await this.agentSessionsRepository.findOneBy({ id: ps.sessionId });
 			if (!session || session.userId !== me.id) throw new ApiError({ message: 'No such session.', code: 'NO_SUCH_SESSION', id: 'd3f0b2a4-9c1e-4b7a-8f5d-2a6c9e1b4f07' });
 
-			const normalized = ps.schedules
-				.map(item => ({
+			const normalized = ps.schedules.map(item => {
+				const trigger = parseImportedTrigger(item.trigger);
+				if (trigger == null) {
+					throw new ApiError({ message: 'Invalid proactive schedule trigger.', code: 'INVALID_PARAM', id: '97b93fc9-55bd-45fe-a1b6-775aa45bd65a' });
+				}
+				return {
 					description: item.description,
 					status: item.status,
-					trigger: parseImportedTrigger(item.trigger),
-				}))
-				.filter((item): item is { description: string; status: 'active' | 'paused'; trigger: AgentProactiveScheduleTrigger } => item.trigger != null);
+					trigger,
+					createdAt: item.createdAt,
+					updatedAt: item.updatedAt,
+					nextRunAt: item.nextRunAt,
+					lastRunAt: item.lastRunAt,
+					remainingRuns: item.remainingRuns,
+				};
+			});
 
-			const importedCount = await this.agentProactiveScheduleService.importSchedules(session.id, normalized);
-			return { importedCount };
+			try {
+				const importedCount = await this.agentProactiveScheduleService.importSchedules(session.id, normalized);
+				return { importedCount };
+			} catch (error) {
+				if (error instanceof ScheduleControlError) {
+					throw new ApiError({
+						message: error.message,
+						code: error.code,
+						id: '0abcfdb9-e2e2-4301-a944-b31bcf9a0d30',
+						kind: 'client',
+						httpStatusCode: 400,
+					});
+				}
+				throw error;
+			}
 		});
 	}
 }

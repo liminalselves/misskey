@@ -4272,21 +4272,32 @@ async function jumpToChatMessage(messageId: string) {
 	await scrollToMessage(messageId);
 }
 
-type SessionContextRole = 'user' | 'assistant';
-/** v6 消息行：可信原始发送时间仅在可用时导出 */
+type SessionContextRole = 'user' | 'assistant' | 'system';
 type SessionContextRow = {
+	sourceId?: string | null;
 	role: SessionContextRole;
 	content: string;
 	createdAt?: string;
+	timeTrusted?: boolean;
 	imageFileId?: string | null;
 	imageRecognitionStatus?: 'succeeded' | 'failed' | null;
 	imageRecognitionDescription?: string | null;
+	rawContent?: string | null;
+	proactiveScheduleControlRaw?: string | null;
+	proactiveScheduleControlError?: { code: string; message: string; processedAt: string } | null;
+	isInternal?: boolean;
+	statsDialogueStyleId?: string | null;
+	promptTokens?: number | null;
+	completionTokens?: number | null;
 };
 const SESSION_IMPORT_MAX_MESSAGES = 10_000;
 const SESSION_IMPORT_MAX_MESSAGE_CHARS = 16_000;
+const SESSION_IMPORT_MAX_SCHEDULES = 5000;
+const SESSION_IMPORT_MAX_STICKIES = 500;
 type SessionExportSettings = {
 	name?: string;
 	dialogueStyleId?: string | null;
+	plazaStatsDialogueStyleId?: string | null;
 	agentModelId?: string | null;
 	agentVisionModelId?: string | null;
 	agentLongMemoryEnabled?: boolean;
@@ -4303,34 +4314,48 @@ type SessionExportSettings = {
 	timeAwarenessEnabled?: boolean;
 	randomProactiveEnabled?: boolean;
 	scheduledProactiveEnabled?: boolean;
-	/** v5 新增：主动消息高级设置（会话级覆盖） */
 	randomProactiveMinSilenceMinutes?: number | null;
 	randomProactiveMaxWindowMinutes?: number | null;
 	randomProactiveDaytimeWeight?: number | null;
 	randomProactiveRecencyBias?: number | null;
 	randomProactiveChainLength?: number;
+	ruleOverrides?: Record<string, boolean>;
 };
-/** v3 导出的定时主动消息计划（仅保留可重建所需字段，id/nextRunAt 等由导入端重新计算） */
 type SessionExportProactiveSchedule = {
+	sourceId?: string;
+	createdAt?: string;
+	updatedAt?: string;
 	description: string;
-	status: 'active' | 'paused';
+	status: 'active' | 'paused' | 'completed' | 'cancelled';
 	trigger: { type: 'once'; at: string } | { type: 'recurring'; cron: string; repeat: { mode: 'count'; count: number } | { mode: 'unlimited' } };
+	nextRunAt?: string | null;
+	lastRunAt?: string | null;
+	remainingRuns?: number | null;
 };
-/** v4 导出的压缩便签（仅保留可重建所需字段，id/消息关联等由导入端重新生成） */
 type SessionExportCompressionSticky = {
+	sourceId?: string;
+	createdAt?: string;
+	updatedAt?: string;
+	fromMessageId?: string | null;
+	toMessageId?: string | null;
 	summaryText: string;
 	state: 'queued' | 'compressing' | 'dormant' | 'active' | 'stale' | 'failed';
 	userOverridden: boolean;
+	sourceFingerprint?: string | null;
+	errorMessage?: string | null;
+	lastModelId?: string | null;
 	sortIndex: number;
+	retryCount?: number;
 };
 type SessionExportPayload = {
-	format: 'misskey-agent-session-export-v6';
-	version: 6;
+	format: 'misskey-agent-session-export-v7';
+	version: 7;
 	sessionId: string;
 	exportedAt: string;
 	source: {
-		characterId: string | null;
-		sessionKind: 'draft_test' | 'community' | null;
+		characterId: string;
+		sessionKind: 'draft_test' | 'community';
+		createdAt: string;
 	};
 	settings: SessionExportSettings;
 	proactiveSchedules: SessionExportProactiveSchedule[];
@@ -4343,85 +4368,14 @@ type ParsedSessionImportPayload = {
 	proactiveSchedules: SessionExportProactiveSchedule[];
 	compressionStickies: SessionExportCompressionSticky[];
 	legacy: boolean;
+	version: number | null;
+	sessionCreatedAt: string | null;
 };
 
 function normalizeImportedMessageCreatedAt(value: unknown): string | null {
 	if (typeof value !== 'string') return null;
 	const time = new Date(value).getTime();
 	return Number.isFinite(time) ? new Date(time).toISOString() : null;
-}
-
-function normalizeSessionContextRows(rows: AgentMsg[]): SessionContextRow[] {
-	const sortedAsc = [...rows].sort((a, b) => {
-		const ta = new Date(a.createdAt).getTime();
-		const tb = new Date(b.createdAt).getTime();
-		if (ta !== tb) return ta - tb;
-		return a.id.localeCompare(b.id);
-	});
-	const out: SessionContextRow[] = [];
-	for (const row of sortedAsc) {
-		if (row.role !== 'user' && row.role !== 'assistant') continue;
-		const createdAt = row.timeTrusted === true ? normalizeImportedMessageCreatedAt(row.createdAt) : null;
-		// v5: 包含图片附件与识别结果（AgentMsg 使用 file 字段存储 DriveFile）
-		out.push({
-			role: row.role,
-			content: row.content,
-			...(createdAt != null ? { createdAt } : {}),
-			imageFileId: row.file?.id ?? null,
-			imageRecognitionStatus: row.imageRecognitionStatus ?? null,
-			imageRecognitionDescription: row.imageRecognitionDescription ?? null,
-		});
-	}
-	return out;
-}
-
-function buildSessionExportSettings(): SessionExportSettings {
-	const s = session.value;
-	if (s == null) return {};
-	return {
-		name: s.name,
-		dialogueStyleId: s.dialogueStyleId ?? null,
-		agentModelId: s.agentModelId ?? null,
-		agentVisionModelId: s.agentVisionModelId ?? null,
-		agentLongMemoryEnabled: s.agentLongMemoryEnabled ?? false,
-		agentLongMemoryTopK: s.agentLongMemoryTopK ?? 8,
-		agentLongMemoryMinScore: s.agentLongMemoryMinScore ?? null,
-		agentLongMemoryInjectMaxChars: s.agentLongMemoryInjectMaxChars ?? 4000,
-		agentLongMemoryAddMaxRounds: s.agentLongMemoryAddMaxRounds ?? null,
-		agentLongMemoryAddEveryNRounds: s.agentLongMemoryAddEveryNRounds ?? null,
-		agentLongMemoryProvider: s.agentLongMemoryProvider ?? 'none',
-		agentCompressionModelId: s.agentCompressionModelId ?? null,
-		agentImageModelId: s.agentImageModelId ?? null,
-		agentImageSettings: s.agentImageSettings ?? {},
-		segmentedOutputEnabled: s.segmentedOutputEnabled === true,
-		timeAwarenessEnabled: s.timeAwarenessEnabled !== false,
-		randomProactiveEnabled: s.randomProactiveEnabled === true,
-		scheduledProactiveEnabled: s.scheduledProactiveEnabled === true,
-		// v5 新增：主动消息高级设置
-		randomProactiveMinSilenceMinutes: s.randomProactiveMinSilenceMinutes ?? null,
-		randomProactiveMaxWindowMinutes: s.randomProactiveMaxWindowMinutes ?? null,
-		randomProactiveDaytimeWeight: s.randomProactiveDaytimeWeight ?? null,
-		randomProactiveRecencyBias: s.randomProactiveRecencyBias ?? null,
-		randomProactiveChainLength: s.randomProactiveChainLength ?? 1,
-	};
-}
-
-async function fetchAllSessionMessages(): Promise<AgentMsg[]> {
-	const limit = 100;
-	const all: AgentMsg[] = [];
-	let untilId: string | null = null;
-	for (let i = 0; i < 1000; i++) {
-		const list = await misskeyApi('agents/messages/timeline', {
-			sessionId,
-			limit,
-			untilId,
-		}) as AgentMsg[];
-		if (list.length === 0) break;
-		all.push(...list);
-		if (list.length < limit) break;
-		untilId = list[list.length - 1]!.id;
-	}
-	return all;
 }
 
 function downloadJsonFile(filename: string, content: string) {
@@ -4436,71 +4390,14 @@ function downloadJsonFile(filename: string, content: string) {
 	}, 0);
 }
 
-async function buildSessionExportProactiveSchedules(): Promise<SessionExportProactiveSchedule[]> {
-	try {
-		const list = await (misskeyApi as unknown as (
-			endpoint: 'agents/proactive-schedules/list',
-			data: { sessionId: string },
-		) => Promise<ProactiveSchedule[]>)('agents/proactive-schedules/list', { sessionId });
-		return list
-			.filter(s => s.status === 'active' || s.status === 'paused')
-			.map(s => ({
-				description: s.description,
-				status: s.status as 'active' | 'paused',
-				trigger: s.trigger,
-			}));
-	} catch {
-		return [];
-	}
-}
-
-/** v4 导出：获取当前会话的压缩便签 */
-async function buildSessionExportCompressionStickies(): Promise<SessionExportCompressionSticky[]> {
-	try {
-		const list = await (misskeyApi as unknown as (
-			endpoint: 'agents/compression-sticky/list',
-			data: { sessionId: string },
-		) => Promise<Array<{
-			summaryText: string;
-			state: string;
-			userOverridden: boolean;
-			sortIndex: number;
-		}>>)('agents/compression-sticky/list', { sessionId });
-		return list.map(s => ({
-			summaryText: s.summaryText,
-			state: s.state as SessionExportCompressionSticky['state'],
-			userOverridden: s.userOverridden,
-			sortIndex: s.sortIndex,
-		}));
-	} catch {
-		return [];
-	}
-}
-
 async function exportSessionContext() {
 	if (contextExporting.value) return;
 	contextExporting.value = true;
 	try {
-		const [all, proactiveSchedulesForExport, compressionStickiesForExport] = await Promise.all([
-			fetchAllSessionMessages(),
-			buildSessionExportProactiveSchedules(),
-			buildSessionExportCompressionStickies(),
-		]);
-		const messagesForContext = normalizeSessionContextRows(all);
-		const payload: SessionExportPayload = {
-			format: 'misskey-agent-session-export-v6',
-			version: 6,
-			sessionId,
-			exportedAt: new Date().toISOString(),
-			source: {
-				characterId: session.value?.characterId ?? null,
-				sessionKind: session.value?.sessionKind ?? null,
-			},
-			settings: buildSessionExportSettings(),
-			proactiveSchedules: proactiveSchedulesForExport,
-			compressionStickies: compressionStickiesForExport,
-			messages: messagesForContext,
-		};
+		const payload = await (misskeyApi as unknown as (
+			endpoint: 'agents/sessions/export',
+			data: { sessionId: string },
+		) => Promise<SessionExportPayload>)('agents/sessions/export', { sessionId });
 		const json = JSON.stringify(payload, null, 2);
 		const filename = `agent-session-${sessionId}-${Date.now()}.json`;
 		downloadJsonFile(filename, json);
@@ -4524,122 +4421,198 @@ function parseImportedContext(text: string): ParsedSessionImportPayload {
 	} catch {
 		throw new Error(i18n.ts._agents.sessionMemoryImportContextInvalidJson);
 	}
-	if (parsed == null || typeof parsed !== 'object') {
+	if (parsed == null || typeof parsed !== 'object' || Array.isArray(parsed)) {
 		throw new Error(i18n.ts._agents.sessionMemoryImportContextInvalidFormat);
 	}
-	const rawMessages = (parsed as { messages?: unknown }).messages;
+	const root = parsed as Record<string, unknown>;
+	const formatVersion = typeof root.format === 'string' ? /^misskey-agent-session-export-v(\d+)$/.exec(root.format)?.[1] : undefined;
+	const version = typeof root.version === 'number' && Number.isInteger(root.version) && root.version >= 1 && root.version <= 7
+		? root.version
+		: formatVersion != null && Number(formatVersion) >= 1 && Number(formatVersion) <= 7 ? Number(formatVersion) : null;
+	const legacy = version == null;
+	const isV7 = version === 7;
+	const rawMessages = root.messages;
 	if (!Array.isArray(rawMessages)) {
 		throw new Error(i18n.ts._agents.sessionMemoryImportContextInvalidFormat);
 	}
-	const out: SessionContextRow[] = [];
 	if (rawMessages.length > SESSION_IMPORT_MAX_MESSAGES) {
 		throw new Error(`导入失败：最多只能导入 ${SESSION_IMPORT_MAX_MESSAGES} 条消息。`);
 	}
-	for (const row of rawMessages) {
-		if (row == null || typeof row !== 'object') {
-			throw new Error(i18n.ts._agents.sessionMemoryImportContextInvalidFormat);
-		}
-		const role = (row as { role?: unknown }).role;
-		const content = (row as { content?: unknown }).content;
-		if ((role !== 'user' && role !== 'assistant') || typeof content !== 'string') {
-			throw new Error(i18n.ts._agents.sessionMemoryImportContextInvalidFormat);
-		}
-		if (content.trim() === '') {
-			throw new Error(i18n.ts._agents.sessionMemoryImportContextEmptyContent);
-		}
-		if (content.length > SESSION_IMPORT_MAX_MESSAGE_CHARS) {
-			throw new Error(`导入失败：单条消息不能超过 ${SESSION_IMPORT_MAX_MESSAGE_CHARS} 字符。`);
-		}
-		// v6: 解析可用的原始发送时间，以及 v5 图片附件字段。
-		const createdAt = normalizeImportedMessageCreatedAt((row as { createdAt?: unknown }).createdAt);
-		const imageFileId = (row as { imageFileId?: unknown }).imageFileId;
-		const imageRecognitionStatus = (row as { imageRecognitionStatus?: unknown }).imageRecognitionStatus;
-		const imageRecognitionDescription = (row as { imageRecognitionDescription?: unknown }).imageRecognitionDescription;
-		out.push({
-			role,
-			content,
-			...(createdAt != null ? { createdAt } : {}),
-			imageFileId: typeof imageFileId === 'string' ? imageFileId : null,
-			imageRecognitionStatus: imageRecognitionStatus === 'succeeded' || imageRecognitionStatus === 'failed' ? imageRecognitionStatus : null,
-			imageRecognitionDescription: typeof imageRecognitionDescription === 'string' ? imageRecognitionDescription : null,
-		});
-	}
-	const settings = parseImportedSessionSettings((parsed as { settings?: unknown }).settings);
-	const proactiveSchedules = parseImportedProactiveSchedules((parsed as { proactiveSchedules?: unknown }).proactiveSchedules);
-	const compressionStickies = parseImportedCompressionStickies((parsed as { compressionStickies?: unknown }).compressionStickies);
-	const format = (parsed as { format?: unknown }).format;
-	const version = (parsed as { version?: unknown }).version;
-	const isSessionExport = format === 'misskey-agent-session-export-v1'
-		|| format === 'misskey-agent-session-export-v2'
-		|| format === 'misskey-agent-session-export-v3'
-		|| format === 'misskey-agent-session-export-v4'
-		|| format === 'misskey-agent-session-export-v5'
-		|| format === 'misskey-agent-session-export-v6'
-		|| version === 1 || version === 2 || version === 3 || version === 4 || version === 5 || version === 6;
-	const legacy = !isSessionExport;
-	if (out.length === 0 && (legacy || settings == null || Object.keys(settings).length === 0)) {
+	const messages: SessionContextRow[] = rawMessages.map(row => parseImportedMessage(row, isV7));
+	const settings = parseImportedSessionSettings(root.settings);
+	const proactiveSchedules = parseImportedProactiveSchedules(root.proactiveSchedules, isV7);
+	const compressionStickies = parseImportedCompressionStickies(root.compressionStickies, isV7);
+	if (messages.length === 0 && (legacy || settings == null || Object.keys(settings).length === 0)) {
 		throw new Error(i18n.ts._agents.sessionMemoryImportContextInvalidFormat);
 	}
-	return {
-		messages: out,
-		settings,
-		proactiveSchedules,
-		compressionStickies,
-		legacy,
-	};
+	const source = root.source != null && typeof root.source === 'object' && !Array.isArray(root.source)
+		? root.source as Record<string, unknown>
+		: null;
+	const sessionCreatedAt = isV7 ? normalizeImportedMessageCreatedAt(source?.createdAt) : null;
+	return { messages, settings, proactiveSchedules, compressionStickies, legacy, version, sessionCreatedAt };
 }
 
-/** 解析导入文件中的定时主动消息计划；无效条目安全忽略（不报错），仅保留可重建的字段。 */
-function parseImportedProactiveSchedules(raw: unknown): SessionExportProactiveSchedule[] {
-	if (raw == null || !Array.isArray(raw)) return [];
+function parseImportedMessage(raw: unknown, isV7: boolean): SessionContextRow {
+	if (raw == null || typeof raw !== 'object' || Array.isArray(raw)) {
+		throw new Error(i18n.ts._agents.sessionMemoryImportContextInvalidFormat);
+	}
+	const row = raw as Record<string, unknown>;
+	const role = row.role;
+	const content = row.content;
+	if ((role !== 'user' && role !== 'assistant' && !(isV7 && role === 'system')) || typeof content !== 'string') {
+		throw new Error(i18n.ts._agents.sessionMemoryImportContextInvalidFormat);
+	}
+	if (!isV7 && content.trim() === '') {
+		throw new Error(i18n.ts._agents.sessionMemoryImportContextEmptyContent);
+	}
+	if (!isV7 && content.length > SESSION_IMPORT_MAX_MESSAGE_CHARS) {
+		throw new Error(`导入失败：旧版文件的单条消息不能超过 ${SESSION_IMPORT_MAX_MESSAGE_CHARS} 字符。`);
+	}
+	const createdAt = normalizeImportedMessageCreatedAt(row.createdAt);
+	const result: SessionContextRow = {
+		role,
+		content,
+		...(createdAt != null ? { createdAt } : {}),
+		imageFileId: typeof row.imageFileId === 'string' ? row.imageFileId : null,
+		imageRecognitionStatus: row.imageRecognitionStatus === 'succeeded' || row.imageRecognitionStatus === 'failed' ? row.imageRecognitionStatus : null,
+		imageRecognitionDescription: typeof row.imageRecognitionDescription === 'string' ? row.imageRecognitionDescription : null,
+	};
+	if (!isV7) return result;
+	result.sourceId = validateImportNullableString(row.sourceId, 'messages.sourceId', 128);
+	result.timeTrusted = row.timeTrusted === true;
+	result.rawContent = validateImportNullableText(row.rawContent, 'messages.rawContent');
+	result.proactiveScheduleControlRaw = validateImportNullableText(row.proactiveScheduleControlRaw, 'messages.proactiveScheduleControlRaw');
+	result.proactiveScheduleControlError = parseImportedScheduleControlError(row.proactiveScheduleControlError);
+	result.isInternal = row.isInternal === true;
+	result.statsDialogueStyleId = validateImportNullableString(row.statsDialogueStyleId, 'messages.statsDialogueStyleId', 128);
+	result.promptTokens = validateImportNullableInteger(row.promptTokens, 'messages.promptTokens');
+	result.completionTokens = validateImportNullableInteger(row.completionTokens, 'messages.completionTokens');
+	return result;
+}
+
+function parseImportedScheduleControlError(raw: unknown): SessionContextRow['proactiveScheduleControlError'] {
+	if (raw == null) return null;
+	if (typeof raw !== 'object' || Array.isArray(raw)) throw new Error('消息配置无效：proactiveScheduleControlError 必须是对象或 null。');
+	const value = raw as Record<string, unknown>;
+	if (typeof value.code !== 'string' || typeof value.message !== 'string' || typeof value.processedAt !== 'string') {
+		throw new Error('消息配置无效：proactiveScheduleControlError 字段不完整。');
+	}
+	return { code: value.code.slice(0, 128), message: value.message.slice(0, 10000), processedAt: value.processedAt.slice(0, 128) };
+}
+
+function parseImportedProactiveSchedules(raw: unknown, isV7: boolean): SessionExportProactiveSchedule[] {
+	if (raw == null) return [];
+	if (!Array.isArray(raw) || raw.length > SESSION_IMPORT_MAX_SCHEDULES) throw new Error(`导入失败：定时计划最多 ${SESSION_IMPORT_MAX_SCHEDULES} 条。`);
 	const out: SessionExportProactiveSchedule[] = [];
 	for (const item of raw) {
-		if (item == null || typeof item !== 'object' || Array.isArray(item)) continue;
-		const rec = item as Record<string, unknown>;
-		if (typeof rec.description !== 'string' || rec.description.trim() === '') continue;
-		if (rec.status !== 'active' && rec.status !== 'paused') continue;
-		const trigger = rec.trigger;
-		if (trigger == null || typeof trigger !== 'object' || Array.isArray(trigger)) continue;
-		const t = trigger as Record<string, unknown>;
-		const description = rec.description.trim();
-		const status = rec.status;
-		if (t.type === 'once' && typeof t.at === 'string') {
-			out.push({ description, status, trigger: { type: 'once', at: t.at } });
-		} else if (t.type === 'recurring' && typeof t.cron === 'string') {
-			const repeat = t.repeat;
-			if (repeat != null && typeof repeat === 'object' && !Array.isArray(repeat)) {
-				const r = repeat as Record<string, unknown>;
-				if (r.mode === 'unlimited') {
-					out.push({ description, status, trigger: { type: 'recurring', cron: t.cron, repeat: { mode: 'unlimited' } } });
-				} else if (r.mode === 'count' && typeof r.count === 'number' && Number.isInteger(r.count)) {
-					out.push({ description, status, trigger: { type: 'recurring', cron: t.cron, repeat: { mode: 'count', count: r.count } } });
-				}
-			}
+		if (item == null || typeof item !== 'object' || Array.isArray(item)) {
+			if (isV7) throw new Error('定时计划格式无效。');
+			continue;
 		}
+		const rec = item as Record<string, unknown>;
+		if (typeof rec.description !== 'string' || rec.description.trim() === '') {
+			if (isV7) throw new Error('定时计划描述不能为空。');
+			continue;
+		}
+		const validStatus = rec.status === 'active' || rec.status === 'paused' || (isV7 && (rec.status === 'completed' || rec.status === 'cancelled'));
+		if (!validStatus) {
+			if (isV7) throw new Error('定时计划状态无效。');
+			continue;
+		}
+		const trigger = parseImportedScheduleTrigger(rec.trigger);
+		if (trigger == null) {
+			if (isV7) throw new Error('定时计划触发器无效。');
+			continue;
+		}
+		out.push({
+			sourceId: validateImportNullableString(rec.sourceId, 'proactiveSchedules.sourceId', 128) ?? undefined,
+			createdAt: normalizeImportedMessageCreatedAt(rec.createdAt) ?? undefined,
+			updatedAt: normalizeImportedMessageCreatedAt(rec.updatedAt) ?? undefined,
+			description: rec.description.trim().slice(0, 80),
+			status: rec.status as SessionExportProactiveSchedule['status'],
+			trigger,
+			nextRunAt: normalizeImportedNullableDate(rec.nextRunAt),
+			lastRunAt: normalizeImportedNullableDate(rec.lastRunAt),
+			remainingRuns: rec.remainingRuns === undefined
+				? undefined
+				: validateImportNullableInteger(rec.remainingRuns, 'proactiveSchedules.remainingRuns'),
+		});
 	}
 	return out;
 }
 
-/** v4 导入：解析压缩便签；无效条目安全忽略（不报错），仅保留可重建的字段。 */
-function parseImportedCompressionStickies(raw: unknown): SessionExportCompressionSticky[] {
-	if (raw == null || !Array.isArray(raw)) return [];
+function parseImportedScheduleTrigger(raw: unknown): SessionExportProactiveSchedule['trigger'] | null {
+	if (raw == null || typeof raw !== 'object' || Array.isArray(raw)) return null;
+	const trigger = raw as Record<string, unknown>;
+	if (trigger.type === 'once' && typeof trigger.at === 'string') return { type: 'once', at: trigger.at };
+	if (trigger.type !== 'recurring' || typeof trigger.cron !== 'string' || trigger.repeat == null || typeof trigger.repeat !== 'object' || Array.isArray(trigger.repeat)) return null;
+	const repeat = trigger.repeat as Record<string, unknown>;
+	if (repeat.mode === 'unlimited') return { type: 'recurring', cron: trigger.cron, repeat: { mode: 'unlimited' } };
+	if (repeat.mode === 'count' && typeof repeat.count === 'number' && Number.isInteger(repeat.count)) return { type: 'recurring', cron: trigger.cron, repeat: { mode: 'count', count: repeat.count } };
+	return null;
+}
+
+function parseImportedCompressionStickies(raw: unknown, isV7: boolean): SessionExportCompressionSticky[] {
+	if (raw == null) return [];
+	if (!Array.isArray(raw) || raw.length > SESSION_IMPORT_MAX_STICKIES) throw new Error(`导入失败：压缩便签最多 ${SESSION_IMPORT_MAX_STICKIES} 条。`);
 	const validStates = new Set(['queued', 'compressing', 'dormant', 'active', 'stale', 'failed']);
 	const out: SessionExportCompressionSticky[] = [];
 	for (const item of raw) {
-		if (item == null || typeof item !== 'object' || Array.isArray(item)) continue;
+		if (item == null || typeof item !== 'object' || Array.isArray(item)) {
+			if (isV7) throw new Error('压缩便签格式无效。');
+			continue;
+		}
 		const rec = item as Record<string, unknown>;
-		if (typeof rec.summaryText !== 'string' || rec.summaryText.trim() === '') continue;
+		if (typeof rec.summaryText !== 'string' || rec.summaryText.trim() === '') {
+			if (isV7) throw new Error('压缩便签内容不能为空。');
+			continue;
+		}
 		const state = typeof rec.state === 'string' && validStates.has(rec.state)
 			? rec.state as SessionExportCompressionSticky['state']
 			: 'active';
 		out.push({
+			sourceId: validateImportNullableString(rec.sourceId, 'compressionStickies.sourceId', 128) ?? undefined,
+			createdAt: normalizeImportedMessageCreatedAt(rec.createdAt) ?? undefined,
+			updatedAt: normalizeImportedMessageCreatedAt(rec.updatedAt) ?? undefined,
+			fromMessageId: validateImportNullableString(rec.fromMessageId, 'compressionStickies.fromMessageId', 128),
+			toMessageId: validateImportNullableString(rec.toMessageId, 'compressionStickies.toMessageId', 128),
 			summaryText: rec.summaryText,
 			state,
 			userOverridden: rec.userOverridden === true,
+			sourceFingerprint: validateImportNullableString(rec.sourceFingerprint, 'compressionStickies.sourceFingerprint', 128),
+			errorMessage: validateImportNullableString(rec.errorMessage, 'compressionStickies.errorMessage', 50000),
+			lastModelId: validateImportNullableString(rec.lastModelId, 'compressionStickies.lastModelId', 64),
 			sortIndex: typeof rec.sortIndex === 'number' && Number.isInteger(rec.sortIndex) ? rec.sortIndex : 0,
+			retryCount: validateImportNullableInteger(rec.retryCount, 'compressionStickies.retryCount') ?? 0,
 		});
 	}
 	return out;
+}
+
+function validateImportNullableText(value: unknown, field: string): string | null {
+	if (value == null) return null;
+	if (typeof value !== 'string') throw new Error(`导入字段无效：${field} 必须是字符串或 null。`);
+	return value;
+}
+
+function validateImportNullableString(value: unknown, field: string, maxLength: number): string | null {
+	const text = validateImportNullableText(value, field);
+	if (text != null && text.length > maxLength) throw new Error(`导入字段无效：${field} 不能超过 ${maxLength} 字符。`);
+	return text;
+}
+
+function validateImportNullableInteger(value: unknown, field: string): number | null {
+	if (value == null) return null;
+	if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) throw new Error(`导入字段无效：${field} 必须是非负整数或 null。`);
+	return value;
+}
+
+function normalizeImportedNullableDate(value: unknown): string | null | undefined {
+	if (value === undefined) return undefined;
+	if (value === null) return null;
+	const normalized = normalizeImportedMessageCreatedAt(value);
+	if (normalized == null) throw new Error('导入字段无效：日期必须是可解析的字符串或 null。');
+	return normalized;
 }
 
 function parseImportedSessionSettings(raw: unknown): SessionExportSettings | null {
@@ -4652,6 +4625,7 @@ function parseImportedSessionSettings(raw: unknown): SessionExportSettings | nul
 
 	if ('name' in src) out.name = validateOptionalString(src.name, 'name', 1, 256, false) ?? undefined;
 	if ('dialogueStyleId' in src) out.dialogueStyleId = validateOptionalString(src.dialogueStyleId, 'dialogueStyleId', 1, 128, true);
+	if ('plazaStatsDialogueStyleId' in src) out.plazaStatsDialogueStyleId = validateOptionalString(src.plazaStatsDialogueStyleId, 'plazaStatsDialogueStyleId', 1, 128, true);
 	if ('agentModelId' in src) out.agentModelId = validateOptionalString(src.agentModelId, 'agentModelId', 1, 64, true);
 	if ('agentVisionModelId' in src) out.agentVisionModelId = validateOptionalString(src.agentVisionModelId, 'agentVisionModelId', 1, 128, true);
 	if ('agentLongMemoryEnabled' in src) out.agentLongMemoryEnabled = validateBoolean(src.agentLongMemoryEnabled, 'agentLongMemoryEnabled');
@@ -4679,6 +4653,7 @@ function parseImportedSessionSettings(raw: unknown): SessionExportSettings | nul
 	if ('randomProactiveDaytimeWeight' in src) out.randomProactiveDaytimeWeight = validateNullableInteger(src.randomProactiveDaytimeWeight, 'randomProactiveDaytimeWeight', 1, 10);
 	if ('randomProactiveRecencyBias' in src) out.randomProactiveRecencyBias = validateNullableInteger(src.randomProactiveRecencyBias, 'randomProactiveRecencyBias', 1, 10);
 	if ('randomProactiveChainLength' in src) out.randomProactiveChainLength = validateInteger(src.randomProactiveChainLength, 'randomProactiveChainLength', 1, 100);
+	if ('ruleOverrides' in src) out.ruleOverrides = validateRuleOverrides(src.ruleOverrides);
 
 	return out;
 }
@@ -4686,6 +4661,22 @@ function parseImportedSessionSettings(raw: unknown): SessionExportSettings | nul
 function validateBoolean(value: unknown, field: string): boolean {
 	if (typeof value !== 'boolean') throw new Error(`会话配置无效：${field} 必须是布尔值。`);
 	return value;
+}
+
+function validateRuleOverrides(value: unknown): Record<string, boolean> {
+	if (value == null || typeof value !== 'object' || Array.isArray(value)) {
+		throw new Error('会话配置无效：ruleOverrides 必须是对象。');
+	}
+	const entries = Object.entries(value as Record<string, unknown>);
+	if (entries.length > 1000) throw new Error('会话配置无效：ruleOverrides 条目过多。');
+	const out: Record<string, boolean> = {};
+	for (const [key, enabled] of entries) {
+		if (key.length < 1 || key.length > 128 || typeof enabled !== 'boolean') {
+			throw new Error('会话配置无效：ruleOverrides 的键和值无效。');
+		}
+		out[key] = enabled;
+	}
+	return out;
 }
 
 function validateOptionalString(value: unknown, field: string, min: number, max: number, nullable: boolean): string | null {
@@ -4735,6 +4726,8 @@ function validateAgentImageSettings(raw: unknown): Record<string, unknown> {
 	if ('cfgRescale' in src && src.cfgRescale !== null) out.cfgRescale = validateNullableNumber(src.cfgRescale, 'agentImageSettings.cfgRescale', 0, 1);
 	if ('sampler' in src) out.sampler = validateOptionalString(src.sampler, 'agentImageSettings.sampler', 1, 128, true);
 	if ('noiseSchedule' in src) out.noiseSchedule = validateOptionalString(src.noiseSchedule, 'agentImageSettings.noiseSchedule', 1, 128, true);
+	if ('autoDraw' in src) out.autoDraw = validateBoolean(src.autoDraw, 'agentImageSettings.autoDraw');
+	if ('autoDrawCount' in src) out.autoDrawCount = validateInteger(src.autoDrawCount, 'agentImageSettings.autoDrawCount', 0, 12);
 	return out;
 }
 
@@ -4760,12 +4753,17 @@ async function applyImportedSessionSettings(settings: SessionExportSettings | nu
 			const err = e as { code?: string; message?: string };
 			const errorMsg = err.message ?? '';
 			// 对话风格不存在
-			if (err.code === 'NO_SUCH_STYLE' && safeSettings.dialogueStyleId != null) {
-				delete safeSettings.dialogueStyleId;
-				removedFields.push('对话风格');
-				return await attemptWithFallback();
-			}
-			// 生图模型不存在
+				if (err.code === 'NO_SUCH_STYLE' && safeSettings.dialogueStyleId != null) {
+					delete safeSettings.dialogueStyleId;
+					removedFields.push('对话风格');
+					return await attemptWithFallback();
+				}
+				if (err.code === 'NO_SUCH_PLAZA_STATS_STYLE' && safeSettings.plazaStatsDialogueStyleId != null) {
+					delete safeSettings.plazaStatsDialogueStyleId;
+					removedFields.push('广场统计风格快照');
+					return await attemptWithFallback();
+				}
+				// 生图模型不存在
 			if (err.code === 'NO_SUCH_AGENT_IMAGE_MODEL' && safeSettings.agentImageModelId != null) {
 				delete safeSettings.agentImageModelId;
 				removedFields.push('生图模型');
@@ -4805,38 +4803,34 @@ async function applyImportedSessionSettings(settings: SessionExportSettings | nu
 	return await attemptWithFallback();
 }
 
-/** v3 导入：重建定时主动消息计划；失败时安全忽略（不影响消息与配置导入），返回实际导入数。 */
 async function applyImportedProactiveSchedules(schedules: SessionExportProactiveSchedule[]): Promise<number> {
-	if (schedules.length === 0) return 0;
-	try {
-		const res = await (misskeyApi as unknown as (
-			endpoint: 'agents/proactive-schedules/import',
-			data: { sessionId: string; schedules: SessionExportProactiveSchedule[] },
-		) => Promise<{ importedCount: number }>)('agents/proactive-schedules/import', {
-			sessionId,
-			schedules,
-		});
-		return res.importedCount;
-	} catch {
-		return 0;
-	}
+	const res = await (misskeyApi as unknown as (
+		endpoint: 'agents/proactive-schedules/import',
+		data: { sessionId: string; schedules: SessionExportProactiveSchedule[] },
+	) => Promise<{ importedCount: number }>)('agents/proactive-schedules/import', {
+		sessionId,
+		schedules,
+	});
+	return res.importedCount;
 }
 
-/** v4 导入：重建压缩便签；失败时安全忽略（不影响消息与配置导入），返回实际导入数。 */
-async function applyImportedCompressionStickies(stickies: SessionExportCompressionSticky[]): Promise<number> {
-	if (stickies.length === 0) return 0;
-	try {
-		const res = await (misskeyApi as unknown as (
-			endpoint: 'agents/compression-sticky/import',
-			data: { sessionId: string; stickies: SessionExportCompressionSticky[] },
-		) => Promise<{ importedCount: number }>)('agents/compression-sticky/import', {
-			sessionId,
-			stickies,
-		});
-		return res.importedCount;
-	} catch {
-		return 0;
-	}
+async function applyImportedCompressionStickies(
+	stickies: SessionExportCompressionSticky[],
+	messageIdMap: Map<string, string>,
+): Promise<number> {
+	const resolved = stickies.map(sticky => ({
+		...sticky,
+		fromMessageId: sticky.fromMessageId == null ? null : (messageIdMap.get(sticky.fromMessageId) ?? sticky.fromMessageId),
+		toMessageId: sticky.toMessageId == null ? null : (messageIdMap.get(sticky.toMessageId) ?? sticky.toMessageId),
+	}));
+	const res = await (misskeyApi as unknown as (
+		endpoint: 'agents/compression-sticky/import',
+		data: { sessionId: string; stickies: SessionExportCompressionSticky[] },
+	) => Promise<{ importedCount: number }>)('agents/compression-sticky/import', {
+		sessionId,
+		stickies: resolved,
+	});
+	return res.importedCount;
 }
 
 async function onContextImportFileChange(ev: Event) {
@@ -4846,6 +4840,7 @@ async function onContextImportFileChange(ev: Event) {
 	input.value = '';
 	if (contextImporting.value || moderationLocksSessionWrites.value) return;
 	contextImporting.value = true;
+	const completedSteps: string[] = [];
 	try {
 		const text = await file.text();
 		const importedPayload = parseImportedContext(text);
@@ -4858,17 +4853,31 @@ async function onContextImportFileChange(ev: Event) {
 		});
 		if (canceled) return;
 		const settingsResult = await applyImportedSessionSettings(importedPayload.settings);
-		const schedulesImported = await applyImportedProactiveSchedules(importedPayload.proactiveSchedules);
-		const stickiesImported = await applyImportedCompressionStickies(importedPayload.compressionStickies);
-		if (importedMessages.length > 0) {
-			await (misskeyApi as unknown as (
+		if (settingsResult.applied) completedSteps.push('会话配置');
+		const shouldReplaceAllResources = importedPayload.version === 7;
+		let skippedImageCount = 0;
+		let messageIdMap = new Map<string, string>();
+		if (importedMessages.length > 0 || shouldReplaceAllResources) {
+			const messageResult = await (misskeyApi as unknown as (
 				endpoint: 'agents/messages/import-context',
-				data: { sessionId: string; messages: SessionContextRow[] },
-			) => Promise<{ importedCount: number }>)('agents/messages/import-context', {
+				data: { sessionId: string; sessionCreatedAt?: string | null; messages: SessionContextRow[] },
+			) => Promise<{ importedCount: number; skippedImageCount: number; messageIdMap: Array<{ sourceId: string; messageId: string }> }>)('agents/messages/import-context', {
 				sessionId,
+				sessionCreatedAt: importedPayload.sessionCreatedAt,
 				messages: importedMessages,
 			});
+			skippedImageCount = messageResult.skippedImageCount;
+			messageIdMap = new Map(messageResult.messageIdMap.map(item => [item.sourceId, item.messageId]));
+			completedSteps.push('消息记录');
 		}
+		const schedulesImported = importedPayload.proactiveSchedules.length > 0 || shouldReplaceAllResources
+			? await applyImportedProactiveSchedules(importedPayload.proactiveSchedules)
+			: 0;
+		if (importedPayload.proactiveSchedules.length > 0 || shouldReplaceAllResources) completedSteps.push('定时计划');
+		const stickiesImported = importedPayload.compressionStickies.length > 0 || shouldReplaceAllResources
+			? await applyImportedCompressionStickies(importedPayload.compressionStickies, messageIdMap)
+			: 0;
+		if (importedPayload.compressionStickies.length > 0 || shouldReplaceAllResources) completedSteps.push('压缩便签');
 		await loadInitialTimeline();
 		await loadSession();
 		if (schedulesImported > 0) {
@@ -4885,13 +4894,22 @@ async function onContextImportFileChange(ev: Event) {
 		if (settingsResult.skippedFields.length > 0) {
 			toastText += `（已跳过不存在的配置：${settingsResult.skippedFields.join('、')}）`;
 		}
+		if (schedulesImported > 0) {
+			toastText += `，含 ${schedulesImported} 条定时计划`;
+		}
 		if (stickiesImported > 0) {
 			toastText += `，含 ${stickiesImported} 条便签`;
 		}
+		if (skippedImageCount > 0) {
+			toastText += `；${skippedImageCount} 个原图片附件在当前账号不可用，已跳过附件但保留消息与识别文本`;
+		}
 		os.toast(toastText);
 	} catch (e) {
-		const text = e instanceof Error ? e.message : formatApiError(e);
-		os.alert({ type: 'error', text });
+		const errorText = e instanceof Error ? e.message : formatApiError(e);
+		const progressText = completedSteps.length > 0
+			? `\n\n已完成：${completedSteps.join('、')}。未完成的部分未导入，请修正问题后重新导入同一文件。`
+			: '';
+		os.alert({ type: 'error', text: `${errorText}${progressText}` });
 	} finally {
 		contextImporting.value = false;
 	}

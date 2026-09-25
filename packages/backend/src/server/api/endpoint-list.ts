@@ -226,6 +226,7 @@ export * as 'agents/memory/update' from './endpoints/agents/memory/update.js';
 export * as 'agents/sessions/create' from './endpoints/agents/sessions/create.js';
 export * as 'agents/sessions/list-mine' from './endpoints/agents/sessions/list-mine.js';
 export * as 'agents/sessions/show' from './endpoints/agents/sessions/show.js';
+export * as 'agents/sessions/export' from './endpoints/agents/sessions/export.js';
 export * as 'agents/sessions/context-window' from './endpoints/agents/sessions/context-window.js';
 export * as 'agents/sessions/compression-overview' from './endpoints/agents/sessions/compression-overview.js';
 export * as 'agents/sessions/worldbook-list' from './endpoints/agents/sessions/worldbook-list.js';

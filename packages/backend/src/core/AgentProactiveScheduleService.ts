@@ -8,7 +8,7 @@ import cronParser from 'cron-parser';
 import type { AgentMessagesRepository, AgentProactiveSchedulesRepository } from '@/models/_.js';
 import { DI } from '@/di-symbols.js';
 import type { MiAgentMessage } from '@/models/AgentMessage.js';
-import type { MiAgentProactiveSchedule, AgentProactiveScheduleTrigger } from '@/models/AgentProactiveSchedule.js';
+import { MiAgentProactiveSchedule, type AgentProactiveScheduleTrigger } from '@/models/AgentProactiveSchedule.js';
 import type { MiAgentSession } from '@/models/AgentSession.js';
 import { AgentService, escapeAgentXmlText } from '@/core/AgentService.js';
 
@@ -337,42 +337,60 @@ export class AgentProactiveScheduleService {
 		}
 	}
 
-	/**
-	 * 会话导入（v3）时重建定时主动消息计划。
-	 * 逐条规范化触发器并重新计算 nextRunAt；无效或超出上限的计划安全跳过，不抛错。
-	 * 返回实际导入的计划数。
-	 */
+	/** Replace all schedules with an imported session snapshot. */
 	public async importSchedules(
 		sessionId: string,
-		schedules: Array<{ description: string; trigger: AgentProactiveScheduleTrigger; status: 'active' | 'paused' }>,
+		schedules: Array<{
+			description: string;
+			trigger: AgentProactiveScheduleTrigger;
+			status: MiAgentProactiveSchedule['status'];
+			createdAt?: string | null;
+			updatedAt?: string | null;
+			nextRunAt?: string | null;
+			lastRunAt?: string | null;
+			remainingRuns?: number | null;
+		}>,
 	): Promise<number> {
 		const now = new Date();
-		const existing = await this.listForUser(sessionId);
-		let imported = 0;
-		for (const item of schedules) {
-			if (existing.length + imported >= MAX_ACTIVE_SCHEDULES) break;
-			const description = item.description.trim().slice(0, 80);
-			if (description.length === 0) continue;
-			try {
-				const normalized = this.normalizeTrigger(item.trigger, now);
-				await this.schedulesRepository.insert({
-					id: this.agentService.newId(),
-					sessionId,
-					createdAt: now,
-					updatedAt: now,
-					status: item.status,
-					description,
-					trigger: normalized.trigger,
-					nextRunAt: normalized.nextRunAt,
-					lastRunAt: null,
-					remainingRuns: normalized.remainingRuns,
-				});
-				imported++;
-			} catch {
-				// 单条计划无效（如非法 cron / 重复间隔过短）时跳过，不中断整体导入
-			}
+		const activeCount = schedules.filter(item => item.status === 'active' || item.status === 'paused').length;
+		if (activeCount > MAX_ACTIVE_SCHEDULES) {
+			throw new ScheduleControlError('ACTIVE_SCHEDULE_LIMIT', `No more than ${MAX_ACTIVE_SCHEDULES} active schedules are allowed.`);
 		}
-		return imported;
+		const rows = schedules.map(item => {
+			const description = item.description.trim().slice(0, 80);
+			if (description.length === 0) throw new ScheduleControlError('INVALID_DESCRIPTION', 'Schedule descriptions cannot be empty.');
+			const normalized = this.normalizeTrigger(item.trigger, now);
+			const createdAt = this.parseImportedDate(item.createdAt) ?? now;
+			const updatedAt = this.parseImportedDate(item.updatedAt) ?? createdAt;
+			const importedNextRunAt = this.parseImportedDate(item.nextRunAt);
+			const importedLastRunAt = this.parseImportedDate(item.lastRunAt);
+			const isTerminal = item.status === 'completed' || item.status === 'cancelled';
+			return {
+				id: this.agentService.newId(),
+				sessionId,
+				createdAt,
+				updatedAt,
+				status: item.status,
+				description,
+				trigger: normalized.trigger,
+				nextRunAt: isTerminal ? null : (item.nextRunAt === undefined ? normalized.nextRunAt : importedNextRunAt),
+				lastRunAt: importedLastRunAt,
+				remainingRuns: item.remainingRuns === undefined
+					? (isTerminal ? 0 : normalized.remainingRuns)
+					: item.remainingRuns,
+			};
+		});
+		await this.schedulesRepository.manager.transaction(async manager => {
+			await manager.delete(MiAgentProactiveSchedule, { sessionId });
+			if (rows.length > 0) await manager.insert(MiAgentProactiveSchedule, rows);
+		});
+		return rows.length;
+	}
+
+	private parseImportedDate(value: string | null | undefined): Date | null {
+		if (typeof value !== 'string') return null;
+		const date = new Date(value);
+		return Number.isFinite(date.getTime()) ? date : null;
 	}
 
 	public drawRandomProactiveAt(endedAt: Date, opts?: { minSilenceMinutes?: number; maxWindowMinutes?: number; daytimeWeight?: number; recencyBias?: number }): Date {
@@ -553,7 +571,7 @@ export class AgentProactiveScheduleService {
 	}
 }
 
-class ScheduleControlError extends Error {
+export class ScheduleControlError extends Error {
 	constructor(
 		public code: string,
 		message: string,

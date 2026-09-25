@@ -494,6 +494,16 @@ export type paths = {
          */
         post: operations['admin___agents___reports___overview'];
     };
+    '/admin/agents/reports/top-users': {
+        /**
+         * admin/agents/reports/top-users
+         * @description No description provided.
+         *
+         *     **Internal Endpoint**: This endpoint is an API for the misskey mainframe and is not intended for use by third parties.
+         *     **Credential required**: *Yes* / **Permission**: *read:admin*
+         */
+        post: operations['admin___agents___reports___top-users'];
+    };
     '/admin/agents/review/diff': {
         /**
          * admin/agents/review/diff
@@ -1411,6 +1421,16 @@ export type paths = {
          */
         post: operations['admin___update-user-note'];
     };
+    '/admin/users/agent-billing-logs': {
+        /**
+         * admin/users/agent-billing-logs
+         * @description No description provided.
+         *
+         *     **Internal Endpoint**: This endpoint is an API for the misskey mainframe and is not intended for use by third parties.
+         *     **Credential required**: *Yes* / **Permission**: *read:admin*
+         */
+        post: operations['admin___users___agent-billing-logs'];
+    };
     '/admin/users/agent-success-rate': {
         /**
          * admin/users/agent-success-rate
@@ -1430,6 +1450,16 @@ export type paths = {
          *     **Credential required**: *Yes* / **Permission**: *read:admin*
          */
         post: operations['admin___users___agent-usage'];
+    };
+    '/admin/users/agent-usage-details': {
+        /**
+         * admin/users/agent-usage-details
+         * @description No description provided.
+         *
+         *     **Internal Endpoint**: This endpoint is an API for the misskey mainframe and is not intended for use by third parties.
+         *     **Credential required**: *Yes* / **Permission**: *read:admin*
+         */
+        post: operations['admin___users___agent-usage-details'];
     };
     '/agents/billing-logs': {
         /**
@@ -1989,6 +2019,15 @@ export type paths = {
          *     **Credential required**: *Yes* / **Permission**: *write:chat*
          */
         post: operations['agents___sessions___delete'];
+    };
+    '/agents/sessions/export': {
+        /**
+         * agents/sessions/export
+         * @description No description provided.
+         *
+         *     **Credential required**: *Yes* / **Permission**: *read:chat*
+         */
+        post: operations['agents___sessions___export'];
     };
     '/agents/sessions/list-mine': {
         /**
@@ -11221,7 +11260,88 @@ export interface operations {
                             unassigned: number;
                             other: number;
                         };
-                        topUsers: {
+                    };
+                };
+            };
+            /** @description Client error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Authentication error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Forbidden error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description I'm Ai */
+            418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+        };
+    };
+    'admin___agents___reports___top-users': {
+        requestBody: {
+            content: {
+                'application/json': {
+                    hours?: number;
+                    since?: string;
+                    until?: string;
+                    modelId?: string;
+                    page?: number;
+                    limit?: number;
+                };
+            };
+        };
+        responses: {
+            /** @description OK (with results) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': {
+                        total: number;
+                        users: {
                             userId: string;
                             username: string;
                             name: string | null;
@@ -19175,6 +19295,110 @@ export interface operations {
             };
         };
     };
+    'admin___users___agent-billing-logs': {
+        requestBody: {
+            content: {
+                'application/json': {
+                    /** Format: misskey:id */
+                    userId: string;
+                    /** @default 30 */
+                    limit?: number;
+                    untilDate?: string | null;
+                    /** @default 1 */
+                    page?: number;
+                    /** @default 30 */
+                    pageSize?: number;
+                };
+            };
+        };
+        responses: {
+            /** @description OK (with results) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': {
+                        items: {
+                            id: string;
+                            /** @enum {string} */
+                            kind: 'usage' | 'redeem';
+                            /** Format: date-time */
+                            createdAt: string;
+                            amount: number;
+                            modelName: string | null;
+                            /** @enum {string|null} */
+                            usageKind: 'chat' | 'compression' | 'image_generation' | 'vision' | 'sticker_description' | 'proactive_random' | 'proactive_scheduled' | 'checkin' | 'admin_reward' | 'credit_migration' | null;
+                            status: string | null;
+                            durationMs: number | null;
+                            redeemCode: string | null;
+                            usedFreeQuota: boolean | null;
+                            freeQuotaUsedAtCall: number | null;
+                            freeQuotaTotalAtCall: number | null;
+                        }[];
+                        hasMore: boolean;
+                        total: number;
+                        page: number;
+                        pageSize: number;
+                    };
+                };
+            };
+            /** @description Client error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Authentication error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Forbidden error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description I'm Ai */
+            418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+        };
+    };
     'admin___users___agent-success-rate': {
         requestBody: {
             content: {
@@ -19355,6 +19579,117 @@ export interface operations {
                             paidCalls: number;
                             creditsCharged: number;
                         }[];
+                    };
+                };
+            };
+            /** @description Client error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Authentication error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Forbidden error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description I'm Ai */
+            418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+        };
+    };
+    'admin___users___agent-usage-details': {
+        requestBody: {
+            content: {
+                'application/json': {
+                    /** Format: misskey:id */
+                    userId: string;
+                    /** @default 720 */
+                    hours?: number;
+                    /** @default 0 */
+                    characterStatsOffset?: number;
+                    /** @default 10 */
+                    characterStatsLimit?: number;
+                    /** @default 0 */
+                    dialogueStyleStatsOffset?: number;
+                    /** @default 10 */
+                    dialogueStyleStatsLimit?: number;
+                };
+            };
+        };
+        responses: {
+            /** @description OK (with results) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': {
+                        modelStats: {
+                            modelId: string | null;
+                            modelName: string | null;
+                            /** @enum {string|null} */
+                            modelSource: 'official' | 'user' | null;
+                            total: number;
+                            success: number;
+                            failed: number;
+                            aborted: number;
+                            totalCost: number;
+                            freeQuotaUsed: number;
+                            freeQuotaTotal: number;
+                        }[];
+                        characterStats: {
+                            characterId: string;
+                            characterName: string | null;
+                            total: number;
+                        }[];
+                        characterStatsTotal: number;
+                        dialogueStyleStats: {
+                            dialogueStyleId: string;
+                            dialogueStyleName: string | null;
+                            total: number;
+                        }[];
+                        dialogueStyleStatsTotal: number;
                     };
                 };
             };
@@ -21561,11 +21896,19 @@ export interface operations {
                     /** Format: misskey:id */
                     sessionId: string;
                     stickies: {
+                        createdAt?: string | null;
+                        updatedAt?: string | null;
+                        fromMessageId?: string | null;
+                        toMessageId?: string | null;
                         summaryText: string;
                         /** @enum {string} */
                         state: 'queued' | 'compressing' | 'dormant' | 'active' | 'stale' | 'failed';
                         userOverridden: boolean;
+                        sourceFingerprint?: string | null;
+                        errorMessage?: string | null;
+                        lastModelId?: string | null;
                         sortIndex: number;
+                        retryCount?: number;
                     }[];
                 };
             };
@@ -22930,13 +23273,26 @@ export interface operations {
                     /** Format: misskey:id */
                     sessionId: string;
                     messages: {
+                        sourceId?: string | null;
                         /** @enum {string} */
-                        role: 'user' | 'assistant';
+                        role: 'user' | 'assistant' | 'system';
                         content: string;
                         createdAt?: string | null;
+                        timeTrusted?: boolean | null;
                         imageFileId?: string | null;
                         imageRecognitionStatus?: string | null;
                         imageRecognitionDescription?: string | null;
+                        rawContent?: string | null;
+                        proactiveScheduleControlRaw?: string | null;
+                        proactiveScheduleControlError?: {
+                            code: string;
+                            message: string;
+                            processedAt: string;
+                        } | null;
+                        isInternal?: boolean | null;
+                        statsDialogueStyleId?: string | null;
+                        promptTokens?: number | null;
+                        completionTokens?: number | null;
                     }[];
                 };
             };
@@ -22950,6 +23306,12 @@ export interface operations {
                 content: {
                     'application/json': {
                         importedCount: number;
+                        skippedImageCount: number;
+                        messageIdMap: {
+                            sourceId: string;
+                            /** Format: misskey:id */
+                            messageId: string;
+                        }[];
                     };
                 };
             };
@@ -24252,10 +24614,15 @@ export interface operations {
                     schedules: {
                         description: string;
                         /** @enum {string} */
-                        status: 'active' | 'paused';
+                        status: 'active' | 'paused' | 'completed' | 'cancelled';
                         trigger: {
                             [key: string]: unknown;
                         };
+                        createdAt?: string | null;
+                        updatedAt?: string | null;
+                        nextRunAt?: string | null;
+                        lastRunAt?: string | null;
+                        remainingRuns?: number | null;
                     }[];
                 };
             };
@@ -24940,6 +25307,101 @@ export interface operations {
             };
         };
     };
+    agents___sessions___export: {
+        requestBody: {
+            content: {
+                'application/json': {
+                    /** Format: misskey:id */
+                    sessionId: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK (with results) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': {
+                        /** @enum {string} */
+                        format: 'misskey-agent-session-export-v7';
+                        version: number;
+                        /** Format: misskey:id */
+                        sessionId: string;
+                        /** Format: date-time */
+                        exportedAt: string;
+                        source: {
+                            /** Format: misskey:id */
+                            characterId: string;
+                            /** @enum {string} */
+                            sessionKind: 'draft_test' | 'community';
+                            /** Format: date-time */
+                            createdAt: string;
+                        };
+                        settings: Record<string, never>;
+                        proactiveSchedules: Record<string, never>[];
+                        compressionStickies: Record<string, never>[];
+                        messages: Record<string, never>[];
+                    };
+                };
+            };
+            /** @description Client error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Authentication error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Forbidden error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description I'm Ai */
+            418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+        };
+    };
     'agents___sessions___list-mine': {
         responses: {
             /** @description OK (with results) */
@@ -25443,6 +25905,8 @@ export interface operations {
                     name?: string | null;
                     /** Format: misskey:id */
                     dialogueStyleId?: string | null;
+                    /** Format: misskey:id */
+                    plazaStatsDialogueStyleId?: string | null;
                     agentModelId?: string | null;
                     agentLongMemoryEnabled?: boolean | null;
                     agentLongMemoryTopK?: number | null;
@@ -25486,6 +25950,8 @@ export interface operations {
                         name: string;
                         /** Format: misskey:id */
                         dialogueStyleId: string | null;
+                        /** Format: misskey:id */
+                        plazaStatsDialogueStyleId: string | null;
                         agentModelId: string | null;
                         agentLongMemoryEnabled: boolean;
                         agentLongMemoryTopK: number;
