@@ -375,23 +375,22 @@ export class AgentProactiveScheduleService {
 		return imported;
 	}
 
-	public armRandomAfterVisibleAssistant(session: MiAgentSession, endedAt: Date, opts?: { minSilenceMinutes?: number; maxWindowMinutes?: number; daytimeWeight?: number; recencyBias?: number }): void {
-		if (!session.randomProactiveEnabled || !session.timeAwarenessEnabled) {
-			session.randomProactiveAt = null;
-			session.randomProactiveNeedsUserMessage = false;
-			return;
-		}
+	public drawRandomProactiveAt(endedAt: Date, opts?: { minSilenceMinutes?: number; maxWindowMinutes?: number; daytimeWeight?: number; recencyBias?: number }): Date {
 		const minSilence = Math.max(5, opts?.minSilenceMinutes ?? 30);
+		const silenceEndsAt = new Date(endedAt.getTime() + minSilence * 60 * 1000);
+		return this.drawRandomProactiveAtAfterSilence(silenceEndsAt, opts);
+	}
+
+	public drawRandomProactiveAtAfterSilence(silenceEndsAt: Date, opts?: { maxWindowMinutes?: number; daytimeWeight?: number; recencyBias?: number }): Date {
 		const maxWindow = Math.max(30, opts?.maxWindowMinutes ?? 1410);
 		const daytimeWeight = Math.max(1, opts?.daytimeWeight ?? 3);
 		const recencyBias = Math.max(1, Math.min(10, opts?.recencyBias ?? 1));
-		const start = new Date(endedAt.getTime() + minSilence * 60 * 1000);
 		// Constructing an Intl.DateTimeFormat is expensive; reuse one instance across all
 		// candidate slots instead of rebuilding it per slot on the synchronous send path.
 		const hourFormatter = new Intl.DateTimeFormat('en-US', { timeZone: BEIJING_TIME_ZONE, hour: '2-digit', hourCycle: 'h23' });
 		const candidateMinutes: { at: Date; weight: number }[] = [];
 		for (let minute = 0; minute <= maxWindow; minute += 5) {
-			const at = new Date(start.getTime() + minute * 60 * 1000);
+			const at = new Date(silenceEndsAt.getTime() + minute * 60 * 1000);
 			const hour = Number(hourFormatter.format(at));
 			const dayWeight = hour >= 8 && hour <= 22 ? daytimeWeight : 1;
 			// Exponential decay: position 0 (nearest) has full weight, position 1 (farthest) decays.
@@ -406,8 +405,22 @@ export class AgentProactiveScheduleService {
 			cursor -= candidate.weight;
 			return cursor < 0;
 		}) ?? candidateMinutes[candidateMinutes.length - 1]!;
-		session.randomProactiveAt = selected.at;
+		return selected.at;
+	}
+
+	public armRandomAfterVisibleAssistant(session: MiAgentSession, endedAt: Date, opts?: { minSilenceMinutes?: number; maxWindowMinutes?: number; daytimeWeight?: number; recencyBias?: number; chainLength?: number; maxChainLength?: number }): void {
+		if (!session.randomProactiveEnabled || !session.timeAwarenessEnabled) {
+			session.randomProactiveAt = null;
+			session.randomProactiveNeedsUserMessage = false;
+			session.randomProactiveChainRemaining = 0;
+			session.randomProactiveAwaitingDraw = false;
+			return;
+		}
+		const maxChainLength = Math.max(1, Math.trunc(opts?.maxChainLength ?? 7));
+		session.randomProactiveAt = this.drawRandomProactiveAt(endedAt, opts);
 		session.randomProactiveNeedsUserMessage = false;
+		session.randomProactiveChainRemaining = Math.max(1, Math.min(maxChainLength, Math.trunc(opts?.chainLength ?? 1)));
+		session.randomProactiveAwaitingDraw = false;
 	}
 
 	public async consumeScheduleRun(schedule: MiAgentProactiveSchedule, now: Date): Promise<void> {

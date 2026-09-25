@@ -379,6 +379,7 @@ export const paramDef = {
 		agentProactiveMaxWindowMinutes: { type: 'integer', minimum: 30, maximum: 10080 },
 		agentProactiveDaytimeWeight: { type: 'integer', minimum: 1, maximum: 10 },
 		agentProactiveRecencyBias: { type: 'integer', minimum: 1, maximum: 10 },
+		agentProactiveMaxChainLength: { type: 'integer', minimum: 1, maximum: 100 },
 		nativeClientAppInfo: {
 			type: 'object', nullable: false,
 			properties: {
@@ -1386,15 +1387,18 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			if (ps.agentProactiveMaxWindowMinutes !== undefined) {
 				set.agentProactiveMaxWindowMinutes = Math.max(30, Math.min(10080, ps.agentProactiveMaxWindowMinutes));
 			}
-			if (ps.agentProactiveDaytimeWeight !== undefined) {
-				set.agentProactiveDaytimeWeight = Math.max(1, Math.min(10, ps.agentProactiveDaytimeWeight));
-			}
-			if (ps.agentProactiveRecencyBias !== undefined) {
-				set.agentProactiveRecencyBias = Math.max(1, Math.min(10, ps.agentProactiveRecencyBias));
-			}
+				if (ps.agentProactiveDaytimeWeight !== undefined) {
+					set.agentProactiveDaytimeWeight = Math.max(1, Math.min(10, ps.agentProactiveDaytimeWeight));
+				}
+				if (ps.agentProactiveRecencyBias !== undefined) {
+					set.agentProactiveRecencyBias = Math.max(1, Math.min(10, ps.agentProactiveRecencyBias));
+				}
+				if (ps.agentProactiveMaxChainLength !== undefined) {
+					set.agentProactiveMaxChainLength = Math.max(1, Math.min(100, ps.agentProactiveMaxChainLength));
+				}
 
-			if (ps.nativeClientAppInfo !== undefined) {
-				const cur: MiNativeClientAppInfo = { ...(serverSettings.nativeClientAppInfo ?? {}) };
+				if (ps.nativeClientAppInfo !== undefined) {
+					const cur: MiNativeClientAppInfo = { ...(serverSettings.nativeClientAppInfo ?? {}) };
 				const p = ps.nativeClientAppInfo;
 				const keys = ['latestAndroidVersion', 'latestIosVersion', 'minRequiredAppVersion', 'androidDownloadUrl', 'iosDownloadUrl', 'announcement'] as const;
 				for (const key of keys) {

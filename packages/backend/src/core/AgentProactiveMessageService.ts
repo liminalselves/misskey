@@ -4,7 +4,7 @@
  */
 
 import { Inject, Injectable } from '@nestjs/common';
-import { LessThanOrEqual } from 'typeorm';
+import { LessThanOrEqual, MoreThan } from 'typeorm';
 import type {
 	AgentDialogueStylesRepository,
 	AgentMessagesRepository,
@@ -80,20 +80,63 @@ export class AgentProactiveMessageService {
 
 	public async processDue(): Promise<void> {
 		const now = new Date();
-		const schedules = await this.schedulesRepository.find({
-			where: { status: 'active', nextRunAt: LessThanOrEqual(now) },
-			order: { nextRunAt: 'ASC' },
-			take: MAX_DUE_PER_TICK,
-		});
+		const schedules = await this.schedulesRepository.createQueryBuilder('schedule')
+			.innerJoin('schedule.session', 'session')
+			.where('schedule.status = :status', { status: 'active' })
+			.andWhere('schedule.nextRunAt <= :now', { now })
+			.andWhere('session.moderationBanned = false')
+			.orderBy('schedule.nextRunAt', 'ASC')
+			.take(MAX_DUE_PER_TICK)
+			.getMany();
 		for (const schedule of schedules) {
 			await this.processScheduled(schedule, now).catch(() => {});
+		}
+
+		const awaitingDrawSessions = await this.sessionsRepository.find({
+			where: {
+				randomProactiveEnabled: true,
+				timeAwarenessEnabled: true,
+				moderationBanned: false,
+				randomProactiveNeedsUserMessage: false,
+				randomProactiveAwaitingDraw: true,
+				randomProactiveChainRemaining: MoreThan(0),
+				randomProactiveAt: LessThanOrEqual(now),
+			},
+			order: { randomProactiveAt: 'ASC' },
+			take: MAX_DUE_PER_TICK,
+		});
+		if (awaitingDrawSessions.length > 0) {
+			const instance = await this.metaService.fetch(true);
+			for (const session of awaitingDrawSessions) {
+				const silenceEndsAt = session.randomProactiveAt!;
+				const nextRandomProactiveAt = this.agentProactiveScheduleService.drawRandomProactiveAtAfterSilence(now, {
+					maxWindowMinutes: session.randomProactiveMaxWindowMinutes ?? instance.agentProactiveMaxWindowMinutes,
+					daytimeWeight: session.randomProactiveDaytimeWeight ?? instance.agentProactiveDaytimeWeight,
+					recencyBias: session.randomProactiveRecencyBias ?? instance.agentProactiveRecencyBias,
+				});
+				await this.sessionsRepository.createQueryBuilder()
+					.update()
+					.set({
+						randomProactiveAt: nextRandomProactiveAt,
+						randomProactiveAwaitingDraw: false,
+						updatedAt: now,
+					})
+					.where('id = :id AND "randomProactiveAt" = :silenceEndsAt AND "randomProactiveAwaitingDraw" = true AND "randomProactiveNeedsUserMessage" = false AND "randomProactiveEnabled" = true AND "timeAwarenessEnabled" = true AND "moderationBanned" = false AND "randomProactiveChainRemaining" > 0', {
+						id: session.id,
+						silenceEndsAt,
+					})
+					.execute();
+			}
 		}
 
 		const sessions = await this.sessionsRepository.find({
 			where: {
 				randomProactiveEnabled: true,
 				timeAwarenessEnabled: true,
+				moderationBanned: false,
 				randomProactiveNeedsUserMessage: false,
+				randomProactiveAwaitingDraw: false,
+				randomProactiveChainRemaining: MoreThan(0),
 				randomProactiveAt: LessThanOrEqual(now),
 			},
 			order: { randomProactiveAt: 'ASC' },
@@ -134,7 +177,7 @@ export class AgentProactiveMessageService {
 	}
 
 	private async processRandom(session: MiAgentSession): Promise<void> {
-		if (!session.randomProactiveAt || session.randomProactiveNeedsUserMessage || session.moderationBanned) return;
+		if (!session.randomProactiveAt || session.randomProactiveNeedsUserMessage || session.randomProactiveAwaitingDraw || session.moderationBanned) return;
 		const trigger = [
 			'<proactive_message type="random">',
 			'The conversation has been inactive. Proactively continue it naturally using the conversation context.',
@@ -169,14 +212,24 @@ export class AgentProactiveMessageService {
 		// concurrent tick can observe an armed past-due delivery after the reply lock is
 		// released; the scheduled path instead consumes its schedule row via onClaim.
 		const isRandom = usageKind === 'proactive_random';
+		const claimedRandomProactiveAt = isRandom ? session.randomProactiveAt : null;
 		const occupied = await this.sessionsRepository.createQueryBuilder()
 			.update()
 			.set(isRandom
-				? { agentReplyPending: true, randomProactiveAt: null, randomProactiveNeedsUserMessage: true, updatedAt: now }
+				? {
+					agentReplyPending: true,
+					randomProactiveAt: null,
+					randomProactiveNeedsUserMessage: true,
+					randomProactiveAwaitingDraw: false,
+					randomProactiveChainRemaining: () => '"randomProactiveChainRemaining" - 1',
+					updatedAt: now,
+				}
 				: { agentReplyPending: true, updatedAt: now })
 			.where(isRandom
-				? 'id = :id AND "agentReplyPending" = false AND "randomProactiveAt" IS NOT NULL'
-				: 'id = :id AND "agentReplyPending" = false', { id: session.id })
+				? 'id = :id AND "agentReplyPending" = false AND "moderationBanned" = false AND "randomProactiveEnabled" = true AND "timeAwarenessEnabled" = true AND "randomProactiveNeedsUserMessage" = false AND "randomProactiveAwaitingDraw" = false AND "randomProactiveAt" = :claimedRandomProactiveAt AND "randomProactiveAt" <= :now AND "randomProactiveChainRemaining" > 0'
+				: 'id = :id AND "agentReplyPending" = false AND "moderationBanned" = false', isRandom
+				? { id: session.id, claimedRandomProactiveAt, now }
+				: { id: session.id })
 			.execute();
 		if ((occupied.affected ?? 0) !== 1) {
 			return { claimed: false, delivered: false, errorCode: null };
@@ -185,6 +238,8 @@ export class AgentProactiveMessageService {
 			session.agentReplyPending = true;
 			session.randomProactiveAt = null;
 			session.randomProactiveNeedsUserMessage = true;
+			session.randomProactiveAwaitingDraw = false;
+			session.randomProactiveChainRemaining = Math.max(0, session.randomProactiveChainRemaining - 1);
 			session.updatedAt = now;
 		}
 
@@ -371,12 +426,32 @@ export class AgentProactiveMessageService {
 				completionTokens: null,
 			});
 			await this.agentProactiveScheduleService.applyAssistantControl(session, assistant, parsed);
+			const minSilenceMinutes = Math.max(5, session.randomProactiveMinSilenceMinutes ?? instance.agentProactiveMinSilenceMinutes);
+			const drawAfterAt = isRandom && session.randomProactiveChainRemaining > 0
+				? new Date(assistantAt.getTime() + minSilenceMinutes * 60 * 1000)
+				: null;
 			// 窄列更新：LLM 调用期间用户可能并发修改会话（改名/切模型等），只写回本流程拥有的列
-			await this.sessionsRepository.createQueryBuilder()
+			const releaseQuery = this.sessionsRepository.createQueryBuilder()
 				.update()
-				.set({ lastMessageAt: assistantAt, updatedAt: assistantAt, agentReplyPending: false })
-				.where('id = :id', { id: session.id })
-				.execute();
+				.set(isRandom
+					? {
+						lastMessageAt: assistantAt,
+						updatedAt: assistantAt,
+						agentReplyPending: false,
+						randomProactiveAt: drawAfterAt == null
+							? null
+							: () => 'CASE WHEN "randomProactiveEnabled" = true AND "timeAwarenessEnabled" = true AND "moderationBanned" = false AND "randomProactiveChainRemaining" > 0 THEN CAST(:drawAfterAt AS timestamptz) ELSE NULL END',
+						randomProactiveNeedsUserMessage: drawAfterAt == null
+							? true
+							: () => 'NOT ("randomProactiveEnabled" = true AND "timeAwarenessEnabled" = true AND "moderationBanned" = false AND "randomProactiveChainRemaining" > 0)',
+						randomProactiveAwaitingDraw: drawAfterAt == null
+							? false
+							: () => '"randomProactiveEnabled" = true AND "timeAwarenessEnabled" = true AND "moderationBanned" = false AND "randomProactiveChainRemaining" > 0',
+					}
+					: { lastMessageAt: assistantAt, updatedAt: assistantAt, agentReplyPending: false })
+				.where('id = :id', { id: session.id });
+			if (drawAfterAt != null) releaseQuery.setParameter('drawAfterAt', drawAfterAt);
+			await releaseQuery.execute();
 			// The effective character avatar is the agent's avatar for this session. When a
 			// session has no separate avatar, it naturally falls back to the role avatar.
 			const avatarFileId = character.avatarFileId ?? characterRow.avatarFileId;
@@ -407,10 +482,12 @@ export class AgentProactiveMessageService {
 			if (internalMessageId) {
 				await this.messagesRepository.delete({ id: internalMessageId }).catch(() => {});
 			}
-			// 失败兜底同样窄列更新，仅释放回复锁
+			// 随机主动消息失败时终止本轮链，避免失败配置反复消耗额度。
 			await this.sessionsRepository.createQueryBuilder()
 				.update()
-				.set({ agentReplyPending: false, updatedAt: new Date() })
+				.set(isRandom
+					? { agentReplyPending: false, randomProactiveAt: null, randomProactiveAwaitingDraw: false, randomProactiveChainRemaining: 0, updatedAt: new Date() }
+					: { agentReplyPending: false, updatedAt: new Date() })
 				.where('id = :id', { id: session.id })
 				.execute()
 				.catch(() => {});

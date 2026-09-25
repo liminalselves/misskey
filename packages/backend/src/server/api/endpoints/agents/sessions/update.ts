@@ -72,18 +72,19 @@ export const paramDef = {
 		},
 		segmentedOutputEnabled: { type: 'boolean' },
 		timeAwarenessEnabled: { type: 'boolean' },
-		randomProactiveEnabled: { type: 'boolean' },
-		scheduledProactiveEnabled: { type: 'boolean' },
-		randomProactiveMinSilenceMinutes: { type: 'integer', nullable: true, minimum: 5, maximum: 1440 },
-		randomProactiveMaxWindowMinutes: { type: 'integer', nullable: true, minimum: 30, maximum: 10080 },
-		randomProactiveDaytimeWeight: { type: 'integer', nullable: true, minimum: 1, maximum: 10 },
-		randomProactiveRecencyBias: { type: 'integer', nullable: true, minimum: 1, maximum: 10 },
-		ruleOverrides: {
-			type: 'object',
-			nullable: true,
-			additionalProperties: { type: 'boolean' },
+			randomProactiveEnabled: { type: 'boolean' },
+			scheduledProactiveEnabled: { type: 'boolean' },
+			randomProactiveMinSilenceMinutes: { type: 'integer', nullable: true, minimum: 5, maximum: 1440 },
+			randomProactiveMaxWindowMinutes: { type: 'integer', nullable: true, minimum: 30, maximum: 10080 },
+			randomProactiveDaytimeWeight: { type: 'integer', nullable: true, minimum: 1, maximum: 10 },
+			randomProactiveRecencyBias: { type: 'integer', nullable: true, minimum: 1, maximum: 10 },
+			randomProactiveChainLength: { type: 'integer', minimum: 1, maximum: 100 },
+			ruleOverrides: {
+				type: 'object',
+				nullable: true,
+				additionalProperties: { type: 'boolean' },
+			},
 		},
-	},
 	required: ['sessionId'],
 } as const;
 
@@ -216,10 +217,12 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			}
 			if (ps.randomProactiveEnabled !== undefined) {
 				row.randomProactiveEnabled = ps.randomProactiveEnabled;
-				if (!ps.randomProactiveEnabled) {
-					row.randomProactiveAt = null;
-					row.randomProactiveNeedsUserMessage = false;
-				}
+					if (!ps.randomProactiveEnabled) {
+						row.randomProactiveAt = null;
+						row.randomProactiveNeedsUserMessage = false;
+						row.randomProactiveChainRemaining = 0;
+						row.randomProactiveAwaitingDraw = false;
+					}
 			}
 			if (ps.scheduledProactiveEnabled !== undefined) {
 				row.scheduledProactiveEnabled = ps.scheduledProactiveEnabled;
@@ -244,6 +247,10 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					? null
 					: Math.max(1, Math.min(10, ps.randomProactiveRecencyBias));
 			}
+			if (ps.randomProactiveChainLength !== undefined) {
+				const maxChainLength = Math.max(1, Math.min(100, instanceMeta.agentProactiveMaxChainLength));
+				row.randomProactiveChainLength = Math.max(1, Math.min(maxChainLength, ps.randomProactiveChainLength));
+			}
 			if (ps.ruleOverrides !== undefined) {
 				row.ruleOverrides = ps.ruleOverrides != null
 					? Object.fromEntries(
@@ -252,8 +259,57 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					: {};
 			}
 
-			row.updatedAt = new Date();
-			await this.agentSessionsRepository.save(row);
+			const updatedAt = new Date();
+			row.updatedAt = updatedAt;
+			const proactiveSettingsChanged = [
+				ps.timeAwarenessEnabled,
+				ps.randomProactiveEnabled,
+				ps.scheduledProactiveEnabled,
+				ps.randomProactiveMinSilenceMinutes,
+				ps.randomProactiveMaxWindowMinutes,
+				ps.randomProactiveDaytimeWeight,
+				ps.randomProactiveRecencyBias,
+				ps.randomProactiveChainLength,
+			].some(value => value !== undefined);
+			await this.agentSessionsRepository.createQueryBuilder()
+				.update()
+				.set({
+					name: row.name,
+					dialogueStyleId: row.dialogueStyleId,
+					plazaStatsDialogueStyleId: row.plazaStatsDialogueStyleId,
+					agentModelId: row.agentModelId,
+					agentLongMemoryEnabled: row.agentLongMemoryEnabled,
+					agentLongMemoryTopK: row.agentLongMemoryTopK,
+					agentLongMemoryMinScore: row.agentLongMemoryMinScore,
+					agentLongMemoryInjectMaxChars: row.agentLongMemoryInjectMaxChars,
+					agentLongMemoryAddMaxRounds: row.agentLongMemoryAddMaxRounds,
+					agentLongMemoryAddEveryNRounds: row.agentLongMemoryAddEveryNRounds,
+					agentLongMemoryProvider: row.agentLongMemoryProvider,
+					agentCompressionModelId: row.agentCompressionModelId,
+					agentImageModelId: row.agentImageModelId,
+					agentVisionModelId: row.agentVisionModelId,
+					agentImageSettings: () => 'CAST(:agentImageSettings AS jsonb)',
+					segmentedOutputEnabled: row.segmentedOutputEnabled,
+					timeAwarenessEnabled: row.timeAwarenessEnabled,
+					randomProactiveEnabled: row.randomProactiveEnabled,
+					scheduledProactiveEnabled: row.scheduledProactiveEnabled,
+					randomProactiveMinSilenceMinutes: row.randomProactiveMinSilenceMinutes,
+					randomProactiveMaxWindowMinutes: row.randomProactiveMaxWindowMinutes,
+					randomProactiveDaytimeWeight: row.randomProactiveDaytimeWeight,
+					randomProactiveRecencyBias: row.randomProactiveRecencyBias,
+					randomProactiveChainLength: row.randomProactiveChainLength,
+					ruleOverrides: row.ruleOverrides,
+						...(proactiveSettingsChanged ? {
+							randomProactiveAt: null,
+							randomProactiveNeedsUserMessage: row.randomProactiveEnabled,
+							randomProactiveChainRemaining: 0,
+							randomProactiveAwaitingDraw: false,
+						} : {}),
+					updatedAt,
+				})
+				.where('id = :id', { id: row.id })
+				.setParameter('agentImageSettings', row.agentImageSettings)
+				.execute();
 			if (ps.scheduledProactiveEnabled === false) {
 				await this.agentProactiveScheduleService.pauseAll(row.id);
 			} else if (ps.scheduledProactiveEnabled === true) {

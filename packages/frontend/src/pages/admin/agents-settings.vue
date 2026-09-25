@@ -1208,6 +1208,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 						<template #label>近期偏好系数</template>
 						<template #caption>取值 1–10。1 = 窗口内均匀分布；值越大越偏向近期时间点发送</template>
 					</MkInput>
+					<MkInput v-model="form.state.agentProactiveMaxChainLength" type="text">
+						<template #label>最大连续主动次数</template>
+						<template #caption>限制用户在单个会话中可设置的连续主动消息次数，范围 1–100，默认 7</template>
+					</MkInput>
 				</div>
 			</MkFolder>
 
@@ -1757,6 +1761,7 @@ const form = useForm({
 	agentProactiveMaxWindowMinutes: String(numFromMeta(meta.agentProactiveMaxWindowMinutes, 1410)),
 	agentProactiveDaytimeWeight: String(numFromMeta(meta.agentProactiveDaytimeWeight, 3)),
 	agentProactiveRecencyBias: String(numFromMeta(meta.agentProactiveRecencyBias, 1)),
+	agentProactiveMaxChainLength: String(numFromMeta(meta.agentProactiveMaxChainLength, 7)),
 }, async (state) => {
 	type Normalized = {
 		id: string;
@@ -2261,6 +2266,7 @@ const form = useForm({
 		agentProactiveMaxWindowMinutes: Math.max(30, Math.min(10080, Number(state.agentProactiveMaxWindowMinutes) || 1410)),
 		agentProactiveDaytimeWeight: Math.max(1, Math.min(10, Number(state.agentProactiveDaytimeWeight) || 3)),
 		agentProactiveRecencyBias: Math.max(1, Math.min(10, Number(state.agentProactiveRecencyBias) || 1)),
+		agentProactiveMaxChainLength: Math.max(1, Math.min(100, Number(state.agentProactiveMaxChainLength) || 7)),
 	} as Record<string, unknown>);
 	fetchInstance(true);
 });

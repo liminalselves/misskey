@@ -200,6 +200,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 								<template #label>近期偏好系数</template>
 								<template #caption>取值 1–10。1 = 窗口内均匀分布；值越大越偏向近期时间点发送</template>
 							</MkInput>
+							<MkInput v-model="proactiveChainLength" type="number" :min="1" :max="siteProactiveMaxChainLength" small>
+								<template #label>连续主动次数</template>
+								<template #caption>用户未回复时最多连续发送几次。取值 1–{{ siteProactiveMaxChainLength }}</template>
+							</MkInput>
 						</div>
 						<MkButton small rounded :primary="proactiveParamsDirty" :disabled="proactiveParamsSaving || moderationLocksSessionWrites || !proactiveParamsDirty" @click="saveProactiveParams">
 							<i class="ti ti-check"></i> 保存参数
@@ -1366,6 +1370,7 @@ const session = ref<{
 	randomProactiveMaxWindowMinutes?: number | null;
 	randomProactiveDaytimeWeight?: number | null;
 	randomProactiveRecencyBias?: number | null;
+	randomProactiveChainLength?: number;
 	randomProactiveLastError?: { code: string; occurredAt: string } | null;
 	scheduledProactiveLastError?: { code: string; occurredAt: string } | null;
 	characterId: string;
@@ -1572,14 +1577,17 @@ const proactiveMinSilence = ref<number | null>(null);
 const proactiveMaxWindow = ref<number | null>(null);
 const proactiveDaytimeWeight = ref<number | null>(null);
 const proactiveRecencyBias = ref<number | null>(null);
+const proactiveChainLength = ref(1);
 const proactiveSavedMinSilence = ref<number | null>(null);
 const proactiveSavedMaxWindow = ref<number | null>(null);
 const proactiveSavedDaytimeWeight = ref<number | null>(null);
 const proactiveSavedRecencyBias = ref<number | null>(null);
+const proactiveSavedChainLength = ref(1);
 const siteProactiveMinSilence = computed(() => Number((instance as any).agentProactiveMinSilenceMinutes) || 30);
 const siteProactiveMaxWindow = computed(() => Number((instance as any).agentProactiveMaxWindowMinutes) || 1410);
 const siteProactiveDaytimeWeight = computed(() => Number((instance as any).agentProactiveDaytimeWeight) || 3);
 const siteProactiveRecencyBias = computed(() => Number((instance as any).agentProactiveRecencyBias) || 1);
+const siteProactiveMaxChainLength = computed(() => Math.max(1, Math.min(100, Number((instance as any).agentProactiveMaxChainLength) || 7)));
 const proactiveHasOverride = computed(() => {
 	if (!session.value) return false;
 	return session.value.randomProactiveMinSilenceMinutes != null
@@ -1591,7 +1599,8 @@ const proactiveParamsDirty = computed(() => {
 	return proactiveMinSilence.value !== proactiveSavedMinSilence.value
 		|| proactiveMaxWindow.value !== proactiveSavedMaxWindow.value
 		|| proactiveDaytimeWeight.value !== proactiveSavedDaytimeWeight.value
-		|| proactiveRecencyBias.value !== proactiveSavedRecencyBias.value;
+		|| proactiveRecencyBias.value !== proactiveSavedRecencyBias.value
+		|| proactiveChainLength.value !== proactiveSavedChainLength.value;
 });
 const proactiveSchedulesLoading = ref(false);
 const proactiveScheduleMutating = ref<string | null>(null);
@@ -2750,11 +2759,13 @@ async function saveProactiveParams() {
 		const maxWindow = Math.max(30, Math.min(10080, proactiveMaxWindow.value ?? siteProactiveMaxWindow.value));
 		const daytimeWeight = Math.max(1, Math.min(10, proactiveDaytimeWeight.value ?? siteProactiveDaytimeWeight.value));
 		const recencyBias = Math.max(1, Math.min(10, proactiveRecencyBias.value ?? siteProactiveRecencyBias.value));
+		const chainLength = Math.max(1, Math.min(siteProactiveMaxChainLength.value, Math.trunc(Number(proactiveChainLength.value) || 1)));
 		const payload: Record<string, unknown> = { sessionId };
 		payload.randomProactiveMinSilenceMinutes = minSilence === siteProactiveMinSilence.value ? null : minSilence;
 		payload.randomProactiveMaxWindowMinutes = maxWindow === siteProactiveMaxWindow.value ? null : maxWindow;
 		payload.randomProactiveDaytimeWeight = daytimeWeight === siteProactiveDaytimeWeight.value ? null : daytimeWeight;
 		payload.randomProactiveRecencyBias = recencyBias === siteProactiveRecencyBias.value ? null : recencyBias;
+		payload.randomProactiveChainLength = chainLength;
 		await (misskeyApi as unknown as (
 			endpoint: 'agents/sessions/update',
 			data: Record<string, unknown>,
@@ -2764,16 +2775,19 @@ async function saveProactiveParams() {
 			session.value.randomProactiveMaxWindowMinutes = payload.randomProactiveMaxWindowMinutes as number | null;
 			session.value.randomProactiveDaytimeWeight = payload.randomProactiveDaytimeWeight as number | null;
 			session.value.randomProactiveRecencyBias = payload.randomProactiveRecencyBias as number | null;
+			session.value.randomProactiveChainLength = chainLength;
 		}
 		// 同步输入框为实际保存的 clamp 值，避免显示超限值与实际存储不一致
 		proactiveMinSilence.value = minSilence;
 		proactiveMaxWindow.value = maxWindow;
 		proactiveDaytimeWeight.value = daytimeWeight;
 		proactiveRecencyBias.value = recencyBias;
+		proactiveChainLength.value = chainLength;
 		proactiveSavedMinSilence.value = minSilence;
 		proactiveSavedMaxWindow.value = maxWindow;
 		proactiveSavedDaytimeWeight.value = daytimeWeight;
 		proactiveSavedRecencyBias.value = recencyBias;
+		proactiveSavedChainLength.value = chainLength;
 		os.alert({ type: 'success', text: '主动消息参数已保存' });
 	} catch (e) {
 		os.alert({ type: 'error', text: formatApiError(e) });
@@ -2795,21 +2809,25 @@ async function resetProactiveParams() {
 			randomProactiveMaxWindowMinutes: null,
 			randomProactiveDaytimeWeight: null,
 			randomProactiveRecencyBias: null,
+			randomProactiveChainLength: 1,
 		});
 		if (session.value) {
 			session.value.randomProactiveMinSilenceMinutes = null;
 			session.value.randomProactiveMaxWindowMinutes = null;
 			session.value.randomProactiveDaytimeWeight = null;
 			session.value.randomProactiveRecencyBias = null;
+			session.value.randomProactiveChainLength = 1;
 		}
 		proactiveMinSilence.value = siteProactiveMinSilence.value;
 		proactiveMaxWindow.value = siteProactiveMaxWindow.value;
 		proactiveDaytimeWeight.value = siteProactiveDaytimeWeight.value;
 		proactiveRecencyBias.value = siteProactiveRecencyBias.value;
+		proactiveChainLength.value = 1;
 		proactiveSavedMinSilence.value = siteProactiveMinSilence.value;
 		proactiveSavedMaxWindow.value = siteProactiveMaxWindow.value;
 		proactiveSavedDaytimeWeight.value = siteProactiveDaytimeWeight.value;
 		proactiveSavedRecencyBias.value = siteProactiveRecencyBias.value;
+		proactiveSavedChainLength.value = 1;
 		os.alert({ type: 'success', text: '已恢复为站点默认参数' });
 	} catch (e) {
 		os.alert({ type: 'error', text: formatApiError(e) });
@@ -2991,10 +3009,12 @@ async function loadSession() {
 			proactiveMaxWindow.value = session.value.randomProactiveMaxWindowMinutes ?? siteProactiveMaxWindow.value;
 			proactiveDaytimeWeight.value = session.value.randomProactiveDaytimeWeight ?? siteProactiveDaytimeWeight.value;
 			proactiveRecencyBias.value = session.value.randomProactiveRecencyBias ?? siteProactiveRecencyBias.value;
+			proactiveChainLength.value = Math.max(1, Math.min(siteProactiveMaxChainLength.value, session.value.randomProactiveChainLength ?? 1));
 			proactiveSavedMinSilence.value = proactiveMinSilence.value;
 			proactiveSavedMaxWindow.value = proactiveMaxWindow.value;
 			proactiveSavedDaytimeWeight.value = proactiveDaytimeWeight.value;
 			proactiveSavedRecencyBias.value = proactiveRecencyBias.value;
+			proactiveSavedChainLength.value = proactiveChainLength.value;
 			await hydrateAgentImageSettingsFromSession();
 			await loadCharacter(session.value.characterId);
 			if (tab.value === 'worldbook') {
@@ -4288,6 +4308,7 @@ type SessionExportSettings = {
 	randomProactiveMaxWindowMinutes?: number | null;
 	randomProactiveDaytimeWeight?: number | null;
 	randomProactiveRecencyBias?: number | null;
+	randomProactiveChainLength?: number;
 };
 /** v3 导出的定时主动消息计划（仅保留可重建所需字段，id/nextRunAt 等由导入端重新计算） */
 type SessionExportProactiveSchedule = {
@@ -4381,6 +4402,7 @@ function buildSessionExportSettings(): SessionExportSettings {
 		randomProactiveMaxWindowMinutes: s.randomProactiveMaxWindowMinutes ?? null,
 		randomProactiveDaytimeWeight: s.randomProactiveDaytimeWeight ?? null,
 		randomProactiveRecencyBias: s.randomProactiveRecencyBias ?? null,
+		randomProactiveChainLength: s.randomProactiveChainLength ?? 1,
 	};
 }
 
@@ -4656,6 +4678,7 @@ function parseImportedSessionSettings(raw: unknown): SessionExportSettings | nul
 	if ('randomProactiveMaxWindowMinutes' in src) out.randomProactiveMaxWindowMinutes = validateNullableInteger(src.randomProactiveMaxWindowMinutes, 'randomProactiveMaxWindowMinutes', 30, 10080);
 	if ('randomProactiveDaytimeWeight' in src) out.randomProactiveDaytimeWeight = validateNullableInteger(src.randomProactiveDaytimeWeight, 'randomProactiveDaytimeWeight', 1, 10);
 	if ('randomProactiveRecencyBias' in src) out.randomProactiveRecencyBias = validateNullableInteger(src.randomProactiveRecencyBias, 'randomProactiveRecencyBias', 1, 10);
+	if ('randomProactiveChainLength' in src) out.randomProactiveChainLength = validateInteger(src.randomProactiveChainLength, 'randomProactiveChainLength', 1, 100);
 
 	return out;
 }
@@ -6453,6 +6476,7 @@ async function onAbortRequest() {
 	-webkit-box-orient: vertical;
 	overflow: hidden;
 	word-break: break-word;
+	white-space: pre-line;
 }
 
 .successRateHigh {

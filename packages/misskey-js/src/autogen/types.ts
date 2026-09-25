@@ -7015,6 +7015,7 @@ export type components = {
             agentProactiveMaxWindowMinutes: number;
             agentProactiveDaytimeWeight: number;
             agentProactiveRecencyBias: number;
+            agentProactiveMaxChainLength: number;
             agentModels: {
                 id: string;
                 name: string;
@@ -15267,6 +15268,7 @@ export interface operations {
                         agentProactiveMaxWindowMinutes: number;
                         agentProactiveDaytimeWeight: number;
                         agentProactiveRecencyBias: number;
+                        agentProactiveMaxChainLength: number;
                         agentMigrationKeyConfigured: boolean;
                         useObjectStorage: boolean;
                         objectStorageBaseUrl: string | null;
@@ -18902,6 +18904,7 @@ export interface operations {
                     agentProactiveMaxWindowMinutes?: number;
                     agentProactiveDaytimeWeight?: number;
                     agentProactiveRecencyBias?: number;
+                    agentProactiveMaxChainLength?: number;
                     nativeClientAppInfo?: {
                         latestAndroidVersion?: string | null;
                         latestIosVersion?: string | null;
@@ -25365,6 +25368,7 @@ export interface operations {
                         randomProactiveMaxWindowMinutes: number | null;
                         randomProactiveDaytimeWeight: number | null;
                         randomProactiveRecencyBias: number | null;
+                        randomProactiveChainLength: number;
                         randomProactiveLastError: Record<string, never> | null;
                         scheduledProactiveLastError: Record<string, never> | null;
                         sessionModerationBanned: boolean;
@@ -25462,6 +25466,7 @@ export interface operations {
                     randomProactiveMaxWindowMinutes?: number | null;
                     randomProactiveDaytimeWeight?: number | null;
                     randomProactiveRecencyBias?: number | null;
+                    randomProactiveChainLength?: number;
                     ruleOverrides?: {
                         [key: string]: boolean;
                     } | null;

@@ -326,7 +326,14 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			// 原子占位：失败说明并发请求已抢占。WHERE 子句里的 "agentReplyPending" 须显式引号，PostgreSQL 才认识 camelCase 列名。
 			const occupy = await this.agentSessionsRepository.createQueryBuilder()
 				.update()
-				.set({ agentReplyPending: true, updatedAt: now })
+				.set({
+					agentReplyPending: true,
+						randomProactiveAt: null,
+						randomProactiveNeedsUserMessage: false,
+						randomProactiveChainRemaining: 0,
+						randomProactiveAwaitingDraw: false,
+						updatedAt: now,
+				})
 				.where('id = :id AND "agentReplyPending" = false', { id: session.id })
 				.execute();
 			if ((occupy.affected ?? 0) !== 1) {
@@ -336,9 +343,13 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					id: '8d99fad8-c487-4a7e-bb28-5df37a590116',
 				});
 			}
-			// 与库侧 UPDATE 同步内存视图：成功/失败末尾的 save(session) 才能把 pending=false 正确写回。
+			// 与库侧 UPDATE 同步内存视图；后续仅窄列释放回复锁，不再整行 save 旧快照。
 			session.agentReplyPending = true;
-			session.updatedAt = now;
+				session.randomProactiveAt = null;
+				session.randomProactiveNeedsUserMessage = false;
+				session.randomProactiveChainRemaining = 0;
+				session.randomProactiveAwaitingDraw = false;
+				session.updatedAt = now;
 
 			let userMsg: MiAgentMessage | null = null;
 			let abortController: AbortController | null = null;
@@ -381,10 +392,6 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					userMsg.imageRecognitionDescription = recognition.status === 'succeeded' ? recognition.description : null;
 					await this.agentMessagesRepository.save(userMsg);
 				}
-				// A real user turn invalidates the previously armed random proactive delivery.
-				session.randomProactiveAt = null;
-				session.randomProactiveNeedsUserMessage = false;
-
 				const modelApiName = (await this.agentService.resolveModelApiNameForUser(instanceMeta, session.agentModelId ?? null, me.id).catch(() => null)) ?? null;
 				usageLog = await this.agentModelUsageService.startLog({
 					userId: me.id,
@@ -711,17 +718,42 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				}
 
 				session.lastMessageAt = asstNow;
-				if (hasVisibleAssistantText) {
-					this.agentProactiveScheduleService.armRandomAfterVisibleAssistant(session, asstNow, {
+				const nextRandomProactiveAt = hasVisibleAssistantText
+					? this.agentProactiveScheduleService.drawRandomProactiveAt(asstNow, {
 						minSilenceMinutes: session.randomProactiveMinSilenceMinutes ?? instanceMeta.agentProactiveMinSilenceMinutes,
 						maxWindowMinutes: session.randomProactiveMaxWindowMinutes ?? instanceMeta.agentProactiveMaxWindowMinutes,
 						daytimeWeight: session.randomProactiveDaytimeWeight ?? instanceMeta.agentProactiveDaytimeWeight,
 						recencyBias: session.randomProactiveRecencyBias ?? instanceMeta.agentProactiveRecencyBias,
-					});
+					})
+					: null;
+				const chainLength = Math.max(1, Math.min(
+					Math.max(1, Math.trunc(instanceMeta.agentProactiveMaxChainLength)),
+					Math.trunc(session.randomProactiveChainLength),
+				));
+				const releaseQuery = this.agentSessionsRepository.createQueryBuilder()
+					.update()
+					.set({
+						lastMessageAt: asstNow,
+						updatedAt: asstNow,
+						agentReplyPending: false,
+					randomProactiveAt: nextRandomProactiveAt == null
+						? null
+						: () => 'CASE WHEN "randomProactiveEnabled" = true AND "timeAwarenessEnabled" = true AND "moderationBanned" = false AND "randomProactiveNeedsUserMessage" = false THEN CAST(:nextRandomProactiveAt AS timestamptz) ELSE NULL END',
+						randomProactiveChainRemaining: nextRandomProactiveAt == null
+							? 0
+							: () => 'CASE WHEN "randomProactiveEnabled" = true AND "timeAwarenessEnabled" = true AND "moderationBanned" = false AND "randomProactiveNeedsUserMessage" = false THEN CAST(:chainLength AS integer) ELSE 0 END',
+						randomProactiveAwaitingDraw: false,
+						randomProactiveNeedsUserMessage: nextRandomProactiveAt == null
+							? true
+							: () => 'NOT ("randomProactiveEnabled" = true AND "timeAwarenessEnabled" = true AND "moderationBanned" = false AND "randomProactiveNeedsUserMessage" = false)',
+					})
+					.where('id = :id', { id: session.id });
+				if (nextRandomProactiveAt != null) {
+					releaseQuery.setParameters({ nextRandomProactiveAt, chainLength });
 				}
+				await releaseQuery.execute();
 				session.updatedAt = asstNow;
 				session.agentReplyPending = false;
-				await this.agentSessionsRepository.save(session);
 
 				const compressionProviderOn =
 					this.agentCompressionMemoryService.resolveEffectiveProvider(session.agentLongMemoryProvider, instanceMeta) === 'compression';
@@ -801,9 +833,13 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				session.agentReplyPending = false;
 				session.updatedAt = new Date();
 				try {
-					await this.agentSessionsRepository.save(session);
+					await this.agentSessionsRepository.createQueryBuilder()
+						.update()
+						.set({ agentReplyPending: false, updatedAt: session.updatedAt })
+						.where('id = :id', { id: session.id })
+						.execute();
 				} catch {
-					// 极端：save 失败时 pending 仍为 true 落库；下次成功发信会覆盖，或由运维介入
+					// 极端：更新失败时 pending 仍为 true 落库；sessions/show 的孤儿锁自愈会在超时后释放
 				}
 				// startLog 失败时 usageLog 为 null；非 null 才结算
 				if (usageLog) {

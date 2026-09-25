@@ -216,6 +216,11 @@ export class MetaEntityService {
 				if (!Number.isFinite(v)) return 1;
 				return Math.max(1, Math.min(10, v));
 			})(),
+			agentProactiveMaxChainLength: (() => {
+				const v = Math.trunc(Number(instance.agentProactiveMaxChainLength));
+				if (!Number.isFinite(v)) return 7;
+				return Math.max(1, Math.min(100, v));
+			})(),
 			agentAliyaCharacterId: instance.agentAliyaCharacterId ?? null,
 			agentAliyaWebUrl: instance.agentAliyaWebUrl ?? null,
 		};

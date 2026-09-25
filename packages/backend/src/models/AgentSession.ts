@@ -210,6 +210,24 @@ export class MiAgentSession {
 	})
 	public randomProactiveNeedsUserMessage: boolean;
 
+	/** Number of consecutive random proactive messages allowed for each user turn. */
+	@Column('integer', {
+		default: 1,
+	})
+	public randomProactiveChainLength: number;
+
+	/** Remaining deliveries in the currently armed random proactive chain. */
+	@Column('integer', {
+		default: 0,
+	})
+	public randomProactiveChainRemaining: number;
+
+	/** Whether randomProactiveAt marks the end of the silence period before drawing the next delivery time. */
+	@Column('boolean', {
+		default: false,
+	})
+	public randomProactiveAwaitingDraw: boolean;
+
 	/** The last skipped random proactive attempt. Raw provider errors are never stored here. */
 	@Column('jsonb', {
 		nullable: true,

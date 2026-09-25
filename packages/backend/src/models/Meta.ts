@@ -1336,6 +1336,12 @@ export class MiMeta {
 	})
 	public agentProactiveRecencyBias: number;
 
+	/** 单轮随机主动消息允许的最大连续次数，默认 7 */
+	@Column('integer', {
+		default: 7,
+	})
+	public agentProactiveMaxChainLength: number;
+
 	/** Aliya 智能体角色 ID；配置后对应会话会展示 Aliya Web 推荐横幅与常驻板块 */
 	@Column('varchar', {
 		length: 256, nullable: true,

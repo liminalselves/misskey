@@ -91,15 +91,28 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			};
 
 			// 1. 批量封禁会话
-			const userAcct = await getAcctByUserId(this.usersRepository, user.id);
-			for (const session of sessions) {
-				if (session.moderationBanned) continue;
-				session.moderationBanned = true;
-				session.moderationBannedReason = sessionReason;
-				session.updatedAt = new Date();
-				await this.agentSessionsRepository.save(session);
+				const userAcct = await getAcctByUserId(this.usersRepository, user.id);
+				for (const session of sessions) {
+					if (session.moderationBanned) continue;
+					const updatedAt = new Date();
+					await this.agentSessionsRepository.createQueryBuilder()
+						.update()
+						.set({
+							moderationBanned: true,
+							moderationBannedReason: sessionReason,
+							randomProactiveAt: null,
+							randomProactiveNeedsUserMessage: true,
+							randomProactiveChainRemaining: 0,
+							randomProactiveAwaitingDraw: false,
+							updatedAt,
+						})
+						.where('id = :id', { id: session.id })
+						.execute();
+					session.moderationBanned = true;
+					session.moderationBannedReason = sessionReason;
+					session.updatedAt = updatedAt;
 
-				await this.moderationLogService.log(me, 'setAgentSessionModerationBan', {
+					await this.moderationLogService.log(me, 'setAgentSessionModerationBan', {
 					sessionId: session.id,
 					sessionName: session.name,
 					userId: session.userId,

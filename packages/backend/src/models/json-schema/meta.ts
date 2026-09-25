@@ -453,6 +453,10 @@ export const packedMetaLiteSchema = {
 			type: 'number',
 			optional: false, nullable: false,
 		},
+		agentProactiveMaxChainLength: {
+			type: 'number',
+			optional: false, nullable: false,
+		},
 		agentModels: {
 			type: 'array',
 			optional: false, nullable: false,
