@@ -809,6 +809,7 @@ onMounted(loadAll);
 	-webkit-box-orient: vertical;
 	overflow: hidden;
 	word-break: break-word;
+	white-space: pre-line;
 }
 
 .modelMonoSub {
