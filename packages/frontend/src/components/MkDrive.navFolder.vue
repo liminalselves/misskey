@@ -5,7 +5,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <template>
 <div
-	:class="[$style.root, { [$style.draghover]: draghover }]"
+	:class="[$style.root, { [$style.draghover]: draghover || touchDragHover }]"
+	:data-drive-nav-folder="folder == null ? 'root' : folder.id"
 	@dragover.prevent.stop="onDragover"
 	@dragenter="onDragenter"
 	@dragleave="onDragleave"
@@ -24,10 +25,13 @@ import { i18n } from '@/i18n.js';
 import { globalEvents } from '@/events.js';
 import { checkDragDataType, getDragData } from '@/drag-and-drop.js';
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
 	folder?: Misskey.entities.DriveFolder;
 	parentFolder: Misskey.entities.DriveFolder | null;
-}>();
+	touchDragHover?: boolean;
+}>(), {
+	touchDragHover: false,
+});
 
 const emit = defineEmits<{
 	(ev: 'upload', files: File[], folder?: Misskey.entities.DriveFolder | null): void;
@@ -72,7 +76,9 @@ function onDragenter() {
 	if (props.folder || props.parentFolder) draghover.value = true;
 }
 
-function onDragleave() {
+function onDragleave(ev: DragEvent) {
+	// 移入自身子元素不算离开，避免高亮闪烁
+	if (ev.relatedTarget instanceof Node && (ev.currentTarget as HTMLElement).contains(ev.relatedTarget)) return;
 	if (props.folder || props.parentFolder) draghover.value = false;
 }
 
@@ -130,8 +136,10 @@ function onDrop(ev: DragEvent) {
 
 <style lang="scss" module>
 .root {
+	border-radius: 4px;
+
 	&.draghover {
-		background: #eee;
+		background: var(--MI_THEME-accentedBg);
 	}
 }
 </style>

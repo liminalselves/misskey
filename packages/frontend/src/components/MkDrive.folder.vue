@@ -5,9 +5,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <template>
 <div
-	:class="[$style.root, { [$style.draghover]: draghover }]"
+	:class="[$style.root, { [$style.draghover]: draghover || touchDragHover }]"
 	draggable="true"
 	:title="title"
+	:data-drive-folder="folder.id"
 	@contextmenu.stop="onContextmenu"
 	@mouseover="onMouseover"
 	@mouseout="onMouseout"
@@ -52,9 +53,11 @@ const props = withDefaults(defineProps<{
 	folder: Misskey.entities.DriveFolder;
 	isSelected?: boolean;
 	selectMode?: boolean;
+	touchDragHover?: boolean;
 }>(), {
 	isSelected: false,
 	selectMode: false,
+	touchDragHover: false,
 });
 
 const emit = defineEmits<{
@@ -125,10 +128,14 @@ function onDragover(ev: DragEvent) {
 }
 
 function onDragenter() {
+	// 禁止拖入的文件夹不显示可投放高亮
+	if (props.folder.systemType === 'agentGeneratedImages') return;
 	if (!isDragging.value) draghover.value = true;
 }
 
-function onDragleave() {
+function onDragleave(ev: DragEvent) {
+	// 移入自身子元素不算离开，避免高亮闪烁
+	if (ev.relatedTarget instanceof Node && (ev.currentTarget as HTMLElement).contains(ev.relatedTarget)) return;
 	draghover.value = false;
 }
 
@@ -148,6 +155,8 @@ function onDrop(ev: DragEvent) {
 	{
 		const droppedData = getDragData(ev, 'driveFiles');
 		if (droppedData != null) {
+			// 文件已在该文件夹内，位置没有变化，直接忽略
+			if (droppedData.every(f => f.folderId === props.folder.id)) return;
 			misskeyApi('drive/files/move-bulk', {
 				fileIds: droppedData.map(f => f.id),
 				folderId: props.folder.id,

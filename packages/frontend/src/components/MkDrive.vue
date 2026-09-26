@@ -11,6 +11,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<XNavFolder
 					:class="[$style.navPathItem, { [$style.navCurrent]: folder == null }]"
 					:parentFolder="folder"
+					:touchDragHover="touchDragHoverNavKey === 'root'"
 					@click="cd(null)"
 					@upload="onUploadRequested"
 				/>
@@ -20,6 +21,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 						:folder="f"
 						:parentFolder="folder"
 						:class="[$style.navPathItem]"
+						:touchDragHover="touchDragHoverNavKey === f.id"
 						@click="cd(f)"
 						@upload="onUploadRequested"
 					/>
@@ -51,15 +53,17 @@ SPDX-License-Identifier: AGPL-3.0-only
 			</template>
 		</div>
 
-		<div
-			ref="main"
-			:class="[$style.main, { [$style.fetching]: fetching }]"
-			@dragover.prevent.stop="onDragover"
-			@dragenter="onDragenter"
-			@dragleave="onDragleave"
-			@drop.prevent.stop="onDrop"
-			@contextmenu.stop="onContextmenu"
-		>
+			<div
+				ref="main"
+				:class="[$style.main, { [$style.fetching]: fetching }]"
+				@dragover.prevent.stop="onDragover"
+				@dragenter="onDragenter"
+				@dragleave="onDragleave"
+				@drop.prevent.stop="onDrop"
+				@contextmenu.capture="onContextmenuCapture"
+				@contextmenu.stop="onContextmenu"
+				@pointerdown="onMarqueePointerDown"
+			>
 			<div :class="$style.tipContainer">
 				<MkTip k="drive"><div v-html="i18n.ts.driveAboutTip"></div></MkTip>
 			</div>
@@ -105,6 +109,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 					:folder="f"
 					:selectMode="select === 'folder'"
 					:isSelected="selectedFolders.some(x => x.id === f.id)"
+					:touchDragHover="touchDragHoverFolderId === f.id"
 					@chosen="chooseFolder"
 					@unchose="unchoseFolder"
 					@click="cd(f)"
@@ -139,7 +144,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 							:isSelected="selectedFiles.some(x => x.id === file.id)"
 							@click="onFileClick($event, file)"
 							@dragstart="onFileDragstart(file, $event)"
-							@dragend="isDragSource = false"
+							@dragend="onItemDragend"
 						/>
 					</TransitionGroup>
 				</MkStickyContainer>
@@ -159,10 +164,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 					:file="file"
 					:folder="folder"
 					:isSelected="selectedFiles.some(x => x.id === file.id)"
-					@click="onFileClick($event, file)"
-					@dragstart="onFileDragstart(file, $event)"
-					@dragend="isDragSource = false"
-				/>
+						@click="onFileClick($event, file)"
+						@dragstart="onFileDragstart(file, $event)"
+						@dragend="onItemDragend"
+					/>
 			</TransitionGroup>
 
 			<MkButton
@@ -184,6 +189,21 @@ SPDX-License-Identifier: AGPL-3.0-only
 		</div>
 		<MkLoading v-if="fetching"/>
 		<div v-if="draghover" :class="$style.dropzone"></div>
+		<Teleport to="body">
+			<div
+				v-if="marqueeRect"
+				:class="$style.marquee"
+				:style="{ left: marqueeRect.left + 'px', top: marqueeRect.top + 'px', width: marqueeRect.width + 'px', height: marqueeRect.height + 'px', zIndex: dragOverlayZIndex }"
+			></div>
+			<div
+				v-if="touchDragGhost"
+				:class="$style.touchDragGhost"
+				:style="{ left: touchDragGhost.x + 'px', top: touchDragGhost.y + 'px', zIndex: dragOverlayZIndex }"
+			>
+				<i class="ti ti-folder-symlink"></i>
+				<span>移动 {{ touchDragGhost.count }} 个文件</span>
+			</div>
+		</Teleport>
 	</div>
 
 	<template #footer>
@@ -365,6 +385,8 @@ function onStreamDriveFileCreated(file: Misskey.entities.DriveFile) {
 	void fetchDriveStats();
 }
 
+let nativeDragImageEl: HTMLElement | null = null;
+
 function onFileDragstart(file: Misskey.entities.DriveFile, ev: DragEvent) {
 	if (isEditMode.value) {
 		if (!selectedFiles.value.some(f => f.id === file.id)) {
@@ -374,11 +396,48 @@ function onFileDragstart(file: Misskey.entities.DriveFile, ev: DragEvent) {
 		if (ev.dataTransfer) {
 			ev.dataTransfer.effectAllowed = 'move';
 			setDragData(ev, 'driveFiles', selectedFiles.value);
+
+			// 多选拖动时使用带数量的自定义拖拽图像，替代单个文件缩略图
+			if (selectedFiles.value.length > 1) {
+				if (nativeDragImageEl != null) nativeDragImageEl.remove();
+				const el = window.document.createElement('div');
+				Object.assign(el.style, {
+					position: 'fixed',
+					top: '-200px',
+					left: '-200px',
+					padding: '8px 16px',
+					borderRadius: '999px',
+					background: 'var(--MI_THEME-accent)',
+					color: 'var(--MI_THEME-fgOnAccent)',
+					fontSize: '13px',
+					fontWeight: '700',
+					whiteSpace: 'nowrap',
+					pointerEvents: 'none',
+				});
+				el.textContent = `移动 ${selectedFiles.value.length} 个文件`;
+				window.document.body.appendChild(el);
+				// 热点取图像中心，用户用胶囊对准哪里，落下判定就在哪里
+				ev.dataTransfer.setDragImage(el, el.offsetWidth / 2, el.offsetHeight / 2);
+				nativeDragImageEl = el;
+			}
 		}
 	}
 
 	isDragSource.value = true;
 }
+
+function onItemDragend() {
+	isDragSource.value = false;
+	if (nativeDragImageEl != null) {
+		nativeDragImageEl.remove();
+		nativeDragImageEl = null;
+	}
+}
+
+// 原生 HTML5 拖拽不会滚动自定义 overflow 容器，记录指针位置供自动滚动
+let nativeDragPointer: { x: number; y: number; time: number } | null = null;
+let nativeDragRafId: number | null = null;
+let nativeDragScrollParent: HTMLElement | null = null;
 
 function onDragover(ev: DragEvent) {
 	if (!ev.dataTransfer) return;
@@ -421,10 +480,14 @@ function onDragover(ev: DragEvent) {
 }
 
 function onDragenter() {
+	// AI 生图专用文件夹不接受拖入，不显示可投放高亮
+	if (folder.value?.systemType === 'agentGeneratedImages') return;
 	if (!isDragSource.value) draghover.value = true;
 }
 
-function onDragleave() {
+function onDragleave(ev: DragEvent) {
+	// 移入自身子元素不算离开，避免高亮闪烁
+	if (ev.relatedTarget instanceof Node && (ev.currentTarget as HTMLElement).contains(ev.relatedTarget)) return;
 	draghover.value = false;
 }
 
@@ -449,13 +512,16 @@ function onDrop(ev: DragEvent): void | boolean {
 	{
 		const droppedData = getDragData(ev, 'driveFiles');
 		if (droppedData != null) {
+			const targetFolderId = folder.value ? folder.value.id : null;
+			// 拖到当前文件夹的空白处，位置没有变化，直接忽略
+			if (droppedData.every(f => f.folderId === targetFolderId)) return;
 			misskeyApi('drive/files/move-bulk', {
 				fileIds: droppedData.map(f => f.id),
-				folderId: folder.value ? folder.value.id : null,
+				folderId: targetFolderId,
 			}).then(() => {
 				globalEvents.emit('driveFilesUpdated', droppedData.map(x => ({
 					...x,
-					folderId: folder.value ? folder.value.id : null,
+					folderId: targetFolderId,
 					folder: folder.value,
 				})));
 				void fetchDriveStats();
@@ -858,8 +924,438 @@ function showMenu(ev: PointerEvent) {
 }
 
 function onContextmenu(ev: PointerEvent) {
+	if (marqueeRect.value != null) return;
 	os.contextMenu(getMenu(), ev);
 }
+
+//#region 拖拽手势（框选 / 触屏拖拽移动）
+const mainEl = useTemplateRef('main');
+
+const marqueeEnabled = computed(() => isEditMode.value || (props.select === 'file' && props.multiple));
+
+type MarqueeState = {
+	pointerId: number;
+	pointerType: string;
+	startX: number;
+	startY: number;
+	curX: number;
+	curY: number;
+	startedOnItem: boolean;
+	startFileId: string | null;
+	active: boolean;
+	touchDrag: boolean;
+	longPressTimer: number | null;
+	hoverFolderId: string | null;
+	hoverNavKey: string | null;
+	baseFiles: Misskey.entities.DriveFile[];
+	scrollParent: HTMLElement | null;
+	rafId: number | null;
+};
+
+let marquee: MarqueeState | null = null;
+const marqueeRect = ref<{ left: number; top: number; width: number; height: number } | null>(null);
+const touchDragGhost = ref<{ x: number; y: number; count: number } | null>(null);
+const touchDragHoverFolderId = ref<string | null>(null);
+const touchDragHoverNavKey = ref<string | null>(null);
+// 矩形与浮标渲染在 body 下（容器查询/弹窗 transform 会改变 fixed 的包含块），z-index 需高于当前弹窗
+const dragOverlayZIndex = ref(0);
+
+function onMarqueePointerDown(ev: PointerEvent) {
+	if (!marqueeEnabled.value || marquee != null) return;
+	if (ev.pointerType === 'mouse' && ev.button !== 0) return;
+	if (!ev.isPrimary) return;
+	const target = ev.target as Element | null;
+	if (target == null || !(target instanceof Element)) return;
+	if (target.closest('button, a, input, textarea, select') != null) return;
+	const fileEl = target.closest('[data-drive-file]') as HTMLElement | null;
+	const startedOnItem = fileEl != null || target.closest('[data-drive-folder]') != null;
+	// PC 从文件/文件夹上起拖保留给原生拖拽移动，框选只从空白处开始
+	if (ev.pointerType === 'mouse' && startedOnItem) return;
+
+	marquee = {
+		pointerId: ev.pointerId,
+		pointerType: ev.pointerType,
+		startX: ev.clientX,
+		startY: ev.clientY,
+		curX: ev.clientX,
+		curY: ev.clientY,
+		startedOnItem,
+		startFileId: fileEl?.dataset.driveFile ?? null,
+		active: false,
+		touchDrag: false,
+		longPressTimer: null,
+		hoverFolderId: null,
+		hoverNavKey: null,
+		baseFiles: [...selectedFiles.value],
+		scrollParent: null,
+		rafId: null,
+	};
+	window.addEventListener('pointermove', onMarqueePointerMove, { passive: false });
+	window.addEventListener('pointerup', onMarqueePointerUp);
+	window.addEventListener('pointercancel', onMarqueePointerCancel);
+	// pointermove 的 preventDefault 无法阻止触屏滚动，需要非被动 touchmove
+	if (ev.pointerType !== 'mouse') {
+		window.addEventListener('touchmove', onMarqueeTouchMove, { passive: false });
+
+		// 触屏长按文件进入拖拽移动（须在浏览器长按菜单触发前激活）
+		if (fileEl != null) {
+			const timer = window.setTimeout(() => {
+				const m = marquee;
+				if (m == null || m.longPressTimer !== timer || m.active) return;
+				m.longPressTimer = null;
+				activateTouchDrag(m);
+			}, 400);
+			marquee.longPressTimer = timer;
+		}
+	}
+}
+
+function onMarqueePointerMove(ev: PointerEvent) {
+	const m = marquee;
+	if (m == null || ev.pointerId !== m.pointerId) return;
+	m.curX = ev.clientX;
+	m.curY = ev.clientY;
+
+	if (m.touchDrag) {
+		if (ev.cancelable) ev.preventDefault();
+		updateTouchDrag(m);
+		return;
+	}
+
+	if (!m.active) {
+		const dx = ev.clientX - m.startX;
+		const dy = ev.clientY - m.startY;
+		const dist = Math.hypot(dx, dy);
+		// 有明显位移就不再是长按，取消拖拽移动的等待
+		if (m.longPressTimer != null && dist >= 8) {
+			window.clearTimeout(m.longPressTimer);
+			m.longPressTimer = null;
+		}
+		const threshold = m.pointerType === 'mouse' ? 6 : 12;
+		if (dist < threshold) return;
+		if (m.pointerType !== 'mouse' && m.startedOnItem) {
+			// 触屏从文件上起拖：横向为主判定为框选，纵向让给页面滚动
+			if (Math.abs(dx) <= Math.abs(dy)) {
+				cancelMarquee();
+				return;
+			}
+		}
+		m.active = true;
+		m.scrollParent = getMainScrollParent();
+		dragOverlayZIndex.value = os.claimZIndex('high');
+	}
+
+	if (ev.cancelable) ev.preventDefault();
+	applyMarqueeSelection();
+	startMarqueeAutoScroll();
+}
+
+function onMarqueeTouchMove(ev: TouchEvent) {
+	const m = marquee;
+	if (m == null) return;
+	// 空白处起拖始终阻止滚动；文件上起拖在判定为框选/拖拽移动后才阻止
+	if (m.active || m.touchDrag || !m.startedOnItem) {
+		if (ev.cancelable) ev.preventDefault();
+	}
+}
+
+function getMainScrollParent(): HTMLElement | null {
+	let el = mainEl.value?.parentElement ?? null;
+	while (el != null) {
+		const style = window.getComputedStyle(el);
+		if (el.scrollHeight > el.clientHeight && /(auto|scroll)/.test(style.overflowY)) {
+			return el;
+		}
+		el = el.parentElement;
+	}
+	return null;
+}
+
+function edgeScrollDelta(curY: number, scrollParent: HTMLElement | null): number {
+	const edge = 48;
+	const maxSpeed = 16;
+	const top = scrollParent == null ? 0 : scrollParent.getBoundingClientRect().top;
+	const bottom = scrollParent == null ? window.innerHeight : scrollParent.getBoundingClientRect().bottom;
+	if (curY < top + edge) {
+		return -maxSpeed * (1 - Math.max(curY - top, 0) / edge);
+	} else if (curY > bottom - edge) {
+		return maxSpeed * (1 - Math.max(bottom - curY, 0) / edge);
+	}
+	return 0;
+}
+
+function applyEdgeScroll(scrollParent: HTMLElement | null, delta: number) {
+	if (scrollParent == null) {
+		window.scrollBy(0, delta);
+	} else {
+		scrollParent.scrollTop += delta;
+	}
+}
+
+function applyMarqueeSelection() {
+	const m = marquee;
+	const main = mainEl.value;
+	if (m == null || !m.active || main == null) return;
+
+	const left = Math.min(m.startX, m.curX);
+	const top = Math.min(m.startY, m.curY);
+	const right = Math.max(m.startX, m.curX);
+	const bottom = Math.max(m.startY, m.curY);
+	marqueeRect.value = { left, top, width: right - left, height: bottom - top };
+
+	const hitIds = new Set<string>();
+	for (const el of main.querySelectorAll('[data-drive-file]')) {
+		const r = el.getBoundingClientRect();
+		if (r.right >= left && r.left <= right && r.bottom >= top && r.top <= bottom) {
+			const id = (el as HTMLElement).dataset.driveFile;
+			if (id != null) hitIds.add(id);
+		}
+	}
+
+	// 框选为增量选择：起拖前已选中的保留，框内新增的随矩形变化而增减
+	const baseIds = new Set(m.baseFiles.map(f => f.id));
+	const next = [...m.baseFiles];
+	for (const f of filesPaginator.items.value) {
+		if (hitIds.has(f.id) && !baseIds.has(f.id)) next.push(f);
+	}
+	selectedFiles.value = next;
+}
+
+function startMarqueeAutoScroll() {
+	const m = marquee;
+	if (m == null || m.rafId != null) return;
+	const step = () => {
+		const mm = marquee;
+		if (mm == null || !mm.active) return;
+		const delta = edgeScrollDelta(mm.curY, mm.scrollParent);
+		if (delta !== 0) {
+			applyEdgeScroll(mm.scrollParent, delta);
+			applyMarqueeSelection();
+		}
+		mm.rafId = requestAnimationFrame(step);
+	};
+	m.rafId = requestAnimationFrame(step);
+}
+
+//#region 触屏长按拖拽移动
+// 浮标中心即命中点：位置由触点坐标同步计算（不能读渲染后的 DOM 矩形，Vue 异步更新会滞后一帧）。
+// 浮标视觉上浮在触点上方 33px（16px 间距 + 约 17px 半高），用户以浮标对准目标。
+const touchDragAimOffsetY = 33;
+
+function getTouchDragAim(m: MarqueeState): { x: number; y: number } {
+	return { x: m.curX, y: m.curY - touchDragAimOffsetY };
+}
+
+function activateTouchDrag(m: MarqueeState) {
+	if (m.startFileId == null) return;
+	const file = filesPaginator.items.value.find(f => f.id === m.startFileId);
+	if (file == null) return;
+
+	m.touchDrag = true;
+	m.scrollParent = getMainScrollParent();
+	dragOverlayZIndex.value = os.claimZIndex('high');
+
+	// 对齐桌面拖拽移动的行为：起按文件未选中时并入当前选中集
+	if (!selectedFiles.value.some(f => f.id === file.id)) {
+		selectedFiles.value = [...selectedFiles.value, file];
+	}
+	const aim = getTouchDragAim(m);
+	touchDragGhost.value = { x: aim.x, y: aim.y, count: selectedFiles.value.length };
+	startTouchDragAutoScroll(m);
+}
+
+function updateTouchDrag(m: MarqueeState) {
+	const aim = getTouchDragAim(m);
+	touchDragGhost.value = { x: aim.x, y: aim.y, count: selectedFiles.value.length };
+
+	let folderId: string | null = null;
+	let navKey: string | null = null;
+
+	// 面包屑条目是吸顶层且可见性最高，优先判定；
+	// 文件夹用矩形包含判定兜底——滑入吸顶导航带下方的文件夹会被 elementFromPoint 截获，几何判定不受覆盖影响
+	const el = window.document.elementFromPoint(aim.x, aim.y);
+	const navFolderEl = el?.closest('[data-drive-nav-folder]') as HTMLElement | null | undefined;
+	if (navFolderEl != null) {
+		const key = navFolderEl.dataset.driveNavFolder ?? null;
+		// 已在根目录时根目录不是有效目标
+		if (key != null && !(key === 'root' && folder.value == null)) {
+			navKey = key;
+		}
+	}
+	if (navKey == null) {
+		const main = mainEl.value;
+		if (main != null) {
+			for (const folderEl of main.querySelectorAll('[data-drive-folder]')) {
+				const r = folderEl.getBoundingClientRect();
+				if (aim.x >= r.left && aim.x <= r.right && aim.y >= r.top && aim.y <= r.bottom) {
+					const id = (folderEl as HTMLElement).dataset.driveFolder ?? null;
+					const targetFolder = foldersPaginator.items.value.find(f => f.id === id);
+					// AI 生图专用文件夹禁止移入
+					if (id != null && targetFolder != null && targetFolder.systemType !== 'agentGeneratedImages') {
+						folderId = id;
+					}
+					break;
+				}
+			}
+		}
+	}
+
+	if (m.hoverFolderId !== folderId || m.hoverNavKey !== navKey) {
+		m.hoverFolderId = folderId;
+		m.hoverNavKey = navKey;
+		touchDragHoverFolderId.value = folderId;
+		touchDragHoverNavKey.value = navKey;
+	}
+}
+
+function startTouchDragAutoScroll(m: MarqueeState) {
+	if (m.rafId != null) return;
+	const step = () => {
+		const mm = marquee;
+		if (mm == null || !mm.touchDrag) return;
+		const aim = getTouchDragAim(mm);
+		const delta = edgeScrollDelta(aim.y, mm.scrollParent);
+		if (delta !== 0) {
+			applyEdgeScroll(mm.scrollParent, delta);
+			updateTouchDrag(mm);
+		}
+		mm.rafId = requestAnimationFrame(step);
+	};
+	m.rafId = requestAnimationFrame(step);
+}
+
+function moveSelectedFilesTo(targetFolderId: string | null) {
+	const filesToMove = [...selectedFiles.value];
+	if (filesToMove.length === 0) return;
+	misskeyApi('drive/files/move-bulk', {
+		fileIds: filesToMove.map(f => f.id),
+		folderId: targetFolderId,
+	}).then(() => {
+		const targetFolder = targetFolderId == null ? null : (foldersPaginator.items.value.find(f => f.id === targetFolderId) ?? null);
+		globalEvents.emit('driveFilesUpdated', filesToMove.map(x => ({
+			...x,
+			folderId: targetFolderId,
+			folder: targetFolder,
+		})));
+		void fetchDriveStats();
+	}).catch(err => {
+		if (isProtectedAgentImageFolderError(err)) {
+			showProtectedAgentImageFolderError('move');
+			return;
+		}
+		os.alert({
+			type: 'error',
+			text: i18n.ts.somethingHappened,
+		});
+	});
+}
+//#endregion
+
+// 原生 HTML5 拖拽（文件/文件夹移动、外部文件拖入）期间靠近边缘时自动滚动。
+// 文件夹等子元素的 dragover 带 stopPropagation，main 收不到，故从 window 捕获阶段统一记录；
+// 同时存在多个 MkDrive 实例（如选择对话框叠在网盘页上）时，只响应指针正悬停的那个实例。
+function onWindowDragover(ev: DragEvent) {
+	const main = mainEl.value;
+	if (main == null) return;
+	const topEl = window.document.elementFromPoint(ev.clientX, ev.clientY);
+	if (topEl == null || !main.contains(topEl)) return;
+	nativeDragPointer = { x: ev.clientX, y: ev.clientY, time: Date.now() };
+	ensureNativeDragAutoScroll();
+}
+
+function ensureNativeDragAutoScroll() {
+	if (nativeDragRafId != null) return;
+	nativeDragScrollParent = getMainScrollParent();
+	const step = () => {
+		const info = nativeDragPointer;
+		// dragover 停止触发（拖出窗口、放下、结束）后自动停止
+		if (info == null || Date.now() - info.time > 500) {
+			nativeDragRafId = null;
+			return;
+		}
+		const delta = edgeScrollDelta(info.y, nativeDragScrollParent);
+		if (delta !== 0) applyEdgeScroll(nativeDragScrollParent, delta);
+		nativeDragRafId = requestAnimationFrame(step);
+	};
+	nativeDragRafId = requestAnimationFrame(step);
+}
+
+function onMarqueePointerUp(ev: PointerEvent) {
+	const m = marquee;
+	if (m == null || ev.pointerId !== m.pointerId) return;
+
+	if (m.touchDrag) {
+		const folderId = m.hoverFolderId;
+		const navKey = m.hoverNavKey;
+		endMarquee();
+		if (folderId != null) {
+			moveSelectedFilesTo(folderId);
+		} else if (navKey != null) {
+			moveSelectedFilesTo(navKey === 'root' ? null : navKey);
+		}
+		suppressNextClick();
+		return;
+	}
+
+	const wasActive = m.active;
+	endMarquee();
+	// 从文件上起拖的框选结束时，吞掉随后可能派发在该文件上的 click，避免误切换选中
+	if (wasActive) suppressNextClick();
+}
+
+function onMarqueePointerCancel(ev: PointerEvent) {
+	const m = marquee;
+	if (m == null || ev.pointerId !== m.pointerId) return;
+	// 浏览器接管了手势（如纵向滚动）：回滚到起拖前的选择
+	if (m.active) selectedFiles.value = m.baseFiles;
+	endMarquee();
+}
+
+function cancelMarquee() {
+	const m = marquee;
+	if (m == null) return;
+	if (m.active) selectedFiles.value = m.baseFiles;
+	endMarquee();
+}
+
+function endMarquee() {
+	const m = marquee;
+	if (m == null) return;
+	if (m.longPressTimer != null) window.clearTimeout(m.longPressTimer);
+	if (m.rafId != null) cancelAnimationFrame(m.rafId);
+	marquee = null;
+	marqueeRect.value = null;
+	touchDragGhost.value = null;
+	touchDragHoverFolderId.value = null;
+	touchDragHoverNavKey.value = null;
+	window.removeEventListener('pointermove', onMarqueePointerMove);
+	window.removeEventListener('pointerup', onMarqueePointerUp);
+	window.removeEventListener('pointercancel', onMarqueePointerCancel);
+	window.removeEventListener('touchmove', onMarqueeTouchMove);
+}
+
+function onContextmenuCapture(ev: Event) {
+	// 触屏长按已激活框选/拖拽移动时，拦截浏览器长按菜单
+	if (marquee != null && (marquee.active || marquee.touchDrag)) {
+		ev.stopPropagation();
+		ev.preventDefault();
+	}
+}
+
+function suppressNextClick() {
+	let timer: number | null = null;
+	const handler = (ev: MouseEvent) => {
+		ev.stopPropagation();
+		ev.preventDefault();
+		window.removeEventListener('click', handler, true);
+		if (timer != null) window.clearTimeout(timer);
+	};
+	timer = window.setTimeout(() => {
+		window.removeEventListener('click', handler, true);
+	}, 350);
+	window.addEventListener('click', handler, { capture: true });
+}
+//#endregion
 
 useGlobalEvent('driveFileCreated', (file) => {
 	if (file.folderId === (folder.value?.id ?? null)) {
@@ -881,6 +1377,12 @@ useGlobalEvent('driveFilesUpdated', (files) => {
 				filesPaginator.prepend(f);
 			}
 		}
+	}
+
+	// 移出当前文件夹的文件自动取消选中，避免对不可见文件继续执行批量操作
+	const movedOutIds = new Set(files.filter(f => f.folderId !== (folder.value?.id ?? null)).map(f => f.id));
+	if (movedOutIds.size > 0 && selectedFiles.value.some(f => movedOutIds.has(f.id))) {
+		selectedFiles.value = selectedFiles.value.filter(f => !movedOutIds.has(f.id));
 	}
 });
 
@@ -916,6 +1418,8 @@ useGlobalEvent('driveFoldersDeleted', (folders) => {
 let connection: Misskey.IChannelConnection<Misskey.Channels['drive']> | null = null;
 
 onMounted(() => {
+	window.addEventListener('dragover', onWindowDragover, true);
+
 	if (store.s.realtimeMode) {
 		connection = useStream().useChannel('drive');
 		connection.on('fileCreated', onStreamDriveFileCreated);
@@ -932,6 +1436,10 @@ onActivated(() => {
 });
 
 onBeforeUnmount(() => {
+	endMarquee();
+	window.removeEventListener('dragover', onWindowDragover, true);
+	if (nativeDragRafId != null) cancelAnimationFrame(nativeDragRafId);
+	if (nativeDragImageEl != null) nativeDragImageEl.remove();
 	if (connection != null) {
 		connection.dispose();
 	}
@@ -1008,6 +1516,7 @@ onBeforeUnmount(() => {
 .main {
 	min-height: 100cqh;
 	user-select: none;
+	-webkit-touch-callout: none;
 
 	&.fetching {
 		cursor: wait !important;
@@ -1126,5 +1635,30 @@ onBeforeUnmount(() => {
 	height: calc(100% - 38px);
 	border: dashed 2px var(--MI_THEME-focus);
 	pointer-events: none;
+}
+
+.marquee {
+	position: fixed;
+	border: 1px solid var(--MI_THEME-accent);
+	border-radius: 2px;
+	background: color(from var(--MI_THEME-accent) srgb r g b / 0.15);
+	pointer-events: none;
+}
+
+.touchDragGhost {
+	position: fixed;
+	transform: translate(-50%, -50%);
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 8px 14px;
+	border-radius: 999px;
+	background: var(--MI_THEME-accent);
+	color: var(--MI_THEME-fgOnAccent);
+	font-size: 13px;
+	font-weight: 700;
+	white-space: nowrap;
+	pointer-events: none;
+	box-shadow: 0 4px 16px rgba(#000, 0.25);
 }
 </style>
