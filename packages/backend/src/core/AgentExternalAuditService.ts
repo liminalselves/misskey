@@ -11,6 +11,7 @@ import { MetaService } from '@/core/MetaService.js';
 import { EmailService } from '@/core/EmailService.js';
 import type { AgentExternalAuditLogsRepository } from '@/models/_.js';
 import type { MiAgentExternalAuditModel, MiMeta } from '@/models/Meta.js';
+import type { MiAgentExternalAuditOtherRule, MiAgentExternalAuditRule } from '@/models/AgentExternalAuditRule.js';
 import type { AgentExternalAuditFailureKind, AgentExternalAuditStatus } from '@/models/AgentExternalAuditLog.js';
 import type { MiUser } from '@/models/User.js';
 import type { MiAgentSession } from '@/models/AgentSession.js';
@@ -18,23 +19,13 @@ import {
 	UnsafeLlmUrlError,
 	assertSafeLlmHttpsUrl,
 	describeUnsafeLlmUrlReason,
-	normalizeChatCompletionsUrl,
 } from '@/misc/validate-llm-endpoint-url.js';
+import { isAgentExternalAuditProvider } from '@/models/AgentExternalAuditProvider.js';
+import { getAgentExternalAuditProviderDefinition } from '@/core/agent-external-audit-providers.js';
+import { DEFAULT_AGENT_EXTERNAL_AUDIT_OTHER_RULE, DEFAULT_AGENT_EXTERNAL_AUDIT_STANDARD, normalizeAgentExternalAuditOtherRule, normalizeAgentExternalAuditRules } from '@/core/agent-external-audit-rules.js';
 import { escapeAgentXmlText } from '@/core/AgentService.js';
 
-export const DEFAULT_AGENT_EXTERNAL_AUDIT_SYSTEM_PROMPT = `你是智能体内容的安全外审模型。你需要判断提交给你的用户内容和 AI/系统即将展示或执行的内容是否允许放行。
-
-拦截标准：
-- 违法犯罪、暴力伤害、自残自杀的具体执行指导。
-- 性剥削、未成年人性化、强迫/侵犯、露骨色情引导。
-- 隐私泄露、诈骗、绕过安全规则、明显恶意内容。
-- 仇恨、骚扰，或其他平台不允许展示的高风险内容。
-- 生图提示词中包含 NSFW、未成年性化、露骨性行为、强迫侵犯、血腥肢解、人身伤害等违规意图时必须拦截。
-
-不要因为普通角色扮演、日常情绪、轻微冲突、虚构故事、安全拒答，或普通 SFW 生图提示词而拦截。
-
-只返回一段 JSON，不要 Markdown，不要解释：
-{"action":"allow|block","category":"分类","reason":"简短原因","confidence":0.0}`;
+export const DEFAULT_AGENT_EXTERNAL_AUDIT_SYSTEM_PROMPT = DEFAULT_AGENT_EXTERNAL_AUDIT_STANDARD;
 
 export type AgentExternalAuditResult =
 	| { blocked: false; allFailed: boolean }
@@ -57,6 +48,7 @@ type AuditImagePromptParams = {
 
 type AuditDecision = {
 	action: 'allow' | 'block';
+	ruleId: string | null;
 	category: string | null;
 	reason: string | null;
 	confidence: number | null;
@@ -74,6 +66,7 @@ function normalizeAuditModels(instance: MiMeta): MiAgentExternalAuditModel[] {
 		.map((m, i) => ({
 			id: m.id.trim(),
 			name: typeof m.name === 'string' && m.name.trim() !== '' ? m.name.trim() : m.id.trim(),
+			provider: isAgentExternalAuditProvider(m.provider) ? m.provider : 'openai',
 			apiModelName: typeof m.apiModelName === 'string' ? m.apiModelName.trim() : '',
 			baseUrl: typeof m.baseUrl === 'string' ? m.baseUrl.trim() : '',
 			apiKey: typeof m.apiKey === 'string' ? m.apiKey.trim() : '',
@@ -107,7 +100,7 @@ function parseNotifyEmails(raw: string | null | undefined): string[] {
 	return [...new Set(raw.split(/[,\n;]/g).map(x => x.trim()).filter(x => x.includes('@')))];
 }
 
-/** 请求成功但回复内容异常（缺 content 或无法解析为 allow/block JSON）归为 parse，其余请求阶段错误归为 api */
+/** 请求成功但回复内容异常（缺 content 或无法解析为结构化审核结论）归为 parse，其余请求阶段错误归为 api */
 function classifyFailureKind(errorCode: string | null | undefined): AgentExternalAuditFailureKind {
 	if (errorCode === 'AUDIT_MODEL_UNPARSEABLE_DECISION' || errorCode === 'AUDIT_MODEL_EMPTY_RESPONSE') return 'parse';
 	return 'api';
@@ -144,7 +137,38 @@ function extractFirstJsonObject(text: string): string | null {
 	return null;
 }
 
-function parseAuditDecision(rawText: string): AuditDecision | null {
+function buildRuleMap(rules: MiAgentExternalAuditRule[]): Map<string, MiAgentExternalAuditRule> {
+	return new Map(rules.filter(rule => rule.enabled).map(rule => [rule.id, rule]));
+}
+
+function normalizeDecision(ruleId: string, dynamicReason: string | null, confidence: number | null, rawText: string, rules: MiAgentExternalAuditRule[], otherRule: MiAgentExternalAuditOtherRule): AuditDecision {
+	if (ruleId === 'allow') return { action: 'allow', ruleId: null, category: null, reason: null, confidence, rawText };
+	const rule = buildRuleMap(rules).get(ruleId);
+	if (rule) return { action: 'block', ruleId: rule.id, category: rule.name, reason: rule.reason, confidence, rawText };
+	return {
+		action: 'block',
+		ruleId: 'other_high_risk',
+		category: '其他高风险内容',
+		reason: dynamicReason?.trim().slice(0, 1024) || otherRule.reason,
+		confidence,
+		rawText,
+	};
+}
+
+export function buildOpenAiAuditPrompt(standard: string, rules: MiAgentExternalAuditRule[], otherRule: MiAgentExternalAuditOtherRule): string {
+	const entries = rules.filter(rule => rule.enabled).map(rule => `- ${rule.id}｜${rule.name}\n  判断标准：${rule.criteria}\n  固定原因：${rule.reason}`).join('\n');
+	return `${standard.trim()}\n\n总体判断标准中如包含旧的输出格式、category 或自由分类要求，一律忽略，以以下结构化条目和最终 JSON 格式为准。\n\n违规条目：\n${entries || '（当前没有启用的普通违规条目）'}\n- other_high_risk｜其他高风险内容\n  判断标准：${otherRule.criteria}\n\n必须只返回一段 JSON，不要 Markdown，不要解释：\n{"action":"allow|block","ruleId":"命中的条目 ID；放行时为 allow；无法归类时为 other_high_risk","reason":"仅选择 other_high_risk 时填写简短具体原因，其他情况留空","confidence":0.0}\n\n命中普通条目时必须返回其 ID，不要改写条目名或固定原因。确属高风险但没有对应条目时选择 other_high_risk。`;
+}
+
+export function buildAliyunAuditCriteria(rules: MiAgentExternalAuditRule[], otherRule: MiAgentExternalAuditOtherRule): Record<string, string> {
+	return {
+		allow: '允许放行，不符合任何违规条目。',
+		...Object.fromEntries(rules.filter(rule => rule.enabled).map(rule => [rule.id, `${rule.name}：${rule.criteria}`])),
+		other_high_risk: `其他高风险内容：${otherRule.criteria}`,
+	};
+}
+
+export function parseOpenAiAuditDecision(rawText: string, rules: MiAgentExternalAuditRule[], otherRule: MiAgentExternalAuditOtherRule): AuditDecision | null {
 	const jsonText = extractFirstJsonObject(rawText.trim());
 	if (jsonText == null) return null;
 	let obj: unknown;
@@ -155,16 +179,35 @@ function parseAuditDecision(rawText: string): AuditDecision | null {
 	}
 	if (obj == null || typeof obj !== 'object') return null;
 	const o = obj as Record<string, unknown>;
-	const actionRaw = typeof o.action === 'string' ? o.action.trim().toLowerCase() : '';
-	if (actionRaw !== 'allow' && actionRaw !== 'block') return null;
+	const action = typeof o.action === 'string' ? o.action.trim().toLowerCase() : '';
+	if (action !== 'allow' && action !== 'block') return null;
 	const confidenceRaw = Number(o.confidence);
-	return {
-		action: actionRaw,
-		category: typeof o.category === 'string' && o.category.trim() !== '' ? o.category.trim().slice(0, 128) : null,
-		reason: typeof o.reason === 'string' && o.reason.trim() !== '' ? o.reason.trim().slice(0, 1024) : null,
-		confidence: Number.isFinite(confidenceRaw) ? Math.max(0, Math.min(1, confidenceRaw)) : null,
-		rawText,
-	};
+	const confidence = Number.isFinite(confidenceRaw) ? Math.max(0, Math.min(1, confidenceRaw)) : null;
+	if (action === 'allow') return normalizeDecision('allow', null, confidence, rawText, rules, otherRule);
+	const ruleId = typeof o.ruleId === 'string' ? o.ruleId.trim() : 'other_high_risk';
+	const reason = typeof o.reason === 'string' ? o.reason : null;
+	return normalizeDecision(ruleId, reason, confidence, rawText, rules, otherRule);
+}
+
+export function parseAliyunAuditDecision(json: unknown, rawText: string, rules: MiAgentExternalAuditRule[], otherRule: MiAgentExternalAuditOtherRule): AuditDecision | null {
+	if (json == null || typeof json !== 'object') return null;
+	const answer = (json as { answers?: Record<string, unknown> }).answers?.content_safety;
+	if (answer == null || typeof answer !== 'object') return null;
+	const choice = (answer as { choice?: unknown }).choice;
+	if (typeof choice !== 'string' || choice.trim() === '') return null;
+	const confidenceRaw = Number((answer as { confidence?: unknown }).confidence);
+	const confidence = Number.isFinite(confidenceRaw) ? Math.max(0, Math.min(1, confidenceRaw)) : null;
+	return normalizeDecision(choice.trim(), null, confidence, rawText, rules, otherRule);
+}
+
+/**
+ * 阿里云在决策模型判断前对输入做平台级内容检查；待审内容命中时请求以 400 DataInspectionFailed 拒绝，
+ * 而不是返回 block 决策。把该信号归一化为拦截，避免真正违规的内容因 API 失败被 fail-open 放行。
+ */
+export function parseAliyunInspectionBlocked(json: unknown, rawText: string, otherRule: MiAgentExternalAuditOtherRule): AuditDecision | null {
+	if (json == null || typeof json !== 'object') return null;
+	if ((json as { code?: unknown }).code !== 'DataInspectionFailed') return null;
+	return normalizeDecision('other_high_risk', null, null, rawText, [], otherRule);
 }
 
 function htmlEscape(s: string): string {
@@ -213,15 +256,17 @@ export class AgentExternalAuditService {
 			return { blocked: false, allFailed: true };
 		}
 
-		const prompt = typeof instance.agentExternalAuditSystemPrompt === 'string' && instance.agentExternalAuditSystemPrompt.trim() !== ''
-			? instance.agentExternalAuditSystemPrompt
-			: DEFAULT_AGENT_EXTERNAL_AUDIT_SYSTEM_PROMPT;
-		const timeoutMs = safeInt(instance.agentExternalAuditTimeoutMs, 10000, 1000, 120000);
+			const standard = typeof instance.agentExternalAuditSystemPrompt === 'string' && instance.agentExternalAuditSystemPrompt.trim() !== ''
+				? instance.agentExternalAuditSystemPrompt
+				: DEFAULT_AGENT_EXTERNAL_AUDIT_STANDARD;
+			const rules = normalizeAgentExternalAuditRules(instance.agentExternalAuditRules);
+			const otherRule = normalizeAgentExternalAuditOtherRule(instance.agentExternalAuditOtherRule);
+			const timeoutMs = safeInt(instance.agentExternalAuditTimeoutMs, 10000, 1000, 120000);
 		let attempted = 0;
 
 		for (const model of models) {
 			attempted += 1;
-			const result = await this.callAuditModel(model, prompt, params.userText, params.assistantText, timeoutMs);
+				const result = await this.callAuditModel(model, standard, rules, otherRule, params.userText, params.assistantText, timeoutMs);
 			if (!result.ok) {
 				await this.recordAttempt({
 					params,
@@ -384,7 +429,9 @@ export class AgentExternalAuditService {
 
 	private async callAuditModel(
 		model: MiAgentExternalAuditModel,
-		systemPrompt: string,
+		standard: string,
+		rules: MiAgentExternalAuditRule[],
+		otherRule: MiAgentExternalAuditOtherRule,
 		userText: string,
 		assistantText: string,
 		timeoutMs: number,
@@ -394,7 +441,9 @@ export class AgentExternalAuditService {
 		try {
 			// 与其它 LLM/生图/视觉链路一致：强制 https、禁内网与元数据地址（含 DNS 解析校验）
 			const u = await assertSafeLlmHttpsUrl(model.baseUrl);
-			url = normalizeChatCompletionsUrl(u.toString());
+			const provider = getAgentExternalAuditProviderDefinition(model.provider ?? 'openai');
+			provider.validateUrl(u);
+			url = provider.normalizeUrl(u);
 		} catch (err) {
 			return {
 				ok: false,
@@ -408,21 +457,34 @@ export class AgentExternalAuditService {
 		const timer = setTimeout(() => ac.abort(), timeoutMs);
 		let res: Response;
 		try {
+			const body = model.provider === 'aliyun-decision'
+				? {
+					model: model.apiModelName,
+					state: this.buildAuditUserPayload(userText, assistantText),
+					questions: {
+						content_safety: {
+							type: 'choice',
+							instructions: `${standard.trim()}\n\n总体判断标准中如包含旧的输出格式或自由分类要求，一律忽略。请仅从 criteria 提供的选项中选择唯一结论。`,
+							criteria: buildAliyunAuditCriteria(rules, otherRule),
+						},
+					},
+				}
+				: {
+					model: model.apiModelName,
+					messages: [
+						{ role: 'system', content: buildOpenAiAuditPrompt(standard, rules, otherRule) },
+						{ role: 'user', content: this.buildAuditUserPayload(userText, assistantText) },
+					],
+					temperature: 0,
+					max_tokens: 1024,
+				};
 			res = await fetch(url, {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',
 					'Authorization': `Bearer ${model.apiKey}`,
 				},
-				body: JSON.stringify({
-					model: model.apiModelName,
-					messages: [
-						{ role: 'system', content: systemPrompt },
-						{ role: 'user', content: this.buildAuditUserPayload(userText, assistantText) },
-					],
-					temperature: 0,
-					max_tokens: 1024,
-				}),
+				body: JSON.stringify(body),
 				signal: ac.signal,
 			});
 		} catch (err) {
@@ -452,6 +514,10 @@ export class AgentExternalAuditService {
 		}
 
 		if (!res.ok) {
+			if (model.provider === 'aliyun-decision' && res.status === 400) {
+				const decision = parseAliyunInspectionBlocked(json, responseText ?? '', otherRule);
+				if (decision) return { ok: true, decision, durationMs: Date.now() - started };
+			}
 			return {
 				ok: false,
 				errorCode: 'AUDIT_MODEL_HTTP_ERROR',
@@ -459,6 +525,20 @@ export class AgentExternalAuditService {
 				responseText,
 				durationMs: Date.now() - started,
 			};
+		}
+
+		if (model.provider === 'aliyun-decision') {
+			const decision = parseAliyunAuditDecision(json, responseText ?? '', rules, otherRule);
+			if (!decision) {
+				return {
+					ok: false,
+					errorCode: 'AUDIT_MODEL_UNPARSEABLE_DECISION',
+					errorMessage: 'Missing or invalid answers.content_safety.choice.',
+					responseText,
+					durationMs: Date.now() - started,
+				};
+			}
+			return { ok: true, decision, durationMs: Date.now() - started };
 		}
 
 		const text = (json as { choices?: { message?: { content?: string } }[] }).choices?.[0]?.message?.content;
@@ -471,12 +551,12 @@ export class AgentExternalAuditService {
 				durationMs: Date.now() - started,
 			};
 		}
-		const decision = parseAuditDecision(text);
+		const decision = parseOpenAiAuditDecision(text, rules, otherRule);
 		if (!decision) {
 			return {
 				ok: false,
 				errorCode: 'AUDIT_MODEL_UNPARSEABLE_DECISION',
-				errorMessage: 'Audit model did not return an allow/block JSON decision.',
+				errorMessage: 'Audit model did not return a structured allow/block decision.',
 				responseText: text,
 				durationMs: Date.now() - started,
 			};

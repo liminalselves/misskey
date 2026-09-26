@@ -432,9 +432,12 @@ SPDX-License-Identifier: AGPL-3.0-only
 							<MkInput v-model="row.name"><template #label>模型名</template><template #caption>内部识别用，不展示给用户。</template></MkInput>
 							<MkInput v-model="row.priority" type="text"><template #label>优先级</template><template #caption>数字越小越优先。</template></MkInput>
 						</FormSplit>
+						<MkSelect v-model="row.provider" :items="externalAuditProviderItems" @update:modelValue="onExternalAuditProviderChange(row)">
+							<template #label>模型类型</template>
+						</MkSelect>
 						<MkInput v-model="row.baseUrl" type="text">
 							<template #label>请求端点</template>
-							<template #caption>填写 OpenAI 兼容 Base URL（版本前缀如 /v1、/v4 请写全）；末尾不是 completions 时会自动追加 /chat/completions，已以 completions 结尾则原样使用。</template>
+							<template #caption>{{ row.provider === 'aliyun-decision' ? '填写完整的阿里云决策模型 systemone 端点，包含业务空间 ID 和地域。' : '填写 OpenAI 兼容 Base URL（版本前缀如 /v1、/v4 请写全）；末尾不是 completions 时会自动追加 /chat/completions，已以 completions 结尾则原样使用。' }}</template>
 							<template #prefix><i class="ti ti-link"></i></template>
 						</MkInput>
 						<FormSplit :minWidth="220">
@@ -455,14 +458,47 @@ SPDX-License-Identifier: AGPL-3.0-only
 						<template #label>通知邮箱</template>
 						<template #caption>多个邮箱可用换行、逗号或分号分隔。邮件服务未启用时不会发送。</template>
 					</MkTextarea>
-					<MkTextarea v-model="form.state.agentExternalAuditSystemPrompt" tall>
-						<template #label>外审系统提示词</template>
-						<template #caption>要求模型返回 allow/block JSON。留空或点击恢复默认会使用内置审核标准。</template>
-					</MkTextarea>
-					<div class="_buttons">
-						<MkButton rounded @click="restoreExternalAuditPrompt"><i class="ti ti-restore"></i> 恢复默认审核提示词</MkButton>
-						<MkButton rounded :disabled="externalAuditStatsLoading" @click="loadExternalAuditStats"><i class="ti ti-refresh"></i> 刷新健康统计</MkButton>
-					</div>
+						<MkTextarea v-model="form.state.agentExternalAuditSystemPrompt" tall>
+							<template #label>总体判断标准</template>
+							<template #caption>只描述共性审核边界、放行原则和例外。输出格式与违规条目由系统自动生成。</template>
+						</MkTextarea>
+						<div class="_buttons">
+							<MkButton rounded @click="restoreExternalAuditPrompt"><i class="ti ti-restore"></i> 恢复默认判断标准</MkButton>
+							<MkButton rounded :disabled="externalAuditStatsLoading" @click="loadExternalAuditStats"><i class="ti ti-refresh"></i> 刷新健康统计</MkButton>
+						</div>
+
+						<MkFolder :defaultOpen="true">
+							<template #icon><i class="ti ti-list-check"></i></template>
+							<template #label>违规条目</template>
+							<div class="_gaps">
+								<MkInfo>模型只负责选择条目。命中普通条目后使用这里配置的固定原因；确属高风险但没有对应条目时选择“其他高风险内容”。</MkInfo>
+								<div v-for="(rule, i) in form.state.agentExternalAuditRuleRows" :key="rule.id" :class="$style.modelCard" class="_gaps_s">
+									<div :class="$style.modelCardHead">
+										<b>{{ rule.name.trim() || `违规条目 #${i + 1}` }}</b>
+										<div :class="$style.modelCardActions">
+											<button type="button" class="_button" :disabled="i === 0" title="上移" @click="moveExternalAuditRule(i, -1)"><i class="ti ti-arrow-up"></i></button>
+											<button type="button" class="_button" :disabled="i === form.state.agentExternalAuditRuleRows.length - 1" title="下移" @click="moveExternalAuditRule(i, 1)"><i class="ti ti-arrow-down"></i></button>
+											<button type="button" class="_button" :class="$style.iconWarn" title="删除条目" @click="removeExternalAuditRule(i)"><i class="ti ti-trash"></i></button>
+										</div>
+									</div>
+									<FormSplit :minWidth="220">
+										<MkInput v-model="rule.name"><template #label>条目名</template></MkInput>
+										<MkInput v-model="rule.id"><template #label>条目 ID</template><template #caption>创建后不建议修改；使用小写字母、数字、下划线或连字符。</template></MkInput>
+									</FormSplit>
+									<MkInput v-model="rule.reason"><template #label>固定拦截原因</template><template #caption>命中此条目时直接展示该原因，不采用模型自由生成的原因。</template></MkInput>
+									<MkTextarea v-model="rule.criteria"><template #label>判断标准</template><template #caption>写清适用范围、必要条件和不应误拦截的例外。</template></MkTextarea>
+									<MkSwitch v-model="rule.enabled"><template #label>启用此条目</template></MkSwitch>
+								</div>
+								<MkButton rounded @click="addExternalAuditRule"><i class="ti ti-plus"></i> 添加违规条目</MkButton>
+
+								<div :class="$style.modelCard" class="_gaps_s">
+									<div :class="$style.modelCardHead"><b>其他高风险内容</b><span>固定兜底项</span></div>
+									<MkInput v-model="form.state.agentExternalAuditOtherRule.reason"><template #label>兜底原因</template><template #caption>决策模型无法生成原因，或 OpenAI 模型未提供有效原因时使用。</template></MkInput>
+									<MkTextarea v-model="form.state.agentExternalAuditOtherRule.criteria"><template #label>判断标准</template></MkTextarea>
+								</div>
+								<MkButton rounded @click="restoreExternalAuditRules"><i class="ti ti-restore"></i> 恢复默认规则集</MkButton>
+							</div>
+						</MkFolder>
 
 					<MkFolder :defaultOpen="true">
 						<template #icon><i class="ti ti-shield-exclamation"></i></template>
@@ -542,7 +578,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 											<time :class="$style.auditFailureTime">{{ formatExternalAuditFailureTime(row.createdAt) }}</time>
 										</div>
 										<template v-if="row.failureKind === 'parse'">
-											<div :class="$style.auditFailureReason">AI 回复内容无法解析为审核结论（allow/block JSON）：</div>
+											<div :class="$style.auditFailureReason">AI 回复内容无法解析为结构化审核结论：</div>
 											<pre :class="$style.auditFailurePre">{{ row.responseText || '（空回复）' }}</pre>
 										</template>
 										<template v-else>
@@ -1358,6 +1394,7 @@ type AgentVisionModelRow = { id: string; name: string; enabled: boolean; apiUrl:
 type AgentExternalAuditModelRow = {
 	id: string;
 	name: string;
+	provider: string;
 	baseUrl: string;
 	apiKey: string;
 	apiModelName: string;
@@ -1366,6 +1403,19 @@ type AgentExternalAuditModelRow = {
 	autoDisabledAt: string;
 	autoDisabledReason: string;
 	lastError: string;
+};
+
+type AgentExternalAuditRuleRow = {
+	id: string;
+	name: string;
+	reason: string;
+	criteria: string;
+	enabled: boolean;
+};
+
+type AgentExternalAuditOtherRuleRow = {
+	reason: string;
+	criteria: string;
 };
 
 type AgentExternalAuditModelStat = {
@@ -1380,7 +1430,7 @@ type AgentExternalAuditModelStat = {
 	failed: number;
 	/** 请求阶段失败数（URL 非法/超时/网络错误/HTTP 错误/响应体非 JSON） */
 	apiFailed: number;
-	/** 回复解析失败数（回复内容缺失或无法解析为 allow/block JSON） */
+	/** 回复解析失败数（回复内容缺失或无法解析为结构化审核结论） */
 	parseFailed: number;
 	failureRate: number;
 };
@@ -1647,6 +1697,7 @@ function initAgentExternalAuditModelRows(): AgentExternalAuditModelRow[] {
 		return {
 			id: typeof o.id === 'string' && o.id ? o.id : genId(),
 			name: typeof o.name === 'string' ? o.name : '',
+				provider: typeof o.provider === 'string' && o.provider !== '' ? o.provider : 'openai',
 			baseUrl: typeof o.baseUrl === 'string' ? o.baseUrl : '',
 			apiKey: typeof o.apiKey === 'string' ? o.apiKey : '',
 			apiModelName: typeof o.apiModelName === 'string' ? o.apiModelName : '',
@@ -1657,6 +1708,33 @@ function initAgentExternalAuditModelRows(): AgentExternalAuditModelRow[] {
 			lastError: typeof o.lastError === 'string' ? o.lastError : '',
 		};
 	});
+}
+
+function parseExternalAuditRuleRows(value: unknown): AgentExternalAuditRuleRow[] {
+	if (!Array.isArray(value)) return [];
+	return value.map(item => {
+		const o = item && typeof item === 'object' ? item as Record<string, unknown> : {};
+		return {
+			id: typeof o.id === 'string' ? o.id : '',
+			name: typeof o.name === 'string' ? o.name : '',
+			reason: typeof o.reason === 'string' ? o.reason : '',
+			criteria: typeof o.criteria === 'string' ? o.criteria : '',
+			enabled: o.enabled !== false,
+		};
+	});
+}
+
+function initAgentExternalAuditRuleRows(): AgentExternalAuditRuleRow[] {
+	return parseExternalAuditRuleRows(meta.agentExternalAuditRules);
+}
+
+function initAgentExternalAuditOtherRule(): AgentExternalAuditOtherRuleRow {
+	const value = meta.agentExternalAuditOtherRule;
+	const o = value && typeof value === 'object' ? value as Record<string, unknown> : {};
+	return {
+		reason: typeof o.reason === 'string' ? o.reason : '',
+		criteria: typeof o.criteria === 'string' ? o.criteria : '',
+	};
 }
 
 function initAgentReviewTriggerRules(): AgentReviewTriggerRule[] {
@@ -1738,10 +1816,12 @@ const form = useForm({
 	agentExternalAuditFailureThresholdPercent: String(numFromMeta(meta.agentExternalAuditFailureThresholdPercent, 60)),
 	agentExternalAuditFailureMinRequests: String(numFromMeta(meta.agentExternalAuditFailureMinRequests, 10)),
 	agentExternalAuditNotifyEmails: typeof meta.agentExternalAuditNotifyEmails === 'string' ? meta.agentExternalAuditNotifyEmails : '',
-	agentExternalAuditSystemPrompt: typeof meta.agentExternalAuditSystemPrompt === 'string'
-		? meta.agentExternalAuditSystemPrompt
-		: (typeof meta.agentExternalAuditSystemPromptResolved === 'string' ? meta.agentExternalAuditSystemPromptResolved : ''),
-	agentReviewTriggerRules: initAgentReviewTriggerRules(),
+		agentExternalAuditSystemPrompt: typeof meta.agentExternalAuditSystemPrompt === 'string'
+			? meta.agentExternalAuditSystemPrompt
+			: (typeof meta.agentExternalAuditSystemPromptResolved === 'string' ? meta.agentExternalAuditSystemPromptResolved : ''),
+		agentExternalAuditRuleRows: initAgentExternalAuditRuleRows(),
+		agentExternalAuditOtherRule: initAgentExternalAuditOtherRule(),
+		agentReviewTriggerRules: initAgentReviewTriggerRules(),
 	checkinEnabled: Boolean((meta as any).agentCheckinSettings?.enabled ?? true),
 	checkinStreakMaxDays: String((meta as any).agentCheckinSettings?.streakMaxDays ?? 365),
 	checkinStreakMaxMultiplier: String((meta as any).agentCheckinSettings?.streakMaxMultiplier ?? 2.0),
@@ -2070,6 +2150,7 @@ const form = useForm({
 		.map((row, i) => ({
 			id: row.id.trim() || genId(),
 			name: row.name.trim(),
+				provider: row.provider,
 			baseUrl: row.baseUrl.trim(),
 			apiKey: row.apiKey.trim(),
 			apiModelName: row.apiModelName.trim(),
@@ -2079,9 +2160,13 @@ const form = useForm({
 			autoDisabledReason: row.autoDisabledReason.trim() === '' ? null : row.autoDisabledReason.trim(),
 			lastError: row.lastError.trim() === '' ? null : row.lastError.trim(),
 		}));
-	const externalAuditIds = new Set<string>();
-	for (const row of externalAuditModels) {
-		if (!row.id || !row.name || !row.baseUrl || !row.apiKey || !row.apiModelName) {
+		const externalAuditIds = new Set<string>();
+		for (const row of externalAuditModels) {
+			if (!externalAuditProviderValues.has(row.provider)) {
+				os.alert({ type: 'error', text: `不支持的外审模型类型：${row.provider}` });
+				throw new Error('unsupported external audit provider');
+			}
+			if (!row.id || !row.name || !row.baseUrl || !row.apiKey || !row.apiModelName) {
 			os.alert({ type: 'error', text: i18n.ts._agents.adminExternalAuditInvalid });
 			throw new Error('invalid external audit model row');
 		}
@@ -2091,7 +2176,30 @@ const form = useForm({
 		}
 		externalAuditIds.add(row.id);
 	}
-	const externalAuditTimeoutMs = Math.trunc(Number(state.agentExternalAuditTimeoutMs));
+		const externalAuditRules = state.agentExternalAuditRuleRows.map(rule => ({
+			id: rule.id.trim(),
+			name: rule.name.trim(),
+			reason: rule.reason.trim(),
+			criteria: rule.criteria.trim(),
+			enabled: rule.enabled,
+		}));
+		const externalAuditRuleIds = new Set<string>();
+		for (const rule of externalAuditRules) {
+			if (!/^[a-z][a-z0-9_-]{0,63}$/.test(rule.id) || rule.id === 'allow' || rule.id === 'other_high_risk' || !rule.name || !rule.reason || !rule.criteria || externalAuditRuleIds.has(rule.id)) {
+				os.alert({ type: 'error', text: '违规条目的 ID、名称、固定原因和判断标准必须完整；ID 需唯一并使用小写字母、数字、下划线或连字符。' });
+				throw new Error('invalid external audit rule');
+			}
+			externalAuditRuleIds.add(rule.id);
+		}
+		const externalAuditOtherRule = {
+			reason: state.agentExternalAuditOtherRule.reason.trim(),
+			criteria: state.agentExternalAuditOtherRule.criteria.trim(),
+		};
+		if (!externalAuditOtherRule.reason || !externalAuditOtherRule.criteria) {
+			os.alert({ type: 'error', text: '“其他高风险内容”的兜底原因和判断标准不能为空。' });
+			throw new Error('invalid external audit other rule');
+		}
+		const externalAuditTimeoutMs = Math.trunc(Number(state.agentExternalAuditTimeoutMs));
 	const externalAuditFailureThresholdPercent = Math.trunc(Number(state.agentExternalAuditFailureThresholdPercent));
 	const externalAuditFailureMinRequests = Math.trunc(Number(state.agentExternalAuditFailureMinRequests));
 	if (!Number.isFinite(externalAuditTimeoutMs) || externalAuditTimeoutMs < 1000 || externalAuditTimeoutMs > 120000) {
@@ -2235,8 +2343,10 @@ const form = useForm({
 		agentExternalAuditFailureThresholdPercent: externalAuditFailureThresholdPercent,
 		agentExternalAuditFailureMinRequests: externalAuditFailureMinRequests,
 		agentExternalAuditNotifyEmails: state.agentExternalAuditNotifyEmails.trim() === '' ? null : state.agentExternalAuditNotifyEmails,
-		agentExternalAuditSystemPrompt: state.agentExternalAuditSystemPrompt.trim() === '' ? null : state.agentExternalAuditSystemPrompt,
-		agentReviewTriggerRules: state.agentReviewTriggerRules
+			agentExternalAuditSystemPrompt: state.agentExternalAuditSystemPrompt.trim() === '' ? null : state.agentExternalAuditSystemPrompt,
+			agentExternalAuditRules: externalAuditRules,
+			agentExternalAuditOtherRule: externalAuditOtherRule,
+			agentReviewTriggerRules: state.agentReviewTriggerRules
 			.filter(r => r.timeWindowMinutes.trim() !== '' && r.blockThreshold.trim() !== '')
 			.map(r => ({
 				id: r.id,
@@ -2297,6 +2407,12 @@ const compressionDefaultModelItems = computed((): MkSelectItem[] => {
 	}
 	return items;
 });
+
+const externalAuditProviderItems: MkSelectItem[] = [
+	{ value: 'openai', label: 'OpenAI 兼容 Chat Completions' },
+	{ value: 'aliyun-decision', label: '阿里云百炼决策模型' },
+];
+const externalAuditProviderValues = new Set(['openai', 'aliyun-decision']);
 
 const listedModelCount = computed(() => form.state.agentLlmModelRows.filter(r => !r.unlisted && r.name.trim() && r.apiModelName.trim()).length);
 const hasAuroraImageModel = computed(() => form.state.agentImageModelRows.some(r => r.provider === 'aurora'));
@@ -2715,6 +2831,7 @@ function addExternalAuditModel() {
 	form.state.agentExternalAuditModelRows.push({
 		id: genId(),
 		name: '',
+		provider: 'openai',
 		baseUrl: '',
 		apiKey: '',
 		apiModelName: '',
@@ -2728,6 +2845,41 @@ function addExternalAuditModel() {
 
 function removeExternalAuditModel(index: number) {
 	form.state.agentExternalAuditModelRows.splice(index, 1);
+}
+
+function onExternalAuditProviderChange(row: AgentExternalAuditModelRow) {
+	if (row.provider === 'aliyun-decision' && row.apiModelName.trim() === '') row.apiModelName = 'decision-model-preview';
+}
+
+function addExternalAuditRule() {
+	form.state.agentExternalAuditRuleRows.push({
+		id: `rule_${genId().slice(-8).toLowerCase()}`,
+		name: '',
+		reason: '',
+		criteria: '',
+		enabled: true,
+	});
+}
+
+function removeExternalAuditRule(index: number) {
+	form.state.agentExternalAuditRuleRows.splice(index, 1);
+}
+
+function moveExternalAuditRule(index: number, direction: -1 | 1) {
+	const target = index + direction;
+	if (target < 0 || target >= form.state.agentExternalAuditRuleRows.length) return;
+	const [rule] = form.state.agentExternalAuditRuleRows.splice(index, 1);
+	if (rule) form.state.agentExternalAuditRuleRows.splice(target, 0, rule);
+}
+
+function restoreExternalAuditRules() {
+	form.state.agentExternalAuditRuleRows = parseExternalAuditRuleRows(meta.agentExternalAuditDefaultRules);
+	const other = meta.agentExternalAuditDefaultOtherRule;
+	const o = other && typeof other === 'object' ? other as Record<string, unknown> : {};
+	form.state.agentExternalAuditOtherRule = {
+		reason: typeof o.reason === 'string' ? o.reason : '',
+		criteria: typeof o.criteria === 'string' ? o.criteria : '',
+	};
 }
 
 function clearExternalAuditAutoDisabled(index: number) {
@@ -2752,8 +2904,8 @@ function removeReviewTriggerRule(index: number) {
 }
 
 function restoreExternalAuditPrompt() {
-	form.state.agentExternalAuditSystemPrompt = typeof meta.agentExternalAuditSystemPromptResolved === 'string'
-		? meta.agentExternalAuditSystemPromptResolved
+	form.state.agentExternalAuditSystemPrompt = typeof meta.agentExternalAuditDefaultSystemPrompt === 'string'
+		? meta.agentExternalAuditDefaultSystemPrompt
 		: '';
 }
 

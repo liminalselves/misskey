@@ -79,11 +79,12 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			return models.map((m, i) => {
 				const id = typeof m.id === 'string' ? m.id : `model-${i + 1}`;
 				const b = byModel.get(id) ?? { total: 0, allow: 0, block: 0, failed: 0, apiFailed: 0, parseFailed: 0 };
-				return {
-					id,
-					name: typeof m.name === 'string' ? m.name : id,
-					apiModelName: typeof m.apiModelName === 'string' ? m.apiModelName : '',
-					baseUrl: typeof m.baseUrl === 'string' ? m.baseUrl : '',
+					return {
+						id,
+						name: typeof m.name === 'string' ? m.name : id,
+						provider: m.provider === 'aliyun-decision' ? 'aliyun-decision' : 'openai',
+						apiModelName: typeof m.apiModelName === 'string' ? m.apiModelName : '',
+						baseUrl: typeof m.baseUrl === 'string' ? m.baseUrl : '',
 					priority: Number.isFinite(Number(m.priority)) ? Math.trunc(Number(m.priority)) : i,
 					enabled: m.enabled !== false,
 					autoDisabledAt: typeof m.autoDisabledAt === 'string' ? m.autoDisabledAt : null,

@@ -5,6 +5,8 @@
 
 import { Entity, Column, PrimaryColumn, ManyToOne } from 'typeorm';
 import type { AgentImageProvider } from './AgentImageProvider.js';
+import type { AgentExternalAuditProvider } from './AgentExternalAuditProvider.js';
+import type { MiAgentExternalAuditOtherRule, MiAgentExternalAuditRule } from './AgentExternalAuditRule.js';
 import { id } from './util/id.js';
 import { MiUser } from './User.js';
 
@@ -94,6 +96,7 @@ export type MiAgentVisionModel = {
 export type MiAgentExternalAuditModel = {
 	id: string;
 	name: string;
+	provider?: AgentExternalAuditProvider;
 	apiModelName: string;
 	baseUrl: string;
 	apiKey: string;
@@ -1280,6 +1283,16 @@ export class MiMeta {
 		nullable: true,
 	})
 	public agentExternalAuditSystemPrompt: string | null;
+
+	@Column('jsonb', {
+		default: [],
+	})
+	public agentExternalAuditRules: MiAgentExternalAuditRule[];
+
+	@Column('jsonb', {
+		default: {},
+	})
+	public agentExternalAuditOtherRule: MiAgentExternalAuditOtherRule;
 
 	/** 外审复审触发条件规则列表 */
 	@Column('jsonb', {

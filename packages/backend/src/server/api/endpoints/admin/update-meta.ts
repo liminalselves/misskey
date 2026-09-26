@@ -13,7 +13,10 @@ import { ApiError } from '@/server/api/error.js';
 import { assertSafeLlmHttpsUrl, describeUnsafeLlmUrlReason, hrefForStoredLlmBaseUrl, UnsafeLlmUrlError } from '@/misc/validate-llm-endpoint-url.js';
 import { getActiveLlmModels, normalizeAgentLlmModelGroupsParam, normalizeAgentLlmModelsParam } from '@/misc/agent-llm-models.js';
 import { AGENT_IMAGE_PROVIDER_IDS } from '@/models/AgentImageProvider.js';
+import { AGENT_EXTERNAL_AUDIT_PROVIDER_IDS, isAgentExternalAuditProvider } from '@/models/AgentExternalAuditProvider.js';
 import { getAgentImageProviderDefinition } from '@/core/agent-image-providers.js';
+import { getAgentExternalAuditProviderDefinition } from '@/core/agent-external-audit-providers.js';
+import { AGENT_EXTERNAL_AUDIT_MAX_RULES, AGENT_EXTERNAL_AUDIT_RESERVED_RULE_IDS, AGENT_EXTERNAL_AUDIT_RULE_ID_PATTERN } from '@/core/agent-external-audit-rules.js';
 import { normalizeAgentByokProvidersParam } from '@/core/AgentUserModelService.js';
 import { AgentCompressionMemoryService } from '@/core/AgentCompressionMemoryService.js';
 import { GlobalEventService } from '@/core/GlobalEventService.js';
@@ -336,11 +339,12 @@ export const paramDef = {
 			type: 'array',
 			items: {
 				type: 'object',
-				properties: {
-					id: { type: 'string', minLength: 1, maxLength: 64 },
-					name: { type: 'string', minLength: 1, maxLength: 256 },
-					apiModelName: { type: 'string', minLength: 1, maxLength: 256 },
-					baseUrl: { type: 'string', minLength: 1, maxLength: 512 },
+					properties: {
+						id: { type: 'string', minLength: 1, maxLength: 64 },
+						name: { type: 'string', minLength: 1, maxLength: 256 },
+						provider: { type: 'string', enum: AGENT_EXTERNAL_AUDIT_PROVIDER_IDS },
+						apiModelName: { type: 'string', minLength: 1, maxLength: 256 },
+						baseUrl: { type: 'string', minLength: 1, maxLength: 512 },
 					apiKey: { type: 'string', minLength: 1, maxLength: 8192 },
 					priority: { type: 'integer', minimum: -1000000, maximum: 1000000 },
 					enabled: { type: 'boolean' },
@@ -354,9 +358,31 @@ export const paramDef = {
 		agentExternalAuditTimeoutMs: { type: 'integer', minimum: 1000, maximum: 120000 },
 		agentExternalAuditFailureThresholdPercent: { type: 'integer', minimum: 1, maximum: 100 },
 		agentExternalAuditFailureMinRequests: { type: 'integer', minimum: 1, maximum: 100000 },
-		agentExternalAuditNotifyEmails: { type: 'string', nullable: true, maxLength: 4000 },
-		agentExternalAuditSystemPrompt: { type: 'string', nullable: true, maxLength: 20000 },
-		agentReviewTriggerRules: {
+			agentExternalAuditNotifyEmails: { type: 'string', nullable: true, maxLength: 4000 },
+			agentExternalAuditSystemPrompt: { type: 'string', nullable: true, maxLength: 20000 },
+			agentExternalAuditRules: {
+				type: 'array', maxItems: AGENT_EXTERNAL_AUDIT_MAX_RULES,
+				items: {
+					type: 'object',
+					properties: {
+						id: { type: 'string', minLength: 1, maxLength: 64 },
+						name: { type: 'string', minLength: 1, maxLength: 128 },
+						reason: { type: 'string', minLength: 1, maxLength: 1024 },
+						criteria: { type: 'string', minLength: 1, maxLength: 4000 },
+						enabled: { type: 'boolean' },
+					},
+					required: ['id', 'name', 'reason', 'criteria', 'enabled'],
+				},
+			},
+			agentExternalAuditOtherRule: {
+				type: 'object',
+				properties: {
+					reason: { type: 'string', minLength: 1, maxLength: 1024 },
+					criteria: { type: 'string', minLength: 1, maxLength: 4000 },
+				},
+				required: ['reason', 'criteria'],
+			},
+			agentReviewTriggerRules: {
 			type: 'array',
 			items: {
 				type: 'object',
@@ -1271,60 +1297,49 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			if (ps.agentExternalAuditEnabled !== undefined) {
 				set.agentExternalAuditEnabled = ps.agentExternalAuditEnabled;
 			}
-			if (ps.agentExternalAuditModels !== undefined) {
-				const seen = new Set<string>();
-				set.agentExternalAuditModels = (ps.agentExternalAuditModels ?? []).map((m, i) => {
-					const id = String(m.id ?? '').trim();
-					if (id === '') {
-						throw new ApiError({
-							message: `External audit model #${i + 1}: id is required.`,
-							code: 'INVALID_PARAM',
-							id: '3f7c1a9e-5d2b-4c8f-9a1e-6b0d2f4c8a71',
-						});
-					}
-					if (seen.has(id)) {
-						throw new ApiError({
-							message: `Duplicate external audit model id: ${id}`,
-							code: 'INVALID_PARAM',
-							id: 'fd2e9f39-328a-4eb6-960a-e1795b72bfc0',
-						});
-					}
-					seen.add(id);
-					const apiModelName = String(m.apiModelName ?? '').trim();
-					const apiKey = String(m.apiKey ?? '').trim();
-					const baseUrlRaw = String(m.baseUrl ?? '').trim().replace(/\/$/, '');
-					if (apiModelName === '' || baseUrlRaw === '' || apiKey === '') {
-						throw new ApiError({
-							message: `External audit model "${id}": apiModelName, baseUrl and apiKey are all required.`,
-							code: 'INVALID_PARAM',
-							id: '9e4b2c6a-1d3f-4a5b-8c7d-2e9f0a1b3c55',
-						});
-					}
-					try {
-						// 与运行时 assertSafeLlmHttpsUrl 口径一致：仅允许 https（内网/DNS 等校验在调用时执行）
-						const u = new URL(baseUrlRaw);
-						if (u.protocol !== 'https:') throw new Error('Only https endpoints are supported.');
-					} catch (e) {
-						throw new ApiError({
-							message: `External audit model "${id}" base URL: ${e instanceof Error ? e.message : String(e)}`,
-							code: 'INVALID_PARAM',
-							id: '8446fb08-2442-4ced-995f-8c538d79d6a2',
-						});
-					}
-					return {
-						id,
-						name: String(m.name ?? '').trim(),
-						apiModelName,
-						baseUrl: baseUrlRaw,
-						apiKey,
-						priority: Number.isFinite(Number(m.priority)) ? Math.trunc(Number(m.priority)) : i,
-						enabled: m.enabled !== false,
-						autoDisabledAt: typeof m.autoDisabledAt === 'string' && m.autoDisabledAt.trim() !== '' ? m.autoDisabledAt.trim() : null,
-						autoDisabledReason: typeof m.autoDisabledReason === 'string' && m.autoDisabledReason.trim() !== '' ? m.autoDisabledReason.trim() : null,
-						lastError: typeof m.lastError === 'string' && m.lastError.trim() !== '' ? m.lastError.trim() : null,
-					};
-				});
-			}
+				if (ps.agentExternalAuditModels !== undefined) {
+					const seen = new Set<string>();
+					set.agentExternalAuditModels = (ps.agentExternalAuditModels ?? []).map((m, i) => {
+						const id = String(m.id ?? '').trim();
+						if (id === '') {
+							throw new ApiError({ message: `External audit model #${i + 1}: id is required.`, code: 'INVALID_PARAM', id: '3f7c1a9e-5d2b-4c8f-9a1e-6b0d2f4c8a71' });
+						}
+						if (seen.has(id)) {
+							throw new ApiError({ message: `Duplicate external audit model id: ${id}`, code: 'INVALID_PARAM', id: 'fd2e9f39-328a-4eb6-960a-e1795b72bfc0' });
+						}
+						seen.add(id);
+						const providerValue = m.provider ?? 'openai';
+						if (!isAgentExternalAuditProvider(providerValue)) {
+							throw new ApiError({ message: `External audit model "${id}": unsupported provider.`, code: 'INVALID_PARAM', id: 'a47e54d1-f911-4bde-b611-a6b25dbb02d0' });
+						}
+						const apiModelName = String(m.apiModelName ?? '').trim();
+						const apiKey = String(m.apiKey ?? '').trim();
+						const baseUrlRaw = String(m.baseUrl ?? '').trim().replace(/\/$/, '');
+						if (apiModelName === '' || baseUrlRaw === '' || apiKey === '') {
+							throw new ApiError({ message: `External audit model "${id}": apiModelName, baseUrl and apiKey are all required.`, code: 'INVALID_PARAM', id: '9e4b2c6a-1d3f-4a5b-8c7d-2e9f0a1b3c55' });
+						}
+						try {
+							const u = new URL(baseUrlRaw);
+							if (u.protocol !== 'https:') throw new Error('Only https endpoints are supported.');
+							getAgentExternalAuditProviderDefinition(providerValue).validateUrl(u);
+						} catch (e) {
+							throw new ApiError({ message: `External audit model "${id}" base URL: ${e instanceof Error ? e.message : String(e)}`, code: 'INVALID_PARAM', id: '8446fb08-2442-4ced-995f-8c538d79d6a2' });
+						}
+						return {
+							id,
+							name: String(m.name ?? '').trim(),
+							provider: providerValue,
+							apiModelName,
+							baseUrl: baseUrlRaw,
+							apiKey,
+							priority: Number.isFinite(Number(m.priority)) ? Math.trunc(Number(m.priority)) : i,
+							enabled: m.enabled !== false,
+							autoDisabledAt: typeof m.autoDisabledAt === 'string' && m.autoDisabledAt.trim() !== '' ? m.autoDisabledAt.trim() : null,
+							autoDisabledReason: typeof m.autoDisabledReason === 'string' && m.autoDisabledReason.trim() !== '' ? m.autoDisabledReason.trim() : null,
+							lastError: typeof m.lastError === 'string' && m.lastError.trim() !== '' ? m.lastError.trim() : null,
+						};
+					});
+				}
 			if (ps.agentExternalAuditTimeoutMs !== undefined) {
 				set.agentExternalAuditTimeoutMs = Math.max(1000, Math.min(120000, ps.agentExternalAuditTimeoutMs));
 			}
@@ -1339,12 +1354,40 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					? null
 					: String(ps.agentExternalAuditNotifyEmails).trim();
 			}
-			if (ps.agentExternalAuditSystemPrompt !== undefined) {
-				set.agentExternalAuditSystemPrompt = ps.agentExternalAuditSystemPrompt === null || String(ps.agentExternalAuditSystemPrompt).trim() === ''
-					? null
-					: String(ps.agentExternalAuditSystemPrompt).trim();
-			}
-			if (ps.agentReviewTriggerRules !== undefined) {
+				if (ps.agentExternalAuditSystemPrompt !== undefined) {
+					set.agentExternalAuditSystemPrompt = ps.agentExternalAuditSystemPrompt === null || String(ps.agentExternalAuditSystemPrompt).trim() === ''
+						? null
+						: String(ps.agentExternalAuditSystemPrompt).trim();
+				}
+				if (ps.agentExternalAuditRules !== undefined) {
+					const seen = new Set<string>();
+					set.agentExternalAuditRules = ps.agentExternalAuditRules.map((rule, i) => {
+						const id = String(rule.id).trim();
+						const name = String(rule.name).trim();
+						const reason = String(rule.reason).trim();
+						const criteria = String(rule.criteria).trim();
+						if (!AGENT_EXTERNAL_AUDIT_RULE_ID_PATTERN.test(id) || AGENT_EXTERNAL_AUDIT_RESERVED_RULE_IDS.includes(id as typeof AGENT_EXTERNAL_AUDIT_RESERVED_RULE_IDS[number])) {
+							throw new ApiError({ message: `External audit rule #${i + 1}: invalid or reserved id.`, code: 'INVALID_PARAM', id: 'c0bd38e0-861d-4df3-82a4-42d3d068c50c' });
+						}
+						if (seen.has(id)) {
+							throw new ApiError({ message: `Duplicate external audit rule id: ${id}`, code: 'INVALID_PARAM', id: 'be459305-aa71-4923-a95f-16d0f6fd5411' });
+						}
+						if (name === '' || reason === '' || criteria === '') {
+							throw new ApiError({ message: `External audit rule "${id}": name, reason and criteria are required.`, code: 'INVALID_PARAM', id: '59202304-8844-48b2-ad84-fd297f8ed9fa' });
+						}
+						seen.add(id);
+						return { id, name, reason, criteria, enabled: rule.enabled !== false };
+					});
+				}
+				if (ps.agentExternalAuditOtherRule !== undefined) {
+					const reason = String(ps.agentExternalAuditOtherRule.reason).trim();
+					const criteria = String(ps.agentExternalAuditOtherRule.criteria).trim();
+					if (reason === '' || criteria === '') {
+						throw new ApiError({ message: 'External audit other rule reason and criteria are required.', code: 'INVALID_PARAM', id: 'da863b92-c508-4a7a-9cb1-0a9aa01a95d0' });
+					}
+					set.agentExternalAuditOtherRule = { reason, criteria };
+				}
+				if (ps.agentReviewTriggerRules !== undefined) {
 				set.agentReviewTriggerRules = (ps.agentReviewTriggerRules ?? []).map(r => ({
 					id: String(r.id),
 					timeWindowMinutes: Math.max(1, Math.min(10080, Math.trunc(r.timeWindowMinutes))),

@@ -12,7 +12,7 @@ import { DEFAULT_POLICIES } from '@/core/RoleService.js';
 import { SystemAccountService } from '@/core/SystemAccountService.js';
 import { resolveAgentImageNegativePrompt } from '@/core/agent-image-defaults.js';
 import { resolveAgentImageArtistPresets } from '@/core/agent-image-presets.js';
-import { DEFAULT_AGENT_EXTERNAL_AUDIT_SYSTEM_PROMPT } from '@/core/AgentExternalAuditService.js';
+import { DEFAULT_AGENT_EXTERNAL_AUDIT_OTHER_RULE, DEFAULT_AGENT_EXTERNAL_AUDIT_STANDARD, cloneDefaultAgentExternalAuditRules, normalizeAgentExternalAuditOtherRule, normalizeAgentExternalAuditRules } from '@/core/agent-external-audit-rules.js';
 import { normalizeAgentLlmApiKeys } from '@/misc/agent-llm-models.js';
 
 export const meta = {
@@ -648,10 +648,28 @@ export const meta = {
 				type: 'string',
 				optional: false, nullable: true,
 			},
-			agentExternalAuditSystemPromptResolved: {
-				type: 'string',
-				optional: false, nullable: false,
-			},
+				agentExternalAuditSystemPromptResolved: {
+					type: 'string',
+					optional: false, nullable: false,
+				},
+				agentExternalAuditDefaultSystemPrompt: {
+					type: 'string',
+					optional: false, nullable: false,
+				},
+				agentExternalAuditRules: {
+					type: 'array', optional: false, nullable: false,
+					items: { type: 'object', optional: false, nullable: false, additionalProperties: true },
+				},
+				agentExternalAuditDefaultRules: {
+					type: 'array', optional: false, nullable: false,
+					items: { type: 'object', optional: false, nullable: false, additionalProperties: true },
+				},
+				agentExternalAuditOtherRule: {
+					type: 'object', optional: false, nullable: false, additionalProperties: true,
+				},
+				agentExternalAuditDefaultOtherRule: {
+					type: 'object', optional: false, nullable: false, additionalProperties: true,
+				},
 			agentReviewTriggerRules: {
 				type: 'array',
 				optional: false, nullable: false,
@@ -1226,10 +1244,15 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				agentExternalAuditFailureMinRequests: instance.agentExternalAuditFailureMinRequests,
 				agentExternalAuditNotifyEmails: instance.agentExternalAuditNotifyEmails,
 				agentExternalAuditSystemPrompt: instance.agentExternalAuditSystemPrompt,
-				agentExternalAuditSystemPromptResolved: typeof instance.agentExternalAuditSystemPrompt === 'string' && instance.agentExternalAuditSystemPrompt.trim() !== ''
-					? instance.agentExternalAuditSystemPrompt
-					: DEFAULT_AGENT_EXTERNAL_AUDIT_SYSTEM_PROMPT,
-				agentReviewTriggerRules: instance.agentReviewTriggerRules ?? [],
+					agentExternalAuditSystemPromptResolved: typeof instance.agentExternalAuditSystemPrompt === 'string' && instance.agentExternalAuditSystemPrompt.trim() !== ''
+						? instance.agentExternalAuditSystemPrompt
+						: DEFAULT_AGENT_EXTERNAL_AUDIT_STANDARD,
+					agentExternalAuditDefaultSystemPrompt: DEFAULT_AGENT_EXTERNAL_AUDIT_STANDARD,
+					agentExternalAuditRules: normalizeAgentExternalAuditRules(instance.agentExternalAuditRules),
+					agentExternalAuditDefaultRules: cloneDefaultAgentExternalAuditRules(),
+					agentExternalAuditOtherRule: normalizeAgentExternalAuditOtherRule(instance.agentExternalAuditOtherRule),
+					agentExternalAuditDefaultOtherRule: { ...DEFAULT_AGENT_EXTERNAL_AUDIT_OTHER_RULE },
+					agentReviewTriggerRules: instance.agentReviewTriggerRules ?? [],
 				agentCheckinSettings: instance.agentCheckinSettings ?? null,
 				agentRedeemPurchaseUrl: instance.agentRedeemPurchaseUrl ?? null,
 				agentAliyaCharacterId: instance.agentAliyaCharacterId ?? null,
