@@ -422,11 +422,6 @@ SPDX-License-Identifier: AGPL-3.0-only
 											<p v-if="m.description" :class="$style.modelDescClamp">{{ m.description }}</p>
 											<div :class="$style.modelMetaChips" role="list">
 												<span :class="$style.modelMetaChip" role="listitem">
-													<i class="ti ti-server" :class="$style.modelMetaChipIcon" aria-hidden="true"></i>
-													<span :class="$style.modelMetaChipKicker">提供商</span>
-													<span :class="$style.modelMetaChipVal">{{ imageProviderLabel(m.provider) }}</span>
-												</span>
-												<span :class="$style.modelMetaChip" role="listitem">
 													<i class="ti ti-coin" :class="$style.modelMetaChipIcon" aria-hidden="true"></i>
 													<span :class="$style.modelMetaChipKicker">{{ i18n.ts._agents.modelRowLabelCost }}</span>
 													<span
@@ -3259,15 +3254,6 @@ function chooseModel(modelId: string) {
 
 function chooseDrawImageModel(modelId: string) {
 	drawImageModelId.value = modelId;
-}
-
-function imageProviderLabel(provider: AgentImageModel['provider']): string {
-	if (provider === 'aurora') return 'Aurora';
-	if (provider === 'openai') return i18n.ts._agents.imageProviderOpenai;
-	if (provider === 'tiptotip') return i18n.ts._agents.imageProviderTiptotip;
-	if (provider === 'qwen') return i18n.ts._agents.imageProviderQwen;
-	if (provider === 'sensenova') return i18n.ts._agents.imageProviderSenseNova;
-	return provider;
 }
 
 async function applyModel() {

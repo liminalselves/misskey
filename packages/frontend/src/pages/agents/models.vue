@@ -7,11 +7,6 @@ SPDX-License-Identifier: AGPL-3.0-only
 <div :class="['_gaps_m', $style.page]">
 	<MkLoading v-if="loading"/>
 	<template v-else>
-		<!-- BYOK 未启用时的提示 -->
-		<MkInfo v-if="!byokEnabled">
-			{{ i18n.ts._agents.byokDisabledHint }}
-		</MkInfo>
-
 		<!-- 用户信息摘要：余额 / 官方模型数 / 自定义模型配额 -->
 		<div v-panel :class="[$style.hero, $style.heroCompact]">
 			<div :class="$style.heroSummary">
@@ -33,6 +28,19 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</span>
 			</div>
 		</div>
+
+		<!-- 对话模型分区 -->
+		<div :class="$style.sectionHead">
+			<i class="ti ti-messages" :class="$style.sectionIcon" aria-hidden="true"></i>
+			<span :class="$style.sectionTitle">对话模型</span>
+			<span :class="$style.sectionCount">{{ allModels.length }}</span>
+			<span :class="$style.sectionLine" aria-hidden="true"></span>
+		</div>
+
+		<!-- BYOK 未启用时的提示 -->
+		<MkInfo v-if="!byokEnabled">
+			{{ i18n.ts._agents.byokDisabledHint }}
+		</MkInfo>
 
 		<!-- 分组筛选 + 添加自定义模型入口 -->
 		<div v-if="modelGroupTabs.length > 1 || byokEnabled" :class="$style.tabsRow">
@@ -190,6 +198,84 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<span :class="$style.emptyHint">{{ i18n.ts._agents.byokCustomHint }}</span>
 			</button>
 		</div>
+
+		<!-- 绘图模型分区（卡片信息对齐智能体对话界面的生图 tab） -->
+		<div :class="$style.sectionHead">
+			<i class="ti ti-photo" :class="$style.sectionIcon" aria-hidden="true"></i>
+			<span :class="$style.sectionTitle">绘图模型</span>
+			<span :class="$style.sectionCount">{{ imageModels.length }}</span>
+			<span :class="$style.sectionLine" aria-hidden="true"></span>
+		</div>
+		<MkInfo v-if="imageModels.length === 0">管理员还没有配置可用的生图模型。</MkInfo>
+		<div v-else :class="$style.selectCardList">
+			<div
+				v-for="m in imageModels"
+				:key="m.id"
+				v-panel
+				:class="$style.selectCard"
+			>
+				<div :class="$style.selectCardMain">
+					<div :class="$style.selectCardHead">
+						<div :class="$style.selectCardTitleWrap">
+							<div :class="$style.selectCardTitle">{{ m.name }}</div>
+							<p v-if="m.description" :class="$style.modelDescClamp">{{ m.description }}</p>
+							<div :class="$style.modelMetaChips" role="list">
+								<span
+									:class="$style.modelMetaChip"
+									:title="i18n.ts._agents.modelCostPerCall"
+									role="listitem"
+								>
+									<i class="ti ti-coin" :class="$style.modelMetaChipIcon" aria-hidden="true"></i>
+									<span :class="$style.modelMetaChipKicker">{{ i18n.ts._agents.modelRowLabelCost }}</span>
+									<span
+										:class="[
+											$style.modelMetaChipVal,
+											typeof m.costPerCall === 'number' && m.costPerCall === 0
+												? $style.modelMetaChipValHighlight
+												: '',
+										]"
+									>{{ formatModelCostPerCall(m.costPerCall) }}</span>
+								</span>
+								<span
+									:class="$style.modelMetaChip"
+									:title="i18n.ts._agents.successRate1h"
+									role="listitem"
+								>
+									<i class="ti ti-chart-line" :class="$style.modelMetaChipIcon" aria-hidden="true"></i>
+									<span :class="$style.modelMetaChipKicker">{{ i18n.ts._agents.modelRowLabelSuccess1h }}</span>
+									<template v-if="successRates[m.id] && successRates[m.id].total > 0">
+										<!-- 动态类名必须写成 $style 字面量引用：生产构建的 unwind 插件只静态替换模板中的 $style.xxx，useCssModule() 在产线拿不到 __cssModules 会返回空对象 -->
+										<span
+											:class="[
+												$style.modelMetaChipVal,
+												$style.modelMetaChipValLong,
+												{
+													successRateHigh: $style.successRateHigh,
+													successRateMedium: $style.successRateMedium,
+													successRateLow: $style.successRateLow,
+												}[getSuccessRateClass(successRates[m.id].success, successRates[m.id].total)],
+											]"
+										>
+											{{ getSuccessRatePercentage(successRates[m.id].success, successRates[m.id].total) }}% ({{ successRates[m.id].success }}/{{ successRates[m.id].total }})
+										</span>
+									</template>
+									<span v-else :class="[$style.modelMetaChipVal, $style.modelMetaChipValMuted]">{{ i18n.ts._agents.noDataAvailable }}</span>
+								</span>
+								<span v-if="m.supportsReferenceImage" :class="$style.modelMetaChip" role="listitem">
+									<i class="ti ti-photo" :class="$style.modelMetaChipIcon" aria-hidden="true"></i>
+									<span :class="$style.modelMetaChipVal">{{ i18n.ts._agents.imageModelReferenceImage }}</span>
+								</span>
+								<span v-if="(m.freeQuotaTotal ?? 0) > 0" :class="$style.modelMetaChip" role="listitem">
+									<i class="ti ti-gift" :class="$style.modelMetaChipIcon" aria-hidden="true"></i>
+									<span :class="$style.modelMetaChipKicker">{{ i18n.ts._agents.modelChipFreeQuota }}</span>
+									<span :class="$style.modelMetaChipVal">{{ i18n.ts._agents.byokFreeQuotaUsed }} {{ m.freeQuotaUsed ?? 0 }}/{{ m.freeQuotaTotal }}</span>
+								</span>
+							</div>
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
 	</template>
 </div>
 </template>
@@ -245,6 +331,17 @@ type ByokProvider = {
 
 type SuccessRateRow = { total: number; success: number; failed: number; aborted: number };
 
+/** 绘图模型（生图）：来自 agents/images/models/list，本页只用到展示字段，口径与生图 tab 一致 */
+type AgentImageModel = {
+	id: string;
+	name: string;
+	description: string | null;
+	supportsReferenceImage: boolean;
+	costPerCall: number;
+	freeQuotaUsed?: number;
+	freeQuotaTotal?: number;
+};
+
 /** 列表卡片统一视图模型：官方模型与 BYOK 自定义模型合并展示 */
 type ModelRow = {
 	id: string;
@@ -267,6 +364,7 @@ type ModelRow = {
 const loading = ref(true);
 const officialModels = ref<OfficialModelLite[]>([]);
 const userModels = ref<UserModel[]>([]);
+const imageModels = ref<AgentImageModel[]>([]);
 const successRates = ref<Record<string, SuccessRateRow>>({});
 const creditBalance = ref<number | null>(null);
 // 等待提供商弹窗关闭后再打开表单弹窗时暂存的选择；undefined 表示未选择
@@ -451,10 +549,12 @@ async function loadAll() {
 		} else {
 			userModels.value = [];
 		}
-		const [rateRes, quotaRes] = await Promise.all([
+		const [imageRows, rateRes, quotaRes] = await Promise.all([
+			misskeyApi('agents/images/models/list' as Parameters<typeof misskeyApi>[0], {} as any).catch(() => [] as AgentImageModel[]),
 			misskeyApi('agents/models/success-rates', { windowMs: 60 * 60 * 1000 }).catch(() => ({ rates: [] as { modelId: string; total: number; success: number; failed: number; aborted: number }[] })),
 			misskeyApi('agents/models/free-quota', {}).catch(() => [] as { modelId: string; freeQuotaUsed: number; freeQuotaTotal: number }[]),
 		]);
+		imageModels.value = Array.isArray(imageRows) ? imageRows : [];
 		const ratesMap: Record<string, SuccessRateRow> = {};
 		for (const r of rateRes.rates) ratesMap[r.modelId] = { total: r.total, success: r.success, failed: r.failed, aborted: r.aborted };
 		successRates.value = ratesMap;
@@ -631,6 +731,43 @@ onMounted(loadAll);
 	&:hover {
 		opacity: 1;
 	}
+}
+
+/* 分区标题：图标 + 标题 + 数量徽标 + 延伸分隔线 */
+.sectionHead {
+	display: flex;
+	align-items: center;
+	gap: 0.5em;
+	padding: 0 0.15em;
+	min-width: 0;
+}
+
+.sectionIcon {
+	font-size: 1.05em;
+	color: var(--MI_THEME-accent);
+	opacity: 0.9;
+}
+
+.sectionTitle {
+	font-size: 1.02em;
+	font-weight: 700;
+	white-space: nowrap;
+}
+
+.sectionCount {
+	padding: 0.05em 0.6em;
+	border-radius: 999px;
+	font-size: 0.78em;
+	font-weight: 700;
+	line-height: 1.55;
+	background: color-mix(in srgb, var(--MI_THEME-accent) 12%, var(--MI_THEME-panel));
+	color: var(--MI_THEME-accent);
+}
+
+.sectionLine {
+	flex: 1;
+	height: 1px;
+	background: var(--MI_THEME-divider);
 }
 
 /* 分组筛选行：pills 在左，主操作按钮在右 */
