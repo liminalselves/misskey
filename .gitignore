@@ -88,3 +88,5 @@ vite.config.local-dev.ts.timestamp-*
 .qoder
 .opencode
 .zcode
+/.zcodeignore
+/AGENTS.md
