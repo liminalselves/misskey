@@ -931,6 +931,13 @@ export class ClientServerService {
 
 		// streamingに非WebSocketリクエストが来た場合にbase htmlをキャシュ付きで返すと、Proxy等でそのパスがキャッシュされておかしくなる
 		fastify.get('/streaming', async (request, reply) => {
+			// 公网 HMR 开启时 @fastify/http-proxy 会把所有 WebSocket upgrade 重新送入
+			// Fastify 路由；/streaming 的真实 upgrade 由 StreamingApiServerService 处理，
+			// 这里不能抢先发送 503，否则业务 Streaming 会被当作普通 HTTP 请求关闭。
+			if (request.headers.upgrade?.toLowerCase() === 'websocket') {
+				reply.hijack();
+				return;
+			}
 			reply.code(503);
 			reply.header('Cache-Control', 'private, max-age=0');
 		});

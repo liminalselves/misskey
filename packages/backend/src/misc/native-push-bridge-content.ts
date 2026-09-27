@@ -4,8 +4,8 @@
  */
 
 /**
- * 与 packages/frontend/src/utility/notification-bridge-content.ts 对齐的文案与 openPath，
- * 供阿里云原生推送等无法跑前端 JS 的场景使用。语言取自 userProfile.lang。
+ * 服务端生成原生推送的文案与 openPath，供阿里云原生推送等无法跑前端 JS 的场景使用。
+ * 语言取自 userProfile.lang。
  */
 
 import type { Packed } from '@/misc/json-schema.js';
