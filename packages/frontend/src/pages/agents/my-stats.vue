@@ -55,7 +55,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		</div>
 
 		<!-- 用量图表 -->
-		<MkFolder :defaultOpen="true">
+		<MkFolder :defaultOpen="true" @opened="renderCharts">
 			<template #icon><i class="ti ti-chart-line"></i></template>
 			<template #label>{{ i18n.ts._agents.myStatsCharts }}（{{ i18n.tsx.recentNDays({ n: 30 }) }}）</template>
 			<div class="_gaps_m">

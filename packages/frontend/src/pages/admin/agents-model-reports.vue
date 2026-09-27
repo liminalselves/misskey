@@ -72,7 +72,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		</div>
 
 		<!-- 请求量趋势（堆叠柱 + 成功率折线双轴） -->
-		<MkFolder :defaultOpen="true">
+		<MkFolder :defaultOpen="true" @opened="renderChartsAfterMount">
 			<template #icon><i class="ti ti-timeline"></i></template>
 			<template #label>{{ i18n.ts._agents.adminReportsRequestsTrend }}</template>
 			<div class="_gaps_s">
@@ -99,13 +99,13 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 		<!-- 扣减额度趋势 + 平均耗时趋势 -->
 		<div :class="$style.compositionRow">
-			<MkFolder :defaultOpen="true" :class="$style.compositionItem">
+			<MkFolder :defaultOpen="true" :class="$style.compositionItem" @opened="renderChartsAfterMount">
 				<template #icon><i class="ti ti-coins"></i></template>
 				<template #label>{{ i18n.ts._agents.adminReportsCreditsTrend }}</template>
 				<MkInfo v-if="data.buckets.length === 0">{{ i18n.ts._agents.noDataAvailable }}</MkInfo>
 				<div v-else :class="$style.chartBox"><canvas ref="creditsChartEl"></canvas></div>
 			</MkFolder>
-			<MkFolder :defaultOpen="true" :class="$style.compositionItem">
+			<MkFolder :defaultOpen="true" :class="$style.compositionItem" @opened="renderChartsAfterMount">
 				<template #icon><i class="ti ti-clock-bolt"></i></template>
 				<template #label>{{ i18n.ts._agents.adminReportsLatencyTrend }}</template>
 				<MkInfo v-if="data.buckets.length === 0">{{ i18n.ts._agents.noDataAvailable }}</MkInfo>
@@ -115,7 +115,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 		<!-- 构成分析 -->
 		<div :class="$style.compositionRow">
-			<MkFolder :defaultOpen="true" :class="$style.compositionItem">
+			<MkFolder :defaultOpen="true" :class="$style.compositionItem" @opened="renderChartsAfterMount">
 				<template #icon><i class="ti ti-chart-donut"></i></template>
 				<template #label>{{ i18n.ts._agents.adminReportsBillingComposition }}</template>
 				<MkInfo v-if="billingTotal === 0">{{ i18n.ts._agents.noDataAvailable }}</MkInfo>
@@ -130,7 +130,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 					</div>
 				</template>
 			</MkFolder>
-			<MkFolder :defaultOpen="true" :class="$style.compositionItem">
+			<MkFolder :defaultOpen="true" :class="$style.compositionItem" @opened="renderChartsAfterMount">
 				<template #icon><i class="ti ti-chart-bar"></i></template>
 				<template #label>{{ i18n.ts._agents.adminReportsUsageKindComposition }}</template>
 				<MkInfo v-if="data.byUsageKind.length === 0">{{ i18n.ts._agents.noDataAvailable }}</MkInfo>
@@ -612,6 +612,11 @@ const billingCenterTextPlugin: Plugin<'doughnut'> = {
 	},
 };
 
+async function renderChartsAfterMount() {
+	await nextTick();
+	renderCharts();
+}
+
 function cssColor(name: string, fallback: string): string {
 	const v = getComputedStyle(window.document.documentElement).getPropertyValue(name).trim();
 	return v || fallback;
@@ -644,6 +649,13 @@ function fmtDurationTick(v: number): string {
 
 function renderCharts() {
 	if (data.value == null) return;
+
+	if (requestsChart != null && !requestsChart.canvas.isConnected) { requestsChart.destroy(); requestsChart = null; }
+	if (creditsChart != null && !creditsChart.canvas.isConnected) { creditsChart.destroy(); creditsChart = null; }
+	if (latencyChart != null && !latencyChart.canvas.isConnected) { latencyChart.destroy(); latencyChart = null; }
+	if (billingChart != null && !billingChart.canvas.isConnected) { billingChart.destroy(); billingChart = null; }
+	if (usageKindChart != null && !usageKindChart.canvas.isConnected) { usageKindChart.destroy(); usageKindChart = null; }
+
 	const d = data.value;
 
 	const colors = {

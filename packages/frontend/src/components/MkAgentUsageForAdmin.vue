@@ -55,7 +55,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 			</div>
 		</div>
 
-		<MkFolder :defaultOpen="true">
+		<MkFolder :defaultOpen="true" @opened="renderCharts">
 			<template #icon><i class="ti ti-chart-line"></i></template>
 			<template #label>{{ i18n.ts._agents.myStatsCharts }}（{{ rangeLabel }}）</template>
 			<div class="_gaps_m">

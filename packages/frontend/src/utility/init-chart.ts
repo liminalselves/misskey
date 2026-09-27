@@ -21,11 +21,37 @@ import {
 	SubTitle,
 	Filler,
 } from 'chart.js';
+import type { Plugin } from 'chart.js';
 import gradient from 'chartjs-plugin-gradient';
 import zoomPlugin from 'chartjs-plugin-zoom';
 import { MatrixController, MatrixElement } from 'chartjs-chart-matrix';
 import { store } from '@/store.js';
 import 'chartjs-adapter-date-fns';
+
+const visibilityObservers = new WeakMap<Chart, IntersectionObserver>();
+
+// 部分 WebView 会漏掉隐藏容器重新显示时的 ResizeObserver 通知，进入视口后主动校尺寸并补绘。
+const visibilityResizePlugin: Plugin = {
+	id: 'visibilityResize',
+	afterInit(chart) {
+		if (typeof IntersectionObserver === 'undefined') return;
+
+		const observer = new IntersectionObserver((entries) => {
+			if (!entries.some(entry => entry.isIntersecting)) return;
+			requestAnimationFrame(() => {
+				if (!chart.canvas.isConnected) return;
+				chart.resize();
+				chart.update('none');
+			});
+		});
+		observer.observe(chart.canvas);
+		visibilityObservers.set(chart, observer);
+	},
+	afterDestroy(chart) {
+		visibilityObservers.get(chart)?.disconnect();
+		visibilityObservers.delete(chart);
+	},
+};
 
 export function initChart() {
 	Chart.register(
@@ -47,6 +73,7 @@ export function initChart() {
 		MatrixController, MatrixElement,
 		zoomPlugin,
 		gradient,
+		visibilityResizePlugin,
 	);
 
 	// フォントカラー
