@@ -407,6 +407,58 @@ SPDX-License-Identifier: AGPL-3.0-only
 					</div>
 				</template>
 
+				<template v-else-if="activeView === 'modelReports'">
+					<section :class="$style.filterBand">
+						<FormSplit :minWidth="220">
+							<MkSelect v-model="modelReportFilters.modelKind" :items="modelReportKindItems"><template #label>模型类型</template></MkSelect>
+							<MkSelect v-model="modelReportFilters.reasonType" :items="modelReportReasonItems"><template #label>异常类型</template></MkSelect>
+						</FormSplit>
+						<FormSplit :minWidth="220">
+							<MkInput v-model="modelReportFilters.userId" type="text"><template #label>用户名 / acct</template></MkInput>
+							<MkInput v-model="modelReportFilters.modelId" type="text"><template #label>模型 ID</template></MkInput>
+							<MkInput v-model="modelReportFilters.query" type="text"><template #label>关键词</template></MkInput>
+						</FormSplit>
+						<div class="_buttons">
+							<MkButton primary rounded :disabled="modelReportsLoading" @click="loadModelReports(true)"><i class="ti ti-search"></i> 检索上报</MkButton>
+							<MkButton rounded :disabled="modelReportsLoading" @click="resetModelReportFilters"><i class="ti ti-filter-off"></i> 重置</MkButton>
+						</div>
+					</section>
+					<MkLoading v-if="modelReportsLoading && modelReports.length === 0"/>
+					<MkInfo v-else-if="modelReports.length === 0">暂无用户上报的模型异常。</MkInfo>
+					<div v-else :class="$style.evidenceList">
+						<article v-for="row in modelReports" :key="row.id" v-panel :class="$style.evidenceCard">
+							<div :class="$style.cardHead">
+								<div :class="$style.badges">
+									<span :class="row.resolvedAt ? $style.typeBadge : $style.warnBadge">{{ row.resolvedAt ? '已处理' : '待处理' }}</span>
+									<span :class="row.reasonType === 'other' ? $style.warnBadge : $style.typeBadge">{{ modelReportReasonLabel(row.reasonType) }}</span>
+									<span>{{ row.modelKind === 'image' ? '绘图模型' : '对话模型' }}</span>
+								</div>
+								<time>{{ formatTime(row.createdAt) }}</time>
+							</div>
+							<div :class="$style.metaGrid">
+								<span>用户：<UserAcctInline :user="row.user" :fallback="row.userId" @copy="copyText"/></span>
+								<span>模型：{{ row.modelName }}</span>
+								<span>模型 ID：<code>{{ row.modelId }}</code></span>
+							</div>
+							<div v-if="row.comment" :class="$style.decisionBox">
+								<b>用户说明</b>
+								<p>{{ row.comment }}</p>
+							</div>
+							<div v-if="row.resolvedAt" :class="$style.decisionBox">
+								<b>处理结果 · {{ formatTime(row.resolvedAt) }}</b>
+								<p>{{ row.resolutionMessage || '上报的模型已恢复' }}</p>
+							</div>
+							<div class="_buttons">
+								<MkButton v-if="!row.resolvedAt && iAmModerator" primary small rounded @click="resolveModelReport(row)"><i class="ti ti-check"></i> 已处理</MkButton>
+								<MkButton small rounded @click="copyText(row.modelId)"><i class="ti ti-copy"></i> 复制模型 ID</MkButton>
+							</div>
+						</article>
+						<div v-if="modelReportsHasMore" :class="$style.loadMore">
+							<MkButton v-appear="prefer.s.enableInfiniteScroll ? () => loadModelReports(false) : null" small rounded :disabled="modelReportsLoading" @click="loadModelReports(false)"><i class="ti ti-chevron-down"></i> {{ modelReportsLoading ? '载入中…' : '继续载入' }}</MkButton>
+						</div>
+					</div>
+				</template>
+
 				<template v-else-if="activeView === 'logs'">
 					<section :class="$style.filterBand">
 						<MkSelect v-model="logType" :items="logTypeItems"><template #label>记录类型</template></MkSelect>
@@ -471,7 +523,7 @@ import { useGovernancePagination } from '@/composables/use-governance-pagination
 import { prefer } from '@/preferences.js';
 import { iAmModerator, $i } from '@/i.js';
 
-type ViewKey = 'overview' | 'queue' | 'library' | 'sessions' | 'externalAudit' | 'review' | 'images' | 'logs';
+type ViewKey = 'overview' | 'queue' | 'library' | 'sessions' | 'externalAudit' | 'review' | 'images' | 'modelReports' | 'logs';
 type Kind = 'character' | 'style';
 type ReviewRow = {
 	kind: Kind;
@@ -519,6 +571,7 @@ type ExternalStatus = 'allow' | 'block' | 'failed' | 'all_failed';
 type ExternalAuditRow = { id: string; createdAt: string; completedAt: string | null; durationMs: number | null; userId: string | null; user: any | null; sessionId: string | null; sessionName: string | null; sessionModerationBanned?: boolean; characterId: string | null; characterName: string; dialogueStyleId: string | null; modelId: string | null; modelName: string | null; apiModelName: string | null; baseUrl: string | null; priority: number; attemptIndex: number; status: ExternalStatus; blockCode: string | null; category: string | null; reason: string | null; confidence: number | null; userText: string | null; assistantText: string | null; responseText: string | null; errorCode: string | null; errorMessage: string | null; userRecentBlockCount?: number; triggeredRules?: { id: string; timeWindowMinutes: number; blockThreshold: number }[] };
 type ImageRow = { id: string; createdAt: string; updatedAt: string; userId: string; user: any | null; sessionId: string; messageId: string | null; placeholderIndex: number; tag: string; size: string; provider: string; imageModelId: string; status: string; fileId: string | null; url: string | null; errorCode: string | null; cost: number; isBlocked: boolean; blockedReason: string | null; autoCleanedAt: string | null; autoCleanedReason: string | null };
 type AgentLog = { id: string; createdAt: string; type: string; info: Record<string, unknown>; userId: string; user: any };
+type ModelReportRow = { id: string; createdAt: string; userId: string; user: any | null; modelKind: 'chat' | 'image'; modelId: string; modelName: string; reasonType: 'unavailable' | 'degraded' | 'slow' | 'errors' | 'other'; comment: string | null; resolvedAt: string | null; resolvedByUserId: string | null; resolutionMessage: string | null };
 
 const UserAcctInline = defineComponent({
 	props: {
@@ -551,7 +604,7 @@ type Summary = { pendingCharacters: number; pendingStyles: number; pendingTotal:
 
 const api = misskeyApi as unknown as <T>(endpoint: string, data?: Record<string, unknown>) => Promise<T>;
 const activeView = ref<ViewKey>((new URLSearchParams(window.location.search).get('view') as ViewKey) || 'overview');
-if (!['overview', 'queue', 'library', 'sessions', 'externalAudit', 'review', 'images', 'logs'].includes(activeView.value)) activeView.value = 'overview';
+if (!['overview', 'queue', 'library', 'sessions', 'externalAudit', 'review', 'images', 'modelReports', 'logs'].includes(activeView.value)) activeView.value = 'overview';
 
 const summaryLoading = ref(false);
 const summary = ref<Summary | null>(null);
@@ -691,6 +744,70 @@ const logs = logsPagination.items;
 const logsLoading = logsPagination.loading;
 const logsHasMore = logsPagination.hasMore;
 
+const modelReportFilters = reactive({ modelKind: '', reasonType: '', userId: '', modelId: '', query: '' });
+
+// 模型上报列表分页
+const modelReportsPagination = useGovernancePagination<ModelReportRow>(async (untilId) => {
+	const payload: Record<string, unknown> = { limit: 80, untilId };
+	if (modelReportFilters.modelKind) payload.modelKind = modelReportFilters.modelKind;
+	if (modelReportFilters.reasonType) payload.reasonType = modelReportFilters.reasonType;
+	if (modelReportFilters.userId.trim()) payload.userId = modelReportFilters.userId.trim();
+	if (modelReportFilters.modelId.trim()) payload.modelId = modelReportFilters.modelId.trim();
+	if (modelReportFilters.query.trim()) payload.query = modelReportFilters.query.trim();
+	return await api<ModelReportRow[]>('admin/agents/governance/model-reports/list', payload);
+}, { pageSize: 80 });
+const modelReports = modelReportsPagination.items;
+const modelReportsLoading = modelReportsPagination.loading;
+const modelReportsHasMore = modelReportsPagination.hasMore;
+
+async function loadModelReports(reset: boolean) {
+	await modelReportsPagination.load(reset);
+	if (modelReportsPagination.error.value) {
+		os.alert({ type: 'error', text: formatApiError(modelReportsPagination.error.value) });
+	}
+}
+
+function resetModelReportFilters() {
+	Object.assign(modelReportFilters, { modelKind: '', reasonType: '', userId: '', modelId: '', query: '' });
+	loadModelReports(true);
+}
+
+const modelReportKindItems = [{ value: '', label: '全部' }, { value: 'chat', label: '对话模型' }, { value: 'image', label: '绘图模型' }];
+const modelReportReasonItems = [{ value: '', label: '全部' }, { value: 'unavailable', label: '长时间不可用' }, { value: 'degraded', label: '降智' }, { value: 'slow', label: '响应缓慢' }, { value: 'errors', label: '频繁报错' }, { value: 'other', label: '其他' }];
+
+function modelReportReasonLabel(t: string): string {
+	return modelReportReasonItems.find(i => i.value === t)?.label ?? t;
+}
+
+async function resolveModelReport(row: ModelReportRow) {
+	const { canceled, result } = await os.form('标记上报已处理', {
+		message: {
+			type: 'string',
+			label: '通知用户的信息',
+			description: '可留空。留空时将通知用户：“上报的模型已恢复”。',
+			required: false,
+			multiline: true,
+		},
+	});
+	if (canceled) return;
+	const message = typeof result.message === 'string' ? result.message.trim() : '';
+	if (message.length > 2000) {
+		os.alert({ type: 'warning', text: '通知信息不能超过 2000 字。' });
+		return;
+	}
+	try {
+		await api('admin/agents/governance/model-reports/resolve', {
+			id: row.id,
+			message: message || null,
+		});
+		os.toast('已标记处理并通知用户');
+		await loadModelReports(true);
+		logsPagination.reset();
+	} catch (err) {
+		os.alert({ type: 'error', text: formatApiError(err) });
+	}
+}
+
 // 复审列表 - 以用户为中心
 const reviewUserFilter = ref('');
 const reviewListLoading = ref(false);
@@ -796,6 +913,7 @@ const headerTabs = computed(() => [
 	{ key: 'externalAudit', title: '外审拦截', icon: 'ti ti-shield-check' },
 	{ key: 'review', title: '复审', icon: 'ti ti-shield-exclamation' },
 	{ key: 'images', title: 'AI 生图', icon: 'ti ti-photo-shield' },
+	{ key: 'modelReports', title: '智能体上报', icon: 'ti ti-flag' },
 	{ key: 'logs', title: '操作日志', icon: 'ti ti-history' },
 ]);
 const headerActions = computed(() => [{
@@ -820,7 +938,7 @@ const roleItems = [{ value: 'all', label: '全部' }, { value: 'user', label: '�
 const externalStatusItems = [{ value: 'block', label: '已拦截' }, { value: 'allow', label: '已放行' }, { value: 'failed', label: '模型失败' }, { value: 'all_failed', label: '全部失败放行' }, { value: 'all', label: '全部' }];
 const imageStatusItems = [{ value: '', label: '全部' }, { value: 'generating', label: '生成中' }, { value: 'succeeded', label: '成功' }, { value: 'failed', label: '失败' }, { value: 'blocked', label: '已封禁' }, { value: 'auto_cleaned', label: '图片已被清理' }];
 const blockedItems = [{ value: '', label: '全部' }, { value: 'true', label: '已封禁' }, { value: 'false', label: '未封禁' }];
-const logTypeItems = [{ value: 'all', label: '全部' }, { value: 'resolveAgentReview', label: '审核处理' }, { value: 'setAgentCharacterModerationBan', label: '角色封禁' }, { value: 'setAgentSessionModerationBan', label: '会话封禁' }];
+const logTypeItems = [{ value: 'all', label: '全部' }, { value: 'resolveAgentReview', label: '审核处理' }, { value: 'resolveAgentModelReport', label: '上报已处理' }, { value: 'setAgentCharacterModerationBan', label: '角色封禁' }, { value: 'setAgentSessionModerationBan', label: '会话封禁' }];
 
 definePage({ title: '智能体治理', icon: 'ti ti-shield-check' });
 
@@ -894,13 +1012,15 @@ watch(activeView, view => {
 		void loadSessions(true);
 	} else if (view === 'externalAudit' && externalAudits.value.length === 0) {
 		void loadExternalAudits(true);
-	} else if (view === 'review' && reviewUserCards.value.length === 0) {
-		void loadReviewListItems(true);
-	} else if (view === 'images' && images.value.length === 0) {
-		void loadImages(true);
-	} else if (view === 'logs' && logs.value.length === 0) {
-		void loadLogs(true);
-	}
+		} else if (view === 'review' && reviewUserCards.value.length === 0) {
+			void loadReviewListItems(true);
+		} else if (view === 'images' && images.value.length === 0) {
+			void loadImages(true);
+		} else if (view === 'modelReports' && modelReports.value.length === 0) {
+			void loadModelReports(true);
+		} else if (view === 'logs' && logs.value.length === 0) {
+			void loadLogs(true);
+		}
 });
 
 async function refreshCurrentView() {
@@ -911,6 +1031,7 @@ async function refreshCurrentView() {
 	else if (activeView.value === 'externalAudit') await loadExternalAudits(true);
 	else if (activeView.value === 'review') await loadReviewListItems(true);
 	else if (activeView.value === 'images') await loadImages(true);
+	else if (activeView.value === 'modelReports') await loadModelReports(true);
 	else await loadLogs(true);
 }
 
@@ -1360,6 +1481,7 @@ function logInfoBoolean(log: AgentLog, key: string) {
 
 function logTitle(log: AgentLog) {
 	if (log.type === 'resolveAgentReview') return '审核处理';
+	if (log.type === 'resolveAgentModelReport') return '模型上报处理';
 	if (log.type === 'setAgentSessionModerationBan') return '会话封禁处理';
 	if (log.type === 'setAgentCharacterModerationBan') return '角色封禁处理';
 	return log.type;
@@ -1367,6 +1489,7 @@ function logTitle(log: AgentLog) {
 
 function logDecisionLabel(log: AgentLog) {
 	if (log.type === 'resolveAgentReview') return logInfoString(log, 'decision') === 'approve' ? '通过' : '拒绝';
+	if (log.type === 'resolveAgentModelReport') return '已处理';
 	if (log.type === 'setAgentSessionModerationBan' || log.type === 'setAgentCharacterModerationBan') return logInfoBoolean(log, 'banned') ? '封禁' : '解封';
 	return '记录';
 }
@@ -1379,6 +1502,15 @@ function logRows(log: AgentLog) {
 			{ label: '对象 ID', value: logInfoString(log, 'id') ?? '—' },
 			{ label: '作者用户名 / acct', value: logInfoString(log, 'ownerAcct') ?? logInfoString(log, 'ownerUserId') ?? '-', copyAsAcct: true },
 			{ label: '状态', value: logInfoString(log, 'reviewStatus') ?? '—' },
+		];
+	}
+	if (log.type === 'resolveAgentModelReport') {
+		return [
+			{ label: '模型', value: logInfoString(log, 'modelName') ?? '—' },
+			{ label: '模型 ID', value: logInfoString(log, 'modelId') ?? '—' },
+			{ label: '类型', value: logInfoString(log, 'modelKind') === 'image' ? '绘图模型' : '对话模型' },
+			{ label: '上报用户 / acct', value: logInfoString(log, 'reporterAcct') ?? logInfoString(log, 'reporterUserId') ?? '-', copyAsAcct: true },
+			{ label: '上报 ID', value: logInfoString(log, 'reportId') ?? '—' },
 		];
 	}
 	if (log.type === 'setAgentSessionModerationBan') {
@@ -1399,6 +1531,7 @@ function logRows(log: AgentLog) {
 }
 
 function logNote(log: AgentLog) {
+	if (log.type === 'resolveAgentModelReport') return logInfoString(log, 'message');
 	return logInfoString(log, 'rejectMessage') ?? logInfoString(log, 'rejectReason') ?? logInfoString(log, 'reason') ?? logInfoString(log, 'internalNote');
 }
 
@@ -1570,6 +1703,7 @@ onMounted(() => {
 	else if (activeView.value === 'externalAudit') void loadExternalAudits(true);
 	else if (activeView.value === 'review') void loadReviewListItems(true);
 	else if (activeView.value === 'images') void loadImages(true);
+	else if (activeView.value === 'modelReports') void loadModelReports(true);
 	else void loadLogs(true);
 });
 

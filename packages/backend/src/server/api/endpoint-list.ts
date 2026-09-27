@@ -36,6 +36,8 @@ export * as 'admin/agents/governance/images/list' from './endpoints/admin/agents
 export * as 'admin/agents/governance/images/set-blocked' from './endpoints/admin/agents/governance/images/set-blocked.js';
 export * as 'admin/agents/governance/logs/list' from './endpoints/admin/agents/governance/logs/list.js';
 export * as 'admin/agents/governance/messages/list' from './endpoints/admin/agents/governance/messages/list.js';
+export * as 'admin/agents/governance/model-reports/list' from './endpoints/admin/agents/governance/model-reports/list.js';
+export * as 'admin/agents/governance/model-reports/resolve' from './endpoints/admin/agents/governance/model-reports/resolve.js';
 export * as 'admin/agents/governance/review/detail' from './endpoints/admin/agents/governance/review/detail.js';
 export * as 'admin/agents/governance/review/list' from './endpoints/admin/agents/governance/review/list.js';
 export * as 'admin/agents/governance/review/resolve' from './endpoints/admin/agents/governance/review/resolve.js';
@@ -192,6 +194,7 @@ export * as 'agents/proactive-schedules/delete' from './endpoints/agents/proacti
 export * as 'agents/proactive-schedules/import' from './endpoints/agents/proactive-schedules/import.js';
 export * as 'agents/models/success-rates' from './endpoints/agents/models/success-rates.js';
 export * as 'agents/models/free-quota' from './endpoints/agents/models/free-quota.js';
+export * as 'agents/model-reports/create' from './endpoints/agents/model-reports/create.js';
 export * as 'admin/agents/reports/overview' from './endpoints/admin/agents/reports/overview.js';
 export * as 'admin/agents/reports/top-users' from './endpoints/admin/agents/reports/top-users.js';
 export * as 'admin/agents-checkin-reports' from './endpoints/admin/agents-checkin-reports.js';

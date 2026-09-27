@@ -180,8 +180,15 @@ export type MiNotification = {
 	agentKind: 'character' | 'style';
 	resourceId: string;
 	resourceName: string;
-} | {
-	type: 'agentCharacterBanned';
+	} | {
+		type: 'agentModelReportResolved';
+		id: string;
+		createdAt: string;
+		reportId: string;
+		modelName: string;
+		message: string;
+	} | {
+		type: 'agentCharacterBanned';
 	id: string;
 	createdAt: string;
 	characterId: string;

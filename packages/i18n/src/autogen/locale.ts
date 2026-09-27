@@ -11391,6 +11391,10 @@ export interface Locale extends ILocale {
          */
         "agentStyleReviewRejected": ParameterizedString<"name">;
         /**
+         * 報告したモデル「{name}」の対応が完了しました
+         */
+        "agentModelReportResolved": ParameterizedString<"name">;
+        /**
          * キャラクター「{name}」がモデレーターにより禁止されました
          */
         "agentCharacterBanned": ParameterizedString<"name">;
@@ -11543,6 +11547,10 @@ export interface Locale extends ILocale {
              * エージェント審査不通過
              */
             "agentReviewRejected": string;
+            /**
+             * エージェントモデル報告の対応完了
+             */
+            "agentModelReportResolved": string;
             /**
              * エージェントキャラクター禁止変更
              */

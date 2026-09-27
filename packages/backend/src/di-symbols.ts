@@ -102,6 +102,7 @@ export const DI = {
 	agentUserStyleSubscriptionsRepository: Symbol('agentUserStyleSubscriptionsRepository'),
 	agentPlazaReviewsRepository: Symbol('agentPlazaReviewsRepository'),
 	agentModelUsageLogsRepository: Symbol('agentModelUsageLogsRepository'),
+	agentModelReportsRepository: Symbol('agentModelReportsRepository'),
 	agentCheckinRecordsRepository: Symbol('agentCheckinRecordsRepository'),
 	agentRedeemCodesRepository: Symbol('agentRedeemCodesRepository'),
 	agentSessionCompressionStickyRepository: Symbol('agentSessionCompressionStickyRepository'),

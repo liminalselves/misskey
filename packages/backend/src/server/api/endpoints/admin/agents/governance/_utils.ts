@@ -11,7 +11,7 @@ import { IsNull } from 'typeorm';
 import * as Acct from '@/misc/acct.js';
 import { normalizeCharacterStickerList } from '@/core/agent-sticker-utils.js';
 
-export const agentGovernanceLogTypes = ['resolveAgentReview', 'setAgentSessionModerationBan', 'setAgentCharacterModerationBan'] as const;
+export const agentGovernanceLogTypes = ['resolveAgentReview', 'resolveAgentModelReport', 'setAgentSessionModerationBan', 'setAgentCharacterModerationBan'] as const;
 
 export function escapeIlikePattern(s: string): string {
 	return s.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');

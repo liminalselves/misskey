@@ -48,6 +48,7 @@ export const notificationTypes = [
 	'test',
 	'agentReviewApproved',
 	'agentReviewRejected',
+	'agentModelReportResolved',
 	'agentCharacterBanned',
 	'agentSessionBanned',
 	'agentProactiveMessage',
@@ -138,6 +139,7 @@ export const moderationLogTypes = [
 	'deleteChatRoom',
 	'updateProxyAccountDescription',
 	'resolveAgentReview',
+	'resolveAgentModelReport',
 	'setAgentSessionModerationBan',
 	'setAgentCharacterModerationBan',
 	'ignoreAgentExternalAuditReview',
@@ -417,6 +419,16 @@ export type ModerationLogPayloads = {
 		rejectReason?: string | null;
 		rejectMessage?: string | null;
 		internalNote?: string | null;
+	};
+	resolveAgentModelReport: {
+		reportId: string;
+		reporterUserId: string;
+		reporterAcct?: string | null;
+		modelKind: 'chat' | 'image';
+		modelId: string;
+		modelName: string;
+		reasonType: string;
+		message: string;
 	};
 	setAgentSessionModerationBan: {
 		sessionId: string;

@@ -35,6 +35,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<span :class="$style.sectionTitle">对话模型</span>
 			<span :class="$style.sectionCount">{{ allModels.length }}</span>
 			<span :class="$style.sectionLine" aria-hidden="true"></span>
+			<MkButton rounded small :class="$style.sectionAction" @click="openReportDialog">
+				<i class="ti ti-flag"></i> 上报异常
+			</MkButton>
 		</div>
 
 		<!-- BYOK 未启用时的提示 -->
@@ -205,6 +208,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<span :class="$style.sectionTitle">绘图模型</span>
 			<span :class="$style.sectionCount">{{ imageModels.length }}</span>
 			<span :class="$style.sectionLine" aria-hidden="true"></span>
+			<MkButton rounded small :class="$style.sectionAction" @click="openReportDialog">
+				<i class="ti ti-flag"></i> 上报异常
+			</MkButton>
 		</div>
 		<MkInfo v-if="imageModels.length === 0">管理员还没有配置可用的生图模型。</MkInfo>
 		<div v-else :class="$style.selectCardList">
@@ -289,6 +295,7 @@ import MkSwitch from '@/components/MkSwitch.vue';
 import MkNumber from '@/components/MkNumber.vue';
 import MkByokModelDialog from './byok-model-dialog.vue';
 import MkByokProviderDialog from './byok-provider-dialog.vue';
+import MkModelReportDialog from './model-report-dialog.vue';
 import { misskeyApi, formatApiError } from '@/utility/misskey-api.js';
 import { instance } from '@/instance.js';
 import { i18n } from '@/i18n.js';
@@ -535,6 +542,16 @@ function goMyStats() {
 	router.push('/agents', { query: { view: 'my-stats' } });
 }
 
+/** 上报模型异常：对话框内可选对话 + 绘图全部模型 */
+function openReportDialog() {
+	const { dispose } = os.popup(MkModelReportDialog, {
+		chatModels: allModels.value.map(m => ({ id: m.id, name: m.name })),
+		imageModels: imageModels.value.map(m => ({ id: m.id, name: m.name })),
+	}, {
+		closed: () => { dispose(); },
+	});
+}
+
 function openByokHint() {
 	os.alert({ type: 'info', text: i18n.ts._agents.byokCustomHint });
 }
@@ -550,7 +567,7 @@ async function loadAll() {
 			userModels.value = [];
 		}
 		const [imageRows, rateRes, quotaRes] = await Promise.all([
-			misskeyApi('agents/images/models/list' as Parameters<typeof misskeyApi>[0], {} as any).catch(() => [] as AgentImageModel[]),
+			misskeyApi('agents/images/models/list' as Parameters<typeof misskeyApi>[0], {} as any).catch(() => [] as AgentImageModel[]) as Promise<AgentImageModel[]>,
 			misskeyApi('agents/models/success-rates', { windowMs: 60 * 60 * 1000 }).catch(() => ({ rates: [] as { modelId: string; total: number; success: number; failed: number; aborted: number }[] })),
 			misskeyApi('agents/models/free-quota', {}).catch(() => [] as { modelId: string; freeQuotaUsed: number; freeQuotaTotal: number }[]),
 		]);
@@ -768,6 +785,10 @@ onMounted(loadAll);
 	flex: 1;
 	height: 1px;
 	background: var(--MI_THEME-divider);
+}
+
+.sectionAction {
+	flex-shrink: 0;
 }
 
 /* 分组筛选行：pills 在左，主操作按钮在右 */

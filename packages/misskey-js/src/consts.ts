@@ -43,6 +43,7 @@ export const notificationTypes = [
 	'createToken',
 	'agentReviewApproved',
 	'agentReviewRejected',
+	'agentModelReportResolved',
 	'agentCharacterBanned',
 	'agentSessionBanned',
 	'agentProactiveMessage',

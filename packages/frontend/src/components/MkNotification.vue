@@ -9,7 +9,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<MkAvatar v-if="['pollEnded', 'note'].includes(notification.type) && 'note' in notification" :class="$style.icon" :user="notification.note.user" link preview/>
 		<img v-else-if="(notification as any).type === 'agentProactiveMessage' && (notification as any).agentAvatarUrl" :class="[$style.icon, $style.agentAvatar]" :src="(notification as any).agentAvatarUrl" alt="">
 		<div v-else-if="(notification as any).type === 'agentProactiveMessage'" :class="[$style.icon, $style.agentAvatarFallback]"><i class="ti ti-robot"></i></div>
-		<MkAvatar v-else-if="['roleAssigned', 'achievementEarned', 'exportCompleted', 'login', 'createToken', 'scheduledNotePosted', 'scheduledNotePostFailed', 'agentReviewApproved', 'agentReviewRejected', 'agentCharacterBanned', 'agentSessionBanned'].includes((notification as any).type)" :class="$style.icon" :user="$i" link preview/>
+		<MkAvatar v-else-if="['roleAssigned', 'achievementEarned', 'exportCompleted', 'login', 'createToken', 'scheduledNotePosted', 'scheduledNotePostFailed', 'agentReviewApproved', 'agentReviewRejected', 'agentModelReportResolved', 'agentCharacterBanned', 'agentSessionBanned'].includes((notification as any).type)" :class="$style.icon" :user="$i" link preview/>
 		<div v-else-if="notification.type === 'reaction:grouped' && notification.note.reactionAcceptance === 'likeOnly'" :class="[$style.icon, $style.icon_reactionGroupHeart]"><i class="ti ti-heart" style="line-height: 1;"></i></div>
 		<div v-else-if="notification.type === 'reaction:grouped'" :class="[$style.icon, $style.icon_reactionGroup]"><i class="ti ti-plus" style="line-height: 1;"></i></div>
 		<div v-else-if="notification.type === 'renote:grouped'" :class="[$style.icon, $style.icon_renoteGroup]"><i class="ti ti-repeat" style="line-height: 1;"></i></div>
@@ -38,8 +38,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 				[$style.t_chatRoomSuspended]: (notification as any).type === 'chatRoomSuspended',
 				[$style.t_chatRoomUnsuspended]: (notification as any).type === 'chatRoomUnsuspended',
 				[$style.t_agentReviewApproved]: (notification as any).type === 'agentReviewApproved',
-				[$style.t_agentReviewRejected]: (notification as any).type === 'agentReviewRejected',
-				[$style.t_agentCharacterBanned]: (notification as any).type === 'agentCharacterBanned',
+					[$style.t_agentReviewRejected]: (notification as any).type === 'agentReviewRejected',
+					[$style.t_agentModelReportResolved]: (notification as any).type === 'agentModelReportResolved',
+					[$style.t_agentCharacterBanned]: (notification as any).type === 'agentCharacterBanned',
 				[$style.t_agentSessionBanned]: (notification as any).type === 'agentSessionBanned',
 				[$style.t_agentProactiveMessage]: (notification as any).type === 'agentProactiveMessage',
 				[$style.t_roleAssigned]: notification.type === 'roleAssigned' && notification.role.iconUrl == null,
@@ -66,6 +67,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<i v-else-if="(notification as any).type === 'chatRoomUnsuspended'" class="ti ti-circle-check"></i>
 			<i v-else-if="(notification as any).type === 'agentReviewApproved'" class="ti ti-circle-check"></i>
 			<i v-else-if="(notification as any).type === 'agentReviewRejected'" class="ti ti-circle-x"></i>
+			<i v-else-if="(notification as any).type === 'agentModelReportResolved'" class="ti ti-tool"></i>
 			<i v-else-if="(notification as any).type === 'agentCharacterBanned'" class="ti ti-ban"></i>
 			<i v-else-if="(notification as any).type === 'agentSessionBanned'" class="ti ti-ban"></i>
 			<i v-else-if="(notification as any).type === 'agentProactiveMessage'" class="ti ti-message-circle"></i>
@@ -99,6 +101,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<span v-else-if="notification.type === 'createToken'">{{ i18n.ts._notification.createToken }}</span>
 			<span v-else-if="(notification as any).type === 'agentReviewApproved'">{{ (notification as any).agentKind === 'character' ? i18n.tsx._notification.agentCharacterReviewApproved({ name: (notification as any).resourceName }) : i18n.tsx._notification.agentStyleReviewApproved({ name: (notification as any).resourceName }) }}</span>
 			<span v-else-if="(notification as any).type === 'agentReviewRejected'">{{ (notification as any).agentKind === 'character' ? i18n.tsx._notification.agentCharacterReviewRejected({ name: (notification as any).resourceName }) : i18n.tsx._notification.agentStyleReviewRejected({ name: (notification as any).resourceName }) }}</span>
+			<span v-else-if="(notification as any).type === 'agentModelReportResolved'">{{ i18n.tsx._notification.agentModelReportResolved({ name: (notification as any).modelName }) }}</span>
 			<span v-else-if="(notification as any).type === 'agentCharacterBanned'">{{ (notification as any).banned ? i18n.tsx._notification.agentCharacterBanned({ name: (notification as any).characterName }) : i18n.tsx._notification.agentCharacterUnbanned({ name: (notification as any).characterName }) }}</span>
 			<span v-else-if="(notification as any).type === 'agentSessionBanned'">{{ (notification as any).banned ? i18n.tsx._notification.agentSessionBanned({ name: (notification as any).sessionName }) : i18n.tsx._notification.agentSessionUnbanned({ name: (notification as any).sessionName }) }}</span>
 			<span v-else-if="(notification as any).type === 'agentProactiveMessage'">{{ (notification as any).sessionName }}</span>
@@ -171,9 +174,12 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<MkA v-else-if="notification.type === 'createToken'" :class="$style.text" to="/settings/apps">
 				<Mfm :text="i18n.tsx._notification.createTokenDescription({ text: i18n.ts.manageAccessTokens })"/>
 			</MkA>
-			<MkA v-else-if="(notification as any).type === 'agentProactiveMessage'" :class="$style.text" :to="`/chat/agent/${(notification as any).sessionId}`">
-				{{ (notification as any).messageText }}
-			</MkA>
+				<div v-else-if="(notification as any).type === 'agentModelReportResolved'" :class="$style.text">
+					{{ (notification as any).message }}
+				</div>
+				<MkA v-else-if="(notification as any).type === 'agentProactiveMessage'" :class="$style.text" :to="`/chat/agent/${(notification as any).sessionId}`">
+					{{ (notification as any).messageText }}
+				</MkA>
 			<template v-else-if="notification.type === 'follow'">
 				<span :class="$style.text" style="opacity: 0.6;">{{ i18n.ts.youGotNewFollower }}</span>
 			</template>
@@ -475,6 +481,11 @@ function getActualReactedUsersCount(notification: Misskey.entities.Notification)
 
 .t_agentReviewRejected {
 	background: var(--MI_THEME-warn);
+	pointer-events: none;
+}
+
+.t_agentModelReportResolved {
+	background: var(--eventFollow);
 	pointer-events: none;
 }
 

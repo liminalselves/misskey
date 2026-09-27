@@ -375,7 +375,12 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</div>
 				<div class="_gaps">
 					<div :class="$style.drawModelChooser">
-						<div :class="$style.drawFieldLabel">生图模型</div>
+						<div :class="$style.drawFieldRow">
+							<div :class="$style.drawFieldLabel">生图模型</div>
+							<MkButton rounded small :class="$style.drawFieldAction" @click="openModelReportDialog">
+								<i class="ti ti-flag"></i> 上报异常
+							</MkButton>
+						</div>
 						<div :class="$style.selectCardList">
 							<div
 								v-panel
@@ -974,19 +979,24 @@ SPDX-License-Identifier: AGPL-3.0-only
 								</span>
 							</div>
 						</div>
-						<div v-if="modelGroupTabs.length > 1" :class="$style.modelGroupTabs" role="tablist">
-							<button
-								v-for="t in modelGroupTabs"
-								:key="t.key"
-								type="button"
-								role="tab"
-								:aria-selected="modelGroupFilter === t.key"
-								:class="[$style.modelGroupTab, modelGroupFilter === t.key ? $style.modelGroupTabActive : '']"
-								@click="modelGroupFilter = t.key"
-							>
-								<span :class="$style.modelGroupTabLabel">{{ t.label }}</span>
-								<span :class="$style.modelGroupTabCount">{{ t.count }}</span>
-							</button>
+						<div :class="$style.modelTabsRow">
+							<div v-if="modelGroupTabs.length > 1" :class="$style.modelGroupTabs" role="tablist">
+								<button
+									v-for="t in modelGroupTabs"
+									:key="t.key"
+									type="button"
+									role="tab"
+									:aria-selected="modelGroupFilter === t.key"
+									:class="[$style.modelGroupTab, modelGroupFilter === t.key ? $style.modelGroupTabActive : '']"
+									@click="modelGroupFilter = t.key"
+								>
+									<span :class="$style.modelGroupTabLabel">{{ t.label }}</span>
+									<span :class="$style.modelGroupTabCount">{{ t.count }}</span>
+								</button>
+							</div>
+							<MkButton rounded small :class="$style.modelTabsAction" @click="openModelReportDialog">
+								<i class="ti ti-flag"></i> 上报异常
+							</MkButton>
 						</div>
 						<div :class="$style.selectCardList">
 							<div
@@ -1143,6 +1153,7 @@ import XAgentSearch from './agent-session.search.vue';
 import XCompression from './agent-session.compression.vue';
 import XMessageBands from './agent-session.message-bands.vue';
 import XControlLoading from '@/pages/agents/control-embed-loading.vue';
+import MkModelReportDialog from '@/pages/agents/model-report-dialog.vue';
 import type { PageHeaderItem } from '@/types/page-header.js';
 import type { DateSeparetedTimelineItem } from '@/utility/timeline-date-separate.js';
 import type { AgentsStylesListUsableResponse, DriveFile } from 'misskey-js/entities.js';
@@ -2168,6 +2179,16 @@ const visibleAgentModels = computed(() => {
 	if (modelGroupFilter.value === '__none__') return models.filter(m => !m.group);
 	return models.filter(m => m.group === modelGroupFilter.value);
 });
+
+/** 上报模型异常：对话框内可选对话 + 绘图全部模型 */
+function openModelReportDialog() {
+	const { dispose } = os.popup(MkModelReportDialog, {
+		chatModels: agentModels.value.map(m => ({ id: m.id, name: m.name })),
+		imageModels: drawImageModels.value.map(m => ({ id: m.id, name: m.name })),
+	}, {
+		closed: () => { dispose(); },
+	});
+}
 
 async function loadUserModels() {
 	if ((instance as Record<string, unknown>).agentByokEnabled !== true) {
@@ -6112,6 +6133,30 @@ async function onAbortRequest() {
 	display: flex;
 	flex-wrap: wrap;
 	gap: 0.4em;
+}
+
+/* 模型 tab 分组筛选行：pills 在左，上报按钮在右 */
+.modelTabsRow {
+	display: flex;
+	align-items: center;
+	gap: 0.5em 0.75em;
+	flex-wrap: wrap;
+}
+
+.modelTabsAction {
+	margin-left: auto;
+	flex-shrink: 0;
+}
+
+.drawFieldRow {
+	display: flex;
+	align-items: center;
+	gap: 0.5em;
+}
+
+.drawFieldAction {
+	margin-left: auto;
+	flex-shrink: 0;
 }
 
 .modelGroupTab {

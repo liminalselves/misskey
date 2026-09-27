@@ -205,12 +205,17 @@ export class NotificationEntityService implements OnModuleInit {
 				header: notification.customHeader,
 				icon: notification.customIcon,
 			} : {}),
-			...((notification.type === 'agentReviewApproved' || notification.type === 'agentReviewRejected') ? {
-				agentKind: notification.agentKind,
-				resourceId: notification.resourceId,
-				resourceName: notification.resourceName,
-			} : {}),
-			...(notification.type === 'agentCharacterBanned' ? {
+				...((notification.type === 'agentReviewApproved' || notification.type === 'agentReviewRejected') ? {
+					agentKind: notification.agentKind,
+					resourceId: notification.resourceId,
+					resourceName: notification.resourceName,
+				} : {}),
+				...(notification.type === 'agentModelReportResolved' ? {
+					reportId: notification.reportId,
+					modelName: notification.modelName,
+					message: notification.message,
+				} : {}),
+				...(notification.type === 'agentCharacterBanned' ? {
 				characterId: notification.characterId,
 				characterName: notification.characterName,
 				banned: notification.banned,

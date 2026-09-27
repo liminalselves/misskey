@@ -95,6 +95,7 @@ import {
 	MiAgentExternalAuditLog,
 	MiAgentUserStyleSubscription,
 	MiAgentModelUsageLog,
+	MiAgentModelReport,
 	MiAgentCheckinRecord,
 	MiAgentRedeemCode,
 	MiAgentPublishedVersion,
@@ -615,6 +616,12 @@ const $agentModelUsageLogsRepository: Provider = {
 	inject: [DI.db],
 };
 
+const $agentModelReportsRepository: Provider = {
+	provide: DI.agentModelReportsRepository,
+	useFactory: (db: DataSource) => db.getRepository(MiAgentModelReport).extend(miRepository as MiRepository<MiAgentModelReport>),
+	inject: [DI.db],
+};
+
 const $agentCheckinRecordsRepository: Provider = {
 	provide: DI.agentCheckinRecordsRepository,
 	useFactory: (db: DataSource) => db.getRepository(MiAgentCheckinRecord).extend(miRepository as MiRepository<MiAgentCheckinRecord>),
@@ -751,6 +758,7 @@ const $reversiGamesRepository: Provider = {
 		$agentUserStyleSubscriptionsRepository,
 		$agentPlazaReviewsRepository,
 		$agentModelUsageLogsRepository,
+		$agentModelReportsRepository,
 		$agentCheckinRecordsRepository,
 		$agentRedeemCodesRepository,
 		$agentSessionCompressionStickyRepository,
@@ -846,6 +854,7 @@ const $reversiGamesRepository: Provider = {
 		$agentUserStyleSubscriptionsRepository,
 		$agentPlazaReviewsRepository,
 		$agentModelUsageLogsRepository,
+		$agentModelReportsRepository,
 		$agentCheckinRecordsRepository,
 		$agentRedeemCodesRepository,
 		$agentSessionCompressionStickyRepository,
