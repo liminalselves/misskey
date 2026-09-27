@@ -31,10 +31,15 @@ import { updateCurrentAccountPartial } from '@/accounts.js';
 import { migrateOldSettings } from '@/pref-migrate.js';
 import { unisonReload } from '@/utility/unison-reload.js';
 import { isBirthday } from '@/utility/is-birthday.js';
+import { initEmbeddedShell } from '@/utility/embedded-shell.js';
 import { isEmbeddedAppShell } from '@/utility/is-embedded-app-shell.js';
 import { signout } from '@/signout.js';
 
 export async function mainBoot() {
+	// 嵌入式壳（App WebView）协议：需先于 common()（首个 applyTheme）安装，
+	// 保证 theme-color 事件监听先于首次主题应用生效
+	initEmbeddedShell();
+
 	const { isClientUpdated, lastVersion } = await common(async () => {
 		let uiStyle = ui;
 		const searchParams = new URLSearchParams(window.location.search);
@@ -304,7 +309,9 @@ export async function mainBoot() {
 			});
 		}
 
-		if (store.s.realtimeMode) {
+		// App 壳必须保持完整 Streaming 事件链：原生后台 WS 只负责系统通知，不能替代
+		// meUpdated、私信/智能体未读、公告、表情、模型配置等站内实时状态。
+		if (store.s.realtimeMode || isEmbeddedAppShell()) {
 			const stream = useStream();
 
 			let reloadDialogShowing = false;
@@ -402,31 +409,6 @@ export async function mainBoot() {
 
 				// 始终播放声音提示
 				sound.playMisskeySfx('chatMessage');
-
-				// App 壳内：私信系统通知（受 notificationRecieveConfig.newChatMessage 控制）
-				if (isEmbeddedAppShell() && !isViewingSource) {
-					const chatConfig = ($i?.notificationRecieveConfig as Record<string, { type: string } | undefined> | undefined)?.['newChatMessage'];
-					if (chatConfig?.type !== 'never') {
-						try {
-							const msg = message as Record<string, any>;
-							const senderName = msg.fromUser?.name ?? msg.fromUser?.username ?? i18n.ts.newMessage;
-							const body = msg.text ?? '';
-							const bridge = (window as unknown as { AppNativePush?: { postMessage: (m: string) => void } }).AppNativePush;
-							const openPath =
-								'fromUserId' in message && message.fromUserId
-									? `/chat/user/${message.fromUserId}`
-									: 'toRoomId' in message && message.toRoomId
-										? `/chat/room/${message.toRoomId}`
-										: '/chat';
-							bridge?.postMessage?.(JSON.stringify({
-								action: 'notify',
-								title: senderName,
-								body: String(body).slice(0, 500),
-								openPath,
-							}));
-						} catch { /* ignore */ }
-					}
-				}
 			});
 
 			// 监听聊天已读事件（全局处理）
@@ -449,22 +431,6 @@ export async function mainBoot() {
 
 				// 始终播放声音提示（与私信同一音效）
 				sound.playMisskeySfx('chatMessage');
-
-				// App 壳内：智能体消息系统通知（受 notificationRecieveConfig.newAgentMessage 控制）
-				if (isEmbeddedAppShell() && !isViewingSource) {
-					const agentConfig = ($i?.notificationRecieveConfig as Record<string, { type: string } | undefined> | undefined)?.['newAgentMessage'];
-					if (agentConfig?.type !== 'never') {
-						try {
-							const bridge = (window as unknown as { AppNativePush?: { postMessage: (m: string) => void } }).AppNativePush;
-							bridge?.postMessage?.(JSON.stringify({
-								action: 'notify',
-								title: payload.sessionName ?? i18n.ts.newMessage,
-								body: String(payload.messageText ?? '').slice(0, 500),
-								openPath: `/chat/agent/${payload.sessionId}`,
-							}));
-						} catch { /* ignore */ }
-					}
-				}
 			});
 
 			// 监听智能体消息已读事件（全局处理）
@@ -516,7 +482,6 @@ export async function mainBoot() {
 	} as const satisfies Keymap;
 	window.document.addEventListener('keydown', makeHotkey(keymap), { passive: false });
 
-	// Flutter 等埋め込みシェル：通知権限でプッシュを自動オフにしたとき、os.alert（MkDialog）で案内
 	if (isEmbeddedAppShell()) {
 		window.addEventListener('liminal-native-push-alert', () => {
 			void alert({

@@ -44,6 +44,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { instanceName } from '@@/js/config.js';
 import { isEmbeddedAppShell } from '@/utility/is-embedded-app-shell.js';
+import { postAppNativePush } from '@/utility/embedded-shell.js';
 import { $i } from '@/i.js';
 import MkButton from '@/components/MkButton.vue';
 import { instance } from '@/instance.js';
@@ -82,7 +83,7 @@ const supported = ref(false);
 // If this browser has already subscribed to push notification
 const pushSubscription = ref<PushSubscription | null>(null);
 const pushRegistrationInServer = ref<{ state?: string; key?: string; userId: string; endpoint: string; sendReadMessage: boolean; } | undefined>();
-/** App 壳内：用户刚点了「启用」，用于仅在 enable 失败时弹出说明（query 同步不带 errorCode） */
+/** App 壳内：用户刚点了「启用」。query 状态同步可能带 errorCode 但不弹窗，仅 enable 失败时弹出说明 */
 const shellPushEnablePending = ref(false);
 
 const subscribeLabel = computed(() =>
@@ -91,15 +92,6 @@ const subscribeLabel = computed(() =>
 const unsubscribeLabel = computed(() =>
 	isEmbeddedAppShell() ? i18n.ts.unsubscribePushNotificationApp : i18n.ts.unsubscribePushNotificationBrowser,
 );
-
-function postAppNativePush(action: 'enable' | 'disable' | 'query') {
-	try {
-		const bridge = (window as unknown as { AppNativePush?: { postMessage: (msg: string) => void } }).AppNativePush;
-		bridge?.postMessage?.(action);
-	} catch {
-		// 非 App WebView
-	}
-}
 
 function alertShellPushError(code: string): void {
 	switch (code) {
@@ -122,6 +114,13 @@ function alertShellPushError(code: string): void {
 				type: 'error',
 				title: i18n.ts.nativePushEnableFailedTitle,
 				text: i18n.ts.nativePushEnableFailedPushSetup,
+			});
+			break;
+		case 'not_logged_in':
+			void alert({
+				type: 'error',
+				title: i18n.ts.nativePushEnableFailedTitle,
+				text: i18n.ts.nativePushEnableFailedNotLoggedIn,
 			});
 			break;
 		default:

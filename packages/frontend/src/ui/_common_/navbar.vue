@@ -4,7 +4,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 -->
 
 <template>
-<div :class="[$style.root, { [$style.iconOnly]: iconOnly }]">
+<div :class="[$style.root, { [$style.iconOnly]: iconOnly, [$style.asDrawer]: props.asDrawer }]">
 	<div :class="$style.body">
 		<div :class="$style.top">
 			<button v-tooltip.noDelay.right="instance.name ?? i18n.ts.instance" class="_button" :class="$style.instance" @click="openInstanceMenu">
@@ -838,6 +838,117 @@ function menuEdit() {
 
 	.subButtons {
 		left: var(--nav-icon-only-width);
+	}
+}
+
+/* 抽屉模式修复：模糊带的渐变形状由 mask-image 定义，但原声明使用新式颜色语法
+   `rgb(0 0 0 / X%)`，部分系统 WebView 无法解析 → mask 整条失效 → 模糊带失去
+   渐隐形状，变成整个元素大小的硬边磨砂块（浏览器解析正常，故仅壳内异常）。
+   此处在抽屉模式下用等值的旧语法（rgba + -webkit- 前缀）重写同一条 mask：
+   形状逐值照抄上方原声明，blur/布局/桌面侧栏均不变。 */
+.root.asDrawer {
+	.top::before {
+		-webkit-backdrop-filter: blur(8px);
+		-webkit-mask-image: linear-gradient(
+			to top,
+			rgba(0, 0, 0, 0) 0%,
+			rgba(0, 0, 0, 0.049) 7.75%,
+			rgba(0, 0, 0, 0.104) 11.25%,
+			rgba(0, 0, 0, 0.45) 23.55%,
+			rgba(0, 0, 0, 0.55) 26.45%,
+			rgba(0, 0, 0, 0.896) 38.75%,
+			rgba(0, 0, 0, 0.951) 42.25%,
+			rgba(0, 0, 0, 1) 50%
+		);
+		mask-image: linear-gradient(
+			to top,
+			rgba(0, 0, 0, 0) 0%,
+			rgba(0, 0, 0, 0.049) 7.75%,
+			rgba(0, 0, 0, 0.104) 11.25%,
+			rgba(0, 0, 0, 0.45) 23.55%,
+			rgba(0, 0, 0, 0.55) 26.45%,
+			rgba(0, 0, 0, 0.896) 38.75%,
+			rgba(0, 0, 0, 0.951) 42.25%,
+			rgba(0, 0, 0, 1) 50%
+		);
+	}
+
+	.top::after {
+		-webkit-backdrop-filter: blur(16px);
+		-webkit-mask-image: linear-gradient(
+			to top,
+			rgba(0, 0, 0, 0) 0%,
+			rgba(0, 0, 0, 0.049) 15.5%,
+			rgba(0, 0, 0, 0.104) 22.5%,
+			rgba(0, 0, 0, 0.45) 47.1%,
+			rgba(0, 0, 0, 0.55) 52.9%,
+			rgba(0, 0, 0, 0.896) 77.5%,
+			rgba(0, 0, 0, 0.951) 91.9%,
+			rgba(0, 0, 0, 1) 100%
+		);
+		mask-image: linear-gradient(
+			to top,
+			rgba(0, 0, 0, 0) 0%,
+			rgba(0, 0, 0, 0.049) 15.5%,
+			rgba(0, 0, 0, 0.104) 22.5%,
+			rgba(0, 0, 0, 0.45) 47.1%,
+			rgba(0, 0, 0, 0.55) 52.9%,
+			rgba(0, 0, 0, 0.896) 77.5%,
+			rgba(0, 0, 0, 0.951) 91.9%,
+			rgba(0, 0, 0, 1) 100%
+		);
+	}
+
+	.bottom::before {
+		-webkit-backdrop-filter: blur(8px);
+		-webkit-mask-image: linear-gradient(
+			to bottom,
+			rgba(0, 0, 0, 0) 0%,
+			rgba(0, 0, 0, 0.049) 7.75%,
+			rgba(0, 0, 0, 0.104) 11.25%,
+			rgba(0, 0, 0, 0.45) 23.55%,
+			rgba(0, 0, 0, 0.55) 26.45%,
+			rgba(0, 0, 0, 0.896) 38.75%,
+			rgba(0, 0, 0, 0.951) 42.25%,
+			rgba(0, 0, 0, 1) 50%
+		);
+		mask-image: linear-gradient(
+			to bottom,
+			rgba(0, 0, 0, 0) 0%,
+			rgba(0, 0, 0, 0.049) 7.75%,
+			rgba(0, 0, 0, 0.104) 11.25%,
+			rgba(0, 0, 0, 0.45) 23.55%,
+			rgba(0, 0, 0, 0.55) 26.45%,
+			rgba(0, 0, 0, 0.896) 38.75%,
+			rgba(0, 0, 0, 0.951) 42.25%,
+			rgba(0, 0, 0, 1) 50%
+		);
+	}
+
+	.bottom::after {
+		-webkit-backdrop-filter: blur(16px);
+		-webkit-mask-image: linear-gradient(
+			to bottom,
+			rgba(0, 0, 0, 0) 0%,
+			rgba(0, 0, 0, 0.049) 15.5%,
+			rgba(0, 0, 0, 0.104) 22.5%,
+			rgba(0, 0, 0, 0.45) 47.1%,
+			rgba(0, 0, 0, 0.55) 52.9%,
+			rgba(0, 0, 0, 0.896) 77.5%,
+			rgba(0, 0, 0, 0.951) 91.9%,
+			rgba(0, 0, 0, 1) 100%
+		);
+		mask-image: linear-gradient(
+			to bottom,
+			rgba(0, 0, 0, 0) 0%,
+			rgba(0, 0, 0, 0.049) 15.5%,
+			rgba(0, 0, 0, 0.104) 22.5%,
+			rgba(0, 0, 0, 0.45) 47.1%,
+			rgba(0, 0, 0, 0.55) 52.9%,
+			rgba(0, 0, 0, 0.896) 77.5%,
+			rgba(0, 0, 0, 0.951) 91.9%,
+			rgba(0, 0, 0, 1) 100%
+		);
 	}
 }
 </style>

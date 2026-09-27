@@ -19,6 +19,7 @@ import { miLocalStorage } from '@/local-storage.js';
 import { $i } from '@/i.js';
 import { prefer } from '@/preferences.js';
 import { deepEqual } from '@/utility/deep-equal.js';
+import { SHELL_THEME_COLOR_EVENT } from '@/utility/embedded-shell.js';
 
 export type Theme = {
 	id: string;
@@ -114,6 +115,12 @@ function applyThemeInternal(theme: Theme, persist: boolean) {
 			break;
 		}
 	}
+
+	// 嵌入式壳（App WebView）监听此事件以同步系统栏颜色（utility/embedded-shell.ts）；
+	// 常规浏览器无监听者，派发开销可忽略
+	window.dispatchEvent(new CustomEvent(SHELL_THEME_COLOR_EVENT, {
+		detail: props['bg'] ?? props['htmlThemeColor'],
+	}));
 
 	for (const [k, v] of Object.entries(props)) {
 		window.document.documentElement.style.setProperty(`--MI_THEME-${k}`, v.toString());

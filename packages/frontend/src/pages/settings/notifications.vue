@@ -79,7 +79,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<template #label>{{ i18n.ts.pushNotification }}</template>
 
 			<div class="_gaps_m">
-				<MkPushNotificationAllowButton ref="allowButton"/>
+					<MkPushNotificationAllowButton ref="allowButton"/>
+
 				<MkSwitch
 					v-if="!isEmbeddedAppShell()"
 					:disabled="!pushRegistrationInServer"

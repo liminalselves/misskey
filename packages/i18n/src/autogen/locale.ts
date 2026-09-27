@@ -4449,7 +4449,7 @@ export interface Locale extends ILocale {
      */
     "nativePushAutoDisabledByPermissionTitle": string;
     /**
-     * 通知の許可が得られないため、アプリのプッシュ受信を停止し、設定をオフにしました。通知を再度利用する場合は、端末の設定で通知を許可したうえで、通知設定から「アプリのプッシュ通知を有効にする」を選んでください。
+     * プッシュ通知に必要な設定が完了していないため、アプリプッシュを自動的に停止しました。もう一度有効にして、通知権限・バッテリー最適化・通知チャンネルの設定をガイドに従って完了してください。
      */
     "nativePushAutoDisabledByPermissionDescription": string;
     /**
@@ -4465,13 +4465,17 @@ export interface Locale extends ILocale {
      */
     "nativePushEnableFailedTitle": string;
     /**
-     * 権限の設定が完了していません（途中でキャンセルしたか、一部の権限が未許可の可能性があります）。もう一度有効にして、ガイドに従いすべての権限設定を完了してください。
+     * プッシュ通知に必要な設定が完了していません。もう一度有効にして、通知権限・バッテリー最適化・すべての通知チャンネル設定をガイドに従って完了してください。
      */
     "nativePushEnableFailedPermission": string;
     /**
      * サーバー側の設定同期に失敗しました（ネットワークが不安定な可能性があります）。ネットワーク接続を確認してから、もう一度お試しください。
      */
     "nativePushEnableFailedPushSetup": string;
+    /**
+     * このサーバーにログインしていないため、アプリのプッシュ通知を有効にできません。ログインしてから、もう一度お試しください。
+     */
+    "nativePushEnableFailedNotLoggedIn": string;
     /**
      * アプリ
      */

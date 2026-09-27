@@ -91,6 +91,7 @@ type LiminalAppInfo = {
 	buildNumber: string;
 	packageName: string;
 	platform: string;
+	sdkInt?: number;
 };
 
 type NativeClientChangelogItem = {
@@ -167,15 +168,47 @@ function pickUpdatedEntries(all: NativeClientChangelogItem[], local: string, lat
 	});
 }
 
+type NativeClientAndroidRelease = {
+	minSdk?: number;
+	maxSdk?: number;
+	version?: string;
+	downloadUrl?: string;
+	changelog?: unknown;
+};
+
 type NativeClientAppInfoLike = {
 	changelog?: unknown;
+	androidReleases?: NativeClientAndroidRelease[];
 };
 
 function readNativeClientAppInfoLike(): NativeClientAppInfoLike {
 	return (instance.nativeClientAppInfo ?? {}) as unknown as NativeClientAppInfoLike;
 }
 
-const allChangelogEntries = computed(() => parseChangelogItems(readNativeClientAppInfoLike().changelog));
+function selectAndroidRelease(info: NativeClientAppInfoLike, sdkInt: number | undefined): NativeClientAndroidRelease | null {
+	if (sdkInt == null || !Array.isArray(info.androidReleases)) return null;
+	const asInt = (value: unknown, fallback: number): number => {
+		const parsed = typeof value === 'number' ? value : Number.parseInt(String(value), 10);
+		return Number.isFinite(parsed) ? parsed : fallback;
+	};
+	return info.androidReleases
+		.filter(release => {
+			const minSdk = asInt(release.minSdk, 1);
+			const maxSdk = asInt(release.maxSdk, -1);
+			return sdkInt >= minSdk && (maxSdk < 0 || sdkInt <= maxSdk);
+		})
+		.sort((a, b) => asInt(b.minSdk, 1) - asInt(a.minSdk, 1))[0] ?? null;
+}
+
+const selectedAndroidRelease = computed(() =>
+	appInfo.value?.platform === 'android'
+		? selectAndroidRelease(readNativeClientAppInfoLike(), appInfo.value.sdkInt)
+		: null,
+);
+
+const allChangelogEntries = computed(() => parseChangelogItems(
+	selectedAndroidRelease.value?.changelog ?? readNativeClientAppInfoLike().changelog,
+));
 
 async function requestCheckUpdate() {
 	if (checkingUpdate.value) return;
@@ -184,14 +217,19 @@ async function requestCheckUpdate() {
 		await fetchInstance(true);
 		const platform = appInfo.value?.platform;
 		const info = instance.nativeClientAppInfo;
+		const release = platform === 'android'
+			? selectAndroidRelease((info ?? {}) as unknown as NativeClientAppInfoLike, appInfo.value?.sdkInt)
+			: null;
 		const latest = (platform === 'ios'
 			? info?.latestIosVersion
-			: info?.latestAndroidVersion)?.trim() ?? '';
+			: release?.version ?? info?.latestAndroidVersion)?.trim() ?? '';
 		const downloadUrlRaw = platform === 'ios'
 			? info?.iosDownloadUrl
-			: info?.androidDownloadUrl;
+			: release?.downloadUrl ?? info?.androidDownloadUrl;
 		const downloadUrl = downloadUrlRaw?.trim() ?? '';
-		const changelog = parseChangelogItems((info as unknown as NativeClientAppInfoLike | undefined)?.changelog);
+		const changelog = parseChangelogItems(
+			release?.changelog ?? (info as unknown as NativeClientAppInfoLike | undefined)?.changelog,
+		);
 
 		if (!latest) {
 			await os.alert({
