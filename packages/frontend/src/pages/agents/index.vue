@@ -6,7 +6,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 <template>
 <PageWithHeader :tab="mainTab" :tabs="mainHeaderTabs" :swipable="false" @update:tab="onMainTabChange">
 	<div v-if="mainTab === 'square'" class="_spacer" style="--MI_SPACER-w: 700px;">
-		<XSquare :initial-sub="props.sub"/>
+		<XSquare :initialSub="props.sub"/>
 	</div>
 	<div v-else-if="mainTab === 'create'" class="_spacer" style="--MI_SPACER-w: 700px;">
 		<div style="display: flex; align-items: center; gap: 10px; margin-bottom: var(--MI-margin);">

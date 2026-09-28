@@ -362,7 +362,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 									<div v-else :class="$style.stickerThumbFallback"><i class="ti ti-sticker"></i></div>
 								</div>
 								<div :class="$style.stickerKeyCol">
-									<MkInput v-model="sticker.key" :max-length="32">
+									<MkInput v-model="sticker.key" :maxLength="32">
 										<template #label>{{ i18n.ts._agents.characterStickerKey }}</template>
 										<template #caption>{{ i18n.ts._agents.characterStickerKeyCaption }}</template>
 									</MkInput>

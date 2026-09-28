@@ -209,14 +209,12 @@ function cellTitle(cell: CalCell): string {
 }
 
 function prevMonth() {
-	if (calMonth.value === 1) { calYear.value--; calMonth.value = 12; }
-	else calMonth.value--;
+	if (calMonth.value === 1) { calYear.value--; calMonth.value = 12; } else calMonth.value--;
 	loadStatus();
 }
 
 function nextMonth() {
-	if (calMonth.value === 12) { calYear.value++; calMonth.value = 1; }
-	else calMonth.value++;
+	if (calMonth.value === 12) { calYear.value++; calMonth.value = 1; } else calMonth.value++;
 	loadStatus();
 }
 

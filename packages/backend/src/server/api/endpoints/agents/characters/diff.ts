@@ -58,7 +58,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 
 		private agentService: AgentService,
 	) {
-		super(meta, paramDef, async (ps, me) => {			this.agentService.assertAgentsEnabled();
+		super(meta, paramDef, async (ps, me) => {
+			this.agentService.assertAgentsEnabled();
 			const row = await this.agentCharactersRepository.findOneBy({ id: ps.characterId });
 			if (!row || row.userId !== me.id) {
 				throw new ApiError({ message: 'No such character.', code: 'NO_SUCH_CHARACTER', id: '4fdde14f-bf96-45ba-8f04-556a5f368165' });

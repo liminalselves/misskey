@@ -288,17 +288,20 @@ function prevMonth() {
 	resetDateSelection();
 	load();
 }
+
 function nextMonth() {
 	if (calMonth.value === 12) { calYear.value++; calMonth.value = 1; } else { calMonth.value++; }
 	resetDateSelection();
 	load();
 }
+
 function resetDateSelection() {
 	selectedDate.value = null;
 	filterDateFrom.value = '';
 	filterDateTo.value = '';
 	currentPage.value = 1;
 }
+
 function selectDate(date: string) {
 	// 点击日期：仅局部加载该日明细，不重新请求整页数据，不出现全局loading
 	if (selectedDate.value === date) {
@@ -311,6 +314,7 @@ function selectDate(date: string) {
 	currentPage.value = 1;
 	loadRecords();
 }
+
 function clearSelectedDate() {
 	selectedDate.value = null;
 	filterDateFrom.value = '';
@@ -318,6 +322,7 @@ function clearSelectedDate() {
 	currentPage.value = 1;
 	loadRecords();
 }
+
 function goPage(p: number) {
 	currentPage.value = p;
 	loadRecords();

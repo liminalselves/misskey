@@ -3184,7 +3184,7 @@ function onModelRowGripPointerDown(ev: PointerEvent, kind: 'llm' | 'image', row:
 
 function activeModelRowEls(kind: 'llm' | 'image'): HTMLElement[] {
 	const activeIds = new Set((kind === 'llm' ? llmModelSections.value[0].rows : imageModelSections.value[0].rows).map(r => r.id));
-	return Array.from(document.querySelectorAll<HTMLElement>('[data-model-row-id]')).filter(el => activeIds.has(el.dataset.modelRowId!));
+	return Array.from(window.document.querySelectorAll<HTMLElement>('[data-model-row-id]')).filter(el => activeIds.has(el.dataset.modelRowId!));
 }
 
 function beginModelRowDrag(kind: 'llm' | 'image', id: string, startY: number) {
