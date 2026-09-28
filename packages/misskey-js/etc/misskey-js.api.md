@@ -315,6 +315,12 @@ type AdminAgentsReportsOverviewRequest = operations['admin___agents___reports___
 type AdminAgentsReportsOverviewResponse = operations['admin___agents___reports___overview']['responses']['200']['content']['application/json'];
 
 // @public (undocumented)
+type AdminAgentsReportsTopUsersRequest = operations['admin___agents___reports___top-users']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AdminAgentsReportsTopUsersResponse = operations['admin___agents___reports___top-users']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
 type AdminAgentsReviewDiffRequest = operations['admin___agents___review___diff']['requestBody']['content']['application/json'];
 
 // @public (undocumented)
@@ -723,10 +729,22 @@ type AdminUpdateProxyAccountResponse = operations['admin___update-proxy-account'
 type AdminUpdateUserNoteRequest = operations['admin___update-user-note']['requestBody']['content']['application/json'];
 
 // @public (undocumented)
+type AdminUsersAgentBillingLogsRequest = operations['admin___users___agent-billing-logs']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AdminUsersAgentBillingLogsResponse = operations['admin___users___agent-billing-logs']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
 type AdminUsersAgentSuccessRateRequest = operations['admin___users___agent-success-rate']['requestBody']['content']['application/json'];
 
 // @public (undocumented)
 type AdminUsersAgentSuccessRateResponse = operations['admin___users___agent-success-rate']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type AdminUsersAgentUsageDetailsRequest = operations['admin___users___agent-usage-details']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AdminUsersAgentUsageDetailsResponse = operations['admin___users___agent-usage-details']['responses']['200']['content']['application/json'];
 
 // @public (undocumented)
 type AdminUsersAgentUsageRequest = operations['admin___users___agent-usage']['requestBody']['content']['application/json'];
@@ -1084,6 +1102,12 @@ type AgentsSessionsDeleteRequest = operations['agents___sessions___delete']['req
 
 // @public (undocumented)
 type AgentsSessionsDeleteResponse = operations['agents___sessions___delete']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type AgentsSessionsExportRequest = operations['agents___sessions___export']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AgentsSessionsExportResponse = operations['agents___sessions___export']['responses']['200']['content']['application/json'];
 
 // @public (undocumented)
 type AgentsSessionsListMineResponse = operations['agents___sessions___list-mine']['responses']['200']['content']['application/json'];
@@ -2400,6 +2424,8 @@ declare namespace entities {
         AdminAgentsRedeemCodesRevokeResponse,
         AdminAgentsReportsOverviewRequest,
         AdminAgentsReportsOverviewResponse,
+        AdminAgentsReportsTopUsersRequest,
+        AdminAgentsReportsTopUsersResponse,
         AdminAgentsReviewDiffRequest,
         AdminAgentsReviewDiffResponse,
         AdminAgentsReviewListPendingRequest,
@@ -2536,10 +2562,14 @@ declare namespace entities {
         AdminUpdateProxyAccountRequest,
         AdminUpdateProxyAccountResponse,
         AdminUpdateUserNoteRequest,
+        AdminUsersAgentBillingLogsRequest,
+        AdminUsersAgentBillingLogsResponse,
         AdminUsersAgentSuccessRateRequest,
         AdminUsersAgentSuccessRateResponse,
         AdminUsersAgentUsageRequest,
         AdminUsersAgentUsageResponse,
+        AdminUsersAgentUsageDetailsRequest,
+        AdminUsersAgentUsageDetailsResponse,
         AgentsBillingLogsRequest,
         AgentsBillingLogsResponse,
         AgentsByokModelsCreateRequest,
@@ -2657,6 +2687,8 @@ declare namespace entities {
         AgentsSessionsCreateResponse,
         AgentsSessionsDeleteRequest,
         AgentsSessionsDeleteResponse,
+        AgentsSessionsExportRequest,
+        AgentsSessionsExportResponse,
         AgentsSessionsListMineResponse,
         AgentsSessionsPreviewModelChangeRequest,
         AgentsSessionsPreviewModelChangeResponse,
@@ -4339,7 +4371,7 @@ type Notification_2 = components['schemas']['Notification'];
 type NotificationsCreateRequest = operations['notifications___create']['requestBody']['content']['application/json'];
 
 // @public (undocumented)
-export const notificationTypes: readonly ["note", "follow", "mention", "reply", "renote", "quote", "reaction", "pollEnded", "scheduledNotePosted", "scheduledNotePostFailed", "receiveFollowRequest", "followRequestAccepted", "app", "roleAssigned", "chatRoomInvitationReceived", "chatRoomMemberJoined", "chatRoomKicked", "chatRoomSuspended", "chatRoomUnsuspended", "achievementEarned", "exportCompleted", "test", "login", "createToken", "agentReviewApproved", "agentReviewRejected", "agentCharacterBanned", "agentSessionBanned", "agentProactiveMessage"];
+export const notificationTypes: readonly ["note", "follow", "mention", "reply", "renote", "quote", "reaction", "pollEnded", "scheduledNotePosted", "scheduledNotePostFailed", "receiveFollowRequest", "followRequestAccepted", "app", "roleAssigned", "chatRoomInvitationReceived", "chatRoomMemberJoined", "chatRoomKicked", "chatRoomSuspended", "chatRoomUnsuspended", "achievementEarned", "exportCompleted", "test", "login", "createToken", "agentReviewApproved", "agentReviewRejected", "agentModelReportResolved", "agentCharacterBanned", "agentSessionBanned", "agentProactiveMessage"];
 
 // @public (undocumented)
 export function nyaize(text: string): string;
