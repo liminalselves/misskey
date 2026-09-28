@@ -6,13 +6,17 @@
 import { assert, describe, test, vi } from 'vitest';
 import { createApp, defineComponent, h, nextTick, ref, vShow, withDirectives } from 'vue';
 
-// 桩掉组件依赖的重模块，只保留草稿逻辑
+// 桩掉组件依赖的重模块，只保留草稿逻辑（i18n 初始化见 ./init）
+import './init';
+import { preferState } from './init.js';
+
+preferState['chat.sendOnEnter'] = true;
+
 vi.mock('@/os.js', () => ({ alert: vi.fn(), toast: vi.fn() }));
 vi.mock('@/utility/drive.js', () => ({ selectFile: vi.fn() }));
 vi.mock('@/utility/autocomplete.js', () => ({ Autocomplete: class { constructor() {} detach() {} } }));
 vi.mock('@/utility/emoji-picker.js', () => ({ emojiPicker: { show: vi.fn() } }));
 vi.mock('@/instance.js', () => ({ instance: { agentStickerEnabled: false } }));
-vi.mock('@/preferences.js', () => ({ prefer: { s: { 'chat.sendOnEnter': true } } }));
 
 import AgentSessionForm from '../src/pages/chat/agent-session.form.vue';
 
