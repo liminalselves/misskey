@@ -9,6 +9,7 @@ import * as Redis from 'ioredis';
 import { DI } from '@/di-symbols.js';
 import { MiMeta } from '@/models/Meta.js';
 import { GlobalEventService } from '@/core/GlobalEventService.js';
+import { DEFAULT_AGENT_EXTERNAL_AUDIT_OTHER_RULE, cloneDefaultAgentExternalAuditRules } from '@/core/agent-external-audit-rules.js';
 import { bindThis } from '@/decorators.js';
 import type { GlobalEvents } from '@/core/GlobalEventService.js';
 import { FeaturedService } from '@/core/FeaturedService.js';
@@ -82,11 +83,14 @@ export class MetaService implements OnApplicationShutdown {
 				return meta;
 			} else {
 				// metaが空のときfetchMetaが同時に呼ばれるとここが同時に呼ばれてしまうことがあるのでフェイルセーフなupsertを使う
+				// 外审默认条目随 meta 行创建种入：列 DEFAULT 已归一为 '[]'/'{}'，不能再依赖数据库默认值带出默认条目
 				const saved = await transactionalEntityManager
 					.upsert(
 						MiMeta,
 						{
 							id: 'x',
+							agentExternalAuditRules: cloneDefaultAgentExternalAuditRules(),
+							agentExternalAuditOtherRule: { ...DEFAULT_AGENT_EXTERNAL_AUDIT_OTHER_RULE },
 						},
 						['id'],
 					)
