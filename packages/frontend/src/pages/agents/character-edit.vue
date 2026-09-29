@@ -1236,13 +1236,13 @@ function clearReferenceImages() {
 async function rollbackToPublished() {
 	const { canceled } = await os.confirm({
 		type: 'warning',
-		text: '确定要将当前草稿回滚到已发布版本吗？',
+		text: '确定要用已发布版本覆盖当前草稿吗？回滚只修改草稿，如需重新上线仍要提交审核。',
 	});
 	if (canceled) return;
 	rollbackPending.value = true;
 	try {
 		await misskeyApi('agents/characters/rollback', { characterId: props.characterId });
-		os.toast('已回滚到发布版本。');
+		os.toast('已恢复为发布版本的草稿，重新上线需提交审核。');
 		await load();
 	} finally {
 		rollbackPending.value = false;
@@ -1253,14 +1253,14 @@ async function rollbackToVersion(version: number, isCurrentPublished: boolean) {
 	const { canceled } = await os.confirm({
 		type: 'warning',
 		text: isCurrentPublished
-			? `确定要将当前草稿回滚到发布版 v${version} 吗？`
-			: `确定要将当前草稿回滚到历史版本 v${version} 吗？该操作会用历史快照覆盖当前编辑内容。`,
+				? `确定要用发布版 v${version} 覆盖当前草稿吗？重新上线仍要提交审核。`
+				: `确定要用历史版本 v${version} 覆盖当前草稿吗？重新上线仍要提交审核。`,
 	});
 	if (canceled) return;
 	rollbackPending.value = true;
 	try {
 		await misskeyApi('agents/characters/rollback', { characterId: props.characterId, version });
-		os.toast(`已回滚到版本 v${version}。`);
+		os.toast(`已恢复为版本 v${version} 的草稿，重新上线需提交审核。`);
 		await load();
 	} finally {
 		rollbackPending.value = false;

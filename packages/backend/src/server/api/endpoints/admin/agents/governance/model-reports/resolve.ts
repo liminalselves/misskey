@@ -13,7 +13,7 @@ import { DI } from '@/di-symbols.js';
 import { AgentService } from '@/core/AgentService.js';
 import { ModerationLogService } from '@/core/ModerationLogService.js';
 import { NotificationService } from '@/core/NotificationService.js';
-import { getAcctByUserId } from '../_utils.js';
+import { getAcctByUserIdSafely } from '../_utils.js';
 
 const DEFAULT_RESOLUTION_MESSAGE = '上报的模型已恢复';
 
@@ -77,8 +77,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			});
 			if (updateResult.affected !== 1) throw new ApiError(meta.errors.alreadyResolved);
 
-			const reporterAcct = await getAcctByUserId(this.usersRepository, row.userId);
-			await this.moderationLogService.log(me, 'resolveAgentModelReport', {
+			const reporterAcct = await getAcctByUserIdSafely(this.usersRepository, row.userId);
+			await this.moderationLogService.logSafely(me, 'resolveAgentModelReport', {
 				reportId: row.id,
 				reporterUserId: row.userId,
 				reporterAcct,

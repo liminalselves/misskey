@@ -15,7 +15,7 @@ import { ModerationLogService } from '@/core/ModerationLogService.js';
 import { NotificationService } from '@/core/NotificationService.js';
 import { UserSuspendService } from '@/core/UserSuspendService.js';
 import { RoleService } from '@/core/RoleService.js';
-import { getAcctByUserId } from './_utils.js';
+import { getAcctByUserIdSafely } from './_utils.js';
 
 export const meta = {
 	tags: ['admin', 'agents'],
@@ -91,7 +91,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			};
 
 			// 1. 批量封禁会话
-				const userAcct = await getAcctByUserId(this.usersRepository, user.id);
+				const userAcct = await getAcctByUserIdSafely(this.usersRepository, user.id);
 				for (const session of sessions) {
 					if (session.moderationBanned) continue;
 					const updatedAt = new Date();
@@ -112,7 +112,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					session.moderationBannedReason = sessionReason;
 					session.updatedAt = updatedAt;
 
-					await this.moderationLogService.log(me, 'setAgentSessionModerationBan', {
+					await this.moderationLogService.logSafely(me, 'setAgentSessionModerationBan', {
 					sessionId: session.id,
 					sessionName: session.name,
 					userId: session.userId,

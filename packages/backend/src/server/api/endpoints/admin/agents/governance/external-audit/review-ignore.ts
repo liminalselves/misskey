@@ -52,7 +52,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				{ reviewIgnoredAt: new Date(), reviewIgnoredById: me.id },
 			);
 
-			await this.moderationLogService.log(me, 'ignoreAgentExternalAuditReview', {
+			await this.moderationLogService.logSafely(me, 'ignoreAgentExternalAuditReview', {
 				ids: ps.ids,
 				count: result.affected ?? 0,
 			});

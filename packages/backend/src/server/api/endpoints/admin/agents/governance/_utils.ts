@@ -48,6 +48,14 @@ export async function getAcctByUserId(usersRepository: UsersRepository, userId: 
 	return `@${Acct.toString({ username: user.username, host: user.host })}`;
 }
 
+export async function getAcctByUserIdSafely(usersRepository: UsersRepository, userId: string): Promise<string | null> {
+	try {
+		return await getAcctByUserId(usersRepository, userId);
+	} catch {
+		return null;
+	}
+}
+
 function extractTextFromWorldbook(worldbook: Array<Record<string, unknown>> | null | undefined): string {
 	if (!Array.isArray(worldbook)) return '';
 	return worldbook.flatMap(entry => [

@@ -5,14 +5,17 @@
 
 import ms from 'ms';
 import { Inject, Injectable } from '@nestjs/common';
-import type { AgentCharactersRepository, UsersRepository } from '@/models/_.js';
+import { DataSource } from 'typeorm';
+import type { UsersRepository } from '@/models/_.js';
+import { MiAgentCharacter } from '@/models/AgentCharacter.js';
 import { Endpoint } from '@/server/api/endpoint-base.js';
 import { DI } from '@/di-symbols.js';
 import { ApiError } from '@/server/api/error.js';
 import { AgentService } from '@/core/AgentService.js';
 import { ModerationLogService } from '@/core/ModerationLogService.js';
 import { NotificationService } from '@/core/NotificationService.js';
-import { getAcctByUserId } from '../_utils.js';
+import { withLockedAgentCharacter } from '../../../../agents/_with-agent-lock.js';
+import { getAcctByUserIdSafely } from '../_utils.js';
 
 export const meta = {
 	tags: ['admin', 'agents'],
@@ -37,8 +40,8 @@ export const paramDef = {
 @Injectable()
 export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-disable-line import/no-default-export
 	constructor(
-		@Inject(DI.agentCharactersRepository)
-		private agentCharactersRepository: AgentCharactersRepository,
+		@Inject(DI.db)
+		private db: DataSource,
 
 		@Inject(DI.usersRepository)
 		private usersRepository: UsersRepository,
@@ -47,30 +50,23 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		private moderationLogService: ModerationLogService,
 		private notificationService: NotificationService,
 	) {
-		super(meta, paramDef, async (ps, me) => {
-			this.agentService.assertAgentsEnabled();
-			const row = await this.agentCharactersRepository.findOneBy({ id: ps.characterId });
-			if (!row) throw new ApiError({ message: 'No such character.', code: 'NO_SUCH_CHARACTER', id: '4f6bc584-7968-4935-b77c-c6a143ff4c87' });
-			const before = row.moderationBanned;
-			row.moderationBanned = ps.banned;
-			row.updatedAt = new Date();
-			await this.agentCharactersRepository.save(row);
-			const ownerAcct = await getAcctByUserId(this.usersRepository, row.userId);
-			await this.moderationLogService.log(me, 'setAgentCharacterModerationBan', {
-				characterId: row.id,
-				characterName: row.name,
-				ownerUserId: row.userId,
-				ownerAcct,
-				banned: ps.banned,
-				before,
-				reason: ps.reason?.trim() || null,
+			super(meta, paramDef, async (ps, me) => {
+				this.agentService.assertAgentsEnabled();
+				const { row, before } = await withLockedAgentCharacter(this.db, ps.characterId, async (row, manager) => {
+					if (!row) throw new ApiError({ message: 'No such character.', code: 'NO_SUCH_CHARACTER', id: '4f6bc584-7968-4935-b77c-c6a143ff4c87' });
+					const before = row.moderationBanned;
+					row.moderationBanned = ps.banned;
+					row.updatedAt = new Date();
+					await manager.save(MiAgentCharacter, row);
+					return { row, before };
+				});
+				const ownerAcct = await getAcctByUserIdSafely(this.usersRepository, row.userId);
+				await this.moderationLogService.logSafely(me, 'setAgentCharacterModerationBan', {
+					characterId: row.id, characterName: row.name, ownerUserId: row.userId, ownerAcct,
+					banned: ps.banned, before, reason: ps.reason?.trim() || null,
+				});
+				this.notificationService.createNotification(row.userId, 'agentCharacterBanned', { characterId: row.id, characterName: row.name, banned: ps.banned });
+				return { ok: true, moderationBanned: row.moderationBanned };
 			});
-			this.notificationService.createNotification(
-				row.userId,
-				'agentCharacterBanned',
-				{ characterId: row.id, characterName: row.name, banned: ps.banned },
-			);
-			return { ok: true, moderationBanned: row.moderationBanned };
-		});
 	}
 }

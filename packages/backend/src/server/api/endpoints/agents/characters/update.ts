@@ -5,12 +5,15 @@
 
 import ms from 'ms';
 import { Inject, Injectable } from '@nestjs/common';
-import type { AgentCharactersRepository, DriveFilesRepository } from '@/models/_.js';
+import { DataSource } from 'typeorm';
+import type { DriveFilesRepository } from '@/models/_.js';
+import { MiAgentCharacter } from '@/models/AgentCharacter.js';
 import { Endpoint } from '@/server/api/endpoint-base.js';
 import { DI } from '@/di-symbols.js';
 import { ApiError } from '@/server/api/error.js';
 import { AgentService, AGENT_TEXT_FIELD_MAX, AGENT_EXAMPLE_TURN_CONTENT_MAX, AGENT_RULE_MAX, AGENT_RULE_NAME_MAX, AGENT_RULE_DESC_MAX, type AgentWorldbookEntry } from '@/core/AgentService.js';
 import { AgentStickerService } from '@/core/AgentStickerService.js';
+import { withLockedAgentCharacter } from '../_with-agent-lock.js';
 
 export const meta = {
 	tags: ['agents'],
@@ -132,8 +135,8 @@ export const paramDef = {
 @Injectable()
 export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-disable-line import/no-default-export
 	constructor(
-		@Inject(DI.agentCharactersRepository)
-		private agentCharactersRepository: AgentCharactersRepository,
+		@Inject(DI.db)
+		private db: DataSource,
 
 		@Inject(DI.driveFilesRepository)
 		private driveFilesRepository: DriveFilesRepository,
@@ -142,79 +145,64 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 
 		private agentStickerService: AgentStickerService,
 	) {
-		super(meta, paramDef, async (ps, me) => {
-			this.agentService.assertAgentsEnabled();
-			const row = await this.agentCharactersRepository.findOneBy({ id: ps.characterId });
-			if (!row || row.userId !== me.id) {
-				throw new ApiError({ message: 'No such character.', code: 'NO_SUCH_CHARACTER', id: '72c74cc7-ed2e-48e5-952d-27233545bf22' });
-			}
-			// 审核中的草稿必须冻结：否则作者可在审核员通过前替换内容，导致发布内容与审核所见不一致
-			if (row.reviewStatus === 'pending') {
-				throw new ApiError({
-					message: 'This character is pending review and cannot be edited. Withdraw the submission first.',
-					code: 'AGENT_REVIEW_PENDING_LOCKED',
-					id: 'b1d2e3f4-a5b6-4789-bcde-f234567890a1',
+			super(meta, paramDef, async (ps, me) => {
+				this.agentService.assertAgentsEnabled();
+				return withLockedAgentCharacter(this.db, ps.characterId, async (row, manager) => {
+					if (!row || row.userId !== me.id) {
+						throw new ApiError({ message: 'No such character.', code: 'NO_SUCH_CHARACTER', id: '72c74cc7-ed2e-48e5-952d-27233545bf22' });
+					}
+					// 审核中的草稿必须冻结：否则作者可在审核员通过前替换内容，导致发布内容与审核所见不一致
+					if (row.reviewStatus === 'pending') {
+						throw new ApiError({
+							message: 'This character is pending review and cannot be edited. Withdraw the submission first.',
+							code: 'AGENT_REVIEW_PENDING_LOCKED',
+							id: 'b1d2e3f4-a5b6-4789-bcde-f234567890a1',
+						});
+					}
+					if (ps.avatarFileId) {
+						const f = await this.driveFilesRepository.findOneBy({ id: ps.avatarFileId, userId: me.id });
+						if (!f) throw new ApiError({ message: 'No such file.', code: 'NO_SUCH_FILE', id: '61ff62dd-58c8-4dbb-a7a2-3e7a2eb6fd7b' });
+					}
+					const referenceImageFileIds = ps.referenceImageFileIds !== undefined
+						? [...new Set(ps.referenceImageFileIds ?? [])].slice(0, 5)
+						: ps.referenceImageFileId !== undefined ? (ps.referenceImageFileId ? [ps.referenceImageFileId] : []) : null;
+					for (const referenceImageFileId of referenceImageFileIds ?? []) {
+						const f = await this.driveFilesRepository.findOneBy({ id: referenceImageFileId, userId: me.id });
+						if (!f || !f.type.startsWith('image/') || f.size > 5 * 1024 * 1024) {
+							throw new ApiError({ message: 'Each reference image must be an image up to 5 MiB from your Drive.', code: 'INVALID_REFERENCE_IMAGE', id: 'd04b0a9b-a4e1-49a0-b9db-5e2e4aa9dd84' });
+						}
+					}
+
+					if (ps.name !== undefined) row.name = ps.name;
+					if (ps.summary !== undefined) row.summary = ps.summary;
+					if (ps.personality !== undefined) row.personality = ps.personality;
+					if (ps.background !== undefined) row.background = ps.background;
+					if (ps.speakingStyle !== undefined) row.speakingStyle = ps.speakingStyle;
+					if (ps.greeting !== undefined) row.greeting = ps.greeting;
+					if (ps.exampleTurns !== undefined) {
+						const turns = ps.exampleTurns != null ? this.agentService.validateExampleTurnsOrThrow(ps.exampleTurns) : [];
+						row.exampleDialogue = this.agentService.serializeExampleTurns(turns);
+					}
+					if (ps.forbiddenBehavior !== undefined) row.forbiddenBehavior = ps.forbiddenBehavior;
+					if (ps.worldbook !== undefined) row.worldbook = (ps.worldbook ?? []).map((entry): AgentWorldbookEntry => ({
+						id: entry.id, title: entry.title, content: entry.content, keywords: entry.keywords,
+						triggerMode: entry.triggerMode, priority: entry.priority, enabled: entry.enabled, revision: entry.revision,
+					}));
+					if (ps.regexRules !== undefined) row.regexRules = this.agentService.normalizeRegexRules(ps.regexRules);
+					if (ps.rules !== undefined) row.rules = this.agentService.normalizeRules(ps.rules);
+					if (ps.avatarFileId !== undefined) row.avatarFileId = ps.avatarFileId;
+					if (ps.stickers !== undefined) row.stickers = await this.agentStickerService.validateCharacterStickersForOwner(ps.stickers ?? [], me.id);
+					if (referenceImageFileIds != null) {
+						row.referenceImageFileIds = referenceImageFileIds;
+						row.referenceImageFileId = referenceImageFileIds[0] ?? null;
+					}
+					if (ps.promptOpenSourced !== undefined) row.promptOpenSourced = ps.promptOpenSourced === true;
+					row.draftRevision = (row.draftRevision ?? 1) + 1;
+					row.updatedAt = new Date();
+					await manager.save(MiAgentCharacter, row);
+
+					return { id: row.id, name: row.name, summary: row.summary, isPublished: row.isPublished, updatedAt: row.updatedAt.toISOString() };
 				});
-			}
-			if (ps.avatarFileId) {
-				const f = await this.driveFilesRepository.findOneBy({ id: ps.avatarFileId, userId: me.id });
-				if (!f) {
-					throw new ApiError({ message: 'No such file.', code: 'NO_SUCH_FILE', id: '61ff62dd-58c8-4dbb-a7a2-3e7a2eb6fd7b' });
-				}
-			}
-			const referenceImageFileIds = ps.referenceImageFileIds !== undefined
-				? [...new Set(ps.referenceImageFileIds ?? [])].slice(0, 5)
-				: ps.referenceImageFileId !== undefined ? (ps.referenceImageFileId ? [ps.referenceImageFileId] : []) : null;
-			for (const referenceImageFileId of referenceImageFileIds ?? []) {
-				const f = await this.driveFilesRepository.findOneBy({ id: referenceImageFileId, userId: me.id });
-				if (!f || !f.type.startsWith('image/') || f.size > 5 * 1024 * 1024) {
-					throw new ApiError({ message: 'Each reference image must be an image up to 5 MiB from your Drive.', code: 'INVALID_REFERENCE_IMAGE', id: 'd04b0a9b-a4e1-49a0-b9db-5e2e4aa9dd84' });
-				}
-			}
-
-			if (ps.name !== undefined) row.name = ps.name;
-			if (ps.summary !== undefined) row.summary = ps.summary;
-			if (ps.personality !== undefined) row.personality = ps.personality;
-			if (ps.background !== undefined) row.background = ps.background;
-			if (ps.speakingStyle !== undefined) row.speakingStyle = ps.speakingStyle;
-			if (ps.greeting !== undefined) row.greeting = ps.greeting;
-			if (ps.exampleTurns !== undefined) {
-				const turns = ps.exampleTurns != null
-					? this.agentService.validateExampleTurnsOrThrow(ps.exampleTurns)
-					: [];
-				row.exampleDialogue = this.agentService.serializeExampleTurns(turns);
-			}
-			if (ps.forbiddenBehavior !== undefined) row.forbiddenBehavior = ps.forbiddenBehavior;
-			if (ps.worldbook !== undefined) row.worldbook = (ps.worldbook ?? []).map((entry): AgentWorldbookEntry => ({
-				id: entry.id,
-				title: entry.title,
-				content: entry.content,
-				keywords: entry.keywords,
-				triggerMode: entry.triggerMode,
-				priority: entry.priority,
-				enabled: entry.enabled,
-				revision: entry.revision,
-			}));
-			if (ps.regexRules !== undefined) row.regexRules = this.agentService.normalizeRegexRules(ps.regexRules);
-			if (ps.rules !== undefined) row.rules = this.agentService.normalizeRules(ps.rules);
-			if (ps.avatarFileId !== undefined) row.avatarFileId = ps.avatarFileId;
-			if (ps.stickers !== undefined) row.stickers = await this.agentStickerService.validateCharacterStickersForOwner(ps.stickers ?? [], me.id);
-			if (referenceImageFileIds != null) {
-				row.referenceImageFileIds = referenceImageFileIds;
-				row.referenceImageFileId = referenceImageFileIds[0] ?? null;
-			}
-			if (ps.promptOpenSourced !== undefined) row.promptOpenSourced = ps.promptOpenSourced === true;
-			row.draftRevision = (row.draftRevision ?? 1) + 1;
-			row.updatedAt = new Date();
-			await this.agentCharactersRepository.save(row);
-
-			return {
-				id: row.id,
-				name: row.name,
-				summary: row.summary,
-				isPublished: row.isPublished,
-				updatedAt: row.updatedAt.toISOString(),
-			};
-		});
+			});
 	}
 }

@@ -77,7 +77,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				row.moderationBanned = ps.banned;
 				row.moderationBannedReason = moderationBannedReason;
 				row.updatedAt = updatedAt;
-			await this.moderationLogService.log(me, 'setAgentSessionModerationBan', {
+			await this.moderationLogService.logSafely(me, 'setAgentSessionModerationBan', {
 				sessionId: row.id,
 				sessionName: row.name,
 				userId: row.userId,

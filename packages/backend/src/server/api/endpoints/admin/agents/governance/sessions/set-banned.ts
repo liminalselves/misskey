@@ -12,7 +12,7 @@ import { ApiError } from '@/server/api/error.js';
 import { AgentService } from '@/core/AgentService.js';
 import { ModerationLogService } from '@/core/ModerationLogService.js';
 import { NotificationService } from '@/core/NotificationService.js';
-import { getAcctByUserId } from '../_utils.js';
+import { getAcctByUserIdSafely } from '../_utils.js';
 
 export const meta = {
 	tags: ['admin', 'agents'],
@@ -72,8 +72,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				row.moderationBanned = ps.banned;
 				row.moderationBannedReason = moderationBannedReason;
 				row.updatedAt = updatedAt;
-			const userAcct = await getAcctByUserId(this.usersRepository, row.userId);
-			await this.moderationLogService.log(me, 'setAgentSessionModerationBan', {
+			const userAcct = await getAcctByUserIdSafely(this.usersRepository, row.userId);
+			await this.moderationLogService.logSafely(me, 'setAgentSessionModerationBan', {
 				sessionId: row.id,
 				sessionName: row.name,
 				userId: row.userId,

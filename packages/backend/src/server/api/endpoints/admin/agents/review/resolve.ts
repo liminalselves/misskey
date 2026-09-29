@@ -5,7 +5,7 @@
 
 import ms from 'ms';
 import { Inject, Injectable } from '@nestjs/common';
-import type { AgentCharactersRepository, AgentDialogueStylesRepository, AgentPublishedVersionsRepository } from '@/models/_.js';
+import { DataSource } from 'typeorm';
 import { Endpoint } from '@/server/api/endpoint-base.js';
 import { DI } from '@/di-symbols.js';
 import { ApiError } from '@/server/api/error.js';
@@ -13,7 +13,7 @@ import { AgentService } from '@/core/AgentService.js';
 import { ModerationLogService } from '@/core/ModerationLogService.js';
 import { NotificationService } from '@/core/NotificationService.js';
 import { IdService } from '@/core/IdService.js';
-import { MiAgentPublishedVersion } from '@/models/AgentPublishedVersion.js';
+import { resolveAgentReview } from '../_resolve-review.js';
 
 export const meta = {
 	tags: ['admin'],
@@ -50,21 +50,12 @@ export const paramDef = {
 @Injectable()
 export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-disable-line import/no-default-export
 	constructor(
-		@Inject(DI.agentCharactersRepository)
-		private agentCharactersRepository: AgentCharactersRepository,
-
-		@Inject(DI.agentDialogueStylesRepository)
-		private agentDialogueStylesRepository: AgentDialogueStylesRepository,
-
-		@Inject(DI.agentPublishedVersionsRepository)
-		private agentPublishedVersionsRepository: AgentPublishedVersionsRepository,
+		@Inject(DI.db)
+		private db: DataSource,
 
 		private agentService: AgentService,
-
 		private moderationLogService: ModerationLogService,
-
 		private notificationService: NotificationService,
-
 		private idService: IdService,
 	) {
 		super(meta, paramDef, async (ps, me) => {
@@ -79,48 +70,20 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					id: 'd3f91c13-56b1-4ad5-9a8c-16275cfa0b5a',
 				});
 			}
-			if (ps.kind === 'character') {
-				const row = await this.agentCharactersRepository.findOneBy({ id: ps.id });
-				if (!row || row.reviewStatus !== 'pending') {
-					throw new ApiError({
-						message: 'No pending review for this character.',
-						code: 'NO_SUCH_REVIEW',
-						id: 'b8c9d0e1-f2a3-4567-bcde-f89012345678',
-					});
-				}
-				let archivedSnapshot: Record<string, unknown> | null = null;
-				if (ps.decision === 'approve') {
-					const snap = this.agentService.buildCharacterSnapshotFromRow(row);
-					row.publishedSnapshot = snap as unknown as Record<string, unknown>;
-					row.publishedVersion = row.publishedVersion == null ? 0 : row.publishedVersion + 1;
-					row.reviewStatus = 'published';
-					row.reviewRejectReason = null;
-					row.reviewRejectMessage = null;
-					row.reviewInternalNote = internalNote;
-					archivedSnapshot = snap as unknown as Record<string, unknown>;
-				} else {
-					row.reviewStatus = row.publishedVersion != null ? 'published' : 'rejected';
-					row.reviewRejectReason = rejectReason;
-					row.reviewRejectMessage = rejectMessage;
-					row.reviewInternalNote = internalNote;
-				}
-				this.agentService.syncCharacterListedFlag(row);
-				row.updatedAt = new Date();
-				await this.agentCharactersRepository.save(row);
-				if (archivedSnapshot != null && row.publishedVersion != null) {
-					const now = new Date();
-					await this.agentPublishedVersionsRepository.save(new MiAgentPublishedVersion({
-						id: this.idService.gen(now.getTime()),
-						createdAt: now,
-						kind: 'character',
-						targetId: row.id,
-						userId: row.userId,
-						version: row.publishedVersion,
-						snapshot: archivedSnapshot,
-					}));
-				}
-			await this.moderationLogService.log(me, 'resolveAgentReview', {
-				kind: 'character',
+
+			const resolved = await resolveAgentReview(this.db, this.agentService, this.idService, {
+				kind: ps.kind,
+				id: ps.id,
+				decision: ps.decision,
+				rejectReason,
+				rejectMessage,
+				internalNote,
+				noSuchCharacterReviewId: 'b8c9d0e1-f2a3-4567-bcde-f89012345678',
+				noSuchStyleReviewId: 'c9d0e1f2-a3b4-5678-cdef-901234567890',
+			});
+			const row = resolved.row;
+			await this.moderationLogService.logSafely(me, 'resolveAgentReview', {
+				kind: resolved.kind,
 				id: row.id,
 				decision: ps.decision,
 				name: row.name,
@@ -135,7 +98,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			this.notificationService.createNotification(
 				row.userId,
 				ps.decision === 'approve' ? 'agentReviewApproved' : 'agentReviewRejected',
-				{ agentKind: 'character', resourceId: row.id, resourceName: row.name },
+				{ agentKind: resolved.kind, resourceId: row.id, resourceName: row.name },
 			);
 			return {
 				ok: true,
@@ -143,71 +106,6 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				publishedVersion: row.publishedVersion,
 				isPublished: row.isPublished,
 			};
-			} else {
-				const row = await this.agentDialogueStylesRepository.findOneBy({ id: ps.id });
-				if (!row || row.reviewStatus !== 'pending') {
-					throw new ApiError({
-						message: 'No pending review for this style.',
-						code: 'NO_SUCH_REVIEW',
-						id: 'c9d0e1f2-a3b4-5678-cdef-901234567890',
-					});
-				}
-				let archivedSnapshot: Record<string, unknown> | null = null;
-				if (ps.decision === 'approve') {
-					const snap = this.agentService.buildStyleSnapshotFromRow(row);
-					row.publishedSnapshot = snap as unknown as Record<string, unknown>;
-					row.publishedVersion = row.publishedVersion == null ? 0 : row.publishedVersion + 1;
-					row.reviewStatus = 'published';
-					row.reviewRejectReason = null;
-					row.reviewRejectMessage = null;
-					row.reviewInternalNote = internalNote;
-					archivedSnapshot = snap as unknown as Record<string, unknown>;
-				} else {
-					row.reviewStatus = row.publishedVersion != null ? 'published' : 'rejected';
-					row.reviewRejectReason = rejectReason;
-					row.reviewRejectMessage = rejectMessage;
-					row.reviewInternalNote = internalNote;
-				}
-				this.agentService.syncStyleListedFlag(row);
-				row.updatedAt = new Date();
-				await this.agentDialogueStylesRepository.save(row);
-				if (archivedSnapshot != null && row.publishedVersion != null) {
-					const now = new Date();
-					await this.agentPublishedVersionsRepository.save(new MiAgentPublishedVersion({
-						id: this.idService.gen(now.getTime()),
-						createdAt: now,
-						kind: 'style',
-						targetId: row.id,
-						userId: row.userId,
-						version: row.publishedVersion,
-						snapshot: archivedSnapshot,
-					}));
-				}
-			await this.moderationLogService.log(me, 'resolveAgentReview', {
-				kind: 'style',
-				id: row.id,
-				decision: ps.decision,
-				name: row.name,
-				ownerUserId: row.userId,
-				reviewStatus: row.reviewStatus,
-				publishedVersion: row.publishedVersion,
-				isPublished: row.isPublished,
-				rejectReason,
-				rejectMessage,
-				internalNote,
-			});
-			this.notificationService.createNotification(
-				row.userId,
-				ps.decision === 'approve' ? 'agentReviewApproved' : 'agentReviewRejected',
-				{ agentKind: 'style', resourceId: row.id, resourceName: row.name },
-			);
-			return {
-				ok: true,
-				reviewStatus: row.reviewStatus,
-				publishedVersion: row.publishedVersion,
-				isPublished: row.isPublished,
-			};
-			}
 		});
 	}
 }

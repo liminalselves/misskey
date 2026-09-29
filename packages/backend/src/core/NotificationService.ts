@@ -19,6 +19,8 @@ import { NotificationEntityService } from '@/core/entities/NotificationEntitySer
 import { IdService } from '@/core/IdService.js';
 import { CacheService } from '@/core/CacheService.js';
 import { UserWebSocketStatusService } from '@/core/UserWebSocketStatusService.js';
+import { LoggerService } from '@/core/LoggerService.js';
+import type Logger from '@/logger.js';
 import type { Config } from '@/config.js';
 import { UserListService } from '@/core/UserListService.js';
 import { FilterUnionByProperty, groupedNotificationTypes, obsoleteNotificationTypes } from '@/types.js';
@@ -27,6 +29,7 @@ import { trackPromise } from '@/misc/promise-tracker.js';
 @Injectable()
 export class NotificationService implements OnApplicationShutdown {
 	#shutdownController = new AbortController();
+	private logger: Logger;
 
 	constructor(
 		@Inject(DI.config)
@@ -48,7 +51,9 @@ export class NotificationService implements OnApplicationShutdown {
 		private cacheService: CacheService,
 		private userListService: UserListService,
 		private userWebSocketStatusService: UserWebSocketStatusService,
+		loggerService: LoggerService,
 	) {
+		this.logger = loggerService.getLogger('notification');
 	}
 
 	@bindThis
@@ -88,7 +93,13 @@ export class NotificationService implements OnApplicationShutdown {
 		notifierId?: MiUser['id'] | null,
 	) {
 		trackPromise(
-			this.#createNotificationInternal(notifieeId, type, data, notifierId),
+			this.#createNotificationInternal(notifieeId, type, data, notifierId).catch(error => {
+				this.logger.error(error instanceof Error ? error : new Error(String(error)), {
+					notifieeId,
+					type,
+				});
+				return null;
+			}),
 		);
 	}
 
