@@ -6,7 +6,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 <template>
 <MkStickyContainer style="background: var(--MI_THEME-bg);">
 	<template #header>
-		<nav :class="$style.nav">
+		<nav ref="nav" :class="$style.nav">
 			<div :class="$style.navPath" @contextmenu.prevent.stop="() => {}">
 				<XNavFolder
 					:class="[$style.navPathItem, { [$style.navCurrent]: folder == null }]"
@@ -275,6 +275,13 @@ const draghover = ref(false);
 const isDragSource = ref(false);
 
 const isEditMode = ref(false);
+
+watch(isEditMode, (enabled) => {
+	if (enabled) return;
+	endMarquee();
+	// 文件/文件夹选择对话框里的选中是交给调用方的结果，不随编辑模式清除
+	if (props.select == null) selectedFiles.value = [];
+});
 
 const selectedFiles = ref<Misskey.entities.DriveFile[]>([]);
 const selectedFolders = ref<Misskey.entities.DriveFolder[]>([]);
@@ -749,6 +756,8 @@ function cd(target?: Misskey.entities.DriveFolder | Misskey.entities.DriveFolder
 
 		if (folderToMove.parent) dive(folderToMove.parent);
 
+		// 切换文件夹后旧文件夹的选中对新文件夹不可见，残留会让批量移动带上幽灵文件
+		if (props.select == null) selectedFiles.value = [];
 		initialize();
 	});
 }
@@ -825,6 +834,7 @@ function goRoot() {
 
 	folder.value = null;
 	hierarchyFolders.value = [];
+	if (props.select == null) selectedFiles.value = [];
 	initialize();
 }
 
@@ -930,8 +940,12 @@ function onContextmenu(ev: PointerEvent) {
 
 //#region 拖拽手势（框选 / 触屏拖拽移动）
 const mainEl = useTemplateRef('main');
+const navEl = useTemplateRef('nav');
 
+// 框选仅在编辑/多选场景启用（选中集在这些场景才有意义）
 const marqueeEnabled = computed(() => isEditMode.value || (props.select === 'file' && props.multiple));
+// 触屏从文件起按的拖拽移动在浏览场景也可用（选择文件夹时除外）
+const touchDragEnabled = computed(() => props.select !== 'folder');
 
 type MarqueeState = {
 	pointerId: number;
@@ -940,6 +954,7 @@ type MarqueeState = {
 	startY: number;
 	curX: number;
 	curY: number;
+	startScrollTop: number;
 	startedOnItem: boolean;
 	startFileId: string | null;
 	active: boolean;
@@ -961,7 +976,7 @@ const touchDragHoverNavKey = ref<string | null>(null);
 const dragOverlayZIndex = ref(0);
 
 function onMarqueePointerDown(ev: PointerEvent) {
-	if (!marqueeEnabled.value || marquee != null) return;
+	if (marquee != null) return;
 	if (ev.pointerType === 'mouse' && ev.button !== 0) return;
 	if (!ev.isPrimary) return;
 	const target = ev.target as Element | null;
@@ -969,9 +984,17 @@ function onMarqueePointerDown(ev: PointerEvent) {
 	if (target.closest('button, a, input, textarea, select') != null) return;
 	const fileEl = target.closest('[data-drive-file]') as HTMLElement | null;
 	const startedOnItem = fileEl != null || target.closest('[data-drive-folder]') != null;
-	// PC 从文件/文件夹上起拖保留给原生拖拽移动，框选只从空白处开始
-	if (ev.pointerType === 'mouse' && startedOnItem) return;
+	if (ev.pointerType === 'mouse') {
+		// PC 从文件/文件夹上起拖保留给原生拖拽移动，框选只从空白处开始
+		if (startedOnItem || !marqueeEnabled.value) return;
+	} else if (marqueeEnabled.value) {
+		// 触屏编辑/多选：任意位置起按——长按进入框选，文件上快速横滑进入拖拽移动
+	} else {
+		// 触屏浏览：仅文件上起按（点选预览/横滑拖拽/长按菜单），其余交给滚动和点击
+		if (fileEl == null || !touchDragEnabled.value) return;
+	}
 
+	const scrollParent = getMainScrollParent();
 	marquee = {
 		pointerId: ev.pointerId,
 		pointerType: ev.pointerType,
@@ -979,6 +1002,8 @@ function onMarqueePointerDown(ev: PointerEvent) {
 		startY: ev.clientY,
 		curX: ev.clientX,
 		curY: ev.clientY,
+		// 锚点按文档坐标记录（视口坐标 + 起按时的滚动位置），自动滚动跨页时命中判定不丢
+		startScrollTop: scrollParent == null ? window.scrollY : scrollParent.scrollTop,
 		startedOnItem,
 		startFileId: fileEl?.dataset.driveFile ?? null,
 		active: false,
@@ -987,7 +1012,7 @@ function onMarqueePointerDown(ev: PointerEvent) {
 		hoverFolderId: null,
 		hoverNavKey: null,
 		baseFiles: [...selectedFiles.value],
-		scrollParent: null,
+		scrollParent,
 		rafId: null,
 	};
 	window.addEventListener('pointermove', onMarqueePointerMove, { passive: false });
@@ -997,16 +1022,19 @@ function onMarqueePointerDown(ev: PointerEvent) {
 	if (ev.pointerType !== 'mouse') {
 		window.addEventListener('touchmove', onMarqueeTouchMove, { passive: false });
 
-		// 触屏长按文件进入拖拽移动（须在浏览器长按菜单触发前激活）
-		if (fileEl != null) {
-			const timer = window.setTimeout(() => {
-				const m = marquee;
-				if (m == null || m.longPressTimer !== timer || m.active) return;
-				m.longPressTimer = null;
+		// 触屏长按 400ms 激活手势：文件上=抓起文件拖拽移动，其余位置=框选（编辑/多选限定）。
+		// 时间是唯一判据，不做方向猜测——立即滑动一律视为滚动，与"拖向上方文件夹"无冲突
+		const timer = window.setTimeout(() => {
+			const m = marquee;
+			if (m == null || m.longPressTimer !== timer || m.active || m.touchDrag) return;
+			m.longPressTimer = null;
+			if (m.startFileId != null) {
 				activateTouchDrag(m);
-			}, 400);
-			marquee.longPressTimer = timer;
-		}
+			} else if (marqueeEnabled.value) {
+				activateMarquee(m);
+			}
+		}, 400);
+		marquee.longPressTimer = timer;
 	}
 }
 
@@ -1026,23 +1054,20 @@ function onMarqueePointerMove(ev: PointerEvent) {
 		const dx = ev.clientX - m.startX;
 		const dy = ev.clientY - m.startY;
 		const dist = Math.hypot(dx, dy);
-		// 有明显位移就不再是长按，取消拖拽移动的等待
-		if (m.longPressTimer != null && dist >= 8) {
+		const threshold = m.pointerType === 'mouse' ? 6 : 12;
+		if (dist < threshold) return;
+		// 超过激活阈值就等不到长按了
+		if (m.longPressTimer != null) {
 			window.clearTimeout(m.longPressTimer);
 			m.longPressTimer = null;
 		}
-		const threshold = m.pointerType === 'mouse' ? 6 : 12;
-		if (dist < threshold) return;
-		if (m.pointerType !== 'mouse' && m.startedOnItem) {
-			// 触屏从文件上起拖：横向为主判定为框选，纵向让给页面滚动
-			if (Math.abs(dx) <= Math.abs(dy)) {
-				cancelMarquee();
-				return;
-			}
+		if (m.pointerType !== 'mouse') {
+			// 触屏立即滑动（任何方向）一律视为页面滚动：拖拽移动与框选都只由长按激活，
+			// 不做方向猜测——拖向上方文件夹和向上滚动是同方向，方向判据必然误伤
+			cancelMarquee();
+			return;
 		}
-		m.active = true;
-		m.scrollParent = getMainScrollParent();
-		dragOverlayZIndex.value = os.claimZIndex('high');
+		activateMarquee(m);
 	}
 
 	if (ev.cancelable) ev.preventDefault();
@@ -1050,11 +1075,26 @@ function onMarqueePointerMove(ev: PointerEvent) {
 	startMarqueeAutoScroll();
 }
 
+// 框选锚点换算回当前视口坐标：矩形随内容上滚而向视口外延伸，覆盖范围稳定
+function getMarqueeAnchorY(m: MarqueeState): number {
+	const scrollTop = m.scrollParent == null ? window.scrollY : m.scrollParent.scrollTop;
+	return m.startY + (m.startScrollTop - scrollTop);
+}
+
+function activateMarquee(m: MarqueeState) {
+	if (m.active) return;
+	m.active = true;
+	dragOverlayZIndex.value = os.claimZIndex('high');
+	// 长按原地激活时矩形为零尺寸，相交判定会选中按点下的文件（长按≈点选）
+	applyMarqueeSelection();
+	startMarqueeAutoScroll();
+}
+
 function onMarqueeTouchMove(ev: TouchEvent) {
 	const m = marquee;
 	if (m == null) return;
-	// 空白处起拖始终阻止滚动；文件上起拖在判定为框选/拖拽移动后才阻止
-	if (m.active || m.touchDrag || !m.startedOnItem) {
+	// 仅在框选/拖拽移动激活后阻止滚动；未激活的快速滑动全部视为页面滚动
+	if (m.active || m.touchDrag) {
 		if (ev.cancelable) ev.preventDefault();
 	}
 }
@@ -1097,10 +1137,11 @@ function applyMarqueeSelection() {
 	const main = mainEl.value;
 	if (m == null || !m.active || main == null) return;
 
+	const anchorY = getMarqueeAnchorY(m);
 	const left = Math.min(m.startX, m.curX);
-	const top = Math.min(m.startY, m.curY);
+	const top = Math.min(anchorY, m.curY);
 	const right = Math.max(m.startX, m.curX);
-	const bottom = Math.max(m.startY, m.curY);
+	const bottom = Math.max(anchorY, m.curY);
 	marqueeRect.value = { left, top, width: right - left, height: bottom - top };
 
 	const hitIds = new Set<string>();
@@ -1137,9 +1178,9 @@ function startMarqueeAutoScroll() {
 	m.rafId = requestAnimationFrame(step);
 }
 
-//#region 触屏长按拖拽移动
-// 浮标中心即命中点：位置由触点坐标同步计算（不能读渲染后的 DOM 矩形，Vue 异步更新会滞后一帧）。
-// 浮标视觉上浮在触点上方 33px（16px 间距 + 约 17px 半高），用户以浮标对准目标。
+//#region 触屏拖拽移动
+// 浮标只是视觉反馈：位置由触点坐标同步计算并上移，避免被手指遮挡（不能读渲染后的 DOM 矩形，Vue 异步更新会滞后一帧）。
+// 落点命中判定一律用触点本身——用户以手指对准目标，而不是以浮标。
 const touchDragAimOffsetY = 33;
 
 function getTouchDragAim(m: MarqueeState): { x: number; y: number } {
@@ -1147,12 +1188,15 @@ function getTouchDragAim(m: MarqueeState): { x: number; y: number } {
 }
 
 function activateTouchDrag(m: MarqueeState) {
-	if (m.startFileId == null) return;
+	if (m.touchDrag || m.startFileId == null) return;
 	const file = filesPaginator.items.value.find(f => f.id === m.startFileId);
 	if (file == null) return;
+	if (m.longPressTimer != null) {
+		window.clearTimeout(m.longPressTimer);
+		m.longPressTimer = null;
+	}
 
 	m.touchDrag = true;
-	m.scrollParent = getMainScrollParent();
 	dragOverlayZIndex.value = os.claimZIndex('high');
 
 	// 对齐桌面拖拽移动的行为：起按文件未选中时并入当前选中集
@@ -1171,15 +1215,21 @@ function updateTouchDrag(m: MarqueeState) {
 	let folderId: string | null = null;
 	let navKey: string | null = null;
 
-	// 面包屑条目是吸顶层且可见性最高，优先判定；
-	// 文件夹用矩形包含判定兜底——滑入吸顶导航带下方的文件夹会被 elementFromPoint 截获，几何判定不受覆盖影响
-	const el = window.document.elementFromPoint(aim.x, aim.y);
-	const navFolderEl = el?.closest('[data-drive-nav-folder]') as HTMLElement | null | undefined;
-	if (navFolderEl != null) {
-		const key = navFolderEl.dataset.driveNavFolder ?? null;
-		// 已在根目录时根目录不是有效目标
-		if (key != null && !(key === 'root' && folder.value == null)) {
-			navKey = key;
+	// 命中判定用触点坐标（用户以手指对准目标）；矩形包含判定限本组件范围
+	// （多实例堆叠时本组件被盖住则 pointerdown 根本不会发生），
+	// elementFromPoint 会被吸顶层、文字间隙和小目标热区漏掉，导致 hover 抖动性丢失
+	const nav = navEl.value;
+	if (nav != null) {
+		for (const el of nav.querySelectorAll('[data-drive-nav-folder]')) {
+			const r = el.getBoundingClientRect();
+			if (m.curX >= r.left && m.curX <= r.right && m.curY >= r.top && m.curY <= r.bottom) {
+				const key = (el as HTMLElement).dataset.driveNavFolder ?? null;
+				// 已在根目录时根目录不是有效目标
+				if (key != null && !(key === 'root' && folder.value == null)) {
+					navKey = key;
+				}
+				break;
+			}
 		}
 	}
 	if (navKey == null) {
@@ -1187,7 +1237,7 @@ function updateTouchDrag(m: MarqueeState) {
 		if (main != null) {
 			for (const folderEl of main.querySelectorAll('[data-drive-folder]')) {
 				const r = folderEl.getBoundingClientRect();
-				if (aim.x >= r.left && aim.x <= r.right && aim.y >= r.top && aim.y <= r.bottom) {
+				if (m.curX >= r.left && m.curX <= r.right && m.curY >= r.top && m.curY <= r.bottom) {
 					const id = (folderEl as HTMLElement).dataset.driveFolder ?? null;
 					const targetFolder = foldersPaginator.items.value.find(f => f.id === id);
 					// AI 生图专用文件夹禁止移入
@@ -1213,11 +1263,13 @@ function startTouchDragAutoScroll(m: MarqueeState) {
 	const step = () => {
 		const mm = marquee;
 		if (mm == null || !mm.touchDrag) return;
-		const aim = getTouchDragAim(mm);
-		const delta = edgeScrollDelta(aim.y, mm.scrollParent);
-		if (delta !== 0) {
-			applyEdgeScroll(mm.scrollParent, delta);
-			updateTouchDrag(mm);
+		// 已悬停在可投放目标上时不再边缘滚动，避免面包屑/边缘文件夹与滚动互相拉扯
+		if (mm.hoverFolderId == null && mm.hoverNavKey == null) {
+			const delta = edgeScrollDelta(mm.curY, mm.scrollParent);
+			if (delta !== 0) {
+				applyEdgeScroll(mm.scrollParent, delta);
+				updateTouchDrag(mm);
+			}
 		}
 		mm.rafId = requestAnimationFrame(step);
 	};
@@ -1227,6 +1279,8 @@ function startTouchDragAutoScroll(m: MarqueeState) {
 function moveSelectedFilesTo(targetFolderId: string | null) {
 	const filesToMove = [...selectedFiles.value];
 	if (filesToMove.length === 0) return;
+	// 拖到当前所在的文件夹，位置没有变化，直接忽略
+	if (filesToMove.every(f => f.folderId === targetFolderId)) return;
 	misskeyApi('drive/files/move-bulk', {
 		fileIds: filesToMove.map(f => f.id),
 		folderId: targetFolderId,
@@ -1285,6 +1339,10 @@ function onMarqueePointerUp(ev: PointerEvent) {
 	if (m == null || ev.pointerId !== m.pointerId) return;
 
 	if (m.touchDrag) {
+		// 落点以松手坐标当场重算：手指静止悬停时不产生 move 事件，缓存的 hover 可能已过期
+		m.curX = ev.clientX;
+		m.curY = ev.clientY;
+		updateTouchDrag(m);
 		const folderId = m.hoverFolderId;
 		const navKey = m.hoverNavKey;
 		endMarquee();
@@ -1293,13 +1351,14 @@ function onMarqueePointerUp(ev: PointerEvent) {
 		} else if (navKey != null) {
 			moveSelectedFilesTo(navKey === 'root' ? null : navKey);
 		}
+		cleanupSelectionAfterTouchDrag();
 		suppressNextClick();
 		return;
 	}
 
 	const wasActive = m.active;
 	endMarquee();
-	// 从文件上起拖的框选结束时，吞掉随后可能派发在该文件上的 click，避免误切换选中
+	// 框选结束时吞掉随后的 click，避免误切换选中
 	if (wasActive) suppressNextClick();
 }
 
@@ -1308,7 +1367,13 @@ function onMarqueePointerCancel(ev: PointerEvent) {
 	if (m == null || ev.pointerId !== m.pointerId) return;
 	// 浏览器接管了手势（如纵向滚动）：回滚到起拖前的选择
 	if (m.active) selectedFiles.value = m.baseFiles;
+	if (m.touchDrag) cleanupSelectionAfterTouchDrag();
 	endMarquee();
+}
+
+// 浏览场景下拖拽移动只是操作手段，选中态是拖拽时临时建立的，结束后清掉
+function cleanupSelectionAfterTouchDrag() {
+	if (!marqueeEnabled.value) selectedFiles.value = [];
 }
 
 function cancelMarquee() {
@@ -1335,8 +1400,9 @@ function endMarquee() {
 }
 
 function onContextmenuCapture(ev: Event) {
-	// 触屏长按已激活框选/拖拽移动时，拦截浏览器长按菜单
-	if (marquee != null && (marquee.active || marquee.touchDrag)) {
+	// 触屏按住期间（含激活前的长按判定窗口）一律拦截浏览器长按菜单：
+	// 浏览器决定展示长按菜单时会对当前 pointer 触发 pointercancel，直接杀死框选/拖拽手势
+	if (marquee != null) {
 		ev.stopPropagation();
 		ev.preventDefault();
 	}

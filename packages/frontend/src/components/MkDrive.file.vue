@@ -6,7 +6,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 <template>
 <div
 	:class="[$style.root, { [$style.isSelected]: isSelected }]"
-	draggable="true"
+	:draggable="!isCoarsePointer"
 	:title="title"
 	:data-drive-file="file.id"
 	@contextmenu.stop="onContextmenu"
@@ -70,6 +70,10 @@ const emit = defineEmits<{
 }>();
 
 const isDragging = ref(false);
+
+// 触屏设备禁用原生 HTML5 拖拽：浏览器（尤其 iOS Safari）会对 draggable 元素的长按触发系统级拖拽，
+// 接管手势并触发 pointercancel，与 MkDrive 的自定义触屏拖拽移动冲突
+const isCoarsePointer = window.matchMedia('(pointer: coarse)').matches;
 
 const title = computed(() => `${props.file.name}\n${props.file.type} ${bytes(props.file.size)}`);
 
