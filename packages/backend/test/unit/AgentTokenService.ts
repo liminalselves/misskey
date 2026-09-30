@@ -8,6 +8,12 @@ import { AgentTokenService } from '@/core/AgentTokenService.js';
 describe('AgentTokenService', () => {
 	const svc = new AgentTokenService();
 
+	describe('countTokensExact', () => {
+		test('Gemini 空文本直接返回 0，不初始化本地分词器', async () => {
+			await expect(svc.countTokensExact('', 'gemini:gemini-2.0-flash-001')).resolves.toBe(0);
+		});
+	});
+
 	describe('estimateTokens（唯一估算实现：Math.round(chars / charsPerToken)）', () => {
 		test('默认比率 3，四舍五入', () => {
 			expect(svc.estimateTokens(9)).toBe(3);

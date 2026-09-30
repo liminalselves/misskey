@@ -532,6 +532,9 @@ export class AgentTokenService {
 	}
 
 	private async countTokensGemini(text: string, modelName: string): Promise<number | null> {
+		// 空文本直接返回 0：@google/genai 的 LocalTokenizer 会对空 text part 向 stderr 打
+		// "Content contains unsupported types for token counting" 警告（生产日志噪音）
+		if (text.length === 0) return 0;
 		if (this.geminiFailedModels.has(modelName)) return null;
 		try {
 			const tokenizer = await this.getGeminiTokenizer(modelName);
