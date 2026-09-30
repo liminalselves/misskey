@@ -482,8 +482,9 @@ export class ChatService {
 		}).then(xs => xs.map(x => x.muteeId));
 
 		// Optimization: use UNION ALL instead of OR so each branch can leverage its
-		// partial index (IDX_chat_message_1on1_from / IDX_chat_message_1on1_to).
-		// Each branch scans only one side (sent / received) with index-ordered id DESC.
+		// covering partial index (IDX_chat_message_1on1_from / _to, migration/1784200000000):
+		// (fromUserId|toUserId, otherId, id DESC) WHERE toRoomId IS NULL.
+		// Each branch scans only one side (sent / received) index-only, GROUP BY needs no heap fetch.
 		const hasMuting = mutedIds.length > 0;
 		// When muting exists: $1=meId, $2=mutedIds(varchar[]), $3=limit
 		// Otherwise:          $1=meId, $2=limit

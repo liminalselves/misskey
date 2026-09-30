@@ -62,6 +62,7 @@ export class MiPage {
 	@JoinColumn()
 	public user: MiUser | null;
 
+	@Index('IDX_page_eyeCatchingImageId')
 	@Column({
 		...id(),
 		nullable: true,

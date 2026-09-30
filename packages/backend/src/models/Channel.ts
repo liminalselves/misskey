@@ -45,6 +45,7 @@ export class MiChannel {
 	})
 	public description: string | null;
 
+	@Index('IDX_channel_bannerId')
 	@Column({
 		...id(),
 		nullable: true,

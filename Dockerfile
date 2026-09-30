@@ -140,6 +140,8 @@ COPY --chown=misskey:misskey . ./
 
 ENV LD_PRELOAD=/usr/local/lib/libjemalloc.so
 ENV NODE_ENV=production
+# Large production indexes must be built without blocking writes for the full build duration.
+ENV MISSKEY_MIGRATION_CREATE_INDEX_CONCURRENTLY=1
 HEALTHCHECK --interval=5s --retries=20 CMD ["/bin/bash", "/misskey/healthcheck.sh"]
 ENTRYPOINT ["/usr/bin/tini", "--"]
 CMD ["pnpm", "run", "migrateandstart"]

@@ -11,7 +11,7 @@ import { MiChatRoom } from './ChatRoom.js';
 
 @Entity('chat_message')
 // 以下インデックスはマイグレーションで DEFINITION（部分条件・DESC）を持つため synchronize: false。
-// 実体は migration/1770400000000 / 1770400000001 に従う。
+// 実体は migration/1770400000001・1784200000000 に従う。
 @Index('IDX_chat_message_1on1_timeline', { synchronize: false })
 @Index('IDX_chat_message_1on1_from', { synchronize: false })
 @Index('IDX_chat_message_1on1_to', { synchronize: false })
@@ -72,6 +72,8 @@ export class MiChatMessage {
 	})
 	public reads: MiUser['id'][];
 
+	// fileId の FK チェックで drive_file 削除時の全表走査を避けるためのインデックス（migration/1784200000000）
+	@Index('IDX_chat_message_fileId')
 	@Column({
 		...id(),
 		nullable: true,
