@@ -50,6 +50,16 @@ export const packedDriveFileSchema = {
 			type: 'boolean',
 			optional: false, nullable: false,
 		},
+		isDeleted: {
+			type: 'boolean',
+			optional: true, nullable: false,
+			description: 'ファイルが削除済みの墓碑プレースホルダーである場合 true。url/thumbnailUrl は null になる',
+		},
+		deletedAt: {
+			type: 'string',
+			optional: true, nullable: true,
+			format: 'date-time',
+		},
 		blurhash: {
 			type: 'string',
 			optional: false, nullable: true,

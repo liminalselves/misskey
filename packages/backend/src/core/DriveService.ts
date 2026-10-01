@@ -11,7 +11,7 @@ import { sharpBmp } from '@misskey-dev/sharp-read-bmp';
 import { In, IsNull } from 'typeorm';
 import { DeleteObjectCommandInput, PutObjectCommandInput, NoSuchKey } from '@aws-sdk/client-s3';
 import { DI } from '@/di-symbols.js';
-import type { DriveFilesRepository, UsersRepository, DriveFoldersRepository, UserProfilesRepository, MiMeta } from '@/models/_.js';
+import type { DriveFilesRepository, UsersRepository, DriveFoldersRepository, DriveFileTombstonesRepository, UserProfilesRepository, MiMeta } from '@/models/_.js';
 import type { Config } from '@/config.js';
 import Logger from '@/logger.js';
 import type { MiRemoteUser, MiUser } from '@/models/User.js';
@@ -112,6 +112,9 @@ export class DriveService {
 
 		@Inject(DI.driveFilesRepository)
 		private driveFilesRepository: DriveFilesRepository,
+
+		@Inject(DI.driveFileTombstonesRepository)
+		private driveFileTombstonesRepository: DriveFileTombstonesRepository,
 
 		@Inject(DI.driveFoldersRepository)
 		private driveFoldersRepository: DriveFoldersRepository,
@@ -871,6 +874,26 @@ export class DriveService {
 				webpublicAccessKey: 'webpublic-' + randomUUID(),
 			});
 		} else {
+			// 行删除前留下墓碑：帖子/聊天等引用处据此展示「已被清理」占位而非隐式消失
+			await this.driveFileTombstonesRepository.createQueryBuilder()
+				.insert()
+				.values({
+					id: file.id,
+					userId: file.userId,
+					userHost: file.userHost,
+					name: file.name,
+					type: file.type,
+					size: file.size,
+					properties: {
+						...(file.properties.width != null ? { width: file.properties.width } : {}),
+						...(file.properties.height != null ? { height: file.properties.height } : {}),
+						...(file.properties.orientation != null ? { orientation: file.properties.orientation } : {}),
+					},
+					deletedAt: new Date(),
+				})
+				.orIgnore()
+				.execute()
+				.catch(err => this.deleteLogger.warn(`failed to record tombstone for ${file.id}: ${err}`));
 			await this.driveFilesRepository.delete(file.id);
 		}
 

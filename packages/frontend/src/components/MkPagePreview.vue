@@ -6,7 +6,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 <template>
 <MkA :to="`/@${page.user.username}/pages/${page.name}`" class="vhpxefrj">
 	<div v-if="page.eyeCatchingImage" class="thumbnail">
+		<MkDeletedFileMedia v-if="page.eyeCatchingImage.isDeleted" :file="page.eyeCatchingImage" :class="$style.eyeCatchingImageRoot"/>
 		<MediaImage
+			v-else
 			:image="page.eyeCatchingImage"
 			:disableImageLink="true"
 			:controls="false"
@@ -32,6 +34,7 @@ import { } from 'vue';
 import * as Misskey from 'misskey-js';
 import { userName } from '@/filters/user.js';
 import MediaImage from '@/components/MkMediaImage.vue';
+import MkDeletedFileMedia from '@/components/MkDeletedFileMedia.vue';
 
 const props = defineProps<{
 	page: Misskey.entities.Page;

@@ -52,7 +52,7 @@ export class GalleryPostEntityService {
 			description: post.description,
 			fileIds: post.fileIds,
 			// TODO: packMany causes N+1 queries
-			files: this.driveFileEntityService.packManyByIds(post.fileIds),
+			files: this.driveFileEntityService.packManyByIds(post.fileIds, { withDeleted: true }),
 			tags: post.tags.length > 0 ? post.tags : undefined,
 			isSensitive: post.isSensitive,
 			likedCount: post.likedCount,

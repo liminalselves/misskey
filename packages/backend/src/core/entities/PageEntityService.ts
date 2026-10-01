@@ -4,14 +4,14 @@
  */
 
 import { Inject, Injectable } from '@nestjs/common';
+import { In } from 'typeorm';
 import { DI } from '@/di-symbols.js';
-import type { DriveFilesRepository, PagesRepository, PageLikesRepository } from '@/models/_.js';
+import type { DriveFilesRepository, DriveFileTombstonesRepository, PagesRepository, PageLikesRepository } from '@/models/_.js';
 import { awaitAll } from '@/misc/prelude/await-all.js';
 import type { Packed } from '@/misc/json-schema.js';
 import type { } from '@/models/Blocking.js';
 import type { MiUser } from '@/models/User.js';
 import type { MiPage } from '@/models/Page.js';
-import type { MiDriveFile } from '@/models/DriveFile.js';
 import { bindThis } from '@/decorators.js';
 import { IdService } from '@/core/IdService.js';
 import { UserEntityService } from './UserEntityService.js';
@@ -28,6 +28,9 @@ export class PageEntityService {
 
 		@Inject(DI.driveFilesRepository)
 		private driveFilesRepository: DriveFilesRepository,
+
+		@Inject(DI.driveFileTombstonesRepository)
+		private driveFileTombstonesRepository: DriveFileTombstonesRepository,
 
 		private userEntityService: UserEntityService,
 		private driveFileEntityService: DriveFileEntityService,
@@ -46,14 +49,11 @@ export class PageEntityService {
 		const meId = me ? me.id : null;
 		const page = typeof src === 'object' ? src : await this.pagesRepository.findOneByOrFail({ id: src });
 
-		const attachedFiles: Promise<MiDriveFile | null>[] = [];
+		const attachedFileIds: string[] = [];
 		const collectFile = (xs: any[]) => {
 			for (const x of xs) {
 				if (x.type === 'image') {
-					attachedFiles.push(this.driveFilesRepository.findOneBy({
-						id: x.fileId,
-						userId: page.userId,
-					}));
+					attachedFileIds.push(x.fileId);
 				}
 				if (x.children) {
 					collectFile(x.children);
@@ -104,11 +104,26 @@ export class PageEntityService {
 			font: page.font,
 			script: page.script,
 			eyeCatchingImageId: page.eyeCatchingImageId,
-			eyeCatchingImage: page.eyeCatchingImageId ? await this.driveFileEntityService.packNullable(page.eyeCatchingImageId) : null,
-			attachedFiles: this.driveFileEntityService.packMany((await Promise.all(attachedFiles)).filter(x => x != null)),
+			eyeCatchingImage: page.eyeCatchingImageId ? await this.driveFileEntityService.packNullable(page.eyeCatchingImageId, { withDeleted: true }) : null,
+			attachedFiles: this.packAttachedFilesWithDeleted(attachedFileIds, page.userId),
 			likedCount: page.likedCount,
 			isLiked: meId ? await this.pageLikesRepository.exists({ where: { pageId: page.id, userId: meId } }) : undefined,
 		});
+	}
+
+	@bindThis
+	private async packAttachedFilesWithDeleted(fileIds: string[], userId: MiPage['userId']): Promise<Packed<'DriveFile'>[]> {
+		if (fileIds.length === 0) return [];
+		const [files, tombstones] = await Promise.all([
+			this.driveFilesRepository.findBy({ id: In(fileIds), userId }),
+			this.driveFileTombstonesRepository.findBy({ id: In(fileIds), userId }),
+		]);
+		const foundIds = new Set(files.map(f => f.id));
+		const packed = await this.driveFileEntityService.packMany(files);
+		const packedTombstones = await this.driveFileEntityService.packTombstones(tombstones.filter(t => !foundIds.has(t.id)));
+		// 保持 content 中的引用顺序
+		const byId = new Map<string, Packed<'DriveFile'>>([...packed, ...packedTombstones].map(f => [f.id, f]));
+		return fileIds.map(id => byId.get(id)).filter((x): x is Packed<'DriveFile'> => x != null);
 	}
 
 	@bindThis

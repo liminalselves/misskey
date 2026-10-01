@@ -4,14 +4,15 @@
  */
 
 import { forwardRef, Inject, Injectable } from '@nestjs/common';
-import { In } from 'typeorm';
+import { EntityNotFoundError, In } from 'typeorm';
 import { DI } from '@/di-symbols.js';
-import type { DriveFilesRepository, MiMeta } from '@/models/_.js';
+import type { DriveFilesRepository, DriveFileTombstonesRepository, MiMeta } from '@/models/_.js';
 import type { Config } from '@/config.js';
 import type { Packed } from '@/misc/json-schema.js';
 import { awaitAll } from '@/misc/prelude/await-all.js';
 import type { MiUser } from '@/models/User.js';
-import type { MiDriveFile } from '@/models/DriveFile.js';
+import { MiDriveFile } from '@/models/DriveFile.js';
+import type { MiDriveFileTombstone } from '@/models/DriveFileTombstone.js';
 import { appendQuery, query } from '@/misc/prelude/url.js';
 import { deepClone } from '@/misc/clone.js';
 import { bindThis } from '@/decorators.js';
@@ -27,6 +28,14 @@ type PackOptions = {
 	detail?: boolean,
 	self?: boolean,
 	withUser?: boolean,
+	/** 文件已被删除时返回「已被清理」占位对象（含归属者），而非 null/抛错 */
+	withDeleted?: boolean,
+};
+
+/** 已删除网盘文件的占位打包形状：url/thumbnailUrl 为 null，以 isDeleted 标记区分 */
+export type PackedDeletedDriveFile = Packed<'DriveFile'> & {
+	isDeleted: true;
+	deletedAt: string;
 };
 
 @Injectable()
@@ -41,6 +50,9 @@ export class DriveFileEntityService {
 		@Inject(DI.driveFilesRepository)
 		private driveFilesRepository: DriveFilesRepository,
 
+		@Inject(DI.driveFileTombstonesRepository)
+		private driveFileTombstonesRepository: DriveFileTombstonesRepository,
+
 		// 循環参照のため / for circular dependency
 		@Inject(forwardRef(() => UserEntityService))
 		private userEntityService: UserEntityService,
@@ -50,6 +62,71 @@ export class DriveFileEntityService {
 		private videoProcessingService: VideoProcessingService,
 		private idService: IdService,
 	) {
+	}
+
+	@bindThis
+	private getTombstonePublicProperties(tombstone: MiDriveFileTombstone): MiDriveFileTombstone['properties'] {
+		const properties = deepClone(tombstone.properties);
+		if (properties.orientation != null) {
+			if (properties.orientation >= 5) {
+				[properties.width, properties.height] = [properties.height, properties.width];
+			}
+			properties.orientation = undefined;
+		}
+		return properties;
+	}
+
+	@bindThis
+	private packTombstone(tombstone: MiDriveFileTombstone, hint?: { packedUser?: Packed<'UserLite'> | null }): PackedDeletedDriveFile {
+		return {
+			id: tombstone.id,
+			createdAt: this.idService.parse(tombstone.id).date.toISOString(),
+			name: tombstone.name,
+			type: tombstone.type,
+			md5: '',
+			size: tombstone.size,
+			isSensitive: false,
+			isAgentGenerated: false,
+			isAgentImageBlocked: false,
+			blurhash: null,
+			properties: this.getTombstonePublicProperties(tombstone),
+			url: null,
+			thumbnailUrl: null,
+			comment: null,
+			folderId: null,
+			folder: null,
+			userId: tombstone.userId,
+			user: hint !== undefined ? (hint.packedUser ?? null) : undefined,
+			isDeleted: true,
+			deletedAt: tombstone.deletedAt.toISOString(),
+		} as unknown as PackedDeletedDriveFile;
+	}
+
+	/** 批量墓碑占位打包；归属者统一预取 UserLite（占位 UI 必须展示归属，与 withUser 无关） */
+	@bindThis
+	public async packTombstones(tombstones: MiDriveFileTombstone[]): Promise<PackedDeletedDriveFile[]> {
+		if (tombstones.length === 0) return [];
+
+		const users = tombstones.map(t => t.user ?? t.userId).filter(x => x != null);
+		const uniqueUsers = uniqueByKey(users, (user) => typeof user === 'string' ? user : user.id);
+		const packedUsers = await this.userEntityService.packMany(uniqueUsers)
+			.then(users => new Map(users.map(u => [u.id, u])));
+
+		return tombstones.map(t => this.packTombstone(t, {
+			packedUser: t.userId ? packedUsers.get(t.userId) ?? null : null,
+		}));
+	}
+
+	/** 查找已删除文件 id 的墓碑并打包；无墓碑的 id 不在返回中 */
+	@bindThis
+	public async packDeletedPlaceholders(fileIds: MiDriveFile['id'][]): Promise<Map<MiDriveFile['id'], PackedDeletedDriveFile>> {
+		const map = new Map<MiDriveFile['id'], PackedDeletedDriveFile>();
+		if (fileIds.length === 0) return map;
+
+		const tombstones = await this.driveFileTombstonesRepository.findBy({ id: In(fileIds) });
+		const packed = await this.packTombstones(tombstones);
+		for (const p of packed) map.set(p.id, p);
+		return map;
 	}
 
 	@bindThis
@@ -229,7 +306,18 @@ export class DriveFileEntityService {
 			self: false,
 		}, options);
 
-		const file = typeof src === 'object' ? src : await this.driveFilesRepository.findOneByOrFail({ id: src });
+		const file = typeof src === 'object' ? src : await this.driveFilesRepository.findOneBy({ id: src });
+		if (file == null) {
+			if (typeof src === 'string' && opts.withDeleted) {
+				const tombstone = await this.driveFileTombstonesRepository.findOneBy({ id: src });
+				if (tombstone != null) {
+					const [packed] = await this.packTombstones([tombstone]);
+					return packed;
+				}
+			}
+			if (typeof src === 'string') throw new EntityNotFoundError(MiDriveFile, { where: { id: src } });
+			throw new EntityNotFoundError(MiDriveFile, '');
+		}
 
 		return await awaitAll<Packed<'DriveFile'>>({
 			id: file.id,
@@ -271,7 +359,16 @@ export class DriveFileEntityService {
 		}, options);
 
 		const file = typeof src === 'object' ? src : await this.driveFilesRepository.findOneBy({ id: src });
-		if (file == null) return null;
+		if (file == null) {
+			if (typeof src === 'string' && opts.withDeleted) {
+				const tombstone = await this.driveFileTombstonesRepository.findOneBy({ id: src });
+				if (tombstone != null) {
+					const [packed] = await this.packTombstones([tombstone]);
+					return packed;
+				}
+			}
+			return null;
+		}
 
 		return await awaitAll<Packed<'DriveFile'>>({
 			id: file.id,
@@ -351,6 +448,13 @@ export class DriveFileEntityService {
 		const files = await this.driveFilesRepository.findBy({ id: In(fileIds) });
 		const packedFiles = await this.packMany(files, options);
 		const map = new Map<Packed<'DriveFile'>['id'], Packed<'DriveFile'> | null>(packedFiles.map(f => [f.id, f]));
+		const missingIds = fileIds.filter(id => !map.has(id));
+		if (missingIds.length > 0 && options?.withDeleted) {
+			const placeholders = await this.packDeletedPlaceholders(missingIds);
+			for (const [id, placeholder] of placeholders) {
+				map.set(id, placeholder);
+			}
+		}
 		for (const id of fileIds) {
 			if (!map.has(id)) map.set(id, null);
 		}

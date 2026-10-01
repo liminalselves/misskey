@@ -66,8 +66,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 							<MkCustomEmoji :class="$style.stickerEmoji" :name="part.name" :menu="true" />
 						</div>
 						<div v-else-if="part.type === 'sticker'" :class="$style.stickerWrap">
+							<MkDeletedFileMedia v-if="stickerFileOf(part.stickerKey)?.isDeleted" compact :file="stickerFileOf(part.stickerKey)!"/>
 							<img
-								v-if="stickerUrl(part.stickerKey)"
+								v-else-if="stickerUrl(part.stickerKey)"
 								:class="$style.stickerImg"
 								:src="stickerUrl(part.stickerKey)"
 								:alt="`表情包 ${part.stickerKey}`"
@@ -144,6 +145,7 @@ import { misskeyApi, formatApiError } from '@/utility/misskey-api.js';
 import MkLoading from '@/components/global/MkLoading.vue';
 import MkButton from '@/components/MkButton.vue';
 import MkMediaList from '@/components/MkMediaList.vue';
+import MkDeletedFileMedia from '@/components/MkDeletedFileMedia.vue';
 import MkCustomEmoji from '@/components/global/MkCustomEmoji.vue';
 import { splitAgentMessageIntoSegments, stripAgentCueTokens } from '@/utility/agent-message-segments.js';
 import { customEmojisMap } from '@/custom-emojis.js';
@@ -246,6 +248,11 @@ const stickerFileMap = computed(() => {
 	}
 	return map;
 });
+
+/** 表情包对应文件（含已被清理的墓碑占位），供区分「已被清理」与「不可用」 */
+function stickerFileOf(key: string): DriveFile | undefined {
+	return stickerFileMap.value.get(key);
+}
 
 /** 表情包展示 URL：动图用原图保持动画，其余优先缩略图 */
 function stickerUrl(key: string): string | undefined {

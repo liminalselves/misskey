@@ -89,7 +89,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				content: m.content,
 				createdAt: m.createdAt.toISOString(),
 				timeTrusted: m.timeTrusted,
-				file: m.imageFileId ? await this.driveFileEntityService.pack(m.imageFileId, {}).catch(() => null) : null,
+				file: m.imageFileId ? await this.driveFileEntityService.pack(m.imageFileId, { withDeleted: true }).catch(() => null) : null,
 				imageRecognitionStatus: m.imageRecognitionStatus,
 				imageRecognitionDescription: m.imageRecognitionDescription,
 				proactiveScheduleActionTypes: this.agentProactiveScheduleService.actionTypes(m),

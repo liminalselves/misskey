@@ -26,6 +26,7 @@ import {
 	MiClipFavorite,
 	MiClipNote,
 	MiDriveFile,
+	MiDriveFileTombstone,
 	MiDriveFolder,
 	MiEmoji,
 	MiFlash,
@@ -271,6 +272,12 @@ const $emojisRepository: Provider = {
 const $driveFilesRepository: Provider = {
 	provide: DI.driveFilesRepository,
 	useFactory: (db: DataSource) => db.getRepository(MiDriveFile).extend(miRepository as MiRepository<MiDriveFile>),
+	inject: [DI.db],
+};
+
+const $driveFileTombstonesRepository: Provider = {
+	provide: DI.driveFileTombstonesRepository,
+	useFactory: (db: DataSource) => db.getRepository(MiDriveFileTombstone).extend(miRepository as MiRepository<MiDriveFileTombstone>),
 	inject: [DI.db],
 };
 
@@ -701,6 +708,7 @@ const $reversiGamesRepository: Provider = {
 		$instancesRepository,
 		$emojisRepository,
 		$driveFilesRepository,
+		$driveFileTombstonesRepository,
 		$driveFoldersRepository,
 		$metasRepository,
 		$mutingsRepository,
@@ -797,6 +805,7 @@ const $reversiGamesRepository: Provider = {
 		$instancesRepository,
 		$emojisRepository,
 		$driveFilesRepository,
+		$driveFileTombstonesRepository,
 		$driveFoldersRepository,
 		$metasRepository,
 		$mutingsRepository,

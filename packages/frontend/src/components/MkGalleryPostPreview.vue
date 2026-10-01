@@ -6,7 +6,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 <template>
 <MkA :to="`/gallery/${post.id}`" class="ttasepnz _panel" tabindex="-1" @pointerenter="enterHover" @pointerleave="leaveHover">
 	<div class="thumbnail">
-		<Transition>
+		<div v-if="post.files?.[0]?.isDeleted" class="deletedThumb"><i class="ti ti-photo-off"></i></div>
+		<Transition v-else>
 			<MkImgWithBlurhash
 				class="img layered"
 				:transition="safe ? null : {
@@ -95,6 +96,18 @@ function leaveHover(): void {
 		height: 100%;
 		position: absolute;
 		transition: transform 0.5s ease;
+
+		> .deletedThumb {
+			width: 100%;
+			height: 100%;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			font-size: 2em;
+			color: var(--MI_THEME-fg);
+			opacity: 0.3;
+			background: var(--MI_THEME-bg);
+		}
 
 		> .img {
 			width: 100%;

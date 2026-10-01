@@ -43,7 +43,7 @@ export class ChatEntityService {
 	): Promise<Packed<'DriveFile'> | null> {
 		if (message.fileId == null) return null;
 		if (packedFiles?.has(message.fileId)) return packedFiles.get(message.fileId) ?? null;
-		return await this.driveFileEntityService.packNullable(message.file ?? message.fileId);
+		return await this.driveFileEntityService.packNullable(message.file ?? message.fileId, { withDeleted: true });
 	}
 
 	@bindThis
@@ -123,7 +123,7 @@ export class ChatEntityService {
 		const [packedUsers, packedFiles, packedRooms] = await Promise.all([
 			this.userEntityService.packMany(users, me)
 				.then(users => new Map(users.map(u => [u.id, u]))),
-			this.driveFileEntityService.packManyByIdsMap(messages.map(m => m.fileId).filter((id): id is string => id != null)),
+			this.driveFileEntityService.packManyByIdsMap(messages.map(m => m.fileId).filter((id): id is string => id != null), { withDeleted: true }),
 			this.packRooms(messages.map(m => m.toRoom ?? m.toRoomId).filter(x => x != null), me)
 				.then(rooms => new Map(rooms.map(r => [r.id, r]))),
 		]);
@@ -191,7 +191,7 @@ export class ChatEntityService {
 		if (messages.length === 0) return [];
 
 		const [packedFiles] = await Promise.all([
-			this.driveFileEntityService.packManyByIdsMap(messages.map(m => m.fileId).filter((id): id is string => id != null)),
+			this.driveFileEntityService.packManyByIdsMap(messages.map(m => m.fileId).filter((id): id is string => id != null), { withDeleted: true }),
 		]);
 
 		return Promise.all(messages.map(message => this.packMessageLiteFor1on1(message, { _hint_: { packedFiles } })));
@@ -273,7 +273,7 @@ export class ChatEntityService {
 		const [packedUsers, packedFiles] = await Promise.all([
 			this.userEntityService.packMany(users)
 				.then(users => new Map(users.map(u => [u.id, u]))),
-			this.driveFileEntityService.packManyByIdsMap(messages.map(m => m.fileId).filter((id): id is string => id != null)),
+			this.driveFileEntityService.packManyByIdsMap(messages.map(m => m.fileId).filter((id): id is string => id != null), { withDeleted: true }),
 		]);
 
 		return Promise.all(messages.map(message => this.packMessageLiteForRoom(message, { _hint_: { packedFiles, packedUsers } })));

@@ -11,7 +11,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<div v-if="post" class="rkxwuolj">
 					<div class="files">
 						<div v-for="file in post.files" :key="file.id" class="file">
-							<img :src="file.url"/>
+							<MkDeletedFileMedia v-if="file.isDeleted" :file="file" class="deletedPlaceholder"/>
+							<img v-else :src="file.url"/>
 						</div>
 					</div>
 					<div class="body">
@@ -72,6 +73,7 @@ import { misskeyApi } from '@/utility/misskey-api.js';
 import MkContainer from '@/components/MkContainer.vue';
 import MkPagination from '@/components/MkPagination.vue';
 import MkGalleryPostPreview from '@/components/MkGalleryPostPreview.vue';
+import MkDeletedFileMedia from '@/components/MkDeletedFileMedia.vue';
 import MkFollowButton from '@/components/MkFollowButton.vue';
 import { i18n } from '@/i18n.js';
 import { definePage } from '@/page.js';

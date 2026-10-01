@@ -68,7 +68,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					? this.agentProactiveScheduleService.privateControlForLlm(row)
 					: row.rawContent ?? row.content,
 				createdAt: row.createdAt.toISOString(),
-				file: row.imageFileId ? await this.driveFileEntityService.pack(row.imageFileId, {}).catch(() => null) : null,
+				file: row.imageFileId ? await this.driveFileEntityService.pack(row.imageFileId, { withDeleted: true }).catch(() => null) : null,
 				proactiveScheduleActionTypes: this.agentProactiveScheduleService.actionTypes(row),
 				proactiveScheduleControlFailed: row.proactiveScheduleControlError != null,
 			};

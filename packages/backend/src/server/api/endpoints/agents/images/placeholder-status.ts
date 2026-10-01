@@ -98,7 +98,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		const isBlocked = !isAutoCleaned && (row.isBlocked || rawFile?.isAgentImageBlocked === true);
 		if (!isAutoCleaned && !isBlocked && row.status === 'succeeded' && row.fileId != null) {
 			try {
-				file = await this.driveFileEntityService.pack(row.fileId, { self: true });
+				file = await this.driveFileEntityService.pack(row.fileId, { self: true, withDeleted: true });
 			} catch {
 				file = null;
 			}

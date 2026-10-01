@@ -146,7 +146,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			}
 			const characterStickers = await Promise.all(effectiveCharacter.stickers.map(async sticker => ({
 				key: sticker.key,
-				file: await this.driveFileEntityService.pack(sticker.fileId, {}).catch(() => null),
+				file: await this.driveFileEntityService.pack(sticker.fileId, { withDeleted: true }).catch(() => null),
 			})));
 			return {
 				id: row.id,

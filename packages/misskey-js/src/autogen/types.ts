@@ -6281,6 +6281,10 @@ export type components = {
             isSensitive: boolean;
             isAgentGenerated: boolean;
             isAgentImageBlocked: boolean;
+            /** ファイルが削除済みの墓碑プレースホルダーである場合 true。url/thumbnailUrl は null になる */
+            isDeleted?: boolean;
+            /** Format: date-time */
+            deletedAt?: string | null;
             blurhash: string | null;
             properties: {
                 /** @example 1280 */

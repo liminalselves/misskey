@@ -5,8 +5,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <template>
 <div :class="$style.root">
-	<XBanner v-for="media in mediaList.filter(media => !previewable(media))" :key="media.id" :media="media"/>
-	<div v-if="mediaList.filter(media => previewable(media)).length > 0" :class="$style.container">
+	<XBanner v-for="media in mediaList.filter(media => !previewable(media) && !media.isDeleted)" :key="media.id" :media="media"/>
+	<div v-if="mediaList.filter(media => previewable(media) || media.isDeleted).length > 0" :class="$style.container">
 		<div
 			ref="gallery"
 			:class="[
@@ -19,8 +19,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 				}] : count === 2 ? $style.n2 : count === 3 ? $style.n3 : count === 4 ? $style.n4 : $style.nMany,
 			]"
 		>
-			<template v-for="media in mediaList.filter(media => previewable(media))">
-				<XVideo v-if="media.type.startsWith('video')" :key="`video:${media.id}`" :class="$style.media" :video="media"/>
+			<template v-for="media in mediaList.filter(media => previewable(media) || media.isDeleted)">
+				<XDeletedFile v-if="media.isDeleted" :key="`deleted:${media.id}`" :class="$style.media" :file="media"/>
+				<XVideo v-else-if="media.type.startsWith('video')" :key="`video:${media.id}`" :class="$style.media" :video="media"/>
 				<XImage v-else-if="media.type.startsWith('image')" :key="`image:${media.id}`" :class="[$style.media, { image: !media.isAgentImageBlocked }]" :data-id="media.id" :image="media" :raw="raw"/>
 			</template>
 		</div>
@@ -38,6 +39,7 @@ import { FILE_TYPE_BROWSERSAFE } from '@@/js/const.js';
 import XBanner from '@/components/MkMediaBanner.vue';
 import XImage from '@/components/MkMediaImage.vue';
 import XVideo from '@/components/MkMediaVideo.vue';
+import XDeletedFile from '@/components/MkDeletedFileMedia.vue';
 import * as os from '@/os.js';
 import { focusParent } from '@/utility/focus.js';
 import { prefer } from '@/preferences.js';
@@ -55,7 +57,7 @@ const AGENT_IMAGE_GENERATION_COMMENT_ZH = '由智能体生成的图片';
 const gallery = useTemplateRef('gallery');
 const pswpZIndex = os.claimZIndex('middle');
 window.document.documentElement.style.setProperty('--mk-pswp-root-z-index', pswpZIndex.toString());
-const count = computed(() => props.mediaList.filter(media => previewable(media)).length);
+const count = computed(() => props.mediaList.filter(media => previewable(media) || media.isDeleted).length);
 let lightbox: PhotoSwipeLightbox | null = null;
 
 let activeEl: HTMLElement | null = null;
@@ -68,6 +70,7 @@ const popstateHandler = (): void => {
 
 function lightboxMediaList(): Misskey.entities.DriveFile[] {
 	return props.mediaList.filter(media => {
+		if (media.isDeleted) return false;
 		if (media.isAgentImageBlocked) return false;
 		if (media.type === 'image/svg+xml') return true; // svgのwebpublicはpngなのでtrue
 		return media.type.startsWith('image') && FILE_TYPE_BROWSERSAFE.includes(media.type);
@@ -268,6 +271,7 @@ onUnmounted(() => {
 });
 
 const previewable = (file: Misskey.entities.DriveFile): boolean => {
+	if (file.isDeleted) return false;
 	if (file.type === 'image/svg+xml') return true; // svgのwebpublic/thumbnailはpngなのでtrue
 	// FILE_TYPE_BROWSERSAFEに適合しないものはブラウザで表示するのに不適切
 	return (file.type.startsWith('video') || file.type.startsWith('image')) && FILE_TYPE_BROWSERSAFE.includes(file.type);

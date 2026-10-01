@@ -6,7 +6,13 @@ SPDX-License-Identifier: AGPL-3.0-only
 <template>
 <template v-for="file in note.files">
 	<div
-		v-if="isHiding(file)"
+		v-if="file.isDeleted"
+		:class="[$style.filePreview, { [$style.square]: square }]"
+	>
+		<MkDeletedFileMedia :file="file" :class="$style.file"/>
+	</div>
+	<div
+		v-else-if="isHiding(file)"
 		:class="[$style.filePreview, { [$style.square]: square }]"
 		@click="reveal(file)"
 	>
@@ -48,6 +54,7 @@ import { shouldHideFileByDefault, canRevealFile } from '@/utility/sensitive-file
 import bytes from '@/filters/bytes.js';
 
 import MkDriveFileThumbnail from '@/components/MkDriveFileThumbnail.vue';
+import MkDeletedFileMedia from '@/components/MkDeletedFileMedia.vue';
 
 defineProps<{
 	note: Misskey.entities.Note;

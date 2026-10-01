@@ -201,7 +201,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					stickers: (await Promise.all((Array.isArray(display.stickers) ? display.stickers : []).map(async sticker => ({
 						key: sticker.key,
 						description: sticker.description,
-						file: await this.driveFileEntityService.pack(sticker.fileId, {}).catch(() => null),
+						file: await this.driveFileEntityService.pack(sticker.fileId, { withDeleted: true }).catch(() => null),
 					})))).filter(sticker => sticker.file != null),
 				} : {}),
 				promptOpenSourced: row.promptOpenSourced === true,

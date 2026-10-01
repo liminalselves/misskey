@@ -50,6 +50,7 @@ import { MiClip } from '@/models/Clip.js';
 import { MiClipFavorite } from '@/models/ClipFavorite.js';
 import { MiClipNote } from '@/models/ClipNote.js';
 import { MiDriveFile } from '@/models/DriveFile.js';
+import { MiDriveFileTombstone } from '@/models/DriveFileTombstone.js';
 import { MiDriveFolder } from '@/models/DriveFolder.js';
 import { MiEmoji } from '@/models/Emoji.js';
 import { MiFlash } from '@/models/Flash.js';
@@ -133,6 +134,7 @@ export {
 	MiClipNote,
 	MiClipFavorite,
 	MiDriveFile,
+	MiDriveFileTombstone,
 	MiDriveFolder,
 	MiEmoji,
 	MiFollowing,
@@ -231,6 +233,7 @@ export type ClipsRepository = Repository<MiClip> & MiRepository<MiClip>;
 export type ClipNotesRepository = Repository<MiClipNote> & MiRepository<MiClipNote>;
 export type ClipFavoritesRepository = Repository<MiClipFavorite> & MiRepository<MiClipFavorite>;
 export type DriveFilesRepository = Repository<MiDriveFile> & MiRepository<MiDriveFile>;
+export type DriveFileTombstonesRepository = Repository<MiDriveFileTombstone> & MiRepository<MiDriveFileTombstone>;
 export type DriveFoldersRepository = Repository<MiDriveFolder> & MiRepository<MiDriveFolder>;
 export type EmojisRepository = Repository<MiEmoji> & MiRepository<MiEmoji>;
 export type FollowingsRepository = Repository<MiFollowing> & MiRepository<MiFollowing>;

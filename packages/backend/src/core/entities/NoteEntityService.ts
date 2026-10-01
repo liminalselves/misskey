@@ -479,7 +479,7 @@ export class NoteEntityService implements OnModuleInit {
 			if (!packedFiles.has(id)) missingIds.push(id);
 		}
 		if (missingIds.length) {
-			const additionalMap = await this.driveFileEntityService.packManyByIdsMap(missingIds);
+			const additionalMap = await this.driveFileEntityService.packManyByIdsMap(missingIds, { withDeleted: true });
 			for (const [k, v] of additionalMap) {
 				packedFiles.set(k, v);
 			}
@@ -569,7 +569,7 @@ export class NoteEntityService implements OnModuleInit {
 			emojis: host != null ? this.customEmojiService.populateEmojis(note.emojis, host) : undefined,
 			tags: note.tags.length > 0 ? note.tags : undefined,
 			fileIds: note.fileIds,
-			files: packedFiles != null ? this.packAttachedFiles(note.fileIds, packedFiles) : this.driveFileEntityService.packManyByIds(note.fileIds),
+			files: packedFiles != null ? this.packAttachedFiles(note.fileIds, packedFiles) : this.driveFileEntityService.packManyByIds(note.fileIds, { withDeleted: true }),
 			replyId: note.replyId,
 			renoteId: note.renoteId,
 			channelId: note.channelId ?? undefined,
@@ -700,7 +700,7 @@ export class NoteEntityService implements OnModuleInit {
 		await this.customEmojiService.prefetchEmojis(this.aggregateNoteEmojis(notes));
 		// TODO: 本当は renote とか reply がないのに renoteId とか replyId があったらここで解決しておく
 		const fileIds = notes.map(n => [n.fileIds, n.renote?.fileIds, n.reply?.fileIds]).flat(2).filter(x => x != null);
-		const packedFiles = fileIds.length > 0 ? await this.driveFileEntityService.packManyByIdsMap(fileIds) : new Map();
+		const packedFiles = fileIds.length > 0 ? await this.driveFileEntityService.packManyByIdsMap(fileIds, { withDeleted: true }) : new Map();
 		const users = [
 			...notes.map(({ user, userId }) => user ?? userId),
 			...notes.map(({ replyUserId }) => replyUserId).filter(x => x != null),
