@@ -447,6 +447,13 @@ export const ROUTE_DEF = [{
 	path: '/admin/file/:fileId',
 	component: iAmModerator ? page(() => import('@/pages/admin-file.vue')) : page(() => import('@/pages/not-found.vue')),
 }, {
+	// 智能体会话审查独立页：复用用户侧聊天 UI 只读查看任意用户会话（入口在智能体治理页）
+	path: '/admin/agent-session/:sessionId',
+	component: iAmModerator ? page(() => import('@/pages/admin/agent-session-review.vue')) : page(() => import('@/pages/not-found.vue')),
+	query: {
+		messageId: 'messageId',
+	},
+}, {
 	path: '/admin',
 	component: iAmModerator ? page(() => import('@/pages/admin/index.vue')) : page(() => import('@/pages/not-found.vue')),
 	children: [{

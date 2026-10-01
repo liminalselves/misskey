@@ -24,7 +24,26 @@ SPDX-License-Identifier: AGPL-3.0-only
 		</div>
 	</div>
 </div>
-<PageWithHeader v-else v-model:tab="tab" :reversed="tab === 'chat'" :tabs="headerTabs" :hideHeader="isEmbeddedControl" :fitContent="isEmbeddedControl" narrowMergedRow :showBack="!isEmbeddedControl" :actions="headerActions">
+<PageWithHeader v-else v-model:tab="tab" :reversed="tab === 'chat'" :tabs="headerTabs" :hideHeader="isEmbeddedControl" :fitContent="isEmbeddedControl" narrowMergedRow :showBack="!isEmbeddedControl" :backPath="isReviewMode ? '/admin/agents-review' : '/chat'" :actions="headerActions">
+		<div v-if="isReviewMode && session" class="_spacer" style="--MI_SPACER-w: var(--agent-control-content-max-width, 700px); --MI_SPACER-max: 12px;">
+			<div v-panel :class="$style.reviewBanner">
+				<i class="ti ti-eye-check" :class="$style.reviewBannerIcon"></i>
+				<div :class="$style.reviewBannerBody">
+					<span :class="$style.reviewBannerTitle">只读审查模式</span>
+					<span v-if="session.user" :class="$style.reviewBannerOwner" :title="`正在查看 ${reviewOwnerAcct} 的会话`">
+						<MkAvatar :class="$style.reviewBannerAvatar" :user="session.user" :link="false" :preview="false"/>
+						{{ reviewOwnerAcct }}
+					</span>
+					<span :class="$style.reviewBannerDesc">所有会话操作已禁用，仅可浏览与导出。</span>
+					<span v-if="session.sessionModerationBanned" :class="$style.reviewBannerBanned">
+						<i class="ti ti-shield-x"></i> 已封禁：{{ bannedReasonDisplay }}
+					</span>
+				</div>
+				<MkButton rounded small @click="goAgentsReview">
+					<i class="ti ti-shield-check"></i> 返回治理页
+				</MkButton>
+			</div>
+		</div>
 		<div v-if="isEmbeddedControl && loading" class="_spacer" style="--MI_SPACER-w: var(--agent-control-content-max-width, 760px);">
 			<XControlLoading/>
 		</div>
@@ -102,6 +121,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 							:characterStickers="characterStickers"
 							:assistantName="character?.name ?? null"
 							:assistantAvatarUrl="assistantAvatarUrl"
+							:review="isReviewMode"
+							:messageUser="isReviewMode ? (session?.user ?? null) : undefined"
 							:highlighted="highlightedMessageId === item.data.id"
 							:segmentedOutputEnabled="session?.segmentedOutputEnabled === true"
 							:visibleSegmentCount="segmentPlayback?.messageId === item.data.id ? segmentPlayback.visibleCount : undefined"
@@ -137,15 +158,17 @@ SPDX-License-Identifier: AGPL-3.0-only
 		</div>
 	</div>
 
-	<div v-else-if="tab === 'search'" class="_spacer" style="--MI_SPACER-w: var(--agent-control-content-max-width, 700px);">
-		<XAgentSearch
-			:sessionId="sessionId"
-			:assistantName="character?.name ?? null"
-			:assistantAvatarUrl="assistantAvatarUrl"
-			@scrollToMessage="handleScrollToMessageFromSearch"
-			@messageDeleted="onAgentMessageDeleted"
-		/>
-	</div>
+		<div v-else-if="tab === 'search'" class="_spacer" style="--MI_SPACER-w: var(--agent-control-content-max-width, 700px);">
+			<XAgentSearch
+				:sessionId="sessionId"
+				:review="isReviewMode"
+				:messageUser="isReviewMode ? (session?.user ?? null) : undefined"
+				:assistantName="character?.name ?? null"
+				:assistantAvatarUrl="assistantAvatarUrl"
+				@scrollToMessage="handleScrollToMessageFromSearch"
+				@messageDeleted="onAgentMessageDeleted"
+			/>
+		</div>
 
 	<div v-else-if="tab === 'proactive'" class="_spacer" style="--MI_SPACER-w: var(--agent-control-content-max-width, 720px);">
 		<div v-if="loading" class="_gaps">
@@ -154,7 +177,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<div v-else class="_gaps">
 			<MkInfo v-if="session == null">{{ i18n.ts.somethingHappened }}</MkInfo>
 			<template v-else>
-				<MkInfo v-if="moderationLocksSessionWrites" warn>{{ moderationBlockUserMessage }}</MkInfo>
+				<MkInfo v-if="moderationLockNoticeVisible" warn>{{ moderationBlockUserMessage }}</MkInfo>
 				<MkInfo v-if="!timeAwarenessEnabled" warn>{{ proactiveTimeAwarenessRequired }}</MkInfo>
 				<MkInfo v-if="session.randomProactiveLastError" warn>{{ randomProactiveLastErrorCaption }}</MkInfo>
 				<MkInfo v-if="session.scheduledProactiveLastError" warn>{{ scheduledProactiveLastErrorCaption }}</MkInfo>
@@ -335,7 +358,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 						<MkSwitch
 							v-if="rule.type === 'toggleable'"
 							:modelValue="rule.currentEnabled"
-							:disabled="ruleSaving"
+							:disabled="ruleSaving || isReviewMode"
 							@update:modelValue="toggleRule(rule, $event)"
 						/>
 					</div>
@@ -377,7 +400,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<div :class="$style.drawModelChooser">
 						<div :class="$style.drawFieldRow">
 							<div :class="$style.drawFieldLabel">生图模型</div>
-							<MkButton rounded small :class="$style.drawFieldAction" @click="openModelReportDialog">
+							<MkButton v-if="!isReviewMode" rounded small :class="$style.drawFieldAction" @click="openModelReportDialog">
 								<i class="ti ti-flag"></i> 上报异常
 							</MkButton>
 						</div>
@@ -406,7 +429,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 										<MkButton
 											rounded
 											:primary="drawImageModelId !== ''"
-											:disabled="drawImageModelId === ''"
+											:disabled="isReviewMode || drawImageModelId === ''"
 											@click="chooseDrawImageModel('')"
 										>
 											{{ drawImageModelId === '' ? i18n.ts.enabled : i18n.ts._agents.sessionPickButton }}
@@ -473,7 +496,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 										<MkButton
 											rounded
 											:primary="drawImageModelId !== m.id"
-											:disabled="drawImageModelId === m.id"
+											:disabled="isReviewMode || drawImageModelId === m.id"
 											@click="chooseDrawImageModel(m.id)"
 										>
 											{{ drawImageModelId === m.id ? i18n.ts.enabled : i18n.ts._agents.sessionPickButton }}
@@ -494,10 +517,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 						</div>
 					</div>
 					<div :class="$style.drawAutoDraw">
-						<MkSwitch v-model="drawAutoDraw">
+						<MkSwitch v-model="drawAutoDraw" :disabled="isReviewMode">
 							<template #label>{{ i18n.ts._agents.imageAutoDrawLabel }}</template>
 						</MkSwitch>
-						<MkInput v-model="drawAutoDrawCount" type="text" :disabled="!drawAutoDraw">
+						<MkInput v-model="drawAutoDrawCount" type="text" :disabled="isReviewMode || !drawAutoDraw">
 							<template #label>{{ i18n.ts._agents.imageAutoDrawCountLabel }}</template>
 							<template #caption>{{ i18n.ts._agents.imageAutoDrawCountCaption }}</template>
 						</MkInput>
@@ -507,16 +530,16 @@ SPDX-License-Identifier: AGPL-3.0-only
 						Naval AI 参数会直接影响出图质量、费用和稳定性。不了解时请保持默认，或使用“恢复默认设置”。
 					</MkInfo>
 					<div v-if="drawSelectedImageModel?.supportsSizeSelection && !drawSelectedImageModel.supportsAdvancedParams" :class="$style.drawSizeRow">
-						<MkSelect v-model="drawSize" :items="drawSizeItems">
+						<MkSelect v-model="drawSize" :items="drawSizeItems" :disabled="isReviewMode">
 							<template #label>{{ i18n.ts._agents.adminOpenaiImageSize }}</template>
 						</MkSelect>
 					</div>
 					<template v-if="drawSelectedImageModel?.supportsAdvancedParams">
 						<div :class="$style.drawSizeRow">
-							<MkSelect v-model="drawSize" :items="drawSizeItems">
+							<MkSelect v-model="drawSize" :items="drawSizeItems" :disabled="isReviewMode">
 								<template #label>默认尺寸</template>
 							</MkSelect>
-							<MkButton rounded :class="$style.drawResetButton" @click="resetAgentImageDefaults">
+							<MkButton v-if="!isReviewMode" rounded :class="$style.drawResetButton" @click="resetAgentImageDefaults">
 								<i class="ti ti-restore"></i> 恢复默认设置
 							</MkButton>
 						</div>
@@ -527,6 +550,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 									v-for="preset in drawArtistPresets"
 									:key="preset.id"
 									type="button"
+									:disabled="isReviewMode"
 									:class="[$style.drawPresetCard, drawArtistPresetId === preset.id && $style.drawPresetCardActive]"
 									@click="drawArtistPresetId = preset.id"
 								>
@@ -537,21 +561,21 @@ SPDX-License-Identifier: AGPL-3.0-only
 							</div>
 						</div>
 						<FormSplit :minWidth="180">
-							<MkInput v-model="drawSteps" type="text">
+							<MkInput v-model="drawSteps" type="text" :disabled="isReviewMode">
 								<template #label>Steps</template>
 							</MkInput>
-							<MkInput v-model="drawScale" type="text">
+							<MkInput v-model="drawScale" type="text" :disabled="isReviewMode">
 								<template #label>Scale</template>
 							</MkInput>
-							<MkInput v-model="drawCfgRescale" type="text">
+							<MkInput v-model="drawCfgRescale" type="text" :disabled="isReviewMode">
 								<template #label>CFG Rescale</template>
 							</MkInput>
 						</FormSplit>
 						<FormSplit :minWidth="220">
-							<MkInput v-model="drawSampler">
+							<MkInput v-model="drawSampler" :disabled="isReviewMode">
 								<template #label>Sampler</template>
 							</MkInput>
-							<MkInput v-model="drawNoiseSchedule">
+							<MkInput v-model="drawNoiseSchedule" :disabled="isReviewMode">
 								<template #label>Noise Schedule</template>
 							</MkInput>
 						</FormSplit>
@@ -559,7 +583,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</div>
 			</div>
 
-			<div v-if="drawSelectedImageModel" v-panel :class="$style.drawPanel">
+			<div v-if="drawSelectedImageModel && !isReviewMode" v-panel :class="$style.drawPanel">
 				<div :class="$style.drawHead">
 					<div>
 						<div :class="$style.drawTitle">测试生图</div>
@@ -614,7 +638,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<MkInfo v-if="instance.agentLlmConfigured && memProvider === 'compression' && compressionCreditInsufficient" warn>
 					<span :class="$style.sessionMemoryHint">{{ i18n.tsx._agents.sessionCompressionInsufficientCredit({ cost: String(expectedCompressionCallCost), balance: String(agentCreditBalance ?? 0) }) }}</span>
 				</MkInfo>
-				<MkInfo v-if="moderationLocksSessionWrites" warn>{{ moderationBlockUserMessage }}</MkInfo>
+				<MkInfo v-if="moderationLockNoticeVisible" warn>{{ moderationBlockUserMessage }}</MkInfo>
 				<template v-if="longMemoryConfigured && memProvider === 'aliyun'">
 					<section v-panel :class="$style.memSection">
 						<header :class="$style.memSectionHead">
@@ -750,13 +774,14 @@ SPDX-License-Identifier: AGPL-3.0-only
 							</MkSelect>
 							<p :class="$style.compressionBillingNote">{{ i18n.ts._agents.compressionModelSessionBillingLine }}</p>
 						</template>
-							<XCompression
-								ref="compressionRef"
-								:sessionId="sessionId"
-								:moderationLocked="moderationLocksSessionWrites"
-								:embedded="isEmbeddedControl"
-							@jumpToMessage="jumpToChatMessage"
-						/>
+						<XCompression
+							ref="compressionRef"
+							:sessionId="sessionId"
+							:review="isReviewMode"
+							:moderationLocked="moderationLocksSessionWrites"
+							:embedded="isEmbeddedControl"
+						@jumpToMessage="jumpToChatMessage"
+					/>
 					</section>
 				</template>
 				<MkInfo v-else-if="memProvider === 'compression'" warn>{{ i18n.ts._agents.compressionNeedDialogueStyle }}</MkInfo>
@@ -764,6 +789,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<XMessageBands
 						ref="bandsRef"
 						:sessionId="sessionId"
+						:review="isReviewMode"
 						:detailed="memProvider === 'compression'"
 						:embedded="isEmbeddedControl"
 					:canLocateDivider="canLocateContextDivider"
@@ -777,8 +803,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 	<div v-else-if="tab === 'operations'" class="_spacer" style="--MI_SPACER-w: var(--agent-control-content-max-width, 720px);">
 		<div class="_gaps">
-			<!-- Aliya Web 常驻推荐板块：不可关闭 -->
-			<div v-if="isAliyaSession" :class="$style.aliyaPanel">
+			<!-- Aliya Web 常驻推荐板块：不可关闭（审查模式隐藏） -->
+			<div v-if="isAliyaSession && !isReviewMode" :class="$style.aliyaPanel">
 				<div :class="$style.aliyaPanelIcon"><i class="ti ti-world"></i></div>
 				<div :class="$style.aliyaPanelContent">
 					<div :class="$style.aliyaPanelTitle">{{ i18n.ts._agents.aliyaWebPanelTitle }}</div>
@@ -788,7 +814,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 					</a>
 				</div>
 			</div>
-			<MkInfo v-if="moderationLocksSessionWrites" warn>{{ moderationBlockUserMessage }}</MkInfo>
+			<MkInfo v-if="moderationLockNoticeVisible" warn>{{ moderationBlockUserMessage }}</MkInfo>
 			<div v-panel :class="[$style.memContextPorter, $style.memPorterPanel]">
 				<div :class="$style.memContextPorterLabel">消息显示</div>
 				<MkSwitch
@@ -856,7 +882,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<div v-else class="_gaps">
 			<MkInfo v-if="session == null">{{ i18n.ts.somethingHappened }}</MkInfo>
 			<template v-else>
-				<MkInfo v-if="moderationLocksSessionWrites" warn>{{ moderationBlockUserMessage }}</MkInfo>
+				<MkInfo v-if="moderationLockNoticeVisible" warn>{{ moderationBlockUserMessage }}</MkInfo>
 				<div class="_gaps_s">
 					<div v-panel :class="$style.settingHero">
 						<div :class="$style.settingTitleRow">
@@ -960,7 +986,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<div v-else class="_gaps">
 			<MkInfo v-if="session == null">{{ i18n.ts.somethingHappened }}</MkInfo>
 				<template v-else>
-					<MkInfo v-if="moderationLocksSessionWrites" warn>{{ moderationBlockUserMessage }}</MkInfo>
+					<MkInfo v-if="moderationLockNoticeVisible" warn>{{ moderationBlockUserMessage }}</MkInfo>
 					<MkInfo v-if="sessionModelUnavailable" warn>{{ i18n.ts._agents.sessionModelUnavailable }}</MkInfo>
 						<div v-if="agentModels.length > 0" class="_gaps_s">
 						<div v-panel :class="[$style.settingHero, $style.modelHeroCompact]">
@@ -994,7 +1020,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 									<span :class="$style.modelGroupTabCount">{{ t.count }}</span>
 								</button>
 							</div>
-							<MkButton rounded small :class="$style.modelTabsAction" @click="openModelReportDialog">
+							<MkButton v-if="!isReviewMode" rounded small :class="$style.modelTabsAction" @click="openModelReportDialog">
 								<i class="ti ti-flag"></i> 上报异常
 							</MkButton>
 						</div>
@@ -1128,7 +1154,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 	<template #footer>
 		<div v-if="!loading && session" v-show="tab === 'chat'" :class="$style.footer">
-			<MkInfo v-if="moderationLocksSessionWrites" warn :class="$style.composeStyleHint">{{ moderationBlockUserMessage }}</MkInfo>
+			<MkInfo v-if="isReviewMode" :class="$style.composeStyleHint">审查模式：只读查看会话，不能发送消息或执行任何会话操作。</MkInfo>
+			<MkInfo v-else-if="moderationLockNoticeVisible" warn :class="$style.composeStyleHint">{{ moderationBlockUserMessage }}</MkInfo>
 			<MkInfo v-else-if="chatComposeBlockedNeedStyle" :class="$style.composeStyleHint">{{ i18n.ts._agents.chatComposeNeedStyleHint }}</MkInfo>
 			<div v-if="memoryAddHintVisible" :class="$style.memAddHint" role="status">
 				<i class="ti ti-loader-2" :class="$style.memAddHintIcon"></i>
@@ -1138,7 +1165,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<i class="ti ti-loader-2" :class="$style.memAddHintIcon"></i>
 				<span>{{ i18n.ts._agents.compressionSidecarScheduledHint }}</span>
 			</div>
-			<XForm ref="formRef" :class="$style.form" :sessionId="sessionId" :disabled="formDisabled" :sending="sending || editSaving" :editing="editingForForm" :attachmentEnabled="visionModels.length > 0" @submit="onFormSubmit" @cancelEdit="cancelEditingMessage" @abort="onAbortRequest"/>
+			<XForm v-if="!isReviewMode" ref="formRef" :class="$style.form" :sessionId="sessionId" :disabled="formDisabled" :sending="sending || editSaving" :editing="editingForForm" :attachmentEnabled="visionModels.length > 0" @submit="onFormSubmit" @cancelEdit="cancelEditingMessage" @abort="onAbortRequest"/>
 		</div>
 	</template>
 </PageWithHeader>
@@ -1156,7 +1183,7 @@ import XControlLoading from '@/pages/agents/control-embed-loading.vue';
 import MkModelReportDialog from '@/pages/agents/model-report-dialog.vue';
 import type { PageHeaderItem } from '@/types/page-header.js';
 import type { DateSeparetedTimelineItem } from '@/utility/timeline-date-separate.js';
-import type { AgentsStylesListUsableResponse, DriveFile } from 'misskey-js/entities.js';
+import type { AgentsStylesListUsableResponse, DriveFile, UserLite } from 'misskey-js/entities.js';
 import type { MkSelectItem } from '@/components/MkSelect.vue';
 import type { MenuItem } from '@/types/menu.js';
 import MkLoading from '@/components/global/MkLoading.vue';
@@ -1190,15 +1217,44 @@ import { agentI18nText } from '@/utility/agent-i18n.js';
 import { useStream } from '@/stream.js';
 import { requestAgentControlClose, requestAgentControlNavigation, requestAgentControlOpenUrl } from '@/utility/agent-control-embed.js';
 import type { AgentControlPanel } from '@/utility/agent-control-embed.js';
+import { resolveAgentSessionReviewCall } from '@/utility/agent-session-review.js';
+import type * as Misskey from 'misskey-js';
 
 const props = defineProps<{
 	sessionId: string;
 	messageId?: string;
 	embeddedPanel?: AgentControlPanel;
+	/** 会话审查模式：管理员以用户侧聊天 UI 只读查看他人会话（独立审查页使用） */
+	review?: boolean;
 }>();
 const sessionId = props.sessionId;
 const isEmbeddedControl = computed(() => props.embeddedPanel != null);
+const isReviewMode = computed(() => props.review === true);
 const router = useRouter();
+
+/**
+ * 审查模式的读端点统一入口：非审查模式原样透传 misskeyApi（保持类型推断与行为）；
+ * 审查模式映射到 admin 镜像端点并补齐镜像所需的 sessionId，响应结构一致故沿用原类型。
+ * 未在映射表中的端点（写端点）在审查模式下直接拒绝——后端属主校验为第二道防线。
+ */
+function callAgentApi<
+	ResT = void,
+	E extends keyof Misskey.Endpoints = keyof Misskey.Endpoints,
+	P extends Misskey.Endpoints[E]['req'] = Misskey.Endpoints[E]['req'],
+	_ResT = ResT extends void ? Misskey.api.SwitchCaseResponseType<E, P> : ResT,
+>(
+	endpoint: E,
+	data: P & { i?: string | null } = {} as any,
+): Promise<_ResT> {
+	if (isReviewMode.value) {
+		const call = resolveAgentSessionReviewCall(String(endpoint), data as Record<string, unknown>, sessionId);
+		if (call == null) {
+			return Promise.reject(new Error(`agent session review: endpoint not available: ${String(endpoint)}`));
+		}
+		return misskeyApi(call.endpoint as E, call.data as any) as Promise<_ResT>;
+	}
+	return misskeyApi<ResT, E, P>(endpoint, data) as Promise<_ResT>;
+}
 
 const PAGE_LIMIT = 30;
 
@@ -1388,11 +1444,13 @@ const session = ref<{
 	agentLongMemoryAddEveryNRounds?: number | null;
 	agentLongMemoryProvider?: 'none' | 'aliyun' | 'compression';
 	agentReplyPending?: boolean;
-	sessionModerationBanned?: boolean;
-	characterModerationBanned?: boolean;
-	sessionModerationBannedReason?: string | null;
-	ruleOverrides?: Record<string, boolean>;
-} | null>(null);
+		sessionModerationBanned?: boolean;
+		characterModerationBanned?: boolean;
+		sessionModerationBannedReason?: string | null;
+		ruleOverrides?: Record<string, boolean>;
+		/** 审查模式：会话属主（session-review/session 镜像端点附带），用于横幅与用户消息头像 */
+		user?: UserLite | null;
+	} | null>(null);
 
 const character = ref<{ name: string; avatarFileId: string | null; avatar?: DriveFile | null; referenceImageFileIds: string[]; referenceImages: DriveFile[]; regexRules: AgentRegexRule[] } | null>(null);
 /** 角色专属表情包（sessions/show 提供），供消息气泡渲染 [[agent_sticker]] */
@@ -1414,8 +1472,8 @@ const isAliyaSession = computed(() => aliyAConfiguredId.value != null && session
 const aliyASeenCookieKey = computed(() => `aliya_web_promo_${sessionId}`);
 const aliyABannerDismissed = ref(false);
 
-/** 可关闭横幅：每个会话仅首次打开时显示，状态存 cookie（365 天） */
-const showAliyaBanner = computed(() => isAliyaSession.value && !aliyABannerDismissed.value);
+/** 可关闭横幅：每个会话仅首次打开时显示，状态存 cookie（365 天）；审查模式不展示也不写 cookie */
+const showAliyaBanner = computed(() => isAliyaSession.value && !isReviewMode.value && !aliyABannerDismissed.value);
 
 function readAliyaSeenCookie(): boolean {
 	try {
@@ -1437,8 +1495,8 @@ function dismissAliyaBanner() {
 }
 
 aliyABannerDismissed.value = readAliyaSeenCookie();
-// 首次打开时写入 cookie，确保每个会话横幅只出现一次
-if (isAliyaSession.value && !aliyABannerDismissed.value) {
+// 首次打开时写入 cookie，确保每个会话横幅只出现一次（审查模式不算用户的首次打开）
+if (isAliyaSession.value && !isReviewMode.value && !aliyABannerDismissed.value) {
 	writeAliyaSeenCookie();
 }
 // ---- Aliya Web 推荐 END ----
@@ -1538,7 +1596,7 @@ async function refreshContextWindow() {
 		return;
 	}
 	try {
-		const res = await misskeyApi('agents/sessions/context-window', { sessionId });
+		const res = await callAgentApi('agents/sessions/context-window', { sessionId });
 		contextWindowTruncated.value = res.truncated;
 		contextWindowBoundaryId.value = res.oldestIncludedMessageId;
 	} catch {
@@ -1828,6 +1886,7 @@ const longMemoryConfigured = computed(() => Boolean((instance as Record<string, 
 const showLongMemoryTab = computed(() => true);
 
 const moderationLocksSessionWrites = computed(() => {
+	if (isReviewMode.value) return true;
 	const s = session.value;
 	if (s == null) return false;
 	return s.characterModerationBanned === true || s.sessionModerationBanned === true;
@@ -1848,8 +1907,22 @@ const moderationBlockUserMessage = computed((): string => {
 	return '';
 });
 
-/** 会话被管理员封禁：进入专用封禁页，不再展示普通会话内容 */
-const isSessionBannedPage = computed(() => session.value?.sessionModerationBanned === true);
+/** 封禁警示条仅面向会话属主展示；审查模式下锁定来自只读限制，由审查横幅说明 */
+const moderationLockNoticeVisible = computed(() => moderationLocksSessionWrites.value && !isReviewMode.value && moderationBlockKind.value != null);
+
+/** 会话被管理员封禁：进入专用封禁页，不再展示普通会话内容（审查模式例外：封禁会话正是审查重点） */
+const isSessionBannedPage = computed(() => !isReviewMode.value && session.value?.sessionModerationBanned === true);
+
+/** 审查模式：横幅展示的属主 acct */
+const reviewOwnerAcct = computed(() => {
+	const u = session.value?.user;
+	if (u == null) return '';
+	return u.host != null && u.host !== '' ? `@${u.username}@${u.host}` : `@${u.username}`;
+});
+
+function goAgentsReview() {
+	void router.push('/admin/agents-review');
+}
 
 /** 封禁原因展示：管理员未填写时使用平台默认文案 */
 const bannedReasonDisplay = computed((): string => {
@@ -2073,7 +2146,7 @@ function stopReplyPendingPoll() {
 
 async function pollSessionReplyState() {
 	try {
-		const row = await misskeyApi('agents/sessions/show', { sessionId }) as NonNullable<typeof session.value>;
+		const row = await callAgentApi('agents/sessions/show', { sessionId }) as NonNullable<typeof session.value>;
 		if (session.value != null) {
 			Object.assign(session.value, row);
 		} else {
@@ -2196,7 +2269,7 @@ async function loadUserModels() {
 		return;
 	}
 	try {
-		const rows = await misskeyApi(
+		const rows = await callAgentApi(
 			'agents/byok/models/list' as Parameters<typeof misskeyApi>[0],
 			{} as any,
 		) as {
@@ -2350,6 +2423,11 @@ const compressionCreditInsufficient = computed((): boolean => {
 const agentCreditBalance = ref<number | null>(null);
 
 async function loadAgentCreditBalance() {
+	// 审查模式不展示属主余额（属主的用量/账单在管理端用户页查看），余额相关提示一并隐藏
+	if (isReviewMode.value) {
+		agentCreditBalance.value = null;
+		return;
+	}
 	try {
 		const r = await misskeyApi('agents/credit-balance' as any, {}) as { creditBalance: number };
 		agentCreditBalance.value = r.creditBalance;
@@ -2522,8 +2600,10 @@ const headerActions = computed<PageHeaderItem[]>(() => isEmbeddedControl.value ?
 ]);
 
 definePage(computed(() => ({
-	title: session.value?.name ?? i18n.ts._agents.sessionChat,
-	icon: 'ti ti-message',
+	title: isReviewMode.value
+		? `会话审查 · ${session.value?.name ?? i18n.ts._agents.sessionChat}`
+		: (session.value?.name ?? i18n.ts._agents.sessionChat),
+	icon: isReviewMode.value ? 'ti ti-eye-check' : 'ti ti-message',
 	subtitle: session.value
 		? (session.value.sessionKind === 'draft_test' ? i18n.ts._agents.sessionKindDraft : i18n.ts._agents.sessionKindCommunity)
 		: undefined,
@@ -2859,7 +2939,9 @@ async function loadProactiveSchedules(silent = false) {
 		proactiveSchedules.value = await (misskeyApi as unknown as (
 			endpoint: 'agents/proactive-schedules/list',
 			data: { sessionId: string },
-		) => Promise<ProactiveSchedule[]>)('agents/proactive-schedules/list', { sessionId });
+		) => Promise<ProactiveSchedule[]>)((isReviewMode.value
+			? 'admin/agents/governance/session-review/proactive-schedules'
+			: 'agents/proactive-schedules/list') as 'agents/proactive-schedules/list', { sessionId });
 	} catch (e) {
 		// 静默轮询失败保留旧列表且不弹窗，避免后台刷新打扰
 		if (!silent) {
@@ -2936,7 +3018,7 @@ async function deleteProactiveSchedule(schedule: ProactiveSchedule) {
 }
 
 async function renameSession() {
-	if (!session.value) return;
+	if (!session.value || isReviewMode.value) return;
 	const { canceled, result } = await os.inputText({
 		title: i18n.ts._agents.renameSession,
 		default: session.value.name,
@@ -2955,7 +3037,7 @@ async function renameSession() {
 }
 
 async function deleteAgentSession() {
-	if (!session.value) return;
+	if (!session.value || isReviewMode.value) return;
 	const { canceled } = await os.confirm({
 		type: 'error',
 		title: i18n.ts._agents.deleteSessionConfirmTitle,
@@ -2992,7 +3074,7 @@ async function scrollToLatest() {
 async function loadSession() {
 	beginSettingsHydration();
 	try {
-		session.value = (await misskeyApi('agents/sessions/show', { sessionId })) as typeof session.value;
+		session.value = (await callAgentApi('agents/sessions/show', { sessionId })) as typeof session.value;
 		// 角色专属表情包（与 LLM 视图同源：社区会话走发布快照，测试会话跟随草稿）
 		const stickersRow = session.value as typeof session.value & { characterStickers?: Array<{ key: string; file: DriveFile | null }> };
 		characterStickers.value = Array.isArray(stickersRow.characterStickers)
@@ -3098,7 +3180,7 @@ async function loadCharacter(characterId: string) {
 	const sessionCharacterName = session.value?.characterName ?? null;
 	const sessionCharacterAvatar = session.value?.characterAvatar ?? null;
 	try {
-		const c = await misskeyApi('agents/characters/show', { characterId }) as {
+			const c = await callAgentApi('agents/characters/show', { characterId }) as {
 			name: string;
 			avatarFileId: string | null;
 			avatar?: DriveFile | null;
@@ -3143,7 +3225,7 @@ async function loadCharacter(characterId: string) {
 async function loadWorldbookEntries() {
 	worldbookListLoading.value = true;
 	try {
-		const rows = await misskeyApi(
+		const rows = await callAgentApi(
 			'agents/sessions/worldbook-list' as Parameters<typeof misskeyApi>[0],
 			{ sessionId } as any,
 		) as SessionWorldbookEntry[];
@@ -3158,7 +3240,7 @@ async function loadWorldbookEntries() {
 async function loadSessionRules() {
 	sessionRulesLoading.value = true;
 	try {
-		const rows = await misskeyApi(
+		const rows = await callAgentApi(
 			'agents/sessions/rule-list' as Parameters<typeof misskeyApi>[0],
 			{ sessionId } as any,
 		) as SessionRule[];
@@ -3175,7 +3257,7 @@ async function loadSessionRules() {
 }
 
 async function toggleRule(rule: SessionRule, enabled: boolean) {
-	if (ruleSaving.value) return;
+	if (ruleSaving.value || isReviewMode.value) return;
 	ruleSaving.value = true;
 	try {
 		ruleOverrides.value = { ...ruleOverrides.value, [rule.id]: enabled };
@@ -3195,7 +3277,7 @@ async function toggleRule(rule: SessionRule, enabled: boolean) {
 
 async function loadUsableStyles() {
 	try {
-		usableStyles.value = await misskeyApi('agents/styles/list-usable', {});
+		usableStyles.value = await callAgentApi('agents/styles/list-usable', {});
 	} catch {
 		usableStyles.value = [];
 	}
@@ -3221,6 +3303,11 @@ async function loadModelSuccessRates() {
 }
 
 async function loadModelFreeQuota() {
+	// 审查模式不拉管理员自己的免费额度（免费额度按调用者结算，展示会误导）
+	if (isReviewMode.value) {
+		modelFreeQuota.value = {};
+		return;
+	}
 	try {
 		const res = await misskeyApi(
 			'agents/models/free-quota' as Parameters<typeof misskeyApi>[0],
@@ -3323,7 +3410,7 @@ function normalizeAgentMessages(messages: (Omit<AgentMsg, 'imageRecognitionStatu
 }
 
 async function loadInitialTimeline(): Promise<AgentMsg[]> {
-	const list = normalizeAgentMessages(await misskeyApi('agents/messages/timeline', {
+	const list = normalizeAgentMessages(await callAgentApi('agents/messages/timeline', {
 		sessionId,
 		limit: PAGE_LIMIT,
 	}));
@@ -3341,13 +3428,13 @@ async function loadContextAround(targetId: string, limit = PAGE_LIMIT) {
 	canFetchMore.value = false;
 	canFetchNewer.value = false;
 	try {
-		const target = await misskeyApi('agents/messages/show', {
+		const target = await callAgentApi('agents/messages/show', {
 			sessionId,
 			messageId: targetId,
 		}) as AgentMsg;
 		const [older, newer] = await Promise.all([
-			misskeyApi('agents/messages/timeline', { sessionId, limit, untilId: targetId }),
-			misskeyApi('agents/messages/timeline', { sessionId, limit, sinceId: targetId }),
+			callAgentApi('agents/messages/timeline', { sessionId, limit, untilId: targetId }),
+			callAgentApi('agents/messages/timeline', { sessionId, limit, sinceId: targetId }),
 		]) as [AgentMsg[], AgentMsg[]];
 		const newerDesc = [...newer].reverse();
 		messages.value = [...newerDesc, target, ...older];
@@ -3367,7 +3454,7 @@ async function fetchOlderMessages() {
 	moreFetching.value = true;
 	try {
 		const tailId = messages.value[messages.value.length - 1]!.id;
-		const list = await misskeyApi('agents/messages/timeline', {
+		const list = await callAgentApi('agents/messages/timeline', {
 			sessionId,
 			limit: PAGE_LIMIT,
 			untilId: tailId,
@@ -3387,7 +3474,7 @@ async function fetchNewerMessages() {
 	fetchingNewer.value = true;
 	try {
 		const headId = messages.value[0]!.id;
-		const list = await misskeyApi('agents/messages/timeline', {
+		const list = await callAgentApi('agents/messages/timeline', {
 			sessionId,
 			limit: PAGE_LIMIT,
 			sinceId: headId,
@@ -3412,9 +3499,32 @@ let proactiveMessageSyncing = false;
 
 // 清除本会话的智能体消息未读标记（与私信 chat/read 对齐），后端会广播 agentRead 更新全局徽标
 async function markAgentSessionRead(): Promise<void> {
+	// 审查模式绝不清属主的未读标记
+	if (isReviewMode.value) return;
 	try {
 		await misskeyApi('agents/sessions/read' as Parameters<typeof misskeyApi>[0], { sessionId } as any);
 	} catch { /* ignore */ }
+}
+
+/** 审查模式的新消息轮询周期：管理员的流通道收不到属主的 newAgentMessage 事件 */
+const REVIEW_POLL_INTERVAL_MS = 30_000;
+let reviewPollTimer: number | null = null;
+
+function startReviewPoll() {
+	if (!isReviewMode.value || reviewPollTimer != null) return;
+	reviewPollTimer = window.setInterval(() => {
+		// 仅在停留在聊天 tab 且页面可见时轻量拉取新消息；不打断阅读位置（不自动滚动）
+		if (window.document.hidden || !isPageActivated || isComponentUnmounted) return;
+		if (tab.value !== 'chat' || messages.value.length === 0) return;
+		void fetchNewerMessages();
+	}, REVIEW_POLL_INTERVAL_MS);
+}
+
+function stopReviewPoll() {
+	if (reviewPollTimer != null) {
+		window.clearInterval(reviewPollTimer);
+		reviewPollTimer = null;
+	}
 }
 
 async function onNewAgentMessage(payload: unknown): Promise<void> {
@@ -3819,7 +3929,7 @@ async function loadEmbeddedPanelResources(panel: AgentControlPanel): Promise<voi
 }
 
 onMounted(async () => {
-	if (!isEmbeddedControl.value) {
+	if (!isEmbeddedControl.value && !isReviewMode.value) {
 		const stream = useStream();
 		const connection = stream.useChannel('main');
 		connection.on('newAgentMessage', onNewAgentMessage);
@@ -3865,6 +3975,7 @@ onMounted(async () => {
 	// 当前驻留面板的易变数据（成功率/额度/余额/计划等）驻留轮询 + 回到页面即时刷新
 	window.document.addEventListener('visibilitychange', onDocumentVisibilityForPanelRefresh);
 	startPanelLiveDataRefresh();
+	if (isReviewMode.value) startReviewPoll();
 	if (!isEmbeddedControl.value) {
 		if (session.value?.agentReplyPending) {
 			sending.value = true;
@@ -3885,6 +3996,7 @@ onActivated(() => {
 	isPageActivated = true;
 	// KeepAlive 缓存页重进：恢复面板数据轮询，并立即刷一次当前面板（离开期间数据可能已变化）
 	startPanelLiveDataRefresh();
+	startReviewPoll();
 	refreshPanelLiveData(tab.value, 'live');
 	if (isEmbeddedControl.value) return;
 	// KeepAlive 缓存页重新进入时 onMounted 不会再次执行：与首次进入一致，看到会话即清未读
@@ -3899,6 +4011,7 @@ onDeactivated(() => {
 	// 后台页不再需要 2.5s 轮询会话状态，避免多个缓存页叠加出后台请求风暴
 	stopReplyPendingPoll();
 	stopPanelLiveDataRefresh();
+	stopReviewPoll();
 	// 离开页面时把仍在防抖等待的生图配置立刻落库
 	if (drawConfigDirty.value && !drawSaving.value) void flushDrawSettingsSave();
 });
@@ -3912,6 +4025,7 @@ onBeforeUnmount(() => {
 	agentModelsNotificationStream = null;
 	stopReplyPendingPoll();
 	stopPanelLiveDataRefresh();
+	stopReviewPoll();
 	window.document.removeEventListener('visibilitychange', onDocumentVisibilityForPanelRefresh);
 	clearDrawAutoSaveTimer();
 	// 卸载前冲刷未保存的生图配置；drawSaving 中则交由在飞请求完成
@@ -3946,7 +4060,7 @@ async function loadMemoryNodes() {
 	if (!session.value) return;
 	memoryListLoading.value = true;
 	try {
-		const res = await misskeyApi('agents/memory/list', {
+		const res = await callAgentApi('agents/memory/list', {
 			sessionId,
 			pageNum: memoryPage.value,
 			pageSize: MEMORY_PAGE_SIZE,
@@ -4227,7 +4341,7 @@ function startCompressionLlmProgressPoll(baselineCount: number, baselineMaxUpdat
 		if (myGen !== compressionLlmPollGen) return;
 		compressionLlmPollTimeout = null;
 		try {
-			const ov = await misskeyApi(
+			const ov = await callAgentApi(
 				'agents/sessions/compression-overview' as Parameters<typeof misskeyApi>[0],
 				{ sessionId } as any,
 			) as CompressionOverviewPayload;
@@ -4401,7 +4515,7 @@ async function exportSessionContext() {
 	if (contextExporting.value) return;
 	contextExporting.value = true;
 	try {
-		const payload = await (misskeyApi as unknown as (
+		const payload = await (callAgentApi as unknown as (
 			endpoint: 'agents/sessions/export',
 			data: { sessionId: string },
 		) => Promise<SessionExportPayload>)('agents/sessions/export', { sessionId });
@@ -5062,7 +5176,7 @@ function showMemoryAddScheduledHintNow(res: { longTermMemoryAddScheduled?: boole
 async function previewPendingWorldbookMatches(text: string) {
 	pendingWorldbookMatches.value = [];
 	try {
-		const rows = await misskeyApi(
+		const rows = await callAgentApi(
 			'agents/sessions/worldbook-match-preview' as Parameters<typeof misskeyApi>[0],
 			{ sessionId, text, maxItems: 12 } as any,
 		) as PendingWorldbookMatch[];
@@ -5073,6 +5187,7 @@ async function previewPendingWorldbookMatches(text: string) {
 }
 
 async function onFormSubmit(payload: { text: string; file: DriveFile | null }) {
+	if (isReviewMode.value) return;
 	if (editingMessage.value != null) {
 		await saveEditingMessage(payload.text);
 		return;
@@ -5348,6 +5463,8 @@ function formatAgentImageError(err: unknown): string {
 }
 
 async function generateAgentImage() {
+	// 审查模式禁止测试生图：会以管理员身份扣费并写入管理员的网盘
+	if (isReviewMode.value) return;
 	const tag = drawTag.value.trim();
 	if (!tag || drawGenerating.value) return;
 	if (drawImageModelId.value === '') {
@@ -5830,6 +5947,75 @@ async function onAbortRequest() {
 
 .worldbookNoKeywords {
 	color: var(--MI_THEME-fgTransparentWeak);
+}
+
+/* 会话审查模式横幅：管理员视角提示，常驻各 tab 顶部 */
+.reviewBanner {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 8px 14px;
+	border: solid 1px var(--MI_THEME-divider);
+	border-radius: 10px;
+	font-size: 0.9em;
+}
+
+.reviewBannerIcon {
+	flex-shrink: 0;
+	font-size: 1.15em;
+	color: var(--MI_THEME-accent);
+}
+
+.reviewBannerBody {
+	flex: 1;
+	min-width: 0;
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 4px 10px;
+}
+
+.reviewBannerTitle {
+	font-weight: 700;
+	white-space: nowrap;
+}
+
+.reviewBannerOwner {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	height: 24px;
+	padding: 0 9px 0 2px;
+	border-radius: 999px;
+	font-size: 0.85em;
+	font-weight: 700;
+	color: var(--MI_THEME-accent);
+	background: color-mix(in srgb, var(--MI_THEME-accent) 10%, transparent);
+	border: solid 1px color-mix(in srgb, var(--MI_THEME-accent) 24%, var(--MI_THEME-divider));
+}
+
+.reviewBannerAvatar {
+	flex-shrink: 0;
+	width: 20px;
+	height: 20px;
+}
+
+.reviewBannerDesc {
+	color: var(--MI_THEME-fgTransparentWeak);
+}
+
+.reviewBannerBanned {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	min-height: 24px;
+	padding: 2px 9px;
+	border-radius: 999px;
+	font-size: 0.85em;
+	font-weight: 700;
+	color: var(--MI_THEME-error);
+	background: color-mix(in srgb, var(--MI_THEME-error) 10%, transparent);
+	border: solid 1px color-mix(in srgb, var(--MI_THEME-error) 24%, var(--MI_THEME-divider));
 }
 
 /* 会话封禁专用页：系统公告/平台处置风格，严肃端庄 */

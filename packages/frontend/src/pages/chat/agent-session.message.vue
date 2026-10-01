@@ -28,7 +28,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 	<MkAvatar
 		v-if="isUser"
 		:class="[$style.avatar, prefer.s.useStickyIcons ? $style.useSticky : null]"
-		:user="$i"
+		:user="messageSenderUser"
 		:link="false"
 		:preview="false"
 	/>
@@ -129,7 +129,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 <script lang="ts" setup>
 import { computed, onMounted, reactive, watch } from 'vue';
 import { isLink } from '@@/js/is-link.js';
-import type { DriveFile } from 'misskey-js/entities.js';
+import type { DriveFile, UserLite } from 'misskey-js/entities.js';
 import { renderAgentChatMarkdown } from '@/utility/agent-chat-markdown.js';
 import type { MenuItem } from '@/types/menu.js';
 import { ensureSignin } from '@/i.js';
@@ -183,6 +183,10 @@ const props = defineProps<{
 	drawModelReady?: boolean;
 	/** 消息是否为本次页面存活期间新到达（发送/流式）；历史消息不自动触发生成，仅查询服务端已有记录 */
 	liveArrived?: boolean;
+	/** 会话审查模式：隐藏编辑/删除/回滚等写操作菜单项 */
+	review?: boolean;
+	/** 审查模式下用户消息头像/名义展示的会话属主；非审查模式回落到当前登录用户 */
+	messageUser?: UserLite | null;
 }>();
 
 const emit = defineEmits<{
@@ -193,6 +197,8 @@ const emit = defineEmits<{
 }>();
 
 const isUser = computed(() => props.message.role === 'user');
+/** 用户消息的头像：审查模式显示会话属主，普通模式显示当前登录用户 */
+const messageSenderUser = computed(() => props.messageUser ?? $i);
 const proactiveScheduleActionSummary = computed(() => {
 	const labels = (props.message.proactiveScheduleActionTypes ?? [])
 		.map(type => {
@@ -605,7 +611,8 @@ function menuItems(): MenuItem[] {
 			},
 		});
 	}
-	if (!props.isSearchResult && (props.message.role === 'user' || props.message.role === 'assistant')) {
+	// 审查模式只保留只读菜单项（复制、查看识别内容），编辑/回滚/删除全部隐藏
+	if (!props.review && !props.isSearchResult && (props.message.role === 'user' || props.message.role === 'assistant')) {
 		items.push({
 			text: i18n.ts.edit,
 			icon: 'ti ti-pencil',
@@ -618,7 +625,7 @@ function menuItems(): MenuItem[] {
 			},
 		});
 	}
-	if (!props.isSearchResult && props.message.role === 'user') {
+	if (!props.review && !props.isSearchResult && props.message.role === 'user') {
 		items.push({
 			text: i18n.ts._agents.rollback,
 			icon: 'ti ti-arrow-back-up',
@@ -630,15 +637,17 @@ function menuItems(): MenuItem[] {
 			},
 		});
 	}
-	items.push({ type: 'divider' });
-	items.push({
-		text: i18n.ts.delete,
-		icon: 'ti ti-trash',
-		danger: true,
-		action: () => {
-			void confirmDelete();
-		},
-	});
+	if (!props.review) {
+		items.push({ type: 'divider' });
+		items.push({
+			text: i18n.ts.delete,
+			icon: 'ti ti-trash',
+			danger: true,
+			action: () => {
+				void confirmDelete();
+			},
+		});
+	}
 	return items;
 }
 

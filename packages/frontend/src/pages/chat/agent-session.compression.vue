@@ -185,8 +185,11 @@ export type CompressionOverviewPayload = {
 const props = withDefaults(defineProps<{
 	sessionId: string;
 	moderationLocked: boolean;
+	/** 会话审查模式：总览走 admin 镜像端点（写操作已由 moderationLocked 拦截） */
+	review?: boolean;
 	embedded?: boolean;
 }>(), {
+	review: false,
 	embedded: false,
 });
 
@@ -214,7 +217,9 @@ async function refresh() {
 	loading.value = true;
 	try {
 		overview.value = await misskeyApi(
-			'agents/sessions/compression-overview' as Parameters<typeof misskeyApi>[0],
+			(props.review
+				? 'admin/agents/governance/session-review/compression-overview'
+				: 'agents/sessions/compression-overview') as 'agents/sessions/compression-overview',
 			{ sessionId: props.sessionId } as any,
 		) as CompressionOverviewPayload;
 	} catch {

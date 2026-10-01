@@ -24,6 +24,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<XAgentMessage
 					:sessionId="sessionId"
 					:message="message"
+					:review="review"
+					:messageUser="review ? (messageUser ?? null) : undefined"
 					:assistantName="assistantName ?? null"
 					:assistantAvatarUrl="assistantAvatarUrl ?? null"
 					isSearchResult
@@ -39,6 +41,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <script lang="ts" setup>
 import { ref } from 'vue';
+import type { UserLite } from 'misskey-js/entities.js';
 import XAgentMessage from './agent-session.message.vue';
 import MkButton from '@/components/MkButton.vue';
 import { i18n } from '@/i18n.js';
@@ -49,6 +52,10 @@ import * as os from '@/os.js';
 
 const props = defineProps<{
 	sessionId: string;
+	/** 会话审查模式：检索走 admin 镜像端点 */
+	review?: boolean;
+	/** 审查模式下用户消息头像展示的会话属主（由父组件透传） */
+	messageUser?: UserLite | null;
 	assistantName?: string | null;
 	assistantAvatarUrl?: string | null;
 }>();
@@ -69,7 +76,9 @@ async function search() {
 		return;
 	}
 	try {
-		const res = await misskeyApi('agents/messages/search', {
+		const res = await misskeyApi((props.review
+			? 'admin/agents/governance/session-review/search'
+			: 'agents/messages/search') as 'agents/messages/search', {
 			sessionId: props.sessionId,
 			query: q,
 			limit: 30,

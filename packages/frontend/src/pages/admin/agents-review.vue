@@ -160,8 +160,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 									<span>角色：{{ row.characterName || '—' }}</span>
 								</div>
 								<pre :class="$style.pre">{{ row.content }}</pre>
-								<div class="_buttons">
-									<MkButton small rounded @click="jumpSession(row.sessionId)"><i class="ti ti-arrow-right"></i> 查看会话</MkButton>
+								<div :class="$style.rowActions">
+									<MkButton small rounded primary @click="openSessionReview(row.sessionId, row.id)"><i class="ti ti-focus-2"></i> 定位此消息</MkButton>
+									<MkButton small rounded @click="openSessionReview(row.sessionId)"><i class="ti ti-arrow-right"></i> 打开会话</MkButton>
 									<MkButton small rounded @click="copyText(row.id)"><i class="ti ti-copy"></i> 复制消息 ID</MkButton>
 								</div>
 							</article>
@@ -170,46 +171,41 @@ SPDX-License-Identifier: AGPL-3.0-only
 							</div>
 						</div>
 					</section>
-					<div :class="[$style.splitPane, $style.sessionsSplit, sessionDetail || sessionDetailLoading ? $style.detailOpen : null]">
-						<section :class="$style.listPane">
-							<div :class="$style.sectionHead">
-								<div>
-									<h2>会话治理</h2>
-									<p>查看会话时间线并封禁异常会话。</p>
+					<section :class="$style.searchSection">
+						<div :class="$style.sectionHead">
+							<div>
+								<h2>会话治理</h2>
+								<p>在独立的会话审查页中查看完整会话（与用户侧一致的只读视图），或封禁异常会话。</p>
+							</div>
+						</div>
+						<MkLoading v-if="sessionsLoading && sessions.length === 0"/>
+						<MkInfo v-else-if="sessions.length === 0">没有匹配的会话。</MkInfo>
+						<div v-else :class="$style.list">
+							<article v-for="row in sessions" :key="row.id" :class="[$style.sessionRow, row.moderationBanned && $style.sessionRowBanned]">
+								<div :class="$style.rowHead">
+									<b>{{ row.name }}</b>
+									<span :class="$style.rowBadges">
+										<span :class="$style.typeBadge">{{ sessionKindLabel(row.sessionKind) }}</span>
+										<span v-if="row.moderationBanned" :class="$style.warnBadge">已封禁</span>
+									</span>
 								</div>
-							</div>
-							<MkLoading v-if="sessionsLoading && sessions.length === 0"/>
-							<MkInfo v-else-if="sessions.length === 0">没有匹配的会话。</MkInfo>
-							<div v-else :class="$style.list">
-								<button v-for="row in sessions" :key="row.id" type="button" class="_button" :class="[$style.sessionRow, selectedSession?.id === row.id ? $style.rowActive : null]" @click="selectSession(row)">
-									<div :class="$style.rowHead">
-										<b>{{ row.name }}</b>
-										<span :class="[row.moderationBanned ? $style.warnBadge : $style.typeBadge]">{{ row.moderationBanned ? '已封禁' : sessionKindLabel(row.sessionKind) }}</span>
-									</div>
-									<p>{{ row.characterName || '—' }}</p>
-									<div :class="$style.rowMeta">
-										<UserAcctInline :user="row.user" :fallback="row.userId" @copy="copyText"/>
-										<span :class="$style.rowMetaRight">
-											<span v-if="row.messageCount != null" :class="$style.msgCount" :title="`共 ${row.messageCount} 条消息`"><i class="ti ti-messages"></i>{{ row.messageCount.toLocaleString() }}</span>
-											<time>{{ formatTime(row.lastMessageAt || row.updatedAt) }}</time>
-										</span>
-									</div>
-								</button>
-							</div>
-							<div v-if="sessions.length > 0 && sessionsHasMore" :class="$style.loadMore">
-								<MkButton v-appear="prefer.s.enableInfiniteScroll ? () => sessionsPagination.load(false) : null" small rounded :disabled="sessionsLoading" @click="sessionsPagination.load(false)"><i class="ti ti-chevron-down"></i> {{ sessionsLoading ? '载入中…' : '继续载入' }}</MkButton>
-							</div>
-						</section>
-						<aside ref="sessionDetailPaneEl" :class="$style.detailPane">
-							<MkButton v-if="sessionDetail || sessionDetailLoading" :class="$style.backToList" small rounded @click="closeSessionDetail"><i class="ti ti-chevron-left"></i> 返回会话列表</MkButton>
-							<MkLoading v-if="sessionDetailLoading"/>
-							<SessionDetail v-else-if="sessionDetail" :detail="sessionDetail" :canModerate="iAmModerator" :messagesLoading="sessionMessagesLoading" :messagesPage="sessionMsgPage" :messagesPageSize="SESSION_MSG_PAGE_SIZE" @toggleBan="toggleSessionBan" @copy="copyText" @pageMessages="loadSessionMessagesPage"/>
-							<div v-else :class="$style.emptyDetail">
-								<i class="ti ti-messages"></i>
-								<p>选择会话查看最近消息。</p>
-							</div>
-						</aside>
-					</div>
+								<div :class="$style.rowMeta">
+									<span :class="$style.metaItem" title="角色"><i class="ti ti-robot"></i>{{ row.characterName || '—' }}</span>
+									<UserAcctInline :user="row.user" :fallback="row.userId" @copy="copyText"/>
+									<span v-if="row.messageCount != null" :class="$style.metaItem" :title="`共 ${row.messageCount} 条消息`"><i class="ti ti-messages"></i>{{ row.messageCount.toLocaleString() }}</span>
+									<time :class="$style.metaItem"><i class="ti ti-clock"></i>{{ formatTime(row.lastMessageAt || row.updatedAt) }}</time>
+								</div>
+								<div :class="$style.rowActions">
+									<MkButton small rounded primary @click="openSessionReview(row.id)"><i class="ti ti-eye-check"></i> 打开审查页</MkButton>
+									<MkButton v-if="iAmModerator" small rounded :danger="!row.moderationBanned" @click="toggleSessionBan(row)"><i class="ti ti-ban"></i> {{ row.moderationBanned ? '解封' : '封禁' }}</MkButton>
+									<MkButton small rounded @click="copyText(row.id)"><i class="ti ti-copy"></i> 复制 ID</MkButton>
+								</div>
+							</article>
+						</div>
+						<div v-if="sessions.length > 0 && sessionsHasMore" :class="$style.loadMore">
+							<MkButton v-appear="prefer.s.enableInfiniteScroll ? () => sessionsPagination.load(false) : null" small rounded :disabled="sessionsLoading" @click="sessionsPagination.load(false)"><i class="ti ti-chevron-down"></i> {{ sessionsLoading ? '载入中…' : '继续载入' }}</MkButton>
+						</div>
+					</section>
 				</template>
 
 				<template v-else-if="activeView === 'externalAudit'">
@@ -566,7 +562,6 @@ type CharacterRuleEntry = { id: string; name: string; content: string; descripti
 type StickerEntry = { key: string; fileId: string; description: string; file?: { url: string; thumbnailUrl?: string | null; type?: string | null } | null };
 type SessionRow = { id: string; createdAt: string; updatedAt: string; userId: string; name: string; characterId: string; dialogueStyleId: string | null; sessionKind: 'draft_test' | 'community'; lastMessageAt: string | null; agentReplyPending: boolean; moderationBanned: boolean; characterName: string; user: any | null; messageCount: number | null };
 type TimelineMsg = { id: string; role: 'user' | 'assistant' | 'system'; content: string; createdAt: string };
-type SessionDetailRow = { session: SessionRow; messages: TimelineMsg[]; totalCount: number; hasMore: boolean };
 type MessageRow = TimelineMsg & { sessionId: string; sessionName: string; sessionKind: 'draft_test' | 'community'; userId: string; user: any | null; characterId: string; characterName: string; dialogueStyleId: string | null; sessionModerationBanned: boolean; characterModerationBanned: boolean };
 type ExternalStatus = 'allow' | 'block' | 'failed' | 'all_failed';
 type ExternalAuditRow = { id: string; createdAt: string; completedAt: string | null; durationMs: number | null; userId: string | null; user: any | null; sessionId: string | null; sessionName: string | null; sessionModerationBanned?: boolean; characterId: string | null; characterName: string; dialogueStyleId: string | null; modelId: string | null; modelName: string | null; apiModelName: string | null; baseUrl: string | null; priority: number; attemptIndex: number; status: ExternalStatus; blockCode: string | null; category: string | null; reason: string | null; confidence: number | null; userText: string | null; assistantText: string | null; responseText: string | null; errorCode: string | null; errorMessage: string | null; userRecentBlockCount?: number; triggeredRules?: { id: string; timeWindowMinutes: number; blockThreshold: number }[] };
@@ -636,31 +631,15 @@ const reviewRows = reviewPagination.items;
 const reviewLoading = reviewPagination.loading;
 const reviewHasMore = reviewPagination.hasMore;
 
-const selectedSession = ref<SessionRow | null>(null);
-const sessionDetail = ref<SessionDetailRow | null>(null);
-const sessionDetailLoading = ref(false);
-const sessionMessagesLoading = ref(false);
 const sessionFilters = reactive({ userId: '', sessionId: '' });
 
-// 会话消息页码式翻页（第 0 页为最新消息）
-const SESSION_MSG_PAGE_SIZE = 50;
-const sessionMsgPage = ref(0);
-const sessionDetailPaneEl = ref<HTMLElement | null>(null);
-
-function scrollSessionDetailToTop() {
-	const pane = sessionDetailPaneEl.value;
-	if (!pane) return;
-	if (window.innerWidth <= 900) {
-		// 移动端详情面板不是独立滚动容器，需要滚动页面
-		pane.scrollIntoView({ block: 'start' });
-	} else {
-		pane.scrollTop = 0;
-	}
-}
-
-function closeSessionDetail() {
-	sessionDetail.value = null;
-	selectedSession.value = null;
+/**
+ * 打开独立的会话审查页（新标签页，保留治理页的筛选与滚动状态）。
+ * messageId 用于从消息检索结果深链定位到具体消息。
+ */
+function openSessionReview(sessionId: string, messageId?: string) {
+	const query = messageId != null ? `?messageId=${encodeURIComponent(messageId)}` : '';
+	window.open(`/admin/agent-session/${sessionId}${query}`, '_blank', 'noopener');
 }
 
 // 会话列表分页
@@ -1134,10 +1113,6 @@ async function toggleCharacterBan(row: ReviewDetailRow) {
 }
 
 async function loadSessions(reset: boolean) {
-	if (reset) {
-		selectedSession.value = null;
-		sessionDetail.value = null;
-	}
 	await sessionsPagination.load(reset);
 	if (sessionsPagination.error.value) {
 		os.alert({ type: 'error', text: formatApiError(sessionsPagination.error.value) });
@@ -1150,45 +1125,6 @@ function resetSessionFilters() {
 	void loadSessions(true);
 }
 
-function fetchSessionMessagesPage(sessionId: string, page: number): Promise<SessionDetailRow> {
-	return api<SessionDetailRow>('admin/agents/governance/sessions/detail', {
-		sessionId,
-		limit: SESSION_MSG_PAGE_SIZE,
-		offset: page * SESSION_MSG_PAGE_SIZE,
-	});
-}
-
-async function selectSession(row: SessionRow) {
-	selectedSession.value = row;
-	sessionMsgPage.value = 0;
-	sessionDetailLoading.value = true;
-	try {
-		sessionDetail.value = await fetchSessionMessagesPage(row.id, 0);
-		scrollSessionDetailToTop();
-	} catch (err) {
-		os.alert({ type: 'error', text: formatApiError(err) });
-	} finally {
-		sessionDetailLoading.value = false;
-	}
-}
-
-async function loadSessionMessagesPage(page: number) {
-	if (!sessionDetail.value || sessionMessagesLoading.value) return;
-	const totalPages = Math.max(1, Math.ceil(sessionDetail.value.totalCount / SESSION_MSG_PAGE_SIZE));
-	const target = Math.min(Math.max(page, 0), totalPages - 1);
-	if (target === sessionMsgPage.value) return;
-	sessionMessagesLoading.value = true;
-	try {
-		sessionDetail.value = await fetchSessionMessagesPage(sessionDetail.value.session.id, target);
-		sessionMsgPage.value = target;
-		scrollSessionDetailToTop();
-	} catch (err) {
-		os.alert({ type: 'error', text: formatApiError(err) });
-	} finally {
-		sessionMessagesLoading.value = false;
-	}
-}
-
 async function toggleSessionBan(row: SessionRow) {
 	// 解封保持简单流程
 	if (row.moderationBanned) {
@@ -1198,11 +1134,8 @@ async function toggleSessionBan(row: SessionRow) {
 		if (canceled) return;
 		try {
 			await api('admin/agents/governance/sessions/set-banned', { sessionId: row.id, banned: false, reason: result.reason || null });
-			const selectedId = selectedSession.value?.id;
 			await loadSummary();
 			await loadSessions(true);
-			const updated = sessions.value.find(item => item.id === row.id);
-			if (updated && selectedId === row.id) await selectSession(updated);
 		} catch (err) {
 			os.alert({ type: 'error', text: formatApiError(err) });
 		}
@@ -1249,12 +1182,9 @@ async function toggleSessionBan(row: SessionRow) {
 		if (res.userSuspended) parts.push(`用户已封禁（${res.suspendDurationHours === 0 ? '永久' : `${res.suspendDurationHours}小时`}）`);
 		if (res.noteAdded) parts.push('管理笔记已记录');
 		os.toast(parts.join('，') || '处理完成');
-		const selectedId = selectedSession.value?.id;
 		await loadSummary();
 		await loadSessions(true);
 		if (reviewUserCards.value.length > 0) await loadReviewListItems(true);
-		const updated = sessions.value.find(item => item.id === row.id);
-		if (updated && selectedId === row.id) await selectSession(updated);
 	} catch (err) {
 		os.alert({ type: 'error', text: formatApiError(err) });
 	}
@@ -1335,9 +1265,8 @@ async function loadLogs(reset: boolean) {
 }
 
 function jumpSession(sessionId: string) {
-	activeView.value = 'sessions';
-	sessionFilters.sessionId = sessionId;
-	void loadSessions(true);
+	// 直达独立的会话审查页（新标签页），无需再回到会话列表二次点击
+	openSessionReview(sessionId);
 }
 
 // 一键违规处理
@@ -1649,53 +1578,6 @@ const ReviewDetail = defineComponent({
 	},
 });
 
-const SessionDetail = defineComponent({
-	props: {
-		detail: { type: Object as () => SessionDetailRow, required: true },
-		canModerate: { type: Boolean, default: true },
-		messagesLoading: { type: Boolean, default: false },
-		messagesPage: { type: Number, default: 0 },
-		messagesPageSize: { type: Number, default: 50 },
-	},
-	emits: ['toggleBan', 'copy', 'pageMessages'],
-	setup(props, { emit }) {
-		const totalPages = computed(() => Math.max(1, Math.ceil(props.detail.totalCount / props.messagesPageSize)));
-		const pagerBtn = (icon: string, label: string, disabled: boolean, page: number) => h('button', {
-			class: '_button session-msg-pager-btn',
-			type: 'button',
-			title: label,
-			disabled,
-			onClick: () => emit('pageMessages', page),
-		}, [h('i', { class: `ti ${icon}` })]);
-		const renderPager = () => h('div', { class: 'session-msg-pager' }, [
-			pagerBtn('ti-chevrons-left', '最新', props.messagesLoading || props.messagesPage <= 0, 0),
-			pagerBtn('ti-chevron-left', '更新', props.messagesLoading || props.messagesPage <= 0, props.messagesPage - 1),
-			h('span', { class: 'session-msg-pager-info' }, props.messagesLoading ? '…' : `${props.messagesPage + 1} / ${totalPages.value}`),
-			pagerBtn('ti-chevron-right', '更早', props.messagesLoading || props.messagesPage >= totalPages.value - 1, props.messagesPage + 1),
-			pagerBtn('ti-chevrons-right', '最早', props.messagesLoading || props.messagesPage >= totalPages.value - 1, totalPages.value - 1),
-		]);
-		return () => h('article', { class: '_gaps_s' }, [
-			h('div', { class: 'session-detail-head' }, [
-				h('div', [h('h2', props.detail.session.name), h('p', `${props.detail.session.characterName || '—'} · ${sessionKindLabel(props.detail.session.sessionKind)}`)]),
-				h('span', { class: props.detail.session.moderationBanned ? 'state-warn' : 'state-ok' }, props.detail.session.moderationBanned ? '已封禁' : '可用'),
-			]),
-			h('div', { class: 'review-actions' }, [
-				props.canModerate ? h(MkButton, { rounded: true, danger: !props.detail.session.moderationBanned, onClick: () => emit('toggleBan', props.detail.session) }, () => [h('i', { class: 'ti ti-ban' }), props.detail.session.moderationBanned ? ' 解封会话' : ' 封禁会话']) : null,
-				h(MkButton, { rounded: true, onClick: () => emit('copy', props.detail.session.id) }, () => [h('i', { class: 'ti ti-copy' }), ' 复制会话 ID']),
-			]),
-			h('section', { class: 'review-block' }, [
-				props.detail.totalCount === 0 ? h('p', '该会话还没有消息。') : null,
-				props.detail.totalCount > props.messagesPageSize ? renderPager() : null,
-				...props.detail.messages.map(msg => h('div', { class: `timeline-message role-${msg.role}` }, [
-					h('div', [h('b', roleLabel(msg.role)), h('time', formatTime(msg.createdAt))]),
-					h('pre', msg.content),
-				])),
-				props.detail.totalCount > props.messagesPageSize ? renderPager() : null,
-			]),
-		]);
-	},
-});
-
 onMounted(() => {
 	restoreFilters();
 	void loadSummary();
@@ -1860,8 +1742,14 @@ onUnmounted(() => {
 	max-height: calc(100vh - 32px);
 	overflow: auto;
 }
-.backToList {
-	display: none;
+.rowActions {
+	display: flex;
+	justify-content: flex-end;
+	flex-wrap: wrap;
+	gap: 8px;
+	margin-top: 10px;
+	padding-top: 10px;
+	border-top: 1px solid var(--MI_THEME-divider);
 }
 .sectionHead {
 	display: flex;
@@ -1892,6 +1780,7 @@ onUnmounted(() => {
 .reviewRow,
 .sessionRow {
 	width: 100%;
+	box-sizing: border-box;
 	padding: 12px;
 	border-radius: 8px;
 	background: var(--MI_THEME-panel);
@@ -1962,38 +1851,32 @@ onUnmounted(() => {
 .rowMeta {
 	display: flex;
 	align-items: center;
-	justify-content: space-between;
 	flex-wrap: wrap;
-	gap: 10px;
-	margin-top: 8px;
+	gap: 6px 14px;
+	margin-top: 6px;
 	color: var(--MI_THEME-fgTransparentWeak);
 	font-size: 0.86em;
 }
-.rowMetaRight {
+.metaItem {
 	display: inline-flex;
 	align-items: center;
-	flex-shrink: 0;
-	gap: 8px;
-}
-.msgCount {
-	display: inline-flex;
-	align-items: center;
-	gap: 4px;
-	padding: 2px 8px;
-	border-radius: 999px;
-	background: var(--MI_THEME-bg);
-	border: 1px solid var(--MI_THEME-divider);
+	gap: 5px;
 	font-variant-numeric: tabular-nums;
-	line-height: 1.4;
 }
-.msgCount i {
+.metaItem i {
 	font-size: 0.95em;
-	opacity: 0.8;
+	opacity: 0.7;
 }
-.rowActive .msgCount {
-	background: var(--MI_THEME-panel);
-	border-color: var(--MI_THEME-accent);
-	color: var(--MI_THEME-accent);
+.rowBadges {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	flex-shrink: 0;
+	flex-wrap: wrap;
+	justify-content: flex-end;
+}
+.sessionRowBanned {
+	border-color: color-mix(in srgb, var(--MI_THEME-error) 40%, var(--MI_THEME-divider));
 }
 .rowMeta > *,
 .metaGrid > *,
@@ -2262,17 +2145,6 @@ onUnmounted(() => {
 		position: static;
 		max-height: none;
 	}
-	/* 会话治理：移动端主从布局，选中会话后详情整页替换列表 */
-	.sessionsSplit.detailOpen .listPane {
-		display: none;
-	}
-	.sessionsSplit:not(.detailOpen) .detailPane {
-		display: none;
-	}
-	.backToList {
-		display: inline-flex;
-		margin-bottom: 10px;
-	}
 	.summaryGrid {
 		grid-template-columns: repeat(2, minmax(0, 1fr));
 	}
@@ -2339,15 +2211,13 @@ onUnmounted(() => {
 </style>
 
 <style lang="scss">
-.review-detail-head,
-.session-detail-head {
+.review-detail-head {
 	display: flex;
 	align-items: flex-start;
 	justify-content: space-between;
 	gap: 12px;
 }
-.review-detail-head > div,
-.session-detail-head > div {
+.review-detail-head > div {
 	min-width: 0;
 }
 .review-avatar {
@@ -2407,14 +2277,12 @@ onUnmounted(() => {
 	gap: 8px;
 	min-width: 0;
 }
-.review-title h2,
-.session-detail-head h2 {
+.review-title h2 {
 	margin: 0;
 	font-size: 1.1em;
 	overflow-wrap: anywhere;
 }
-.review-detail-head p,
-.session-detail-head p {
+.review-detail-head p {
 	margin: 6px 0 0;
 	color: var(--MI_THEME-fgTransparentWeak);
 }
@@ -2424,9 +2292,7 @@ onUnmounted(() => {
 	flex-wrap: wrap;
 	margin-top: 8px;
 }
-.review-badges span,
-.state-ok,
-.state-warn {
+.review-badges span {
 	display: inline-flex;
 	align-items: center;
 	min-height: 22px;
@@ -2435,10 +2301,6 @@ onUnmounted(() => {
 	background: var(--MI_THEME-accentedBg);
 	color: var(--MI_THEME-accent);
 	font-size: 0.82em;
-}
-.state-warn {
-	background: var(--MI_THEME-errorBg);
-	color: var(--MI_THEME-error);
 }
 .review-note,
 .review-block {
@@ -2454,8 +2316,7 @@ onUnmounted(() => {
 }
 .review-block pre,
 .review-note pre,
-.diff-row pre,
-.timeline-message pre {
+.diff-row pre {
 	margin: 0;
 	white-space: pre-wrap;
 	word-break: break-word;
@@ -2507,63 +2368,8 @@ onUnmounted(() => {
 	padding-top: 10px;
 	background: var(--MI_THEME-panel);
 }
-.timeline-message {
-	display: grid;
-	gap: 6px;
-	padding: 10px 12px;
-	border-radius: 8px;
-	border: 1px solid var(--MI_THEME-divider);
-	background: var(--MI_THEME-panel);
-}
-.timeline-message > div {
-	display: flex;
-	justify-content: space-between;
-	flex-wrap: wrap;
-	gap: 10px;
-	color: var(--MI_THEME-fgTransparentWeak);
-}
-.role-user {
-	border-color: var(--MI_THEME-accent);
-}
-.role-assistant {
-	border-color: var(--MI_THEME-success);
-}
-.session-msg-pager {
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	flex-wrap: nowrap;
-	gap: 4px;
-	padding: 6px 0;
-}
-.session-msg-pager-btn {
-	display: inline-grid;
-	place-items: center;
-	width: 32px;
-	height: 32px;
-	border-radius: 8px;
-	font-size: 1em;
-	color: var(--MI_THEME-fgTransparentWeak);
-	transition: background 0.15s, color 0.15s;
-}
-.session-msg-pager-btn:hover:not(:disabled) {
-	color: var(--MI_THEME-accent);
-	background: var(--MI_THEME-accentedBg);
-}
-.session-msg-pager-btn:disabled {
-	opacity: 0.35;
-	cursor: default;
-}
-.session-msg-pager-info {
-	min-width: 56px;
-	text-align: center;
-	color: var(--MI_THEME-fgTransparentWeak);
-	font-size: 0.9em;
-	font-variant-numeric: tabular-nums;
-}
 @media (max-width: 600px) {
-	.review-detail-head,
-	.session-detail-head {
+	.review-detail-head {
 		flex-wrap: wrap;
 	}
 }
