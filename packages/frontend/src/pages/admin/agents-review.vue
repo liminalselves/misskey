@@ -410,6 +410,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<template v-else-if="activeView === 'modelReports'">
 					<section :class="$style.filterBand">
 						<FormSplit :minWidth="220">
+							<MkSelect v-model="modelReportFilters.status" :items="modelReportStatusItems"><template #label>状态</template></MkSelect>
 							<MkSelect v-model="modelReportFilters.modelKind" :items="modelReportKindItems"><template #label>模型类型</template></MkSelect>
 							<MkSelect v-model="modelReportFilters.reasonType" :items="modelReportReasonItems"><template #label>异常类型</template></MkSelect>
 						</FormSplit>
@@ -744,11 +745,12 @@ const logs = logsPagination.items;
 const logsLoading = logsPagination.loading;
 const logsHasMore = logsPagination.hasMore;
 
-const modelReportFilters = reactive({ modelKind: '', reasonType: '', userId: '', modelId: '', query: '' });
+const modelReportFilters = reactive({ status: 'unresolved', modelKind: '', reasonType: '', userId: '', modelId: '', query: '' });
 
 // 模型上报列表分页
 const modelReportsPagination = useGovernancePagination<ModelReportRow>(async (untilId) => {
 	const payload: Record<string, unknown> = { limit: 80, untilId };
+	if (modelReportFilters.status) payload.status = modelReportFilters.status;
 	if (modelReportFilters.modelKind) payload.modelKind = modelReportFilters.modelKind;
 	if (modelReportFilters.reasonType) payload.reasonType = modelReportFilters.reasonType;
 	if (modelReportFilters.userId.trim()) payload.userId = modelReportFilters.userId.trim();
@@ -768,11 +770,12 @@ async function loadModelReports(reset: boolean) {
 }
 
 function resetModelReportFilters() {
-	Object.assign(modelReportFilters, { modelKind: '', reasonType: '', userId: '', modelId: '', query: '' });
+	Object.assign(modelReportFilters, { status: 'unresolved', modelKind: '', reasonType: '', userId: '', modelId: '', query: '' });
 	loadModelReports(true);
 }
 
 const modelReportKindItems = [{ value: '', label: '全部' }, { value: 'chat', label: '对话模型' }, { value: 'image', label: '绘图模型' }];
+const modelReportStatusItems = [{ value: '', label: '全部' }, { value: 'resolved', label: '已处理' }, { value: 'unresolved', label: '未处理' }];
 const modelReportReasonItems = [{ value: '', label: '全部' }, { value: 'unavailable', label: '长时间不可用' }, { value: 'degraded', label: '降智' }, { value: 'slow', label: '响应缓慢' }, { value: 'errors', label: '频繁报错' }, { value: 'other', label: '其他' }];
 
 function modelReportReasonLabel(t: string): string {
@@ -908,12 +911,12 @@ async function ignoreReviewUser(card: ReviewUserCard) {
 const headerTabs = computed(() => [
 	{ key: 'overview', title: '概览', icon: 'ti ti-dashboard' },
 	{ key: 'queue', title: '待处理', icon: 'ti ti-inbox' },
+	{ key: 'modelReports', title: '模型上报', icon: 'ti ti-flag' },
 	{ key: 'library', title: '内容库', icon: 'ti ti-cards' },
 	{ key: 'sessions', title: '会话治理', icon: 'ti ti-messages' },
 	{ key: 'externalAudit', title: '外审拦截', icon: 'ti ti-shield-check' },
 	{ key: 'review', title: '复审', icon: 'ti ti-shield-exclamation' },
 	{ key: 'images', title: 'AI 生图', icon: 'ti ti-photo-shield' },
-	{ key: 'modelReports', title: '智能体上报', icon: 'ti ti-flag' },
 	{ key: 'logs', title: '操作日志', icon: 'ti ti-history' },
 ]);
 const headerActions = computed(() => [{

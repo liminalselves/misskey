@@ -3736,6 +3736,7 @@ _agents:
   reviewKindStyle: "Dialogue style"
   noPendingAgentReviews: "Nothing pending"
   thereArePendingAgentReviewsAdminWarning: "There are agent character or dialogue style submissions pending review."
+  thereAreUnresolvedAgentModelReportsAdminWarning: "There are unresolved model issue reports."
   adminSettingsDescription: "Configure the agents toggle, system prompt, and per-model API settings. Each model needs its own endpoint, key, and limits. Base URL must be https; the server validates on save (SSRF mitigation)."
   adminSectionFeature: "Feature & prompt"
   adminSectionConnection: "API connection"

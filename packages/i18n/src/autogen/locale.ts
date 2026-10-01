@@ -14386,6 +14386,10 @@ export interface Locale extends ILocale {
          */
         "thereArePendingAgentReviewsAdminWarning": string;
         /**
+         * 未処理のモデル不具合報告があります。
+         */
+        "thereAreUnresolvedAgentModelReportsAdminWarning": string;
+        /**
          * エージェントのオンオフ、システムプロンプト、モデル一覧を設定します。各モデルにAPIのURL・キー・上限を個別に設定します。ベースURLは https で、保存時にサーバーで検証されます（SSRF対策）。
          */
         "adminSettingsDescription": string;

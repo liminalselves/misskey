@@ -30,6 +30,7 @@ export const paramDef = {
 	properties: {
 		modelKind: { type: 'string', enum: [null, ...agentModelReportKinds], nullable: true },
 		reasonType: { type: 'string', enum: [null, ...agentModelReportReasonTypes], nullable: true },
+		status: { type: 'string', enum: [null, 'unresolved', 'resolved'], nullable: true },
 		modelId: { type: 'string', nullable: true },
 		userId: { type: 'string', minLength: 1, maxLength: 256, nullable: true },
 		query: { type: 'string', minLength: 1, maxLength: 512, nullable: true },
@@ -60,6 +61,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			if (userId) q = q.andWhere('report.userId = :userId', { userId });
 			if (ps.modelKind) q = q.andWhere('report.modelKind = :modelKind', { modelKind: ps.modelKind });
 			if (ps.reasonType) q = q.andWhere('report.reasonType = :reasonType', { reasonType: ps.reasonType });
+			if (ps.status === 'unresolved') q = q.andWhere('report.resolvedAt IS NULL');
+			else if (ps.status === 'resolved') q = q.andWhere('report.resolvedAt IS NOT NULL');
 			if (ps.modelId) q = q.andWhere('report.modelId = :modelId', { modelId: ps.modelId.trim() });
 			if (ps.query) {
 				const pattern = `%${escapeIlikePattern(ps.query)}%`;

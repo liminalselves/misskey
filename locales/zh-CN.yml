@@ -3743,6 +3743,7 @@ _agents:
   reviewKindStyle: "对话风格"
   noPendingAgentReviews: "暂无待审核项"
   thereArePendingAgentReviewsAdminWarning: "有待审核的智能体角色或对话风格提交。"
+  thereAreUnresolvedAgentModelReportsAdminWarning: "有未处理的模型异常上报。"
   adminSettingsDescription: "配置智能体开关、系统提示词与模型列表。每个模型须单独填写 API 地址、密钥与用量；Base URL 须为 https，保存时由服务端校验以防 SSRF。"
   adminSectionFeature: "功能与提示词"
   adminSectionConnection: "API 连接"

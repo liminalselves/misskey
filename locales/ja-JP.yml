@@ -3837,6 +3837,7 @@ _agents:
   reviewKindStyle: "会話スタイル"
   noPendingAgentReviews: "審査待ちはありません"
   thereArePendingAgentReviewsAdminWarning: "審査待ちのエージェント（キャラクターまたは会話スタイル）があります。"
+  thereAreUnresolvedAgentModelReportsAdminWarning: "未処理のモデル不具合報告があります。"
   adminSettingsDescription: "エージェントのオンオフ、システムプロンプト、モデル一覧を設定します。各モデルにAPIのURL・キー・上限を個別に設定します。ベースURLは https で、保存時にサーバーで検証されます（SSRF対策）。"
   adminSectionFeature: "機能とプロンプト"
   adminSectionConnection: "API接続"

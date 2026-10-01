@@ -15,6 +15,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<div class="_gaps_s">
 					<MkInfo v-if="thereIsUnresolvedAbuseReport" warn>{{ i18n.ts.thereIsUnresolvedAbuseReportWarning }} <MkA to="/admin/abuses" class="_link">{{ i18n.ts.check }}</MkA></MkInfo>
 					<MkInfo v-if="thereArePendingAgentReviews" warn>{{ i18n.ts._agents.thereArePendingAgentReviewsAdminWarning }} <MkA to="/admin/agents-review" class="_link">{{ i18n.ts.check }}</MkA></MkInfo>
+					<MkInfo v-if="thereAreUnresolvedAgentModelReports" warn>{{ i18n.ts._agents.thereAreUnresolvedAgentModelReportsAdminWarning }} <MkA to="/admin/agents-review?view=modelReports" class="_link">{{ i18n.ts.check }}</MkA></MkInfo>
 					<MkInfo v-if="noMaintainerInformation" warn>{{ i18n.ts.noMaintainerInformationWarning }} <MkA to="/admin/settings" class="_link">{{ i18n.ts.configure }}</MkA></MkInfo>
 					<MkInfo v-if="noInquiryUrl" warn>{{ i18n.ts.noInquiryUrlWarning }} <MkA to="/admin/settings" class="_link">{{ i18n.ts.configure }}</MkA></MkInfo>
 					<MkInfo v-if="noBotProtection" warn>{{ i18n.ts.noBotProtectionWarning }} <MkA to="/admin/security" class="_link">{{ i18n.ts.configure }}</MkA></MkInfo>
@@ -73,6 +74,7 @@ const noEmailServer = computed(() => !instance.enableEmail);
 const noInquiryUrl = computed(() => isEmpty(instance.inquiryUrl));
 const thereIsUnresolvedAbuseReport = ref(false);
 const thereArePendingAgentReviews = ref(false);
+const thereAreUnresolvedAgentModelReports = ref(false);
 const currentPage = computed(() => router.currentRef.value.child);
 
 function refreshAdminPanelAlerts() {
@@ -87,6 +89,12 @@ function refreshAdminPanelAlerts() {
 		thereArePendingAgentReviews.value = res.pending;
 	}).catch(() => {
 		thereArePendingAgentReviews.value = false;
+	});
+
+	(misskeyApi as unknown as (ep: string, data: Record<string, unknown>) => Promise<{ pending: boolean }>)('admin/agents/governance/model-reports/pending-exists', {}).then(res => {
+		thereAreUnresolvedAgentModelReports.value = res.pending;
+	}).catch(() => {
+		thereAreUnresolvedAgentModelReports.value = false;
 	});
 }
 

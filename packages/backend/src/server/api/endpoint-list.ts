@@ -37,6 +37,7 @@ export * as 'admin/agents/governance/images/set-blocked' from './endpoints/admin
 export * as 'admin/agents/governance/logs/list' from './endpoints/admin/agents/governance/logs/list.js';
 export * as 'admin/agents/governance/messages/list' from './endpoints/admin/agents/governance/messages/list.js';
 export * as 'admin/agents/governance/model-reports/list' from './endpoints/admin/agents/governance/model-reports/list.js';
+export * as 'admin/agents/governance/model-reports/pending-exists' from './endpoints/admin/agents/governance/model-reports/pending-exists.js';
 export * as 'admin/agents/governance/model-reports/resolve' from './endpoints/admin/agents/governance/model-reports/resolve.js';
 export * as 'admin/agents/governance/review/detail' from './endpoints/admin/agents/governance/review/detail.js';
 export * as 'admin/agents/governance/review/list' from './endpoints/admin/agents/governance/review/list.js';
