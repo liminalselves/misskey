@@ -125,6 +125,7 @@ import { $i } from '@/i.js';
 import { DI } from '@/di.js';
 import * as os from '@/os.js';
 import { useRouter } from '@/router.js';
+import { goBackInApp } from '@/utility/router-history.js';
 import { i18n } from '@/i18n.js';
 
 const props = withDefaults(defineProps<PageHeaderProps>(), {
@@ -156,13 +157,7 @@ const showLowerTabs = computed(() =>
 const router = useRouter();
 
 function goBack() {
-	// Nirax の Router に .back() は無い。アプリ内遷移では pushState により state が設定されるため、
-	// アドレスバー等から直接開いたページでブラウザ外へ戻ることを避ける。
-	if (window.history.state != null && window.history.length > 1) {
-		window.history.back();
-	} else {
-		router.pushByPath(props.backPath, 'forcePage');
-	}
+	goBackInApp(router, props.backPath);
 }
 
 const show = computed(() => {

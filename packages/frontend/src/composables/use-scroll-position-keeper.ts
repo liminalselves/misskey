@@ -7,76 +7,88 @@ import { throttle } from 'throttle-debounce';
 import { nextTick, onActivated, onDeactivated, onUnmounted, watch } from 'vue';
 import type { Ref } from 'vue';
 
-// note render skippingがオンだとズレるため、遷移直前にスクロール範囲に表示されているdata-scroll-anchor要素を特定して、復元時に当該要素までスクロールするようにする
-
-// TODO: data-scroll-anchor がひとつも存在しない場合、または手動で useAnchor みたいなフラグをfalseで呼ばれた場合、単純にスクロール位置を使用する処理にフォールバックするようにする
-
 export function useScrollPositionKeeper(scrollContainerRef: Ref<HTMLElement | null | undefined>): void {
 	let anchorId: string | null = null;
+	let anchorOffset = 0;
+	let scrollTop = 0;
+	let scrollLeft = 0;
 	let ready = true;
+	let active = true;
+	let wasDeactivated = false;
+	let restoreTimer: number | null = null;
 
-	watch(scrollContainerRef, (el) => {
+	watch(scrollContainerRef, (el, _, onCleanup) => {
 		if (!el) return;
 
-		const onScroll = () => {
-			if (!el) return;
-			if (!ready) return;
+		const captureAnchor = throttle(1000, () => {
+			if (!ready || !el.isConnected) return;
+			anchorId = null;
+			if (Math.abs(el.scrollTop) < 100) return;
 
-			if (el.scrollTop < 100) {
-				// 上部にいるときはanchorを参照するとズレの原因になるし位置復元するメリットも乏しいため設定しない
-				anchorId = null;
-				return;
-			}
-
-			const scrollContainerRect = el.getBoundingClientRect();
-			const viewPosition = scrollContainerRect.height / 2;
-
-			const anchorEls = el.querySelectorAll('[data-scroll-anchor]');
-			for (let i = anchorEls.length - 1; i > -1; i--) { // 下から見た方が速い
-				const anchorEl = anchorEls[i] as HTMLElement;
-				const anchorRect = anchorEl.getBoundingClientRect();
-				const anchorTop = anchorRect.top;
-				const anchorBottom = anchorRect.bottom;
-				if (anchorTop <= viewPosition && anchorBottom >= viewPosition) {
-					anchorId = anchorEl.getAttribute('data-scroll-anchor');
+			const containerRect = el.getBoundingClientRect();
+			const viewPosition = containerRect.top + containerRect.height / 2;
+			const anchors = el.querySelectorAll<HTMLElement>('[data-scroll-anchor]');
+			for (let i = anchors.length - 1; i >= 0; i--) {
+				const rect = anchors[i].getBoundingClientRect();
+				if (rect.top <= viewPosition && rect.bottom >= viewPosition) {
+					anchorId = anchors[i].getAttribute('data-scroll-anchor');
+					anchorOffset = rect.top - containerRect.top;
 					break;
 				}
 			}
+		});
+		const onScroll = () => {
+			if (!ready || !el.isConnected) return;
+			anchorOffset -= el.scrollTop - scrollTop;
+			scrollTop = el.scrollTop;
+			scrollLeft = el.scrollLeft;
+			if (Math.abs(scrollTop) < 100) anchorId = null;
+			captureAnchor();
 		};
-
-		// ほんとはscrollイベントじゃなくてonBeforeDeactivatedでやりたい
-		// https://github.com/vuejs/vue/issues/9454
-		// https://github.com/vuejs/rfcs/pull/284
-		el.addEventListener('scroll', throttle(1000, onScroll), { passive: true });
-	}, {
-		immediate: true,
-	});
+		el.addEventListener('scroll', onScroll, { passive: true });
+		onCleanup(() => {
+			el.removeEventListener('scroll', onScroll);
+			captureAnchor.cancel();
+		});
+	}, { immediate: true, flush: 'post' });
 
 	const restore = () => {
-		if (!anchorId) return;
-		const scrollContainer = scrollContainerRef.value;
-		if (!scrollContainer) return;
-		const scrollAnchorEl = scrollContainer.querySelector(`[data-scroll-anchor="${anchorId}"]`);
-		if (!scrollAnchorEl) return;
-		scrollAnchorEl.scrollIntoView({
-			behavior: 'instant',
-			block: 'center',
-			inline: 'center',
-		});
+		const el = scrollContainerRef.value;
+		if (!active || !el?.isConnected) return;
+		el.scrollTo({ top: scrollTop, left: scrollLeft, behavior: 'instant' });
+		if (anchorId == null) return;
+		const anchor = Array.from(el.querySelectorAll<HTMLElement>('[data-scroll-anchor]'))
+			.find(candidate => candidate.getAttribute('data-scroll-anchor') === anchorId);
+		if (anchor) {
+			el.scrollTo({
+				top: el.scrollTop + anchor.getBoundingClientRect().top - el.getBoundingClientRect().top - anchorOffset,
+				left: scrollLeft,
+				behavior: 'instant',
+			});
+		}
 	};
 
-	onDeactivated(() => {
+	const stopRestoring = () => {
+		active = false;
+		wasDeactivated = true;
 		ready = false;
-	});
-
+		if (restoreTimer != null) window.clearTimeout(restoreTimer);
+		restoreTimer = null;
+	};
+	onDeactivated(stopRestoring);
+	onUnmounted(stopRestoring);
 	onActivated(() => {
+		active = true;
+		if (!wasDeactivated) return;
+		ready = false;
 		restore();
 		nextTick(() => {
+			if (!active) return;
 			restore();
-			window.setTimeout(() => {
+			restoreTimer = window.setTimeout(() => {
+				restoreTimer = null;
 				restore();
-
-				ready = true;
+				ready = active;
 			}, 100);
 		});
 	});

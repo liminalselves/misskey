@@ -47,13 +47,16 @@ const props = withDefaults(defineProps<PageHeaderProps & {
 	swipable: true,
 	hideHeader: false,
 	fitContent: false,
+	showBack: undefined,
 });
 
 /** MkPageHeader.narrow と同じ閾値：狭い画面ではチャット頂部タブを優先 */
 const isNarrowViewport = ref(typeof window !== 'undefined' && window.innerWidth < 500);
+const isMobileSection = ref(typeof window !== 'undefined' && window.innerWidth < 600);
 
 function updateNarrowViewport() {
 	isNarrowViewport.value = window.innerWidth < 500;
+	isMobileSection.value = window.innerWidth < 600;
 }
 
 onMounted(() => {
@@ -71,13 +74,25 @@ const useBottomTabsInFooter = computed(() =>
 	!(props.narrowMergedRow && isNarrowViewport.value),
 );
 
+const router = useRouter();
+const sectionBackPath = computed(() => {
+	const path = router.currentRef.value.route.path;
+	if (path.startsWith('/admin')) return '/admin';
+	if (path === '/settings' && router.currentRef.value.child?.route.name != null) return '/settings';
+	return undefined;
+});
+
 const pageHeaderProps = computed(() => {
 	const { reversed, tab, swipable, hideHeader, fitContent, ...rest } = props;
-	return rest;
+	return {
+		...rest,
+		showBack: props.showBack ?? (isMobileSection.value && sectionBackPath.value != null),
+		backPath: props.backPath ?? sectionBackPath.value,
+	};
 });
 
 const pageHeaderPropsWithoutTabs = computed(() => {
-	const { reversed, tabs, swipable, hideHeader, fitContent, ...rest } = props;
+	const { tabs, ...rest } = pageHeaderProps.value;
 	return rest;
 });
 
@@ -86,10 +101,8 @@ const rootEl = useTemplateRef('rootEl');
 
 useScrollPositionKeeper(rootEl);
 
-const router = useRouter();
-
 router.useListener('same', () => {
-	scrollToTop();
+	if (rootEl.value?.isConnected) scrollToTop();
 });
 
 function scrollToTop() {

@@ -464,6 +464,7 @@ export const ROUTE_DEF = [{
 		path: '/users',
 		name: 'users',
 		component: page(() => import('@/pages/admin/users.vue')),
+		cache: true,
 	}, {
 		path: '/emojis',
 		name: 'emojis',
@@ -488,10 +489,12 @@ export const ROUTE_DEF = [{
 		path: '/files',
 		name: 'files',
 		component: page(() => import('@/pages/admin/files.vue')),
+		cache: true,
 	}, {
 		path: '/federation',
 		name: 'federation',
 		component: page(() => import('@/pages/admin/federation.vue')),
+		cache: true,
 	}, {
 		path: '/announcements',
 		name: 'announcements',
@@ -524,10 +527,12 @@ export const ROUTE_DEF = [{
 		path: '/abuses',
 		name: 'abuses',
 		component: page(() => import('@/pages/admin/abuses.vue')),
+		cache: true,
 	}, {
 		path: '/modlog',
 		name: 'modlog',
 		component: page(() => import('@/pages/admin/modlog.vue')),
+		cache: true,
 	}, {
 		path: '/settings',
 		name: 'settings',
@@ -544,6 +549,9 @@ export const ROUTE_DEF = [{
 		path: '/agents-review',
 		name: 'agents-review',
 		component: page(() => import('@/pages/admin/agents-review.vue')),
+		query: { view: 'view' },
+		reuseComponent: true,
+		cache: true,
 	}, {
 		path: '/branding',
 		name: 'branding',

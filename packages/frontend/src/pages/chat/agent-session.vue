@@ -24,7 +24,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		</div>
 	</div>
 </div>
-<PageWithHeader v-else v-model:tab="tab" :reversed="tab === 'chat'" :tabs="headerTabs" :hideHeader="isEmbeddedControl" :fitContent="isEmbeddedControl" narrowMergedRow :showBack="!isEmbeddedControl" :backPath="isReviewMode ? '/admin/agents-review' : '/chat'" :actions="headerActions">
+<PageWithHeader v-else v-model:tab="tab" :reversed="tab === 'chat'" :tabs="headerTabs" :hideHeader="isEmbeddedControl" :fitContent="isEmbeddedControl" narrowMergedRow :showBack="!isEmbeddedControl" :backPath="isReviewMode ? '/admin/agents-review?view=sessions' : '/chat'" :actions="headerActions">
 		<div v-if="isReviewMode && session" class="_spacer" style="--MI_SPACER-w: var(--agent-control-content-max-width, 700px); --MI_SPACER-max: 12px;">
 			<div v-panel :class="$style.reviewBanner">
 				<i class="ti ti-eye-check" :class="$style.reviewBannerIcon"></i>
@@ -1208,6 +1208,7 @@ import { definePage } from '@/page.js';
 import * as os from '@/os.js';
 import { fetchInstance, instance } from '@/instance.js';
 import { useRouter } from '@/router.js';
+import { goBackInApp } from '@/utility/router-history.js';
 import { makeDateSeparatedTimelineComputedRef } from '@/utility/timeline-date-separate.js';
 import { useMutationObserver } from '@/composables/use-mutation-observer.js';
 import { prefer } from '@/preferences.js';
@@ -1921,7 +1922,7 @@ const reviewOwnerAcct = computed(() => {
 });
 
 function goAgentsReview() {
-	void router.push('/admin/agents-review');
+	goBackInApp(router, '/admin/agents-review?view=sessions');
 }
 
 /** 封禁原因展示：管理员未填写时使用平台默认文案 */

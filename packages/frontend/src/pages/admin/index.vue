@@ -26,7 +26,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 			</div>
 		</div>
 	</div>
-	<div v-if="!(narrow && currentPage?.route.name == null)" class="main _pageContainer" style="height: 100%;">
+	<div v-show="!(narrow && currentPage?.route.name == null)" class="main _pageContainer" style="height: 100%;">
 		<NestedRouterView/>
 	</div>
 </div>
@@ -100,8 +100,9 @@ function refreshAdminPanelAlerts() {
 
 const NARROW_THRESHOLD = 600;
 const ro = new ResizeObserver((entries, observer) => {
-	if (entries.length === 0) return;
-	narrow.value = entries[0].borderBoxSize[0].inlineSize < NARROW_THRESHOLD;
+	if (entries.length === 0 || !el.value?.isConnected) return;
+	const width = entries[0].borderBoxSize[0].inlineSize;
+	if (width > 0) narrow.value = width < NARROW_THRESHOLD;
 });
 
 const menuDef = computed<SuperMenuDef[]>(() => [{
@@ -278,7 +279,7 @@ onMounted(() => {
 		ro.observe(el.value);
 		narrow.value = el.value.offsetWidth < NARROW_THRESHOLD;
 	}
-	if (currentPage.value?.route.name == null && !narrow.value) {
+	if (router.currentRef.value.route.path === '/admin' && currentPage.value?.route.name == null && !narrow.value) {
 		router.replace('/admin/overview');
 	}
 	refreshAdminPanelAlerts();
@@ -288,7 +289,7 @@ onActivated(() => {
 	if (el.value != null) {
 		narrow.value = el.value.offsetWidth < NARROW_THRESHOLD;
 	}
-	if (currentPage.value?.route.name == null && !narrow.value) {
+	if (router.currentRef.value.route.path === '/admin' && currentPage.value?.route.name == null && !narrow.value) {
 		router.replace('/admin/overview');
 	}
 	refreshAdminPanelAlerts();

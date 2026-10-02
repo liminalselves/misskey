@@ -519,6 +519,8 @@ import MkAgentQuickActionDialog from '@/components/MkAgentQuickActionDialog.vue'
 import { useGovernancePagination } from '@/composables/use-governance-pagination.js';
 import { prefer } from '@/preferences.js';
 import { iAmModerator, $i } from '@/i.js';
+import { useRouter } from '@/router.js';
+import { preferMobileNavigation } from '@/utility/prefer-mobile-navigation.js';
 
 type ViewKey = 'overview' | 'queue' | 'library' | 'sessions' | 'externalAudit' | 'review' | 'images' | 'modelReports' | 'logs';
 type Kind = 'character' | 'style';
@@ -599,8 +601,18 @@ const UserAcctInline = defineComponent({
 type Summary = { pendingCharacters: number; pendingStyles: number; pendingTotal: number; bannedCharacters: number; bannedSessions: number; blockedExternalAudits: number; blockedImages: number; recentOperations: number };
 
 const api = misskeyApi as unknown as <T>(endpoint: string, data?: Record<string, unknown>) => Promise<T>;
-const activeView = ref<ViewKey>((new URLSearchParams(window.location.search).get('view') as ViewKey) || 'overview');
-if (!['overview', 'queue', 'library', 'sessions', 'externalAudit', 'review', 'images', 'modelReports', 'logs'].includes(activeView.value)) activeView.value = 'overview';
+const props = defineProps<{ view?: string }>();
+const router = useRouter();
+const viewKeys: ViewKey[] = ['overview', 'queue', 'library', 'sessions', 'externalAudit', 'review', 'images', 'modelReports', 'logs'];
+
+function resolveView(view?: string): ViewKey {
+	return viewKeys.includes(view as ViewKey) ? view as ViewKey : 'overview';
+}
+
+const activeView = ref<ViewKey>(resolveView(props.view));
+watch(() => props.view, view => {
+	activeView.value = resolveView(view);
+});
 
 const summaryLoading = ref(false);
 const summary = ref<Summary | null>(null);
@@ -633,13 +645,14 @@ const reviewHasMore = reviewPagination.hasMore;
 
 const sessionFilters = reactive({ userId: '', sessionId: '' });
 
-/**
- * 打开独立的会话审查页（新标签页，保留治理页的筛选与滚动状态）。
- * messageId 用于从消息检索结果深链定位到具体消息。
- */
 function openSessionReview(sessionId: string, messageId?: string) {
 	const query = messageId != null ? `?messageId=${encodeURIComponent(messageId)}` : '';
-	window.open(`/admin/agent-session/${sessionId}${query}`, '_blank', 'noopener');
+	const path = `/admin/agent-session/${encodeURIComponent(sessionId)}${query}`;
+	if (preferMobileNavigation()) {
+		router.pushByPath(path, 'forcePage');
+	} else {
+		window.open(path, '_blank', 'noopener');
+	}
 }
 
 // 会话列表分页
@@ -977,10 +990,11 @@ async function loadSummary() {
 }
 
 watch(activeView, view => {
-	const url = new URL(window.location.href);
+	const url = new URL(router.getCurrentFullPath(), window.location.origin);
 	if (view === 'overview') url.searchParams.delete('view');
 	else url.searchParams.set('view', view);
-	window.history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`);
+	const path = `${url.pathname}${url.search}${url.hash}`;
+	if (path !== router.getCurrentFullPath()) router.replaceByPath(path);
 	if (view === 'overview') {
 		void loadSummary();
 		return;
@@ -1265,7 +1279,6 @@ async function loadLogs(reset: boolean) {
 }
 
 function jumpSession(sessionId: string) {
-	// 直达独立的会话审查页（新标签页），无需再回到会话列表二次点击
 	openSessionReview(sessionId);
 }
 

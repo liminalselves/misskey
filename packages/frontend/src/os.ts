@@ -35,6 +35,8 @@ import { pleaseLogin } from '@/utility/please-login.js';
 import { showMovedDialog } from '@/utility/show-moved-dialog.js';
 import { getHTMLElementOrNull } from '@/utility/get-dom-node-or-null.js';
 import { focusParent } from '@/utility/focus.js';
+import { mainRouter } from '@/router.js';
+import { preferMobileNavigation } from '@/utility/prefer-mobile-navigation.js';
 
 export const openingWindowsCount = ref(0);
 
@@ -266,6 +268,10 @@ export async function popupAsyncWithDialog<T extends Component>(
 }
 
 export function pageWindow(path: string) {
+	if (path.startsWith('/admin/') && preferMobileNavigation()) {
+		mainRouter.pushByPath(path, 'forcePage');
+		return;
+	}
 	const { dispose } = popup(MkPageWindow, {
 		initialPath: path,
 	}, {

@@ -73,8 +73,9 @@ const NARROW_THRESHOLD = 600;
 const currentPage = computed(() => router.currentRef.value.child);
 
 const ro = new ResizeObserver((entries, observer) => {
-	if (entries.length === 0) return;
-	narrow.value = entries[0].borderBoxSize[0].inlineSize < NARROW_THRESHOLD;
+	if (entries.length === 0 || !el.value?.isConnected) return;
+	const width = entries[0].borderBoxSize[0].inlineSize;
+	if (width > 0) narrow.value = width < NARROW_THRESHOLD;
 });
 
 function skipAutoBackup() {
@@ -212,7 +213,7 @@ onMounted(() => {
 
 	narrow.value = el.value.offsetWidth < NARROW_THRESHOLD;
 
-	if (!narrow.value && currentPage.value?.route.name == null) {
+	if (router.currentRef.value.route.path === '/settings' && !narrow.value && currentPage.value?.route.name == null) {
 		router.replace('/settings/profile');
 	}
 });
@@ -222,7 +223,7 @@ onActivated(() => {
 
 	narrow.value = el.value.offsetWidth < NARROW_THRESHOLD;
 
-	if (!narrow.value && currentPage.value?.route.name == null) {
+	if (router.currentRef.value.route.path === '/settings' && !narrow.value && currentPage.value?.route.name == null) {
 		router.replace('/settings/profile');
 	}
 });

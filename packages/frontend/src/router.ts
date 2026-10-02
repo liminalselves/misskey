@@ -10,6 +10,7 @@ import { Nirax } from '@/lib/nirax.js';
 import { ROUTE_DEF } from '@/router.definition.js';
 import { analytics } from '@/analytics.js';
 import { DI } from '@/di.js';
+import { bindRouterHistory } from '@/utility/router-history.js';
 
 export type Router = Nirax<typeof ROUTE_DEF>;
 
@@ -19,17 +20,7 @@ export function createRouter(fullPath: string): Router {
 
 export const mainRouter = createRouter(window.location.pathname + window.location.search + window.location.hash);
 
-window.addEventListener('popstate', (event) => {
-	mainRouter.replaceByPath(window.location.pathname + window.location.search + window.location.hash);
-});
-
-mainRouter.addListener('push', ctx => {
-	window.history.pushState({ }, '', ctx.fullPath);
-});
-
-mainRouter.addListener('replace', ctx => {
-	window.history.replaceState({ }, '', ctx.fullPath);
-});
+bindRouterHistory(mainRouter);
 
 mainRouter.addListener('change', ctx => {
 	if (_DEV_) console.log('mainRouter: change', ctx.fullPath);
