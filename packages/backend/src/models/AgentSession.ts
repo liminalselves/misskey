@@ -14,6 +14,7 @@ export type AgentSessionKind = typeof agentSessionKinds[number];
 
 @Entity('agent_session')
 @Index('IDX_agent_session_userId_lastMessage', ['lastMessageAt', 'userId'])
+@Index('IDX_agent_session_cleanup_created', ['createdAt', 'id'])
 export class MiAgentSession {
 	@PrimaryColumn(id())
 	public id: string;

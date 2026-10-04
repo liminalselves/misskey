@@ -14,6 +14,8 @@ import { isUserEffectivelySuspended } from '@/misc/user-effective-suspension.js'
 import { MiLocalUser } from '@/models/User.js';
 import { UserService } from '@/core/UserService.js';
 import { UserWebSocketStatusService } from '@/core/UserWebSocketStatusService.js';
+import { LoggerService } from '@/core/LoggerService.js';
+import type Logger from '@/logger.js';
 import { AuthenticateService, AuthenticationError } from './AuthenticateService.js';
 import MainStreamConnection, { ConnectionRequest } from './stream/Connection.js';
 import type * as http from 'node:http';
@@ -24,6 +26,7 @@ export class StreamingApiServerService {
 	#wss: WebSocket.WebSocketServer;
 	#connections = new Map<WebSocket.WebSocket, number>();
 	#cleanConnectionsIntervalId: NodeJS.Timeout | null = null;
+	private logger: Logger;
 
 	constructor(
 		@Inject(DI.redisForSub)
@@ -33,7 +36,9 @@ export class StreamingApiServerService {
 		private authenticateService: AuthenticateService,
 		private usersService: UserService,
 		private userWebSocketStatusService: UserWebSocketStatusService,
+		loggerService: LoggerService,
 	) {
+		this.logger = loggerService.getLogger('streaming');
 	}
 
 	@bindThis
@@ -138,13 +143,17 @@ export class StreamingApiServerService {
 				this.userWebSocketStatusService.setUserOnline(user.id);
 			}
 
+			const updateLastActiveDate = () => {
+				if (!user) return;
+				void this.usersService.updateLastActiveDate(user).catch(error => {
+					this.logger.error(error instanceof Error ? error : String(error), { userId: user.id });
+				});
+			};
 			const userUpdateIntervalId = user ? setInterval(() => {
-				this.usersService.updateLastActiveDate(user);
+				updateLastActiveDate();
 				this.userWebSocketStatusService.keepUserAlive(user.id);
 			}, 1000 * 30) : null;
-			if (user) {
-				this.usersService.updateLastActiveDate(user);
-			}
+			updateLastActiveDate();
 
 			connection.once('close', () => {
 				ev.removeAllListeners();
