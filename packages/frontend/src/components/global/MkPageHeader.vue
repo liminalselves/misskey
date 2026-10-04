@@ -422,6 +422,11 @@ onUnmounted(() => {
 	margin-left: 24px;
 }
 
+/* デスクトップ：タブは横スクロール可能なので、行が溢れる場合はタイトルではなくタブ側に吸収させる（狭い画面はタブが下段に行き競合しないため従来通り縮小） */
+.upper:not(.slim) > .titleContainer {
+	flex-shrink: 0;
+}
+
 .titleAvatarContainer {
 	$size: 32px;
 	contain: strict;

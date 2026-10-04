@@ -1251,7 +1251,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</div>
 			</MkFolder>
 
-			<div v-if="form.modified.value && ['basic', 'models', 'memory', 'compression', 'externalAudit', 'images', 'sticker', 'pet', 'vision', 'credits', 'proactive'].includes(activeTab)" :class="$style.saveBar">
+			<div v-if="form.modified.value && ['basic', 'models', 'memory', 'compression', 'externalAudit', 'images', 'sticker', 'pet', 'vision', 'credits', 'checkin', 'proactive'].includes(activeTab)" :class="$style.saveBar">
 				<MkFormFooter :form="form"/>
 			</div>
 		</div>
@@ -1292,7 +1292,22 @@ import { selectFile } from '@/utility/drive.js';
 import { formatDateTimeString } from '@/utility/format-time-string.js';
 
 const router = useRouter();
-const activeTab = ref('overview');
+
+type TabKey = 'overview' | 'basic' | 'models' | 'memory' | 'compression' | 'externalAudit' | 'images' | 'sticker' | 'pet' | 'vision' | 'credits' | 'migration' | 'checkin' | 'proactive' | 'reports';
+const tabKeys: TabKey[] = ['overview', 'basic', 'models', 'memory', 'compression', 'externalAudit', 'images', 'sticker', 'pet', 'vision', 'credits', 'migration', 'checkin', 'proactive', 'reports'];
+
+const props = defineProps<{ view?: string }>();
+
+function resolveTab(view?: string): TabKey {
+	return tabKeys.includes(view as TabKey) ? view as TabKey : 'overview';
+}
+
+const activeTab = ref<TabKey>(resolveTab(props.view));
+
+watch(() => props.view, view => {
+	const resolved = resolveTab(view);
+	if (resolved !== activeTab.value) activeTab.value = resolved;
+});
 
 const meta = await misskeyApi('admin/meta') as Record<string, unknown>;
 
@@ -3606,18 +3621,26 @@ watch(externalAuditSubTab, sub => {
 });
 
 watch(activeTab, tab => {
+	const url = new URL(router.getCurrentFullPath(), window.location.origin);
+	if (tab === 'overview') url.searchParams.delete('view');
+	else url.searchParams.set('view', tab);
+	const path = `${url.pathname}${url.search}${url.hash}`;
+	if (path !== router.getCurrentFullPath()) router.replaceByPath(path);
+});
+
+// immediate: 直接带 ?view 进入（刷新/分享链接）时也触发对应 tab 的懒加载
+watch(activeTab, tab => {
 	if (tab === 'overview' && reportsData.value == null) void loadReports();
 	if (tab === 'externalAudit' && externalAuditStats.value.length === 0) void loadExternalAuditStats();
 	if (tab === 'externalAudit' && externalAuditSubTab.value === 'failures' && externalAuditFailures.value.length === 0) void loadExternalAuditFailures();
 	if (tab === 'credits' && redeemCodes.value.length === 0) void loadRedeemListPage(1, true);
 	if (tab === 'migration' && migrationLogs.value.length === 0) void loadMigrationLogs();
 	if (tab === 'checkin' && roleItems.value.length === 0) void loadRolesForCheckin();
-});
+}, { immediate: true });
 
 initCheckinRoleRows(meta);
 
 onMounted(() => {
-	void loadReports();
 	void loadTokenizerStatus();
 });
 </script>

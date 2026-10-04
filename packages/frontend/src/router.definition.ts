@@ -545,6 +545,8 @@ export const ROUTE_DEF = [{
 		path: '/agents-settings',
 		name: 'agents-settings',
 		component: page(() => import('@/pages/admin/agents-settings.vue')),
+		query: { view: 'view' },
+		reuseComponent: true,
 	}, {
 		path: '/agents-review',
 		name: 'agents-review',
