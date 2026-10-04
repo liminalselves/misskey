@@ -641,13 +641,14 @@ onMounted(() => { load(); });
 	display: flex;
 	flex-direction: column;
 	border-radius: 10px;
-	overflow: hidden;
+	overflow-x: auto;
 	border: solid 1px var(--MI_THEME-divider);
 }
 
 .recHeader {
 	display: grid;
 	grid-template-columns: 1fr 0.8fr 2.5fr 0.8fr 0.5fr;
+	min-width: 580px;
 	padding: 8px 12px;
 	font-size: 0.75em;
 	font-weight: 600;
@@ -659,6 +660,7 @@ onMounted(() => { load(); });
 .recRow {
 	display: grid;
 	grid-template-columns: 1fr 0.8fr 2.5fr 0.8fr 0.5fr;
+	min-width: 580px;
 	padding: 7px 12px;
 	font-size: 0.82em;
 	align-items: center;

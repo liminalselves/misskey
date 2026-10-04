@@ -885,7 +885,7 @@ onBeforeUnmount(() => {
 	display: flex;
 	flex-direction: column;
 	border-radius: 12px;
-	overflow: hidden;
+	overflow-x: auto;
 	border: solid 1px var(--MI_THEME-divider);
 	background: var(--MI_THEME-panel);
 	box-shadow: 0 1px 2px color-mix(in srgb, var(--MI_THEME-fg) 4%, transparent);
@@ -929,14 +929,17 @@ onBeforeUnmount(() => {
 
 .billingCols {
 	grid-template-columns: minmax(170px, 1.3fr) minmax(180px, 1.1fr) minmax(120px, 1fr) minmax(80px, 0.55fr);
+	min-width: 640px;
 }
 
 .modelCols {
 	grid-template-columns: 2.4fr 0.7fr 0.7fr 0.7fr 0.9fr 1fr 0.9fr;
+	min-width: 700px;
 }
 
 .logCols {
 	grid-template-columns: 1.45fr 0.8fr 1.15fr 0.8fr 0.75fr 0.85fr;
+	min-width: 660px;
 }
 
 .simpleCols {
@@ -1326,32 +1329,6 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 600px) {
-	.billingCols {
-		grid-template-columns: 1.2fr 0.7fr 0.8fr;
-
-		> :nth-child(3) {
-			display: none;
-		}
-	}
-
-	.modelCols {
-		grid-template-columns: 1.4fr 0.7fr 0.7fr 0.9fr 0.8fr;
-
-		> :nth-child(4),
-		> :nth-child(5) {
-			display: none;
-		}
-	}
-
-	.logCols {
-		grid-template-columns: 1fr 0.65fr 0.9fr 0.75fr;
-
-		> :nth-child(5),
-		> :nth-child(6) {
-			display: none;
-		}
-	}
-
 	.pagerBar {
 		gap: 6px 8px;
 		padding: 8px 0 4px;

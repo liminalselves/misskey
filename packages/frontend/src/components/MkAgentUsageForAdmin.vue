@@ -418,7 +418,7 @@ onBeforeUnmount(() => {
 	display: flex;
 	flex-direction: column;
 	border-radius: 12px;
-	overflow: hidden;
+	overflow-x: auto;
 	border: solid 1px var(--MI_THEME-divider);
 	background: var(--MI_THEME-panel);
 }
@@ -455,6 +455,7 @@ onBeforeUnmount(() => {
 
 .logCols {
 	grid-template-columns: 1.4fr 0.8fr 1.2fr 0.8fr 0.7fr 0.9fr;
+	min-width: 660px;
 }
 
 .name {
@@ -572,25 +573,5 @@ onBeforeUnmount(() => {
 	font-variant-numeric: tabular-nums;
 	min-width: 4em;
 	text-align: center;
-}
-
-@media (max-width: 600px) {
-	.modelCols {
-		grid-template-columns: 1.6fr 0.6fr 0.6fr 0.6fr 0.9fr;
-
-		> :nth-child(4),
-		> :nth-child(5) {
-			display: none;
-		}
-	}
-
-	.logCols {
-		grid-template-columns: 1.2fr 0.7fr 0.9fr 0.7fr;
-
-		> :nth-child(5),
-		> :nth-child(6) {
-			display: none;
-		}
-	}
 }
 </style>

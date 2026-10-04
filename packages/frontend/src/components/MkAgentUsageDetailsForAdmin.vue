@@ -488,7 +488,7 @@ onMounted(reload);
 	display: flex;
 	flex-direction: column;
 	border-radius: 12px;
-	overflow: hidden;
+	overflow-x: auto;
 	border: solid 1px var(--MI_THEME-divider);
 	background: var(--MI_THEME-panel);
 }
@@ -523,9 +523,11 @@ onMounted(reload);
 			120px,
 			1fr
 		) minmax(80px, 0.55fr);
+	min-width: 620px;
 }
 .modelCols {
 	grid-template-columns: 2.4fr 0.7fr 0.7fr 0.7fr 0.9fr 1fr 0.9fr;
+	min-width: 700px;
 }
 .simpleCols {
 	grid-template-columns: 1fr auto;
@@ -694,20 +696,5 @@ onMounted(reload);
 	font-variant-numeric: tabular-nums;
 	min-width: 4em;
 	text-align: center;
-}
-@media (max-width: 600px) {
-	.billingCols {
-		grid-template-columns: 1.2fr 0.8fr 0.8fr;
-	}
-	.billingCols > :nth-child(3) {
-		display: none;
-	}
-	.modelCols {
-		grid-template-columns: 1.4fr 0.7fr 0.7fr 0.9fr 0.8fr;
-	}
-	.modelCols > :nth-child(4),
-	.modelCols > :nth-child(5) {
-		display: none;
-	}
 }
 </style>
