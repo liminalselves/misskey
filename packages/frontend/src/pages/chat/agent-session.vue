@@ -64,6 +64,19 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</button>
 			</div>
 		</Transition>
+		<!-- 未读定位按钮：进入会话时未读占不满首屏则不显示（与私信房间一致） -->
+		<Transition :name="prefer.s.animation ? 'fade' : ''">
+			<button
+				v-if="showAgentUnreadJump"
+				type="button"
+				class="_button"
+				:class="$style.unreadJump"
+				:style="showAliyaBanner ? { top: 'calc(var(--MI-stickyTop, 0px) + 60px)' } : undefined"
+				@click="onAgentUnreadJumpClick"
+			>
+				<i class="ti ti-arrow-up"></i> 查看 {{ agentUnreadSnapshot?.count }} 条未读消息
+			</button>
+		</Transition>
 		<div
 			v-if="showWorldbookHitHint && sending && pendingWorldbookMatches.length > 0"
 			:class="[$style.worldbookHitHint, worldbookHitPopoverOpen && $style.worldbookHitHintActive]"
@@ -113,6 +126,11 @@ SPDX-License-Identifier: AGPL-3.0-only
 					tag="div" class="_gaps"
 				>
 					<template v-for="item in timelineForChat.toReversed()" :key="item.id">
+						<div v-if="item.type === 'item' && agentUnreadSnapshot?.firstUnreadId === item.data.id" :class="$style.unreadDivider">
+							<span :class="$style.unreadDividerLine"></span>
+							<span :class="$style.unreadDividerLabel">以下为新消息</span>
+							<span :class="$style.unreadDividerLine"></span>
+						</div>
 						<XAgentMessage
 							v-if="item.type === 'item'"
 							:sessionId="sessionId"
@@ -2693,6 +2711,11 @@ function stopPanelLiveDataRefresh() {
 
 function onDocumentVisibilityForPanelRefresh() {
 	if (window.document.visibilityState !== 'visible') return;
+	// 页面从后台切回可见时补清未读：消息在后台期间到达时 onNewAgentMessage 会跳过清未读（用户当时没看到），
+	// 但消息已渲染进时间线，切回即视为看到，不补的话返回列表会出现未读点（审查/嵌入模式永不清未读）
+	if (isPageActivated && !isComponentUnmounted && !isEmbeddedControl.value && !isReviewMode.value) {
+		void markAgentSessionRead();
+	}
 	// 回到页面立即刷新当前面板的易变数据，不必等下一个轮询周期
 	refreshPanelLiveData(tab.value, 'live');
 }
@@ -3507,6 +3530,103 @@ async function markAgentSessionRead(): Promise<void> {
 	} catch { /* ignore */ }
 }
 
+/**
+ * 进入会话时（清未读之前）抓取的未读快照：count 条数、firstUnreadId 首条未读消息 id。
+ * 用于「查看 X 条未读消息」跳转按钮与「以下为新消息」分割线。
+ * 条数/首条 id 未知（存量未读数据无计数）时不置位，退化为不展示。审查/嵌入模式不启用。
+ */
+const agentUnreadSnapshot = ref<{ count: number; firstUnreadId: string } | null>(null);
+const showAgentUnreadJump = ref(false);
+let agentUnreadScrollListenerEl: HTMLElement | null = null;
+
+async function captureAgentUnreadSnapshot(): Promise<void> {
+	agentUnreadSnapshot.value = null;
+	showAgentUnreadJump.value = false;
+	unbindAgentUnreadScrollListener();
+	if (isReviewMode.value || isEmbeddedControl.value) return;
+	try {
+		const res = await (misskeyApi as unknown as (endpoint: string, data: Record<string, string>) => Promise<{ count: number | null; firstUnreadId: string | null }>)(
+			'agents/sessions/unread-info',
+			{ sessionId },
+		);
+		if (res.count != null && res.count > 0 && res.firstUnreadId != null) {
+			agentUnreadSnapshot.value = { count: res.count, firstUnreadId: res.firstUnreadId };
+		}
+	} catch {
+		// 未读信息获取失败不影响会话加载
+	}
+}
+
+/** 消息元素当前是否显示在滚动视口内（fully=true 要求完整可见） */
+function isAgentMessageVisibleInTimeline(messageId: string, fully = false): boolean {
+	const root = timelineEl.value;
+	if (root == null) return false;
+	const el = root.querySelector(`[data-message-id="${CSS.escape(messageId)}"]`) as HTMLElement | null;
+	if (el == null) return false;
+	const container = getScrollContainer(root);
+	const elRect = el.getBoundingClientRect();
+	const containerRect = container != null ? container.getBoundingClientRect() : new DOMRect(0, 0, window.innerWidth, window.innerHeight);
+	return fully
+		? elRect.top >= containerRect.top && elRect.bottom <= containerRect.bottom
+		: elRect.bottom > containerRect.top && elRect.top < containerRect.bottom;
+}
+
+function onAgentUnreadScroll() {
+	if (!showAgentUnreadJump.value || agentUnreadSnapshot.value == null) return;
+	// 用户手动滚动看到首条未读后收起按钮
+	if (isAgentMessageVisibleInTimeline(agentUnreadSnapshot.value.firstUnreadId)) {
+		showAgentUnreadJump.value = false;
+		unbindAgentUnreadScrollListener();
+	}
+}
+
+function bindAgentUnreadScrollListener() {
+	unbindAgentUnreadScrollListener();
+	const root = timelineEl.value;
+	if (root == null) return;
+	const container = getScrollContainer(root);
+	if (container == null) return;
+	agentUnreadScrollListenerEl = container;
+	container.addEventListener('scroll', onAgentUnreadScroll, { passive: true });
+}
+
+function unbindAgentUnreadScrollListener() {
+	agentUnreadScrollListenerEl?.removeEventListener('scroll', onAgentUnreadScroll);
+	agentUnreadScrollListenerEl = null;
+}
+
+/**
+ * 未读消息在当前屏幕显示不完（首条未读不在视口内）时展示跳转按钮。
+ * 进入页面时停在底部（最新消息），首条未读不可见即说明未读占满/超出首屏。
+ */
+async function evaluateAgentUnreadJump(): Promise<void> {
+	if (agentUnreadSnapshot.value == null) return;
+	await nextTick();
+	await new Promise(r => window.setTimeout(r, 300));
+	const snapshot = agentUnreadSnapshot.value;
+	if (snapshot == null || messages.value.length === 0) return;
+	showAgentUnreadJump.value = !isAgentMessageVisibleInTimeline(snapshot.firstUnreadId, true);
+	if (showAgentUnreadJump.value) bindAgentUnreadScrollListener();
+}
+
+async function onAgentUnreadJumpClick() {
+	const snapshot = agentUnreadSnapshot.value;
+	if (snapshot == null) return;
+	showAgentUnreadJump.value = false;
+	unbindAgentUnreadScrollListener();
+	// 首条未读不在已加载列表时逐页向上加载；仍找不到则由 scrollToMessage 退化到上下文定位
+	const isLoaded = () => messages.value.some(m => m.id === snapshot.firstUnreadId);
+	let guard = 0;
+	while (!isLoaded() && canFetchMore.value && guard < 20) {
+		await fetchOlderMessages();
+		guard++;
+		const tail = messages.value[messages.value.length - 1];
+		// 时序 id：加载范围已越过目标仍不存在，说明目标消息已被删除，放弃定位
+		if (!isLoaded() && (tail == null || tail.id < snapshot.firstUnreadId)) return;
+	}
+	await scrollToMessage(snapshot.firstUnreadId);
+}
+
 /** 审查模式的新消息轮询周期：管理员的流通道收不到属主的 newAgentMessage 事件 */
 const REVIEW_POLL_INTERVAL_MS = 30_000;
 let reviewPollTimer: number | null = null;
@@ -3938,8 +4058,8 @@ onMounted(async () => {
 		agentModelsNotificationStream = stream;
 		// 模型配置广播（管理员下架/调价等）挂在根流上，离开页面时解绑
 		stream.on('agentModelsChanged', onAgentModelsChanged);
-		// 进入会话页即清未读（与私信房间行为一致）
-		void markAgentSessionRead();
+		// 进入会话页即清未读（与私信房间行为一致）；清未读前先抓未读快照供定位按钮/分割线使用
+		void captureAgentUnreadSnapshot().then(() => markAgentSessionRead());
 	}
 	try {
 		await fetchInstance(true);
@@ -3965,6 +4085,7 @@ onMounted(async () => {
 					await scrollToMessage(props.messageId);
 				} else {
 					await loadInitialTimeline();
+					void evaluateAgentUnreadJump();
 				}
 			}
 		}
@@ -4001,7 +4122,15 @@ onActivated(() => {
 	refreshPanelLiveData(tab.value, 'live');
 	if (isEmbeddedControl.value) return;
 	// KeepAlive 缓存页重新进入时 onMounted 不会再次执行：与首次进入一致，看到会话即清未读
-	void markAgentSessionRead();
+	// 清未读前先抓未读快照（离开期间可能有新消息）；审查模式不抓快照（markAgentSessionRead 内部也有守卫）
+	if (isReviewMode.value) {
+		void markAgentSessionRead();
+	} else {
+		void captureAgentUnreadSnapshot().then(() => {
+			void markAgentSessionRead();
+			void evaluateAgentUnreadJump();
+		});
+	}
 	// 返回本页时若回复仍在生成则恢复轮询（onDeactivated 已将其停止）
 	if (session.value?.agentReplyPending) startReplyPendingPoll();
 });
@@ -4020,6 +4149,7 @@ onDeactivated(() => {
 onBeforeUnmount(() => {
 	// 必须最先置位：阻止在飞异步回调（send 返回、轮询 tick）在卸载后误清未读
 	isComponentUnmounted = true;
+	unbindAgentUnreadScrollListener();
 	proactiveNotificationConnection?.dispose();
 	proactiveNotificationConnection = null;
 	agentModelsNotificationStream?.off('agentModelsChanged', onAgentModelsChanged);
@@ -7188,6 +7318,54 @@ async function onAbortRequest() {
 }
 
 /* ---- Aliya Web 推荐横幅 ---- */
+.unreadJump {
+	position: sticky;
+	top: calc(var(--MI-stickyTop, 0px) + 8px);
+	z-index: 3;
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	width: fit-content;
+	margin-left: auto;
+	padding: 6px 12px;
+	border-radius: 999px;
+	font-size: 0.85em;
+	font-weight: 600;
+	color: var(--MI_THEME-accent);
+	background: color(from var(--MI_THEME-panel) srgb r g b / 0.85);
+	border: solid 1px color-mix(in srgb, var(--MI_THEME-accent) 36%, var(--MI_THEME-divider));
+	box-shadow: 0 2px 10px color-mix(in srgb, var(--MI_THEME-shadow, #000) 25%, transparent);
+	-webkit-backdrop-filter: var(--MI-blur, blur(15px));
+	backdrop-filter: var(--MI-blur, blur(15px));
+}
+
+.unreadDivider {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 0.65em;
+	width: 100%;
+	max-width: var(--agent-control-content-max-width, 700px);
+	margin: 0.35em auto;
+	padding: 0 0.25em;
+	box-sizing: border-box;
+}
+
+.unreadDividerLine {
+	flex: 1;
+	height: 0;
+	border-top: 1px solid color-mix(in srgb, var(--MI_THEME-accent) 40%, var(--MI_THEME-divider));
+	min-width: 1em;
+}
+
+.unreadDividerLabel {
+	flex-shrink: 0;
+	font-size: 0.78em;
+	font-weight: 600;
+	color: var(--MI_THEME-accent);
+	white-space: nowrap;
+}
+
 .aliyaBanner {
 	position: sticky;
 	top: calc(var(--MI-stickyTop, 0px) + 8px);

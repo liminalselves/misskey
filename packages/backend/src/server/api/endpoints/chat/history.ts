@@ -54,18 +54,28 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 
 			if (ps.room) {
 				const roomIds = history.map(m => m.toRoomId!);
-				const readStateMap = await this.chatService.getRoomReadStateMap(me.id, roomIds);
+				const [readStateMap, unreadCountMap] = await Promise.all([
+					this.chatService.getRoomReadStateMap(me.id, roomIds),
+					this.chatService.getRoomUnreadCountMap(me.id, roomIds),
+				]);
 
 				for (const message of packedMessages) {
-					message.isRead = readStateMap[message.toRoomId!] ?? false;
+					const isRead = readStateMap[message.toRoomId!] ?? false;
+					message.isRead = isRead;
+					message.unreadCount = isRead ? 0 : (unreadCountMap[message.toRoomId!] ?? null);
 				}
 			} else {
 				const otherIds = history.map(m => m.fromUserId === me.id ? m.toUserId! : m.fromUserId!);
-				const readStateMap = await this.chatService.getUserReadStateMap(me.id, otherIds);
+				const [readStateMap, unreadCountMap] = await Promise.all([
+					this.chatService.getUserReadStateMap(me.id, otherIds),
+					this.chatService.getUserUnreadCountMap(me.id, otherIds),
+				]);
 
 				for (const message of packedMessages) {
 					const otherId = message.fromUserId === me.id ? message.toUserId! : message.fromUserId!;
-					message.isRead = readStateMap[otherId] ?? false;
+					const isRead = readStateMap[otherId] ?? false;
+					message.isRead = isRead;
+					message.unreadCount = isRead ? 0 : (unreadCountMap[otherId] ?? null);
 				}
 			}
 

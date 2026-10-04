@@ -59,6 +59,11 @@ export const packedChatMessageSchema = {
 			type: 'boolean',
 			optional: true, nullable: false,
 		},
+		// 仅 history 端点注入：该会话的未读条数。已读为 0；有未读但条数未知（存量数据无计数）为 null
+		unreadCount: {
+			type: 'number',
+			optional: true, nullable: true,
+		},
 		reactions: {
 			type: 'array',
 			optional: false, nullable: false,

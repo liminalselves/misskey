@@ -8,7 +8,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 	<MkA
 		v-for="item in history"
 		:key="item.id"
-		:class="[$style.message, { [$style.isMe]: item.isMe, [$style.isRead]: item.isRead }]"
+		:class="[$style.message, { [$style.isMe]: item.isMe, [$style.isRead]: item.isRead, [$style.hasUnreadCount]: !item.isMe && !item.isRead && item.unreadCount != null && item.unreadCount > 0 }]"
 		class="_panel"
 		:to="item.href"
 	>
@@ -24,6 +24,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<header :class="$style.messageHeader">
 					<span :class="$style.messageHeaderName">{{ item.session.name }}</span>
 					<MkTime :time="item.session.lastMessageAt" :class="$style.messageHeaderTime"/>
+					<span v-if="!item.isMe && !item.isRead && item.unreadCount != null && item.unreadCount > 0" class="_indicateCounter" :class="$style.unreadBadge">{{ item.unreadCount > 99 ? '99+' : item.unreadCount }}</span>
 				</header>
 				<div v-if="item.session.lastMessagePreview" :class="$style.messageBodyText">
 					<span v-if="item.session.lastMessageRole === 'user'" :class="$style.youSaid">{{ i18n.ts.you }}:</span>{{ item.session.lastMessagePreview }}
@@ -40,11 +41,13 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<header v-if="item.message.toRoom" :class="$style.messageHeader">
 					<span :class="$style.messageHeaderName"><i class="ti ti-users"></i> {{ item.message.toRoom.name }}</span>
 					<MkTime :time="item.message.createdAt" :class="$style.messageHeaderTime"/>
+					<span v-if="!item.isMe && !item.isRead && item.unreadCount != null && item.unreadCount > 0" class="_indicateCounter" :class="$style.unreadBadge">{{ item.unreadCount > 99 ? '99+' : item.unreadCount }}</span>
 				</header>
 				<header v-else :class="$style.messageHeader">
 					<MkUserName :class="$style.messageHeaderName" :user="item.other!"/>
 					<MkAcct :class="$style.messageHeaderUsername" :user="item.other!"/>
 					<MkTime :time="item.message.createdAt" :class="$style.messageHeaderTime"/>
+					<span v-if="!item.isMe && !item.isRead && item.unreadCount != null && item.unreadCount > 0" class="_indicateCounter" :class="$style.unreadBadge">{{ item.unreadCount > 99 ? '99+' : item.unreadCount }}</span>
 				</header>
 				<div v-if="item.message.toRoom" :class="[$style.messageBodyText, $style.inlineLayout]">
 					<template v-if="!item.isMe">
@@ -64,7 +67,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { onActivated, onDeactivated, onMounted, ref } from 'vue';
+import { onActivated, onBeforeUnmount, onDeactivated, onMounted, ref } from 'vue';
 import * as Misskey from 'misskey-js';
 import type { AgentsSessionsListMineResponse } from 'misskey-js/entities.js';
 import { useInterval } from '@@/js/use-interval.js';
@@ -89,6 +92,8 @@ type ChatHistoryItem = {
 	id: string;
 	isMe: boolean;
 	isRead: boolean;
+	/** 未读条数；null 表示有未读但条数未知（存量数据无计数） */
+	unreadCount: number | null;
 	href: string;
 } & (
 	| {
@@ -113,13 +118,18 @@ async function fetchHistory(updateGlobalStatus = false) {
 
 	fetching.value = true;
 
+	// 请求不能无限悬置：休眠恢复/网络切换后 TCP 半开会让 fetch 长时间不 settle，
+	// fetching 锁将一直被占用，列表在整页刷新前都不再更新
+	const abort = new AbortController();
+	const abortTimer = window.setTimeout(() => abort.abort(), 20000);
+
 	try {
 		const [userMessages, roomMessages, agentSessions] = await Promise.all([
-			misskeyApi('chat/history', { room: false }),
-			misskeyApi('chat/history', { room: true }),
+			misskeyApi('chat/history', { room: false }, undefined, abort.signal),
+			misskeyApi('chat/history', { room: true }, undefined, abort.signal),
 			props.includeAgentSessions
 				// 智能体会话获取失败不影响私信列表刷新
-				? misskeyApi('agents/sessions/list-mine', {}).catch(() => [] as AgentsSessionsListMineResponse)
+				? misskeyApi('agents/sessions/list-mine', {}, undefined, abort.signal).catch(() => [] as AgentsSessionsListMineResponse)
 				: Promise.resolve([] as AgentsSessionsListMineResponse),
 		]);
 
@@ -129,6 +139,7 @@ async function fetchHistory(updateGlobalStatus = false) {
 			other: (!('room' in m) || m.room == null) ? (m.fromUserId === $i.id ? m.toUser : m.fromUser) : null,
 			isMe: m.fromUserId === $i.id,
 			isRead: m.isRead === true,
+			unreadCount: m.unreadCount ?? null,
 			href: m.toRoomId ? `/chat/room/${m.toRoomId}` : `/chat/user/${(m.fromUserId === $i.id ? m.toUser : m.fromUser)!.id}`,
 		}));
 
@@ -141,6 +152,7 @@ async function fetchHistory(updateGlobalStatus = false) {
 			other: null,
 			isMe: false,
 			isRead: !s.hasUnread,
+			unreadCount: s.unreadCount,
 			href: `/chat/agent/${s.id}`,
 			session: s,
 		}));
@@ -157,10 +169,20 @@ async function fetchHistory(updateGlobalStatus = false) {
 			const hasUnread = [...userMessages, ...roomMessages].some(m => m.fromUserId !== $i.id && !m.isRead);
 			updateCurrentAccountPartial({ hasUnreadChatMessages: hasUnread });
 		}
+	} catch {
+		// 后台刷新失败（含超时中止）保持现有数据，静默等待下个周期
 	} finally {
+		window.clearTimeout(abortTimer);
 		// 无论成功失败都复位锁，避免异常时 fetching 永久卡死导致列表不再刷新
 		fetching.value = false;
 		initializing.value = false;
+	}
+}
+
+/** 后台恢复/断网重连时立即刷新列表，不等下一个 10s 轮询 */
+function onVisibleOrOnline() {
+	if (!window.document.hidden && isActivated) {
+		fetchHistory(false);
 	}
 }
 
@@ -228,6 +250,14 @@ onMounted(() => {
 			fetchHistory(false);
 		}, 150);
 	});
+
+	window.document.addEventListener('visibilitychange', onVisibleOrOnline);
+	window.addEventListener('online', onVisibleOrOnline);
+});
+
+onBeforeUnmount(() => {
+	window.document.removeEventListener('visibilitychange', onVisibleOrOnline);
+	window.removeEventListener('online', onVisibleOrOnline);
 });
 </script>
 
@@ -242,7 +272,8 @@ onMounted(() => {
 		opacity: 0.8;
 	}
 
-	&:not(.isMe):not(.isRead) {
+	// 条数已知时改显示数字角标（unreadBadge），圆点仅留给条数未知的存量数据
+	&:not(.isMe):not(.isRead):not(.hasUnreadCount) {
 		&::before {
 			content: '';
 			position: absolute;
@@ -254,6 +285,12 @@ onMounted(() => {
 			background-color: var(--MI_THEME-accent);
 		}
 	}
+}
+
+.unreadBadge {
+	flex-shrink: 0;
+	margin-left: 6px;
+	font-size: 0.72em;
 }
 
 @container (max-width: 500px) {

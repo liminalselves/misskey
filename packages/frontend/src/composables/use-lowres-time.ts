@@ -32,3 +32,11 @@ export function useLowresTime() {
 window.setInterval(() => {
 	time.value = Date.now();
 }, TIME_UPDATE_INTERVAL);
+
+// 后台时 setInterval 会被浏览器降频（极端情况对齐到分钟级唤醒），恢复前台时立即补一跳，
+// 否则相对时间最长要等一个降频周期才刷新
+window.document.addEventListener('visibilitychange', () => {
+	if (!window.document.hidden) {
+		time.value = Date.now();
+	}
+});

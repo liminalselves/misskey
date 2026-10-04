@@ -254,6 +254,7 @@ export * as 'agents/sessions/worldbook-match-preview' from './endpoints/agents/s
 export * as 'agents/sessions/preview-model-change' from './endpoints/agents/sessions/preview-model-change.js';
 export * as 'agents/sessions/update' from './endpoints/agents/sessions/update.js';
 export * as 'agents/sessions/read' from './endpoints/agents/sessions/read.js';
+export * as 'agents/sessions/unread-info' from './endpoints/agents/sessions/unread-info.js';
 export * as 'agents/sessions/read-all' from './endpoints/agents/sessions/read-all.js';
 export * as 'agents/sessions/delete' from './endpoints/agents/sessions/delete.js';
 export * as 'agents/styles/create' from './endpoints/agents/styles/create.js';
@@ -614,4 +615,5 @@ export * as 'chat/rooms/search' from './endpoints/chat/rooms/search.js';
 export * as 'chat/history' from './endpoints/chat/history.js';
 export * as 'chat/read' from './endpoints/chat/read.js';
 export * as 'chat/read-all' from './endpoints/chat/read-all.js';
+export * as 'chat/unread-info' from './endpoints/chat/unread-info.js';
 export * as 'v2/admin/emoji/list' from './endpoints/v2/admin/emoji/list.js';

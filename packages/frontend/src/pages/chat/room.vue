@@ -7,6 +7,11 @@ SPDX-License-Identifier: AGPL-3.0-only
 <PageWithHeader v-model:tab="tab" :reversed="tab === 'chat'" :tabs="headerTabs" :actions="headerActions" narrowMergedRow showBack>
 	<div v-if="tab === 'chat'" class="_spacer" style="--MI_SPACER-w: 700px;">
 		<div class="_gaps">
+			<Transition name="fade">
+				<button v-if="showUnreadJump" class="_button" :class="$style.unreadJump" @click="onUnreadJumpClick">
+					<i class="ti ti-arrow-up"></i> 查看 {{ unreadSnapshot?.count }} 条未读消息
+				</button>
+			</Transition>
 			<div v-if="initializing">
 				<MkLoading/>
 			</div>
@@ -49,6 +54,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 					tag="div" class="_gaps"
 				>
 					<template v-for="item in timeline.toReversed()" :key="item.id">
+						<div v-if="item.type === 'item' && unreadSnapshot?.firstUnreadId === item.data.id" :class="$style.unreadDivider">
+							<span>以下为新消息</span>
+						</div>
 						<XMessage v-if="item.type === 'item'" :message="item.data" :highlighted="highlightedMessageId === item.data.id" :roomOwnerId="room?.ownerId" :data-message-id="item.data.id" @reply="handleReply" @scrollToMessage="handleScrollToMessage"/>
 						<div v-else-if="item.type === 'date'" :class="$style.dateDivider">
 							<span><i class="ti ti-chevron-up"></i> {{ item.nextText }}</span>
@@ -159,6 +167,103 @@ const timeline = makeDateSeparatedTimelineComputedRef(messages);
 const highlightedMessageId = ref<string | null>(null);
 let highlightTimeoutId: number | null = null; // 防抖用
 const replyingTo = ref<{ id: string; text?: string | null } | null>(null);
+
+/**
+ * 进入会话时（read 清除标记之前）抓取的未读快照：
+ * count 条数、firstUnreadId 首条未读消息 id。
+ * 用于「查看 X 条未读消息」跳转按钮与「以下为新消息」分割线。
+ * 条数/首条 id 未知（存量未读数据无计数）时不置位，退化为不展示。
+ */
+const unreadSnapshot = ref<{ count: number; firstUnreadId: string } | null>(null);
+const showUnreadJump = ref(false);
+let unreadScrollListenerEl: HTMLElement | null = null;
+
+async function captureUnreadSnapshot(): Promise<void> {
+	unreadSnapshot.value = null;
+	showUnreadJump.value = false;
+	unbindUnreadScrollListener();
+	try {
+		const res = await (misskeyApi as unknown as (endpoint: string, data: Record<string, string>) => Promise<{ count: number | null; firstUnreadId: string | null }>)(
+			'chat/unread-info',
+			props.userId ? { userId: props.userId } : { roomId: props.roomId! },
+		);
+		if (res.count != null && res.count > 0 && res.firstUnreadId != null) {
+			unreadSnapshot.value = { count: res.count, firstUnreadId: res.firstUnreadId };
+		}
+	} catch {
+		// 未读信息获取失败不影响正常聊天
+	}
+}
+
+/** 消息元素当前是否显示在滚动视口内（fully=true 要求完整可见） */
+function isMessageVisibleInTimeline(messageId: string, fully = false): boolean {
+	const root = timelineEl.value;
+	if (root == null) return false;
+	const el = root.querySelector(`[data-message-id="${CSS.escape(messageId)}"]`) as HTMLElement | null;
+	if (el == null) return false;
+	const container = getScrollContainer(root);
+	const elRect = el.getBoundingClientRect();
+	const containerRect = container != null ? container.getBoundingClientRect() : new DOMRect(0, 0, window.innerWidth, window.innerHeight);
+	return fully
+		? elRect.top >= containerRect.top && elRect.bottom <= containerRect.bottom
+		: elRect.bottom > containerRect.top && elRect.top < containerRect.bottom;
+}
+
+function onUnreadScroll() {
+	if (!showUnreadJump.value || unreadSnapshot.value == null) return;
+	// 用户手动滚动看到首条未读后收起按钮
+	if (isMessageVisibleInTimeline(unreadSnapshot.value.firstUnreadId)) {
+		showUnreadJump.value = false;
+		unbindUnreadScrollListener();
+	}
+}
+
+function bindUnreadScrollListener() {
+	unbindUnreadScrollListener();
+	const root = timelineEl.value;
+	if (root == null) return;
+	const container = getScrollContainer(root);
+	if (container == null) return;
+	unreadScrollListenerEl = container;
+	container.addEventListener('scroll', onUnreadScroll, { passive: true });
+}
+
+function unbindUnreadScrollListener() {
+	unreadScrollListenerEl?.removeEventListener('scroll', onUnreadScroll);
+	unreadScrollListenerEl = null;
+}
+
+/**
+ * 未读消息在当前屏幕显示不完（首条未读不在视口内）时展示跳转按钮。
+ * 进入页面时停在底部（最新消息），首条未读不可见即说明未读占满/超出首屏。
+ */
+async function evaluateUnreadJump(): Promise<void> {
+	if (unreadSnapshot.value == null) return;
+	await nextTick();
+	await new Promise(resolve => window.setTimeout(resolve, 300));
+	const snapshot = unreadSnapshot.value;
+	if (snapshot == null || messages.value.length === 0) return;
+	showUnreadJump.value = !isMessageVisibleInTimeline(snapshot.firstUnreadId, true);
+	if (showUnreadJump.value) bindUnreadScrollListener();
+}
+
+async function onUnreadJumpClick() {
+	const snapshot = unreadSnapshot.value;
+	if (snapshot == null) return;
+	showUnreadJump.value = false;
+	unbindUnreadScrollListener();
+	// 首条未读不在已加载列表时逐页向上加载；仍找不到则由 scrollToMessage 退化到上下文定位
+	const isLoaded = () => messages.value.some(m => m.id === snapshot.firstUnreadId);
+	let guard = 0;
+	while (!isLoaded() && canFetchMore.value && guard < 20) {
+		await fetchMore();
+		guard++;
+		const tail = messages.value[messages.value.length - 1];
+		// 时序 id：加载范围已越过目标仍不存在，说明目标消息已被删除，放弃定位
+		if (!isLoaded() && (tail == null || tail.id < snapshot.firstUnreadId)) return;
+	}
+	await scrollToMessage(snapshot.firstUnreadId);
+}
 
 const SCROLL_HEAD_THRESHOLD = 200;
 
@@ -293,6 +398,8 @@ async function initialize() {
 		const [u, m] = await Promise.all([
 			misskeyApi('users/show', { userId: props.userId }),
 			misskeyApi('chat/messages/user-timeline', { userId: props.userId, limit: LIMIT }),
+			// 必须先于 read 信号完成：read 会清除后端的未读标记与计数
+			captureUnreadSnapshot(),
 		]);
 
 		user.value = u;
@@ -368,8 +475,11 @@ async function initialize() {
 			return;
 		}
 
-		// 已是成员：加载消息时间线
-		const m = await misskeyApi('chat/messages/room-timeline', { roomId: props.roomId, limit: LIMIT });
+		// 已是成员：加载消息时间线（未读快照必须先于 read 信号完成）
+		const [m] = await Promise.all([
+			misskeyApi('chat/messages/room-timeline', { roomId: props.roomId, limit: LIMIT }),
+			captureUnreadSnapshot(),
+		]);
 
 		room.value = r;
 		messages.value = m.map(x => normalizeMessage(x));
@@ -397,6 +507,7 @@ async function initialize() {
 
 	initialized.value = true;
 	initializing.value = false;
+	void evaluateUnreadJump();
 }
 
 let isActivated = true;
@@ -404,8 +515,12 @@ let isActivated = true;
 onActivated(() => {
 	isActivated = true;
 	// 用户从其他页面返回时，发送 read 信号标记该对话为已读
-	if (connection.value && !window.document.hidden) {
-		(connection.value as any).send('read', {});
+	// read 会清除后端未读标记，先重新抓取未读快照（离开期间可能有新消息）
+	if (connection.value && initialized.value && !window.document.hidden) {
+		void captureUnreadSnapshot().then(() => {
+			(connection.value as any)?.send('read', {});
+			void evaluateUnreadJump();
+		});
 	}
 });
 
@@ -658,7 +773,12 @@ function onIndicatorClick() {
 
 function onVisibilitychange() {
 	if (window.document.hidden) return;
-	// TODO
+	// 页面从后台切回可见时补发已读：消息在后台期间到达时 onMessage 会跳过 read（用户当时没看到），
+	// 但消息已渲染进时间线，切回即视为看到，不补已读的话返回列表会出现未读点
+	if (connection.value && isActivated) {
+		(connection.value as any).send('read', {});
+		markAsRead();
+	}
 }
 
 onMounted(() => {
@@ -673,6 +793,7 @@ onActivated(() => {
 
 onBeforeUnmount(() => {
 	connection.value?.dispose();
+	unbindUnreadScrollListener();
 	window.document.removeEventListener('visibilitychange', onVisibilitychange);
 });
 
@@ -883,6 +1004,37 @@ definePage(computed(() => {
 	width: fit-content;
 	padding: 0.5em 1em;
 	margin: 0 auto;
+}
+
+.unreadDivider {
+	width: fit-content;
+	margin: 0 auto;
+	padding: 0.4em 1em;
+	font-size: 85%;
+	border-radius: 999px;
+	border: solid 0.5px color-mix(in srgb, var(--MI_THEME-accent) 40%, var(--MI_THEME-divider));
+	color: var(--MI_THEME-accent);
+	background: color-mix(in srgb, var(--MI_THEME-accent) 8%, transparent);
+}
+
+.unreadJump {
+	position: sticky;
+	top: calc(var(--MI-stickyTop, 0px) + 8px);
+	z-index: 3;
+	align-self: flex-end;
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 6px 12px;
+	border-radius: 999px;
+	font-size: 0.85em;
+	font-weight: 600;
+	color: var(--MI_THEME-accent);
+	background: color(from var(--MI_THEME-panel) srgb r g b / 0.85);
+	border: solid 1px color-mix(in srgb, var(--MI_THEME-accent) 36%, var(--MI_THEME-divider));
+	box-shadow: 0 2px 10px color-mix(in srgb, var(--MI_THEME-shadow, #000) 25%, transparent);
+	-webkit-backdrop-filter: var(--MI-blur, blur(15px));
+	backdrop-filter: var(--MI-blur, blur(15px));
 }
 
 .joinPanel {

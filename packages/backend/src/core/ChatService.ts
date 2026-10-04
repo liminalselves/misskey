@@ -211,6 +211,9 @@ export class ChatService {
 		if (this.userEntityService.isLocalUser(toUser)) {
 			const redisPipeline = this.redisClient.pipeline();
 			redisPipeline.set(`newUserChatMessageExists:${toUser.id}:${fromUser.id}`, message.id);
+			// 首条未读 id：仅在上一批未读被清空后（键不存在）写入，已读时随标记一起删除
+			redisPipeline.set(`firstUnreadUserChatMessage:${toUser.id}:${fromUser.id}`, message.id, 'NX');
+			redisPipeline.incr(`unreadUserChatMessagesCount:${toUser.id}:${fromUser.id}`);
 			redisPipeline.sadd(`newChatMessagesExists:${toUser.id}`, `user:${fromUser.id}`);
 			await redisPipeline.exec();
 		}
@@ -305,6 +308,8 @@ export class ChatService {
 			if (membership.isMuted) continue;
 
 			redisPipeline.set(`newRoomChatMessageExists:${membership.userId}:${toRoom.id}`, message.id);
+			redisPipeline.set(`firstUnreadRoomChatMessage:${membership.userId}:${toRoom.id}`, message.id, 'NX');
+			redisPipeline.incr(`unreadRoomChatMessagesCount:${membership.userId}:${toRoom.id}`);
 			redisPipeline.sadd(`newChatMessagesExists:${membership.userId}`, `room:${toRoom.id}`);
 		}
 		await redisPipeline.exec();
@@ -343,6 +348,8 @@ export class ChatService {
 	): Promise<void> {
 		const redisPipeline = this.redisClient.pipeline();
 		redisPipeline.del(`newUserChatMessageExists:${readerId}:${senderId}`);
+		redisPipeline.del(`firstUnreadUserChatMessage:${readerId}:${senderId}`);
+		redisPipeline.del(`unreadUserChatMessagesCount:${readerId}:${senderId}`);
 		redisPipeline.srem(`newChatMessagesExists:${readerId}`, `user:${senderId}`);
 		await redisPipeline.exec();
 	}
@@ -354,6 +361,8 @@ export class ChatService {
 	): Promise<void> {
 		const redisPipeline = this.redisClient.pipeline();
 		redisPipeline.del(`newRoomChatMessageExists:${readerId}:${roomId}`);
+		redisPipeline.del(`firstUnreadRoomChatMessage:${readerId}:${roomId}`);
+		redisPipeline.del(`unreadRoomChatMessagesCount:${readerId}:${roomId}`);
 		redisPipeline.srem(`newChatMessagesExists:${readerId}`, `room:${roomId}`);
 		await redisPipeline.exec();
 	}
@@ -362,9 +371,24 @@ export class ChatService {
 	public async readAllChatMessages(
 		readerId: MiUser['id'],
 	): Promise<void> {
+		// 汇总集合的成员即各会话标记，逐一清除（含未读计数/首条未读），避免 history 仍显示未读
+		const members = await this.redisClient.smembers(`newChatMessagesExists:${readerId}`);
 		const redisPipeline = this.redisClient.pipeline();
-		// TODO: newUserChatMessageExists とか newRoomChatMessageExists も消したい(けどキーの列挙が必要になって面倒)
 		redisPipeline.del(`newChatMessagesExists:${readerId}`);
+		for (const member of members) {
+			const sep = member.indexOf(':');
+			const kind = member.slice(0, sep);
+			const id = member.slice(sep + 1);
+			if (kind === 'user') {
+				redisPipeline.del(`newUserChatMessageExists:${readerId}:${id}`);
+				redisPipeline.del(`firstUnreadUserChatMessage:${readerId}:${id}`);
+				redisPipeline.del(`unreadUserChatMessagesCount:${readerId}:${id}`);
+			} else if (kind === 'room') {
+				redisPipeline.del(`newRoomChatMessageExists:${readerId}:${id}`);
+				redisPipeline.del(`firstUnreadRoomChatMessage:${readerId}:${id}`);
+				redisPipeline.del(`unreadRoomChatMessagesCount:${readerId}:${id}`);
+			}
+		}
 		await redisPipeline.exec();
 	}
 
@@ -603,6 +627,79 @@ export class ChatService {
 		return card > 0;
 	}
 
+	/**
+	 * 单个 1on1 会话的未读详情。count 为 null 表示有未读但条数未知
+	 * （未读标记早于计数键引入，存量数据没有计数，已读后自愈）。
+	 */
+	@bindThis
+	public async getUserChatUnreadInfo(userId: MiUser['id'], otherId: MiUser['id']): Promise<{ count: number | null; firstUnreadId: MiChatMessage['id'] | null }> {
+		const [marker, count, firstUnreadId] = await this.redisClient.mget(
+			`newUserChatMessageExists:${userId}:${otherId}`,
+			`unreadUserChatMessagesCount:${userId}:${otherId}`,
+			`firstUnreadUserChatMessage:${userId}:${otherId}`,
+		);
+		if (marker == null) return { count: 0, firstUnreadId: null };
+		return {
+			count: count == null ? null : parseInt(count, 10),
+			firstUnreadId,
+		};
+	}
+
+	/** 单个群聊会话的未读详情（语义同 getUserChatUnreadInfo） */
+	@bindThis
+	public async getRoomChatUnreadInfo(userId: MiUser['id'], roomId: MiChatRoom['id']): Promise<{ count: number | null; firstUnreadId: MiChatMessage['id'] | null }> {
+		const [marker, count, firstUnreadId] = await this.redisClient.mget(
+			`newRoomChatMessageExists:${userId}:${roomId}`,
+			`unreadRoomChatMessagesCount:${userId}:${roomId}`,
+			`firstUnreadRoomChatMessage:${userId}:${roomId}`,
+		);
+		if (marker == null) return { count: 0, firstUnreadId: null };
+		return {
+			count: count == null ? null : parseInt(count, 10),
+			firstUnreadId,
+		};
+	}
+
+	/** history 用：批量取未读条数。仅在有未读标记时会话才有意义（无标记时计数键已被删除，返回 null） */
+	@bindThis
+	public async getUserUnreadCountMap(userId: MiUser['id'], otherIds: MiUser['id'][]): Promise<Record<MiUser['id'], number | null>> {
+		const countMap: Record<MiUser['id'], number | null> = {};
+		if (otherIds.length === 0) return countMap;
+
+		const redisPipeline = this.redisClient.pipeline();
+		for (const otherId of otherIds) {
+			redisPipeline.get(`unreadUserChatMessagesCount:${userId}:${otherId}`);
+		}
+		const counts = await redisPipeline.exec();
+		if (counts == null) throw new Error('redis error');
+
+		for (let i = 0; i < otherIds.length; i++) {
+			const raw = counts[i][1] as string | null;
+			countMap[otherIds[i]] = raw == null ? null : parseInt(raw, 10);
+		}
+		return countMap;
+	}
+
+	/** history 用：批量取群聊未读条数（语义同 getUserUnreadCountMap） */
+	@bindThis
+	public async getRoomUnreadCountMap(userId: MiUser['id'], roomIds: MiChatRoom['id'][]): Promise<Record<MiChatRoom['id'], number | null>> {
+		const countMap: Record<MiChatRoom['id'], number | null> = {};
+		if (roomIds.length === 0) return countMap;
+
+		const redisPipeline = this.redisClient.pipeline();
+		for (const roomId of roomIds) {
+			redisPipeline.get(`unreadRoomChatMessagesCount:${userId}:${roomId}`);
+		}
+		const counts = await redisPipeline.exec();
+		if (counts == null) throw new Error('redis error');
+
+		for (let i = 0; i < roomIds.length; i++) {
+			const raw = counts[i][1] as string | null;
+			countMap[roomIds[i]] = raw == null ? null : parseInt(raw, 10);
+		}
+		return countMap;
+	}
+
 	@bindThis
 	public async createRoom(owner: MiUser, params: Partial<{
 		name: string;
@@ -650,6 +747,8 @@ export class ChatService {
 		const redisPipeline = this.redisClient.pipeline();
 		for (const membership of memberships) {
 			redisPipeline.del(`newRoomChatMessageExists:${membership.userId}:${room.id}`);
+			redisPipeline.del(`firstUnreadRoomChatMessage:${membership.userId}:${room.id}`);
+			redisPipeline.del(`unreadRoomChatMessagesCount:${membership.userId}:${room.id}`);
 			redisPipeline.srem(`newChatMessagesExists:${membership.userId}`, `room:${room.id}`);
 		}
 		await redisPipeline.exec();
@@ -845,6 +944,8 @@ export class ChatService {
 		// 未読フラグを消す (「既読にする」というわけでもないのでreadメソッドは使わないでおく)
 		const redisPipeline = this.redisClient.pipeline();
 		redisPipeline.del(`newRoomChatMessageExists:${userId}:${roomId}`);
+		redisPipeline.del(`firstUnreadRoomChatMessage:${userId}:${roomId}`);
+		redisPipeline.del(`unreadRoomChatMessagesCount:${userId}:${roomId}`);
 		redisPipeline.srem(`newChatMessagesExists:${userId}`, `room:${roomId}`);
 		await redisPipeline.exec();
 	}
@@ -890,6 +991,8 @@ export class ChatService {
 
 		const redisPipeline = this.redisClient.pipeline();
 		redisPipeline.del(`newRoomChatMessageExists:${userId}:${roomId}`);
+		redisPipeline.del(`firstUnreadRoomChatMessage:${userId}:${roomId}`);
+		redisPipeline.del(`unreadRoomChatMessagesCount:${userId}:${roomId}`);
 		redisPipeline.srem(`newChatMessagesExists:${userId}`, `room:${roomId}`);
 		await redisPipeline.exec();
 

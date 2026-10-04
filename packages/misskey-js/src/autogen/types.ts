@@ -7170,6 +7170,8 @@ export type components = {
             fileId?: string | null;
             file?: components['schemas']['DriveFile'] | null;
             isRead?: boolean;
+            /** @description 仅 history 端点注入：该会话未读条数。已读为 0；有未读但条数未知（存量数据无计数）为 null */
+            unreadCount?: number | null;
             reactions: {
                 reaction: string;
                 user: components['schemas']['UserLite'];
@@ -25433,6 +25435,8 @@ export interface operations {
                         /** @enum {string} */
                         lastMessageRole: 'user' | 'assistant' | 'system';
                         hasUnread: boolean;
+                        /** @description 未读条数：已读为 0；有未读但条数未知（存量数据无计数）为 null */
+                        unreadCount: number | null;
                         sessionModerationBanned: boolean;
                         characterModerationBanned: boolean;
                     }[];

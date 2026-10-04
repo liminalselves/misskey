@@ -45,6 +45,8 @@ export const meta = {
 				lastMessagePreview: { type: 'string' },
 				lastMessageRole: { type: 'string', enum: ['user', 'assistant', 'system'] },
 				hasUnread: { type: 'boolean' },
+				// 未读条数：已读为 0；有未读但条数未知（存量数据无计数）为 null
+				unreadCount: { type: 'number', nullable: true },
 				sessionModerationBanned: { type: 'boolean' },
 				characterModerationBanned: { type: 'boolean' },
 			},
@@ -104,7 +106,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			const avatarPacked = avatarIds.length > 0
 				? await this.driveFileEntityService.packManyByIdsMap(avatarIds, {})
 				: new Map();
-			const unreadIds = await this.agentMessageNotifyService.unreadSessionIds(me.id);
+			const unreadCounts = await this.agentMessageNotifyService.unreadCountMap(me.id);
 
 			return rows.map(r => {
 				const ch = charMap.get(r.characterId);
@@ -126,7 +128,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					characterAvatar: avatarFileId ? avatarPacked.get(avatarFileId) ?? null : null,
 					lastMessagePreview: last ? previewText(last.content) : '',
 					lastMessageRole: last?.role ?? 'assistant',
-					hasUnread: unreadIds.has(r.id),
+					hasUnread: unreadCounts.has(r.id),
+					unreadCount: unreadCounts.has(r.id) ? (unreadCounts.get(r.id) ?? null) : 0,
 					sessionModerationBanned: r.moderationBanned,
 					characterModerationBanned: ch?.moderationBanned ?? false,
 				};

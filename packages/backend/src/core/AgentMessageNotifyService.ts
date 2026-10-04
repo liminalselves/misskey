@@ -32,6 +32,9 @@ export class AgentMessageNotifyService {
 	public async notifyAgentMessage(userId: string, payload: AgentMessageNotifyPayload): Promise<void> {
 		const redisPipeline = this.redisClient.pipeline();
 		redisPipeline.set(`newAgentMessageExists:${userId}:${payload.sessionId}`, payload.messageId);
+		// 首条未读 id：仅在上一批未读被清空后（键不存在）写入，已读时随标记一起删除
+		redisPipeline.set(`firstUnreadAgentMessage:${userId}:${payload.sessionId}`, payload.messageId, 'NX');
+		redisPipeline.incr(`unreadAgentMessagesCount:${userId}:${payload.sessionId}`);
 		redisPipeline.sadd(`newAgentMessagesExists:${userId}`, payload.sessionId);
 		await redisPipeline.exec();
 
@@ -51,14 +54,17 @@ export class AgentMessageNotifyService {
 		const redisPipeline = this.redisClient.pipeline();
 		if (sessionId) {
 			redisPipeline.del(`newAgentMessageExists:${userId}:${sessionId}`);
+			redisPipeline.del(`firstUnreadAgentMessage:${userId}:${sessionId}`);
+			redisPipeline.del(`unreadAgentMessagesCount:${userId}:${sessionId}`);
 			redisPipeline.srem(`newAgentMessagesExists:${userId}`, sessionId);
 			await redisPipeline.exec();
 		} else {
-			// 全部既読：逐会话标记无法廉价枚举，仅清汇总集合（与 chat/read-all 对齐）
 			const sessionIds = await this.redisClient.smembers(`newAgentMessagesExists:${userId}`);
 			redisPipeline.del(`newAgentMessagesExists:${userId}`);
 			for (const id of sessionIds) {
 				redisPipeline.del(`newAgentMessageExists:${userId}:${id}`);
+				redisPipeline.del(`firstUnreadAgentMessage:${userId}:${id}`);
+				redisPipeline.del(`unreadAgentMessagesCount:${userId}:${id}`);
 			}
 			await redisPipeline.exec();
 		}
@@ -70,10 +76,42 @@ export class AgentMessageNotifyService {
 		return card > 0;
 	}
 
-	/** 返回当前存在未读智能体消息的会话 ID 集合（供会话列表标记未读） */
+	/**
+	 * 单个会话的未读详情。count 为 null 表示有未读但条数未知
+	 * （未读标记早于计数键引入，存量数据没有计数，已读后自愈）。
+	 */
 	@bindThis
-	public async unreadSessionIds(userId: string): Promise<Set<string>> {
-		const ids = await this.redisClient.smembers(`newAgentMessagesExists:${userId}`);
-		return new Set(ids);
+	public async getUnreadInfo(userId: string, sessionId: string): Promise<{ count: number | null; firstUnreadId: string | null }> {
+		const [marker, count, firstUnreadId] = await this.redisClient.mget(
+			`newAgentMessageExists:${userId}:${sessionId}`,
+			`unreadAgentMessagesCount:${userId}:${sessionId}`,
+			`firstUnreadAgentMessage:${userId}:${sessionId}`,
+		);
+		if (marker == null) return { count: 0, firstUnreadId: null };
+		return {
+			count: count == null ? null : parseInt(count, 10),
+			firstUnreadId,
+		};
+	}
+
+	/** 会话列表用：返回所有未读会话的 id → 条数映射（条数未知为 null，见 getUnreadInfo） */
+	@bindThis
+	public async unreadCountMap(userId: string): Promise<Map<string, number | null>> {
+		const map = new Map<string, number | null>();
+		const sessionIds = await this.redisClient.smembers(`newAgentMessagesExists:${userId}`);
+		if (sessionIds.length === 0) return map;
+
+		const redisPipeline = this.redisClient.pipeline();
+		for (const id of sessionIds) {
+			redisPipeline.get(`unreadAgentMessagesCount:${userId}:${id}`);
+		}
+		const counts = await redisPipeline.exec();
+		if (counts == null) throw new Error('redis error');
+
+		for (let i = 0; i < sessionIds.length; i++) {
+			const raw = counts[i][1] as string | null;
+			map.set(sessionIds[i], raw == null ? null : parseInt(raw, 10));
+		}
+		return map;
 	}
 }
