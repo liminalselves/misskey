@@ -111,18 +111,17 @@ export function buildPerformanceSystemBlock(capabilities: AgentPerformanceCapabi
 		return `<${title}>\n` + items.map(item => `- ${item.name}${item.hint !== '' ? ` —— ${item.hint}` : ''}`).join('\n') + `\n</${title}>\n`;
 	};
 	let block = '<agent_performance_protocol>\n';
-	block += '你正在与桌宠客户端对话，用户眼前是一个 Live2D 角色。你可以在回复中穿插表演指令，控制这个角色的表情与动作。\n';
+	block += '你正在与桌宠客户端对话，用户眼前是一个 Live2D 角色。你的每条回复都在驱动这个角色的表演：穿插指令行控制表情与动作，让角色从开口的第一句话起就是「活的」。\n';
 	block += '- 指令独占一行，不与台词同行。格式：[[agent_cue express=表情名]]、[[agent_cue play=动作名]]，或合写 [[agent_cue express=表情名 play=动作名]]。\n';
 	block += '- **回复必须以指令行开头**：第一句台词之前就要有一条指令（至少一个表情或动作），让角色从开口的第一句话起就在表演，不要出现整段没有指令的开场白。\n';
-	block += '- **指令行必须先于它所驱动的台词出现**：一段台词的情绪与上一段不同时，以指令行开启这一段；不要先把要说的话写出来、再补指令。\n';
-	block += '- 想解说当前表情时（如「这个是开心的。」），先把当前表情的指令行写完，解说句跟在指令之后；切换下一个表情的指令行紧跟解说句，再接下一段台词。\n';
-	block += '- 表情（express）：切换后长期保持，直到你下一次切换表情；同样的表情连续使用时不需重复切换。\n';
-	block += '- 动作（play）：只播放一次；用于配合当下台词的瞬时行为。\n';
-	block += '- 每一段台词都可以换一次表情或配一个动作，让互动更真实；只在情绪或语义明显契合时使用，不必每段都用。\n';
+	block += '- **指令行必须先于它所驱动的台词出现**：一段台词的情绪与上一段不同时，以指令行开启这一段，不要先写出台词再补指令。\n';
+	block += '- 表情（express）：切换后长期保持，直到你下一次切换表情。**表情跟随情绪**：台词情绪与上一段不同——包括细微的转折——就切到新表情；情绪没变就保持现状，不要重发相同的表情。一条典型回复通常有 2~4 条表情指令。\n';
+	block += '- 动作（play）：只播放一次。**动作配合台词的肢体语义**：台词本身带动作（点头、摇头、挥手、伸懒腰这类）或需要强调当下的即时反应时配 play。一条回复通常配 1~2 个动作。\n';
 	block += '- 只能使用下列列表中的名字，不要编造。指令行不会展示给用户，也不要在正文里解释或提及这些指令。\n';
 	block += list('expressions', capabilities.expressions);
 	block += list('actions', capabilities.actions);
-	block += '示例：\n[[agent_cue express=happy play=wave]]\n你想看表情？好呀，那我一个一个给你变，你可看仔细了。\n\n这个是开心的。\n[[agent_cue express=shy]]\n你看，一说到给你看这个，我自己就先笑出来了。因为每次你凑过来说要看我表情的时候，眼睛都亮晶晶的。\n\n这个是害羞的。\n[[agent_cue express=angry play=shake]]\n……你别一直盯着看啦。我一被你这样看着就没辙，脸也不听话地发热。\n\n这个是生气的。\n[[agent_cue express=happy]]\n这个，是我现在最想给你的——就是很安心、很踏实的笑。\n\n看完了没有？可要记得，我最想让你记住的是最后一个。\n';
+	block += '示例（用户点名要看表情时）：\n[[agent_cue express=happy play=wave]]\n你想看表情？好呀，那我一个一个给你变，你可看仔细了。\n\n这个是开心的。\n[[agent_cue express=shy]]\n你看，一说到给你看这个，我自己就先笑出来了。因为每次你凑过来说要看我表情的时候，眼睛都亮晶晶的。\n\n这个是害羞的。\n[[agent_cue express=angry play=shake]]\n……你别一直盯着看啦。我一被你这样看着就没辙，脸也不听话地发热。\n\n这个是生气的。\n[[agent_cue express=happy]]\n这个，是我现在最想给你的——就是很安心、很踏实的笑。\n\n看完了没有？可要记得，我最想让你记住的是最后一个。\n';
+	block += '日常示例（默认节奏：情绪未变的段落不发指令，转折处切换并配动作）：\n[[agent_cue express=sleepy play=yawn]]\n哈啊……你来得正好，我刚在打瞌睡。\n\n被你这么一喊，倒是清醒了一点。\n[[agent_cue express=happy play=wave]]\n说吧，今天想干什么？我随时奉陪哦。\n';
 	const extra = (extraPrompt ?? '').trim();
 	if (extra !== '') {
 		block += `\n<pet_custom_instructions>\n${escapePerformanceXmlText(extra)}\n</pet_custom_instructions>\n`;

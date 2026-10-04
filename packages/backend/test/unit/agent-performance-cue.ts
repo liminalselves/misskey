@@ -100,17 +100,24 @@ describe('agent-performance-cue', () => {
 			expect(block).toContain('[[agent_cue express=表情名 play=动作名]]');
 			expect(block).toContain('回复必须以指令行开头');
 			expect(block).toContain('指令行必须先于它所驱动的台词出现');
-			expect(block).toContain('同样的表情连续使用时不需重复切换');
+			expect(block).toContain('不要重发相同的表情');
 			expect(block).toContain('长期保持');
 			expect(block).toContain('只播放一次');
+			// 密度锚点：表情/动作的典型数量区间，防止模型取最小努力
+			expect(block).toContain('2~4 条表情指令');
+			expect(block).toContain('1~2 个动作');
 			expect(block).toContain('- happy —— 开心');
 			expect(block).toContain('- shy —— 害羞');
 			expect(block).toContain('- wave —— 挥手');
-			// 示例必须示范用户期望的节奏：开场指令→解说句→切下一表情→结尾不重复切换
-			expect(block).toContain('示例：\n[[agent_cue express=happy play=wave]]\n你想看表情？好呀，那我一个一个给你变');
+			// 示例一（点名看表情）：开场指令→解说句→切下一表情→结尾不重复切换
+			expect(block).toContain('示例（用户点名要看表情时）：\n[[agent_cue express=happy play=wave]]\n你想看表情？好呀，那我一个一个给你变');
 			expect(block).toContain('这个是开心的。\n[[agent_cue express=shy]]');
 			expect(block).toContain('这个是害羞的。\n[[agent_cue express=angry play=shake]]');
 			expect(block).toContain('看完了没有？可要记得，我最想让你记住的是最后一个。');
+			// 示例二（日常）：情绪未变段落不发指令，转折处切换并配动作
+			expect(block).toContain('日常示例（默认节奏：情绪未变的段落不发指令，转折处切换并配动作）：');
+			expect(block).toContain('[[agent_cue express=sleepy play=yawn]]\n哈啊……你来得正好');
+			expect(block).toContain('被你这么一喊，倒是清醒了一点。\n[[agent_cue express=happy play=wave]]');
 		});
 
 		test('omits empty sections', () => {
@@ -122,7 +129,7 @@ describe('agent-performance-cue', () => {
 		test('appends extra prompt inside the block and escapes XML characters', () => {
 			const block = buildPerformanceSystemBlock(caps, '你是<windows>&桌宠');
 			expect(block).toContain('<pet_custom_instructions>\n你是&lt;windows&gt;&amp;桌宠\n</pet_custom_instructions>');
-			expect(block.indexOf('<pet_custom_instructions>')).toBeGreaterThan(block.indexOf('示例：'));
+			expect(block.indexOf('<pet_custom_instructions>')).toBeGreaterThan(block.indexOf('日常示例（'));
 			expect(block.endsWith('</agent_performance_protocol>')).toBe(true);
 		});
 
