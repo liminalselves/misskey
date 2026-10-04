@@ -5,7 +5,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <template>
 <div>
-	<MkDrive @cd="x => folder = x"/>
+	<MkDrive :initialFolder="props.folder" navigateByRoute @cd="x => folder = x"/>
 </div>
 </template>
 
@@ -15,6 +15,10 @@ import * as Misskey from 'misskey-js';
 import MkDrive from '@/components/MkDrive.vue';
 import { i18n } from '@/i18n.js';
 import { definePage } from '@/page.js';
+
+const props = defineProps<{
+	folder?: string;
+}>();
 
 const folder = ref<Misskey.entities.DriveFolder | null>(null);
 

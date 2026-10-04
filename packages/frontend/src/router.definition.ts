@@ -616,6 +616,7 @@ export const ROUTE_DEF = [{
 	path: '/my/drive/folder/:folder',
 	component: page(() => import('@/pages/drive.vue')),
 	loginRequired: true,
+	reuseComponent: true,
 }, {
 	path: '/my/drive',
 	component: page(() => import('@/pages/drive.vue')),

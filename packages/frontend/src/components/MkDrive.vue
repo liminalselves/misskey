@@ -247,6 +247,7 @@ const props = withDefaults(defineProps<{
 	multiple?: boolean;
 	select?: 'file' | 'folder' | null;
 	forceDisableInfiniteScroll?: boolean;
+	navigateByRoute?: boolean;
 }>(), {
 	initialFolder: null,
 	multiple: false,
@@ -654,8 +655,12 @@ function deleteFolder(folderToDelete: Misskey.entities.DriveFolder) {
 	misskeyApi('drive/folders/delete', {
 		folderId: folderToDelete.id,
 	}).then(() => {
-		// 削除時に親フォルダに移動
-		cd(folderToDelete.parentId);
+		// Removing the current folder must not leave it as a back destination.
+		if (props.navigateByRoute) {
+			router.replaceByPath(folderToDelete.parentId ? `/my/drive/folder/${encodeURIComponent(folderToDelete.parentId)}` : '/my/drive');
+		} else {
+			cd(folderToDelete.parentId);
+		}
 		globalEvents.emit('driveFoldersDeleted', [folderToDelete]);
 	}).catch(err => {
 		switch (err.id) {
@@ -733,12 +738,26 @@ function unchoseFolder(folderToUnchose: Misskey.entities.DriveFolder) {
 	selectedFolders.value = selectedFolders.value.filter(f => f.id !== folderToUnchose.id);
 }
 
-function cd(target?: Misskey.entities.DriveFolder | Misskey.entities.DriveFolder['id' | 'parentId']) {
+let folderRequestId = 0;
+
+watch(() => props.initialFolder, (target) => {
+	if (props.navigateByRoute) cd(target, false);
+});
+
+function cd(target?: Misskey.entities.DriveFolder | Misskey.entities.DriveFolder['id' | 'parentId'], navigate = props.navigateByRoute) {
+	if (target != null && typeof target === 'object') {
+		target = target.id;
+	}
+
+	if (navigate) {
+		router.pushByPath(target ? `/my/drive/folder/${encodeURIComponent(target)}` : '/my/drive', 'forcePage');
+		return;
+	}
+
+	const requestId = ++folderRequestId;
 	if (!target) {
 		goRoot();
 		return;
-	} else if (typeof target === 'object') {
-		target = target.id;
 	}
 
 	fetching.value = true;
@@ -746,6 +765,7 @@ function cd(target?: Misskey.entities.DriveFolder | Misskey.entities.DriveFolder
 	misskeyApi('drive/folders/show', {
 		folderId: target,
 	}).then(folderToMove => {
+		if (requestId !== folderRequestId) return;
 		folder.value = folderToMove;
 		hierarchyFolders.value = [];
 
@@ -1492,7 +1512,7 @@ onMounted(() => {
 	}
 
 	if (props.initialFolder) {
-		cd(props.initialFolder);
+		cd(props.initialFolder, false);
 	} else {
 		initialize();
 	}
@@ -1502,6 +1522,7 @@ onActivated(() => {
 });
 
 onBeforeUnmount(() => {
+	folderRequestId++;
 	endMarquee();
 	window.removeEventListener('dragover', onWindowDragover, true);
 	if (nativeDragRafId != null) cancelAnimationFrame(nativeDragRafId);
