@@ -693,18 +693,21 @@ const messagesHasMore = messagesPagination.hasMore;
 
 const externalFilters = reactive({ status: 'block' as ExternalStatus | 'all', blockCode: '', userId: '', sessionId: '', modelId: '', query: '' });
 
-// 外审列表分页
+// 外审列表分页；status 的 enum 不接受 null，「全部」与空筛选字段一律不发送
 const externalPagination = useGovernancePagination<ExternalAuditRow>(async (untilId) => {
-	return await api<ExternalAuditRow[]>('admin/agents/governance/external-audit/list', {
-		status: externalFilters.status === 'all' ? null : externalFilters.status,
-		blockCode: externalFilters.blockCode.trim() || null,
-		userId: externalFilters.userId.trim() || null,
-		sessionId: externalFilters.sessionId.trim() || null,
-		modelId: externalFilters.modelId.trim() || null,
-		query: externalFilters.query.trim() || null,
-		limit: 80,
-		untilId,
-	});
+	const payload: Record<string, unknown> = { limit: 80, untilId };
+	if (externalFilters.status !== 'all') payload.status = externalFilters.status;
+	const blockCode = externalFilters.blockCode.trim();
+	const userId = externalFilters.userId.trim();
+	const sessionId = externalFilters.sessionId.trim();
+	const modelId = externalFilters.modelId.trim();
+	const query = externalFilters.query.trim();
+	if (blockCode) payload.blockCode = blockCode;
+	if (userId) payload.userId = userId;
+	if (sessionId) payload.sessionId = sessionId;
+	if (modelId) payload.modelId = modelId;
+	if (query) payload.query = query;
+	return await api<ExternalAuditRow[]>('admin/agents/governance/external-audit/list', payload);
 }, { pageSize: 80 });
 const externalAudits = externalPagination.items;
 const externalLoading = externalPagination.loading;
