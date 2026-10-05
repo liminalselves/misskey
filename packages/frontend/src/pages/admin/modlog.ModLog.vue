@@ -88,6 +88,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<span v-else-if="log.type === 'setAgentSessionModerationBan'">: {{ log.info.sessionName }} <span class="_text">({{ log.info.sessionId }})</span> · {{ log.info.banned ? i18n.ts._agents.modlogAgentBanOn : i18n.ts._agents.modlogAgentBanOff }}</span>
 		<span v-else-if="log.type === 'setAgentCharacterModerationBan'">: {{ log.info.characterName }} <span class="_text">({{ log.info.characterId }})</span> · {{ log.info.banned ? i18n.ts._agents.modlogAgentBanOn : i18n.ts._agents.modlogAgentBanOff }}</span>
 		<span v-else-if="log.type === 'ignoreAgentExternalAuditReview'">: ×{{ log.info.count }}</span>
+		<span v-else-if="log.type === 'resolveAgentModelReport'">: {{ log.info.modelName }} · {{ modelReportReasonLabel(log.info.reasonType) }}</span>
 	</template>
 	<template #icon>
 		<i v-if="log.type === 'updateServerSettings'" class="ti ti-settings"></i>
@@ -133,6 +134,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<i v-else-if="log.type === 'deleteGalleryPost'" class="ti ti-trash"></i>
 		<i v-else-if="log.type === 'deleteChatRoom'" class="ti ti-trash"></i>
 		<i v-else-if="log.type === 'resolveAgentReview'" class="ti ti-checkbox"></i>
+		<i v-else-if="log.type === 'resolveAgentModelReport'" class="ti ti-circle-check"></i>
 		<i v-else-if="log.type === 'setAgentSessionModerationBan'" class="ti ti-message-off"></i>
 		<i v-else-if="log.type === 'setAgentCharacterModerationBan'" class="ti ti-user-off"></i>
 		<i v-else-if="log.type === 'ignoreAgentExternalAuditReview'" class="ti ti-eye-off"></i>
@@ -261,6 +263,12 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<div>×{{ log.info.count }}</div>
 			<div v-if="log.info.ids.length > 0" class="_text" style="word-break: break-all;">{{ log.info.ids.join(', ') }}</div>
 		</template>
+		<template v-else-if="log.type === 'resolveAgentModelReport'">
+			<div>模型: {{ log.info.modelName }} <span class="_text">[{{ log.info.modelId }}]</span> · {{ log.info.modelKind === 'image' ? '绘图模型' : '对话模型' }}</div>
+			<div>上报人: <MkA :to="`/admin/user/${log.info.reporterUserId}`" class="_link">{{ log.info.reporterAcct ? '@' + log.info.reporterAcct : log.info.reporterUserId }}</MkA></div>
+			<div>异常类型: {{ modelReportReasonLabel(log.info.reasonType) }}</div>
+			<div>处理说明: {{ log.info.message }}</div>
+		</template>
 
 		<details :class="$style.rawBlock">
 			<summary>Raw object</summary>
@@ -287,6 +295,19 @@ const props = defineProps<{
 
 // 定期ジョブによる自動解凍など、システム実行のログ（FK の都合上 userId には root が入る）
 const isBySystem = computed(() => props.log.type === 'unsuspend' && props.log.info.scheduleExpired === true);
+
+// agents-review.vue の modelReportReasonItems と同じ値
+const modelReportReasonLabels: Record<string, string> = {
+	unavailable: '长时间不可用',
+	degraded: '降智',
+	slow: '响应缓慢',
+	errors: '频繁报错',
+	other: '其他',
+};
+
+function modelReportReasonLabel(reasonType: string): string {
+	return modelReportReasonLabels[reasonType] ?? reasonType;
+}
 
 const typeLabel = computed(() => {
 	if (isBySystem.value) return i18n.ts.userSuspendAutoRelease;

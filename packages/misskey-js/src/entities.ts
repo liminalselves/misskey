@@ -210,6 +210,9 @@ export type ModerationLog = {
 	type: 'resolveAgentReview';
 	info: ModerationLogPayloads['resolveAgentReview'];
 } | {
+	type: 'resolveAgentModelReport';
+	info: ModerationLogPayloads['resolveAgentModelReport'];
+} | {
 	type: 'setAgentSessionModerationBan';
 	info: ModerationLogPayloads['setAgentSessionModerationBan'];
 } | {

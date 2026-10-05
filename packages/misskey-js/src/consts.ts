@@ -199,6 +199,7 @@ export const moderationLogTypes = [
 	'deleteChatRoom',
 	'updateProxyAccountDescription',
 	'resolveAgentReview',
+	'resolveAgentModelReport',
 	'setAgentSessionModerationBan',
 	'setAgentCharacterModerationBan',
 	'ignoreAgentExternalAuditReview',
@@ -583,5 +584,15 @@ export type ModerationLogPayloads = {
 	ignoreAgentExternalAuditReview: {
 		ids: string[];
 		count: number;
+	};
+	resolveAgentModelReport: {
+		reportId: string;
+		reporterUserId: string;
+		reporterAcct?: string | null;
+		modelKind: 'chat' | 'image';
+		modelId: string;
+		modelName: string;
+		reasonType: string;
+		message: string;
 	};
 };

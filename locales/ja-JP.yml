@@ -3219,6 +3219,7 @@ _moderationLogTypes:
   setAgentSessionModerationBan: "エージェント会話セッションの利用停止"
   setAgentCharacterModerationBan: "エージェントキャラクターの利用停止"
   ignoreAgentExternalAuditReview: "エージェント外部監査レコードを除外"
+  resolveAgentModelReport: "エージェントのモデル異常レポートを処理"
 
 _fileViewer:
   title: "ファイルの詳細"

@@ -12170,6 +12170,10 @@ export interface Locale extends ILocale {
          * エージェント外部監査レコードを除外
          */
         "ignoreAgentExternalAuditReview": string;
+        /**
+         * エージェントのモデル異常レポートを処理
+         */
+        "resolveAgentModelReport": string;
     };
     "_fileViewer": {
         /**
