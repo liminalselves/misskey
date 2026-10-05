@@ -227,8 +227,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 							<MkButton rounded :disabled="externalLoading" @click="resetExternalFilters"><i class="ti ti-filter-off"></i> 重置</MkButton>
 						</div>
 					</section>
-					<MkLoading v-if="externalLoading && externalAudits.length === 0"/>
-					<MkInfo v-else-if="externalAudits.length === 0">暂无外审拦截记录。</MkInfo>
+					<MkLoading v-if="externalLoading && externalAudits.length === 0" :class="$style.listStatus"/>
+					<MkInfo v-else-if="externalAudits.length === 0" :class="$style.listStatus">暂无外审拦截记录。</MkInfo>
 					<div v-else :class="$style.evidenceList">
 						<article v-for="row in externalAudits" :key="row.id" v-panel :class="$style.evidenceCard">
 							<div :class="$style.cardHead">
@@ -279,8 +279,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 							<MkButton rounded :disabled="reviewListLoading" @click="resetReviewListFilters"><i class="ti ti-filter-off"></i> 重置</MkButton>
 						</div>
 					</section>
-					<MkLoading v-if="reviewListLoading && reviewUserCards.length === 0" style="margin-top: 12px;"/>
-					<MkInfo v-else-if="reviewUserCards.length === 0" style="margin-top: 12px;">暂无需要复审的用户。配置复审触发条件后，满足条件的用户将自动出现在这里。</MkInfo>
+					<MkLoading v-if="reviewListLoading && reviewUserCards.length === 0" :class="$style.listStatus"/>
+					<MkInfo v-else-if="reviewUserCards.length === 0" :class="$style.listStatus">暂无需要复审的用户。配置复审触发条件后，满足条件的用户将自动出现在这里。</MkInfo>
 					<div v-else :class="$style.reviewUserList">
 						<article v-for="card in reviewUserCards" :key="card.userId" v-panel :class="[$style.reviewUserCard, card.isSuspended ? $style.reviewUserCardSuspended : null]">
 							<!-- 用户头部：核心信息 + 操作入口 -->
@@ -369,8 +369,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 							<MkButton rounded :disabled="imagesLoading" @click="resetImageFilters"><i class="ti ti-filter-off"></i> 重置</MkButton>
 						</div>
 					</section>
-					<MkLoading v-if="imagesLoading && images.length === 0"/>
-					<MkInfo v-else-if="images.length === 0">没有匹配的 AI 生图记录。</MkInfo>
+					<MkLoading v-if="imagesLoading && images.length === 0" :class="$style.listStatus"/>
+					<MkInfo v-else-if="images.length === 0" :class="$style.listStatus">没有匹配的 AI 生图记录。</MkInfo>
 					<div v-else :class="$style.imageGrid">
 						<article v-for="row in images" :key="row.id" v-panel :class="$style.imageCard">
 							<div :class="$style.imageBox">
@@ -422,8 +422,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 							<MkButton rounded :disabled="modelReportsLoading" @click="resetModelReportFilters"><i class="ti ti-filter-off"></i> 重置</MkButton>
 						</div>
 					</section>
-					<MkLoading v-if="modelReportsLoading && modelReports.length === 0"/>
-					<MkInfo v-else-if="modelReports.length === 0">暂无用户上报的模型异常。</MkInfo>
+					<MkLoading v-if="modelReportsLoading && modelReports.length === 0" :class="$style.listStatus"/>
+					<MkInfo v-else-if="modelReports.length === 0" :class="$style.listStatus">暂无用户上报的模型异常。</MkInfo>
 					<div v-else :class="$style.evidenceList">
 						<article v-for="row in modelReports" :key="row.id" v-panel :class="$style.evidenceCard">
 							<div :class="$style.cardHead">
@@ -465,8 +465,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 							<MkButton primary rounded :disabled="logsLoading" @click="loadLogs(true)"><i class="ti ti-search"></i> 检索日志</MkButton>
 						</div>
 					</section>
-					<MkLoading v-if="logsLoading && logs.length === 0"/>
-					<MkInfo v-else-if="logs.length === 0">暂无治理记录。</MkInfo>
+					<MkLoading v-if="logsLoading && logs.length === 0" :class="$style.listStatus"/>
+					<MkInfo v-else-if="logs.length === 0" :class="$style.listStatus">暂无治理记录。</MkInfo>
 					<div v-else :class="$style.evidenceList">
 						<article v-for="log in logs" :key="log.id" v-panel :class="$style.logCard">
 							<div :class="$style.cardHead">
@@ -1925,6 +1925,10 @@ onUnmounted(() => {
 	display: flex;
 	justify-content: center;
 	margin-top: 10px;
+}
+/* 紧跟筛选区的加载/空态提示：MkLoading/MkInfo 无自带外边距，须显式与上方区块拉开 */
+.listStatus {
+	margin-top: 12px;
 }
 .emptyDetail {
 	display: grid;
