@@ -189,16 +189,18 @@ SPDX-License-Identifier: AGPL-3.0-only
 										<span v-if="row.moderationBanned" :class="$style.warnBadge">已封禁</span>
 									</span>
 								</div>
-								<div :class="$style.rowMeta">
-									<span :class="$style.metaItem" title="角色"><i class="ti ti-robot"></i>{{ row.characterName || '—' }}</span>
-									<UserAcctInline :user="row.user" :fallback="row.userId" @copy="copyText"/>
-									<span v-if="row.messageCount != null" :class="$style.metaItem" :title="`共 ${row.messageCount} 条消息`"><i class="ti ti-messages"></i>{{ row.messageCount.toLocaleString() }}</span>
-									<time :class="$style.metaItem"><i class="ti ti-clock"></i>{{ formatTime(row.lastMessageAt || row.updatedAt) }}</time>
-								</div>
-								<div :class="$style.rowActions">
-									<MkButton small rounded primary @click="openSessionReview(row.id)"><i class="ti ti-eye-check"></i> 打开审查页</MkButton>
-									<MkButton v-if="iAmModerator" small rounded :danger="!row.moderationBanned" @click="toggleSessionBan(row)"><i class="ti ti-ban"></i> {{ row.moderationBanned ? '解封' : '封禁' }}</MkButton>
-									<MkButton small rounded @click="copyText(row.id)"><i class="ti ti-copy"></i> 复制 ID</MkButton>
+								<div :class="$style.sessionFoot">
+									<div :class="$style.rowMeta">
+										<span :class="$style.metaItem" title="角色"><i class="ti ti-robot"></i>{{ row.characterName || '—' }}</span>
+										<UserAcctInline :user="row.user" :fallback="row.userId" @copy="copyText"/>
+										<span v-if="row.messageCount != null" :class="$style.metaItem" :title="`共 ${row.messageCount} 条消息`"><i class="ti ti-messages"></i>{{ row.messageCount.toLocaleString() }}</span>
+										<time :class="$style.metaItem"><i class="ti ti-clock"></i>{{ formatTime(row.lastMessageAt || row.updatedAt) }}</time>
+									</div>
+									<div :class="$style.sessionActions">
+										<MkButton small rounded @click="openSessionReview(row.id)"><i class="ti ti-eye-check"></i> 审查</MkButton>
+										<MkButton v-if="iAmModerator" small rounded :danger="!row.moderationBanned" @click="toggleSessionBan(row)"><i class="ti ti-ban"></i> {{ row.moderationBanned ? '解封' : '封禁' }}</MkButton>
+										<MkButton small rounded iconOnly title="复制会话 ID" @click="copyText(row.id)"><i class="ti ti-copy"></i></MkButton>
+									</div>
 								</div>
 							</article>
 						</div>
@@ -1890,6 +1892,24 @@ onUnmounted(() => {
 }
 .sessionRowBanned {
 	border-color: color-mix(in srgb, var(--MI_THEME-error) 40%, var(--MI_THEME-divider));
+}
+.sessionFoot {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 6px 12px;
+	margin-top: 6px;
+}
+.sessionFoot > .rowMeta {
+	margin-top: 0;
+	flex: 1 1 auto;
+}
+.sessionActions {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	margin-left: auto;
+	flex-shrink: 0;
 }
 .rowMeta > *,
 .metaGrid > *,
