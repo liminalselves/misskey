@@ -66,50 +66,41 @@ SPDX-License-Identifier: AGPL-3.0-only
 						</template>
 					</section>
 
-					<div :class="$style.splitPane">
-						<section :class="$style.listPane">
-							<div :class="$style.sectionHead">
-								<div>
-									<h2>{{ activeView === 'queue' ? '待处理' : '内容库' }}</h2>
-									<p>{{ activeView === 'queue' ? '按提交时间优先处理等待最久的内容。' : '检索角色和对话风格，查看详情或执行治理操作。' }}</p>
-								</div>
-								<MkButton small rounded :disabled="reviewLoading" @click="loadReviewList(true)"><i class="ti ti-refresh"></i></MkButton>
+					<section :class="$style.listSection">
+						<div :class="$style.sectionHead">
+							<div>
+								<h2>{{ activeView === 'queue' ? '待处理' : '内容库' }}</h2>
+								<p>{{ activeView === 'queue' ? '按提交时间优先处理等待最久的内容，点选打开审查页。' : '检索角色和对话风格，点选打开审查页查看详情或执行治理操作。' }}</p>
 							</div>
-							<MkLoading v-if="reviewLoading && reviewRows.length === 0"/>
-							<MkInfo v-else-if="reviewRows.length === 0">{{ activeView === 'queue' ? '暂无待处理审核。' : '没有匹配的内容。' }}</MkInfo>
-							<div v-else :class="$style.list">
-								<button v-for="row in reviewRows" :key="row.kind + row.id" type="button" class="_button" :class="[$style.reviewRow, selectedReview?.id === row.id && selectedReview?.kind === row.kind ? $style.rowActive : null]" @click="selectReview(row)">
-									<div :class="$style.rowHead">
+							<MkButton small rounded :disabled="reviewLoading" @click="loadReviewList(true)"><i class="ti ti-refresh"></i></MkButton>
+						</div>
+						<MkLoading v-if="reviewLoading && reviewRows.length === 0"/>
+						<MkInfo v-else-if="reviewRows.length === 0">{{ activeView === 'queue' ? '暂无待处理审核。' : '没有匹配的内容。' }}</MkInfo>
+						<div v-else :class="$style.list">
+							<button v-for="row in reviewRows" :key="row.kind + row.id" type="button" class="_button" :class="$style.reviewRow" @click="openLibraryReview(row)">
+								<div :class="$style.rowHead">
+									<b>{{ row.name }}</b>
+									<span :class="$style.rowBadges">
 										<span :class="$style.typeBadge">{{ kindLabel(row.kind) }}</span>
-										<b>{{ row.name }}</b>
-									</div>
-									<p>{{ row.summary || '—' }}</p>
-									<div :class="$style.badges">
-										<span>{{ statusLabel(row.reviewStatus) }}</span>
-										<span>{{ row.publishedVersion == null ? '首次提交' : `V${row.publishedVersion} 更新` }}</span>
+										<span :class="$style[statusBadgeStyle(row.reviewStatus)]">{{ statusLabel(row.reviewStatus) }}</span>
 										<span v-if="row.moderationBanned" :class="$style.warnBadge">已封禁</span>
-										<span v-for="tag in row.riskTags" :key="tag">{{ tag }}</span>
-									</div>
-									<div :class="$style.rowMeta">
-										<UserAcctInline :user="row.user" :fallback="row.userId" @copy="copyText"/>
-										<time>{{ formatTime(row.updatedAt) }}</time>
-									</div>
-								</button>
-							</div>
-							<div v-if="reviewRows.length > 0 && reviewHasMore" :class="$style.loadMore">
-								<MkButton v-appear="prefer.s.enableInfiniteScroll && !reviewLoading && !reviewPagination.error.value ? loadMoreReviews : null" small rounded :disabled="reviewLoading" @click="loadMoreReviews"><i class="ti ti-chevron-down"></i> {{ reviewLoading ? '载入中…' : '继续载入' }}</MkButton>
-							</div>
-						</section>
-
-						<aside :class="$style.detailPane">
-							<MkLoading v-if="reviewDetailLoading"/>
-							<ReviewDetail v-else-if="reviewDetail" :detail="reviewDetail" :canModerate="iAmModerator" @approve="approveReview" @reject="rejectReview" @ban="toggleCharacterBan" @copy="copyText"/>
-							<div v-else :class="$style.emptyDetail">
-								<i class="ti ti-click"></i>
-								<p>选择一条内容查看完整提示词、差异和治理操作。</p>
-							</div>
-						</aside>
-					</div>
+									</span>
+								</div>
+								<p>{{ row.summary || '—' }}</p>
+								<div :class="$style.badges">
+									<span>{{ row.publishedVersion == null ? '首次提交' : `V${row.publishedVersion} 更新` }}</span>
+									<span v-for="tag in row.riskTags" :key="tag">{{ tag }}</span>
+								</div>
+								<div :class="$style.rowMeta">
+									<MkUserAcctInline :user="row.user" :fallback="row.userId"/>
+									<span :class="$style.metaItem"><i class="ti ti-clock"></i><time>{{ formatTime(row.updatedAt) }}</time></span>
+								</div>
+							</button>
+						</div>
+						<div v-if="reviewRows.length > 0 && reviewHasMore" :class="$style.loadMore">
+							<MkButton v-appear="prefer.s.enableInfiniteScroll && !reviewLoading && !reviewPagination.error.value ? loadMoreReviews : null" small rounded :disabled="reviewLoading" @click="loadMoreReviews"><i class="ti ti-chevron-down"></i> {{ reviewLoading ? '载入中…' : '继续载入' }}</MkButton>
+						</div>
+					</section>
 				</template>
 
 				<template v-else-if="activeView === 'sessions'">
@@ -155,7 +146,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 									<time>{{ formatTime(row.createdAt) }}</time>
 								</div>
 								<div :class="$style.metaGrid">
-									<span>用户：<UserAcctInline :user="row.user" :fallback="row.userId" @copy="copyText"/></span>
+									<span>用户：<MkUserAcctInline :user="row.user" :fallback="row.userId"/></span>
 									<span>会话：{{ row.sessionName }}</span>
 									<span>角色：{{ row.characterName || '—' }}</span>
 								</div>
@@ -192,7 +183,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 								<div :class="$style.sessionFoot">
 									<div :class="$style.rowMeta">
 										<span :class="$style.metaItem" title="角色"><i class="ti ti-robot"></i>{{ row.characterName || '—' }}</span>
-										<UserAcctInline :user="row.user" :fallback="row.userId" @copy="copyText"/>
+										<MkUserAcctInline :user="row.user" :fallback="row.userId"/>
 										<span v-if="row.messageCount != null" :class="$style.metaItem" :title="`共 ${row.messageCount} 条消息`"><i class="ti ti-messages"></i>{{ row.messageCount.toLocaleString() }}</span>
 										<time :class="$style.metaItem"><i class="ti ti-clock"></i>{{ formatTime(row.lastMessageAt || row.updatedAt) }}</time>
 									</div>
@@ -239,7 +230,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 								<time>{{ formatTime(row.createdAt) }}</time>
 							</div>
 							<div :class="$style.metaGrid">
-								<span>用户：<UserAcctInline :user="row.user" :fallback="row.userId || '—'" @copy="copyText"/></span>
+								<span>用户：<MkUserAcctInline :user="row.user" :fallback="row.userId || '—'"/></span>
 								<span>会话：{{ row.sessionName || row.sessionId || '—' }}</span>
 								<span>角色：{{ row.characterName || '—' }}</span>
 								<span>模型：{{ row.modelName || row.modelId || '—' }}</span>
@@ -287,7 +278,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 							<div :class="$style.reviewUserHead">
 								<div :class="$style.reviewUserInfo">
 									<div :class="$style.reviewUserName">
-										<UserAcctInline :user="card.user" :fallback="card.userId" @copy="copyText"/>
+										<MkUserAcctInline :user="card.user" :fallback="card.userId"/>
 										<span v-if="card.isSuspended" :class="$style.warnBadge">已封禁</span>
 										<span :class="$style.reviewBadge">{{ card.blockCount }} 次拦截</span>
 									</div>
@@ -389,7 +380,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 								<div :class="$style.metaGrid">
 									<span>尺寸：{{ row.size }}</span>
 									<span>费用：{{ row.cost }}</span>
-									<span>用户：<UserAcctInline :user="row.user" :fallback="row.userId" @copy="copyText"/></span>
+									<span>用户：<MkUserAcctInline :user="row.user" :fallback="row.userId"/></span>
 									<code>{{ row.sessionId }}</code>
 								</div>
 								<div class="_buttons">
@@ -435,7 +426,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 								<time>{{ formatTime(row.createdAt) }}</time>
 							</div>
 							<div :class="$style.metaGrid">
-								<span>用户：<UserAcctInline :user="row.user" :fallback="row.userId" @copy="copyText"/></span>
+								<span>用户：<MkUserAcctInline :user="row.user" :fallback="row.userId"/></span>
 								<span>模型：{{ row.modelName }}</span>
 								<span>模型 ID：<code>{{ row.modelId }}</code></span>
 							</div>
@@ -477,12 +468,12 @@ SPDX-License-Identifier: AGPL-3.0-only
 								<time>{{ formatTime(log.createdAt) }}</time>
 							</div>
 							<div :class="$style.rowMeta">
-								<span>操作人：<UserAcctInline :user="log.user" :fallback="log.userId" @copy="copyText"/></span>
+								<span>操作人：<MkUserAcctInline :user="log.user" :fallback="log.userId"/></span>
 							</div>
 							<div :class="$style.metaGrid">
 								<span v-for="row in logRows(log)" :key="row.label">
 									{{ row.label }}：
-									<UserAcctInline v-if="row.copyAsAcct" :fallback="row.value" @copy="copyText"/>
+									<MkUserAcctInline v-if="row.copyAsAcct" :fallback="row.value"/>
 									<template v-else>{{ row.value }}</template>
 								</span>
 							</div>
@@ -502,14 +493,14 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { computed, defineComponent, h, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
 import type { QuickActionResult, QuickActionSession } from '@/components/MkAgentQuickActionDialog.vue';
 import MkButton from '@/components/MkButton.vue';
 import MkLoading from '@/components/global/MkLoading.vue';
 import MkInfo from '@/components/MkInfo.vue';
 import MkInput from '@/components/MkInput.vue';
 import MkSelect from '@/components/MkSelect.vue';
-import MkDriveFileThumbnail from '@/components/MkDriveFileThumbnail.vue';
+import MkUserAcctInline from '@/components/MkUserAcctInline.vue';
 import FormSplit from '@/components/form/split.vue';
 import { misskeyApi, formatApiError } from '@/utility/misskey-api.js';
 import { copyToClipboard } from '@/utility/copy-to-clipboard.js';
@@ -547,23 +538,6 @@ type ReviewRow = {
 	worldbookCount: number;
 	riskTags: string[];
 };
-type ReviewDetailRow = ReviewRow & {
-	personality?: string;
-	background?: string;
-	speakingStyle?: string;
-	greeting?: string;
-	exampleTurns?: { role: 'user' | 'assistant'; content: string }[];
-	forbiddenBehavior?: string;
-	worldbook?: WorldbookEntry[];
-	rules?: CharacterRuleEntry[];
-	stickers?: StickerEntry[];
-	body?: string;
-	publishedSnapshot: Record<string, unknown> | null;
-	diff: { hasChanges: boolean; fields: { key: string; draftPreview: string; publishedPreview: string }[] };
-};
-type WorldbookEntry = { id: string; title: string; content: string; keywords: string[]; triggerMode: 'keyword' | 'manual' | 'always'; priority: number; enabled: boolean; revision: number };
-type CharacterRuleEntry = { id: string; name: string; content: string; description: string; type: 'persistent' | 'toggleable'; defaultEnabled: boolean };
-type StickerEntry = { key: string; fileId: string; description: string; file?: { url: string; thumbnailUrl?: string | null; type?: string | null } | null };
 type SessionRow = { id: string; createdAt: string; updatedAt: string; userId: string; name: string; characterId: string; dialogueStyleId: string | null; sessionKind: 'draft_test' | 'community'; lastMessageAt: string | null; agentReplyPending: boolean; moderationBanned: boolean; characterName: string; user: any | null; messageCount: number | null };
 type TimelineMsg = { id: string; role: 'user' | 'assistant' | 'system'; content: string; createdAt: string };
 type MessageRow = TimelineMsg & { sessionId: string; sessionName: string; sessionKind: 'draft_test' | 'community'; userId: string; user: any | null; characterId: string; characterName: string; dialogueStyleId: string | null; sessionModerationBanned: boolean; characterModerationBanned: boolean };
@@ -573,33 +547,6 @@ type ImageRow = { id: string; createdAt: string; updatedAt: string; userId: stri
 type AgentLog = { id: string; createdAt: string; type: string; info: Record<string, unknown>; userId: string; user: any };
 type ModelReportRow = { id: string; createdAt: string; userId: string; user: any | null; modelKind: 'chat' | 'image'; modelId: string; modelName: string; reasonType: 'unavailable' | 'degraded' | 'slow' | 'errors' | 'other'; comment: string | null; resolvedAt: string | null; resolvedByUserId: string | null; resolutionMessage: string | null };
 
-const UserAcctInline = defineComponent({
-	props: {
-		user: { type: Object, required: false, default: null },
-		fallback: { type: String, required: false, default: null },
-	},
-	emits: ['copy'],
-	setup(props, { emit }) {
-		return () => {
-			const acct = props.user ? `@${userAcct(props.user as any)}` : props.fallback;
-			const canCopy = typeof acct === 'string' && acct !== '' && acct !== '-';
-
-			return h('span', { class: 'agent-user-acct' }, [
-				h('code', acct || '-'),
-				h('button', {
-					type: 'button',
-					class: 'agent-user-acct-copy _button',
-					title: 'Copy username / acct',
-					disabled: !canCopy,
-					onClick: (ev: MouseEvent) => {
-						ev.stopPropagation();
-						if (canCopy) emit('copy', acct);
-					},
-				}, [h('i', { class: 'ti ti-copy' })]),
-			]);
-		};
-	},
-});
 type Summary = { pendingCharacters: number; pendingStyles: number; pendingTotal: number; bannedCharacters: number; bannedSessions: number; blockedExternalAudits: number; blockedImages: number; recentOperations: number };
 
 const api = misskeyApi as unknown as <T>(endpoint: string, data?: Record<string, unknown>) => Promise<T>;
@@ -620,9 +567,6 @@ const summaryLoading = ref(false);
 const summary = ref<Summary | null>(null);
 // 全部翻页 tab 统一页大小：控制单页查询与关联打包的成本
 const PAGE_SIZE = 30;
-const selectedReview = ref<ReviewRow | null>(null);
-const reviewDetail = ref<ReviewDetailRow | null>(null);
-const reviewDetailLoading = ref(false);
 const reviewFilters = reactive({ kind: 'all', status: 'pending', query: '', userId: '' });
 const reviewFilterOpen = ref(false);
 const hasActiveReviewFilters = computed(() => {
@@ -658,15 +602,25 @@ function openSessionReview(sessionId: string, messageId?: string) {
 	}
 }
 
+// 内容库审查独立页：电脑新标签页，手机/App 站内跳转（同会话审查）
+function openLibraryReview(row: ReviewRow) {
+	const path = `/admin/agent-library/${row.kind}/${row.id}`;
+	if (preferMobileNavigation()) {
+		router.pushByPath(path, 'forcePage');
+	} else {
+		window.open(path, '_blank', 'noopener');
+	}
+}
+
 // 会话列表分页
 const sessionsPagination = useGovernancePagination<SessionRow>(async (untilId) => {
-	return await api<SessionRow[]>('admin/agents/governance/sessions/list', {
-		userId: sessionFilters.userId.trim() || null,
-		sessionId: sessionFilters.sessionId.trim() || null,
-		limit: PAGE_SIZE + 1,
-		untilId,
-	});
-}, { pageSize: PAGE_SIZE });
+		return await api<SessionRow[]>('admin/agents/governance/sessions/list', {
+			userId: sessionFilters.userId.trim() || null,
+			sessionId: sessionFilters.sessionId.trim() || null,
+			limit: PAGE_SIZE + 1,
+			untilId,
+		});
+	}, { pageSize: PAGE_SIZE });
 const sessions = sessionsPagination.items;
 const sessionsLoading = sessionsPagination.loading;
 const sessionsHasMore = sessionsPagination.hasMore;
@@ -1037,10 +991,6 @@ async function refreshCurrentView() {
 }
 
 async function loadReviewList(reset: boolean) {
-	if (reset) {
-		selectedReview.value = null;
-		reviewDetail.value = null;
-	}
 	await reviewPagination.load(reset);
 	if (reviewPagination.error.value) {
 		os.alert({ type: 'error', text: formatApiError(reviewPagination.error.value) });
@@ -1057,78 +1007,6 @@ function resetReviewFilters() {
 	reviewFilters.query = '';
 	reviewFilters.userId = '';
 	void loadReviewList(true);
-}
-
-async function selectReview(row: ReviewRow) {
-	selectedReview.value = row;
-	reviewDetailLoading.value = true;
-	try {
-		reviewDetail.value = await api<ReviewDetailRow>('admin/agents/governance/review/detail', { kind: row.kind, id: row.id });
-	} catch (err) {
-		os.alert({ type: 'error', text: formatApiError(err) });
-	} finally {
-		reviewDetailLoading.value = false;
-	}
-}
-
-async function approveReview(row: ReviewDetailRow) {
-	const { canceled } = await os.confirm({ type: 'info', text: `通过「${row.name}」？` });
-	if (canceled) return;
-	await resolveReview(row, 'approve', {});
-}
-
-async function rejectReview(row: ReviewDetailRow) {
-	const { canceled, result } = await os.form('拒绝审核', {
-		rejectReason: {
-			type: 'enum',
-			label: '标准原因',
-			required: true,
-			default: 'policy',
-			enum: [
-				{ label: '违反社区规范', value: 'policy' },
-				{ label: '色情或露骨内容', value: 'sexual' },
-				{ label: '暴力或危险内容', value: 'violence' },
-				{ label: '仇恨或骚扰', value: 'hate' },
-				{ label: '违法或侵权', value: 'illegal' },
-				{ label: '提示词注入/越权', value: 'prompt_injection' },
-				{ label: '广告或低质内容', value: 'spam' },
-				{ label: '其他', value: 'other' },
-			],
-		},
-		rejectMessage: { type: 'string', label: '给作者的说明', required: true, multiline: true },
-		internalNote: { type: 'string', label: '内部备注', required: false, multiline: true },
-	});
-	if (canceled) return;
-	await resolveReview(row, 'reject', result);
-}
-
-async function resolveReview(row: ReviewDetailRow, decision: 'approve' | 'reject', extra: Record<string, unknown>) {
-	try {
-		await api('admin/agents/governance/review/resolve', { kind: row.kind, id: row.id, decision, ...extra });
-		os.toast('已处理');
-		await Promise.all([loadSummary(), loadReviewList(true)]);
-	} catch (err) {
-		os.alert({ type: 'error', text: formatApiError(err) });
-	}
-}
-
-async function toggleCharacterBan(row: ReviewDetailRow) {
-	if (row.kind !== 'character') return;
-	const next = !row.moderationBanned;
-	const { canceled, result } = await os.form(next ? '封禁角色' : '解封角色', {
-		reason: { type: 'string', label: '处理原因', required: next, multiline: true },
-	});
-	if (canceled) return;
-	try {
-		await api('admin/agents/governance/review/set-character-banned', { characterId: row.id, banned: next, reason: result.reason || null });
-		os.toast('已处理');
-		await loadSummary();
-		await loadReviewList(true);
-		const updated = reviewRows.value.find(item => item.kind === row.kind && item.id === row.id);
-		if (updated) await selectReview(updated);
-	} catch (err) {
-		os.alert({ type: 'error', text: formatApiError(err) });
-	}
 }
 
 async function loadSessions(reset: boolean) {
@@ -1374,6 +1252,13 @@ function statusLabel(status: string) {
 	return status;
 }
 
+function statusBadgeStyle(status: string): 'statusPending' | 'statusPublished' | 'statusRejected' | 'statusDraft' {
+	if (status === 'pending') return 'statusPending';
+	if (status === 'rejected') return 'statusRejected';
+	if (status === 'draft') return 'statusDraft';
+	return 'statusPublished';
+}
+
 function sessionKindLabel(kind: string) {
 	return kind === 'draft_test' ? '草稿测试' : '社区会话';
 }
@@ -1398,25 +1283,6 @@ function imageStateLabel(row: ImageRow) {
 	if (row.status === 'failed') return '失败';
 	if (row.status === 'generating') return '生成中';
 	return row.status;
-}
-
-function reviewFieldLabel(key: string) {
-	const labels: Record<string, string> = {
-		name: '名称',
-		summary: '简介',
-		personality: '人设',
-		background: '背景',
-		speakingStyle: '说话风格',
-		greeting: '开场白',
-		exampleDialogue: '示例对话',
-		forbiddenBehavior: '禁止行为',
-		worldbook: '世界书',
-		rules: '规则',
-		stickers: '表情包',
-		body: '风格提示词正文',
-		avatarFileId: '头像',
-	};
-	return labels[key] ?? key;
 }
 
 function logInfoString(log: AgentLog, key: string) {
@@ -1484,117 +1350,6 @@ function logNote(log: AgentLog) {
 	if (log.type === 'resolveAgentModelReport') return logInfoString(log, 'message');
 	return logInfoString(log, 'rejectMessage') ?? logInfoString(log, 'rejectReason') ?? logInfoString(log, 'reason') ?? logInfoString(log, 'internalNote');
 }
-
-function worldbookToText(entries: WorldbookEntry[] | null | undefined): string {
-	if (!entries?.length) return '—';
-	return entries.map((entry, index) => [
-		`${index + 1}. ${entry.title || '未命名'}（${entry.enabled ? '启用' : '停用'} · ${entry.triggerMode} · 优先级 ${entry.priority}）`,
-		`关键词：${entry.keywords.join('、') || '—'}`,
-		`正文：${entry.content || '—'}`,
-	].join('\n')).join('\n\n');
-}
-
-function rulesToText(entries: CharacterRuleEntry[] | null | undefined): string {
-	if (!entries?.length) return '—';
-	return entries.map((rule, index) => [
-		`${index + 1}. ${rule.name || '未命名'}（${rule.type === 'persistent' ? '常驻' : `可切换 · 默认${rule.defaultEnabled ? '开启' : '关闭'}`}）`,
-		`简介：${rule.description || '—'}`,
-		`正文：${rule.content || '—'}`,
-	].join('\n')).join('\n\n');
-}
-
-function worldbookText(entries: WorldbookEntry[] | undefined) {
-	return worldbookToText(entries);
-}
-
-function rulesText(entries: CharacterRuleEntry[] | undefined) {
-	return rulesToText(entries);
-}
-
-// diff 字段预览：rules/worldbook 为 JSON 字符串时转为可读文本，其余字段原样展示
-function diffPreviewText(key: string, text: string): string {
-	if (!text) return '—';
-	try {
-		const parsed = JSON.parse(text);
-		if (key === 'rules' && Array.isArray(parsed)) return rulesToText(parsed);
-		if (key === 'worldbook' && Array.isArray(parsed)) return worldbookToText(parsed);
-	} catch {
-		// 非 JSON，原样展示
-	}
-	return text;
-}
-
-const ReviewDetail = defineComponent({
-	props: { detail: { type: Object as () => ReviewDetailRow, required: true }, canModerate: { type: Boolean, default: true } },
-	emits: ['approve', 'reject', 'ban', 'copy'],
-	setup(props, { emit }) {
-		return () => h('article', { class: '_gaps_s' }, [
-			h('div', { class: 'review-detail-head' }, [
-				props.detail.avatar ? h(MkDriveFileThumbnail, { file: props.detail.avatar, fit: 'cover', class: 'review-avatar' }) : null,
-				h('div', [
-					h('div', { class: 'review-title' }, [h('span', kindLabel(props.detail.kind)), h('h2', props.detail.name)]),
-					h('p', props.detail.summary || '—'),
-					h('div', { class: 'review-badges' }, [
-						h('span', statusLabel(props.detail.reviewStatus)),
-						h('span', props.detail.publishedVersion == null ? '首次提交' : `V${props.detail.publishedVersion} 更新`),
-						...props.detail.riskTags.map(tag => h('span', tag)),
-					]),
-				]),
-			]),
-			props.detail.reviewRejectReason || props.detail.reviewRejectMessage ? h('section', { class: 'review-note' }, [
-				h('b', '最近拒绝/备注'),
-				h('p', `原因：${props.detail.reviewRejectReason ?? '—'}`),
-				h('pre', props.detail.reviewRejectMessage ?? '—'),
-			]) : null,
-			props.detail.diff.hasChanges ? h('section', { class: 'review-block' }, [
-				h('h3', '与当前线上版本的差异'),
-				...props.detail.diff.fields.map(field => h('div', { class: 'diff-row' }, [
-					h('b', reviewFieldLabel(field.key)),
-					h('pre', `当前：${diffPreviewText(field.key, field.draftPreview)}\n\n线上：${diffPreviewText(field.key, field.publishedPreview)}`),
-				])),
-			]) : h('section', { class: 'review-block' }, [h('h3', '版本差异'), h('p', '首次提交或当前内容与线上版本无差异。')]),
-			props.detail.kind === 'character' ? h('section', { class: 'review-block' }, [
-				h('h3', '角色内容'),
-				h('pre', [
-					`人设：${props.detail.personality || '—'}`,
-					`背景：${props.detail.background || '—'}`,
-					`说话风格：${props.detail.speakingStyle || '—'}`,
-					`开场白：${props.detail.greeting || '—'}`,
-					`示例对话：${props.detail.exampleTurns?.map(turn => `${turn.role}: ${turn.content}`).join('\n') || '—'}`,
-					`禁止行为：${props.detail.forbiddenBehavior || '—'}`,
-				].join('\n\n')),
-				h('h3', '世界书'),
-				h('pre', worldbookText(props.detail.worldbook)),
-				h('h3', '规则'),
-				h('pre', rulesText(props.detail.rules)),
-				(props.detail.stickers?.length ?? 0) > 0 ? h('section', { class: 'review-stickers' }, [
-					h('h3', '表情包'),
-					...props.detail.stickers!.map(sticker => {
-						const stickerUrl = sticker.file ? (sticker.file.type === 'image/gif' ? sticker.file.url : sticker.file.thumbnailUrl ?? sticker.file.url) : null;
-						return h('div', { class: 'review-sticker-item', title: sticker.description }, [
-							stickerUrl
-								? h('img', { src: stickerUrl, alt: sticker.key, loading: 'lazy' })
-								: h('div', { class: 'review-sticker-fallback' }, sticker.key),
-							h('div', { class: 'review-sticker-meta' }, [
-								h('b', sticker.key),
-								h('span', sticker.description),
-							]),
-						]);
-					}),
-				]) : null,
-			]) : h('section', { class: 'review-block' }, [
-				h('h3', '风格提示词正文'),
-				h('pre', props.detail.body || '—'),
-			]),
-			h('div', { class: 'review-actions' }, [
-				props.canModerate && props.detail.reviewStatus === 'pending' ? h(MkButton, { primary: true, rounded: true, onClick: () => emit('approve', props.detail) }, () => [h('i', { class: 'ti ti-check' }), ' 通过']) : null,
-				props.canModerate && props.detail.reviewStatus === 'pending' ? h(MkButton, { danger: true, rounded: true, onClick: () => emit('reject', props.detail) }, () => [h('i', { class: 'ti ti-x' }), ' 拒绝']) : null,
-				props.canModerate && props.detail.kind === 'character' ? h(MkButton, { rounded: true, danger: !props.detail.moderationBanned, onClick: () => emit('ban', props.detail) }, () => [h('i', { class: 'ti ti-ban' }), props.detail.moderationBanned ? ' 解封角色' : ' 封禁角色']) : null,
-				h(MkButton, { rounded: true, onClick: () => emit('copy', props.detail.id) }, () => [h('i', { class: 'ti ti-copy' }), ' 复制 ID']),
-			]),
-		]);
-	},
-});
 
 onMounted(() => {
 	restoreFilters();
@@ -1739,27 +1494,6 @@ onUnmounted(() => {
 .searchSection > :global(._buttons) {
 	margin-top: 2px;
 }
-.splitPane {
-	display: grid;
-	grid-template-columns: minmax(320px, 0.9fr) minmax(380px, 1.1fr);
-	gap: 14px;
-	margin-top: 14px;
-	align-items: start;
-}
-.listPane,
-.detailPane {
-	min-width: 0;
-}
-.detailPane {
-	position: sticky;
-	top: 12px;
-	padding: 14px;
-	border-radius: 8px;
-	background: var(--MI_THEME-panel);
-	border: 1px solid var(--MI_THEME-divider);
-	max-height: calc(100vh - 32px);
-	overflow: auto;
-}
 .rowActions {
 	display: flex;
 	justify-content: flex-end;
@@ -1768,6 +1502,10 @@ onUnmounted(() => {
 	margin-top: 10px;
 	padding-top: 10px;
 	border-top: 1px solid var(--MI_THEME-divider);
+}
+/* queue/library 列表区：紧跟筛选区须显式拉开间距（_gaps_m 只管 main 的直接子元素） */
+.listSection {
+	margin-top: 14px;
 }
 .sectionHead {
 	display: flex;
@@ -1805,9 +1543,40 @@ onUnmounted(() => {
 	border: 1px solid var(--MI_THEME-divider);
 	text-align: left;
 }
-.rowActive {
+.reviewRow {
+	cursor: pointer;
+	transition: border-color 0.15s;
+}
+.reviewRow:hover {
 	border-color: var(--MI_THEME-accent);
+}
+.statusPending,
+.statusPublished,
+.statusRejected,
+.statusDraft {
+	display: inline-flex;
+	align-items: center;
+	min-height: 22px;
+	padding: 1px 8px;
+	border-radius: 999px;
+	font-size: 0.82em;
+	flex-shrink: 0;
+}
+.statusPublished {
 	background: var(--MI_THEME-accentedBg);
+	color: var(--MI_THEME-accent);
+}
+.statusPending {
+	background: var(--MI_THEME-infoWarnBg);
+	color: var(--MI_THEME-infoWarnFg);
+}
+.statusRejected {
+	background: var(--MI_THEME-errorBg);
+	color: var(--MI_THEME-error);
+}
+.statusDraft {
+	background: var(--MI_THEME-bg);
+	color: var(--MI_THEME-fgTransparentWeak);
 }
 .rowHead,
 .cardHead {
@@ -1929,16 +1698,6 @@ onUnmounted(() => {
 /* 紧跟筛选区的加载/空态提示：MkLoading/MkInfo 无自带外边距，须显式与上方区块拉开 */
 .listStatus {
 	margin-top: 12px;
-}
-.emptyDetail {
-	display: grid;
-	place-items: center;
-	min-height: 220px;
-	color: var(--MI_THEME-fgTransparentWeak);
-	text-align: center;
-}
-.emptyDetail i {
-	font-size: 2em;
 }
 .searchSection {
 	margin-top: 14px;
@@ -2177,13 +1936,8 @@ onUnmounted(() => {
 	overflow-wrap: anywhere;
 }
 @media (max-width: 900px) {
-	.splitPane,
 	.twoCol {
 		grid-template-columns: 1fr;
-	}
-	.detailPane {
-		position: static;
-		max-height: none;
 	}
 	.summaryGrid {
 		grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2201,8 +1955,7 @@ onUnmounted(() => {
 		flex: 0 0 auto;
 	}
 	.filterBand,
-	.searchSection,
-	.detailPane {
+	.searchSection {
 		padding: 12px;
 	}
 	.imageGrid {
@@ -2246,171 +1999,6 @@ onUnmounted(() => {
 @media (max-width: 380px) {
 	.summaryGrid {
 		grid-template-columns: 1fr;
-	}
-}
-</style>
-
-<style lang="scss">
-.review-detail-head {
-	display: flex;
-	align-items: flex-start;
-	justify-content: space-between;
-	gap: 12px;
-}
-.review-detail-head > div {
-	min-width: 0;
-}
-.review-avatar {
-	width: 56px;
-	height: 56px;
-	border-radius: 8px;
-	overflow: hidden;
-	flex: 0 0 auto;
-}
-/* 角色表情包审核网格：缩略图（原始比例有界） + key/描述 */
-.review-stickers {
-	display: grid;
-	grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-	gap: 8px;
-}
-.review-sticker-item {
-	display: flex;
-	flex-direction: column;
-	gap: 4px;
-	padding: 8px;
-	border: solid 1px var(--MI_THEME-divider);
-	border-radius: 8px;
-	min-width: 0;
-}
-.review-sticker-item img,
-.review-sticker-fallback {
-	max-width: 100%;
-	max-height: 140px;
-	width: auto;
-	height: auto;
-	object-fit: contain;
-	border-radius: 6px;
-	background: var(--MI_THEME-panel);
-}
-.review-sticker-fallback {
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	font-size: 0.85em;
-	color: var(--MI_THEME-fgTransparentWeak);
-	overflow: hidden;
-}
-.review-sticker-meta {
-	display: flex;
-	flex-direction: column;
-	min-width: 0;
-}
-.review-sticker-meta span {
-	font-size: 0.85em;
-	color: var(--MI_THEME-fgTransparentWeak);
-	overflow-wrap: anywhere;
-}
-.review-title {
-	display: flex;
-	align-items: center;
-	flex-wrap: wrap;
-	gap: 8px;
-	min-width: 0;
-}
-.review-title h2 {
-	margin: 0;
-	font-size: 1.1em;
-	overflow-wrap: anywhere;
-}
-.review-detail-head p {
-	margin: 6px 0 0;
-	color: var(--MI_THEME-fgTransparentWeak);
-}
-.review-badges {
-	display: flex;
-	gap: 6px;
-	flex-wrap: wrap;
-	margin-top: 8px;
-}
-.review-badges span {
-	display: inline-flex;
-	align-items: center;
-	min-height: 22px;
-	padding: 1px 8px;
-	border-radius: 999px;
-	background: var(--MI_THEME-accentedBg);
-	color: var(--MI_THEME-accent);
-	font-size: 0.82em;
-}
-.review-note,
-.review-block {
-	padding: 10px 12px;
-	border-radius: 8px;
-	background: var(--MI_THEME-bg);
-	border: 1px solid var(--MI_THEME-divider);
-}
-.review-block h3 {
-	margin: 0 0 8px;
-	font-size: 0.95em;
-	color: var(--MI_THEME-fgTransparentWeak);
-}
-.review-block pre,
-.review-note pre,
-.diff-row pre {
-	margin: 0;
-	white-space: pre-wrap;
-	word-break: break-word;
-	overflow-wrap: anywhere;
-	line-height: 1.45;
-}
-.agent-user-acct {
-	display: inline-flex;
-	align-items: center;
-	max-width: 100%;
-	gap: 4px;
-	vertical-align: middle;
-}
-.agent-user-acct code {
-	min-width: 0;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-}
-.agent-user-acct-copy {
-	display: inline-grid;
-	place-items: center;
-	flex: 0 0 auto;
-	width: 24px;
-	height: 24px;
-	border-radius: 6px;
-	color: var(--MI_THEME-fgTransparentWeak);
-}
-.agent-user-acct-copy:hover {
-	color: var(--MI_THEME-accent);
-	background: var(--MI_THEME-accentedBg);
-}
-.agent-user-acct-copy:disabled {
-	opacity: 0.45;
-	cursor: default;
-}
-.diff-row {
-	display: grid;
-	gap: 6px;
-	padding: 8px 0;
-	border-top: 1px solid var(--MI_THEME-divider);
-}
-.review-actions {
-	position: sticky;
-	bottom: 0;
-	display: flex;
-	gap: 8px;
-	flex-wrap: wrap;
-	padding-top: 10px;
-	background: var(--MI_THEME-panel);
-}
-@media (max-width: 600px) {
-	.review-detail-head {
-		flex-wrap: wrap;
 	}
 }
 </style>

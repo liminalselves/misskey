@@ -454,6 +454,10 @@ export const ROUTE_DEF = [{
 		messageId: 'messageId',
 	},
 }, {
+	// 内容库审查独立页：角色/风格提示词详情与审核操作（入口在智能体治理页待处理/内容库列表）
+	path: '/admin/agent-library/:kind/:id',
+	component: iAmModerator ? page(() => import('@/pages/admin/agent-library-review.vue')) : page(() => import('@/pages/not-found.vue')),
+}, {
 	path: '/admin',
 	component: iAmModerator ? page(() => import('@/pages/admin/index.vue')) : page(() => import('@/pages/not-found.vue')),
 	children: [{
