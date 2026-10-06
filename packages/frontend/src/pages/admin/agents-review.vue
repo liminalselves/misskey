@@ -618,7 +618,8 @@ watch(() => props.view, view => {
 
 const summaryLoading = ref(false);
 const summary = ref<Summary | null>(null);
-const REVIEW_PAGE_SIZE = 50;
+// 全部翻页 tab 统一页大小：控制单页查询与关联打包的成本
+const PAGE_SIZE = 30;
 const selectedReview = ref<ReviewRow | null>(null);
 const reviewDetail = ref<ReviewDetailRow | null>(null);
 const reviewDetailLoading = ref(false);
@@ -636,11 +637,11 @@ const reviewPagination = useGovernancePagination<ReviewRow>(async (untilId) => {
 		status: activeView.value === 'queue' ? 'pending' : reviewFilters.status,
 		query: reviewFilters.query.trim() || null,
 		userId: reviewFilters.userId.trim() || null,
-		limit: REVIEW_PAGE_SIZE + 1,
+		limit: PAGE_SIZE + 1,
 		untilId,
 	});
 	return rows;
-}, { pageSize: REVIEW_PAGE_SIZE });
+}, { pageSize: PAGE_SIZE });
 const reviewRows = reviewPagination.items;
 const reviewLoading = reviewPagination.loading;
 const reviewHasMore = reviewPagination.hasMore;
@@ -662,10 +663,10 @@ const sessionsPagination = useGovernancePagination<SessionRow>(async (untilId) =
 	return await api<SessionRow[]>('admin/agents/governance/sessions/list', {
 		userId: sessionFilters.userId.trim() || null,
 		sessionId: sessionFilters.sessionId.trim() || null,
-		limit: 50,
+		limit: PAGE_SIZE + 1,
 		untilId,
 	});
-}, { pageSize: 50 });
+}, { pageSize: PAGE_SIZE });
 const sessions = sessionsPagination.items;
 const sessionsLoading = sessionsPagination.loading;
 const sessionsHasMore = sessionsPagination.hasMore;
@@ -675,7 +676,7 @@ const messageFilters = reactive({ userId: '', sessionId: '', characterId: '', ro
 
 // 消息检索分页
 const messagesPagination = useGovernancePagination<MessageRow>(async (untilId) => {
-	const payload: Record<string, unknown> = { limit: 80, untilId };
+	const payload: Record<string, unknown> = { limit: PAGE_SIZE + 1, untilId };
 	const userId = messageFilters.userId.trim();
 	const sessionId = messageFilters.sessionId.trim();
 	const characterId = messageFilters.characterId.trim();
@@ -686,7 +687,7 @@ const messagesPagination = useGovernancePagination<MessageRow>(async (untilId) =
 	if (messageFilters.role !== 'all') payload.role = messageFilters.role;
 	if (query) payload.query = query;
 	return await api<MessageRow[]>('admin/agents/governance/messages/list', payload);
-}, { pageSize: 80 });
+}, { pageSize: PAGE_SIZE });
 const messages = messagesPagination.items;
 const messagesLoading = messagesPagination.loading;
 const messagesHasMore = messagesPagination.hasMore;
@@ -695,7 +696,7 @@ const externalFilters = reactive({ status: 'block' as ExternalStatus | 'all', bl
 
 // 外审列表分页；status 的 enum 不接受 null，「全部」与空筛选字段一律不发送
 const externalPagination = useGovernancePagination<ExternalAuditRow>(async (untilId) => {
-	const payload: Record<string, unknown> = { limit: 80, untilId };
+	const payload: Record<string, unknown> = { limit: PAGE_SIZE + 1, untilId };
 	if (externalFilters.status !== 'all') payload.status = externalFilters.status;
 	const blockCode = externalFilters.blockCode.trim();
 	const userId = externalFilters.userId.trim();
@@ -708,7 +709,7 @@ const externalPagination = useGovernancePagination<ExternalAuditRow>(async (unti
 	if (modelId) payload.modelId = modelId;
 	if (query) payload.query = query;
 	return await api<ExternalAuditRow[]>('admin/agents/governance/external-audit/list', payload);
-}, { pageSize: 80 });
+}, { pageSize: PAGE_SIZE });
 const externalAudits = externalPagination.items;
 const externalLoading = externalPagination.loading;
 const externalHasMore = externalPagination.hasMore;
@@ -724,10 +725,10 @@ const imagesPagination = useGovernancePagination<ImageRow>(async (untilId) => {
 		status: imageFilters.status || null,
 		blocked: imageFilters.blocked === '' ? null : imageFilters.blocked === 'true',
 		query: imageFilters.query.trim() || null,
-		limit: 80,
+		limit: PAGE_SIZE + 1,
 		untilId,
 	});
-}, { pageSize: 80 });
+}, { pageSize: PAGE_SIZE });
 const images = imagesPagination.items;
 const imagesLoading = imagesPagination.loading;
 const imagesHasMore = imagesPagination.hasMore;
@@ -736,8 +737,8 @@ const logType = ref('all');
 
 // 日志列表分页
 const logsPagination = useGovernancePagination<AgentLog>(async (untilId) => {
-	return await api<AgentLog[]>('admin/agents/governance/logs/list', { type: logType.value, limit: 80, untilId });
-}, { pageSize: 80 });
+	return await api<AgentLog[]>('admin/agents/governance/logs/list', { type: logType.value, limit: PAGE_SIZE + 1, untilId });
+}, { pageSize: PAGE_SIZE });
 const logs = logsPagination.items;
 const logsLoading = logsPagination.loading;
 const logsHasMore = logsPagination.hasMore;
@@ -746,7 +747,7 @@ const modelReportFilters = reactive({ status: 'unresolved', modelKind: '', reaso
 
 // 模型上报列表分页
 const modelReportsPagination = useGovernancePagination<ModelReportRow>(async (untilId) => {
-	const payload: Record<string, unknown> = { limit: 80, untilId };
+	const payload: Record<string, unknown> = { limit: PAGE_SIZE + 1, untilId };
 	if (modelReportFilters.status) payload.status = modelReportFilters.status;
 	if (modelReportFilters.modelKind) payload.modelKind = modelReportFilters.modelKind;
 	if (modelReportFilters.reasonType) payload.reasonType = modelReportFilters.reasonType;
@@ -754,7 +755,7 @@ const modelReportsPagination = useGovernancePagination<ModelReportRow>(async (un
 	if (modelReportFilters.modelId.trim()) payload.modelId = modelReportFilters.modelId.trim();
 	if (modelReportFilters.query.trim()) payload.query = modelReportFilters.query.trim();
 	return await api<ModelReportRow[]>('admin/agents/governance/model-reports/list', payload);
-}, { pageSize: 80 });
+}, { pageSize: PAGE_SIZE });
 const modelReports = modelReportsPagination.items;
 const modelReportsLoading = modelReportsPagination.loading;
 const modelReportsHasMore = modelReportsPagination.hasMore;
@@ -815,7 +816,6 @@ const reviewListHasMore = ref(false);
 const reviewUserCards = ref<ReviewUserCard[]>([]);
 const expandedReviewUsers = reactive(new Set<string>());
 const reviewOffset = ref(0);
-const REVIEW_USER_PAGE_SIZE = 20;
 
 type ReviewUserCard = {
 	userId: string;
@@ -855,11 +855,11 @@ async function loadReviewListItems(reset: boolean) {
 	try {
 		const rows = await api<ReviewUserCard[]>('admin/agents/governance/external-audit/review-list', {
 			userId: reviewUserFilter.value.trim() || null,
-			limit: REVIEW_USER_PAGE_SIZE + 1,
+			limit: PAGE_SIZE + 1,
 			offset: reviewOffset.value,
 		});
-		reviewListHasMore.value = rows.length > REVIEW_USER_PAGE_SIZE;
-		const pageRows = rows.slice(0, REVIEW_USER_PAGE_SIZE);
+		reviewListHasMore.value = rows.length > PAGE_SIZE;
+		const pageRows = rows.slice(0, PAGE_SIZE);
 		reviewUserCards.value = reset ? pageRows : [...reviewUserCards.value, ...pageRows];
 		reviewOffset.value += pageRows.length;
 	} catch (err) {
