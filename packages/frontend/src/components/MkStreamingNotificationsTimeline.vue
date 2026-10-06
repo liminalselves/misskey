@@ -33,9 +33,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<XNotification v-else :class="$style.content" :notification="notification" :withTime="true" :full="true"/>
 			</div>
 		</component>
-		<button v-show="paginator.canFetchOlder.value" key="_more_" v-appear="prefer.s.enableInfiniteScroll ? paginator.fetchOlder : null" :disabled="paginator.fetchingOlder.value" class="_button" :class="$style.more" @click="paginator.fetchOlder">
-			<div v-if="!paginator.fetchingOlder.value">{{ i18n.ts.loadMore }}</div>
-			<MkLoading v-else/>
+		<button v-show="paginator.canFetchOlder.value" key="_more_" v-appear="prefer.s.enableInfiniteScroll && paginator.canFetchOlder.value && !paginator.fetchingOlder.value && !paginator.fetchError.value ? paginator.fetchOlder : null" :disabled="paginator.fetchingOlder.value" class="_button" :class="$style.more" @click="paginator.fetchOlder">
+			<span :style="{ visibility: paginator.fetchingOlder.value ? 'hidden' : undefined }">{{ paginator.fetchError.value ? i18n.ts.loadMoreFailed : i18n.ts.loadMore }}</span>
+			<MkLoading v-if="paginator.fetchingOlder.value" :class="$style.moreLoading" em/>
 		</button>
 	</div>
 </component>
@@ -242,11 +242,19 @@ defineExpose({
 }
 
 .more {
+	position: relative;
 	display: block;
 	width: 100%;
 	box-sizing: border-box;
 	padding: 16px;
 	background: var(--MI_THEME-panel);
 	border-top: solid 0.5px var(--MI_THEME-divider);
+}
+
+.moreLoading {
+	position: absolute;
+	inset: 0;
+	display: grid !important;
+	place-items: center;
 }
 </style>

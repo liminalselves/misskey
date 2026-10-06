@@ -34,6 +34,14 @@
 
 导航修复只改网页端，不改 App、后端、数据库或依赖；验证不得操作开发库/生产库，测试接口使用模拟数据。新增缓存或修改公共路由历史需单独核对停用、订阅与状态恢复行为。
 
+## 滚动分页
+
+- 共用 `Paginator` 的 `limit` 模式按本次实际请求数量判断末页；`safe` 模式允许不足一页的有效结果，空页或整页重复则停止。offset 记录已消费的接口条数，不从去重、删除或裁剪后的显示列表长度反推；重新加载重置 offset 和两向结束状态。
+- `MkPagination`、时间线、通知、网盘与治理列表在加载或失败时将 `v-appear` 置为 null，成功且仍有下一页时重新观察；失败保留手动重试。`appear` 必须响应绑定更新，停用/卸载取消延迟回调，不能只在首次 mounted 读取设置。
+- 分页加载保留已显示条目和加载控件高度，不用大号 `MkLoading` 替换整段列表或按钮。用户分页调用 `fetchNewer({ pagination: true })`，结束后不再请求；时间线轮询不带该选项，仍可发现新消息，且不会清除历史分页失败态触发自动重试。
+- 智能体广场的角色/风格追加加载保留卡片，末尾预留 64px 状态区；搜索时不加载被隐藏的广场列表。治理消息检索只在初次空列表加载时显示整块加载指示。
+- 2026-10-06：`pnpm --filter frontend test pagination.test.ts drive-navigation.test.ts scroll.test.ts` 共 23 项通过，frontend typecheck 通过，改动源码 ESLint 无错误（存量警告保留）。Chrome 393×852 移动视口使用实际搜索页/用户列表、时间线、通知、反向分页和广场组件，配合模拟 API 验证失败不自动重试、按钮与页面高度/scrollY 不变、手动重试后末页停止、重复页停止及广场加载时卡片不消失。无数据库操作；未替代 Android WebView 真机验收。
+
 ## 验证
 
 自动化：`pnpm --filter frontend test drive-navigation.test.ts navigation-state.test.ts scroll.test.ts`、frontend typecheck、改动 src 文件 ESLint、git diff --check。回归覆盖站内历史/独立窗口、移动判定、父容器复用、子页缓存隔离、标签更新、管理菜单往返、无锚点/反向滚动、锚点偏移、离开时取消恢复及首次深链位置；网盘另覆盖目录逐级返回/前进、文件详情返回、目录直达、面包屑、迟到响应、删除目录 replace 和两类选择器隔离。

@@ -39,8 +39,13 @@ export function useGovernancePagination<T extends { id: string }>(
 				return;
 			}
 			const rows = await fetchFn(untilId);
-			hasMore.value = rows.length > pageSize;
-			const pageRows = rows.slice(0, pageSize);
+			const existingIds = new Set(items.value.map(item => item.id));
+			const pageRows = rows.slice(0, pageSize).filter(item => {
+				if (existingIds.has(item.id)) return false;
+				existingIds.add(item.id);
+				return true;
+			});
+			hasMore.value = rows.length > pageSize && pageRows.length > 0;
 			items.value = reset ? pageRows : [...items.value, ...pageRows];
 		} catch (err) {
 			error.value = err as Error;

@@ -26,17 +26,17 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 			<div v-else key="_root_" class="_gaps">
 				<div v-if="direction === 'up' || direction === 'both'" v-show="upButtonVisible">
-					<MkButton v-if="!upButtonLoading" v-appear="shouldEnableInfiniteScroll ? upButtonClick : null" :class="$style.more" primary rounded @click="upButtonClick">
-						{{ props.paginator.fetchError.value ? i18n.ts.loadMoreFailed : i18n.ts.loadMore }}
+					<MkButton v-appear="shouldEnableInfiniteScroll && upButtonVisible && !upButtonLoading && !paginator.fetchError.value ? upButtonClick : null" :class="$style.more" :wait="upButtonLoading" primary rounded @click="upButtonClick">
+						<span :style="{ visibility: upButtonLoading ? 'hidden' : undefined }">{{ paginator.fetchError.value ? i18n.ts.loadMoreFailed : i18n.ts.loadMore }}</span>
+						<MkLoading v-if="upButtonLoading" :class="$style.moreLoading" :colored="false" em/>
 					</MkButton>
-					<MkLoading v-else/>
 				</div>
 				<slot :items="getValue(paginator.items)" :fetching="paginator.fetching.value || paginator.fetchingOlder.value"></slot>
 				<div v-if="direction === 'down' || direction === 'both'" v-show="downButtonVisible">
-					<MkButton v-if="!downButtonLoading" v-appear="shouldEnableInfiniteScroll ? downButtonClick : null" :class="$style.more" primary rounded @click="downButtonClick">
-						{{ props.paginator.fetchError.value ? i18n.ts.loadMoreFailed : i18n.ts.loadMore }}
+					<MkButton v-appear="shouldEnableInfiniteScroll && downButtonVisible && !downButtonLoading && !paginator.fetchError.value ? downButtonClick : null" :class="$style.more" :wait="downButtonLoading" primary rounded @click="downButtonClick">
+						<span :style="{ visibility: downButtonLoading ? 'hidden' : undefined }">{{ paginator.fetchError.value ? i18n.ts.loadMoreFailed : i18n.ts.loadMore }}</span>
+						<MkLoading v-if="downButtonLoading" :class="$style.moreLoading" :colored="false" em/>
 					</MkButton>
-					<MkLoading v-else/>
 				</div>
 			</div>
 		</Transition>
@@ -126,10 +126,11 @@ const upButtonLoading = computed(() => {
 });
 
 function upButtonClick() {
+	if (!upButtonVisible.value || upButtonLoading.value) return;
 	if (props.paginator.order.value === 'oldest') {
-		props.paginator.fetchOlder();
+		return props.paginator.fetchOlder();
 	} else {
-		props.paginator.fetchNewer();
+		return props.paginator.fetchNewer({ pagination: true });
 	}
 }
 
@@ -141,10 +142,11 @@ const downButtonLoading = computed(() => {
 });
 
 function downButtonClick() {
+	if (!downButtonVisible.value || downButtonLoading.value) return;
 	if (props.paginator.order.value === 'oldest') {
-		props.paginator.fetchNewer();
+		return props.paginator.fetchNewer({ pagination: true });
 	} else {
-		props.paginator.fetchOlder();
+		return props.paginator.fetchOlder();
 	}
 }
 
@@ -167,5 +169,12 @@ defineSlots<{
 .more {
 	margin-left: auto;
 	margin-right: auto;
+}
+
+.moreLoading {
+	position: absolute;
+	inset: 0;
+	display: grid !important;
+	place-items: center;
 }
 </style>

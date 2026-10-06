@@ -59,7 +59,7 @@ export interface IPaginator<T = unknown, _T = T & MisskeyEntity> {
 	init(): Promise<void>;
 	reload(): Promise<void>;
 	fetchOlder(): Promise<void>;
-	fetchNewer(options?: { toQueue?: boolean }): Promise<void>;
+	fetchNewer(options?: { toQueue?: boolean; pagination?: boolean }): Promise<void>;
 	trim(trigger?: boolean): void;
 	unshiftItems(newItems: (_T)[]): void;
 	pushItems(oldItems: (_T)[]): void;
@@ -104,6 +104,7 @@ export class Paginator<
 	public initialDirection: 'newer' | 'older';
 
 	private offsetMode: boolean;
+	private offset = 0;
 	public noPaging: boolean;
 	public searchQuery = ref<null | string>('');
 	private searchParamName: keyof E['req'] | 'search';
@@ -197,6 +198,9 @@ export class Paginator<
 		this.items.value = [];
 		this.aheadQueue = [];
 		this.queuedAheadItemsCount.value = 0;
+		this.offset = 0;
+		this.canFetchOlder.value = false;
+		this.canFetchNewer.value = false;
 		this.fetching.value = true;
 
 		const data: E['req'] = {
@@ -237,20 +241,9 @@ export class Paginator<
 		}
 
 		this.pushItems(apiRes);
-
-		if (this.canFetchDetection === 'limit') {
-			if (apiRes.length < FIRST_FETCH_LIMIT) {
-				(this.initialDirection === 'older' ? this.canFetchOlder : this.canFetchNewer).value = false;
-			} else {
-				(this.initialDirection === 'older' ? this.canFetchOlder : this.canFetchNewer).value = true;
-			}
-		} else if (this.canFetchDetection === 'safe' || this.canFetchDetection == null) {
-			if (apiRes.length === 0 || this.noPaging) {
-				(this.initialDirection === 'older' ? this.canFetchOlder : this.canFetchNewer).value = false;
-			} else {
-				(this.initialDirection === 'older' ? this.canFetchOlder : this.canFetchNewer).value = true;
-			}
-		}
+		this.offset = apiRes.length;
+		(this.initialDirection === 'older' ? this.canFetchOlder : this.canFetchNewer).value =
+			!this.noPaging && (this.canFetchDetection === 'limit' ? apiRes.length >= this.limit : apiRes.length > 0);
 
 		this.error.value = false;
 		this.fetchError.value = false;
@@ -262,7 +255,7 @@ export class Paginator<
 	}
 
 	public async fetchOlder(): Promise<void> {
-		if (!this.canFetchOlder.value || this.fetching.value || this.fetchingOlder.value || this.items.value.length === 0) return;
+		if (this.noPaging || !this.canFetchOlder.value || this.fetching.value || this.fetchingOlder.value || this.fetchingNewer.value || this.items.value.length === 0) return;
 		this.fetchingOlder.value = true;
 
 		const data: E['req'] = {
@@ -271,7 +264,7 @@ export class Paginator<
 			...(this.searchQuery.value != null && this.searchQuery.value.trim() !== '' ? { [this.searchParamName]: this.searchQuery.value } : {}),
 			limit: SECOND_FETCH_LIMIT,
 			...(this.offsetMode ? {
-				offset: this.items.value.length,
+				offset: this.offset,
 			} : {
 				untilId: this.getOldestId(),
 			}),
@@ -289,6 +282,9 @@ export class Paginator<
 		}
 
 		this.fetchError.value = false;
+		this.offset += apiRes.length;
+		const existingIds = new Set(this.items.value.map(item => item.id));
+		const hasNewItems = apiRes.some(item => !existingIds.has(item.id));
 
 		for (let i = 0; i < apiRes.length; i++) {
 			const item = apiRes[i];
@@ -301,24 +297,17 @@ export class Paginator<
 			this.pushItems(apiRes);
 		}
 
-		if (this.canFetchDetection === 'limit') {
-			if (apiRes.length < FIRST_FETCH_LIMIT) {
-				this.canFetchOlder.value = false;
-			} else {
-				this.canFetchOlder.value = true;
-			}
-		} else if (this.canFetchDetection === 'safe' || this.canFetchDetection == null) {
-			if (apiRes.length === 0) {
-				this.canFetchOlder.value = false;
-			} else {
-				this.canFetchOlder.value = true;
-			}
-		}
+		this.canFetchOlder.value = hasNewItems &&
+			(this.canFetchDetection !== 'limit' || apiRes.length >= SECOND_FETCH_LIMIT);
 	}
 
 	public async fetchNewer(options: {
 		toQueue?: boolean;
+		pagination?: boolean;
 	} = {}): Promise<void> {
+		if (this.fetching.value || this.fetchingNewer.value || this.fetchingOlder.value) return;
+		// Polling must still discover arrivals after a previously empty page.
+		if (options.pagination && (!this.canFetchNewer.value || this.noPaging || this.items.value.length === 0)) return;
 		this.fetchingNewer.value = true;
 
 		const data: E['req'] = {
@@ -327,62 +316,55 @@ export class Paginator<
 			...(this.searchQuery.value != null && this.searchQuery.value.trim() !== '' ? { [this.searchParamName]: this.searchQuery.value } : {}),
 			limit: SECOND_FETCH_LIMIT,
 			...(this.offsetMode ? {
-				offset: this.items.value.length,
+				offset: this.offset,
 			} : {
 				sinceId: this.getNewestId(),
 			}),
 		};
 
 		const apiRes = (await misskeyApi<T[]>(this.endpoint, data).catch(_ => {
-			// fetchNewer 由轮询/事件自动驱动，失败不置 fetchError，
-			// 避免把“加载更多”（fetchOlder）按钮污染成错误态
+			if (options.pagination) this.fetchError.value = true;
 			return null;
 		})) as T[] | null;
 
 		this.fetchingNewer.value = false;
 
 		if (apiRes == null) {
-			this.canFetchNewer.value = false;
-			// 余計なre-renderを防止するためここで終了
+			if (!options.pagination) this.canFetchNewer.value = false;
 			return;
 		}
 
-		// 请求成功即说明网络已恢复：清除失败态，并让时间线自动从初回加载的错误页恢复
-		this.fetchError.value = false;
+		if (options.pagination) this.fetchError.value = false;
 		// 仅在有数据时清除错误态：若时间线确实为空（init 失败后拉新仍返回空），
 		// 保留错误页与重试按钮，避免出现无任何加载入口的死胡同
 		if (this.items.value.length > 0) {
 			this.error.value = false;
 		}
 
-		if (apiRes.length === 0) {
-			this.canFetchNewer.value = false;
-			return;
-		}
+		this.offset += apiRes.length;
+		const existingIds = new Set([...this.items.value, ...this.aheadQueue].map(item => item.id));
+		const newItems = apiRes.filter(item => {
+			if (existingIds.has(item.id)) return false;
+			existingIds.add(item.id);
+			return true;
+		});
+		this.canFetchNewer.value = !this.noPaging && newItems.length > 0 &&
+			(this.canFetchDetection !== 'limit' || apiRes.length >= SECOND_FETCH_LIMIT);
+		if (newItems.length === 0) return;
 
 		if (options.toQueue) {
-			this.aheadQueue.unshift(...apiRes.toReversed());
+			this.aheadQueue.unshift(...newItems.toReversed());
 			if (this.aheadQueue.length > MAX_QUEUE_ITEMS) {
 				this.aheadQueue = this.aheadQueue.slice(0, MAX_QUEUE_ITEMS);
 			}
 			this.queuedAheadItemsCount.value = this.aheadQueue.length;
 		} else {
 			if (this.order.value === 'oldest') {
-				this.pushItems(apiRes);
+				this.pushItems(newItems);
 			} else {
-				this.unshiftItems(apiRes.toReversed(), false);
+				this.unshiftItems(newItems.toReversed(), false);
 			}
 		}
-
-		if (this.canFetchDetection === 'limit') {
-			if (apiRes.length < FIRST_FETCH_LIMIT) {
-				this.canFetchNewer.value = false;
-			} else {
-				this.canFetchNewer.value = true;
-			}
-		}
-		// canFetchDetectionが'safe'の場合・apiRes.length === 0 の場合は apiRes.length === 0 の場合に canFetchNewer.value = false になるが、
-		// 余計な re-render を防ぐために上部で処理している。そのため、ここでは何もしない
 	}
 
 	public trim(trigger = true): void {

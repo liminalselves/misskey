@@ -7,29 +7,46 @@ import { throttle } from 'throttle-debounce';
 import type { Directive } from 'vue';
 import type { Awaitable } from '@/types/misc.js';
 
+type AppearCallback = (() => Awaitable<void>) | null | undefined;
+
 interface HTMLElementWithObserver extends HTMLElement {
 	_observer_?: IntersectionObserver;
+	_appearCallback_?: AppearCallback;
+	_appearCheck_?: { cancel(): void };
+}
+
+function updateObserver(src: HTMLElementWithObserver, callback: AppearCallback) {
+	src._appearCallback_ = callback;
+	if (callback == null) {
+		src._observer_?.disconnect();
+		src._appearCheck_?.cancel();
+		delete src._observer_;
+		delete src._appearCheck_;
+		return;
+	}
+	if (src._observer_) return;
+
+	const check = throttle<IntersectionObserverCallback>(500, (entries) => {
+		if (src.isConnected && entries.some(entry => entry.isIntersecting)) {
+			src._appearCallback_?.();
+		}
+	});
+	const observer = new IntersectionObserver(check);
+	src._observer_ = observer;
+	src._appearCheck_ = check;
+	observer.observe(src);
 }
 
 export const appearDirective = {
 	mounted(src, binding) {
-		const fn = binding.value;
-		if (fn == null) return;
+		updateObserver(src, binding.value);
+	},
 
-		const check = throttle<IntersectionObserverCallback>(500, (entries) => {
-			if (entries.some(entry => entry.isIntersecting)) {
-				fn();
-			}
-		});
-
-		const observer = new IntersectionObserver(check);
-
-		observer.observe(src);
-
-		src._observer_ = observer;
+	updated(src, binding) {
+		updateObserver(src, binding.value);
 	},
 
 	unmounted(src) {
-		if (src._observer_) src._observer_.disconnect();
+		updateObserver(src, null);
 	},
-} as Directive<HTMLElementWithObserver, (() => Awaitable<void>) | null | undefined>;
+} as Directive<HTMLElementWithObserver, AppearCallback>;

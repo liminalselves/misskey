@@ -172,13 +172,14 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 			<MkButton
 				v-show="canFetchFiles"
-				v-appear="shouldEnableInfiniteScroll ? fetchMoreFiles : null"
+				v-appear="shouldEnableInfiniteScroll && canFetchFiles && !fetchingMoreFiles && !filesPaginator.fetchError.value ? fetchMoreFiles : null"
 				:class="$style.loadMore"
+				:wait="fetchingMoreFiles"
 				primary
 				rounded
 				@click="fetchMoreFiles"
 			>
-				{{ i18n.ts.loadMore }}
+				{{ filesPaginator.fetchError.value ? i18n.ts.loadMoreFailed : i18n.ts.loadMore }}
 			</MkButton>
 
 			<div v-if="filesPaginator.items.value.length == 0 && foldersPaginator.items.value.length == 0 && !fetching" :class="$style.empty">
@@ -328,12 +329,14 @@ const foldersPaginator = markRaw(new Paginator('drive/folders', {
 }));
 
 const canFetchFiles = computed(() => !fetching.value && (filesPaginator.order.value === 'oldest' ? filesPaginator.canFetchNewer.value : filesPaginator.canFetchOlder.value));
+const fetchingMoreFiles = computed(() => filesPaginator.order.value === 'oldest' ? filesPaginator.fetchingNewer.value : filesPaginator.fetchingOlder.value);
 
 async function fetchMoreFiles() {
+	if (!canFetchFiles.value || fetchingMoreFiles.value) return;
 	if (filesPaginator.order.value === 'oldest') {
-		filesPaginator.fetchNewer();
+		await filesPaginator.fetchNewer({ pagination: true });
 	} else {
-		filesPaginator.fetchOlder();
+		await filesPaginator.fetchOlder();
 	}
 }
 

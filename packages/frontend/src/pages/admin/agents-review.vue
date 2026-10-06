@@ -97,7 +97,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 								</button>
 							</div>
 							<div v-if="reviewRows.length > 0 && reviewHasMore" :class="$style.loadMore">
-								<MkButton v-appear="prefer.s.enableInfiniteScroll ? loadMoreReviews : null" small rounded :disabled="reviewLoading" @click="loadMoreReviews"><i class="ti ti-chevron-down"></i> {{ reviewLoading ? '载入中…' : '继续载入' }}</MkButton>
+								<MkButton v-appear="prefer.s.enableInfiniteScroll && !reviewLoading && !reviewPagination.error.value ? loadMoreReviews : null" small rounded :disabled="reviewLoading" @click="loadMoreReviews"><i class="ti ti-chevron-down"></i> {{ reviewLoading ? '载入中…' : '继续载入' }}</MkButton>
 							</div>
 						</section>
 
@@ -143,7 +143,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 							<MkButton primary rounded :disabled="messagesLoading" @click="searchMessages"><i class="ti ti-search"></i> 检索消息</MkButton>
 							<MkButton rounded :disabled="messagesLoading" @click="resetMessageFilters"><i class="ti ti-filter-off"></i> 重置</MkButton>
 						</div>
-						<MkLoading v-if="messagesLoading"/>
+						<MkLoading v-if="messagesLoading && messages.length === 0"/>
 						<MkInfo v-else-if="messagesSearched && messages.length === 0">没有匹配的消息。</MkInfo>
 						<div v-else-if="messages.length > 0" :class="$style.messageResults">
 							<article v-for="row in messages" :key="row.id" v-panel :class="$style.messageCard">
@@ -167,7 +167,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 								</div>
 							</article>
 							<div v-if="messagesHasMore" :class="$style.loadMore">
-								<MkButton v-appear="prefer.s.enableInfiniteScroll ? () => messagesPagination.load(false) : null" small rounded :disabled="messagesLoading" @click="messagesPagination.load(false)"><i class="ti ti-chevron-down"></i> {{ messagesLoading ? '载入中…' : '继续载入' }}</MkButton>
+								<MkButton v-appear="prefer.s.enableInfiniteScroll && !messagesLoading && !messagesPagination.error.value ? () => messagesPagination.load(false) : null" small rounded :disabled="messagesLoading" @click="messagesPagination.load(false)"><i class="ti ti-chevron-down"></i> {{ messagesLoading ? '载入中…' : '继续载入' }}</MkButton>
 							</div>
 						</div>
 					</section>
@@ -205,7 +205,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 							</article>
 						</div>
 						<div v-if="sessions.length > 0 && sessionsHasMore" :class="$style.loadMore">
-							<MkButton v-appear="prefer.s.enableInfiniteScroll ? () => sessionsPagination.load(false) : null" small rounded :disabled="sessionsLoading" @click="sessionsPagination.load(false)"><i class="ti ti-chevron-down"></i> {{ sessionsLoading ? '载入中…' : '继续载入' }}</MkButton>
+							<MkButton v-appear="prefer.s.enableInfiniteScroll && !sessionsLoading && !sessionsPagination.error.value ? () => sessionsPagination.load(false) : null" small rounded :disabled="sessionsLoading" @click="sessionsPagination.load(false)"><i class="ti ti-chevron-down"></i> {{ sessionsLoading ? '载入中…' : '继续载入' }}</MkButton>
 						</div>
 					</section>
 				</template>
@@ -264,7 +264,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 							</div>
 						</article>
 						<div v-if="externalHasMore" :class="$style.loadMore">
-							<MkButton v-appear="prefer.s.enableInfiniteScroll ? () => externalPagination.load(false) : null" small rounded :disabled="externalLoading" @click="externalPagination.load(false)"><i class="ti ti-chevron-down"></i> {{ externalLoading ? '载入中…' : '继续载入' }}</MkButton>
+							<MkButton v-appear="prefer.s.enableInfiniteScroll && !externalLoading && !externalPagination.error.value ? () => externalPagination.load(false) : null" small rounded :disabled="externalLoading" @click="externalPagination.load(false)"><i class="ti ti-chevron-down"></i> {{ externalLoading ? '载入中…' : '继续载入' }}</MkButton>
 						</div>
 					</div>
 				</template>
@@ -400,7 +400,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 							</div>
 						</article>
 						<div v-if="imagesHasMore" :class="$style.loadMore">
-							<MkButton v-appear="prefer.s.enableInfiniteScroll ? () => imagesPagination.load(false) : null" small rounded :disabled="imagesLoading" @click="imagesPagination.load(false)"><i class="ti ti-chevron-down"></i> {{ imagesLoading ? '载入中…' : '继续载入' }}</MkButton>
+							<MkButton v-appear="prefer.s.enableInfiniteScroll && !imagesLoading && !imagesPagination.error.value ? () => imagesPagination.load(false) : null" small rounded :disabled="imagesLoading" @click="imagesPagination.load(false)"><i class="ti ti-chevron-down"></i> {{ imagesLoading ? '载入中…' : '继续载入' }}</MkButton>
 						</div>
 					</div>
 				</template>
@@ -453,7 +453,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 							</div>
 						</article>
 						<div v-if="modelReportsHasMore" :class="$style.loadMore">
-							<MkButton v-appear="prefer.s.enableInfiniteScroll ? () => loadModelReports(false) : null" small rounded :disabled="modelReportsLoading" @click="loadModelReports(false)"><i class="ti ti-chevron-down"></i> {{ modelReportsLoading ? '载入中…' : '继续载入' }}</MkButton>
+							<MkButton v-appear="prefer.s.enableInfiniteScroll && !modelReportsLoading && !modelReportsPagination.error.value ? () => loadModelReports(false) : null" small rounded :disabled="modelReportsLoading" @click="loadModelReports(false)"><i class="ti ti-chevron-down"></i> {{ modelReportsLoading ? '载入中…' : '继续载入' }}</MkButton>
 						</div>
 					</div>
 				</template>
@@ -491,7 +491,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 							</div>
 						</article>
 						<div v-if="logsHasMore" :class="$style.loadMore">
-							<MkButton v-appear="prefer.s.enableInfiniteScroll ? () => logsPagination.load(false) : null" small rounded :disabled="logsLoading" @click="logsPagination.load(false)"><i class="ti ti-chevron-down"></i> {{ logsLoading ? '载入中…' : '继续载入' }}</MkButton>
+							<MkButton v-appear="prefer.s.enableInfiniteScroll && !logsLoading && !logsPagination.error.value ? () => logsPagination.load(false) : null" small rounded :disabled="logsLoading" @click="logsPagination.load(false)"><i class="ti ti-chevron-down"></i> {{ logsLoading ? '载入中…' : '继续载入' }}</MkButton>
 						</div>
 					</div>
 				</template>

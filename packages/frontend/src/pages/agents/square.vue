@@ -128,7 +128,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</MkButton>
 			</div>
 		</div>
-		<MkLoading v-if="loadingCh"/>
+		<MkLoading v-if="loadingCh && list.length === 0"/>
 		<MkInfo v-else-if="list.length === 0">{{ i18n.ts._agents.noAgentsYet }}</MkInfo>
 		<div v-else :class="$style.grid">
 			<div v-for="a in list" :key="a.id" v-panel :class="$style.card">
@@ -190,8 +190,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<MkButton primary rounded @click="startPlay(a)"><i class="ti ti-message"></i> {{ i18n.ts._agents.play }}</MkButton>
 				</div>
 			</div>
-			<div v-if="loadingMoreCharacters" class="_buttonsCenter">
-				<MkLoading/>
+			<div :class="$style.loadMoreStatus">
+				<MkLoading v-show="loadingMoreCharacters" mini/>
 			</div>
 		</div>
 	</template>
@@ -211,7 +211,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</MkButton>
 			</div>
 		</div>
-		<MkLoading v-if="loadingPlaza"/>
+		<MkLoading v-if="loadingPlaza && plazaStyles.length === 0"/>
 		<MkInfo v-else-if="plazaStyles.length === 0">{{ i18n.ts._agents.stylesPlazaEmpty }}</MkInfo>
 		<div v-else :class="$style.grid">
 			<div v-for="s in plazaStyles" :key="s.id" v-panel :class="$style.card">
@@ -271,8 +271,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<MkButton v-if="plazaRowState(s) === 'mine'" rounded @click="router.push(('/agents/style/' + s.id) as '/agents/style/:styleId')"><i class="ti ti-pencil"></i> {{ i18n.ts._agents.edit }}</MkButton>
 				</div>
 			</div>
-			<div v-if="loadingMoreStyles" class="_buttonsCenter">
-				<MkLoading/>
+			<div :class="$style.loadMoreStatus">
+				<MkLoading v-show="loadingMoreStyles" mini/>
 			</div>
 		</div>
 	</template>
@@ -455,10 +455,11 @@ async function loadCharacters(reset = true) {
 			} as any));
 		if (seq !== charactersSeq) return; // 丢弃过期响应
 		const next = res as AgentsCharactersPublicListResponse;
+		const newItems = next.filter(item => !list.value.some(existing => existing.id === item.id));
 		if (reset) list.value = next;
-		else list.value = [...list.value, ...next];
+		else list.value = [...list.value, ...newItems];
 		if (sortCharacters.value !== 'recommended') charactersOffset.value += next.length;
-		canLoadMoreCharacters.value = next.length === 30;
+		canLoadMoreCharacters.value = next.length === 30 && (reset || newItems.length > 0);
 	} catch (err) {
 		if (seq !== charactersSeq) return;
 		if (sortCharacters.value !== 'latest') {
@@ -470,10 +471,11 @@ async function loadCharacters(reset = true) {
 				});
 				if (seq !== charactersSeq) return;
 				const next = fallback as AgentsCharactersPublicListResponse;
+				const newItems = next.filter(item => !list.value.some(existing => existing.id === item.id));
 				if (reset) list.value = next;
-				else list.value = [...list.value, ...next];
+				else list.value = [...list.value, ...newItems];
 				charactersOffset.value += next.length;
-				canLoadMoreCharacters.value = next.length === 30;
+				canLoadMoreCharacters.value = next.length === 30 && (reset || newItems.length > 0);
 				os.toast(i18n.ts._agents.recommendedSortFailedFallback);
 				return;
 			} catch {
@@ -516,10 +518,11 @@ async function loadPlaza(reset = true) {
 		]);
 		if (seq !== stylesSeq) return; // 丢弃过期响应
 		const next = pub as AgentsStylesPublicListResponse;
+		const newItems = next.filter(item => !plazaStyles.value.some(existing => existing.id === item.id));
 		if (reset) plazaStyles.value = next;
-		else plazaStyles.value = [...plazaStyles.value, ...next];
+		else plazaStyles.value = [...plazaStyles.value, ...newItems];
 		if (sortStyles.value !== 'recommended') stylesOffset.value += next.length;
-		canLoadMoreStyles.value = next.length === 30;
+		canLoadMoreStyles.value = next.length === 30 && (reset || newItems.length > 0);
 		const m = new Map<string, { isMine: boolean; subscribed: boolean }>();
 		for (const u of usable as { id: string; isMine: boolean; subscribed: boolean }[]) {
 			m.set(u.id, { isMine: u.isMine, subscribed: u.subscribed });
@@ -539,10 +542,11 @@ async function loadPlaza(reset = true) {
 				]);
 				if (seq !== stylesSeq) return;
 				const next = pub2 as AgentsStylesPublicListResponse;
+				const newItems = next.filter(item => !plazaStyles.value.some(existing => existing.id === item.id));
 				if (reset) plazaStyles.value = next;
-				else plazaStyles.value = [...plazaStyles.value, ...next];
+				else plazaStyles.value = [...plazaStyles.value, ...newItems];
 				stylesOffset.value += next.length;
-				canLoadMoreStyles.value = next.length === 30;
+				canLoadMoreStyles.value = next.length === 30 && (reset || newItems.length > 0);
 				const m = new Map<string, { isMine: boolean; subscribed: boolean }>();
 				for (const u of usable2 as { id: string; isMine: boolean; subscribed: boolean }[]) {
 					m.set(u.id, { isMine: u.isMine, subscribed: u.subscribed });
@@ -565,6 +569,7 @@ async function loadPlaza(reset = true) {
 }
 
 async function maybeLoadMoreByScroll() {
+	if (searchActive.value) return;
 	if (sub.value === 'characters') {
 		if (loadingCh.value || loadingMoreCharacters.value || !canLoadMoreCharacters.value) return;
 		loadingMoreCharacters.value = true;
@@ -675,6 +680,10 @@ async function startPlay(a: { id: string }) {
 </script>
 
 <style lang="scss" module>
+.loadMoreStatus {
+	grid-column: 1 / -1;
+	min-height: 64px;
+}
 .sortBar {
 	display: flex;
 	align-items: center;
