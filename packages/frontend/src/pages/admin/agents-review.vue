@@ -364,28 +364,29 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<MkInfo v-else-if="images.length === 0" :class="$style.listStatus">没有匹配的 AI 生图记录。</MkInfo>
 					<div v-else :class="$style.imageGrid">
 						<article v-for="row in images" :key="row.id" v-panel :class="$style.imageCard">
-							<div :class="$style.imageBox">
-								<img v-if="row.url && !row.isBlocked && row.status !== 'auto_cleaned'" :src="row.url" alt="AI生成图片">
+							<div :class="[$style.imageBox, canPreviewImage(row) ? $style.imageBoxClickable : null]" :title="canPreviewImage(row) ? '点击查看原图' : undefined" @click="openImagePreview(row)">
+								<MkDriveFileThumbnail v-if="canPreviewImage(row)" :file="row.file!" fit="cover" :class="$style.imageThumb"/>
 								<div v-else :class="$style.imageEmpty">
-									<i :class="row.status === 'auto_cleaned' ? 'ti ti-trash' : row.isBlocked ? 'ti ti-ban' : 'ti ti-photo-off'"></i>
+									<i :class="row.file?.isDeleted || row.status === 'auto_cleaned' ? 'ti ti-trash' : isImageBlocked(row) ? 'ti ti-ban' : row.status === 'failed' ? 'ti ti-alert-triangle' : 'ti ti-loader-2'"></i>
 									<span>{{ imageStateLabel(row) }}</span>
 								</div>
 							</div>
 							<div :class="$style.imageBody">
 								<div :class="$style.cardHead">
-									<b>{{ row.provider }} / {{ row.imageModelId }}</b>
-									<span :class="row.isBlocked ? $style.warnBadge : $style.typeBadge">{{ imageStateLabel(row) }}</span>
+									<b>{{ row.imageModelName ?? row.imageModelId }}</b>
+									<time>{{ formatTime(row.createdAt) }}</time>
 								</div>
-								<p>{{ row.tag }}</p>
-								<div :class="$style.metaGrid">
-									<span>尺寸：{{ row.size }}</span>
-									<span>费用：{{ row.cost }}</span>
-									<span>用户：<MkUserAcctInline :user="row.user" :fallback="row.userId"/></span>
-									<code>{{ row.sessionId }}</code>
+								<p :class="$style.imageTag" :title="row.tag">{{ row.tag }}</p>
+								<div :class="$style.imageMeta">
+									<span :class="$style.metaItem"><i class="ti ti-server-2"></i>{{ row.provider }}</span>
+									<span :class="$style.metaItem"><i class="ti ti-ruler-2"></i>{{ imageSizeLabel(row.size) }}</span>
+									<span :class="$style.metaItem"><i class="ti ti-coin"></i>{{ row.cost }}</span>
+									<span :class="$style.metaItem"><i class="ti ti-user"></i><MkUserAcctInline :user="row.user" :fallback="row.userId"/></span>
 								</div>
+								<div v-if="row.status === 'failed' && row.errorMessage" :class="$style.imageError">{{ row.errorMessage }}</div>
+								<div v-if="isImageBlocked(row) && row.blockedReason" :class="$style.imageError">封禁原因：{{ row.blockedReason }}</div>
 								<div class="_buttons">
-									<MkButton v-if="row.url && !row.isBlocked && row.status !== 'auto_cleaned'" small rounded @click="openUrl(row.url)"><i class="ti ti-external-link"></i> 打开图片</MkButton>
-									<MkButton v-if="iAmModerator && row.status !== 'auto_cleaned'" small rounded :danger="!row.isBlocked" @click="toggleImageBlocked(row)"><i class="ti ti-ban"></i> {{ row.isBlocked ? '解封图片' : '封禁图片' }}</MkButton>
+									<MkButton v-if="iAmModerator && row.status !== 'auto_cleaned' && !row.file?.isDeleted" small rounded :danger="!row.isBlocked" @click="toggleImageBlocked(row)"><i class="ti ti-ban"></i> {{ row.isBlocked ? '解封图片' : '封禁图片' }}</MkButton>
 									<MkButton small rounded @click="jumpSession(row.sessionId)"><i class="ti ti-arrow-right"></i> 查看会话</MkButton>
 								</div>
 							</div>
@@ -494,6 +495,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <script lang="ts" setup>
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
+import type * as Misskey from 'misskey-js';
 import type { QuickActionResult, QuickActionSession } from '@/components/MkAgentQuickActionDialog.vue';
 import MkButton from '@/components/MkButton.vue';
 import MkLoading from '@/components/global/MkLoading.vue';
@@ -501,6 +503,8 @@ import MkInfo from '@/components/MkInfo.vue';
 import MkInput from '@/components/MkInput.vue';
 import MkSelect from '@/components/MkSelect.vue';
 import MkUserAcctInline from '@/components/MkUserAcctInline.vue';
+import MkDriveFileThumbnail from '@/components/MkDriveFileThumbnail.vue';
+import MkImgPreviewDialog from '@/components/MkImgPreviewDialog.vue';
 import FormSplit from '@/components/form/split.vue';
 import { misskeyApi, formatApiError } from '@/utility/misskey-api.js';
 import { copyToClipboard } from '@/utility/copy-to-clipboard.js';
@@ -543,7 +547,7 @@ type TimelineMsg = { id: string; role: 'user' | 'assistant' | 'system'; content:
 type MessageRow = TimelineMsg & { sessionId: string; sessionName: string; sessionKind: 'draft_test' | 'community'; userId: string; user: any | null; characterId: string; characterName: string; dialogueStyleId: string | null; sessionModerationBanned: boolean; characterModerationBanned: boolean };
 type ExternalStatus = 'allow' | 'block' | 'failed' | 'all_failed';
 type ExternalAuditRow = { id: string; createdAt: string; completedAt: string | null; durationMs: number | null; userId: string | null; user: any | null; sessionId: string | null; sessionName: string | null; sessionModerationBanned?: boolean; characterId: string | null; characterName: string; dialogueStyleId: string | null; modelId: string | null; modelName: string | null; apiModelName: string | null; baseUrl: string | null; priority: number; attemptIndex: number; status: ExternalStatus; blockCode: string | null; category: string | null; reason: string | null; confidence: number | null; userText: string | null; assistantText: string | null; responseText: string | null; errorCode: string | null; errorMessage: string | null; userRecentBlockCount?: number; triggeredRules?: { id: string; timeWindowMinutes: number; blockThreshold: number }[] };
-type ImageRow = { id: string; createdAt: string; updatedAt: string; userId: string; user: any | null; sessionId: string; messageId: string | null; placeholderIndex: number; tag: string; size: string; provider: string; imageModelId: string; status: string; fileId: string | null; url: string | null; errorCode: string | null; cost: number; isBlocked: boolean; blockedReason: string | null; autoCleanedAt: string | null; autoCleanedReason: string | null };
+type ImageRow = { id: string; createdAt: string; updatedAt: string; userId: string; user: any | null; sessionId: string; messageId: string | null; placeholderIndex: number; tag: string; size: string; provider: string; imageModelId: string; imageModelName: string | null; status: string; fileId: string | null; file: Misskey.entities.DriveFile | null; errorCode: string | null; errorMessage: string | null; cost: number; isBlocked: boolean; blockedReason: string | null; autoCleanedAt: string | null; autoCleanedReason: string | null };
 type AgentLog = { id: string; createdAt: string; type: string; info: Record<string, unknown>; userId: string; user: any };
 type ModelReportRow = { id: string; createdAt: string; userId: string; user: any | null; modelKind: 'chat' | 'image'; modelId: string; modelName: string; reasonType: 'unavailable' | 'degraded' | 'slow' | 'errors' | 'other'; comment: string | null; resolvedAt: string | null; resolvedByUserId: string | null; resolutionMessage: string | null };
 
@@ -1232,10 +1236,6 @@ function copyText(text: string) {
 	os.toast('已复制');
 }
 
-function openUrl(url: string | null) {
-	if (url) window.open(url, '_blank', 'noopener');
-}
-
 function formatTime(v: string | null | undefined) {
 	return v ? formatDateTimeString(new Date(v), 'yyyy-MM-dd HH:mm') : '—';
 }
@@ -1276,12 +1276,35 @@ function externalStatusLabel(status: string) {
 	return '全部失败放行';
 }
 
+function isImageBlocked(row: ImageRow) {
+	return row.isBlocked || row.status === 'blocked';
+}
+
+// 只有可预览的图才允许点击看原图：封禁/已清理/无文件的一律不出全图
+function canPreviewImage(row: ImageRow): boolean {
+	return row.file != null && !row.file.isDeleted && !isImageBlocked(row) && row.status === 'succeeded';
+}
+
+function openImagePreview(row: ImageRow) {
+	if (!canPreviewImage(row) || row.file == null) return;
+	os.popup(MkImgPreviewDialog, { file: row.file }, {});
+}
+
+function imageSizeLabel(size: string) {
+	if (size === 'portrait') return '竖图';
+	if (size === 'landscape') return '横图';
+	if (size === 'square') return '方图';
+	return size;
+}
+
 function imageStateLabel(row: ImageRow) {
-	if (row.status === 'auto_cleaned') return '图片已被清理';
-	if (row.isBlocked) return '已封禁';
+	if (row.status === 'auto_cleaned' || row.file?.isDeleted) return '图片已被清理';
+	if (isImageBlocked(row)) return '已封禁';
 	if (row.status === 'succeeded') return '成功';
 	if (row.status === 'failed') return '失败';
 	if (row.status === 'generating') return '生成中';
+	if (row.status === 'pending') return '等待中';
+	if (row.status === 'deleted') return '已删除';
 	return row.status;
 }
 
@@ -1684,8 +1707,7 @@ onUnmounted(() => {
 	flex-shrink: 0;
 }
 .rowMeta > *,
-.metaGrid > *,
-.imageBody code {
+.metaGrid > * {
 	min-width: 0;
 	overflow-wrap: anywhere;
 	word-break: break-word;
@@ -1693,6 +1715,7 @@ onUnmounted(() => {
 .loadMore {
 	display: flex;
 	justify-content: center;
+	grid-column: 1 / -1;
 	margin-top: 10px;
 }
 /* 紧跟筛选区的加载/空态提示：MkLoading/MkInfo 无自带外边距，须显式与上方区块拉开 */
@@ -1898,42 +1921,98 @@ onUnmounted(() => {
 }
 .imageGrid {
 	display: grid;
-	grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+	grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
 	gap: 12px;
 	margin-top: 12px;
 }
 .imageCard {
 	overflow: hidden;
 	border-radius: 8px;
+	display: flex;
+	flex-direction: column;
+	transition: border-color 0.15s, box-shadow 0.15s;
+}
+.imageCard:hover {
+	border-color: var(--MI_THEME-accent);
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 .imageBox {
+	position: relative;
 	display: grid;
 	place-items: center;
-	aspect-ratio: 4 / 3;
-	background: color-mix(in srgb, var(--MI_THEME-panel) 90%, var(--MI_THEME-bg));
+	aspect-ratio: 1;
+	background: var(--MI_THEME-bg);
 	border-bottom: 1px solid var(--MI_THEME-divider);
 }
-.imageBox img {
+.imageBoxClickable {
+	cursor: zoom-in;
+}
+.imageThumb {
 	width: 100%;
 	height: 100%;
-	object-fit: contain;
+	border-radius: 0;
 }
 .imageEmpty {
 	display: grid;
 	place-items: center;
+	justify-items: center;
 	gap: 8px;
+	padding: 12px;
+	text-align: center;
 	color: var(--MI_THEME-fgTransparentWeak);
+	font-size: 0.85em;
 }
 .imageEmpty i {
 	font-size: 2em;
 }
 .imageBody {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
 	padding: 12px;
+	flex: 1;
 }
-.imageBody p {
+.imageBody .cardHead time {
+	flex-shrink: 0;
+	font-size: 0.82em;
+	color: var(--MI_THEME-fgTransparentWeak);
+	font-variant-numeric: tabular-nums;
+}
+.imageTag {
+	margin: 0;
+	font-size: 0.88em;
+	color: var(--MI_THEME-fgTransparentWeak);
 	line-height: 1.45;
 	word-break: break-word;
 	overflow-wrap: anywhere;
+	display: -webkit-box;
+	-webkit-line-clamp: 2;
+	-webkit-box-orient: vertical;
+	overflow: hidden;
+}
+.imageMeta {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px 12px;
+	font-size: 0.85em;
+	color: var(--MI_THEME-fgTransparentWeak);
+}
+.imageError {
+	padding: 8px 10px;
+	border-radius: 6px;
+	background: var(--MI_THEME-errorBg);
+	color: var(--MI_THEME-error);
+	font-size: 0.82em;
+	line-height: 1.45;
+	word-break: break-word;
+	overflow-wrap: anywhere;
+	display: -webkit-box;
+	-webkit-line-clamp: 3;
+	-webkit-box-orient: vertical;
+	overflow: hidden;
+}
+.imageBody > :global(._buttons) {
+	margin-top: auto;
 }
 @media (max-width: 900px) {
 	.twoCol {
@@ -1959,7 +2038,7 @@ onUnmounted(() => {
 		padding: 12px;
 	}
 	.imageGrid {
-		grid-template-columns: minmax(0, 1fr);
+		grid-template-columns: repeat(2, minmax(0, 1fr));
 	}
 	.sectionHead,
 	.rowMeta {

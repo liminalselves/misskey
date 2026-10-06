@@ -6,12 +6,14 @@
 import ms from 'ms';
 import { Inject, Injectable } from '@nestjs/common';
 import { In } from 'typeorm';
+import type { MiMeta } from '@/models/Meta.js';
 import type { AgentImageGenerationsRepository, UsersRepository } from '@/models/_.js';
 import { Endpoint } from '@/server/api/endpoint-base.js';
 import { DI } from '@/di-symbols.js';
 import { AgentService } from '@/core/AgentService.js';
 import { QueryService } from '@/core/QueryService.js';
 import { UserEntityService } from '@/core/entities/UserEntityService.js';
+import { DriveFileEntityService } from '@/core/entities/DriveFileEntityService.js';
 import { escapeIlikePattern, resolveUserIdFromAcctOrId } from '../_utils.js';
 
 export const meta = {
@@ -49,9 +51,13 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		@Inject(DI.usersRepository)
 		private usersRepository: UsersRepository,
 
+		@Inject(DI.meta)
+		private serverSettings: MiMeta,
+
 		private agentService: AgentService,
 		private queryService: QueryService,
 		private userEntityService: UserEntityService,
+		private driveFileEntityService: DriveFileEntityService,
 	) {
 		super(meta, paramDef, async (ps, me) => {
 			this.agentService.assertAgentsEnabled();
@@ -72,6 +78,17 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			const users = userIds.length > 0 ? await this.usersRepository.findBy({ id: In(userIds) }) : [];
 			const packedUsers = await this.userEntityService.packMany(users, me, { schema: 'UserLite' });
 			const userById = new Map(packedUsers.map(u => [u.id, u]));
+			// 批量打包网盘文件供前端走缩略图（withDeleted：已被清理的文件回落为墓碑占位）
+			const fileIds = [...new Set(rows.map(r => r.fileId).filter((id): id is string => id != null))];
+			const fileById = fileIds.length > 0
+				? await this.driveFileEntityService.packManyByIdsMap(fileIds, { withDeleted: true })
+				: new Map<string, unknown>();
+			// imageModelId 是配置项 id，解析出显示名便于治理识别
+			const imageModelNameById = new Map(
+				(Array.isArray(this.serverSettings.agentImageModels) ? this.serverSettings.agentImageModels : [])
+					.filter(m => typeof m.id === 'string')
+					.map(m => [m.id, typeof m.name === 'string' && m.name.trim() !== '' ? m.name.trim() : m.id] as const),
+			);
 			return rows.map(r => ({
 				id: r.id,
 				createdAt: r.createdAt.toISOString(),
@@ -85,9 +102,10 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				size: r.size,
 				provider: r.provider,
 				imageModelId: r.imageModelId,
+				imageModelName: imageModelNameById.get(r.imageModelId) ?? null,
 				status: r.status,
 				fileId: r.fileId,
-				url: r.isBlocked ? null : r.url,
+				file: r.fileId ? fileById.get(r.fileId) ?? null : null,
 				errorCode: r.errorCode,
 				errorMessage: r.errorMessage,
 				cost: r.cost,
