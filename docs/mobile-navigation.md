@@ -34,6 +34,12 @@
 
 导航修复只改网页端，不改 App、后端、数据库或依赖；验证不得操作开发库/生产库，测试接口使用模拟数据。新增缓存或修改公共路由历史需单独核对停用、订阅与状态恢复行为。
 
+## 嵌入播放器全屏
+
+- `MkUrlPreview` 的播放器 iframe 固定声明 `allowfullscreen`，不依赖预览服务是否在 `player.allow` 中返回 `fullscreen`；仍按原白名单筛选其他 iframe 权限，不放宽 sandbox。它与窗口播放器使用相同的全屏声明。
+- Android 的全屏显示与返回键退出由 App 现有 `WebChromeClient` 回调负责，职责合同见兄弟仓库 `liminalselves/scripts/misskey-embedded-ux-contract.md`；本次只修改网页，不改变桥协议或 App。
+- 2026-10-06：预览回归测试覆盖缺失全屏权限的元数据；Chrome 实测该场景修复前拒绝全屏、补齐后可进入，并验证截图视频 `BV1C8Hx6PELX` 的全屏进入与退出。该视频仅凭现代 `allow` 在 Chrome 中也能全屏，因此这些结果不能确认用户手机的具体失败原因；旧 WebView 与 App 真机尚未验收。
+
 ## 滚动分页
 
 - 共用 `Paginator` 的 `limit` 模式按本次实际请求数量判断末页；`safe` 模式允许不足一页的有效结果，空页或整页重复则停止。offset 记录已消费的接口条数，不从去重、删除或裁剪后的显示列表长度反推；重新加载重置 offset 和两向结束状态。

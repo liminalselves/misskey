@@ -105,6 +105,21 @@ describe('MkUrlPreview', () => {
 		);
 	});
 
+	test('A player should allow fullscreen even when preview metadata omits the permission', async () => {
+		const iframe = await renderAndOpenPreview({
+			url: 'https://example.local',
+			player: {
+				url: 'https://example.local/player',
+				width: null,
+				height: null,
+				allow: ['autoplay', 'encrypted-media'],
+			},
+		});
+		assert.exists(iframe, 'iframe should exist');
+		assert.isTrue(iframe?.hasAttribute('allowfullscreen'));
+		assert.strictEqual(iframe?.allow, 'autoplay;encrypted-media');
+	});
+
 	test('Having a player with `allow` field should set permissions', async () => {
 		const iframe = await renderAndOpenPreview({
 			url: 'https://example.local',
