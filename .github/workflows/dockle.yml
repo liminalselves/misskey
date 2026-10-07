@@ -50,4 +50,5 @@ jobs:
       - name: Run Dockle Scan (tar input)
         run: |
           set -eux
-          dockle --exit-code 1 --input /mnt/dockle-tmp/misskey-web.tar
+          # This boolean migration flag contains KEY but is not a credential.
+          dockle --exit-code 1 --accept-key MISSKEY_MIGRATION_CREATE_INDEX_CONCURRENTLY --input /mnt/dockle-tmp/misskey-web.tar

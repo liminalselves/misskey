@@ -9,6 +9,7 @@ import { CustomEmojiService } from '@/core/CustomEmojiService.js';
 import { EmojiEntityService } from '@/core/entities/EmojiEntityService.js';
 import { GlobalEventService } from '@/core/GlobalEventService.js';
 import { IdService } from '@/core/IdService.js';
+import { LoggerService } from '@/core/LoggerService.js';
 import { ModerationLogService } from '@/core/ModerationLogService.js';
 import { UtilityService } from '@/core/UtilityService.js';
 import { DI } from '@/di-symbols.js';
@@ -33,6 +34,7 @@ describe('CustomEmojiService', () => {
 					CustomEmojiService,
 					UtilityService,
 					IdService,
+					LoggerService,
 					EmojiEntityService,
 					ModerationLogService,
 					GlobalEventService,

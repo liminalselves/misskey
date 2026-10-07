@@ -22,6 +22,12 @@ export class DriveFileTombstones1784300000000 {
 			"deletedAt" TIMESTAMP WITH TIME ZONE NOT NULL,
 			CONSTRAINT "PK_drive_file_tombstone" PRIMARY KEY ("id")
 		)`);
+		await queryRunner.query(`COMMENT ON COLUMN "drive_file_tombstone"."userId" IS 'The owner ID of the deleted file.'`);
+		await queryRunner.query(`COMMENT ON COLUMN "drive_file_tombstone"."userHost" IS 'The host of owner. It will be null if the user in local.'`);
+		await queryRunner.query(`COMMENT ON COLUMN "drive_file_tombstone"."name" IS 'The file name of the deleted DriveFile.'`);
+		await queryRunner.query(`COMMENT ON COLUMN "drive_file_tombstone"."type" IS 'The content type (MIME) of the deleted DriveFile.'`);
+		await queryRunner.query(`COMMENT ON COLUMN "drive_file_tombstone"."size" IS 'The file size (bytes) of the deleted DriveFile.'`);
+		await queryRunner.query(`COMMENT ON COLUMN "drive_file_tombstone"."properties" IS 'Snapshot of public properties (width/height/orientation) for placeholder layout.'`);
 		await queryRunner.query(`CREATE INDEX IF NOT EXISTS "IDX_drive_file_tombstone_user" ON "drive_file_tombstone" ("userId")`);
 		await queryRunner.query(`ALTER TABLE "drive_file_tombstone" ADD CONSTRAINT "FK_drive_file_tombstone_user" FOREIGN KEY ("userId") REFERENCES "user"("id") ON DELETE CASCADE`);
 	}
