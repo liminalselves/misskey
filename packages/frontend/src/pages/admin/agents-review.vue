@@ -35,36 +35,24 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</section>
 
 				<template v-else-if="activeView === 'queue' || activeView === 'library'">
-					<section :class="$style.filterBand">
-						<div :class="$style.filterToggle" @click="reviewFilterOpen = !reviewFilterOpen">
-							<i :class="reviewFilterOpen ? 'ti ti-filter-off' : 'ti ti-filter'"></i>
-							<span>筛选条件</span>
-							<span v-if="hasActiveReviewFilters" :class="$style.filterActiveDot"></span>
-							<i :class="reviewFilterOpen ? 'ti ti-chevron-up' : 'ti ti-chevron-down'" style="margin-left: auto;"></i>
-						</div>
-						<template v-if="reviewFilterOpen">
-							<FormSplit :minWidth="190">
-								<MkSelect v-model="reviewFilters.kind" :items="kindItems">
-									<template #label>类型</template>
-								</MkSelect>
-								<MkSelect v-model="reviewFilters.status" :items="reviewStatusItems">
-									<template #label>状态</template>
-								</MkSelect>
-							</FormSplit>
-							<FormSplit :minWidth="240">
-								<MkInput v-model="reviewFilters.query" type="text">
-									<template #label>关键词</template>
-								</MkInput>
-								<MkInput v-model="reviewFilters.userId" type="text">
-									<template #label>作者用户名 / acct</template>
-								</MkInput>
-							</FormSplit>
-							<div class="_buttons">
-								<MkButton primary rounded :disabled="reviewLoading" @click="loadReviewList(true)"><i class="ti ti-search"></i> 检索</MkButton>
-								<MkButton rounded :disabled="reviewLoading" @click="resetReviewFilters"><i class="ti ti-filter-off"></i> 重置</MkButton>
-							</div>
-						</template>
-					</section>
+					<MkFilterBand :activeCount="reviewFilterActiveCount" :loading="reviewLoading" @reset="resetReviewFilters">
+						<FormSplit :minWidth="190">
+							<MkSelect v-model="reviewFilters.kind" :items="kindItems">
+								<template #label>类型</template>
+							</MkSelect>
+							<MkSelect v-if="activeView === 'library'" v-model="reviewFilters.status" :items="reviewStatusItems">
+								<template #label>状态</template>
+							</MkSelect>
+						</FormSplit>
+						<FormSplit :minWidth="240">
+							<MkInput v-model="reviewFilters.query" type="text">
+								<template #label>关键词</template>
+							</MkInput>
+							<MkInput v-model="reviewFilters.userId" type="text">
+								<template #label>作者用户名 / acct</template>
+							</MkInput>
+						</FormSplit>
+					</MkFilterBand>
 
 					<section :class="$style.listSection">
 						<div :class="$style.sectionHead">
@@ -104,16 +92,6 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</template>
 
 				<template v-else-if="activeView === 'sessions'">
-					<section :class="$style.filterBand">
-						<FormSplit :minWidth="240">
-							<MkInput v-model="sessionFilters.userId" type="text"><template #label>用户名 / acct</template></MkInput>
-							<MkInput v-model="sessionFilters.sessionId" type="text"><template #label>会话 ID</template></MkInput>
-						</FormSplit>
-						<div class="_buttons">
-							<MkButton primary rounded :disabled="sessionsLoading" @click="loadSessions(true)"><i class="ti ti-search"></i> 检索会话</MkButton>
-							<MkButton rounded :disabled="sessionsLoading" @click="resetSessionFilters"><i class="ti ti-filter-off"></i> 重置</MkButton>
-						</div>
-					</section>
 					<section :class="$style.searchSection">
 						<div :class="$style.sectionHead">
 							<div>
@@ -121,19 +99,17 @@ SPDX-License-Identifier: AGPL-3.0-only
 								<p>按用户、会话、角色或关键词检索历史消息。</p>
 							</div>
 						</div>
-						<FormSplit :minWidth="220">
-							<MkInput v-model="messageFilters.userId" type="text"><template #label>用户名 / acct</template></MkInput>
-							<MkInput v-model="messageFilters.sessionId" type="text"><template #label>会话 ID</template></MkInput>
-							<MkInput v-model="messageFilters.characterId" type="text"><template #label>角色 ID</template></MkInput>
-						</FormSplit>
-						<FormSplit :minWidth="220">
-							<MkSelect v-model="messageFilters.role" :items="roleItems"><template #label>消息角色</template></MkSelect>
-							<MkInput v-model="messageFilters.query" type="text"><template #label>关键词</template></MkInput>
-						</FormSplit>
-						<div class="_buttons">
-							<MkButton primary rounded :disabled="messagesLoading" @click="searchMessages"><i class="ti ti-search"></i> 检索消息</MkButton>
-							<MkButton rounded :disabled="messagesLoading" @click="resetMessageFilters"><i class="ti ti-filter-off"></i> 重置</MkButton>
-						</div>
+						<MkFilterBand :activeCount="messageFilterActiveCount" :loading="messagesLoading" @reset="resetMessageFilters">
+							<FormSplit :minWidth="220">
+								<MkInput v-model="messageFilters.userId" type="text"><template #label>用户名 / acct</template></MkInput>
+								<MkInput v-model="messageFilters.sessionId" type="text"><template #label>会话 ID</template></MkInput>
+								<MkInput v-model="messageFilters.characterId" type="text"><template #label>角色 ID</template></MkInput>
+							</FormSplit>
+							<FormSplit :minWidth="220">
+								<MkSelect v-model="messageFilters.role" :items="roleItems"><template #label>消息角色</template></MkSelect>
+								<MkInput v-model="messageFilters.query" type="text"><template #label>关键词</template></MkInput>
+							</FormSplit>
+						</MkFilterBand>
 						<MkLoading v-if="messagesLoading && messages.length === 0"/>
 						<MkInfo v-else-if="messagesSearched && messages.length === 0">没有匹配的消息。</MkInfo>
 						<div v-else-if="messages.length > 0" :class="$style.messageResults">
@@ -169,6 +145,12 @@ SPDX-License-Identifier: AGPL-3.0-only
 								<p>在独立的会话审查页中查看完整会话（与用户侧一致的只读视图），或封禁异常会话。</p>
 							</div>
 						</div>
+						<MkFilterBand :activeCount="sessionFilterActiveCount" :loading="sessionsLoading" @reset="resetSessionFilters">
+							<FormSplit :minWidth="240">
+								<MkInput v-model="sessionFilters.userId" type="text"><template #label>用户名 / acct</template></MkInput>
+								<MkInput v-model="sessionFilters.sessionId" type="text"><template #label>会话 ID</template></MkInput>
+							</FormSplit>
+						</MkFilterBand>
 						<MkLoading v-if="sessionsLoading && sessions.length === 0"/>
 						<MkInfo v-else-if="sessions.length === 0">没有匹配的会话。</MkInfo>
 						<div v-else :class="$style.list">
@@ -202,7 +184,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</template>
 
 				<template v-else-if="activeView === 'externalAudit'">
-					<section :class="$style.filterBand">
+					<MkFilterBand :activeCount="externalFilterActiveCount" :loading="externalLoading" @reset="resetExternalFilters">
 						<FormSplit :minWidth="220">
 							<MkSelect v-model="externalFilters.status" :items="externalStatusItems"><template #label>状态</template></MkSelect>
 							<MkInput v-model="externalFilters.blockCode" type="text"><template #label>拦截编码</template></MkInput>
@@ -213,11 +195,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 							<MkInput v-model="externalFilters.modelId" type="text"><template #label>外审模型 ID</template></MkInput>
 						</FormSplit>
 						<MkInput v-model="externalFilters.query" type="text"><template #label>关键词</template></MkInput>
-						<div class="_buttons">
-							<MkButton primary rounded :disabled="externalLoading" @click="loadExternalAudits(true)"><i class="ti ti-search"></i> 检索外审</MkButton>
-							<MkButton rounded :disabled="externalLoading" @click="resetExternalFilters"><i class="ti ti-filter-off"></i> 重置</MkButton>
-						</div>
-					</section>
+					</MkFilterBand>
 					<MkLoading v-if="externalLoading && externalAudits.length === 0" :class="$style.listStatus"/>
 					<MkInfo v-else-if="externalAudits.length === 0" :class="$style.listStatus">暂无外审拦截记录。</MkInfo>
 					<div v-else :class="$style.evidenceList">
@@ -261,15 +239,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</template>
 
 				<template v-else-if="activeView === 'review'">
-					<section :class="$style.filterBand">
-						<FormSplit :minWidth="220">
-							<MkInput v-model="reviewUserFilter" type="text"><template #label>用户名 / acct</template></MkInput>
-						</FormSplit>
-						<div class="_buttons">
-							<MkButton primary rounded :disabled="reviewListLoading" @click="loadReviewListItems(true)"><i class="ti ti-search"></i> 检索</MkButton>
-							<MkButton rounded :disabled="reviewListLoading" @click="resetReviewListFilters"><i class="ti ti-filter-off"></i> 重置</MkButton>
-						</div>
-					</section>
+					<MkFilterBand :activeCount="reviewUserFilterActiveCount" :loading="reviewListLoading" @reset="resetReviewListFilters">
+						<MkInput v-model="reviewUserFilter" type="text"><template #label>用户名 / acct</template></MkInput>
+					</MkFilterBand>
 					<MkLoading v-if="reviewListLoading && reviewUserCards.length === 0" :class="$style.listStatus"/>
 					<MkInfo v-else-if="reviewUserCards.length === 0" :class="$style.listStatus">暂无需要复审的用户。配置复审触发条件后，满足条件的用户将自动出现在这里。</MkInfo>
 					<div v-else :class="$style.reviewUserList">
@@ -344,7 +316,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</template>
 
 				<template v-else-if="activeView === 'images'">
-					<section :class="$style.filterBand">
+					<MkFilterBand :activeCount="imageFilterActiveCount" :loading="imagesLoading" @reset="resetImageFilters">
 						<FormSplit :minWidth="220">
 							<MkInput v-model="imageFilters.userId" type="text"><template #label>用户名 / acct</template></MkInput>
 							<MkInput v-model="imageFilters.sessionId" type="text"><template #label>会话 ID</template></MkInput>
@@ -355,11 +327,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 							<MkSelect v-model="imageFilters.blocked" :items="blockedItems"><template #label>封禁状态</template></MkSelect>
 							<MkInput v-model="imageFilters.query" type="text"><template #label>Prompt 关键词</template></MkInput>
 						</FormSplit>
-						<div class="_buttons">
-							<MkButton primary rounded :disabled="imagesLoading" @click="loadImages(true)"><i class="ti ti-search"></i> 查询图片</MkButton>
-							<MkButton rounded :disabled="imagesLoading" @click="resetImageFilters"><i class="ti ti-filter-off"></i> 重置</MkButton>
-						</div>
-					</section>
+					</MkFilterBand>
 					<MkLoading v-if="imagesLoading && images.length === 0" :class="$style.listStatus"/>
 					<MkInfo v-else-if="images.length === 0" :class="$style.listStatus">没有匹配的 AI 生图记录。</MkInfo>
 					<div v-else :class="$style.imageGrid">
@@ -398,7 +366,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</template>
 
 				<template v-else-if="activeView === 'modelReports'">
-					<section :class="$style.filterBand">
+					<MkFilterBand :activeCount="modelReportFilterActiveCount" :loading="modelReportsLoading" @reset="resetModelReportFilters">
 						<FormSplit :minWidth="220">
 							<MkSelect v-model="modelReportFilters.status" :items="modelReportStatusItems"><template #label>状态</template></MkSelect>
 							<MkSelect v-model="modelReportFilters.modelKind" :items="modelReportKindItems"><template #label>模型类型</template></MkSelect>
@@ -409,11 +377,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 							<MkInput v-model="modelReportFilters.modelId" type="text"><template #label>模型 ID</template></MkInput>
 							<MkInput v-model="modelReportFilters.query" type="text"><template #label>关键词</template></MkInput>
 						</FormSplit>
-						<div class="_buttons">
-							<MkButton primary rounded :disabled="modelReportsLoading" @click="loadModelReports(true)"><i class="ti ti-search"></i> 检索上报</MkButton>
-							<MkButton rounded :disabled="modelReportsLoading" @click="resetModelReportFilters"><i class="ti ti-filter-off"></i> 重置</MkButton>
-						</div>
-					</section>
+					</MkFilterBand>
 					<MkLoading v-if="modelReportsLoading && modelReports.length === 0" :class="$style.listStatus"/>
 					<MkInfo v-else-if="modelReports.length === 0" :class="$style.listStatus">暂无用户上报的模型异常。</MkInfo>
 					<div v-else :class="$style.evidenceList">
@@ -451,12 +415,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</template>
 
 				<template v-else-if="activeView === 'logs'">
-					<section :class="$style.filterBand">
+					<MkFilterBand :activeCount="logFilterActiveCount" :loading="logsLoading" @reset="resetLogFilters">
 						<MkSelect v-model="logType" :items="logTypeItems"><template #label>记录类型</template></MkSelect>
-						<div class="_buttons">
-							<MkButton primary rounded :disabled="logsLoading" @click="loadLogs(true)"><i class="ti ti-search"></i> 检索日志</MkButton>
-						</div>
-					</section>
+					</MkFilterBand>
 					<MkLoading v-if="logsLoading && logs.length === 0" :class="$style.listStatus"/>
 					<MkInfo v-else-if="logs.length === 0" :class="$style.listStatus">暂无治理记录。</MkInfo>
 					<div v-else :class="$style.evidenceList">
@@ -494,7 +455,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
 import type * as Misskey from 'misskey-js';
 import type { QuickActionResult, QuickActionSession } from '@/components/MkAgentQuickActionDialog.vue';
 import MkButton from '@/components/MkButton.vue';
@@ -502,6 +463,7 @@ import MkLoading from '@/components/global/MkLoading.vue';
 import MkInfo from '@/components/MkInfo.vue';
 import MkInput from '@/components/MkInput.vue';
 import MkSelect from '@/components/MkSelect.vue';
+import MkFilterBand from '@/components/MkFilterBand.vue';
 import MkUserAcctInline from '@/components/MkUserAcctInline.vue';
 import MkDriveFileThumbnail from '@/components/MkDriveFileThumbnail.vue';
 import MkImgPreviewDialog from '@/components/MkImgPreviewDialog.vue';
@@ -571,12 +533,8 @@ const summaryLoading = ref(false);
 const summary = ref<Summary | null>(null);
 // 全部翻页 tab 统一页大小：控制单页查询与关联打包的成本
 const PAGE_SIZE = 30;
-const reviewFilters = reactive({ kind: 'all', status: 'pending', query: '', userId: '' });
-const reviewFilterOpen = ref(false);
-const hasActiveReviewFilters = computed(() => {
-	return reviewFilters.kind !== 'all' || reviewFilters.query.trim() !== '' || reviewFilters.userId.trim() !== ''
-		|| (activeView.value === 'library' && reviewFilters.status !== 'all');
-});
+// queue 固定按 pending 取数（见下方 fetcher），status 仅为 library 的筛选，默认「全部」
+const reviewFilters = reactive({ kind: 'all', status: 'all', query: '', userId: '' });
 
 // 审核列表分页
 const reviewPagination = useGovernancePagination<ReviewRow>(async (untilId) => {
@@ -727,7 +685,7 @@ async function loadModelReports(reset: boolean) {
 
 function resetModelReportFilters() {
 	Object.assign(modelReportFilters, { status: 'unresolved', modelKind: '', reasonType: '', userId: '', modelId: '', query: '' });
-	loadModelReports(true);
+	saveFilters();
 }
 
 const modelReportKindItems = [{ value: '', label: '全部' }, { value: 'chat', label: '对话模型' }, { value: 'image', label: '绘图模型' }];
@@ -833,7 +791,7 @@ function loadMoreReviewUsers() {
 
 function resetReviewListFilters() {
 	reviewUserFilter.value = '';
-	void loadReviewListItems(true);
+	saveFilters();
 }
 
 function toggleReviewUserExpand(userId: string) {
@@ -889,9 +847,7 @@ const summaryCards = computed(() => [
 ]);
 
 const kindItems = [{ value: 'all', label: '全部' }, { value: 'character', label: '角色' }, { value: 'style', label: '风格提示词' }];
-const reviewStatusItems = computed(() => activeView.value === 'queue'
-	? [{ value: 'pending', label: '待审' }]
-	: [{ value: 'all', label: '全部' }, { value: 'pending', label: '待审' }, { value: 'published', label: '已发布' }, { value: 'rejected', label: '已拒绝' }, { value: 'draft', label: '草稿' }]);
+const reviewStatusItems = [{ value: 'all', label: '全部' }, { value: 'pending', label: '待审' }, { value: 'published', label: '已发布' }, { value: 'rejected', label: '已拒绝' }, { value: 'draft', label: '草稿' }];
 const roleItems = [{ value: 'all', label: '全部' }, { value: 'user', label: '用户' }, { value: 'assistant', label: '智能体' }, { value: 'system', label: '系统' }];
 const externalStatusItems = [{ value: 'block', label: '已拦截' }, { value: 'allow', label: '已放行' }, { value: 'failed', label: '模型失败' }, { value: 'all_failed', label: '全部失败放行' }, { value: 'all', label: '全部' }];
 const imageStatusItems = [{ value: '', label: '全部' }, { value: 'generating', label: '生成中' }, { value: 'succeeded', label: '成功' }, { value: 'failed', label: '失败' }, { value: 'blocked', label: '已封禁' }, { value: 'auto_cleaned', label: '图片已被清理' }];
@@ -900,7 +856,7 @@ const logTypeItems = [{ value: 'all', label: '全部' }, { value: 'resolveAgentR
 
 definePage({ title: '智能体治理', icon: 'ti ti-shield-check' });
 
-// 筛选条件持久化
+// 筛选条件持久化：全部 tab 的筛选随改随存，下次进入原样回填
 const FILTER_STORAGE_KEY = 'agents-review-filters';
 
 function saveFilters() {
@@ -908,8 +864,11 @@ function saveFilters() {
 		localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify({
 			review: { kind: reviewFilters.kind, status: reviewFilters.status, query: reviewFilters.query, userId: reviewFilters.userId },
 			session: { userId: sessionFilters.userId, sessionId: sessionFilters.sessionId },
+			message: { userId: messageFilters.userId, sessionId: messageFilters.sessionId, characterId: messageFilters.characterId, role: messageFilters.role, query: messageFilters.query },
 			external: { status: externalFilters.status, blockCode: externalFilters.blockCode, userId: externalFilters.userId, sessionId: externalFilters.sessionId, modelId: externalFilters.modelId, query: externalFilters.query },
 			image: { userId: imageFilters.userId, sessionId: imageFilters.sessionId, messageId: imageFilters.messageId, status: imageFilters.status, blocked: imageFilters.blocked, query: imageFilters.query },
+			modelReport: { status: modelReportFilters.status, modelKind: modelReportFilters.modelKind, reasonType: modelReportFilters.reasonType, userId: modelReportFilters.userId, modelId: modelReportFilters.modelId, query: modelReportFilters.query },
+			reviewUser: reviewUserFilter.value,
 			logType: logType.value,
 		}));
 	} catch { /* ignore */ }
@@ -922,24 +881,132 @@ function restoreFilters() {
 		const data = JSON.parse(saved);
 		if (data.review) Object.assign(reviewFilters, data.review);
 		if (data.session) Object.assign(sessionFilters, data.session);
+		if (data.message) Object.assign(messageFilters, data.message);
 		if (data.external) Object.assign(externalFilters, data.external);
 		if (data.image) Object.assign(imageFilters, data.image);
+		if (data.modelReport) Object.assign(modelReportFilters, data.modelReport);
+		if (typeof data.reviewUser === 'string') reviewUserFilter.value = data.reviewUser;
 		if (data.logType) logType.value = data.logType;
 	} catch { /* ignore */ }
 }
 
-// 搜索防抖
-let searchDebounceTimer: number | null = null;
+// 须在 watcher 注册前、子组件读取 activeCount 前恢复（activeCount 决定筛选条默认展开）
+restoreFilters();
 
-function debouncedLoadReview() {
-	if (searchDebounceTimer) window.clearTimeout(searchDebounceTimer);
-	searchDebounceTimer = window.setTimeout(() => { void loadReviewList(true); }, 300);
+function countActiveFilters(conditions: boolean[]): number {
+	return conditions.reduce((n, c) => n + (c ? 1 : 0), 0);
 }
 
-watch(() => reviewFilters.query, () => { debouncedLoadReview(); saveFilters(); });
-watch(() => reviewFilters.kind, () => { saveFilters(); });
-watch(() => reviewFilters.status, () => { saveFilters(); });
-watch(logType, () => { void loadLogs(true); saveFilters(); });
+const reviewFilterActiveCount = computed(() => countActiveFilters([
+	reviewFilters.kind !== 'all',
+	activeView.value === 'library' && reviewFilters.status !== 'all',
+	reviewFilters.query.trim() !== '',
+	reviewFilters.userId.trim() !== '',
+]));
+const sessionFilterActiveCount = computed(() => countActiveFilters([
+	sessionFilters.userId.trim() !== '',
+	sessionFilters.sessionId.trim() !== '',
+]));
+const messageFilterActiveCount = computed(() => countActiveFilters([
+	messageFilters.userId.trim() !== '',
+	messageFilters.sessionId.trim() !== '',
+	messageFilters.characterId.trim() !== '',
+	messageFilters.role !== 'all',
+	messageFilters.query.trim() !== '',
+]));
+const externalFilterActiveCount = computed(() => countActiveFilters([
+	externalFilters.status !== 'block',
+	externalFilters.blockCode.trim() !== '',
+	externalFilters.userId.trim() !== '',
+	externalFilters.sessionId.trim() !== '',
+	externalFilters.modelId.trim() !== '',
+	externalFilters.query.trim() !== '',
+]));
+const reviewUserFilterActiveCount = computed(() => countActiveFilters([reviewUserFilter.value.trim() !== '']));
+const imageFilterActiveCount = computed(() => countActiveFilters([
+	imageFilters.userId.trim() !== '',
+	imageFilters.sessionId.trim() !== '',
+	imageFilters.messageId.trim() !== '',
+	imageFilters.status !== '',
+	imageFilters.blocked !== '',
+	imageFilters.query.trim() !== '',
+]));
+const modelReportFilterActiveCount = computed(() => countActiveFilters([
+	modelReportFilters.status !== 'unresolved',
+	modelReportFilters.modelKind !== '',
+	modelReportFilters.reasonType !== '',
+	modelReportFilters.userId.trim() !== '',
+	modelReportFilters.modelId.trim() !== '',
+	modelReportFilters.query.trim() !== '',
+]));
+const logFilterActiveCount = computed(() => countActiveFilters([logType.value !== 'all']));
+
+// 筛选自动应用：变更后 350ms 防抖触发；上次应用未完成时排队补发一次，避免条件与结果错位
+function createFilterApplier(apply: () => Promise<void>) {
+	let timer: number | null = null;
+	let running = false;
+	let queued = false;
+
+	const flush = async () => {
+		if (running) {
+			queued = true;
+			return;
+		}
+		running = true;
+		try {
+			await apply();
+		} finally {
+			running = false;
+		}
+		if (queued) {
+			queued = false;
+			void flush();
+		}
+	};
+
+	const trigger = () => {
+		if (timer != null) window.clearTimeout(timer);
+		timer = window.setTimeout(() => {
+			timer = null;
+			void flush();
+		}, 350);
+	};
+
+	const cancel = () => {
+		if (timer != null) {
+			window.clearTimeout(timer);
+			timer = null;
+		}
+	};
+
+	onUnmounted(cancel);
+	return { trigger, cancel };
+}
+
+const reviewApplier = createFilterApplier(() => loadReviewList(true));
+const sessionsApplier = createFilterApplier(() => loadSessions(true));
+const messagesApplier = createFilterApplier(() => searchMessages());
+const externalApplier = createFilterApplier(() => loadExternalAudits(true));
+const imagesApplier = createFilterApplier(() => loadImages(true));
+const modelReportsApplier = createFilterApplier(() => loadModelReports(true));
+const reviewUsersApplier = createFilterApplier(() => loadReviewListItems(true));
+const logsApplier = createFilterApplier(() => loadLogs(true));
+
+// 消息检索保持「未检索不拉取」语义：重置仅清空条件与结果，不触发自动检索
+let skipMessageAutoApply = false;
+
+watch(reviewFilters, () => { saveFilters(); reviewApplier.trigger(); });
+watch(sessionFilters, () => { saveFilters(); sessionsApplier.trigger(); });
+watch(messageFilters, () => {
+	saveFilters();
+	if (skipMessageAutoApply) return;
+	messagesApplier.trigger();
+});
+watch(externalFilters, () => { saveFilters(); externalApplier.trigger(); });
+watch(imageFilters, () => { saveFilters(); imagesApplier.trigger(); });
+watch(modelReportFilters, () => { saveFilters(); modelReportsApplier.trigger(); });
+watch(reviewUserFilter, () => { saveFilters(); reviewUsersApplier.trigger(); });
+watch(logType, () => { saveFilters(); logsApplier.trigger(); });
 
 async function loadSummary() {
 	summaryLoading.value = true;
@@ -961,25 +1028,21 @@ watch(activeView, view => {
 	if (view === 'overview') {
 		void loadSummary();
 		return;
-	} else if (view === 'queue') {
-		reviewFilters.status = 'pending';
-		void loadReviewList(true);
-	} else if (view === 'library') {
-		if (reviewFilters.status === 'pending') reviewFilters.status = 'all';
+	} else if (view === 'queue' || view === 'library') {
 		void loadReviewList(true);
 	} else if (view === 'sessions' && sessions.value.length === 0) {
 		void loadSessions(true);
 	} else if (view === 'externalAudit' && externalAudits.value.length === 0) {
 		void loadExternalAudits(true);
-		} else if (view === 'review' && reviewUserCards.value.length === 0) {
-			void loadReviewListItems(true);
-		} else if (view === 'images' && images.value.length === 0) {
-			void loadImages(true);
-		} else if (view === 'modelReports' && modelReports.value.length === 0) {
-			void loadModelReports(true);
-		} else if (view === 'logs' && logs.value.length === 0) {
-			void loadLogs(true);
-		}
+	} else if (view === 'review' && reviewUserCards.value.length === 0) {
+		void loadReviewListItems(true);
+	} else if (view === 'images' && images.value.length === 0) {
+		void loadImages(true);
+	} else if (view === 'modelReports' && modelReports.value.length === 0) {
+		void loadModelReports(true);
+	} else if (view === 'logs' && logs.value.length === 0) {
+		void loadLogs(true);
+	}
 });
 
 async function refreshCurrentView() {
@@ -1005,12 +1068,10 @@ function loadMoreReviews() {
 	void reviewPagination.load(false);
 }
 
+// 各重置函数只恢复默认值并落盘，列表刷新由对应 watcher 的自动应用统一触发
 function resetReviewFilters() {
-	reviewFilters.kind = 'all';
-	reviewFilters.status = activeView.value === 'queue' ? 'pending' : 'all';
-	reviewFilters.query = '';
-	reviewFilters.userId = '';
-	void loadReviewList(true);
+	Object.assign(reviewFilters, { kind: 'all', status: 'all', query: '', userId: '' });
+	saveFilters();
 }
 
 async function loadSessions(reset: boolean) {
@@ -1021,9 +1082,8 @@ async function loadSessions(reset: boolean) {
 }
 
 function resetSessionFilters() {
-	sessionFilters.userId = '';
-	sessionFilters.sessionId = '';
-	void loadSessions(true);
+	Object.assign(sessionFilters, { userId: '', sessionId: '' });
+	saveFilters();
 }
 
 async function toggleSessionBan(row: SessionRow) {
@@ -1100,13 +1160,14 @@ async function searchMessages() {
 }
 
 function resetMessageFilters() {
-	messageFilters.userId = '';
-	messageFilters.sessionId = '';
-	messageFilters.characterId = '';
-	messageFilters.role = 'all';
-	messageFilters.query = '';
+	skipMessageAutoApply = true;
+	messagesApplier.cancel();
+	Object.assign(messageFilters, { userId: '', sessionId: '', characterId: '', role: 'all', query: '' });
+	saveFilters();
 	messagesPagination.reset();
 	messagesSearched.value = false;
+	// watcher 为 pre-flush，先于 nextTick 回调执行，此时抑制标记仍在
+	void nextTick(() => { skipMessageAutoApply = false; });
 }
 
 async function loadExternalAudits(reset: boolean) {
@@ -1117,13 +1178,8 @@ async function loadExternalAudits(reset: boolean) {
 }
 
 function resetExternalFilters() {
-	externalFilters.status = 'block';
-	externalFilters.blockCode = '';
-	externalFilters.userId = '';
-	externalFilters.sessionId = '';
-	externalFilters.modelId = '';
-	externalFilters.query = '';
-	void loadExternalAudits(true);
+	Object.assign(externalFilters, { status: 'block', blockCode: '', userId: '', sessionId: '', modelId: '', query: '' });
+	saveFilters();
 }
 
 async function loadImages(reset: boolean) {
@@ -1134,13 +1190,8 @@ async function loadImages(reset: boolean) {
 }
 
 function resetImageFilters() {
-	imageFilters.userId = '';
-	imageFilters.sessionId = '';
-	imageFilters.messageId = '';
-	imageFilters.status = '';
-	imageFilters.blocked = '';
-	imageFilters.query = '';
-	void loadImages(true);
+	Object.assign(imageFilters, { userId: '', sessionId: '', messageId: '', status: '', blocked: '', query: '' });
+	saveFilters();
 }
 
 async function toggleImageBlocked(row: ImageRow) {
@@ -1163,6 +1214,11 @@ async function loadLogs(reset: boolean) {
 	if (logsPagination.error.value) {
 		os.alert({ type: 'error', text: formatApiError(logsPagination.error.value) });
 	}
+}
+
+function resetLogFilters() {
+	logType.value = 'all';
+	saveFilters();
 }
 
 function jumpSession(sessionId: string) {
@@ -1375,7 +1431,6 @@ function logNote(log: AgentLog) {
 }
 
 onMounted(() => {
-	restoreFilters();
 	void loadSummary();
 	if (activeView.value === 'overview') return;
 	if (activeView.value === 'queue') void loadReviewList(true);
@@ -1386,14 +1441,6 @@ onMounted(() => {
 	else if (activeView.value === 'images') void loadImages(true);
 	else if (activeView.value === 'modelReports') void loadModelReports(true);
 	else void loadLogs(true);
-});
-
-onUnmounted(() => {
-	// 卸载后防抖回调不得再发起列表请求并写入已销毁组件的 ref
-	if (searchDebounceTimer != null) {
-		window.clearTimeout(searchDebounceTimer);
-		searchDebounceTimer = null;
-	}
 });
 </script>
 
@@ -1484,7 +1531,6 @@ onUnmounted(() => {
 	font-size: 1.8em;
 	line-height: 1;
 }
-.filterBand,
 .searchSection {
 	display: flex;
 	flex-direction: column;
@@ -1493,29 +1539,6 @@ onUnmounted(() => {
 	border-radius: 8px;
 	background: var(--MI_THEME-panel);
 	border: 1px solid var(--MI_THEME-divider);
-}
-.filterToggle {
-	display: flex;
-	align-items: center;
-	gap: 8px;
-	cursor: pointer;
-	padding: 4px 0;
-	color: var(--MI_THEME-fgTransparentWeak);
-	font-size: 0.92em;
-	user-select: none;
-}
-.filterToggle:hover {
-	color: var(--MI_THEME-fg);
-}
-.filterActiveDot {
-	width: 8px;
-	height: 8px;
-	border-radius: 50%;
-	background: var(--MI_THEME-accent);
-}
-.filterBand > :global(._buttons),
-.searchSection > :global(._buttons) {
-	margin-top: 2px;
 }
 .rowActions {
 	display: flex;
@@ -1724,6 +1747,10 @@ onUnmounted(() => {
 }
 .searchSection {
 	margin-top: 14px;
+}
+/* tab 内首个区块不带上边距（会话治理 tab 以 searchSection 开头） */
+.searchSection:first-child {
+	margin-top: 0;
 }
 .messageResults,
 .evidenceList {
@@ -2033,7 +2060,6 @@ onUnmounted(() => {
 	.hero > div:last-child {
 		flex: 0 0 auto;
 	}
-	.filterBand,
 	.searchSection {
 		padding: 12px;
 	}
