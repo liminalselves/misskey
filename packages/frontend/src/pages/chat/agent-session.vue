@@ -4762,7 +4762,7 @@ function parseImportedProactiveSchedules(raw: unknown, isV7: boolean): SessionEx
 		}
 		const rec = item as Record<string, unknown>;
 		if (typeof rec.description !== 'string' || rec.description.trim() === '') {
-			if (isV7) throw new Error('定时计划描述不能为空。');
+			// 历史数据里控制流可能落库空描述；跳过该条而非拒收整个文件
 			continue;
 		}
 		const validStatus = rec.status === 'active' || rec.status === 'paused' || (isV7 && (rec.status === 'completed' || rec.status === 'cancelled'));
@@ -4815,7 +4815,7 @@ function parseImportedCompressionStickies(raw: unknown, isV7: boolean): SessionE
 		}
 		const rec = item as Record<string, unknown>;
 		if (typeof rec.summaryText !== 'string' || rec.summaryText.trim() === '') {
-			if (isV7) throw new Error('压缩便签内容不能为空。');
+			// 压缩失败的便签没有摘要文本，导出会带出这些空行；导入侧跳过而非拒收整个文件
 			continue;
 		}
 		const state = typeof rec.state === 'string' && validStates.has(rec.state)
@@ -4874,7 +4874,11 @@ function parseImportedSessionSettings(raw: unknown): SessionExportSettings | nul
 	const src = raw as Record<string, unknown>;
 	const out: SessionExportSettings = {};
 
-	if ('name' in src) out.name = validateOptionalString(src.name, 'name', 1, 256, false) ?? undefined;
+		if ('name' in src) {
+			// 纯空白的会话名（历史数据可能落库）跳过该字段，导入时保留当前名称
+			if (typeof src.name === 'string' && src.name.trim() !== '') out.name = validateOptionalString(src.name, 'name', 1, 256, false) ?? undefined;
+			else if (src.name != null) throw new Error('会话配置无效：name 必须是字符串。');
+		}
 	if ('dialogueStyleId' in src) out.dialogueStyleId = validateOptionalString(src.dialogueStyleId, 'dialogueStyleId', 1, 128, true);
 	if ('plazaStatsDialogueStyleId' in src) out.plazaStatsDialogueStyleId = validateOptionalString(src.plazaStatsDialogueStyleId, 'plazaStatsDialogueStyleId', 1, 128, true);
 	if ('agentModelId' in src) out.agentModelId = validateOptionalString(src.agentModelId, 'agentModelId', 1, 64, true);
