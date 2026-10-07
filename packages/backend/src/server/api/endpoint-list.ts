@@ -48,6 +48,7 @@ export * as 'admin/agents/governance/session-review/character' from './endpoints
 export * as 'admin/agents/governance/session-review/compression-overview' from './endpoints/admin/agents/governance/session-review/compression-overview.js';
 export * as 'admin/agents/governance/session-review/context-window' from './endpoints/admin/agents/governance/session-review/context-window.js';
 export * as 'admin/agents/governance/session-review/export' from './endpoints/admin/agents/governance/session-review/export.js';
+export * as 'admin/agents/governance/session-review/image-placeholder-status' from './endpoints/admin/agents/governance/session-review/image-placeholder-status.js';
 export * as 'admin/agents/governance/session-review/memory' from './endpoints/admin/agents/governance/session-review/memory.js';
 export * as 'admin/agents/governance/session-review/message' from './endpoints/admin/agents/governance/session-review/message.js';
 export * as 'admin/agents/governance/session-review/messages' from './endpoints/admin/agents/governance/session-review/messages.js';

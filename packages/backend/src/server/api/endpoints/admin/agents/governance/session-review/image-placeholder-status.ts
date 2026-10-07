@@ -10,42 +10,19 @@ import { Endpoint } from '@/server/api/endpoint-base.js';
 import { ApiError } from '@/server/api/error.js';
 import { AgentService } from '@/core/AgentService.js';
 import { DriveFileEntityService } from '@/core/entities/DriveFileEntityService.js';
-import { packAgentImagePlaceholder } from './_pack-placeholder.js';
+import { meta as userMeta, paramDef } from '@/server/api/endpoints/agents/images/placeholder-status.js';
+import { packAgentImagePlaceholder } from '@/server/api/endpoints/agents/images/_pack-placeholder.js';
+import { loadSessionForReview } from './_utils.js';
+
+export { paramDef };
 
 export const meta = {
-	tags: ['agents'],
+	tags: ['admin', 'agents'],
 	requireCredential: true,
-	kind: 'read:chat',
-	res: {
-		type: 'object',
-		optional: false, nullable: true,
-		properties: {
-			id: { type: 'string', format: 'misskey:id' },
-			messageId: { type: 'string', format: 'misskey:id' },
-			placeholderIndex: { type: 'integer' },
-			status: { type: 'string' },
-			fileId: { type: 'string', nullable: true },
-			url: { type: 'string', nullable: true },
-			file: { type: 'object', nullable: true, ref: 'DriveFile' },
-			errorCode: { type: 'string', nullable: true },
-			errorMessage: { type: 'string', nullable: true },
-			tag: { type: 'string' },
-			size: { type: 'string' },
-			isBlocked: { type: 'boolean' },
-			autoCleanedAt: { type: 'string', format: 'date-time', nullable: true },
-			autoCleanedReason: { type: 'string', nullable: true },
-		},
-	},
-} as const;
-
-export const paramDef = {
-	type: 'object',
-	properties: {
-		sessionId: { type: 'string', format: 'misskey:id' },
-		messageId: { type: 'string', format: 'misskey:id' },
-		placeholderIndex: { type: 'integer', minimum: 0, maximum: 99 },
-	},
-	required: ['sessionId', 'messageId', 'placeholderIndex'],
+	secure: true,
+	requireModerator: true,
+	kind: 'read:admin',
+	res: userMeta.res,
 } as const;
 
 @Injectable()
@@ -66,15 +43,12 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		private agentService: AgentService,
 		private driveFileEntityService: DriveFileEntityService,
 	) {
-		super(meta, paramDef, async (ps, me) => {
+		super(meta, paramDef, async (ps, _me) => {
 			this.agentService.assertAgentsEnabled();
-			const session = await this.agentSessionsRepository.findOneBy({ id: ps.sessionId });
-			if (!session || session.userId !== me.id) {
-				throw new ApiError({ message: 'No such session.', code: 'NO_SUCH_SESSION', id: 'c3a2f1e0-8b4d-4f6a-9e7d-1a2b3c4d5e6f' });
-			}
+			const session = await loadSessionForReview(this.agentSessionsRepository, ps.sessionId);
 			const message = await this.agentMessagesRepository.findOneBy({ id: ps.messageId, sessionId: session.id });
 			if (!message || message.role !== 'assistant') {
-				throw new ApiError({ message: 'No such message.', code: 'NO_SUCH_AGENT_MESSAGE', id: 'd4b3e2f1-9c5a-4b7c-8f6e-2b3c4d5e6f7a' });
+				throw new ApiError({ message: 'No such message.', code: 'NO_SUCH_AGENT_MESSAGE', id: 'fd9e72f6-3d41-46a8-866a-eed5e62f09c8' });
 			}
 
 			const existing = await this.agentImageGenerationsRepository.findOne({

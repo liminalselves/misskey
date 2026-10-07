@@ -1172,8 +1172,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 	<template #footer>
 		<div v-if="!loading && session" v-show="tab === 'chat'" :class="$style.footer">
-			<MkInfo v-if="isReviewMode" :class="$style.composeStyleHint">审查模式：只读查看会话，不能发送消息或执行任何会话操作。</MkInfo>
-			<MkInfo v-else-if="moderationLockNoticeVisible" warn :class="$style.composeStyleHint">{{ moderationBlockUserMessage }}</MkInfo>
+			<MkInfo v-if="moderationLockNoticeVisible" warn :class="$style.composeStyleHint">{{ moderationBlockUserMessage }}</MkInfo>
 			<MkInfo v-else-if="chatComposeBlockedNeedStyle" :class="$style.composeStyleHint">{{ i18n.ts._agents.chatComposeNeedStyleHint }}</MkInfo>
 			<div v-if="memoryAddHintVisible" :class="$style.memAddHint" role="status">
 				<i class="ti ti-loader-2" :class="$style.memAddHintIcon"></i>

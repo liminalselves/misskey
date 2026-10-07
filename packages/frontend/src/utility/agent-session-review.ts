@@ -14,6 +14,7 @@ export const agentSessionReviewEndpointMap: Partial<Record<string, string>> = {
 	'agents/messages/timeline': 'admin/agents/governance/session-review/messages',
 	'agents/messages/show': 'admin/agents/governance/session-review/message',
 	'agents/messages/search': 'admin/agents/governance/session-review/search',
+	'agents/images/placeholder-status': 'admin/agents/governance/session-review/image-placeholder-status',
 	'agents/sessions/context-window': 'admin/agents/governance/session-review/context-window',
 	'agents/memory/list': 'admin/agents/governance/session-review/memory',
 	'agents/sessions/compression-overview': 'admin/agents/governance/session-review/compression-overview',

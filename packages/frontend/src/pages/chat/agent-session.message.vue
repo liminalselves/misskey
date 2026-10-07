@@ -81,7 +81,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 							<div :class="$style.drawCardHead">
 								<span><i class="ti ti-brush"></i> 配图</span>
 								<button
-									v-if="!isManualPending(part.index)"
+									v-if="!review && !isSearchResult && !statusCheckFailed[part.index] && !isManualPending(part.index)"
 									class="_button"
 									:class="$style.drawRetry"
 									:title="drawState(part.index)?.status === 'generating' ? '生成中' : '重新生成'"
@@ -98,12 +98,12 @@ SPDX-License-Identifier: AGPL-3.0-only
 							<div v-else-if="isManualPending(part.index)" :class="$style.drawManual">
 								<i class="ti ti-brush" :class="$style.drawManualIcon"></i>
 								<span :class="$style.drawManualText">{{ i18n.ts._agents.imageDrawManualPending }}</span>
-								<MkButton rounded small primary :class="$style.drawManualBtn" @click.stop="manualGenerate(part.index)">
+								<MkButton v-if="!review && !isSearchResult" rounded small primary :class="$style.drawManualBtn" @click.stop="manualGenerate(part.index)">
 									{{ i18n.ts._agents.imageDrawManualGenerate }}
 								</MkButton>
 							</div>
 							<div v-else :class="$style.drawPending">
-								<MkLoading v-if="!drawState(part.index) || drawState(part.index)?.status === 'generating' || drawState(part.index)?.status === 'pending'"/>
+								<MkLoading v-if="!statusCheckFailed[part.index] && (!drawState(part.index) || drawState(part.index)?.status === 'generating' || drawState(part.index)?.status === 'pending')"/>
 								<i v-else-if="isDrawBlocked(part.index)" class="ti ti-ban"></i>
 								<i v-else class="ti ti-alert-circle"></i>
 								<span>{{ drawStatusText(part.index) }}</span>
@@ -132,6 +132,7 @@ import { computed, onMounted, reactive, watch } from 'vue';
 import { isLink } from '@@/js/is-link.js';
 import type { DriveFile, UserLite } from 'misskey-js/entities.js';
 import { renderAgentChatMarkdown } from '@/utility/agent-chat-markdown.js';
+import { resolveAgentSessionReviewCall } from '@/utility/agent-session-review.js';
 import type { MenuItem } from '@/types/menu.js';
 import { ensureSignin } from '@/i.js';
 import { i18n } from '@/i18n.js';
@@ -185,7 +186,7 @@ const props = defineProps<{
 	drawModelReady?: boolean;
 	/** 消息是否为本次页面存活期间新到达（发送/流式）；历史消息不自动触发生成，仅查询服务端已有记录 */
 	liveArrived?: boolean;
-	/** 会话审查模式：隐藏编辑/删除/回滚等写操作菜单项 */
+	/** Session review is read-only, including image generation and message mutations. */
 	review?: boolean;
 	/** 审查模式下用户消息头像/名义展示的会话属主；非审查模式回落到当前登录用户 */
 	messageUser?: UserLite | null;
@@ -411,6 +412,7 @@ function drawErrorText(code: string | null): string {
 }
 
 function drawStatusText(index: number): string {
+	if (statusCheckFailed[index]) return '图片状态读取失败';
 	const s = drawState(index);
 	if (!s || s.status === 'pending' || s.status === 'generating') return '图片生成中...';
 	if (isDrawBlocked(index)) return '图片已被审核封禁';
@@ -429,7 +431,7 @@ function drawErrorDiagnostic(index: number): string | null {
 }
 
 async function generateDraw(index: number, regenerate = false) {
-	if (props.isSearchResult) return;
+	if (props.review || props.isSearchResult) return;
 	const current = drawResults[index];
 	if (!regenerate && !shouldRefreshDrawState(current)) return;
 	drawResults[index] = {
@@ -490,6 +492,7 @@ function isManualPending(index: number): boolean {
 }
 
 function manualGenerate(index: number) {
+	if (props.review || props.isSearchResult) return;
 	if (props.drawModelReady === false) {
 		os.alert({ type: 'info', text: '请先在「生图」标签选择生图模型。' });
 		return;
@@ -500,6 +503,7 @@ function manualGenerate(index: number) {
 
 /** 正在查询服务端已有生图记录的占位符索引（防止并发重复查询） */
 const statusChecking = reactive<Record<number, boolean>>({});
+const statusCheckFailed = reactive<Record<number, boolean>>({});
 /** 状态检查代：消息内容变更时递增，使旧的异步查询结果被丢弃 */
 let drawCheckGeneration = 0;
 
@@ -507,13 +511,19 @@ async function checkExistingDrawResult(index: number) {
 	const token = drawCheckGeneration;
 	statusChecking[index] = true;
 	try {
+		const endpoint = 'agents/images/placeholder-status';
+		const data = {
+			sessionId: props.sessionId,
+			messageId: props.message.id,
+			placeholderIndex: index,
+		};
+		const call = props.review
+			? resolveAgentSessionReviewCall(endpoint, data, props.sessionId)
+			: { endpoint, data };
+		if (call == null) throw new Error('Image status is unavailable in session review.');
 		const res = await misskeyApi(
-			'agents/images/placeholder-status' as Parameters<typeof misskeyApi>[0],
-			{
-				sessionId: props.sessionId,
-				messageId: props.message.id,
-				placeholderIndex: index,
-			} as any,
+			call.endpoint as Parameters<typeof misskeyApi>[0],
+			call.data as any,
 		) as DrawResult | null;
 		// 竞态保护：消息内容已变更或状态已被其他流程写入（如手动生图）时不覆盖
 		if (token !== drawCheckGeneration || drawResults[index] != null) return;
@@ -524,7 +534,7 @@ async function checkExistingDrawResult(index: number) {
 		}
 	} catch {
 		if (token === drawCheckGeneration && drawResults[index] == null) {
-			manualPending[index] = true;
+			statusCheckFailed[index] = true;
 		}
 	} finally {
 		if (token === drawCheckGeneration) delete statusChecking[index];
@@ -536,7 +546,7 @@ function parkDrawForManual(index: number) {
 	const cur = drawResults[index];
 	if (cur == null) {
 		// 已确认无记录并完成分流时不重复查询
-		if (manualPending[index] === true) return;
+		if (manualPending[index] === true || statusCheckFailed[index] === true) return;
 		if (!statusChecking[index]) void checkExistingDrawResult(index);
 	} else if (cur.status === 'pending') {
 		manualPending[index] = true;
@@ -552,6 +562,10 @@ function startDraws(allowUnpark = false) {
 	for (const segment of renderedSegments.value) {
 		for (const part of segment.parts) {
 			if (part.type !== 'draw') continue;
+			if (props.review) {
+				parkDrawForManual(part.index);
+				continue;
+			}
 			// 生图模型为「无」：与关闭自动生图一致进入待手动生成，不发起必然失败（AGENT_IMAGE_DISABLED）的请求
 			if (props.drawModelReady === false) {
 				parkDrawForManual(part.index);
@@ -580,6 +594,7 @@ onMounted(() => startDraws());
 watch(() => `${props.message.id}:${props.message.content}`, () => {
 	drawCheckGeneration++;
 	for (const key of Object.keys(statusChecking)) delete statusChecking[Number(key)];
+	for (const key of Object.keys(statusCheckFailed)) delete statusCheckFailed[Number(key)];
 	for (const key of Object.keys(drawResults)) delete drawResults[Number(key)];
 	for (const key of Object.keys(manualPending)) delete manualPending[Number(key)];
 	startDraws();
@@ -677,6 +692,7 @@ function onContextmenu(ev: PointerEvent) {
 }
 
 async function confirmDelete() {
+	if (props.review) return;
 	const { canceled } = await os.confirm({
 		type: 'warning',
 		text: i18n.ts.deleteConfirm,
