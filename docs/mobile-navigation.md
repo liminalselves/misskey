@@ -6,7 +6,7 @@
 - 管理页面的 `os.pageWindow('/admin/...')`：相同移动判定下走 mainRouter，电脑仍用页面浮窗。普通确认框、选择器和非管理浮窗不变。
 - 页面返回使用 `goBackInApp`：主路由有明确的站内历史时退回上一条；直达页及独立窗口路由使用 fallback 的 replace，不新增“返回后再返回详情”的循环。审查页顶栏与横幅共享该逻辑，无历史时回到 `?view=sessions`。
 - 管理页和设置子页在宽度小于 600px 时自动显示返回按钮。业务显式 `showBack` / `backPath` 优先。
-- 治理标签从路由 `view` prop 初始化，通过注入 router.replaceByPath 更新，不直接操作浏览器 history。标签切换不增加返回步骤、不重建治理页。
+- 治理、智能体设置与 `/chat` 标签从路由 `view` prop 初始化，通过注入 router.replaceByPath 更新，不直接操作浏览器 history。`?view=` 支持刷新与直达恢复；标签切换不增加返回步骤、不重建页面。聊天首页不带 `view`，其他标签包括私信（`directMessages`）；未知或当前不可用的标签回到首页。
 
 ## 状态归属
 

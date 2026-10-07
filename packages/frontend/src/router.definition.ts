@@ -59,6 +59,8 @@ export const ROUTE_DEF = [{
 	path: '/chat',
 	component: chatPage(() => import('@/pages/chat/home.vue')),
 	loginRequired: true,
+	query: { view: 'view' },
+	reuseComponent: true,
 }, {
 	path: '/chat/search',
 	component: chatPage(() => import('@/pages/chat/room.search-room.vue')),

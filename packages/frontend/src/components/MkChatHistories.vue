@@ -81,8 +81,11 @@ import MkDriveFileThumbnail from '@/components/MkDriveFileThumbnail.vue';
 const props = withDefaults(defineProps<{
 	/** 是否把智能体会话合并进列表（/chat「全部」页启用；Deck 列、Widget 保持原样） */
 	includeAgentSessions?: boolean;
+	/** 只展示与用户的私信（/chat「私信」页启用；不含群聊与智能体会话） */
+	directOnly?: boolean;
 }>(), {
 	includeAgentSessions: false,
+	directOnly: false,
 });
 
 const $i = ensureSignin();
@@ -126,8 +129,10 @@ async function fetchHistory(updateGlobalStatus = false) {
 	try {
 		const [userMessages, roomMessages, agentSessions] = await Promise.all([
 			misskeyApi('chat/history', { room: false }, undefined, abort.signal),
-			misskeyApi('chat/history', { room: true }, undefined, abort.signal),
-			props.includeAgentSessions
+			props.directOnly
+				? Promise.resolve([] as Misskey.entities.ChatMessage[])
+				: misskeyApi('chat/history', { room: true }, undefined, abort.signal),
+			props.includeAgentSessions && !props.directOnly
 				// 智能体会话获取失败不影响私信列表刷新
 				? misskeyApi('agents/sessions/list-mine', {}, undefined, abort.signal).catch(() => [] as AgentsSessionsListMineResponse)
 				: Promise.resolve([] as AgentsSessionsListMineResponse),
@@ -165,7 +170,8 @@ async function fetchHistory(updateGlobalStatus = false) {
 			});
 
 		// 只在明确要求时才更新全局状态（例如用户进入 /chat 页面时）
-		if (updateGlobalStatus) {
+		// directOnly 不拉取群聊消息，无法据此判定全局未读，跳过
+		if (updateGlobalStatus && !props.directOnly) {
 			const hasUnread = [...userMessages, ...roomMessages].some(m => m.fromUserId !== $i.id && !m.isRead);
 			updateCurrentAccountPartial({ hasUnreadChatMessages: hasUnread });
 		}
