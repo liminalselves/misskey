@@ -70,7 +70,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 									<b>{{ row.name }}</b>
 									<span :class="$style.rowBadges">
 										<span :class="$style.typeBadge">{{ kindLabel(row.kind) }}</span>
-										<span :class="$style[statusBadgeStyle(row.reviewStatus)]">{{ statusLabel(row.reviewStatus) }}</span>
+										<!-- 生产构建的 UnwindCssModuleClassName 插件会移除运行时 __cssModules，$style 仅剩静态点访问可用（禁止 $style[动态键]） -->
+										<span :class="row.reviewStatus === 'pending' ? $style.statusPending : row.reviewStatus === 'rejected' ? $style.statusRejected : row.reviewStatus === 'draft' ? $style.statusDraft : $style.statusPublished">{{ statusLabel(row.reviewStatus) }}</span>
 										<span v-if="row.moderationBanned" :class="$style.warnBadge">已封禁</span>
 									</span>
 								</div>
@@ -1306,13 +1307,6 @@ function statusLabel(status: string) {
 	if (status === 'rejected') return '已拒绝';
 	if (status === 'draft') return '草稿';
 	return status;
-}
-
-function statusBadgeStyle(status: string): 'statusPending' | 'statusPublished' | 'statusRejected' | 'statusDraft' {
-	if (status === 'pending') return 'statusPending';
-	if (status === 'rejected') return 'statusRejected';
-	if (status === 'draft') return 'statusDraft';
-	return 'statusPublished';
 }
 
 function sessionKindLabel(kind: string) {

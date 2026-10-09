@@ -29,7 +29,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 					</div>
 				</div>
 				<div :class="$style.badges">
-					<span :class="$style[statusBadgeStyle(detail.reviewStatus)]">{{ statusLabel(detail.reviewStatus) }}</span>
+					<!-- 生产构建的 UnwindCssModuleClassName 插件会移除运行时 __cssModules，$style 仅剩静态点访问可用（禁止 $style[动态键]） -->
+					<span :class="detail.reviewStatus === 'pending' ? $style.statusPending : detail.reviewStatus === 'rejected' ? $style.statusRejected : detail.reviewStatus === 'draft' ? $style.statusDraft : $style.statusPublished">{{ statusLabel(detail.reviewStatus) }}</span>
 					<span>{{ detail.publishedVersion == null ? '首次提交' : `V${detail.publishedVersion} 更新` }}</span>
 					<span v-if="detail.moderationBanned" :class="$style.warnBadge">已封禁</span>
 					<span v-for="tag in detail.riskTags" :key="tag">{{ tag }}</span>
@@ -285,13 +286,6 @@ function statusLabel(status: string) {
 	if (status === 'rejected') return '已拒绝';
 	if (status === 'draft') return '草稿';
 	return status;
-}
-
-function statusBadgeStyle(status: string): 'statusPending' | 'statusPublished' | 'statusRejected' | 'statusDraft' {
-	if (status === 'pending') return 'statusPending';
-	if (status === 'rejected') return 'statusRejected';
-	if (status === 'draft') return 'statusDraft';
-	return 'statusPublished';
 }
 
 function reviewFieldLabel(key: string) {
