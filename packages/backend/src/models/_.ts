@@ -34,6 +34,7 @@ import { MiAgentUserStyleSubscription } from '@/models/AgentUserStyleSubscriptio
 import { MiAgentPlazaReview } from '@/models/AgentPlazaReview.js';
 import { MiAgentModelUsageLog } from '@/models/AgentModelUsageLog.js';
 import { MiAgentModelReport } from '@/models/AgentModelReport.js';
+import { MiAgentModelAnnouncement } from '@/models/AgentModelAnnouncement.js';
 import { MiAgentCheckinRecord } from '@/models/AgentCheckinRecord.js';
 import { MiAgentRedeemCode } from '@/models/AgentRedeemCode.js';
 import { MiAgentSession } from '@/models/AgentSession.js';
@@ -204,6 +205,7 @@ export {
 	MiAgentPlazaReview,
 	MiAgentModelUsageLog,
 	MiAgentModelReport,
+	MiAgentModelAnnouncement,
 	MiAgentCheckinRecord,
 	MiAgentRedeemCode,
 	MiAgentPublishedVersion,
@@ -304,6 +306,7 @@ export type AgentUserStyleSubscriptionsRepository = Repository<MiAgentUserStyleS
 export type AgentPlazaReviewsRepository = Repository<MiAgentPlazaReview> & MiRepository<MiAgentPlazaReview>;
 export type AgentModelUsageLogsRepository = Repository<MiAgentModelUsageLog> & MiRepository<MiAgentModelUsageLog>;
 export type AgentModelReportsRepository = Repository<MiAgentModelReport> & MiRepository<MiAgentModelReport>;
+export type AgentModelAnnouncementsRepository = Repository<MiAgentModelAnnouncement> & MiRepository<MiAgentModelAnnouncement>;
 export type AgentCheckinRecordsRepository = Repository<MiAgentCheckinRecord> & MiRepository<MiAgentCheckinRecord>;
 export type AgentRedeemCodesRepository = Repository<MiAgentRedeemCode> & MiRepository<MiAgentRedeemCode>;
 export type AgentSessionCompressionStickyRepository = Repository<MiAgentSessionCompressionSticky> & MiRepository<MiAgentSessionCompressionSticky>;

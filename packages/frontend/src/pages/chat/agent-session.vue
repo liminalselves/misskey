@@ -1236,6 +1236,7 @@ import { useStream } from '@/stream.js';
 import { requestAgentControlClose, requestAgentControlNavigation, requestAgentControlOpenUrl } from '@/utility/agent-control-embed.js';
 import type { AgentControlPanel } from '@/utility/agent-control-embed.js';
 import { resolveAgentSessionReviewCall } from '@/utility/agent-session-review.js';
+import { showUnreadAgentModelAnnouncements } from '@/utility/agent-model-announcements.js';
 import type * as Misskey from 'misskey-js';
 
 const props = defineProps<{
@@ -2710,6 +2711,7 @@ function stopPanelLiveDataRefresh() {
 
 function onDocumentVisibilityForPanelRefresh() {
 	if (window.document.visibilityState !== 'visible') return;
+	checkModelAnnouncements();
 	// 页面从后台切回可见时补清未读：消息在后台期间到达时 onNewAgentMessage 会跳过清未读（用户当时没看到），
 	// 但消息已渲染进时间线，切回即视为看到，不补的话返回列表会出现未读点（审查/嵌入模式永不清未读）
 	if (isPageActivated && !isComponentUnmounted && !isEmbeddedControl.value && !isReviewMode.value) {
@@ -4048,6 +4050,11 @@ async function loadEmbeddedPanelResources(panel: AgentControlPanel): Promise<voi
 	}
 }
 
+function checkModelAnnouncements() {
+	if (loading.value || isEmbeddedControl.value || isReviewMode.value) return;
+	void showUnreadAgentModelAnnouncements(() => isPageActivated && !isComponentUnmounted && !window.document.hidden);
+}
+
 onMounted(async () => {
 	if (!isEmbeddedControl.value && !isReviewMode.value) {
 		const stream = useStream();
@@ -4111,10 +4118,12 @@ onMounted(async () => {
 		await nextTick();
 		formRef.value?.focus();
 	}
+	checkModelAnnouncements();
 });
 
 onActivated(() => {
 	isPageActivated = true;
+	checkModelAnnouncements();
 	// KeepAlive 缓存页重进：恢复面板数据轮询，并立即刷一次当前面板（离开期间数据可能已变化）
 	startPanelLiveDataRefresh();
 	startReviewPoll();

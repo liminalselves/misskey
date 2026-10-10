@@ -70,6 +70,7 @@ export * as 'admin/agents/images/tokens/test' from './endpoints/admin/agents/ima
 export * as 'admin/agents/external-audit/logs/list' from './endpoints/admin/agents/external-audit/logs/list.js';
 export * as 'admin/agents/external-audit/logs/show' from './endpoints/admin/agents/external-audit/logs/show.js';
 export * as 'admin/agents/external-audit/models/stats' from './endpoints/admin/agents/external-audit/models/stats.js';
+export * as 'admin/agents/model-announcements/create' from './endpoints/admin/agents/model-announcements/create.js';
 export * as 'admin/agents/messages/list' from './endpoints/admin/agents/messages/list.js';
 export * as 'admin/agents/messages/timeline' from './endpoints/admin/agents/messages/timeline.js';
 export * as 'admin/agents/review/diff' from './endpoints/admin/agents/review/diff.js';
@@ -211,6 +212,8 @@ export * as 'agents/proactive-schedules/delete' from './endpoints/agents/proacti
 export * as 'agents/proactive-schedules/import' from './endpoints/agents/proactive-schedules/import.js';
 export * as 'agents/models/success-rates' from './endpoints/agents/models/success-rates.js';
 export * as 'agents/models/free-quota' from './endpoints/agents/models/free-quota.js';
+export * as 'agents/model-announcements/unread' from './endpoints/agents/model-announcements/unread.js';
+export * as 'agents/model-announcements/read' from './endpoints/agents/model-announcements/read.js';
 export * as 'agents/model-reports/create' from './endpoints/agents/model-reports/create.js';
 export * as 'admin/agents/reports/overview' from './endpoints/admin/agents/reports/overview.js';
 export * as 'admin/agents/reports/top-users' from './endpoints/admin/agents/reports/top-users.js';

@@ -20,6 +20,7 @@ import { AGENT_EXTERNAL_AUDIT_MAX_RULES, AGENT_EXTERNAL_AUDIT_RESERVED_RULE_IDS,
 import { normalizeAgentByokProvidersParam } from '@/core/AgentUserModelService.js';
 import { AgentCompressionMemoryService } from '@/core/AgentCompressionMemoryService.js';
 import { GlobalEventService } from '@/core/GlobalEventService.js';
+import { AgentModelAnnouncementService } from '@/core/AgentModelAnnouncementService.js';
 
 function normalizeObjectStorageConfigValue(value: string | null | undefined): string | null {
 	const trimmed = value?.trim();
@@ -562,6 +563,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		private moderationLogService: ModerationLogService,
 		private agentCompressionMemoryService: AgentCompressionMemoryService,
 		private globalEventService: GlobalEventService,
+		private agentModelAnnouncementService: AgentModelAnnouncementService,
 	) {
 		super(meta, paramDef, async (ps, me) => {
 			const set = {} as Partial<MiMeta>;
@@ -1753,7 +1755,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				Object.keys(agentModelFieldKinds).map(k => [k, JSON.stringify((beforeMeta as unknown as Record<string, unknown>)[k] ?? null)]),
 			);
 
-			await this.metaService.update(set);
+			await this.metaService.update(set, (previous, next, manager) => this.agentModelAnnouncementService.recordChanges(previous, next, manager));
 
 			const changedKinds = new Set<'chat' | 'image'>();
 			for (const [field, kind] of Object.entries(agentModelFieldKinds)) {

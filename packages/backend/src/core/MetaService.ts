@@ -5,6 +5,7 @@
 
 import { Inject, Injectable } from '@nestjs/common';
 import { DataSource } from 'typeorm';
+import type { EntityManager } from 'typeorm';
 import * as Redis from 'ioredis';
 import { DI } from '@/di-symbols.js';
 import { MiMeta } from '@/models/Meta.js';
@@ -103,7 +104,7 @@ export class MetaService implements OnApplicationShutdown {
 	}
 
 	@bindThis
-	public async update(data: Partial<MiMeta>): Promise<MiMeta> {
+	public async update(data: Partial<MiMeta>, onUpdated?: (before: MiMeta | undefined, after: MiMeta, manager: EntityManager) => Promise<void>): Promise<MiMeta> {
 		let before: MiMeta | undefined;
 
 		const updated = await this.db.transaction(async transactionalEntityManager => {
@@ -111,6 +112,7 @@ export class MetaService implements OnApplicationShutdown {
 				order: {
 					id: 'DESC',
 				},
+				lock: { mode: 'pessimistic_write' },
 			});
 
 			before = metas[0];
@@ -130,6 +132,7 @@ export class MetaService implements OnApplicationShutdown {
 				},
 			});
 
+			await onUpdated?.(before, afters[0], transactionalEntityManager);
 			return afters[0];
 		});
 

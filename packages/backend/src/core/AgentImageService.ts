@@ -23,7 +23,7 @@ import { ApiError } from '@/server/api/error.js';
 import { IdentifiableError } from '@/misc/identifiable-error.js';
 import { assertSafeLlmHttpsUrl, describeUnsafeLlmUrlReason, UnsafeLlmUrlError } from '@/misc/validate-llm-endpoint-url.js';
 import { readBodyWithLimit, UpstreamBodyTooLargeError } from '@/misc/read-body-with-limit.js';
-import { isAgentImageProvider } from '@/models/AgentImageProvider.js';
+import { getEffectiveImageModels, normalizeImageParams } from '@/misc/agent-image-models.js';
 import { getAgentImagePreset } from './agent-image-presets.js';
 import { resolveAgentImageNegativePrompt } from './agent-image-defaults.js';
 import {
@@ -237,10 +237,6 @@ function maskToken(token: string): string {
 	return `${token.slice(0, 8)}****${token.slice(-4)}`;
 }
 
-function normalizeImageParams(raw: unknown): MiAgentImageDefaultParams {
-	return raw != null && typeof raw === 'object' ? raw as MiAgentImageDefaultParams : {};
-}
-
 function normalizeImageSettings(raw: unknown): MiAgentImageDefaultParams & { artistPresetId?: string | null } {
 	return raw != null && typeof raw === 'object' ? raw as MiAgentImageDefaultParams & { artistPresetId?: string | null } : {};
 }
@@ -278,29 +274,7 @@ export class AgentImageService {
 
 	@bindThis
 	public listAvailableImageModels(instance: MiMeta, includeDisabled = false): MiAgentImageModel[] {
-		const configured = Array.isArray(instance.agentImageModels) ? instance.agentImageModels : [];
-		const models = configured
-			.filter((m): m is MiAgentImageModel => typeof m?.id === 'string' && m.id.trim() !== '' && isAgentImageProvider(m.provider))
-			.map(m => {
-				const provider = getAgentImageProviderDefinition(m.provider);
-				return {
-					id: m.id.trim(),
-					name: typeof m.name === 'string' && m.name.trim() !== '' ? m.name.trim() : m.id.trim(),
-					description: typeof m.description === 'string' && m.description.trim() !== '' ? m.description.trim() : null,
-					provider: m.provider,
-					enabled: m.enabled !== false,
-					apiModelName: typeof m.apiModelName === 'string' && m.apiModelName.trim() !== '' ? m.apiModelName.trim() : instance.agentImageDefaultModel,
-					apiUrl: typeof m.apiUrl === 'string' && m.apiUrl.trim() !== '' ? m.apiUrl.trim() : null,
-					apiKey: typeof m.apiKey === 'string' && m.apiKey.trim() !== '' ? m.apiKey.trim() : null,
-					supportsReferenceImage: provider.capabilities.supportsReferenceImage && m.supportsReferenceImage === true,
-					costPerCall: typeof m.costPerCall === 'number' ? m.costPerCall : instance.agentImageCostPerCall,
-					dailyFreeQuota: typeof m.dailyFreeQuota === 'number' && m.dailyFreeQuota > 0 ? Math.trunc(m.dailyFreeQuota) : null,
-					defaultParams: normalizeImageParams(m.defaultParams ?? instance.agentImageDefaultParams),
-					defaultArtistPresetId: typeof m.defaultArtistPresetId === 'string' ? m.defaultArtistPresetId : instance.agentImageDefaultArtistPresetId,
-				};
-			});
-		const enabledModels = includeDisabled ? models : models.filter(m => m.enabled !== false);
-		return enabledModels;
+		return getEffectiveImageModels(instance, includeDisabled);
 	}
 
 	@bindThis

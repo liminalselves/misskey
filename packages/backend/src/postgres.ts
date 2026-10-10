@@ -100,6 +100,7 @@ import { MiAgentUserStyleSubscription } from '@/models/AgentUserStyleSubscriptio
 import { MiAgentPlazaReview } from '@/models/AgentPlazaReview.js';
 import { MiAgentModelUsageLog } from '@/models/AgentModelUsageLog.js';
 import { MiAgentModelReport } from '@/models/AgentModelReport.js';
+import { MiAgentModelAnnouncement } from '@/models/AgentModelAnnouncement.js';
 import { MiAgentCheckinRecord } from '@/models/AgentCheckinRecord.js';
 import { MiAgentRedeemCode } from '@/models/AgentRedeemCode.js';
 import { MiAgentPublishedVersion } from '@/models/AgentPublishedVersion.js';
@@ -285,6 +286,7 @@ export const entities = [
 	MiAgentPlazaReview,
 	MiAgentModelUsageLog,
 	MiAgentModelReport,
+	MiAgentModelAnnouncement,
 	MiAgentCheckinRecord,
 	MiAgentRedeemCode,
 	MiAgentPublishedVersion,

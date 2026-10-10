@@ -55,6 +55,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</div>
 			</template>
 
+			<MkAgentModelAnnouncementPublisher v-if="activeTab === 'models' || activeTab === 'images'" :key="activeTab" :kind="activeTab === 'models' ? 'chat' : 'image'"/>
+
 			<MkFolder v-if="activeTab === 'basic'" :defaultOpen="true">
 				<template #icon><i class="ti ti-toggle-right"></i></template>
 				<template #label>{{ i18n.ts._agents.adminSectionFeature }}</template>
@@ -1267,6 +1269,7 @@ import MkInput from '@/components/MkInput.vue';
 import MkTextarea from '@/components/MkTextarea.vue';
 import MkInfo from '@/components/MkInfo.vue';
 import MkFolder from '@/components/MkFolder.vue';
+import MkAgentModelAnnouncementPublisher from '@/components/MkAgentModelAnnouncementPublisher.vue';
 import MkSwitch from '@/components/MkSwitch.vue';
 import MkFormFooter from '@/components/MkFormFooter.vue';
 import MkButton from '@/components/MkButton.vue';

@@ -13,7 +13,7 @@
 ```sh
 pnpm --filter frontend typecheck
 pnpm --filter frontend eslint
-pnpm --filter frontend test -- test/<affected-test>.test.ts
+pnpm --filter frontend exec vitest run test/<affected-test>.test.ts
 ```
 
 将 `<affected-test>` 换成实际测试名。共享组件、路由、测试初始化或公共依赖改动时，再运行 `pnpm --filter frontend test-and-coverage`。组件挂载测试参照 `test/home.test.ts` 导入 `./init` 初始化语言数据；路由等不挂载组件的纯逻辑测试不要为此引入应用启动和网络请求。
