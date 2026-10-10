@@ -437,7 +437,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 						</MkSelect>
 						<MkInput v-model="row.baseUrl" type="text">
 							<template #label>请求端点</template>
-							<template #caption>{{ row.provider === 'aliyun-decision' ? '填写完整的阿里云决策模型 systemone 端点，包含业务空间 ID 和地域。' : '填写 OpenAI 兼容 Base URL（版本前缀如 /v1、/v4 请写全）；末尾不是 completions 时会自动追加 /chat/completions，已以 completions 结尾则原样使用。' }}</template>
+							<template #caption>{{ row.provider === 'aliyun-decision' ? '填写完整的阿里云决策模型 systemone 端点，包含业务空间 ID 和地域。' : row.provider === 'jev-decision' ? '填写完整的 JEV 决策端点，例如 https://pool.futureppo.top/v1/systemone；不会追加 /chat/completions。' : '填写 OpenAI 兼容 Base URL（版本前缀如 /v1、/v4 请写全）；末尾不是 completions 时会自动追加 /chat/completions，已以 completions 结尾则原样使用。' }}</template>
 							<template #prefix><i class="ti ti-link"></i></template>
 						</MkInput>
 						<FormSplit :minWidth="220">
@@ -2423,11 +2423,12 @@ const compressionDefaultModelItems = computed((): MkSelectItem[] => {
 	return items;
 });
 
-const externalAuditProviderItems: MkSelectItem[] = [
+const externalAuditProviderItems = [
 	{ value: 'openai', label: 'OpenAI 兼容 Chat Completions' },
 	{ value: 'aliyun-decision', label: '阿里云百炼决策模型' },
-];
-const externalAuditProviderValues = new Set(['openai', 'aliyun-decision']);
+	{ value: 'jev-decision', label: 'JEV 决策模型' },
+] satisfies MkSelectItem[];
+const externalAuditProviderValues = new Set(externalAuditProviderItems.map(item => item.value));
 
 const listedModelCount = computed(() => form.state.agentLlmModelRows.filter(r => !r.unlisted && r.name.trim() && r.apiModelName.trim()).length);
 const hasAuroraImageModel = computed(() => form.state.agentImageModelRows.some(r => r.provider === 'aurora'));
@@ -2864,6 +2865,10 @@ function removeExternalAuditModel(index: number) {
 
 function onExternalAuditProviderChange(row: AgentExternalAuditModelRow) {
 	if (row.provider === 'aliyun-decision' && row.apiModelName.trim() === '') row.apiModelName = 'decision-model-preview';
+	if (row.provider === 'jev-decision') {
+		if (row.apiModelName.trim() === '') row.apiModelName = 'jev-1.13.0';
+		if (row.baseUrl.trim() === '') row.baseUrl = 'https://pool.futureppo.top/v1/systemone';
+	}
 }
 
 function addExternalAuditRule() {

@@ -23,6 +23,16 @@ const definitions: Record<AgentExternalAuditProvider, AgentExternalAuditProvider
 		normalizeUrl: url => normalizeChatCompletionsUrl(url.toString()),
 		validateUrl: noopValidate,
 	},
+	'jev-decision': {
+		id: 'jev-decision',
+		name: 'JEV 决策模型',
+		normalizeUrl: url => url.toString(),
+		validateUrl: url => {
+			if (!/\/v1\/systemone$/.test(url.pathname)) {
+				throw new Error('JEV decision model endpoint must end with /v1/systemone.');
+			}
+		},
+	},
 	'aliyun-decision': {
 		id: 'aliyun-decision',
 		name: '阿里云百炼决策模型',

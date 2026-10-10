@@ -160,7 +160,7 @@ export function buildOpenAiAuditPrompt(standard: string, rules: MiAgentExternalA
 	return `${standard.trim()}\n\n总体判断标准中如包含旧的输出格式、category 或自由分类要求，一律忽略，以以下结构化条目和最终 JSON 格式为准。\n\n违规条目：\n${entries || '（当前没有启用的普通违规条目）'}\n- other_high_risk｜其他高风险内容\n  判断标准：${otherRule.criteria}\n\n必须只返回一段 JSON，不要 Markdown，不要解释：\n{"action":"allow|block","ruleId":"命中的条目 ID；放行时为 allow；无法归类时为 other_high_risk","reason":"仅选择 other_high_risk 时填写简短具体原因，其他情况留空","confidence":0.0}\n\n命中普通条目时必须返回其 ID，不要改写条目名或固定原因。确属高风险但没有对应条目时选择 other_high_risk。`;
 }
 
-export function buildAliyunAuditCriteria(rules: MiAgentExternalAuditRule[], otherRule: MiAgentExternalAuditOtherRule): Record<string, string> {
+export function buildDecisionAuditCriteria(rules: MiAgentExternalAuditRule[], otherRule: MiAgentExternalAuditOtherRule): Record<string, string> {
 	return {
 		allow: '允许放行，不符合任何违规条目。',
 		...Object.fromEntries(rules.filter(rule => rule.enabled).map(rule => [rule.id, `${rule.name}：${rule.criteria}`])),
@@ -189,7 +189,7 @@ export function parseOpenAiAuditDecision(rawText: string, rules: MiAgentExternal
 	return normalizeDecision(ruleId, reason, confidence, rawText, rules, otherRule);
 }
 
-export function parseAliyunAuditDecision(json: unknown, rawText: string, rules: MiAgentExternalAuditRule[], otherRule: MiAgentExternalAuditOtherRule): AuditDecision | null {
+export function parseDecisionAuditDecision(json: unknown, rawText: string, rules: MiAgentExternalAuditRule[], otherRule: MiAgentExternalAuditOtherRule): AuditDecision | null {
 	if (json == null || typeof json !== 'object') return null;
 	const answer = (json as { answers?: Record<string, unknown> }).answers?.content_safety;
 	if (answer == null || typeof answer !== 'object') return null;
@@ -453,19 +453,22 @@ export class AgentExternalAuditService {
 			};
 		}
 
+		const decisionModel = model.provider === 'aliyun-decision' || model.provider === 'jev-decision';
 		const ac = new AbortController();
 		const timer = setTimeout(() => ac.abort(), timeoutMs);
 		let res: Response;
 		try {
-			const body = model.provider === 'aliyun-decision'
+			const body = decisionModel
 				? {
 					model: model.apiModelName,
-					state: this.buildAuditUserPayload(userText, assistantText),
+					state: model.provider === 'jev-decision'
+						? { '用户侧': userText, '模型侧': assistantText }
+						: this.buildAuditUserPayload(userText, assistantText),
 					questions: {
 						content_safety: {
 							type: 'choice',
 							instructions: `${standard.trim()}\n\n总体判断标准中如包含旧的输出格式或自由分类要求，一律忽略。请仅从 criteria 提供的选项中选择唯一结论。`,
-							criteria: buildAliyunAuditCriteria(rules, otherRule),
+							criteria: buildDecisionAuditCriteria(rules, otherRule),
 						},
 					},
 				}
@@ -527,8 +530,8 @@ export class AgentExternalAuditService {
 			};
 		}
 
-		if (model.provider === 'aliyun-decision') {
-			const decision = parseAliyunAuditDecision(json, responseText ?? '', rules, otherRule);
+		if (decisionModel) {
+			const decision = parseDecisionAuditDecision(json, responseText ?? '', rules, otherRule);
 			if (!decision) {
 				return {
 					ok: false,

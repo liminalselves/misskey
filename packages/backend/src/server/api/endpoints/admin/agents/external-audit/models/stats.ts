@@ -11,6 +11,7 @@ import { DI } from '@/di-symbols.js';
 import { AgentService } from '@/core/AgentService.js';
 import { MetaService } from '@/core/MetaService.js';
 import type { AgentExternalAuditFailureKind, AgentExternalAuditStatus } from '@/models/AgentExternalAuditLog.js';
+import { isAgentExternalAuditProvider } from '@/models/AgentExternalAuditProvider.js';
 
 export const meta = {
 	tags: ['admin'],
@@ -82,7 +83,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					return {
 						id,
 						name: typeof m.name === 'string' ? m.name : id,
-						provider: m.provider === 'aliyun-decision' ? 'aliyun-decision' : 'openai',
+						provider: isAgentExternalAuditProvider(m.provider) ? m.provider : 'openai',
 						apiModelName: typeof m.apiModelName === 'string' ? m.apiModelName : '',
 						baseUrl: typeof m.baseUrl === 'string' ? m.baseUrl : '',
 					priority: Number.isFinite(Number(m.priority)) ? Math.trunc(Number(m.priority)) : i,
