@@ -31,7 +31,7 @@ export const paramDef = {
 		userId: { type: 'string', minLength: 1, maxLength: 256, nullable: true },
 		sessionId: { type: 'string', format: 'misskey:id', nullable: true },
 		modelId: { type: 'string', nullable: true },
-		status: { type: 'string', enum: [...agentExternalAuditStatuses], nullable: true },
+		status: { type: 'string', enum: [null, ...agentExternalAuditStatuses], nullable: true },
 		blockCode: { type: 'string', nullable: true },
 		query: { type: 'string', minLength: 1, maxLength: 512, nullable: true },
 		limit: { type: 'integer', minimum: 1, maximum: 100, default: 40 },

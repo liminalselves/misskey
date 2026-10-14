@@ -5,7 +5,10 @@
 
 import ms from 'ms';
 import { Inject, Injectable } from '@nestjs/common';
-import type { AgentRedeemCodesRepository, UserProfilesRepository } from '@/models/_.js';
+import { DataSource } from 'typeorm';
+import type { AgentRedeemCodesRepository } from '@/models/_.js';
+import { MiAgentRedeemCode } from '@/models/AgentRedeemCode.js';
+import { MiUserProfile } from '@/models/UserProfile.js';
 import { Endpoint } from '@/server/api/endpoint-base.js';
 import { DI } from '@/di-symbols.js';
 import { ApiError } from '@/server/api/error.js';
@@ -41,8 +44,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		@Inject(DI.agentRedeemCodesRepository)
 		private agentRedeemCodesRepository: AgentRedeemCodesRepository,
 
-		@Inject(DI.userProfilesRepository)
-		private userProfilesRepository: UserProfilesRepository,
+		@Inject(DI.db)
+		private db: DataSource,
 	) {
 		super(meta, paramDef, async (ps, me) => {
 			const code = ps.code.trim().toUpperCase();
@@ -77,32 +80,32 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				});
 			}
 
-			// 一次性码必须用条件更新原子认领：并发请求中只有一个能命中
-			// `redeemedAt IS NULL`，杜绝 check-then-act 竞态导致的重复入账
-			const claim = await this.agentRedeemCodesRepository.createQueryBuilder()
-				.update()
-				.set({
-					redeemedAt: new Date(),
-					redeemedById: me.id,
-				})
-				.where('id = :id AND "redeemedAt" IS NULL AND revoked = false', { id: row.id })
-				.execute();
-			if ((claim.affected ?? 0) !== 1) {
-				throw new ApiError({
-					message: 'This code has already been redeemed.',
-					code: 'REDEEM_CODE_ALREADY_USED',
-					id: 'c3d4e5f6-a7b8-9012-3456-7890abcdef01',
-				});
-			}
+			// 认领与入账同事务：事务内仍用条件更新原子认领（并发请求中只有一个能命中
+			// `redeemedAt IS NULL`，杜绝 check-then-act 竞态导致的重复入账）；
+			// 认领后入账失败则整体回滚，码不会被烧掉，用户可重试兑换
+			let newBalance = row.creditAmount;
+			await this.db.transaction(async em => {
+				const claim = await em.getRepository(MiAgentRedeemCode).createQueryBuilder()
+					.update()
+					.set({
+						redeemedAt: new Date(),
+						redeemedById: me.id,
+					})
+					.where('id = :id AND "redeemedAt" IS NULL AND revoked = false', { id: row.id })
+					.execute();
+				if ((claim.affected ?? 0) !== 1) {
+					throw new ApiError({
+						message: 'This code has already been redeemed.',
+						code: 'REDEEM_CODE_ALREADY_USED',
+						id: 'c3d4e5f6-a7b8-9012-3456-7890abcdef01',
+					});
+				}
 
-			await this.userProfilesRepository.increment(
-				{ userId: me.id },
-				'agentCreditBalance',
-				row.creditAmount,
-			);
-
-			const profile = await this.userProfilesRepository.findOneBy({ userId: me.id });
-			const newBalance = profile?.agentCreditBalance ?? row.creditAmount;
+				const credited = await em.increment(MiUserProfile, { userId: me.id }, 'agentCreditBalance', row.creditAmount);
+				if (credited.affected !== 1) throw new Error('agent redemption user profile missing');
+				const profile = await em.findOneOrFail(MiUserProfile, { where: { userId: me.id } });
+				newBalance = profile.agentCreditBalance;
+			});
 
 			return {
 				ok: true,

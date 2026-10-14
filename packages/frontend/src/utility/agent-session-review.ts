@@ -8,6 +8,12 @@
  * 后端为每个用户侧读端点提供形状一致的 admin 镜像（admin/agents/governance/session-review/*），
  * 前端审查模式下把用户侧端点名映射过去，响应结构不变、组件零分支渲染。
  * 用户侧新增读能力时在此补一行映射 + 后端补一个镜像端点即可。
+ *
+ * 只镜像「按会话属主推导数据」的端点（BYOK 模型、可用风格等）。
+ * 实例级读端点（vision-models/list、models/success-rates、images/models/list、images/presets/list、
+ * credit-balance、models/free-quota 等）不进映射表：审查者凭自己的凭据直接调用即可得到相同的
+ * 实例级数据（余额/免费额度等按调用者结算的除外，调用方已有 review 守卫不拉取）。
+ * 因此也不要给这些列表加「review 模式跳过加载」的守卫——审查页的模型/生图面板依赖它们渲染。
  */
 export const agentSessionReviewEndpointMap: Partial<Record<string, string>> = {
 	'agents/sessions/show': 'admin/agents/governance/session-review/session',

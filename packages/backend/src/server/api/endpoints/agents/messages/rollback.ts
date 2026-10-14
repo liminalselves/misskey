@@ -5,8 +5,13 @@
 
 import ms from 'ms';
 import { Inject, Injectable } from '@nestjs/common';
-import { MoreThanOrEqual } from 'typeorm';
-import type { AgentMessagesRepository, AgentSessionsRepository } from '@/models/_.js';
+import { DataSource } from 'typeorm';
+import { MiAgentMessage } from '@/models/AgentMessage.js';
+import { MiAgentSession } from '@/models/AgentSession.js';
+import { AgentMessageNotifyService } from '@/core/AgentMessageNotifyService.js';
+import { withWritableAgentSession } from '../_with-agent-lock.js';
+import { invalidateMessageCompression } from './_invalidate-compression.js';
+import type { AgentSessionsRepository } from '@/models/_.js';
 import { Endpoint } from '@/server/api/endpoint-base.js';
 import { DI } from '@/di-symbols.js';
 import { ApiError } from '@/server/api/error.js';
@@ -40,12 +45,12 @@ export const paramDef = {
 
 @Injectable()
 export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-disable-line import/no-default-export
-	constructor(
+		constructor(
+			@Inject(DI.db) private db: DataSource,
+			private agentMessageNotifyService: AgentMessageNotifyService,
+
 		@Inject(DI.agentSessionsRepository)
 		private agentSessionsRepository: AgentSessionsRepository,
-
-		@Inject(DI.agentMessagesRepository)
-		private agentMessagesRepository: AgentMessagesRepository,
 
 		private agentService: AgentService,
 		private chatService: ChatService,
@@ -71,7 +76,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				});
 			}
 
-			const anchor = await this.agentMessagesRepository.findOneBy({
+				const result = await withWritableAgentSession(this.db, ps.sessionId, me.id, async (locked, manager) => {
+				const anchor = await manager.findOneBy(MiAgentMessage, {
 				id: ps.messageId,
 				sessionId: ps.sessionId,
 			});
@@ -88,25 +94,17 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				});
 			}
 
-			const victims = await this.agentMessagesRepository.find({
-				where: {
-					sessionId: ps.sessionId,
-					createdAt: MoreThanOrEqual(anchor.createdAt),
-				},
-				select: ['id', 'createdAt'],
-			});
-			const ids = victims
-				.filter(v => v.createdAt.getTime() > anchor.createdAt.getTime() || v.id === anchor.id)
-				.map(v => v.id);
-
-			if (ids.length > 0) {
-				await this.agentMessagesRepository.delete(ids);
-			}
-
-			return {
-				deletedCount: ids.length,
-				content: anchor.content,
-			};
+				const deleted = await manager.createQueryBuilder().delete().from(MiAgentMessage)
+					.where('"sessionId" = :sessionId', { sessionId: locked.id })
+					.andWhere('("createdAt" > :createdAt OR ("createdAt" = :createdAt AND id >= :id))', { createdAt: anchor.createdAt, id: anchor.id })
+					.execute();
+				await invalidateMessageCompression(manager, locked.id);
+				const latest = await manager.findOne(MiAgentMessage, { where: { sessionId: locked.id }, order: { createdAt: 'DESC', id: 'DESC' } });
+				await manager.update(MiAgentSession, { id: locked.id }, { updatedAt: new Date(), lastMessageAt: latest?.createdAt ?? null });
+				return { deletedCount: deleted.affected ?? 0, content: anchor.content };
+				});
+				await this.agentMessageNotifyService.reconcileUnreadMessages(me.id, ps.sessionId);
+				return result;
 		});
 	}
 }

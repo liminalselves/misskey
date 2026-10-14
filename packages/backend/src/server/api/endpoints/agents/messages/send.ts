@@ -445,10 +445,18 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				const { messages: history, scannedRows: historyScannedRows, dMap: historyDMap } = await this.agentService.loadRecentMessagesForContextWithMeta(session.id, historyBudget, AGENT_OVERVIEW_SCAN_LIMIT, { exactTokenCounter: sendExactCounter, tokenBudget: historyBudgetTokens, charsPerToken, timeAwarenessEnabled: session.timeAwarenessEnabled === true });
 				const historyForApi = history.filter(m => (m.role === 'user' || m.role === 'assistant') && m.id !== userMsg!.id);
 				const regexRules = this.agentService.normalizeRegexRules(character.regexRules);
-				const filterForAi = (text: string, role: 'user' | 'assistant') => this.agentService.applyRegexRules(text, role, 'aiInvisible', regexRules);
+				const regexFiltered = await this.agentService.applyRegexRulesBatch(
+					regexRules,
+					'aiInvisible',
+					[
+						{ role: 'user', text: userText },
+						...historyForApi.map(m => ({ role: m.role as 'user' | 'assistant', text: m.content })),
+					],
+				);
+				const filteredUserText = regexFiltered[0];
+				const filteredHistoryTexts = regexFiltered.slice(1);
 				// 网页端没有表演协议：assistant 历史中的 [[agent_cue]] 指令一并剥离，避免诱导输出
 				const historyForAi = (text: string, role: 'user' | 'assistant') => role === 'assistant' && performance == null ? stripPerformanceCues(text) : text;
-				const filteredUserText = filterForAi(userText, 'user');
 				const llmUserText = convertUserStickersForLlm(filteredUserText);
 				const aiUserText = imageFileId == null
 					? llmUserText
@@ -463,16 +471,16 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					const actives = cStickies.filter(s => s.state === 'active');
 					const bIds = actives.flatMap(s => [s.fromMessageId, s.toMessageId]);
 					const boundaries = await this.agentCompressionMemoryService.loadBoundaryMap(session.id, bIds);
-						pairs = this.agentCompressionMemoryService.buildPairsExcludingActiveCompression(
-						historyForApi.map(m => ({ ...m, content: m.role === 'user' ? convertUserStickersForLlm(filterForAi(m.content, m.role as 'user' | 'assistant')) : historyForAi(filterForAi(m.content, m.role as 'user' | 'assistant'), m.role as 'user' | 'assistant') })),
+					pairs = this.agentCompressionMemoryService.buildPairsExcludingActiveCompression(
+						historyForApi.map((m, index) => ({ ...m, content: m.role === 'user' ? convertUserStickersForLlm(filteredHistoryTexts[index]) : historyForAi(filteredHistoryTexts[index], m.role as 'user' | 'assistant') })),
 						actives,
 						boundaries,
 					);
 				} else {
-					for (const m of historyForApi) {
+					for (const [index, m] of historyForApi.entries()) {
 						if (m.role === 'user' || m.role === 'assistant') {
-					const content = filterForAi(m.content, m.role);
-						pairs.push({ role: m.role, content: m.role === 'user' ? convertUserStickersForLlm(content) : historyForAi(content, m.role) });
+							const content = filteredHistoryTexts[index];
+							pairs.push({ role: m.role, content: m.role === 'user' ? convertUserStickersForLlm(content) : historyForAi(content, m.role) });
 						}
 					}
 				}

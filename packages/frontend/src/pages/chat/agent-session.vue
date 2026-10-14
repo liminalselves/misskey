@@ -192,198 +192,60 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<div v-if="loading" class="_gaps">
 			<MkLoading/>
 		</div>
-		<div v-else class="_gaps">
-			<MkInfo v-if="session == null">{{ i18n.ts.somethingHappened }}</MkInfo>
-			<template v-else>
-				<MkInfo v-if="moderationLockNoticeVisible" warn>{{ moderationBlockUserMessage }}</MkInfo>
-				<MkInfo v-if="!timeAwarenessEnabled" warn>{{ proactiveTimeAwarenessRequired }}</MkInfo>
-				<MkInfo v-if="session.randomProactiveLastError" warn>{{ randomProactiveLastErrorCaption }}</MkInfo>
-				<MkInfo v-if="session.scheduledProactiveLastError" warn>{{ scheduledProactiveLastErrorCaption }}</MkInfo>
-				<div v-panel :class="$style.proactivePanel">
-					<div :class="$style.proactiveTitle">{{ proactiveMessagesLabel }}</div>
-					<MkSwitch
-						v-model="randomProactiveEnabled"
-						:disabled="proactiveSaving || moderationLocksSessionWrites || !timeAwarenessEnabled"
-						@update:modelValue="saveRandomProactiveSetting"
-					>
-						{{ randomProactiveLabel }}
-						<template #caption>{{ randomProactiveCaption }}</template>
-					</MkSwitch>
-					<MkSwitch
-						v-model="scheduledProactiveEnabled"
-						:disabled="proactiveSaving || moderationLocksSessionWrites || !timeAwarenessEnabled"
-						@update:modelValue="saveScheduledProactiveSetting"
-					>
-						{{ scheduledProactiveLabel }}
-						<template #caption>{{ scheduledProactiveCaption }}</template>
-					</MkSwitch>
-					<div :class="$style.proactiveParamsGroup">
-						<div :class="$style.proactiveParamsHead">
-							<span :class="$style.proactiveParamsTitle">随机主动消息参数</span>
-							<MkButton small rounded :disabled="proactiveParamsSaving || moderationLocksSessionWrites" @click="resetProactiveParams">
-								<i class="ti ti-rotate-back"></i> 恢复默认
-							</MkButton>
-						</div>
-						<div :class="$style.proactiveParamsGrid">
-							<MkInput v-model="proactiveMinSilence" type="number" :min="5" :max="1440" small>
-								<template #label>最小静默时间（分钟）</template>
-								<template #caption>助手回复后至少等待多久才发送。取值 5–1440</template>
-							</MkInput>
-							<MkInput v-model="proactiveMaxWindow" type="number" :min="30" :max="10080" small>
-								<template #label>最大等待窗口（分钟）</template>
-								<template #caption>从静默时间起，在多大窗口内随机选取发送时刻。取值 30–10080</template>
-							</MkInput>
-							<MkInput v-model="proactiveDaytimeWeight" type="number" :min="1" :max="10" small>
-								<template #label>白天权重倍率</template>
-								<template #caption>取值 1–10。1 = 白天与夜间概率相同；3 = 白天概率为夜间 3 倍</template>
-							</MkInput>
-							<MkInput v-model="proactiveRecencyBias" type="number" :min="1" :max="10" small>
-								<template #label>近期偏好系数</template>
-								<template #caption>取值 1–10。1 = 窗口内均匀分布；值越大越偏向近期时间点发送</template>
-							</MkInput>
-							<MkInput v-model="proactiveChainLength" type="number" :min="1" :max="siteProactiveMaxChainLength" small>
-								<template #label>连续主动次数</template>
-								<template #caption>用户未回复时最多连续发送几次。取值 1–{{ siteProactiveMaxChainLength }}</template>
-							</MkInput>
-						</div>
-						<MkButton small rounded :primary="proactiveParamsDirty" :disabled="proactiveParamsSaving || moderationLocksSessionWrites || !proactiveParamsDirty" @click="saveProactiveParams">
-							<i class="ti ti-check"></i> 保存参数
-						</MkButton>
-					</div>
-				</div>
-				<div :class="$style.proactiveListHead">
-					<div>
-						<div :class="$style.proactiveTitle">{{ proactiveScheduleListLabel }}</div>
-						<div :class="$style.proactiveCaption">{{ proactiveScheduleListCaption }}</div>
-					</div>
-					<MkButton rounded small :disabled="proactiveSchedulesLoading" @click="loadProactiveSchedules()">
-						<i class="ti ti-refresh"></i>
-					</MkButton>
-				</div>
-					<XControlLoading v-if="proactiveSchedulesLoading && isEmbeddedControl" compact/>
-					<MkLoading v-else-if="proactiveSchedulesLoading"/>
-				<MkInfo v-else-if="proactiveSchedules.length === 0">{{ proactiveScheduleEmpty }}</MkInfo>
-				<div v-else :class="$style.proactiveScheduleList">
-					<div v-for="schedule in proactiveSchedules" :key="schedule.id" v-panel :class="$style.proactiveScheduleCard">
-						<div :class="$style.proactiveScheduleTop">
-							<div :class="$style.proactiveScheduleDescription">{{ schedule.description }}</div>
-							<span :class="$style.proactiveScheduleStatus">{{ proactiveScheduleStatusLabel(schedule.status) }}</span>
-						</div>
-						<div :class="$style.proactiveScheduleMeta">
-							<span>{{ proactiveScheduleTriggerLabel(schedule) }}</span>
-							<span v-if="schedule.nextRunAt">{{ proactiveNextRunLabel }} {{ formatDateTimeString(new Date(schedule.nextRunAt), 'yyyy-MM-dd HH:mm') }}</span>
-							<span>{{ proactiveRemainingLabel(schedule.remainingRuns) }}</span>
-						</div>
-						<div :class="$style.proactiveScheduleActions">
-							<MkButton
-								v-if="schedule.status === 'active' || schedule.status === 'paused'"
-								rounded
-								small
-								:disabled="proactiveScheduleMutating === schedule.id || moderationLocksSessionWrites || (schedule.status === 'paused' && (!timeAwarenessEnabled || !scheduledProactiveEnabled))"
-								@click="toggleProactiveSchedule(schedule)"
-							>
-								<i :class="schedule.status === 'active' ? 'ti ti-player-pause' : 'ti ti-player-play'"></i>
-								{{ schedule.status === 'active' ? proactivePauseLabel : proactiveResumeLabel }}
-							</MkButton>
-							<MkButton rounded small danger :disabled="proactiveScheduleMutating === schedule.id || moderationLocksSessionWrites" @click="deleteProactiveSchedule(schedule)">
-								<i class="ti ti-trash"></i>
-								{{ i18n.ts.delete }}
-							</MkButton>
-						</div>
-					</div>
-				</div>
-			</template>
-		</div>
+		<MkInfo v-else-if="session == null">{{ i18n.ts.somethingHappened }}</MkInfo>
+		<XProactivePanel
+			v-else
+			v-model:randomProactiveEnabled="randomProactiveEnabled"
+			v-model:scheduledProactiveEnabled="scheduledProactiveEnabled"
+			v-model:minSilence="proactiveMinSilence"
+			v-model:maxWindow="proactiveMaxWindow"
+			v-model:daytimeWeight="proactiveDaytimeWeight"
+			v-model:recencyBias="proactiveRecencyBias"
+			v-model:chainLength="proactiveChainLength"
+			:moderationLocked="moderationLocksSessionWrites"
+			:lockNoticeVisible="moderationLockNoticeVisible"
+			:lockNoticeMessage="moderationBlockUserMessage"
+			:timeAwareness="timeAwarenessEnabled"
+			:randomProactiveLastError="session.randomProactiveLastError"
+			:scheduledProactiveLastError="session.scheduledProactiveLastError"
+			:saving="proactiveSaving"
+			:paramsSaving="proactiveParamsSaving"
+			:paramsDirty="proactiveParamsDirty"
+			:siteMaxChainLength="siteProactiveMaxChainLength"
+			:schedules="proactiveSchedules"
+			:schedulesLoading="proactiveSchedulesLoading"
+			:scheduleMutating="proactiveScheduleMutating"
+			:embedded="isEmbeddedControl"
+			@update:randomProactiveEnabled="saveRandomProactiveSetting"
+			@update:scheduledProactiveEnabled="saveScheduledProactiveSetting"
+			@saveParams="saveProactiveParams"
+			@resetParams="resetProactiveParams"
+			@reloadSchedules="loadProactiveSchedules()"
+			@toggleSchedule="toggleProactiveSchedule"
+			@deleteSchedule="deleteProactiveSchedule"
+		/>
 	</div>
 
 	<div v-else-if="tab === 'worldbook'" class="_spacer" style="--MI_SPACER-w: var(--agent-control-content-max-width, 760px);">
-			<div v-if="loading || worldbookListLoading" class="_gaps">
-				<XControlLoading v-if="isEmbeddedControl" compact/>
-				<MkLoading v-else/>
-			</div>
-		<div v-else class="_gaps">
-			<div v-panel :class="$style.worldbookOverview">
-				<div :class="$style.worldbookOverviewIcon"><i class="ti ti-book"></i></div>
-				<div>
-					<div :class="$style.worldbookOverviewTitle">世界书 · {{ worldbookStats.enabledCount }} / {{ worldbookStats.totalCount }}</div>
-					<div :class="$style.worldbookOverviewText">这里只显示世界书规模和提示设置，不展示条目标题、关键词或正文，避免剧透。</div>
-				</div>
-			</div>
-			<MkInfo v-if="worldbookEntries.length === 0">当前会话使用的角色版本没有世界书条目。</MkInfo>
-			<template v-else>
-				<div :class="$style.worldbookStatsGrid">
-					<div v-panel :class="$style.worldbookStatCard">
-						<span>启用条目</span>
-						<b>{{ worldbookStats.enabledCount }}</b>
-					</div>
-					<div v-panel :class="$style.worldbookStatCard">
-						<span>总条目</span>
-						<b>{{ worldbookStats.totalCount }}</b>
-					</div>
-					<div v-panel :class="$style.worldbookStatCard">
-						<span>正文量级</span>
-						<b>{{ worldbookStats.textScaleLabel }}</b>
-					</div>
-					<div v-panel :class="$style.worldbookStatCard">
-						<span>触发方式</span>
-						<b>{{ worldbookStats.modeSummary }}</b>
-					</div>
-				</div>
-				<div v-panel :class="$style.worldbookSettingCard">
-					<MkSwitch v-model="showWorldbookHitHint">
-						<template #label>命中世界书时显示提示</template>
-						<template #caption>开启后，发送消息命中世界书时会在聊天边缘显示标志。桌面端悬浮查看详情，触屏设备点击显示、再点隐藏。</template>
-					</MkSwitch>
-				</div>
-				<MkInfo>为避免剧透，此页不展示世界书条目、关键词和正文。命中提示只展示本轮实际命中的条目标题和命中原因。</MkInfo>
-			</template>
-		</div>
+			<XWorldbookPanel
+				v-model:showHitHint="showWorldbookHitHint"
+				:loading="loading"
+				:listLoading="worldbookListLoading"
+				:entries="worldbookEntries"
+				:embedded="isEmbeddedControl"
+			/>
 	</div>
 
 	<div v-else-if="tab === 'rules'" class="_spacer" style="--MI_SPACER-w: var(--agent-control-content-max-width, 760px);">
-			<div v-if="loading || sessionRulesLoading" class="_gaps">
-				<XControlLoading v-if="isEmbeddedControl" compact/>
-				<MkLoading v-else/>
-			</div>
-		<div v-else class="_gaps">
-			<MkInfo v-if="sessionRules.length === 0">当前会话使用的角色没有配置规则。</MkInfo>
-			<template v-else>
-				<div :class="$style.ruleSummary">
-					<span :class="$style.ruleSummaryItem"><i class="ti ti-shield-check"></i> {{ sessionRules.length }} 条规则</span>
-					<span :class="$style.ruleSummaryItem"><i class="ti ti-lock"></i> {{ sessionRules.filter(r => r.type === 'persistent').length }} 常驻</span>
-					<span :class="$style.ruleSummaryItem"><i class="ti ti-toggle-right"></i> {{ sessionRules.filter(r => r.type === 'toggleable').length }} 可切换</span>
-				</div>
-				<div
-					v-for="rule in sessionRules"
-					:key="rule.id"
-					v-panel
-					:class="[$style.ruleCard, rule.type === 'toggleable' && rule.currentEnabled && $style.ruleCardActive]"
-				>
-					<div :class="$style.ruleHeader">
-						<div :class="$style.ruleInfo">
-							<div :class="$style.ruleName">
-								{{ rule.name }}
-								<span v-if="rule.type === 'persistent'" :class="$style.ruleBadge">常驻</span>
-								<span v-else-if="rule.hasDisabledPrompt" :class="[$style.ruleBadge, $style.ruleBadgeBidirectional]">双向</span>
-							</div>
-							<div v-if="rule.description" :class="$style.ruleDesc">{{ rule.description }}</div>
-							<div v-if="rule.type === 'toggleable'" :class="$style.ruleStatus">
-								<span :class="[$style.ruleStatusDot, rule.currentEnabled ? $style.ruleStatusDotOn : $style.ruleStatusDotOff]"></span>
-								{{ rule.currentEnabled ? '已开启' : '已关闭' }}
-								<template v-if="rule.hasDisabledPrompt">（{{ rule.currentEnabled ? '注入开启提示词' : '注入关闭提示词' }}）</template>
-							</div>
-						</div>
-						<MkSwitch
-							v-if="rule.type === 'toggleable'"
-							:modelValue="rule.currentEnabled"
-							:disabled="ruleSaving || isReviewMode"
-							@update:modelValue="toggleRule(rule, $event)"
-						/>
-					</div>
-				</div>
-				<MkInfo>规则内容由角色作者设定，此处仅显示名称与简介。开关状态即时生效，下一轮对话将使用更新后的规则。</MkInfo>
-			</template>
-		</div>
+			<XRulesPanel
+				:loading="loading"
+				:listLoading="sessionRulesLoading"
+				:rules="sessionRules"
+				:ruleSaving="ruleSaving"
+				:review="isReviewMode"
+				:embedded="isEmbeddedControl"
+				@toggle="toggleRule"
+			/>
 	</div>
 
 	<div v-else-if="tab === 'draw'" class="_spacer" style="--MI_SPACER-w: var(--agent-control-content-max-width, 760px);">
@@ -1196,6 +1058,9 @@ import XForm from './agent-session.form.vue';
 import XAgentSearch from './agent-session.search.vue';
 import XCompression from './agent-session.compression.vue';
 import XMessageBands from './agent-session.message-bands.vue';
+import XWorldbookPanel from './agent-session.worldbook.vue';
+import XRulesPanel from './agent-session.rules.vue';
+import XProactivePanel from './agent-session.proactive.vue';
 import XControlLoading from '@/pages/agents/control-embed-loading.vue';
 import MkModelReportDialog from '@/pages/agents/model-report-dialog.vue';
 import type { PageHeaderItem } from '@/types/page-header.js';
@@ -1382,26 +1247,8 @@ type PendingWorldbookMatch = {
 	matchedBy: string;
 	matchedKeywords: string[];
 };
-type SessionWorldbookEntry = {
-	id: string;
-	title: string;
-	keywords: string[];
-	triggerMode: 'keyword' | 'manual' | 'always';
-	priority: number;
-	enabled: boolean;
-	revision: number;
-	contentLength: number;
-};
-
-type SessionRule = {
-	id: string;
-	name: string;
-	description: string;
-	type: 'persistent' | 'toggleable';
-	defaultEnabled: boolean;
-	currentEnabled: boolean;
-	hasDisabledPrompt: boolean;
-};
+type SessionWorldbookEntry = import('./agent-session.worldbook.vue').SessionWorldbookEntry;
+type SessionRule = import('./agent-session.rules.vue').SessionRule;
 
 const messages = ref<AgentMsg[]>([]);
 /** 本次页面存活期间新到达（发送/流式）的助手消息 id：仅这些消息的占位符允许自动生图，历史消息只查已有记录 */
@@ -1530,47 +1377,11 @@ const pendingWorldbookTooltip = computed(() => pendingWorldbookMatches.value
 	})
 	.join('\n'));
 
-const worldbookStats = computed(() => {
-	const totalCount = worldbookEntries.value.length;
-	const enabled = worldbookEntries.value.filter(entry => entry.enabled);
-	const totalTextLength = enabled.reduce((sum, entry) => sum + Math.max(0, entry.contentLength ?? 0), 0);
-	const modeCounts = enabled.reduce((acc, entry) => {
-		acc[entry.triggerMode] += 1;
-		return acc;
-	}, { keyword: 0, manual: 0, always: 0 });
-	const modes = [
-		modeCounts.keyword > 0 ? `关键词 ${modeCounts.keyword}` : '',
-		modeCounts.manual > 0 ? `手动 ${modeCounts.manual}` : '',
-		modeCounts.always > 0 ? `常驻 ${modeCounts.always}` : '',
-	].filter(Boolean);
-	return {
-		totalCount,
-		enabledCount: enabled.length,
-		totalTextLength,
-		textScaleLabel: worldbookTextScaleLabel(totalTextLength),
-		modeSummary: modes.length > 0 ? modes.join(' / ') : '无启用条目',
-	};
-});
-
 function worldbookMatchedByLabel(matchedBy: string): string {
 	if (matchedBy === 'always') return '常驻';
 	if (matchedBy === 'manual') return '手动';
 	if (matchedBy === 'keyword') return '关键词';
 	return matchedBy;
-}
-
-function worldbookTriggerLabel(triggerMode: string): string {
-	if (triggerMode === 'always') return '常驻';
-	if (triggerMode === 'manual') return '手动';
-	if (triggerMode === 'keyword') return '关键词';
-	return triggerMode;
-}
-
-function worldbookTextScaleLabel(chars: number): string {
-	if (chars <= 0) return '无正文';
-	if (chars < 1000) return `${chars} 字符`;
-	if (chars < 10000) return `${(chars / 1000).toFixed(1)}k 字符`;
-	return `${Math.round(chars / 1000)}k 字符`;
 }
 
 function openWorldbookHitPopover() {
@@ -1671,13 +1482,6 @@ const siteProactiveMaxWindow = computed(() => Number((instance as any).agentProa
 const siteProactiveDaytimeWeight = computed(() => Number((instance as any).agentProactiveDaytimeWeight) || 3);
 const siteProactiveRecencyBias = computed(() => Number((instance as any).agentProactiveRecencyBias) || 1);
 const siteProactiveMaxChainLength = computed(() => Math.max(1, Math.min(100, Number((instance as any).agentProactiveMaxChainLength) || 7)));
-const proactiveHasOverride = computed(() => {
-	if (!session.value) return false;
-	return session.value.randomProactiveMinSilenceMinutes != null
-		|| session.value.randomProactiveMaxWindowMinutes != null
-		|| session.value.randomProactiveDaytimeWeight != null
-		|| session.value.randomProactiveRecencyBias != null;
-});
 const proactiveParamsDirty = computed(() => {
 	return proactiveMinSilence.value !== proactiveSavedMinSilence.value
 		|| proactiveMaxWindow.value !== proactiveSavedMaxWindow.value
@@ -1687,31 +1491,11 @@ const proactiveParamsDirty = computed(() => {
 });
 const proactiveSchedulesLoading = ref(false);
 const proactiveScheduleMutating = ref<string | null>(null);
-type ProactiveSchedule = {
-	id: string;
-	description: string;
-	trigger: { type: 'once'; at: string } | { type: 'recurring'; cron: string; repeat: { mode: 'count'; count: number } | { mode: 'unlimited' } };
-	status: 'active' | 'paused' | 'completed' | 'cancelled';
-	createdAt: string;
-	nextRunAt: string | null;
-	lastRunAt: string | null;
-	remainingRuns: number | null;
-};
+type ProactiveSchedule = import('./agent-session.proactive.vue').ProactiveSchedule;
 const proactiveSchedules = ref<ProactiveSchedule[]>([]);
 const proactiveMessagesLabel = computed(() => agentText('proactiveMessages', '主动消息'));
-const randomProactiveLabel = computed(() => agentText('randomProactiveMessages', '随机主动消息'));
-const randomProactiveCaption = computed(() => agentText('randomProactiveMessagesCaption', '会话静默 30 分钟后，按北京时间昼夜权重随机安排一次主动消息。'));
-const scheduledProactiveLabel = computed(() => agentText('scheduledProactiveMessages', '定时主动消息'));
-const scheduledProactiveCaption = computed(() => agentText('scheduledProactiveMessagesCaption', '智能体可自主创建、调整或取消最多 5 个定时计划。'));
+// 关闭时间感知的拦截提示（主动消息面板内的同文案提示由 agent-session.proactive.vue 自行渲染）
 const proactiveTimeAwarenessRequired = computed(() => agentText('proactiveTimeAwarenessRequired', '开启主动消息前需要先开启时间感知。'));
-const randomProactiveLastErrorCaption = computed(() => agentText('proactiveRandomLastError', '上次随机主动消息执行失败，本次已跳过。'));
-const scheduledProactiveLastErrorCaption = computed(() => agentText('proactiveScheduledLastError', '上次定时主动消息执行失败，本次已跳过。'));
-const proactiveScheduleListLabel = computed(() => agentText('proactiveScheduleList', '当前定时计划'));
-const proactiveScheduleListCaption = computed(() => agentText('proactiveScheduleListCaption', '计划由智能体维护，你可以暂停、恢复或删除。'));
-const proactiveScheduleEmpty = computed(() => agentText('proactiveScheduleEmpty', '当前没有定时计划。'));
-const proactivePauseLabel = computed(() => agentText('proactivePause', '暂停'));
-const proactiveResumeLabel = computed(() => agentText('proactiveResume', '恢复'));
-const proactiveNextRunLabel = computed(() => agentText('proactiveNextRun', '下次执行'));
 const segmentedOutputSaving = ref(false);
 const usableStyles = ref<AgentsStylesListUsableResponse>([]);
 
@@ -1994,10 +1778,8 @@ async function onEditRequested(payload: { id: string; role: string; content: str
 	}
 	let originalContent = payload.content;
 	try {
-		const full = await (misskeyApi as unknown as (
-			endpoint: 'agents/messages/show',
-			data: { sessionId: string; messageId: string },
-		) => Promise<{ content: string }>)('agents/messages/show', { sessionId, messageId: payload.id });
+		// 编辑前拉全文：读端点统一走 callAgentApi（审查模式下映射到镜像端点）
+		const full = await callAgentApi('agents/messages/show', { sessionId, messageId: payload.id }) as { content: string };
 		originalContent = full.content;
 	} catch {
 		// Fall back to the visible timeline content when the full-message fetch fails.
@@ -2976,28 +2758,6 @@ async function loadProactiveSchedules(silent = false) {
 	} finally {
 		if (!silent) proactiveSchedulesLoading.value = false;
 	}
-}
-
-function proactiveScheduleStatusLabel(status: ProactiveSchedule['status']): string {
-	if (status === 'active') return agentText('proactiveScheduleActive', '执行中');
-	if (status === 'paused') return agentText('proactiveSchedulePaused', '已暂停');
-	if (status === 'completed') return agentText('proactiveScheduleCompleted', '已完成');
-	return agentText('proactiveScheduleCancelled', '已取消');
-}
-
-function proactiveScheduleTriggerLabel(schedule: ProactiveSchedule): string {
-	if (schedule.trigger.type === 'once') {
-		return agentText('proactiveScheduleOnce', '一次性') + ` · ${schedule.trigger.at}`;
-	}
-	const repeat = schedule.trigger.repeat.mode === 'unlimited'
-		? agentText('proactiveScheduleUnlimited', '无限重复')
-		: agentText('proactiveScheduleCount', '重复 {count} 次').replace('{count}', String(schedule.trigger.repeat.count));
-	return `${repeat} · ${schedule.trigger.cron}`;
-}
-
-function proactiveRemainingLabel(remainingRuns: number | null): string {
-	if (remainingRuns == null) return agentText('proactiveScheduleUnlimited', '无限重复');
-	return agentText('proactiveScheduleRemaining', '剩余 {count} 次').replace('{count}', String(remainingRuns));
 }
 
 async function toggleProactiveSchedule(schedule: ProactiveSchedule) {
@@ -4130,10 +3890,8 @@ onActivated(() => {
 	refreshPanelLiveData(tab.value, 'live');
 	if (isEmbeddedControl.value) return;
 	// KeepAlive 缓存页重新进入时 onMounted 不会再次执行：与首次进入一致，看到会话即清未读
-	// 清未读前先抓未读快照（离开期间可能有新消息）；审查模式不抓快照（markAgentSessionRead 内部也有守卫）
-	if (isReviewMode.value) {
-		void markAgentSessionRead();
-	} else {
+	// 清未读前先抓未读快照（离开期间可能有新消息）；审查模式不抓快照也不清未读（markAgentSessionRead 的守卫只剩兜底）
+	if (!isReviewMode.value) {
 		void captureAgentUnreadSnapshot().then(() => {
 			void markAgentSessionRead();
 			void evaluateAgentUnreadJump();
@@ -5839,259 +5597,6 @@ async function onAbortRequest() {
 	word-break: break-word;
 }
 
-.worldbookOverview {
-	display: grid;
-	grid-template-columns: auto minmax(0, 1fr);
-	gap: 14px;
-	align-items: center;
-	padding: 16px;
-	border-radius: var(--MI-radius);
-}
-
-.worldbookOverviewIcon {
-	width: 46px;
-	height: 46px;
-	border-radius: 14px;
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	font-size: 1.45rem;
-	color: var(--MI_THEME-accent);
-	background: color-mix(in srgb, var(--MI_THEME-accent) 14%, transparent);
-	border: solid 1px color-mix(in srgb, var(--MI_THEME-accent) 30%, transparent);
-}
-
-.worldbookOverviewTitle {
-	font-weight: 800;
-	font-size: 1.05rem;
-	line-height: 1.35;
-}
-
-.worldbookOverviewText {
-	margin-top: 3px;
-	font-size: 0.88rem;
-	line-height: 1.45;
-	color: var(--MI_THEME-fgTransparentWeak);
-}
-
-.worldbookStatsGrid {
-	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-	gap: 12px;
-}
-
-.worldbookStatCard {
-	padding: 14px 16px;
-	border-radius: var(--MI-radius);
-
-	> span {
-		display: block;
-		font-size: 0.84rem;
-		color: var(--MI_THEME-fgTransparentWeak);
-	}
-
-	> b {
-		display: block;
-		margin-top: 5px;
-		font-size: 1.25rem;
-		line-height: 1.25;
-		word-break: break-word;
-	}
-}
-
-.worldbookSettingCard {
-	padding: 14px 16px;
-	border-radius: var(--MI-radius);
-}
-
-.ruleCard {
-	padding: 14px 16px;
-	border-radius: var(--MI-radius);
-	transition: border-color 0.2s ease, box-shadow 0.2s ease;
-}
-
-.ruleCardActive {
-	border-color: color-mix(in srgb, var(--MI_THEME-accent) 40%, transparent);
-	box-shadow: 0 0 0 1px color-mix(in srgb, var(--MI_THEME-accent) 20%, transparent);
-}
-
-.ruleSummary {
-	display: flex;
-	gap: 16px;
-	padding: 10px 14px;
-	border-radius: var(--MI-radius);
-	background: color-mix(in srgb, var(--MI_THEME-panel) 60%, transparent);
-	font-size: 0.85em;
-}
-
-.ruleSummaryItem {
-	display: flex;
-	align-items: center;
-	gap: 5px;
-	opacity: 0.8;
-}
-
-.ruleBadgeBidirectional {
-	background: color-mix(in srgb, var(--MI_THEME-warn) 12%, transparent);
-	color: var(--MI_THEME-warn);
-	border-color: color-mix(in srgb, var(--MI_THEME-warn) 25%, transparent);
-}
-
-.ruleStatus {
-	margin-top: 6px;
-	font-size: 0.8em;
-	display: flex;
-	align-items: center;
-	gap: 6px;
-	opacity: 0.7;
-}
-
-.ruleStatusDot {
-	width: 8px;
-	height: 8px;
-	border-radius: 50%;
-	flex-shrink: 0;
-}
-
-.ruleStatusDotOn {
-	background: var(--MI_THEME-accent);
-	box-shadow: 0 0 6px color-mix(in srgb, var(--MI_THEME-accent) 50%, transparent);
-}
-
-.ruleStatusDotOff {
-	background: var(--MI_THEME-divider);
-}
-
-.ruleHeader {
-	display: flex;
-	justify-content: space-between;
-	align-items: flex-start;
-	gap: 12px;
-}
-
-.ruleInfo {
-	flex: 1;
-	min-width: 0;
-}
-
-.ruleName {
-	font-weight: 600;
-	font-size: 0.95em;
-	display: flex;
-	align-items: center;
-	gap: 8px;
-}
-
-.ruleBadge {
-	font-size: 0.75em;
-	font-weight: 500;
-	padding: 2px 8px;
-	border-radius: 999px;
-	background: color-mix(in srgb, var(--MI_THEME-accent) 12%, transparent);
-	color: var(--MI_THEME-accent);
-	border: solid 1px color-mix(in srgb, var(--MI_THEME-accent) 25%, transparent);
-	white-space: nowrap;
-}
-
-.ruleDesc {
-	margin-top: 4px;
-	font-size: 0.85em;
-	opacity: 0.75;
-	line-height: 1.4;
-}
-
-.worldbookList {
-	display: flex;
-	flex-direction: column;
-	gap: 10px;
-}
-
-.worldbookCard {
-	padding: 14px;
-	border-radius: var(--MI-radius);
-}
-
-.worldbookCardDisabled {
-	opacity: 0.58;
-}
-
-.worldbookCardHeader {
-	display: flex;
-	justify-content: space-between;
-	align-items: flex-start;
-	gap: 12px;
-	flex-wrap: wrap;
-}
-
-.worldbookTitleRow {
-	display: inline-flex;
-	align-items: center;
-	gap: 8px;
-	min-width: 0;
-}
-
-.worldbookTitle {
-	font-weight: 800;
-	line-height: 1.35;
-	word-break: break-word;
-}
-
-.worldbookMutedBadge {
-	flex-shrink: 0;
-	padding: 3px 8px;
-	border-radius: 999px;
-	font-size: 0.78rem;
-	font-weight: 800;
-	color: var(--MI_THEME-fgTransparentWeak);
-	background: color-mix(in srgb, var(--MI_THEME-panel) 80%, transparent);
-	border: solid 1px var(--MI_THEME-divider);
-}
-
-.worldbookMetaPills {
-	display: flex;
-	flex-wrap: wrap;
-	gap: 6px;
-	justify-content: flex-end;
-}
-
-.worldbookMetaPill {
-	display: inline-flex;
-	align-items: center;
-	gap: 4px;
-	height: 24px;
-	padding: 0 9px;
-	border-radius: 999px;
-	font-size: 0.8rem;
-	font-weight: 800;
-	color: var(--MI_THEME-accent);
-	background: color-mix(in srgb, var(--MI_THEME-accent) 10%, transparent);
-	border: solid 1px color-mix(in srgb, var(--MI_THEME-accent) 24%, var(--MI_THEME-divider));
-}
-
-.worldbookKeywords {
-	display: flex;
-	flex-wrap: wrap;
-	gap: 6px;
-	margin-top: 10px;
-}
-
-.worldbookKeyword,
-.worldbookNoKeywords {
-	display: inline-flex;
-	align-items: center;
-	min-height: 24px;
-	padding: 2px 9px;
-	border-radius: 999px;
-	font-size: 0.8rem;
-	line-height: 1.35;
-	background: color-mix(in srgb, var(--MI_THEME-panel) 78%, transparent);
-	border: solid 1px var(--MI_THEME-divider);
-}
-
-.worldbookNoKeywords {
-	color: var(--MI_THEME-fgTransparentWeak);
-}
-
 /* 会话审查模式横幅：管理员视角提示，常驻各 tab 顶部 */
 .reviewBanner {
 	display: flex;
@@ -7216,117 +6721,6 @@ async function onAbortRequest() {
 
 .drawPreviewMedia {
 	width: min(100%, 280px);
-}
-
-.proactivePanel {
-	display: flex;
-	flex-direction: column;
-	gap: 14px;
-	padding: 16px;
-	border-radius: 8px;
-}
-
-.proactiveTitle {
-	font-weight: 700;
-	font-size: 1em;
-	line-height: 1.35;
-}
-
-.proactiveCaption {
-	margin-top: 3px;
-	font-size: 0.88em;
-	line-height: 1.45;
-	color: var(--MI_THEME-fgTransparentWeak);
-}
-
-.proactiveParamsGroup {
-	display: flex;
-	flex-direction: column;
-	gap: 10px;
-	margin-top: 4px;
-	padding: 14px;
-	border-radius: 8px;
-	background: var(--MI_THEME-bg);
-	border: 1px solid var(--MI_THEME-divider);
-}
-
-.proactiveParamsHead {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	gap: 8px;
-}
-
-.proactiveParamsTitle {
-	font-weight: 600;
-	font-size: 0.92em;
-	color: var(--MI_THEME-fg);
-}
-
-.proactiveParamsGrid {
-	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-	gap: 10px;
-}
-
-.proactiveListHead {
-	display: flex;
-	align-items: flex-start;
-	justify-content: space-between;
-	gap: 12px;
-}
-
-.proactiveScheduleList {
-	display: flex;
-	flex-direction: column;
-	gap: 8px;
-}
-
-.proactiveScheduleCard {
-	padding: 14px;
-	border-radius: 8px;
-}
-
-.proactiveScheduleTop {
-	display: flex;
-	align-items: flex-start;
-	justify-content: space-between;
-	gap: 12px;
-}
-
-.proactiveScheduleDescription {
-	min-width: 0;
-	font-weight: 700;
-	line-height: 1.5;
-	word-break: break-word;
-}
-
-.proactiveScheduleStatus {
-	flex: 0 0 auto;
-	padding: 2px 7px;
-	border-radius: 999px;
-	background: color-mix(in srgb, var(--MI_THEME-accent) 13%, var(--MI_THEME-panel));
-	color: var(--MI_THEME-accent);
-	font-size: 0.78em;
-	font-weight: 700;
-}
-
-.proactiveScheduleMeta {
-	display: flex;
-	flex-wrap: wrap;
-	gap: 4px 12px;
-	margin-top: 9px;
-	font-size: 0.86em;
-	line-height: 1.45;
-	color: var(--MI_THEME-fgTransparentWeak);
-	word-break: break-word;
-}
-
-.proactiveScheduleActions {
-	display: flex;
-	flex-wrap: wrap;
-	gap: 8px;
-	margin-top: 12px;
 }
 
 /* ---- Aliya Web 推荐横幅 ---- */

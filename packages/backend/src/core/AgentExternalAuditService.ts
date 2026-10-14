@@ -24,6 +24,7 @@ import { isAgentExternalAuditProvider } from '@/models/AgentExternalAuditProvide
 import { getAgentExternalAuditProviderDefinition } from '@/core/agent-external-audit-providers.js';
 import { DEFAULT_AGENT_EXTERNAL_AUDIT_OTHER_RULE, DEFAULT_AGENT_EXTERNAL_AUDIT_STANDARD, normalizeAgentExternalAuditOtherRule, normalizeAgentExternalAuditRules } from '@/core/agent-external-audit-rules.js';
 import { escapeAgentXmlText } from '@/core/AgentService.js';
+import { readBodyWithLimit } from '@/misc/read-body-with-limit.js';
 
 export const DEFAULT_AGENT_EXTERNAL_AUDIT_SYSTEM_PROMPT = DEFAULT_AGENT_EXTERNAL_AUDIT_STANDARD;
 
@@ -241,6 +242,12 @@ export class AgentExternalAuditService {
 		const models = normalizeAuditModels(instance);
 		if (includeInactive) return models;
 		return models.filter(m => m.enabled !== false && !m.autoDisabledAt);
+	}
+
+	@bindThis
+	public getAuditTimeoutBudgetMs(instance: MiMeta): number {
+		if (instance.agentExternalAuditEnabled !== true) return 0;
+		return this.listConfiguredModels(instance).length * safeInt(instance.agentExternalAuditTimeoutMs, 10000, 1000, 120000);
 	}
 
 	@bindThis
@@ -489,6 +496,7 @@ export class AgentExternalAuditService {
 				},
 				body: JSON.stringify(body),
 				signal: ac.signal,
+				redirect: 'error',
 			});
 		} catch (err) {
 			clearTimeout(timer);
@@ -499,21 +507,22 @@ export class AgentExternalAuditService {
 				durationMs: Date.now() - started,
 			};
 		}
-		clearTimeout(timer);
 
 		let responseText: string | null = null;
 		let json: unknown;
 		try {
-			responseText = await res.text();
+			responseText = (await readBodyWithLimit(res, 2 * 1024 * 1024)).toString('utf8');
 			json = JSON.parse(responseText);
 		} catch (err) {
 			return {
 				ok: false,
-				errorCode: 'AUDIT_MODEL_BAD_JSON',
+				errorCode: ac.signal.aborted ? 'AUDIT_MODEL_TIMEOUT' : 'AUDIT_MODEL_BAD_JSON',
 				errorMessage: err instanceof Error ? err.message : String(err),
 				responseText,
 				durationMs: Date.now() - started,
 			};
+		} finally {
+			clearTimeout(timer);
 		}
 
 		if (!res.ok) {

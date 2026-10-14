@@ -7,6 +7,7 @@ import ms from 'ms';
 import { Inject, Injectable } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { MiAgentDialogueStyle } from '@/models/AgentDialogueStyle.js';
+import { MiAgentSession } from '@/models/AgentSession.js';
 import { MiAgentPublishedVersion } from '@/models/AgentPublishedVersion.js';
 import { MiAgentPlazaReview } from '@/models/AgentPlazaReview.js';
 import { Endpoint } from '@/server/api/endpoint-base.js';
@@ -32,7 +33,10 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			this.agentService.assertAgentsEnabled();
 			return withLockedAgentStyle(this.db, ps.styleId, async (row, manager) => {
 				if (!row || row.userId !== me.id) throw new ApiError({ message: 'No such style.', code: 'NO_SUCH_STYLE', id: 'b4c5d6e7-f8a9-0123-7890-234567890123' });
-				await manager.delete(MiAgentPublishedVersion, { kind: 'style', targetId: row.id });
+					if (await manager.existsBy(MiAgentSession, { dialogueStyleId: row.id })) {
+						throw new ApiError({ message: 'This style is used by existing sessions. Unpublish it instead.', code: 'AGENT_STYLE_IN_USE', id: '0b3ba169-ac07-47ed-8120-065982b548fe', kind: 'client', httpStatusCode: 409 });
+					}
+					await manager.delete(MiAgentPublishedVersion, { kind: 'style', targetId: row.id });
 				await manager.delete(MiAgentPlazaReview, { styleId: row.id });
 				await manager.delete(MiAgentDialogueStyle, { id: row.id });
 				return { success: true };

@@ -19,7 +19,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 <script lang="ts" setup>
 import { defineAsyncComponent, onBeforeUnmount, ref } from 'vue';
 import XControlLoading from '@/pages/agents/control-embed-loading.vue';
-import { applyAgentControlBootstrapAppearance } from '@/utility/agent-control-embed.js';
+import { applyAgentControlBootstrapAppearance, createAgentControlParentGuard } from '@/utility/agent-control-embed.js';
 
 defineProps<{
 	sessionId: string;
@@ -34,6 +34,8 @@ const XControlContent = defineAsyncComponent(() => import('@/pages/agents/contro
 const isFramed = window.parent !== window;
 const hasBootstrapAppearance = new URLSearchParams(window.location.search).has('appearance');
 const revealed = ref(!isFramed || hasBootstrapAppearance);
+// 与内容组件同一套 source+origin 守卫（reveal 消息本身不含敏感数据，但保持同一校验口径）
+const parentGuard = createAgentControlParentGuard();
 
 function reveal(): void {
 	if (revealed.value) return;
@@ -44,11 +46,8 @@ function reveal(): void {
 }
 
 function onHostMessage(event: MessageEvent): void {
-	if (event.source !== window.parent || event.data == null || typeof event.data !== 'object') return;
-	const type = (event.data as { type?: unknown }).type;
-	if (type === 'misskey:agent-control:configure' || type === 'misskey:agent-control:update-appearance' || type === 'misskey:agent-control:update-token') {
-		reveal();
-	}
+	if (!parentGuard.accept(event)) return;
+	reveal();
 }
 
 if (!revealed.value) {

@@ -4,8 +4,14 @@
  */
 
 import ms from 'ms';
+import { DataSource } from 'typeorm';
+import { MiAgentMessage } from '@/models/AgentMessage.js';
+import { MiAgentSession } from '@/models/AgentSession.js';
+import { AgentMessageNotifyService } from '@/core/AgentMessageNotifyService.js';
+import { withWritableAgentSession } from '../_with-agent-lock.js';
+import { invalidateMessageCompression } from './_invalidate-compression.js';
 import { Inject, Injectable } from '@nestjs/common';
-import type { AgentMessagesRepository, AgentSessionsRepository } from '@/models/_.js';
+import type { AgentSessionsRepository } from '@/models/_.js';
 import { Endpoint } from '@/server/api/endpoint-base.js';
 import { DI } from '@/di-symbols.js';
 import { ApiError } from '@/server/api/error.js';
@@ -36,12 +42,12 @@ export const paramDef = {
 
 @Injectable()
 export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-disable-line import/no-default-export
-	constructor(
+		constructor(
+			@Inject(DI.db) private db: DataSource,
+			private agentMessageNotifyService: AgentMessageNotifyService,
+
 		@Inject(DI.agentSessionsRepository)
 		private agentSessionsRepository: AgentSessionsRepository,
-
-		@Inject(DI.agentMessagesRepository)
-		private agentMessagesRepository: AgentMessagesRepository,
 
 		private agentService: AgentService,
 		private chatService: ChatService,
@@ -57,7 +63,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			const characterRow = await this.agentService.loadCharacterForAgentSessionOrThrow(session);
 			this.agentService.assertAgentUserSessionChatAllowed(characterRow, session);
 
-			const row = await this.agentMessagesRepository.findOneBy({
+				await withWritableAgentSession(this.db, ps.sessionId, me.id, async (locked, manager) => {
+				const row = await manager.findOneBy(MiAgentMessage, {
 				id: ps.messageId,
 				sessionId: ps.sessionId,
 			});
@@ -65,12 +72,17 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				throw new ApiError({ message: 'No such message.', code: 'NO_SUCH_MESSAGE', id: 'bd8b45b6-52d7-4a64-8c64-b893d29a4623' });
 			}
 
-			await this.agentMessagesRepository.delete({
+				await manager.delete(MiAgentMessage, {
 				id: ps.messageId,
 				sessionId: ps.sessionId,
 			});
 
-			return {};
+				await invalidateMessageCompression(manager, locked.id);
+				const latest = await manager.findOne(MiAgentMessage, { where: { sessionId: locked.id }, order: { createdAt: 'DESC', id: 'DESC' } });
+				await manager.update(MiAgentSession, { id: locked.id }, { updatedAt: new Date(), lastMessageAt: latest?.createdAt ?? null });
+				});
+				await this.agentMessageNotifyService.reconcileUnreadMessages(me.id, ps.sessionId);
+				return {};
 		});
 	}
 }

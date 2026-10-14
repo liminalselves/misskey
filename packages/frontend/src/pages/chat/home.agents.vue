@@ -48,6 +48,11 @@ SPDX-License-Identifier: AGPL-3.0-only
 			>
 				<XRow :session="s"/>
 			</MkA>
+			<div v-if="hasMoreSessions">
+				<MkButton v-appear="prefer.s.enableInfiniteScroll && !loadingMore ? loadMoreSessions : null" small rounded :disabled="loadingMore" @click="loadMoreSessions">
+					<i class="ti ti-chevron-down"></i> {{ loadingMore ? i18n.ts.loading : i18n.ts.loadMore }}
+				</MkButton>
+			</div>
 		</div>
 	</MkFoldableSection>
 </div>
@@ -65,12 +70,22 @@ import MkInput from '@/components/MkInput.vue';
 import MkButton from '@/components/MkButton.vue';
 import MkFoldableSection from '@/components/MkFoldableSection.vue';
 import { misskeyApi } from '@/utility/misskey-api.js';
+import { appendCursorPage, mergeCursorTopPage, takeCursorFirstPage } from '@/utility/cursor-page.js';
 import { i18n } from '@/i18n.js';
+import { prefer } from '@/preferences.js';
 
 type SessionRow = AgentsSessionsListMineResponse[number];
 
+// list-mine 新增可选 limit/untilId 页面游标（(updatedAt,id) 复合游标的裸数组）：
+// 首页 limit+1 探测 hasMore，翻页带 untilId，按需加载避免 take-100 截断，也不串行全量拉取
+const SESSIONS_PAGE_SIZE = 30;
+// 端点新增参数未进 misskey-js 类型，按惯例页面内强转
+const fetchSessions = misskeyApi as unknown as (endpoint: 'agents/sessions/list-mine', data: { limit?: number; untilId?: string | null }) => Promise<SessionRow[]>;
+
 const sessions = ref<SessionRow[]>([]);
 const loading = ref(true);
+const loadingMore = ref(false);
+const hasMoreSessions = ref(false);
 const searchQuery = ref('');
 const searched = ref(false);
 
@@ -102,13 +117,51 @@ watch(searchQuery, (q) => {
 });
 
 async function loadSessions() {
+	if (loading.value) return;
+	loading.value = true;
 	try {
-		loading.value = true;
-		sessions.value = await misskeyApi('agents/sessions/list-mine', {});
+		const rows = await fetchSessions('agents/sessions/list-mine', { limit: SESSIONS_PAGE_SIZE + 1 });
+		const page = takeCursorFirstPage(rows, SESSIONS_PAGE_SIZE);
+		hasMoreSessions.value = page.hasMore;
+		sessions.value = page.items;
 	} catch {
 		sessions.value = [];
+		hasMoreSessions.value = false;
 	} finally {
 		loading.value = false;
+	}
+}
+
+async function loadMoreSessions() {
+	if (loading.value || loadingMore.value || !hasMoreSessions.value) return;
+	const untilId = sessions.value.at(-1)?.id;
+	if (untilId == null) return;
+	loadingMore.value = true;
+	try {
+		const rows = await fetchSessions('agents/sessions/list-mine', { limit: SESSIONS_PAGE_SIZE + 1, untilId });
+		const page = appendCursorPage(sessions.value, rows, SESSIONS_PAGE_SIZE);
+		hasMoreSessions.value = page.hasMore;
+		sessions.value = page.items;
+	} catch {
+		// 翻页失败保留现有列表，用户可手动重试
+	} finally {
+		loadingMore.value = false;
+	}
+}
+
+/**
+ * 实时事件刷新：只重拉首页并按 id 合并（新会话置顶、已有会话就地更新未读/预览），
+ * 不整页重置——已翻开的深页保留，也不为刷新串行重拉全部页。
+ */
+async function refreshSessionsTop() {
+	if (loading.value || loadingMore.value) return;
+	try {
+		const rows = await fetchSessions('agents/sessions/list-mine', { limit: SESSIONS_PAGE_SIZE + 1 });
+		const page = mergeCursorTopPage(sessions.value, rows, SESSIONS_PAGE_SIZE, hasMoreSessions.value);
+		hasMoreSessions.value = page.hasMore;
+		sessions.value = page.items;
+	} catch {
+		// 刷新失败保持现有数据
 	}
 }
 
@@ -117,13 +170,13 @@ onMounted(() => {
 });
 
 onActivated(() => {
-	void loadSessions();
+	void refreshSessionsTop();
 });
 
 // 实时响应智能体消息到达/已读事件，刷新各会话未读标记
 const agentStreamConnection = useStream().useChannel('main');
-agentStreamConnection.on('newAgentMessage', () => void loadSessions());
-agentStreamConnection.on('agentRead', () => void loadSessions());
+agentStreamConnection.on('newAgentMessage', () => void refreshSessionsTop());
+agentStreamConnection.on('agentRead', () => void refreshSessionsTop());
 
 onUnmounted(() => {
 	agentStreamConnection.dispose();

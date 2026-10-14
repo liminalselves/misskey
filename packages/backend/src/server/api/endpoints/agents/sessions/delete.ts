@@ -5,10 +5,12 @@
 
 import ms from 'ms';
 import { Inject, Injectable } from '@nestjs/common';
-import type { AgentSessionsRepository } from '@/models/_.js';
+import { DataSource } from 'typeorm';
+import { MiAgentSession } from '@/models/AgentSession.js';
+import { AgentMessageNotifyService } from '@/core/AgentMessageNotifyService.js';
+import { withWritableAgentSession } from '../_with-agent-lock.js';
 import { Endpoint } from '@/server/api/endpoint-base.js';
 import { DI } from '@/di-symbols.js';
-import { ApiError } from '@/server/api/error.js';
 import { AgentService } from '@/core/AgentService.js';
 import { AgentDashscopeMemoryService } from '@/core/AgentDashscopeMemoryService.js';
 import { MetaService } from '@/core/MetaService.js';
@@ -41,8 +43,9 @@ export const paramDef = {
 @Injectable()
 export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-disable-line import/no-default-export
 	constructor(
-		@Inject(DI.agentSessionsRepository)
-		private agentSessionsRepository: AgentSessionsRepository,
+			@Inject(DI.db)
+			private db: DataSource,
+			private agentMessageNotifyService: AgentMessageNotifyService,
 
 		private agentService: AgentService,
 		private agentDashscopeMemoryService: AgentDashscopeMemoryService,
@@ -53,10 +56,11 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			this.agentService.assertAgentsEnabled();
 			await this.chatService.checkChatAvailability(me.id, 'write');
 
-			const session = await this.agentSessionsRepository.findOneBy({ id: ps.sessionId });
-			if (!session || session.userId !== me.id) {
-				throw new ApiError({ message: 'No such session.', code: 'NO_SUCH_SESSION', id: 'a7b8c9d0-e1f2-3456-7890-abcdef123401' });
-			}
+				const session = await withWritableAgentSession(this.db, ps.sessionId, me.id, async (row, manager) => {
+					await manager.delete(MiAgentSession, { id: row.id });
+					return row;
+				});
+				await this.agentMessageNotifyService.readAgentMessages(me.id, session.id);
 
 			const instanceMeta = await this.metaService.fetch(true);
 			let aliyunMemoryProviderError = false;
@@ -70,8 +74,6 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					aliyunMemoryProviderError = true;
 				}
 			}
-
-			await this.agentSessionsRepository.delete({ id: session.id });
 
 			return {
 				ok: true,

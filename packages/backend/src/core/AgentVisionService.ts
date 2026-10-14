@@ -122,7 +122,7 @@ export class AgentVisionService {
 				// 出站请求统一走 HttpRequestService 的代理规则：实例配置 proxy 时经代理转发
 				// （proxyBypassHosts 例外直连），否则直连。与站内其余外联（联邦/媒体代理等）同口径。
 				const outboundAgent = (parsedUrl: URL) => this.httpRequestService.getAgentByUrl(parsedUrl);
-				const response = await fetch(this.driveFileEntityService.getPublicUrl(file), { signal: controller.signal, agent: outboundAgent });
+				const response = await fetch(this.driveFileEntityService.getPublicUrl(file), { signal: controller.signal, agent: outboundAgent, redirect: 'error' });
 				if (!response.ok) throw new Error(`Cannot read image: ${response.status}`);
 				const bytes = await readBodyWithLimit(response, MAX_IMAGE_BYTES);
 				if (bytes.length === 0) throw new Error('Invalid image payload.');

@@ -6,6 +6,9 @@ on:
     workflows:
       - Get backend memory usage # get-backend-memory.yml
 
+permissions:
+  contents: read
+
 jobs:
   compare-memory:
     runs-on: ubuntu-latest
@@ -15,7 +18,7 @@ jobs:
 
     steps:
       - name: Download artifact
-        uses: actions/github-script@v8.0.0
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
         with:
           script: |
             const fs = require('fs');
@@ -162,13 +165,13 @@ jobs:
           fi
 
           echo "$FOOTER" >> ./output.md
-      - uses: thollander/actions-comment-pull-request@v3
+      - uses: thollander/actions-comment-pull-request@65f9e5c9a1f2cd378bd74b2e057c9736982a8e74 # v3
         with:
           pr-number: ${{ steps.load-pr-num.outputs.pr-number }}
           comment-tag: show_memory_diff
           file-path: ./output.md
       - name: Tell error to PR
-        uses: thollander/actions-comment-pull-request@v3
+        uses: thollander/actions-comment-pull-request@65f9e5c9a1f2cd378bd74b2e057c9736982a8e74 # v3
         if: failure() && steps.load-pr-num.outputs.pr-number
         with:
           pr-number: ${{ steps.load-pr-num.outputs.pr-number }}

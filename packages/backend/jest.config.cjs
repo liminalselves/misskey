@@ -89,8 +89,6 @@ module.exports = {
 		// converts it again to `../../src/foo/bar` which then can be resolved to
 		// `.ts` files.
 		// See https://github.com/swc-project/jest/issues/64#issuecomment-1029753225
-		// TODO: Use `--allowImportingTsExtensions` on TypeScript 5.0 so that we can
-		// directly import `.ts` files without this hack.
 		'^((?:\\.{1,2}|[A-Z:])*/.*)\\.js$': '$1',
 	},
 

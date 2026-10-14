@@ -31,7 +31,7 @@ export const paramDef = {
 		userId: { type: 'string', minLength: 1, maxLength: 256, nullable: true },
 		sessionId: { type: 'string', minLength: 1, maxLength: 128, nullable: true },
 		characterId: { type: 'string', minLength: 1, maxLength: 128, nullable: true },
-		role: { type: 'string', enum: [...agentMessageRoles], nullable: true },
+		role: { type: 'string', enum: [null, ...agentMessageRoles], nullable: true },
 		query: { type: 'string', maxLength: 512, nullable: true },
 		limit: { type: 'integer', minimum: 1, maximum: 100, default: 40 },
 		sinceId: { type: 'string', format: 'misskey:id', nullable: true },

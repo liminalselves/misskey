@@ -3,13 +3,15 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import * as Redis from 'ioredis';
 import { DI } from '@/di-symbols.js';
 import { GlobalEventService } from '@/core/GlobalEventService.js';
 import { PushNotificationService } from '@/core/PushNotificationService.js';
 import { bindThis } from '@/decorators.js';
 import type { MainEventTypes } from '@/core/GlobalEventService.js';
+import type { AgentMessagesRepository } from '@/models/_.js';
+import { reconcileUnread } from '@/misc/reconcile-unread.js';
 
 export type AgentMessageNotifyPayload = MainEventTypes['newAgentMessage'];
 
@@ -20,7 +22,12 @@ export type AgentMessageNotifyPayload = MainEventTypes['newAgentMessage'];
  */
 @Injectable()
 export class AgentMessageNotifyService {
+	private readonly logger = new Logger(AgentMessageNotifyService.name);
+
 	constructor(
+		@Inject(DI.agentMessagesRepository)
+		private agentMessagesRepository: AgentMessagesRepository,
+
 		@Inject(DI.redis)
 		private redisClient: Redis.Redis,
 
@@ -30,7 +37,7 @@ export class AgentMessageNotifyService {
 
 	@bindThis
 	public async notifyAgentMessage(userId: string, payload: AgentMessageNotifyPayload): Promise<void> {
-		const redisPipeline = this.redisClient.pipeline();
+		const redisPipeline = this.redisClient.multi();
 		redisPipeline.set(`newAgentMessageExists:${userId}:${payload.sessionId}`, payload.messageId);
 		// 首条未读 id：仅在上一批未读被清空后（键不存在）写入，已读时随标记一起删除
 		redisPipeline.set(`firstUnreadAgentMessage:${userId}:${payload.sessionId}`, payload.messageId, 'NX');
@@ -39,19 +46,19 @@ export class AgentMessageNotifyService {
 		await redisPipeline.exec();
 
 		// 3秒経っても既読にならなかったらイベント発行（私信渠道同款逻辑）
-		setTimeout(async () => {
-			const marker = await this.redisClient.get(`newAgentMessageExists:${userId}:${payload.sessionId}`);
-
-			if (marker == null) return; // 既読
-
-			this.globalEventService.publishMainStream(userId, 'newAgentMessage', payload);
-			this.pushNotificationService.pushNotification(userId, 'newAgentMessage', payload);
+		setTimeout(() => {
+			void (async () => {
+				const marker = await this.redisClient.get(`newAgentMessageExists:${userId}:${payload.sessionId}`);
+				if (marker !== payload.messageId) return;
+				this.globalEventService.publishMainStream(userId, 'newAgentMessage', payload);
+				await this.pushNotificationService.pushNotification(userId, 'newAgentMessage', payload);
+			})().catch(error => this.logger.error('Delayed agent message notification failed', error));
 		}, 3000);
 	}
 
 	@bindThis
 	public async readAgentMessages(userId: string, sessionId?: string): Promise<void> {
-		const redisPipeline = this.redisClient.pipeline();
+		const redisPipeline = this.redisClient.multi();
 		if (sessionId) {
 			redisPipeline.del(`newAgentMessageExists:${userId}:${sessionId}`);
 			redisPipeline.del(`firstUnreadAgentMessage:${userId}:${sessionId}`);
@@ -60,14 +67,32 @@ export class AgentMessageNotifyService {
 			await redisPipeline.exec();
 		} else {
 			const sessionIds = await this.redisClient.smembers(`newAgentMessagesExists:${userId}`);
-			redisPipeline.del(`newAgentMessagesExists:${userId}`);
 			for (const id of sessionIds) {
+				redisPipeline.srem(`newAgentMessagesExists:${userId}`, id);
 				redisPipeline.del(`newAgentMessageExists:${userId}:${id}`);
 				redisPipeline.del(`firstUnreadAgentMessage:${userId}:${id}`);
 				redisPipeline.del(`unreadAgentMessagesCount:${userId}:${id}`);
 			}
 			await redisPipeline.exec();
 		}
+	}
+
+	@bindThis
+	public async reconcileUnreadMessages(userId: string, sessionId: string): Promise<void> {
+		await reconcileUnread(this.redisClient, [
+			`newAgentMessageExists:${userId}:${sessionId}`,
+			`firstUnreadAgentMessage:${userId}:${sessionId}`,
+			`unreadAgentMessagesCount:${userId}:${sessionId}`,
+			`newAgentMessagesExists:${userId}`,
+		], sessionId, async (first, last) => {
+			const result = await this.agentMessagesRepository.createQueryBuilder('message')
+				.select('COUNT(*)', 'count').addSelect('MIN(message.id)', 'first').addSelect('MAX(message.id)', 'last')
+				.where('message.sessionId = :sessionId', { sessionId })
+				.andWhere('message.role = :role AND message.isInternal = false', { role: 'assistant' })
+				.andWhere('message.id >= :first AND message.id <= :last', { first, last })
+				.getRawOne<{ count: string; first: string | null; last: string | null }>();
+			return { count: Number(result?.count ?? 0), first: result?.first ?? null, last: result?.last ?? null };
+		});
 	}
 
 	@bindThis

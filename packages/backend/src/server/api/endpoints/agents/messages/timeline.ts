@@ -83,18 +83,25 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			).take(ps.limit ?? 30);
 
 			const rows = await q.getMany();
-			return await Promise.all(rows.map(async m => ({
+
+			// 附件批量打包：一次 packManyByIdsMap 替代逐条 pack 的 N+1 查询
+			const imageFileIds = [...new Set(rows.map(m => m.imageFileId).filter((id): id is string => id != null))];
+			const imageMap = imageFileIds.length > 0
+				? await this.driveFileEntityService.packManyByIdsMap(imageFileIds, { withDeleted: true })
+				: new Map();
+
+			return rows.map(m => ({
 				id: m.id,
 				role: m.role,
 				content: m.content,
 				createdAt: m.createdAt.toISOString(),
 				timeTrusted: m.timeTrusted,
-				file: m.imageFileId ? await this.driveFileEntityService.pack(m.imageFileId, { withDeleted: true }).catch(() => null) : null,
+				file: m.imageFileId ? imageMap.get(m.imageFileId) ?? null : null,
 				imageRecognitionStatus: m.imageRecognitionStatus,
 				imageRecognitionDescription: m.imageRecognitionDescription,
 				proactiveScheduleActionTypes: this.agentProactiveScheduleService.actionTypes(m),
 				proactiveScheduleControlFailed: m.proactiveScheduleControlError != null,
-			})));
+			}));
 		});
 	}
 }

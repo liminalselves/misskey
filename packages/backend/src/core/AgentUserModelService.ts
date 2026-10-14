@@ -5,6 +5,7 @@
 
 import { randomBytes } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
+import type { EntityManager } from 'typeorm';
 import { bindThis } from '@/decorators.js';
 import { DI } from '@/di-symbols.js';
 import type { AgentUserModelsRepository } from '@/models/_.js';
@@ -202,11 +203,26 @@ export class AgentUserModelService {
 		};
 	}
 
+	/**
+	 * 用户级写锁：同一用户的「重名校验 + 写入」在事务内以 pg_advisory_xact_lock 串行化，
+	 * 消除 check-then-insert 竞态（并发同名创建/改名不再产生重名）。
+	 * 不引入 (userId, name) 唯一索引：存量脏数据与官方模型名的交叉校验无法用库约束表达。
+	 */
+	@bindThis
+	private async withUserLock<T>(userId: string, fn: (em: EntityManager) => Promise<T>): Promise<T> {
+		return await this.agentUserModelsRepository.manager.transaction(async em => {
+			await em.query('SELECT pg_advisory_xact_lock(hashtext($1))', [userId]);
+			return await fn(em);
+		});
+	}
+
 	/** 名称唯一校验：同一用户内不重复，且不与官方模型名重复 */
 	@bindThis
-	public async assertNameAvailable(userId: string, name: string, excludeId?: string): Promise<void> {
+	public async assertNameAvailable(userId: string, name: string, excludeId?: string, em?: EntityManager): Promise<void> {
 		const t = name.trim();
-		const existing = await this.agentUserModelsRepository.findOneBy({ userId, name: t });
+		const existing = em != null
+			? await em.findOneBy(MiAgentUserModel, { userId, name: t })
+			: await this.agentUserModelsRepository.findOneBy({ userId, name: t });
 		if (existing && existing.id !== excludeId) {
 			throw new ApiError({
 				message: 'A model with this name already exists.',
@@ -265,16 +281,6 @@ export class AgentUserModelService {
 		await this.assertByokEnabled();
 		const meta = await this.metaService.fetch(true);
 		const limit = Math.max(1, Math.min(500, meta.agentByokMaxUserModels ?? 20));
-		const count = await this.agentUserModelsRepository.countBy({ userId, enabled: true });
-		if (count >= limit) {
-			throw new ApiError({
-				message: 'You have reached the user model limit.',
-				code: 'AGENT_USER_MODEL_LIMIT',
-				id: 'e5f6a7b8-c9d0-4be1-2f3a-4b5c6d7e8f90',
-				kind: 'client',
-				httpStatusCode: 400,
-			});
-		}
 		const name = params.name.trim();
 		if (!name || name.length > 256) {
 			throw new ApiError({
@@ -283,7 +289,6 @@ export class AgentUserModelService {
 				id: 'f6a7b8c9-d0e1-4cf2-3a4b-5c6d7e8f90a1',
 			});
 		}
-		await this.assertNameAvailable(userId, name);
 		const baseUrlRaw = params.baseUrl.trim();
 		if (!baseUrlRaw) {
 			throw new ApiError({
@@ -335,24 +340,39 @@ export class AgentUserModelService {
 			: null;
 		const providerId = typeof params.providerId === 'string' && params.providerId.trim() ? params.providerId.trim().slice(0, 64) : null;
 
-		const now = new Date();
-		const row = await this.agentUserModelsRepository.insertOne({
-			id: this.allocateId(),
-			userId,
-			name,
-			baseUrl: hrefForStoredLlmBaseUrl(safeBase),
-			apiKey,
-			apiModelName,
-			maxContextTokens,
-			maxOutputTokensPerCall,
-			tokenizerEncoding,
-			charsPerToken,
-			providerId,
-			enabled: true,
-			createdAt: now,
-			updatedAt: now,
+		// 数量上限与重名校验与写入同事务串行化：SSRF/DNS 等耗时校验已完成，锁内只做短查询
+		return await this.withUserLock(userId, async em => {
+			const count = await em.countBy(MiAgentUserModel, { userId, enabled: true });
+			if (count >= limit) {
+				throw new ApiError({
+					message: 'You have reached the user model limit.',
+					code: 'AGENT_USER_MODEL_LIMIT',
+					id: 'e5f6a7b8-c9d0-4be1-2f3a-4b5c6d7e8f90',
+					kind: 'client',
+					httpStatusCode: 400,
+				});
+			}
+			await this.assertNameAvailable(userId, name, undefined, em);
+			const now = new Date();
+			const id = this.allocateId();
+			await em.insert(MiAgentUserModel, {
+				id,
+				userId,
+				name,
+				baseUrl: hrefForStoredLlmBaseUrl(safeBase),
+				apiKey,
+				apiModelName,
+				maxContextTokens,
+				maxOutputTokensPerCall,
+				tokenizerEncoding,
+				charsPerToken,
+				providerId,
+				enabled: true,
+				createdAt: now,
+				updatedAt: now,
+			});
+			return this.pack(await em.findOneByOrFail(MiAgentUserModel, { id }));
 		});
-		return this.pack(row);
 	}
 
 	@bindThis
@@ -369,21 +389,17 @@ export class AgentUserModelService {
 		enabled?: boolean;
 	}): Promise<AgentUserModelPack> {
 		await this.assertByokEnabled();
-		const row = await this.getOwnedOrThrow(userId, modelId);
-		const meta = await this.metaService.fetch(true);
 
-		if (params.name !== undefined) {
-			const name = params.name.trim();
-			if (!name || name.length > 256) {
-				throw new ApiError({
-					message: 'Invalid model name.',
-					code: 'INVALID_PARAM',
-					id: 'e0f1a2b3-c4d5-4ae7-8f90-a1b2c3d4e5f6',
-				});
-			}
-			await this.assertNameAvailable(userId, name, modelId);
-			row.name = name;
+		// 与数据库无关的入参校验先完成（SSRF/DNS 不放进事务），锁内只做行读取、重名校验与写入
+		const name = params.name !== undefined ? params.name.trim() : undefined;
+		if (name !== undefined && (!name || name.length > 256)) {
+			throw new ApiError({
+				message: 'Invalid model name.',
+				code: 'INVALID_PARAM',
+				id: 'e0f1a2b3-c4d5-4ae7-8f90-a1b2c3d4e5f6',
+			});
 		}
+		let safeBase: URL | null = null;
 		if (params.baseUrl !== undefined) {
 			const baseUrlRaw = params.baseUrl.trim();
 			if (!baseUrlRaw) {
@@ -393,7 +409,6 @@ export class AgentUserModelService {
 					id: 'f1a2b3c4-d5e6-4bf8-90a1-b2c3d4e5f6a7',
 				});
 			}
-			let safeBase: URL;
 			try {
 				safeBase = await assertSafeLlmHttpsUrl(baseUrlRaw);
 			} catch (e) {
@@ -406,54 +421,73 @@ export class AgentUserModelService {
 					id: 'a2b3c4d5-e6f7-4ac9-1b2c-3d4e5f6a7b8c',
 				});
 			}
-			row.baseUrl = hrefForStoredLlmBaseUrl(safeBase);
 		}
-		if (params.apiKey !== undefined) {
-			const apiKey = params.apiKey.trim();
-			if (!apiKey) {
+		const apiKey = params.apiKey !== undefined ? params.apiKey.trim() : undefined;
+		if (apiKey !== undefined && !apiKey) {
+			throw new ApiError({
+				message: 'API key is required.',
+				code: 'INVALID_PARAM',
+				id: 'b3c4d5e6-f7a8-4bd0-2c3d-4e5f6a7b8c9d',
+			});
+		}
+		const apiModelName = params.apiModelName !== undefined ? params.apiModelName.trim() : undefined;
+		if (apiModelName !== undefined && (!apiModelName || apiModelName.length > 256)) {
+			throw new ApiError({
+				message: 'Invalid API model name.',
+				code: 'INVALID_PARAM',
+				id: 'c4d5e6f7-a8b9-4ce1-3d4e-5f6a7b8c9d0e',
+			});
+		}
+
+		return await this.withUserLock(userId, async em => {
+			const row = await em.findOneBy(MiAgentUserModel, { id: modelId, userId });
+			if (!row) {
 				throw new ApiError({
-					message: 'API key is required.',
-					code: 'INVALID_PARAM',
-					id: 'b3c4d5e6-f7a8-4bd0-2c3d-4e5f6a7b8c9d',
+					message: 'No such user model.',
+					code: 'NO_SUCH_AGENT_USER_MODEL',
+					id: 'd4e5f6a7-b8c9-4ad0-1e2f-3a4b5c6d7e8f',
+					kind: 'client',
+					httpStatusCode: 404,
 				});
 			}
-			row.apiKey = apiKey;
-		}
-		if (params.apiModelName !== undefined) {
-			const apiModelName = params.apiModelName.trim();
-			if (!apiModelName || apiModelName.length > 256) {
-				throw new ApiError({
-					message: 'Invalid API model name.',
-					code: 'INVALID_PARAM',
-					id: 'c4d5e6f7-a8b9-4ce1-3d4e-5f6a7b8c9d0e',
-				});
+			if (name !== undefined) {
+				await this.assertNameAvailable(userId, name, modelId, em);
+				row.name = name;
 			}
-			row.apiModelName = apiModelName;
-		}
-		if (params.maxContextTokens !== undefined) {
-			row.maxContextTokens = clampInt(Number(params.maxContextTokens), 256, 2_000_000, row.maxContextTokens);
-		}
-		if (params.maxOutputTokensPerCall !== undefined) {
-			row.maxOutputTokensPerCall = clampInt(Number(params.maxOutputTokensPerCall), 1, 128_000, row.maxOutputTokensPerCall);
-		}
-		if (params.tokenizerEncoding !== undefined) {
-			row.tokenizerEncoding = typeof params.tokenizerEncoding === 'string' && params.tokenizerEncoding.trim()
-				? params.tokenizerEncoding.trim().slice(0, 64)
-				: null;
-		}
-		if (params.charsPerToken !== undefined) {
-			const v = Number(params.charsPerToken);
-			row.charsPerToken = Number.isFinite(v) && Math.trunc(v) >= 1 && Math.trunc(v) <= 10 ? Math.trunc(v) : null;
-		}
-		if (params.providerId !== undefined) {
-			row.providerId = typeof params.providerId === 'string' && params.providerId.trim() ? params.providerId.trim().slice(0, 64) : null;
-		}
-		if (params.enabled !== undefined) {
-			row.enabled = Boolean(params.enabled);
-		}
-		row.updatedAt = new Date();
-		const saved = await this.agentUserModelsRepository.save(row);
-		return this.pack(saved);
+			if (safeBase != null) {
+				row.baseUrl = hrefForStoredLlmBaseUrl(safeBase);
+			}
+			if (apiKey !== undefined) {
+				row.apiKey = apiKey;
+			}
+			if (apiModelName !== undefined) {
+				row.apiModelName = apiModelName;
+			}
+			if (params.maxContextTokens !== undefined) {
+				row.maxContextTokens = clampInt(Number(params.maxContextTokens), 256, 2_000_000, row.maxContextTokens);
+			}
+			if (params.maxOutputTokensPerCall !== undefined) {
+				row.maxOutputTokensPerCall = clampInt(Number(params.maxOutputTokensPerCall), 1, 128_000, row.maxOutputTokensPerCall);
+			}
+			if (params.tokenizerEncoding !== undefined) {
+				row.tokenizerEncoding = typeof params.tokenizerEncoding === 'string' && params.tokenizerEncoding.trim()
+					? params.tokenizerEncoding.trim().slice(0, 64)
+					: null;
+			}
+			if (params.charsPerToken !== undefined) {
+				const v = Number(params.charsPerToken);
+				row.charsPerToken = Number.isFinite(v) && Math.trunc(v) >= 1 && Math.trunc(v) <= 10 ? Math.trunc(v) : null;
+			}
+			if (params.providerId !== undefined) {
+				row.providerId = typeof params.providerId === 'string' && params.providerId.trim() ? params.providerId.trim().slice(0, 64) : null;
+			}
+			if (params.enabled !== undefined) {
+				row.enabled = Boolean(params.enabled);
+			}
+			row.updatedAt = new Date();
+			await em.save(row);
+			return this.pack(row);
+		});
 	}
 
 	@bindThis

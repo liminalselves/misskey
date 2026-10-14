@@ -192,7 +192,7 @@ iframe 会发送：
 - `misskey:agent-control:close-requested`
 - `misskey:agent-control:error`
 
-所有消息都必须校验 `event.origin` 和 `event.source`。宿主脚本已经代为执行这些检查。
+宿主必须同时校验 `event.origin` 和 `event.source`；宿主脚本已执行。iframe 只接受来自 `window.parent` 的协议消息，拒绝不透明的 `null` origin。有 referrer 时固定其 origin；无 referrer 时由首条合法父级协议消息确定 origin，之后不能切换。确定来源后的回传使用该 origin；仅不含凭证的启动通知可在确定来源前使用 `*`。令牌仍在 ready 后发送，不放进 URL。
 
 ## 认证
 

@@ -11,15 +11,14 @@ env:
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
 permissions:
-  contents: write
-  issues: write
+  contents: read
   pull-requests: write
 
 jobs:
   edit:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       # headが$GITHUB_REF_NAME, baseが$STABLE_BRANCHかつopenのPRを1つ取得
       - name: Get PR
         run: |
@@ -29,12 +28,12 @@ jobs:
           STABLE_BRANCH: ${{ vars.STABLE_BRANCH }}
       - name: Get target version
         if: steps.get_pr.outputs.pr_number != ''
-        uses: misskey-dev/release-manager-actions/.github/actions/get-target-version@v2
+        uses: misskey-dev/release-manager-actions/.github/actions/get-target-version@dd3ecf280ca42f6edbd217f494b53b0b59e837a5 # v2
         id: v
       # CHANGELOG.mdの内容を取得
       - name: Get changelog
         if: steps.get_pr.outputs.pr_number != ''
-        uses: misskey-dev/release-manager-actions/.github/actions/get-changelog@v2
+        uses: misskey-dev/release-manager-actions/.github/actions/get-changelog@dd3ecf280ca42f6edbd217f494b53b0b59e837a5 # v2
         with:
           version: ${{ steps.v.outputs.target_version }}
         id: changelog

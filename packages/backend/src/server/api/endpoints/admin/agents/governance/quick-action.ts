@@ -33,13 +33,14 @@ export const paramDef = {
 		/** 要封禁的会话 ID 列表 */
 		sessionIds: {
 			type: 'array',
+			uniqueItems: true,
 			items: { type: 'string', format: 'misskey:id' },
 			minItems: 1,
 		},
 		/** 封禁会话的原因（面向用户），留空则使用违规类别 */
 		sessionBanReason: { type: 'string', maxLength: 1000, nullable: true },
-		/** 用户封禁时长（小时），-1 表示不封禁用户，0 表示永封 */
-		suspendDurationHours: { type: 'integer', minimum: -1, default: -1 },
+		/** 用户封禁时长（小时），-1 表示不封禁用户，0 表示永封，上限 10 年 */
+			suspendDurationHours: { type: 'integer', minimum: -1, maximum: 87_600, default: -1 },
 		/** 封禁用户的原因（面向用户），留空则使用违规类别 */
 		userSuspendReason: { type: 'string', maxLength: 2048, nullable: true },
 		/** 管理笔记（面向内部），不填则自动生成 */
@@ -74,15 +75,28 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		super(meta, paramDef, async (ps, me) => {
 			this.agentService.assertAgentsEnabled();
 
+			// 操作前验证全部目标：任一会话不存在即整体拒绝，避免部分执行
 			const sessions = await this.agentSessionsRepository.findBy({ id: In(ps.sessionIds) });
-			if (sessions.length === 0) throw new ApiError({ message: 'No such session.', code: 'NO_SUCH_SESSION', id: 'a1b2c3d4-5678-4abc-9def-000000000001' });
+			if (sessions.length !== ps.sessionIds.length) {
+				throw new ApiError({ message: 'No such session.', code: 'NO_SUCH_SESSION', id: 'a1b2c3d4-5678-4abc-9def-000000000001' });
+			}
 
-			const user = await this.usersRepository.findOneBy({ id: sessions[0].userId });
+			// 跨用户校验：本操作以「单个用户」为处置单位（封禁用户 / 写管理笔记 / 清外审记录均按同一 userId 执行），
+			// 混入其他用户的会话会导致处置对象错位，必须拒绝
+			const targetUserId = sessions[0].userId;
+			if (sessions.some(s => s.userId !== targetUserId)) {
+				throw new ApiError({ message: 'Sessions belong to different users.', code: 'SESSIONS_BELONG_TO_DIFFERENT_USERS', id: 'a1b2c3d4-5678-4abc-9def-000000000004' });
+			}
+
+			const user = await this.usersRepository.findOneBy({ id: targetUserId });
 			if (!user) throw new ApiError({ message: 'No such user.', code: 'NO_SUCH_USER', id: 'a1b2c3d4-5678-4abc-9def-000000000002' });
 
 			const category = ps.violationCategory.trim();
 			const sessionReason = ps.sessionBanReason?.trim() || category;
 			const shouldSuspendUser = (ps.suspendDurationHours ?? -1) >= 0;
+			if (shouldSuspendUser && !user.isSuspended && await this.roleService.isModerator(user)) {
+				throw new ApiError({ message: 'Cannot suspend moderator account.', code: 'CANNOT_SUSPEND_MODERATOR', id: 'a1b2c3d4-5678-4abc-9def-000000000003' });
+			}
 
 			const results: Record<string, unknown> = {
 				sessionsBanned: 0,
@@ -91,28 +105,28 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			};
 
 			// 1. 批量封禁会话
-				const userAcct = await getAcctByUserIdSafely(this.usersRepository, user.id);
-				for (const session of sessions) {
-					if (session.moderationBanned) continue;
-					const updatedAt = new Date();
-					await this.agentSessionsRepository.createQueryBuilder()
-						.update()
-						.set({
-							moderationBanned: true,
-							moderationBannedReason: sessionReason,
-							randomProactiveAt: null,
-							randomProactiveNeedsUserMessage: true,
-							randomProactiveChainRemaining: 0,
-							randomProactiveAwaitingDraw: false,
-							updatedAt,
-						})
-						.where('id = :id', { id: session.id })
-						.execute();
-					session.moderationBanned = true;
-					session.moderationBannedReason = sessionReason;
-					session.updatedAt = updatedAt;
+			const userAcct = await getAcctByUserIdSafely(this.usersRepository, user.id);
+			for (const session of sessions) {
+				if (session.moderationBanned) continue;
+				const updatedAt = new Date();
+				await this.agentSessionsRepository.createQueryBuilder()
+					.update()
+					.set({
+						moderationBanned: true,
+						moderationBannedReason: sessionReason,
+						randomProactiveAt: null,
+						randomProactiveNeedsUserMessage: true,
+						randomProactiveChainRemaining: 0,
+						randomProactiveAwaitingDraw: false,
+						updatedAt,
+					})
+					.where('id = :id', { id: session.id })
+					.execute();
+				session.moderationBanned = true;
+				session.moderationBannedReason = sessionReason;
+				session.updatedAt = updatedAt;
 
-					await this.moderationLogService.logSafely(me, 'setAgentSessionModerationBan', {
+				await this.moderationLogService.logSafely(me, 'setAgentSessionModerationBan', {
 					sessionId: session.id,
 					sessionName: session.name,
 					userId: session.userId,
@@ -122,7 +136,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					before: false,
 					reason: sessionReason,
 				});
-				this.notificationService.createNotification(
+				await this.notificationService.createNotification(
 					session.userId,
 					'agentSessionBanned',
 					{ sessionId: session.id, sessionName: session.name, banned: true },
@@ -132,10 +146,6 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 
 			// 2. 封禁用户
 			if (shouldSuspendUser && !user.isSuspended) {
-				if (await this.roleService.isModerator(user)) {
-					throw new ApiError({ message: 'Cannot suspend moderator account.', code: 'CANNOT_SUSPEND_MODERATOR', id: 'a1b2c3d4-5678-4abc-9def-000000000003' });
-				}
-
 				const durationHours = ps.suspendDurationHours!;
 				const expiresAt = durationHours > 0 ? new Date(Date.now() + durationHours * 60 * 60 * 1000) : null;
 				const reason = ps.userSuspendReason?.trim() || `智能体${category}`;

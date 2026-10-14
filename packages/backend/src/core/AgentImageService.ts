@@ -6,6 +6,8 @@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { fileTypeFromBuffer } from 'file-type';
+import sharp from 'sharp';
 import { Inject, Injectable } from '@nestjs/common';
 import { DI } from '@/di-symbols.js';
 import { bindThis } from '@/decorators.js';
@@ -810,7 +812,7 @@ export class AgentImageService {
 				: 'The image URL returned by the upstream service is invalid.';
 			throw upstreamImageError(detail);
 		}
-		const imageRes = await fetch(imageUrl, { signal });
+		const imageRes = await fetch(imageUrl, { signal, redirect: 'error' });
 		if (!imageRes.ok) throw upstreamImageError(await describeImageUpstreamHttpError(imageRes));
 		const contentType = imageRes.headers.get('content-type');
 		if (!contentType?.toLowerCase().startsWith('image/')) {
@@ -841,7 +843,7 @@ export class AgentImageService {
 			const ac = new AbortController();
 			const timeout = setTimeout(() => ac.abort(), 30_000);
 			try {
-				const res = await fetch(this.driveFileEntityService.getPublicUrl(file), { signal: ac.signal });
+				const res = await fetch(this.driveFileEntityService.getPublicUrl(file), { signal: ac.signal, redirect: 'error' });
 				if (!res.ok) return null;
 				const data = await readBodyWithLimit(res, 5 * 1024 * 1024);
 				if (data.length === 0 || data.length > 5 * 1024 * 1024) return null;
@@ -857,6 +859,14 @@ export class AgentImageService {
 	private async storeGeneratedImage(params: FetchImageParams, buf: Buffer, contentType: string | null) {
 		if (buf.length <= 0) throw upstreamImageError('Upstream returned an empty image file.');
 		if (buf.length > 20 * 1024 * 1024) throw upstreamImageError('Upstream returned an image larger than the 20 MiB limit.');
+		const detected = await fileTypeFromBuffer(buf);
+		if (!detected?.mime.startsWith('image/')) throw upstreamImageError('Upstream returned an invalid image file.');
+		try {
+			await sharp(buf, { failOn: 'warning' }).resize(1, 1).png().toBuffer();
+		} catch {
+			throw upstreamImageError('Upstream returned an undecodable image file.');
+		}
+		contentType = detected.mime;
 		await this.ensureAgentImageDriveSpace(params.user, buf.length);
 
 		const dir = await mkdtemp(join(tmpdir(), 'misskey-agent-image-'));
@@ -891,8 +901,12 @@ export class AgentImageService {
 
 	private safeBaseUrl(raw: string | null | undefined): string {
 		const s = (raw ?? 'https://love.auroralove.cc').trim().replace(/\/$/, '');
-		const u = new URL(s);
-		if (u.protocol !== 'https:') throw new ApiError(agentImageErrors.notConfigured);
-		return u.toString();
+		try {
+			const u = new URL(s);
+			if (u.protocol !== 'https:') throw new ApiError(agentImageErrors.notConfigured);
+			return u.toString();
+		} catch {
+			throw new ApiError(agentImageErrors.notConfigured);
+		}
 	}
 }

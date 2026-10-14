@@ -14,7 +14,6 @@ import { AgentService } from '@/core/AgentService.js';
 import { AgentMessageNotifyService } from '@/core/AgentMessageNotifyService.js';
 import { DriveFileEntityService } from '@/core/entities/DriveFileEntityService.js';
 import { agentPreviewText } from '@/core/agent-preview-text.js';
-import { IsNull, Not } from 'typeorm';
 
 function previewText(s: string, max = 220): string {
 	return agentPreviewText(s, { maxLength: max });
@@ -54,7 +53,14 @@ export const meta = {
 	},
 } as const;
 
-export const paramDef = { type: 'object', properties: {}, required: [] } as const;
+export const paramDef = {
+	type: 'object',
+	properties: {
+		limit: { type: 'integer', minimum: 1, maximum: 100, default: 100 },
+		untilId: { type: 'string', format: 'misskey:id', nullable: true },
+	},
+	required: [],
+} as const;
 
 @Injectable()
 export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-disable-line import/no-default-export
@@ -74,15 +80,27 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 	) {
 		super(meta, paramDef, async (ps, me) => {
 			this.agentService.assertAgentsEnabled();
-			const rows = await this.agentSessionsRepository.find({
-				where: {
-					userId: me.id,
-					lastMessageAt: Not(IsNull()),
-				},
-				order: { lastMessageAt: 'DESC' },
-				select: ['id', 'name', 'characterId', 'dialogueStyleId', 'sessionKind', 'lastMessageAt', 'moderationBanned'],
-				take: 100,
-			});
+			const limit = ps.limit ?? 100;
+			const qb = this.agentSessionsRepository.createQueryBuilder('s')
+				.where('s.userId = :userId', { userId: me.id })
+				.andWhere('s.lastMessageAt IS NOT NULL')
+				.select(['s.id', 's.name', 's.characterId', 's.dialogueStyleId', 's.sessionKind', 's.lastMessageAt', 's.moderationBanned'])
+				.orderBy('s.lastMessageAt', 'DESC')
+				.addOrderBy('s.id', 'DESC')
+				.take(limit);
+			if (ps.untilId != null) {
+				// (lastMessageAt, id) 复合游标：列表按最近消息时间排序，同刻并列按 id 决胜
+				const cursor = await this.agentSessionsRepository.findOne({
+					where: { id: ps.untilId, userId: me.id },
+					select: ['id', 'lastMessageAt'],
+				});
+				if (cursor?.lastMessageAt == null) return [];
+				qb.andWhere('(s.lastMessageAt < :cursorAt OR (s.lastMessageAt = :cursorAt AND s.id < :cursorId))', {
+					cursorAt: cursor.lastMessageAt,
+					cursorId: cursor.id,
+				});
+			}
+			const rows = await qb.getMany();
 			if (rows.length === 0) return [];
 
 			const charIds = [...new Set(rows.map(r => r.characterId))];
@@ -102,7 +120,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			) as { sessionId: string; content: string; role: 'user' | 'assistant' | 'system' }[];
 			const lastMap = new Map(lastRows.map(r => [r.sessionId, r]));
 
-			const avatarIds = [...new Set(chars.map(c => c.avatarFileId).filter((id): id is string => id != null))];
+			const avatarIds = [...new Set(chars.flatMap(c => [c.avatarFileId, this.agentService.characterPlazaDisplayFields(c as MiAgentCharacter).avatarFileId]).filter((id): id is string => id != null))];
 			const avatarPacked = avatarIds.length > 0
 				? await this.driveFileEntityService.packManyByIdsMap(avatarIds, {})
 				: new Map();

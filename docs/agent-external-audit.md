@@ -12,4 +12,6 @@
 
 两个决策类型均使用 `questions.content_safety`，以启用的违规条目 ID 生成 `criteria`；`allow` 表示放行，`other_high_risk` 表示其他高风险。返回读取 `answers.content_safety.choice` 和 `confidence`，普通违规条目使用配置的固定原因。JEV 示例中的问题名和选项名是自定义键，不要求使用示例的中文名称。
 
+请求禁止重定向；完整响应体读取包含在单模型超时内，上限 2 MiB。失败仍按现有顺序切换模型或放行；`sessions/show` 的回复占位自愈阈值为 5 分钟基础预算加当前有效外审模型的串行超时总额，不能仅凭上一轮 assistant 消息解除本轮占位。
+
 模型类型白名单与端点规则分别维护在 `packages/backend/src/models/AgentExternalAuditProvider.ts` 和 `packages/backend/src/core/agent-external-audit-providers.ts`。新增类型须同步管理端选项、请求格式与解析；配置保存和健康统计使用后端白名单。不涉及新增数据库列，无需迁移。

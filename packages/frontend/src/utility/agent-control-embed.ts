@@ -101,6 +101,46 @@ export function isAgentControlPanel(value: string): value is AgentControlPanel {
 	return (agentControlPanels as readonly string[]).includes(value);
 }
 
+const agentControlParentMessageTypes = new Set([
+	'misskey:agent-control:configure',
+	'misskey:agent-control:update-appearance',
+	'misskey:agent-control:update-token',
+	'misskey:agent-control:set-panel',
+]);
+
+export function isAgentControlParentMessageType(type: unknown): boolean {
+	return typeof type === 'string' && agentControlParentMessageTypes.has(type);
+}
+
+/** The host sets referrerPolicy=origin; a missing referrer is resolved by the parent handshake. */
+export function readAgentControlParentOriginFromReferrer(): string | null {
+	if (window.parent === window || window.document.referrer === '') return null;
+	try {
+		const origin = new URL(window.document.referrer).origin;
+		return origin === 'null' ? null : origin;
+	} catch {
+		return null;
+	}
+}
+
+/** Bind each embedded instance to its parent origin without restricting legitimate hosts to one domain. */
+export function createAgentControlParentGuard() {
+	let parentOrigin = readAgentControlParentOriginFromReferrer();
+	return {
+		origin(): string | null {
+			return parentOrigin;
+		},
+		accept(event: MessageEvent): boolean {
+			if (event.source !== window.parent || event.origin === 'null') return false;
+			if (parentOrigin != null) return event.origin === parentOrigin;
+			const data = event.data as { type?: unknown } | null;
+			if (data == null || typeof data !== 'object' || !isAgentControlParentMessageType(data.type)) return false;
+			parentOrigin = event.origin;
+			return true;
+		},
+	};
+}
+
 function normalizeCssVariableName(name: string): string | null {
 	const normalized = name.trim();
 	if (!/^--[A-Za-z0-9_-]+$/.test(normalized)) return null;

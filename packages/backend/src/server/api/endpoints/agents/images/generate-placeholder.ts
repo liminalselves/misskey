@@ -14,6 +14,7 @@ import { AgentService } from '@/core/AgentService.js';
 import { AgentImageService, agentImageErrors, getAgentImageErrorDiagnostic } from '@/core/AgentImageService.js';
 import { DriveFileEntityService } from '@/core/entities/DriveFileEntityService.js';
 import type { MiAgentImageGeneration } from '@/models/AgentImageGeneration.js';
+import { packAgentImagePlaceholder } from './_pack-placeholder.js';
 
 const noSuchMessageError = {
 	message: 'No such message.',
@@ -253,34 +254,10 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		};
 	}
 
+	/** 打包逻辑与 placeholder-status / session-review 镜像共用一份实现，仅错误语义（无 messageId 视为消息不存在）在本端点保留 */
 	private async pack(row: MiAgentImageGeneration) {
-		if (row.messageId == null) throw new ApiError(noSuchMessageError);
-		let file = null;
-		const rawFile = row.fileId == null ? null : await this.driveFilesRepository.findOneBy({ id: row.fileId });
-		const isAutoCleaned = row.status === 'auto_cleaned' || row.autoCleanedAt != null;
-		const isBlocked = !isAutoCleaned && (row.isBlocked || rawFile?.isAgentImageBlocked === true);
-		if (!isAutoCleaned && !isBlocked && row.status === 'succeeded' && row.fileId != null) {
-			try {
-				file = await this.driveFileEntityService.pack(row.fileId, { self: true, withDeleted: true });
-			} catch {
-				file = null;
-			}
-		}
-		return {
-			id: row.id,
-			messageId: row.messageId,
-			placeholderIndex: row.placeholderIndex,
-			status: isAutoCleaned ? 'auto_cleaned' : isBlocked ? 'blocked' : row.status,
-			fileId: row.fileId,
-			url: isAutoCleaned || isBlocked ? null : row.url,
-			file,
-				errorCode: isAutoCleaned || isBlocked ? null : row.errorCode,
-				errorMessage: isAutoCleaned || isBlocked ? null : row.errorMessage,
-			tag: row.tag,
-			size: row.size,
-			isBlocked: isAutoCleaned ? false : isBlocked,
-			autoCleanedAt: row.autoCleanedAt?.toISOString() ?? null,
-			autoCleanedReason: row.autoCleanedReason,
-		};
+		const packed = await packAgentImagePlaceholder(row, this.driveFilesRepository, this.driveFileEntityService);
+		if (packed == null) throw new ApiError(noSuchMessageError);
+		return packed;
 	}
 }

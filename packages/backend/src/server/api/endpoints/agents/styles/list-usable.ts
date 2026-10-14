@@ -12,17 +12,12 @@ import { Endpoint } from '@/server/api/endpoint-base.js';
 import { DI } from '@/di-symbols.js';
 import { AgentService } from '@/core/AgentService.js';
 import { UserEntityService } from '@/core/entities/UserEntityService.js';
+import { agentPreviewText } from '@/core/agent-preview-text.js';
 import {
 	batchPlazaRatingsByStyleIds,
 	batchCommunitySessionCountByStyleIds,
 	batchCommunityAssistantReplyCountByStyleIds,
 } from '@/core/agent-plaza-display-stats.js';
-
-function previewBody(body: string, max = 200): string {
-	const t = body.replace(/\s+/g, ' ').trim();
-	if (t.length <= max) return t;
-	return `${t.slice(0, max)}…`;
-}
 
 export const meta = {
 	tags: ['agents'],
@@ -100,10 +95,10 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				select: ['id', 'userId', 'name', 'isPublished', 'body', 'summary', 'reviewStatus', 'publishedVersion', 'createdAt', 'updatedAt'],
 				take: 200,
 			});
+			// 订阅不设任意上限（原先 take:500 会静默截断第 501 个起的订阅）
 			const subs = await this.agentUserStyleSubscriptionsRepository.find({
 				where: { userId: me.id },
 				select: ['styleId'],
-				take: 500,
 			});
 			const subIds = subs.map(s => s.styleId).filter(Boolean);
 			let subscribedRows: typeof mine = [];
@@ -135,7 +130,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					isMine: true,
 					subscribed: false,
 					userId: r.userId,
-					bodyPreview: previewBody(r.body),
+					bodyPreview: agentPreviewText(r.body, { maxLength: 200 }),
 					summary: r.summary,
 					reviewStatus: r.reviewStatus,
 					publishedVersion: r.publishedVersion,
@@ -154,7 +149,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 						isMine: false,
 						subscribed: true,
 						userId: r.userId,
-						bodyPreview: previewBody(d.body),
+						bodyPreview: agentPreviewText(d.body, { maxLength: 200 }),
 						summary: d.summary,
 						createdAt: r.createdAt.toISOString(),
 						updatedAt: r.updatedAt.toISOString(),
@@ -172,6 +167,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			const users = await this.usersRepository.findBy({ id: In(userIds) });
 			const packedUsers = await this.userEntityService.packMany(users, me, { schema: 'UserLite' });
 			const userById = new Map(packedUsers.map(u => [u.id, u]));
+			// 混合（自有+订阅）排序：updatedAt 主序 + id 决胜，保证顺序确定
 			return values
 				.map(v => {
 					const r = ratings.get(v.id) ?? { average: null, count: 0 };
@@ -183,7 +179,10 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 						aiReplyCount: aiReplies.get(v.id) ?? 0,
 					};
 				})
-				.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+				.sort((a, b) => {
+					const byTime = b.updatedAt.localeCompare(a.updatedAt);
+					return byTime !== 0 ? byTime : b.id.localeCompare(a.id);
+				});
 		});
 	}
 }

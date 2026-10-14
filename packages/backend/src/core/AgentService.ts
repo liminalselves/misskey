@@ -18,6 +18,7 @@ import { assertSafeLlmHttpsUrl, describeUnsafeLlmUrlReason, normalizeChatComplet
 import { readBodyWithLimit, UpstreamBodyTooLargeError } from '@/misc/read-body-with-limit.js';
 import { sanitizeLlmErrorDetail, extractSafeUpstreamErrorDetail } from '@/misc/llm-error-detail.js';
 import { getActiveLlmModels, getEffectiveLlmModels, isAgentLlmRunnable, type AgentLlmModelJson } from '@/misc/agent-llm-models.js';
+import { AgentRegexBatchFilter, AgentRegexFilterTimeoutError, AGENT_REGEX_FILTER_TIMEOUT_MS } from '@/core/agent-regex-filter.js';
 import { MetaService } from '@/core/MetaService.js';
 import { IdService } from '@/core/IdService.js';
 import { AgentTokenService, AGENT_LLM_APPROX_CHARS_PER_TOKEN } from '@/core/AgentTokenService.js';
@@ -323,6 +324,18 @@ export const agentsErrors = {
 		id: '7e4c1a52-9b3d-4f68-a5e0-3d92c8b71f46',
 		httpStatusCode: 504,
 	},
+	regexFilterTimeout: {
+		message: 'Character regex filtering timed out.',
+		code: 'AGENT_REGEX_FILTER_TIMEOUT',
+		id: '2f8a1c9d-6b4e-4a70-8c31-5d9e0f7b2a48',
+		httpStatusCode: 500,
+	},
+	regexFilterFailed: {
+		message: 'Character regex filtering failed.',
+		code: 'AGENT_REGEX_FILTER_FAILED',
+		id: '8c3d5e1f-0a24-4b69-9d72-6e5f4a8c1b37',
+		httpStatusCode: 500,
+	},
 } as const;
 
 /**
@@ -345,6 +358,9 @@ export function styleUsesPublishedFaceForSession(
 @Injectable()
 export class AgentService {
 	private readonly logger = new Logger(AgentService.name);
+
+	/** Bounded worker-thread executor for character regex rules (never on the main thread). */
+	private readonly regexBatchFilter = new AgentRegexBatchFilter(AGENT_REGEX_FILTER_TIMEOUT_MS);
 
 	constructor(
 		@Inject(DI.meta)
@@ -1718,14 +1734,22 @@ export class AgentService {
 		});
 	}
 
+		/** Keep JavaScript regex semantics without running unbounded patterns on the main thread. */
 	@bindThis
-	public applyRegexRules(text: string, role: AgentRegexTarget, effect: AgentRegexEffect, rules: AgentRegexRule[]): string {
-		let result = text;
-		for (const rule of this.normalizeRegexRules(rules)) {
-			if (!rule.targets.includes(role) || !rule.effects.includes(effect)) continue;
-			try { result = result.replace(new RegExp(rule.pattern, 'gu'), ''); } catch { /* Invalid legacy rules are ignored. */ }
+	public async applyRegexRulesBatch(rules: AgentRegexRule[], effect: AgentRegexEffect, items: { role: AgentRegexTarget; text: string }[]): Promise<string[]> {
+		const normalized = this.normalizeRegexRules(rules);
+		if (!normalized.some(rule => rule.effects.includes(effect))) {
+			return items.map(item => item.text);
 		}
-		return result;
+		try {
+			return await this.regexBatchFilter.applyBatch(normalized, effect, items);
+		} catch (err) {
+			if (err instanceof AgentRegexFilterTimeoutError) {
+				throw new ApiError(agentsErrors.regexFilterTimeout);
+			}
+			this.logger.warn(`agent regex batch failed: ${err instanceof Error ? err.message : String(err)}`);
+			throw new ApiError(agentsErrors.regexFilterFailed);
+		}
 	}
 
 	@bindThis

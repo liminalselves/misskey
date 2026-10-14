@@ -33,10 +33,13 @@ permissions:
 jobs:
   get-pr:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
     outputs:
       pr_number: ${{ steps.get_pr.outputs.pr_number }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       # headが$GITHUB_REF_NAME, baseが$STABLE_BRANCHかつopenのPRを1つ取得
       - name: Get PRs
         run: |
@@ -46,7 +49,7 @@ jobs:
           STABLE_BRANCH: ${{ vars.STABLE_BRANCH }}
 
   merge:
-    uses: misskey-dev/release-manager-actions/.github/workflows/merge.yml@v2
+    uses: misskey-dev/release-manager-actions/.github/workflows/merge.yml@dd3ecf280ca42f6edbd217f494b53b0b59e837a5 # v2
     needs: get-pr
     if: ${{ needs.get-pr.outputs.pr_number != '' && inputs.merge == true }}
     with:
@@ -74,7 +77,7 @@ jobs:
       RELEASE_APP_PRIVATE_KEY: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
 
   create-prerelease:
-    uses: misskey-dev/release-manager-actions/.github/workflows/create-prerelease.yml@v2
+    uses: misskey-dev/release-manager-actions/.github/workflows/create-prerelease.yml@dd3ecf280ca42f6edbd217f494b53b0b59e837a5 # v2
     needs: get-pr
     if: ${{ needs.get-pr.outputs.pr_number != '' && inputs.merge != true  }}
     with:
@@ -92,7 +95,7 @@ jobs:
       RELEASE_APP_PRIVATE_KEY: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
 
   create-target:
-    uses: misskey-dev/release-manager-actions/.github/workflows/create-target.yml@v2
+    uses: misskey-dev/release-manager-actions/.github/workflows/create-target.yml@dd3ecf280ca42f6edbd217f494b53b0b59e837a5 # v2
     needs: get-pr
     if: ${{ needs.get-pr.outputs.pr_number == '' }}
     with:

@@ -43,7 +43,10 @@ export const meta = {
 
 export const paramDef = {
 	type: 'object',
-	properties: {},
+	properties: {
+		limit: { type: 'integer', minimum: 1, maximum: 100, default: 100 },
+		untilId: { type: 'string', format: 'misskey:id', nullable: true },
+	},
 	required: [],
 } as const;
 
@@ -58,12 +61,27 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 	) {
 		super(meta, paramDef, async (ps, me) => {
 			this.agentService.assertAgentsEnabled();
-			const rows = await this.agentCharactersRepository.find({
-				where: { userId: me.id },
-				order: { updatedAt: 'DESC' },
-				select: ['id', 'name', 'summary', 'isPublished', 'reviewStatus', 'publishedVersion', 'reviewRejectReason', 'reviewRejectMessage', 'worldbook', 'avatarFileId', 'createdAt', 'updatedAt'],
-				take: 100,
-			});
+			const limit = ps.limit ?? 100;
+			const qb = this.agentCharactersRepository.createQueryBuilder('c')
+				.where('c.userId = :userId', { userId: me.id })
+				.select(['c.id', 'c.name', 'c.summary', 'c.isPublished', 'c.reviewStatus', 'c.publishedVersion', 'c.reviewRejectReason', 'c.reviewRejectMessage', 'c.worldbook', 'c.avatarFileId', 'c.createdAt', 'c.updatedAt'])
+				.orderBy('c.updatedAt', 'DESC')
+				.addOrderBy('c.id', 'DESC')
+				.take(limit);
+			if (ps.untilId != null) {
+				// (updatedAt, id) 复合游标：updatedAt 相同的并列行按 id 决胜，避免翻页丢行/重行
+				const cursor = await this.agentCharactersRepository.findOne({
+					where: { id: ps.untilId, userId: me.id },
+					select: ['id', 'updatedAt'],
+				});
+				if (cursor) {
+					qb.andWhere('(c.updatedAt < :cursorUpdatedAt OR (c.updatedAt = :cursorUpdatedAt AND c.id < :cursorId))', {
+						cursorUpdatedAt: cursor.updatedAt,
+						cursorId: cursor.id,
+					});
+				}
+			}
+			const rows = await qb.getMany();
 			const avatarIds = [...new Set(rows.map(r => r.avatarFileId).filter((id): id is string => id != null))];
 			const avatarMap = avatarIds.length > 0
 				? await this.driveFileEntityService.packManyByIdsMap(avatarIds, {})

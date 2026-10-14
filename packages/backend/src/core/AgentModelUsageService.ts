@@ -3,8 +3,10 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import Redis from 'ioredis';
+import { DataSource } from 'typeorm';
+import type { QueryDeepPartialEntity } from 'typeorm/query-builder/QueryPartialEntity.js';
 import { bindThis } from '@/decorators.js';
 import { DI } from '@/di-symbols.js';
 import { IdService } from '@/core/IdService.js';
@@ -12,7 +14,9 @@ import type {
 	AgentModelUsageLogsRepository,
 	UserProfilesRepository,
 } from '@/models/_.js';
-import type { MiAgentModelUsageLog, AgentModelUsageStatus, AgentModelUsageKind } from '@/models/AgentModelUsageLog.js';
+import { MiAgentModelUsageLog } from '@/models/AgentModelUsageLog.js';
+import type { AgentModelUsageStatus, AgentModelUsageKind } from '@/models/AgentModelUsageLog.js';
+import { MiUserProfile } from '@/models/UserProfile.js';
 import type { MiMeta } from '@/models/Meta.js';
 import type { MiUser } from '@/models/User.js';
 import { AgentService } from '@/core/AgentService.js';
@@ -78,6 +82,8 @@ function ceilCostTo4Decimals(x: number): number {
  */
 @Injectable()
 export class AgentModelUsageService {
+	private readonly logger = new Logger(AgentModelUsageService.name);
+
 	constructor(
 		@Inject(DI.agentModelUsageLogsRepository)
 		private agentModelUsageLogsRepository: AgentModelUsageLogsRepository,
@@ -87,6 +93,9 @@ export class AgentModelUsageService {
 
 		@Inject(DI.redis)
 		private redisClient: Redis.Redis,
+
+		@Inject(DI.db)
+		private db: DataSource,
 
 		private idService: IdService,
 		private agentService: AgentService,
@@ -120,6 +129,12 @@ export class AgentModelUsageService {
 	 * 结算一条使用日志：按状态扣费并写入 completedAt。
 	 * cost 与用户对会话解析出的模型及 LLM 调用一致（含默认模型）；失败（status=failed）不扣费。
 	 * 每日免费额度：仅 success 消耗，所有 usageKind 共享同一模型的免费计数器。
+	 *
+	 * 原子性与幂等：
+	 * - 日志结算与余额扣费在同一 DB 事务（任一失败整体回滚，不再出现“已扣费无日志/有日志未扣费”）；
+	 * - 结算用 `status='pending'` 条件更新，重试/并发的重复 finishLog 只会命中 0 行，不重复扣费；
+	 * - 免费额度 INCR+EXPIRE 用 Lua 原子执行（分两条命令时，两命令间崩溃会留下永不过期的计数键）；
+	 * - DB 结算失败或未命中（已结算过）时补偿 DECR，归还本次占用的免费额度位。
 	 */
 	@bindThis
 	public async finishLog(log: MiAgentModelUsageLog, instance: MiMeta, params: FinishLogParams): Promise<void> {
@@ -137,23 +152,29 @@ export class AgentModelUsageService {
 		}
 
 		// 每日免费额度：仅 success 消耗（aborted 不消耗），所有 usageKind 共享
+		if (!Number.isFinite(cost)) throw new Error('Invalid agent model cost');
+		let quotaConsumedKey: string | null = null;
+		let freeQuotaUsedAtCall: number | null = null;
+		let freeQuotaTotalAtCall: number | null = null;
 		if (params.status === 'success' && cost > 0 && log.modelId) {
 			const quota = this.resolveDailyFreeQuota(instance, log.modelId);
 			if (quota > 0) {
 				const dateKey = this.beijingDateKey(completedAt);
 				const key = this.freeQuotaKey(log.userId, log.modelId, dateKey);
-				// INCR 原子计数：get+set 在并发下会相互覆盖，系统性放大免费次数
-				const afterIncr = await this.redisClient.incr(key);
-				if (afterIncr === 1) {
-					const ttl = this.secondsUntilNextBeijingMidnight(completedAt);
-					await this.redisClient.expire(key, ttl);
-				}
+				const ttl = this.secondsUntilNextBeijingMidnight(completedAt);
+				// INCR 与 EXPIRE 原子执行：分两条命令时 INCR 后崩溃会留下永不过期的计数键；
+				// 每次 INCR 都刷新 TTL（到下一个北京时间 0 点），也能自愈历史遗留的无 TTL 键
+				const afterIncr = (await this.redisClient.eval(`
+					local v = redis.call('INCR', KEYS[1])
+					redis.call('EXPIRE', KEYS[1], ARGV[1])
+					return v
+				`, 1, key, ttl)) as number;
 				if (afterIncr <= quota) {
 					cost = 0;
 					// 快照写入：记录调用时刻的免费额度使用情况，后续管理员修改配额不影响已有日志
-					log.usedFreeQuota = true;
-					log.freeQuotaUsedAtCall = afterIncr;
-					log.freeQuotaTotalAtCall = quota;
+					freeQuotaUsedAtCall = afterIncr;
+					freeQuotaTotalAtCall = quota;
+					quotaConsumedKey = key;
 				} else {
 					// 本次调用不免费：回滚计数，额度位置留给后续真正命中的调用
 					await this.redisClient.decr(key);
@@ -161,20 +182,49 @@ export class AgentModelUsageService {
 			}
 		}
 
-		log.completedAt = completedAt;
-		log.durationMs = durationMs;
-		log.status = params.status;
-		log.errorCode = params.errorCode ?? null;
-		log.cost = cost;
-		if (params.promptTokens != null) log.promptTokens = params.promptTokens;
-		if (params.completionTokens != null) log.completionTokens = params.completionTokens;
-		if (params.promptCacheHitTokens != null) log.promptCacheHitTokens = params.promptCacheHitTokens;
-		if (params.promptCacheMissTokens != null) log.promptCacheMissTokens = params.promptCacheMissTokens;
-		await this.agentModelUsageLogsRepository.save(log);
+		// 结算与扣费同事务：条件更新 status='pending' → 只有首次结算生效并扣费（幂等）
+		const applied = await this.db.transaction(async em => {
+			const patch: QueryDeepPartialEntity<MiAgentModelUsageLog> = {
+				completedAt,
+				durationMs,
+				status: params.status,
+				errorCode: params.errorCode ?? null,
+				cost,
+				promptTokens: params.promptTokens ?? log.promptTokens ?? null,
+				completionTokens: params.completionTokens ?? log.completionTokens ?? null,
+				promptCacheHitTokens: params.promptCacheHitTokens ?? log.promptCacheHitTokens ?? null,
+				promptCacheMissTokens: params.promptCacheMissTokens ?? log.promptCacheMissTokens ?? null,
+			};
+			patch.usedFreeQuota = quotaConsumedKey != null;
+			patch.freeQuotaUsedAtCall = freeQuotaUsedAtCall;
+			patch.freeQuotaTotalAtCall = freeQuotaTotalAtCall;
+			const result = await em.update(MiAgentModelUsageLog, { id: log.id, status: 'pending' }, patch);
+			if ((result.affected ?? 0) !== 1) return false;
+			if (cost > 0) {
+				// 允许余额为负；管理端可再充值或调整模型价格
+				await em.decrement(MiUserProfile, { userId: log.userId }, 'agentCreditBalance', cost);
+			}
+			return true;
+		}).catch(async (err: unknown) => {
+			// DB 结算失败：归还本次占用的免费额度位，避免日志未落库却烧掉当日次数
+			if (quotaConsumedKey != null) await this.redisClient.decr(quotaConsumedKey).catch(() => this.logger.error('Failed to compensate agent free quota'));
+			throw err;
+		});
 
-		if (cost > 0) {
-			// 允许余额为负；管理端可再充值或调整模型价格
-			await this.userProfilesRepository.decrement({ userId: log.userId }, 'agentCreditBalance', cost);
+		if (applied) {
+			Object.assign(log, {
+				completedAt, durationMs, status: params.status, errorCode: params.errorCode ?? null, cost,
+				usedFreeQuota: quotaConsumedKey != null, freeQuotaUsedAtCall, freeQuotaTotalAtCall,
+			});
+			if (params.promptTokens != null) log.promptTokens = params.promptTokens;
+			if (params.completionTokens != null) log.completionTokens = params.completionTokens;
+			if (params.promptCacheHitTokens != null) log.promptCacheHitTokens = params.promptCacheHitTokens;
+			if (params.promptCacheMissTokens != null) log.promptCacheMissTokens = params.promptCacheMissTokens;
+		}
+
+		// A duplicate settlement returns only the quota slot reserved by this attempt.
+		if (!applied && quotaConsumedKey != null) {
+			await this.redisClient.decr(quotaConsumedKey).catch(() => this.logger.error('Failed to compensate agent free quota'));
 		}
 	}
 
@@ -605,7 +655,8 @@ export class AgentModelUsageService {
 		avgDurationMs: number | null;
 	}>> {
 		const qb = this.agentModelUsageLogsRepository.createQueryBuilder('log')
-			.select(`date_trunc('${opts.unit}', log.requestedAt)`, 'bucketstart')
+			.select('date_trunc(:unit, log.requestedAt)', 'bucketstart')
+			.setParameter('unit', opts.unit === 'hour' ? 'hour' : 'day')
 			.addSelect('COUNT(*)::int', 'total')
 			.addSelect('SUM(CASE WHEN log.status = \'success\' THEN 1 ELSE 0 END)::int', 'success')
 			.addSelect('SUM(CASE WHEN log.status = \'failed\' THEN 1 ELSE 0 END)::int', 'failed')

@@ -91,14 +91,15 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		super(meta, paramDef, async (ps, me) => {
 			this.agentService.assertAgentsEnabled();
 
-			// 1. 校验系统授权 Key
+			// 1. 校验系统授权 Key（常量时间比较，避免逐字节短路泄露哈希前缀）
 			const instanceMeta = await this.metaService.fetch(true);
 			const storedHash = instanceMeta.agentMigrationKeyHash;
 			if (!storedHash) {
 				throw new ApiError(meta.errors.invalidKey);
 			}
-			const providedHash = crypto.createHash('sha256').update(ps.systemKey).digest('hex');
-			if (providedHash !== storedHash) {
+			const providedHash = crypto.createHash('sha256').update(ps.systemKey).digest();
+			const storedHashBuffer = Buffer.from(storedHash, 'hex');
+			if (storedHashBuffer.length !== providedHash.length || !crypto.timingSafeEqual(storedHashBuffer, providedHash)) {
 				throw new ApiError(meta.errors.invalidKey);
 			}
 
@@ -131,6 +132,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			const now = new Date();
 			const migrationId = this.idService.gen();
 			const usageLogId = this.idService.gen();
+			let newBalance = 0;
 
 			// 5–7. 事务内执行：先插入迁移日志（唯一索引作幂等占位），再余额入账 + usage log
 			try {
@@ -148,8 +150,15 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 						failReason: null,
 					});
 
-					// 余额入账
-					await transactionalEntityManager.increment(MiUserProfile, { userId: ps.targetUserId }, 'agentCreditBalance', amount);
+					// 余额入账；无 profile 行时 increment 命中 0 行——宁可使迁移整体失败回滚，
+					// 也不落一条“成功”迁移却配上伪造的 newBalance
+					const credited = await transactionalEntityManager.increment(MiUserProfile, { userId: ps.targetUserId }, 'agentCreditBalance', amount);
+					if ((credited.affected ?? 0) !== 1) {
+						throw new Error('agent credit migration target user profile missing');
+					}
+
+					const profile = await transactionalEntityManager.findOneOrFail(MiUserProfile, { where: { userId: ps.targetUserId } });
+					newBalance = profile.agentCreditBalance;
 
 					// 写入 usage log
 					await transactionalEntityManager.insert(MiAgentModelUsageLog, {
@@ -199,10 +208,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				customIcon: instance.iconUrl ?? instance.logoImageUrl ?? null,
 			});
 
-			// 9. 查询新余额
-			const profile = await this.userProfilesRepository.findOneBy({ userId: ps.targetUserId });
-			const newBalance = profile?.agentCreditBalance ?? amount;
-
+			// 9. newBalance 已在事务内读回（步骤 5–7），此处直接返回
 			return { migrationId, targetUserId: ps.targetUserId, amount, newBalance };
 		});
 	}

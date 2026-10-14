@@ -31,7 +31,7 @@ export const meta = {
 export const paramDef = {
 	type: 'object',
 	properties: {
-		deviceId: { type: 'string' },
+		deviceId: { type: 'string', minLength: 1, maxLength: 512 },
 	},
 	required: ['deviceId'],
 } as const;

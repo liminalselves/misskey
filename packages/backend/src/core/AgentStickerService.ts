@@ -3,9 +3,11 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
+import { randomUUID } from 'node:crypto';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { IsNull } from 'typeorm';
 import fetch from 'node-fetch';
+import * as Redis from 'ioredis';
 import { DI } from '@/di-symbols.js';
 import { bindThis } from '@/decorators.js';
 import type { Config } from '@/config.js';
@@ -43,6 +45,13 @@ const STICKER_DESC_TIMEOUT_MS = 120_000;
 const MAX_IMAGE_BYTES = 12 * 1024 * 1024;
 const MAX_UPSTREAM_JSON_BYTES = 10 * 1024 * 1024;
 
+// HTTP requests may reach different workers; batch ownership and progress must be shared.
+const BATCH_LOCK_KEY = 'agentStickerBatchFill:lock';
+const BATCH_STATE_KEY = 'agentStickerBatchFill:state';
+// Renew before each item; keep finished progress for one hour.
+const BATCH_LOCK_TTL_SEC = 300;
+const BATCH_STATE_TTL_SEC = 3600;
+
 export type AgentPromptEmoji = { name: string; description: string };
 
 /**
@@ -61,11 +70,13 @@ export type AgentStickerReplyContext = {
 @Injectable()
 export class AgentStickerService {
 	private logger = new Logger('AgentStickerService');
-	private batchFillState: { running: boolean; total: number; done: number; failed: number } | null = null;
 
 	constructor(
 		@Inject(DI.config)
 		private config: Config,
+
+		@Inject(DI.redis)
+		private redisClient: Redis.Redis,
 
 		@Inject(DI.emojisRepository)
 		private emojisRepository: EmojisRepository,
@@ -307,7 +318,7 @@ export class AgentStickerService {
 		// （proxyBypassHosts 例外直连），否则直连。与站内其余外联（联邦/媒体代理等）同口径。
 		const outboundAgent = (parsedUrl: URL) => this.httpRequestService.getAgentByUrl(parsedUrl);
 		try {
-			const response = await fetch(url, { signal: controller.signal, agent: outboundAgent });
+			const response = await fetch(url, { signal: controller.signal, agent: outboundAgent, redirect: 'error' });
 			if (!response.ok) throw new Error(`Cannot read image: ${response.status}`);
 			const bytes = await readBodyWithLimit(response, MAX_IMAGE_BYTES);
 			if (bytes.length === 0) throw new Error('Invalid image payload.');
@@ -366,51 +377,103 @@ export class AgentStickerService {
 
 	//#region 批量填充（全站空描述）
 
-	/** 批量为本站所有空描述的本地表情生成描述。异步执行，进度经 getBatchFillStatus 轮询。 */
-	@bindThis
-	public async startBatchFill(instance: MiMeta, user: MiUser): Promise<{ queued: number }> {
-		if (this.batchFillState?.running) throw new ApiError(agentStickerErrors.alreadyRunning);
-		const targets = await this.emojisRepository.createQueryBuilder('emoji')
-			.where('emoji.host IS NULL')
-			.andWhere('(emoji."agentDescription" IS NULL OR emoji."agentDescription" = \'\')')
-			.orderBy('emoji.name', 'ASC')
-			.getMany();
-		if (targets.length === 0) return { queued: 0 };
-		this.batchFillState = { running: true, total: targets.length, done: 0, failed: 0 };
-		void this.runBatchFill(instance, user, targets);
-		return { queued: targets.length };
-	}
+		@bindThis
+		private async releaseBatchFillLock(token: string): Promise<void> {
+			await this.redisClient.eval(`
+				if redis.call('GET', KEYS[1]) == ARGV[1] then
+					return redis.call('DEL', KEYS[1])
+				end
+				return 0
+			`, 1, BATCH_LOCK_KEY, token);
+		}
 
-	@bindThis
-	private async runBatchFill(instance: MiMeta, user: MiUser, targets: MiEmoji[]): Promise<void> {
-		const state = this.batchFillState;
-		if (!state) return;
-		for (const emoji of targets) {
-			if (!state.running) break; // 外部不可中止，仅防御状态被清空
+		@bindThis
+		private async updateBatchFillState(token: string, state: Record<string, string>, finished = false): Promise<boolean> {
+			// An expired runner must neither overwrite its successor's progress nor release its lock.
+			return await this.redisClient.eval(`
+				if redis.call('GET', KEYS[1]) ~= ARGV[1] then return 0 end
+				for i = 5, #ARGV, 2 do redis.call('HSET', KEYS[2], ARGV[i], ARGV[i + 1]) end
+				redis.call('EXPIRE', KEYS[2], ARGV[3])
+				if ARGV[2] == '1' then redis.call('DEL', KEYS[1])
+				else redis.call('EXPIRE', KEYS[1], ARGV[4]) end
+				return 1
+			`, 2, BATCH_LOCK_KEY, BATCH_STATE_KEY, token, finished ? '1' : '0', BATCH_STATE_TTL_SEC, BATCH_LOCK_TTL_SEC, ...Object.entries(state).flat()) === 1;
+		}
+
+		/** 批量为本站所有空描述的本地表情生成描述。异步执行，进度经 getBatchFillStatus 轮询。 */
+		@bindThis
+		public async startBatchFill(instance: MiMeta, user: MiUser): Promise<{ queued: number }> {
+			const token = randomUUID();
+			const acquired = await this.redisClient.set(BATCH_LOCK_KEY, token, 'EX', BATCH_LOCK_TTL_SEC, 'NX');
+			if (acquired == null) throw new ApiError(agentStickerErrors.alreadyRunning);
+			let targets: MiEmoji[];
 			try {
-				const description = await this.generateDescriptionForEmoji(instance, user, emoji.id);
-				const result = await this.customEmojiService.update({ id: emoji.id, agentDescription: description }, user);
-				if (result === null) state.done++;
-				else state.failed++;
-			} catch (err) {
-				state.failed++;
-				// 余额不足或识图模型不可用时，后续每一项都会同样失败：直接中止，避免无意义的连续扣查/调用
-				if (err instanceof ApiError && (
-					err.code === agentStickerErrors.insufficientCredit.code
-					|| err.code === agentVisionErrors.notConfigured.code
-					|| err.code === agentVisionErrors.disabled.code
-				)) {
-					break;
+				targets = await this.emojisRepository.createQueryBuilder('emoji')
+					.where('emoji.host IS NULL')
+					.andWhere('(emoji."agentDescription" IS NULL OR emoji."agentDescription" = \'\')')
+					.orderBy('emoji.name', 'ASC')
+					.getMany();
+				if (targets.length === 0) {
+					await this.releaseBatchFillLock(token);
+					return { queued: 0 };
 				}
+				if (!await this.updateBatchFillState(token, { token, running: '1', total: String(targets.length), done: '0', failed: '0' })) {
+					throw new ApiError(agentStickerErrors.alreadyRunning);
+				}
+			} catch (err) {
+				await this.releaseBatchFillLock(token).catch(error => this.logger.error('sticker batch fill lock release failed', error));
+				throw err;
+			}
+			void this.runBatchFill(instance, user, targets, token).catch(err => {
+				this.logger.error('sticker batch fill crashed', err);
+			});
+			return { queued: targets.length };
+		}
+
+		@bindThis
+		private async runBatchFill(instance: MiMeta, user: MiUser, targets: MiEmoji[], token: string): Promise<void> {
+			let done = 0;
+			let failed = 0;
+			try {
+				for (const emoji of targets) {
+					if (!await this.updateBatchFillState(token, { done: String(done), failed: String(failed) })) break;
+					try {
+						const description = await this.generateDescriptionForEmoji(instance, user, emoji.id);
+						const result = await this.customEmojiService.update({ id: emoji.id, agentDescription: description }, user);
+						if (result === null) done++;
+						else failed++;
+					} catch (err) {
+						failed++;
+						if (err instanceof ApiError && (
+							err.code === agentStickerErrors.insufficientCredit.code
+							|| err.code === agentVisionErrors.notConfigured.code
+							|| err.code === agentVisionErrors.disabled.code
+						)) {
+							break;
+						}
+					}
+				}
+			} finally {
+				await this.updateBatchFillState(token, { running: '0', done: String(done), failed: String(failed) }, true)
+					.catch(err => this.logger.error('sticker batch fill final state update failed', err));
 			}
 		}
-		state.running = false;
-	}
 
-	@bindThis
-	public getBatchFillStatus(): { running: boolean; total: number; done: number; failed: number } {
-		return this.batchFillState ?? { running: false, total: 0, done: 0, failed: 0 };
-	}
+		@bindThis
+		public async getBatchFillStatus(): Promise<{ running: boolean; total: number; done: number; failed: number }> {
+			const [raw, token] = await Promise.all([
+				this.redisClient.hgetall(BATCH_STATE_KEY),
+				this.redisClient.get(BATCH_LOCK_KEY),
+			]);
+			if (Object.keys(raw).length === 0) {
+				return { running: false, total: 0, done: 0, failed: 0 };
+			}
+			const n = (v: string | undefined): number => {
+				const x = Number(v);
+				return Number.isFinite(x) ? Math.trunc(x) : 0;
+			};
+			return { running: raw.running === '1' && token != null && raw.token === token, total: n(raw.total), done: n(raw.done), failed: n(raw.failed) };
+		}
 
 	//#endregion
 }

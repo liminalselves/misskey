@@ -43,7 +43,7 @@ export const meta = {
 export const paramDef = {
 	type: 'object',
 	properties: {
-		deviceId: { type: 'string' },
+		deviceId: { type: 'string', minLength: 1, maxLength: 512 },
 		platform: { type: 'string', enum: ['android', 'ios'] },
 	},
 	required: ['deviceId', 'platform'],

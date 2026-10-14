@@ -12,6 +12,7 @@ import { DI } from '@/di-symbols.js';
 import { AgentService } from '@/core/AgentService.js';
 import { UserEntityService } from '@/core/entities/UserEntityService.js';
 import { DriveFileEntityService } from '@/core/entities/DriveFileEntityService.js';
+import { escapeIlikePattern } from '../governance/_utils.js';
 
 export const meta = {
 	tags: ['admin'],
@@ -165,11 +166,13 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 						'c.createdAt', 'c.updatedAt',
 					])
 					.orderBy('c.updatedAt', orderDir)
+					.addOrderBy('c.id', orderDir)
 					.take(limit);
 				if (status !== 'all') qb.andWhere('c.reviewStatus = :status', { status });
 				if (ps.userId) qb.andWhere('c.userId = :userId', { userId: ps.userId });
 				if (query) {
-					qb.andWhere('(c.name ILIKE :q OR c.summary ILIKE :q OR c.personality ILIKE :q OR c.background ILIKE :q OR c.speakingStyle ILIKE :q OR c.greeting ILIKE :q OR c.forbiddenBehavior ILIKE :q OR c.worldbook::text ILIKE :q)', { q: `%${query.replace(/[%_\\]/g, '\\$&')}%` });
+					const q = `%${escapeIlikePattern(query)}%`;
+					qb.andWhere('(c.name ILIKE :q ESCAPE \'\\\' OR c.summary ILIKE :q ESCAPE \'\\\' OR c.personality ILIKE :q ESCAPE \'\\\' OR c.background ILIKE :q ESCAPE \'\\\' OR c.speakingStyle ILIKE :q ESCAPE \'\\\' OR c.greeting ILIKE :q ESCAPE \'\\\' OR c.forbiddenBehavior ILIKE :q ESCAPE \'\\\' OR c.worldbook::text ILIKE :q ESCAPE \'\\\')', { q });
 				}
 				return await qb.getMany();
 			})();
@@ -182,11 +185,13 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 						's.createdAt', 's.updatedAt',
 					])
 					.orderBy('s.updatedAt', orderDir)
+					.addOrderBy('s.id', orderDir)
 					.take(limit);
 				if (status !== 'all') qb.andWhere('s.reviewStatus = :status', { status });
 				if (ps.userId) qb.andWhere('s.userId = :userId', { userId: ps.userId });
 				if (query) {
-					qb.andWhere('(s.name ILIKE :q OR s.summary ILIKE :q OR s.body ILIKE :q)', { q: `%${query.replace(/[%_\\]/g, '\\$&')}%` });
+					const q = `%${escapeIlikePattern(query)}%`;
+					qb.andWhere('(s.name ILIKE :q ESCAPE \'\\\' OR s.summary ILIKE :q ESCAPE \'\\\' OR s.body ILIKE :q ESCAPE \'\\\')', { q });
 				}
 				return await qb.getMany();
 			})();

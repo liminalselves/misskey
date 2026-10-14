@@ -63,29 +63,6 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			const maxWindow = Math.max(...rules.map(r => r.timeWindowMinutes));
 			const windowStart = new Date(Date.now() - maxWindow * 60 * 1000);
 
-			// 按用户聚合：统计每个用户在时间窗口内的 block 记录数和最新记录（排除已忽略的）
-			const userStatsQb = this.agentExternalAuditLogsRepository
-				.createQueryBuilder('log')
-				.select('log.userId', 'userId')
-				.addSelect('COUNT(*)', 'blockCount')
-				.addSelect('MAX(log.createdAt)', 'latestBlockAt')
-				.where('log.status = :status', { status: 'block' })
-				.andWhere('log.createdAt > :windowStart', { windowStart })
-				.andWhere('log.userId IS NOT NULL')
-				.andWhere('log.reviewIgnoredAt IS NULL')
-				.groupBy('log.userId')
-				.orderBy('"blockCount"', 'DESC')
-				.addOrderBy('"latestBlockAt"', 'DESC');
-
-			if (filterUserId) userStatsQb.andWhere('log.userId = :filterUserId', { filterUserId });
-
-			const userStats = await userStatsQb
-				.offset(ps.offset ?? 0)
-				.limit(ps.limit ?? 20)
-				.getRawMany();
-
-			if (userStats.length === 0) return [];
-
 			// 每条规则按自己的时间窗独立计数（聚合用最大窗口仅用于排序分页，不能套用到小窗口规则上）
 			const ruleCounts = new Map<string, Map<string, number>>();
 			for (const rule of rules) {
@@ -105,40 +82,69 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			}
 			const ruleCountFor = (ruleId: string, userId: string): number => ruleCounts.get(ruleId)?.get(userId) ?? 0;
 
-			// 过滤出满足任一复审规则的用户
-			const qualifiedUserIds = userStats
-				.filter(stat => rules.some(rule => ruleCountFor(rule.id, stat.userId as string) >= rule.blockThreshold))
-				.map(stat => stat.userId as string);
+			// 满足任一复审规则阈值即进入候选（先取全量候选集，再做资格过滤与分页，保证分页不因过滤而缩水跳页）
+			const qualifiedUserIds = new Set<string>();
+			for (const rule of rules) {
+				const counts = ruleCounts.get(rule.id);
+				if (counts == null) continue;
+				for (const [userId, count] of counts) {
+					if (count >= rule.blockThreshold) qualifiedUserIds.add(userId);
+				}
+			}
+			if (qualifiedUserIds.size === 0) return [];
 
-			if (qualifiedUserIds.length === 0) return [];
+			// 资格条件（未封禁、仍有未处理完的涉事会话）下推到 SQL，再按 blockCount / latestBlockAt / userId 排序分页
+			const pageQb = this.agentExternalAuditLogsRepository
+				.createQueryBuilder('log')
+				.select('log.userId', 'userId')
+				.addSelect('COUNT(*)', 'blockCount')
+				.addSelect('MAX(log.createdAt)', 'latestBlockAt')
+				.where('log.status = :status', { status: 'block' })
+				.andWhere('log.createdAt > :windowStart', { windowStart })
+				.andWhere('log.userId IS NOT NULL')
+				.andWhere('log.reviewIgnoredAt IS NULL')
+				.andWhere('log.userId IN (:...qualifiedUserIds)', { qualifiedUserIds: [...qualifiedUserIds] })
+				// 已封禁用户无需再处置
+				.andWhere('NOT EXISTS (SELECT 1 FROM "user" "su" WHERE "su"."id" = "log"."userId" AND "su"."isSuspended" = true)')
+				// 所有涉事会话均已被封禁的用户视为已处理完毕，不再显示
+				.andWhere(`EXISTS (
+					SELECT 1 FROM "agent_external_audit_log" "l2"
+					LEFT JOIN "agent_session" "s2" ON "s2"."id" = "l2"."sessionId"
+					WHERE "l2"."userId" = "log"."userId"
+						AND "l2"."status" = :status
+						AND "l2"."createdAt" > :windowStart
+						AND "l2"."reviewIgnoredAt" IS NULL
+						AND COALESCE("s2"."moderationBanned", false) = false
+				)`)
+				.groupBy('log.userId')
+				.orderBy('"blockCount"', 'DESC')
+				.addOrderBy('"latestBlockAt"', 'DESC')
+				.addOrderBy('"userId"', 'ASC')
+				.offset(ps.offset ?? 0)
+				.limit(ps.limit ?? 20);
 
-			// 获取用户信息
-			const users = await this.usersRepository.findBy({ id: In(qualifiedUserIds) });
+			const userStats = await pageQb.getRawMany<{ userId: string; blockCount: string; latestBlockAt: Date | string }>();
+			if (userStats.length === 0) return [];
+
+			// 仅对当前页用户取明细，去掉旧的全局 take(500)（跨用户截断会让靠后的用户被静默丢弃）
+			const pageUserIds = userStats.map(s => s.userId);
+			const users = await this.usersRepository.findBy({ id: In(pageUserIds) });
 			const packedUsers = await this.userEntityService.packMany(users, me, { schema: 'UserLite' });
 			const userById = new Map(packedUsers.map(u => [u.id, u]));
 
-			// 过滤掉已被封禁的用户
-			const activeUserIds = qualifiedUserIds.filter(id => {
-				const user = users.find(u => u.id === id);
-				return user && !user.isSuspended;
-			});
-			if (activeUserIds.length === 0) return [];
-
-			// 获取用户封禁状态和管理笔记
-			const profiles = await this.userProfilesRepository.findBy({ userId: In(qualifiedUserIds) });
+			const profiles = await this.userProfilesRepository.findBy({ userId: In(pageUserIds) });
 			const profileById = new Map(profiles.map(p => [p.userId, p]));
 
-			// 获取每个用户的违规记录详情（时间窗口内所有未忽略的 block 记录）
 			const allLogs = await this.agentExternalAuditLogsRepository
 				.createQueryBuilder('log')
 				.leftJoinAndSelect('log.session', 'session')
 				.leftJoinAndSelect('log.character', 'character')
 				.where('log.status = :status', { status: 'block' })
 				.andWhere('log.createdAt > :windowStart', { windowStart })
-				.andWhere('log.userId IN (:...activeUserIds)', { activeUserIds })
+				.andWhere('log.userId IN (:...pageUserIds)', { pageUserIds })
 				.andWhere('log.reviewIgnoredAt IS NULL')
 				.orderBy('log.createdAt', 'DESC')
-				.take(500)
+				.addOrderBy('log.id', 'DESC')
 				.getMany();
 
 			// 按用户分组
@@ -157,16 +163,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				: [];
 			const sessionBanMap = new Map(sessions.map(s => [s.id, s.moderationBanned]));
 
-			// 过滤掉所有涉事会话均已被封禁的用户（已处理完毕的不再显示）
-			const pendingUserIds = activeUserIds.filter(userId => {
-				const userLogs = logsByUser.get(userId) ?? [];
-				// 没有任何未忽略的日志则不显示
-				if (userLogs.length === 0) return false;
-				return userLogs.some(l => l.sessionId == null || !(sessionBanMap.get(l.sessionId) ?? false));
-			});
-
-			return pendingUserIds.map(userId => {
-				const stat = userStats.find(s => s.userId === userId)!;
+			return userStats.map(stat => {
+				const userId = stat.userId;
 				const user = users.find(u => u.id === userId);
 				const profile = profileById.get(userId);
 				const userLogs = logsByUser.get(userId) ?? [];

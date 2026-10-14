@@ -10,12 +10,7 @@ import { Endpoint } from '@/server/api/endpoint-base.js';
 import { DI } from '@/di-symbols.js';
 import { AgentService } from '@/core/AgentService.js';
 import { UserEntityService } from '@/core/entities/UserEntityService.js';
-
-function previewBody(body: string, max = 200): string {
-	const t = body.replace(/\s+/g, ' ').trim();
-	if (t.length <= max) return t;
-	return `${t.slice(0, max)}…`;
-}
+import { agentPreviewText } from '@/core/agent-preview-text.js';
 
 export const meta = {
 	tags: ['agents'],
@@ -50,7 +45,14 @@ export const meta = {
 	},
 } as const;
 
-export const paramDef = { type: 'object', properties: {}, required: [] } as const;
+export const paramDef = {
+	type: 'object',
+	properties: {
+		limit: { type: 'integer', minimum: 1, maximum: 100, default: 100 },
+		untilId: { type: 'string', format: 'misskey:id', nullable: true },
+	},
+	required: [],
+} as const;
 
 @Injectable()
 export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-disable-line import/no-default-export
@@ -63,12 +65,27 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 	) {
 		super(meta, paramDef, async (ps, me) => {
 			this.agentService.assertAgentsEnabled();
-			const rows = await this.agentDialogueStylesRepository.find({
-				where: { userId: me.id },
-				order: { updatedAt: 'DESC' },
-				select: ['id', 'userId', 'name', 'body', 'summary', 'isPublished', 'reviewStatus', 'publishedVersion', 'reviewRejectReason', 'reviewRejectMessage', 'createdAt', 'updatedAt'],
-				take: 200,
-			});
+			const limit = ps.limit ?? 100;
+			const qb = this.agentDialogueStylesRepository.createQueryBuilder('s')
+				.where('s.userId = :userId', { userId: me.id })
+				.select(['s.id', 's.userId', 's.name', 's.body', 's.summary', 's.isPublished', 's.reviewStatus', 's.publishedVersion', 's.reviewRejectReason', 's.reviewRejectMessage', 's.createdAt', 's.updatedAt'])
+				.orderBy('s.updatedAt', 'DESC')
+				.addOrderBy('s.id', 'DESC')
+				.take(limit);
+			if (ps.untilId != null) {
+				// (updatedAt, id) 复合游标：updatedAt 相同的并列行按 id 决胜，避免翻页丢行/重行
+				const cursor = await this.agentDialogueStylesRepository.findOne({
+					where: { id: ps.untilId, userId: me.id },
+					select: ['id', 'updatedAt'],
+				});
+				if (cursor) {
+					qb.andWhere('(s.updatedAt < :cursorUpdatedAt OR (s.updatedAt = :cursorUpdatedAt AND s.id < :cursorId))', {
+						cursorUpdatedAt: cursor.updatedAt,
+						cursorId: cursor.id,
+					});
+				}
+			}
+			const rows = await qb.getMany();
 			const userLite = await this.userEntityService.pack(me, me, { schema: 'UserLite' });
 			return rows.map(r => ({
 				id: r.id,
@@ -78,7 +95,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				isMine: true,
 				subscribed: false,
 				userId: r.userId,
-				bodyPreview: previewBody(r.body),
+				bodyPreview: agentPreviewText(r.body, { maxLength: 200 }),
 				reviewStatus: r.reviewStatus,
 				publishedVersion: r.publishedVersion,
 				reviewRejectReason: r.reviewRejectReason,

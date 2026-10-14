@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import * as Redis from 'ioredis';
 import { Brackets } from 'typeorm';
 import { DI } from '@/di-symbols.js';
@@ -28,6 +28,7 @@ import { CustomEmojiService } from '@/core/CustomEmojiService.js';
 import { emojiRegex } from '@/misc/emoji-regex.js';
 import { NotificationService } from '@/core/NotificationService.js';
 import { ModerationLogService } from '@/core/ModerationLogService.js';
+import { reconcileUnread } from '@/misc/reconcile-unread.js';
 
 const MAX_ROOM_MEMBERS = 50;
 const MAX_REACTIONS_PER_MESSAGE = 100;
@@ -49,6 +50,8 @@ function normalizeEmojiString(x: string) {
 
 @Injectable()
 export class ChatService {
+	private readonly logger = new Logger(ChatService.name);
+
 	constructor(
 		@Inject(DI.config)
 		private config: Config,
@@ -199,17 +202,17 @@ export class ChatService {
 
 		// 相手を許可しておく
 		if (!iApprovedOther) {
-			this.chatApprovalsRepository.insertOne({
+			await this.chatApprovalsRepository.createQueryBuilder().insert().values({
 				id: this.idService.gen(),
 				userId: fromUser.id,
 				otherId: toUser.id,
-			});
+			}).orIgnore().execute();
 		}
 
 		const packedMessage = await this.chatEntityService.packMessageLiteFor1on1(inserted);
 
 		if (this.userEntityService.isLocalUser(toUser)) {
-			const redisPipeline = this.redisClient.pipeline();
+			const redisPipeline = this.redisClient.multi();
 			redisPipeline.set(`newUserChatMessageExists:${toUser.id}:${fromUser.id}`, message.id);
 			// 首条未读 id：仅在上一批未读被清空后（键不存在）写入，已读时随标记一起删除
 			redisPipeline.set(`firstUnreadUserChatMessage:${toUser.id}:${fromUser.id}`, message.id, 'NX');
@@ -230,14 +233,14 @@ export class ChatService {
 
 		// 3秒経っても既読にならなかったらイベント発行
 		if (this.userEntityService.isLocalUser(toUser)) {
-			setTimeout(async () => {
-				const marker = await this.redisClient.get(`newUserChatMessageExists:${toUser.id}:${fromUser.id}`);
-
-				if (marker == null) return; // 既読
-
-				const packedMessageForTo = await this.chatEntityService.packMessageDetailed(inserted, toUser);
-				this.globalEventService.publishMainStream(toUser.id, 'newChatMessage', packedMessageForTo);
-				this.pushNotificationService.pushNotification(toUser.id, 'newChatMessage', packedMessageForTo);
+			setTimeout(() => {
+				void (async () => {
+					const marker = await this.redisClient.get(`newUserChatMessageExists:${toUser.id}:${fromUser.id}`);
+					if (marker !== message.id) return;
+					const packedMessageForTo = await this.chatEntityService.packMessageDetailed(inserted, toUser);
+					this.globalEventService.publishMainStream(toUser.id, 'newChatMessage', packedMessageForTo);
+					await this.pushNotificationService.pushNotification(toUser.id, 'newChatMessage', packedMessageForTo);
+				})().catch(error => this.logger.error('Delayed direct message notification failed', error));
 			}, 3000);
 		}
 
@@ -303,7 +306,7 @@ export class ChatService {
 
 		const packedMessage = await this.chatEntityService.packMessageLiteForRoom(inserted);
 
-		const redisPipeline = this.redisClient.pipeline();
+		const redisPipeline = this.redisClient.multi();
 		for (const membership of membershipsOtherThanMe) {
 			if (membership.isMuted) continue;
 
@@ -317,25 +320,22 @@ export class ChatService {
 		this.globalEventService.publishChatRoomStream(toRoom.id, 'message', packedMessage);
 
 		// 3秒経っても既読にならなかったらイベント発行
-		setTimeout(async () => {
-			const redisPipeline = this.redisClient.pipeline();
-			for (const membership of membershipsOtherThanMe) {
-				redisPipeline.get(`newRoomChatMessageExists:${membership.userId}:${toRoom.id}`);
-			}
-			const markers = await redisPipeline.exec();
-			if (markers == null) throw new Error('redis error');
-
-			if (markers.every(marker => marker[1] == null)) return;
-
-			const packedMessageForTo = await this.chatEntityService.packMessageDetailed(inserted);
-
-			for (let i = 0; i < membershipsOtherThanMe.length; i++) {
-				const marker = markers[i][1];
-				if (marker == null) continue;
-
-				this.globalEventService.publishMainStream(membershipsOtherThanMe[i].userId, 'newChatMessage', packedMessageForTo);
-				this.pushNotificationService.pushNotification(membershipsOtherThanMe[i].userId, 'newChatMessage', packedMessageForTo);
-			}
+		setTimeout(() => {
+			void (async () => {
+				const redisPipeline = this.redisClient.pipeline();
+				for (const membership of membershipsOtherThanMe) {
+					redisPipeline.get(`newRoomChatMessageExists:${membership.userId}:${toRoom.id}`);
+				}
+				const markers = await redisPipeline.exec();
+				if (markers == null) throw new Error('redis error');
+				if (markers.every(marker => marker[1] !== message.id)) return;
+				const packedMessageForTo = await this.chatEntityService.packMessageDetailed(inserted);
+				await Promise.all(membershipsOtherThanMe.map(async (membership, i) => {
+					if (markers[i][1] !== message.id) return;
+					this.globalEventService.publishMainStream(membership.userId, 'newChatMessage', packedMessageForTo);
+					await this.pushNotificationService.pushNotification(membership.userId, 'newChatMessage', packedMessageForTo);
+				}));
+			})().catch(error => this.logger.error('Delayed room message notification failed', error));
 		}, 3000);
 
 		return packedMessage;
@@ -346,7 +346,7 @@ export class ChatService {
 		readerId: MiUser['id'],
 		senderId: MiUser['id'],
 	): Promise<void> {
-		const redisPipeline = this.redisClient.pipeline();
+		const redisPipeline = this.redisClient.multi();
 		redisPipeline.del(`newUserChatMessageExists:${readerId}:${senderId}`);
 		redisPipeline.del(`firstUnreadUserChatMessage:${readerId}:${senderId}`);
 		redisPipeline.del(`unreadUserChatMessagesCount:${readerId}:${senderId}`);
@@ -359,7 +359,7 @@ export class ChatService {
 		readerId: MiUser['id'],
 		roomId: MiChatRoom['id'],
 	): Promise<void> {
-		const redisPipeline = this.redisClient.pipeline();
+		const redisPipeline = this.redisClient.multi();
 		redisPipeline.del(`newRoomChatMessageExists:${readerId}:${roomId}`);
 		redisPipeline.del(`firstUnreadRoomChatMessage:${readerId}:${roomId}`);
 		redisPipeline.del(`unreadRoomChatMessagesCount:${readerId}:${roomId}`);
@@ -373,9 +373,9 @@ export class ChatService {
 	): Promise<void> {
 		// 汇总集合的成员即各会话标记，逐一清除（含未读计数/首条未读），避免 history 仍显示未读
 		const members = await this.redisClient.smembers(`newChatMessagesExists:${readerId}`);
-		const redisPipeline = this.redisClient.pipeline();
-		redisPipeline.del(`newChatMessagesExists:${readerId}`);
+		const redisPipeline = this.redisClient.multi();
 		for (const member of members) {
+			redisPipeline.srem(`newChatMessagesExists:${readerId}`, member);
 			const sep = member.indexOf(':');
 			const kind = member.slice(0, sep);
 			const id = member.slice(sep + 1);
@@ -445,15 +445,46 @@ export class ChatService {
 			]);
 
 			if (this.userEntityService.isLocalUser(fromUser)) this.globalEventService.publishChatUserStream(message.fromUserId, message.toUserId, 'deleted', message.id);
-			if (this.userEntityService.isLocalUser(toUser)) this.globalEventService.publishChatUserStream(message.toUserId, message.fromUserId, 'deleted', message.id);
+			if (this.userEntityService.isLocalUser(toUser)) {
+				await this.reconcileUnreadMessages(message.toUserId, 'user', message.fromUserId);
+				this.globalEventService.publishChatUserStream(message.toUserId, message.fromUserId, 'deleted', message.id);
+			}
 
 			if (this.userEntityService.isLocalUser(fromUser) && this.userEntityService.isRemoteUser(toUser)) {
 				//const activity = this.apRendererService.addContext(this.apRendererService.renderDelete(this.apRendererService.renderTombstone(`${this.config.url}/notes/${message.id}`), fromUser));
 				//this.queueService.deliver(fromUser, activity, toUser.inbox);
 			}
 		} else if (message.toRoomId) {
+			const [room, memberships] = await Promise.all([
+				this.chatRoomsRepository.findOneBy({ id: message.toRoomId }),
+				this.chatRoomMembershipsRepository.findBy({ roomId: message.toRoomId }),
+			]);
+			const readers = new Set(memberships.map(m => m.userId));
+			if (room) readers.add(room.ownerId);
+			await Promise.all([...readers].map(readerId => this.reconcileUnreadMessages(readerId, 'room', message.toRoomId!)));
 			this.globalEventService.publishChatRoomStream(message.toRoomId, 'deleted', message.id);
 		}
+	}
+
+	private async reconcileUnreadMessages(readerId: string, kind: 'user' | 'room', conversationId: string): Promise<void> {
+		const prefix = kind === 'user' ? 'User' : 'Room';
+		await reconcileUnread(this.redisClient, [
+			`new${prefix}ChatMessageExists:${readerId}:${conversationId}`,
+			`firstUnread${prefix}ChatMessage:${readerId}:${conversationId}`,
+			`unread${prefix}ChatMessagesCount:${readerId}:${conversationId}`,
+			`newChatMessagesExists:${readerId}`,
+		], `${kind}:${conversationId}`, async (first, last) => {
+			const query = this.chatMessagesRepository.createQueryBuilder('message')
+				.select('COUNT(*)', 'count').addSelect('MIN(message.id)', 'first').addSelect('MAX(message.id)', 'last')
+				.where('message.id >= :first AND message.id <= :last', { first, last });
+			if (kind === 'user') {
+				query.andWhere('message.toUserId = :readerId AND message.fromUserId = :conversationId', { readerId, conversationId });
+			} else {
+				query.andWhere('message.toRoomId = :conversationId AND message.fromUserId <> :readerId', { readerId, conversationId });
+			}
+			const result = await query.getRawOne<{ count: string; first: string | null; last: string | null }>();
+			return { count: Number(result?.count ?? 0), first: result?.first ?? null, last: result?.last ?? null };
+		});
 	}
 
 	@bindThis
@@ -942,7 +973,7 @@ export class ChatService {
 		await this.chatRoomMembershipsRepository.delete(membership.id);
 
 		// 未読フラグを消す (「既読にする」というわけでもないのでreadメソッドは使わないでおく)
-		const redisPipeline = this.redisClient.pipeline();
+		const redisPipeline = this.redisClient.multi();
 		redisPipeline.del(`newRoomChatMessageExists:${userId}:${roomId}`);
 		redisPipeline.del(`firstUnreadRoomChatMessage:${userId}:${roomId}`);
 		redisPipeline.del(`unreadRoomChatMessagesCount:${userId}:${roomId}`);
@@ -989,7 +1020,7 @@ export class ChatService {
 		const membership = await this.chatRoomMembershipsRepository.findOneByOrFail({ roomId, userId });
 		await this.chatRoomMembershipsRepository.delete(membership.id);
 
-		const redisPipeline = this.redisClient.pipeline();
+		const redisPipeline = this.redisClient.multi();
 		redisPipeline.del(`newRoomChatMessageExists:${userId}:${roomId}`);
 		redisPipeline.del(`firstUnreadRoomChatMessage:${userId}:${roomId}`);
 		redisPipeline.del(`unreadRoomChatMessagesCount:${userId}:${roomId}`);
@@ -1186,9 +1217,10 @@ export class ChatService {
 
 		await this.chatMessagesRepository.createQueryBuilder().update()
 			.set({
-				reactions: () => `array_append("reactions", '${userId}/${reaction}')`,
+				reactions: () => 'array_append("reactions", :reaction)',
 			})
 			.where('id = :id', { id: message.id })
+			.setParameter('reaction', `${userId}/${reaction}`)
 			.execute();
 
 		if (room) {
@@ -1230,9 +1262,10 @@ export class ChatService {
 
 		await this.chatMessagesRepository.createQueryBuilder().update()
 			.set({
-				reactions: () => `array_remove("reactions", '${userId}/${reaction}')`,
+				reactions: () => 'array_remove("reactions", :reaction)',
 			})
 			.where('id = :id', { id: message.id })
+			.setParameter('reaction', `${userId}/${reaction}`)
 			.execute();
 
 		// TODO: 実際に削除が行われたときのみイベントを発行する

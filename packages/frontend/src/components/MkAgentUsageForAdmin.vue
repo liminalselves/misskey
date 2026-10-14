@@ -98,7 +98,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 						<span :class="$style.num">{{ i18n.ts._agents.myStatsDuration }}</span>
 						<span :class="$style.num">{{ i18n.ts._agents.myStatsCost }}</span>
 					</div>
-					<div v-for="log in data.recentLogs" :key="log.id" :class="[$style.row, $style.rowData, $style.logCols]">
+					<div v-for="log in data.recentLogs" :key="log.id" :class="[$style.row, $style.logCols]">
 						<span :class="$style.name"><MkTime :time="log.requestedAt" mode="detail"/></span>
 						<span :class="$style.name">{{ usageKindLabel(log.usageKind) }}</span>
 						<span :class="$style.name" :title="log.modelName ?? log.modelApiName ?? undefined">

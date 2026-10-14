@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
+import { jest } from '@jest/globals';
 import { AgentStickerService } from '@/core/AgentStickerService.js';
 import { normalizeCharacterStickerList, AGENT_STICKER_DESCRIPTION_MAX } from '@/core/agent-sticker-utils.js';
 import type { AgentStickerReplyContext } from '@/core/AgentStickerService.js';
@@ -11,7 +12,8 @@ import type { AgentStickerReplyContext } from '@/core/AgentStickerService.js';
 
 describe('AgentStickerService prompt/reply helpers', () => {
 	// enforceReplyLimits / convertUserTextForLlm 不触碰 DI，可安全用空依赖构造
-	const service = new AgentStickerService(undefined as never, undefined as never, undefined as never, undefined as never, undefined as never, undefined as never, undefined as never, undefined as never, undefined as never);
+	// （构造参数 10 个：config、redis、emojis、driveFiles、userProfiles、vision、usage、customEmoji、httpRequest、driveFileEntity）
+	const service = new AgentStickerService(undefined as never, undefined as never, undefined as never, undefined as never, undefined as never, undefined as never, undefined as never, undefined as never, undefined as never, undefined as never);
 
 	function ctx(partial: Partial<AgentStickerReplyContext> = {}): AgentStickerReplyContext {
 		return {
@@ -79,6 +81,37 @@ describe('AgentStickerService prompt/reply helpers', () => {
 		test('empty emoji list keeps text as-is', () => {
 			expect(service.convertUserTextForLlm(':happy:', [])).toBe(':happy:');
 		});
+	});
+});
+
+describe('AgentStickerService batch ownership', () => {
+	test('stops before another paid call when the batch loses its lock', async () => {
+		const evalScript = jest.fn<(script: string, keys: number, ...args: (string | number)[]) => Promise<number>>().mockResolvedValueOnce(1).mockResolvedValue(0);
+		const update = jest.fn<() => Promise<null>>().mockResolvedValue(null);
+		const generate = jest.fn<() => Promise<string>>().mockResolvedValue('description');
+		const service = new AgentStickerService(undefined as never, { eval: evalScript } as never, undefined as never, undefined as never, undefined as never, undefined as never, undefined as never, { update } as never, undefined as never, undefined as never);
+		Object.defineProperty(service, 'generateDescriptionForEmoji', { value: generate });
+		const runner = service as unknown as {
+			runBatchFill(instance: unknown, user: unknown, targets: { id: string }[], token: string): Promise<void>;
+		};
+		await runner.runBatchFill({}, {}, [{ id: 'first' }, { id: 'second' }], 'expired-owner');
+		expect(generate).toHaveBeenCalledTimes(1);
+		expect(update).toHaveBeenCalledTimes(1);
+		expect(evalScript).toHaveBeenCalledTimes(3);
+		for (const call of evalScript.mock.calls) {
+			expect(call[0]).toContain("if redis.call('GET', KEYS[1]) ~= ARGV[1] then return 0 end");
+			expect(call[4]).toBe('expired-owner');
+		}
+		expect(evalScript.mock.calls[2][5]).toBe('1');
+	});
+
+	test('does not report old progress as a running successor batch', async () => {
+		const redis = {
+			hgetall: jest.fn<() => Promise<Record<string, string>>>().mockResolvedValue({ token: 'old', running: '1', total: '8', done: '3', failed: '0' }),
+			get: jest.fn<() => Promise<string>>().mockResolvedValue('new'),
+		};
+		const service = new AgentStickerService(undefined as never, redis as never, undefined as never, undefined as never, undefined as never, undefined as never, undefined as never, undefined as never, undefined as never, undefined as never);
+		expect(await service.getBatchFillStatus()).toEqual({ running: false, total: 8, done: 3, failed: 0 });
 	});
 });
 

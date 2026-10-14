@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Not, IsNull } from 'typeorm';
 import type { AccessTokensRepository, FollowingsRepository, FollowRequestsRepository, UsersRepository } from '@/models/_.js';
 import type { MiUser } from '@/models/User.js';
@@ -20,6 +20,8 @@ import { generateNativeUserToken } from '@/misc/token.js';
 
 @Injectable()
 export class UserSuspendService {
+	private readonly logger = new Logger(UserSuspendService.name);
+
 	constructor(
 		@Inject(DI.usersRepository)
 		private usersRepository: UsersRepository,
@@ -66,7 +68,7 @@ export class UserSuspendService {
 			this.globalEventService.publishMainStream(user.id, 'myTokenRegenerated');
 		}
 
-		this.moderationLogService.log(moderator, 'suspend', {
+		await this.moderationLogService.logSafely(moderator, 'suspend', {
 			userId: user.id,
 			userUsername: user.username,
 			userHost: user.host,
@@ -74,9 +76,9 @@ export class UserSuspendService {
 			reason,
 		});
 
-		(async () => {
-			await this.postSuspend(user).catch(_ => {});
-			await this.unFollowAll(user).catch(_ => {});
+		void (async () => {
+			await this.postSuspend(user).catch(error => this.logger.error('Post-suspension cleanup failed', error));
+			await this.unFollowAll(user).catch(error => this.logger.error('Suspension unfollow cleanup failed', error));
 		})();
 	}
 
@@ -111,7 +113,7 @@ export class UserSuspendService {
 			.getMany();
 
 		for (const u of users) {
-			await this.unsuspendDueToScheduledExpiry(u).catch(_ => {});
+			await this.unsuspendDueToScheduledExpiry(u).catch(error => this.logger.error('Scheduled unsuspension failed', error));
 		}
 	}
 
@@ -127,13 +129,13 @@ export class UserSuspendService {
 		});
 
 		if (opts.logKind === 'moderator' && opts.moderator) {
-			this.moderationLogService.log(opts.moderator, 'unsuspend', {
+			await this.moderationLogService.logSafely(opts.moderator, 'unsuspend', {
 				userId: user.id,
 				userUsername: user.username,
 				userHost: user.host,
 			});
 		} else if (opts.logKind === 'scheduleExpired' && opts.moderator) {
-			this.moderationLogService.log(opts.moderator, 'unsuspend', {
+			await this.moderationLogService.logSafely(opts.moderator, 'unsuspend', {
 				userId: user.id,
 				userUsername: user.username,
 				userHost: user.host,
@@ -141,21 +143,17 @@ export class UserSuspendService {
 			});
 		}
 
-		(async () => {
-			await this.postUnsuspend(user).catch(_ => {});
-		})();
+		void this.postUnsuspend(user).catch(error => this.logger.error('Post-unsuspension delivery failed', error));
 	}
 
 	@bindThis
 	private async postSuspend(user: { id: MiUser['id']; host: MiUser['host'] }): Promise<void> {
 		this.globalEventService.publishInternalEvent('userChangeSuspendedState', { id: user.id, isSuspended: true });
 
-		this.followRequestsRepository.delete({
-			followeeId: user.id,
-		});
-		this.followRequestsRepository.delete({
-			followerId: user.id,
-		});
+		await Promise.all([
+			this.followRequestsRepository.delete({ followeeId: user.id }),
+			this.followRequestsRepository.delete({ followerId: user.id }),
+		]);
 
 		if (this.userEntityService.isLocalUser(user)) {
 			// 知り得る全SharedInboxにDelete配信
@@ -178,7 +176,7 @@ export class UserSuspendService {
 			}
 
 			for (const inbox of queue) {
-				this.queueService.deliver(user, content, inbox, true);
+				await this.queueService.deliver(user, content, inbox, true);
 			}
 		}
 	}
@@ -208,7 +206,7 @@ export class UserSuspendService {
 			}
 
 			for (const inbox of queue) {
-				this.queueService.deliver(user as any, content, inbox, true);
+				await this.queueService.deliver(user, content, inbox, true);
 			}
 		}
 	}
@@ -232,6 +230,6 @@ export class UserSuspendService {
 				});
 			}
 		}
-		this.queueService.createUnfollowJob(jobs);
+		await this.queueService.createUnfollowJob(jobs);
 	}
 }

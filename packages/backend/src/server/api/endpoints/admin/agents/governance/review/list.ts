@@ -80,9 +80,10 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 						'c.greeting', 'c.exampleDialogue', 'c.forbiddenBehavior', 'c.avatarFileId', 'c.publishedVersion',
 						'c.worldbook', 'c.reviewStatus', 'c.isPublished', 'c.moderationBanned', 'c.promptOpenSourced',
 						'c.reviewRejectReason', 'c.reviewRejectMessage', 'c.reviewInternalNote',
-						'c.createdAt', 'c.updatedAt',
-					])
+					'c.createdAt', 'c.updatedAt',
+				])
 					.orderBy('c.updatedAt', orderDir)
+					.addOrderBy('c.id', orderDir)
 					.take(limit);
 				if (status !== 'all') qb.andWhere('c.reviewStatus = :status', { status });
 				if (userId) qb.andWhere('c.userId = :userId', { userId });
@@ -110,6 +111,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 						's.createdAt', 's.updatedAt',
 					])
 					.orderBy('s.updatedAt', orderDir)
+					.addOrderBy('s.id', orderDir)
 					.take(limit);
 				if (status !== 'all') qb.andWhere('s.reviewStatus = :status', { status });
 				if (userId) qb.andWhere('s.userId = :userId', { userId });
@@ -136,12 +138,18 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			const avatarIds = [...new Set(characters.map(c => c.avatarFileId).filter((id): id is string => id != null))];
 			const avatarMap = avatarIds.length > 0 ? await this.driveFileEntityService.packManyByIdsMap(avatarIds, {}) : new Map();
 
+			// 混合两表排序：updatedAt 主序 + id 决胜，方向与 DB 查询一致（pending 最旧优先，其余最新优先）
 			return [
 				...characters.map(c => packCharacterGovernanceRow(this.agentService, c, userById.get(c.userId) ?? null, c.avatarFileId ? avatarMap.get(c.avatarFileId) ?? null : null)),
 				...styles.map(s => packStyleGovernanceRow(s, userById.get(s.userId) ?? null)),
-			].sort((a, b) => status === 'pending'
-				? a.updatedAt.localeCompare(b.updatedAt)
-				: b.updatedAt.localeCompare(a.updatedAt)).slice(0, limit);
+			].sort((a, b) => {
+				if (a.updatedAt !== b.updatedAt) {
+					return status === 'pending'
+						? a.updatedAt.localeCompare(b.updatedAt)
+						: b.updatedAt.localeCompare(a.updatedAt);
+				}
+				return status === 'pending' ? a.id.localeCompare(b.id) : b.id.localeCompare(a.id);
+			}).slice(0, limit);
 		});
 	}
 }

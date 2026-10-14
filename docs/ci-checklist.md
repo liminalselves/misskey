@@ -7,6 +7,7 @@
 - 使用 [`.node-version`](../.node-version) 指定的 Node.js；后端运行时改动还要考虑 [最低版本](../.github/min.node-version)。pnpm 版本以 [`package.json`](../package.json) 的 `packageManager` 为准。
 - 依赖或锁文件改动后，安装验收使用 `pnpm install --frozen-lockfile`，不要靠非冻结安装掩盖不一致。安装新依赖仍需单独授权。
 - 所有命令从项目根目录执行。结束时运行 `git diff --check`，检查实际 diff，排除临时文件和无关生成结果。
+- CI 的 lint、typecheck 和 locale 类型步骤不再允许 `continue-on-error`；本地选取实际受影响文件和测试，不能将未匹配的测试名或 SWC 构建当成类型验收。2026-10-10 全量审查的处置与本地验证见 [代码质量修复记录](code-quality-repair.md)。
 
 ## 前端改动
 
@@ -69,7 +70,6 @@ Dockle 会按环境变量名匹配疑似凭据。`MISSKEY_MIGRATION_CREATE_INDEX
 
 推送后检查每个 job 和失败步骤，不只看工作流总颜色：
 
-- [`lint.yml`](../.github/workflows/lint.yml) 的 lint/typecheck 允许 `continue-on-error`，总工作流成功不代表各检查通过。
 - 一个矩阵任务失败可能取消另一个任务；`cancelled` 不自动代表第二种代码问题。
 - amd64/arm64 都成功、有 digest 工件，但合并任务没有启动且页面显示 `Internal server error`，应按 GitHub 服务故障处理。此次镜像发布属于这种情况，不应无证据修改 Dockerfile 或缓存设置。
 - Action 的 Node.js 弃用通知、runner 系统升级通知不等于当前失败根因。不要为消除通知混入无关依赖升级。

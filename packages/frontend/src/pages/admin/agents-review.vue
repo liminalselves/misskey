@@ -726,13 +726,16 @@ async function resolveModelReport(row: ModelReportRow) {
 	}
 }
 
-// 复审列表 - 以用户为中心
+// 复审列表 - 以用户为中心（offset 真实分页：与 useGovernancePagination 相同的 reset 语义——
+// 在途请求期间收到 reset 不丢弃、按世代作废旧响应，避免旧筛选结果落地或 reset 被吞）
 const reviewUserFilter = ref('');
 const reviewListLoading = ref(false);
 const reviewListHasMore = ref(false);
 const reviewUserCards = ref<ReviewUserCard[]>([]);
 const expandedReviewUsers = reactive(new Set<string>());
 const reviewOffset = ref(0);
+let reviewListEpoch = 0;
+let reviewListQueuedReset = false;
 
 type ReviewUserCard = {
 	userId: string;
@@ -761,28 +764,49 @@ type ReviewLogEntry = {
 };
 
 async function loadReviewListItems(reset: boolean) {
-	if (reviewListLoading.value) return;
-	reviewListLoading.value = true;
+	if (reviewListLoading.value) {
+		if (reset) {
+			reviewListEpoch++;
+			reviewListQueuedReset = true;
+		}
+		return;
+	}
 	if (reset) {
+		reviewListEpoch++;
 		reviewUserCards.value = [];
 		reviewOffset.value = 0;
 		reviewListHasMore.value = false;
 		expandedReviewUsers.clear();
 	}
+	reviewListLoading.value = true;
+	const myEpoch = reviewListEpoch;
 	try {
 		const rows = await api<ReviewUserCard[]>('admin/agents/governance/external-audit/review-list', {
 			userId: reviewUserFilter.value.trim() || null,
 			limit: PAGE_SIZE + 1,
 			offset: reviewOffset.value,
 		});
-		reviewListHasMore.value = rows.length > PAGE_SIZE;
-		const pageRows = rows.slice(0, PAGE_SIZE);
+		if (myEpoch !== reviewListEpoch) return; // 已被后续 reset 作废的旧响应
+		const existingIds = new Set(reviewUserCards.value.map(card => card.userId));
+		const pageRows = rows.slice(0, PAGE_SIZE).filter(card => {
+			if (existingIds.has(card.userId)) return false;
+			existingIds.add(card.userId);
+			return true;
+		});
+		// 整页重复（offset 未推进）时停止翻页防循环；只有出现新条目才允许继续
+		reviewListHasMore.value = rows.length > PAGE_SIZE && pageRows.length > 0;
 		reviewUserCards.value = reset ? pageRows : [...reviewUserCards.value, ...pageRows];
+		// offset 按去重后实际落库条数推进，与列表内容保持同步
 		reviewOffset.value += pageRows.length;
 	} catch (err) {
+		if (myEpoch !== reviewListEpoch) return;
 		os.alert({ type: 'error', text: formatApiError(err) });
 	} finally {
 		reviewListLoading.value = false;
+		if (reviewListQueuedReset) {
+			reviewListQueuedReset = false;
+			void loadReviewListItems(true);
+		}
 	}
 }
 

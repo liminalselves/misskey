@@ -308,20 +308,36 @@ export class AgentProactiveMessageService {
 			}
 			// 主动消息仅在对 timeAwarenessEnabled 已前置校验（processScheduled / armRandomAfterVisibleAssistant）的会话触发，历史一并注入发送时间
 			const { messages } = await this.agentService.loadRecentMessagesForContextWithMeta(session.id, 48_000, 500, { timeAwarenessEnabled: true });
-			const regexRules = this.agentService.normalizeRegexRules(character.regexRules);
-			const history = messages
+			const historyRows = messages
 				.filter(message => message.role === 'user' || message.role === 'assistant')
-				.filter(message => message.id !== internalMessageId)
-				.map(message => {
-					let content = this.agentService.applyRegexRules(message.content, message.role as 'user' | 'assistant', 'aiInvisible', regexRules);
-					// 主动消息无桌宠请求上下文：历史中的表演指令一律剥离，避免诱导输出
-					if (message.role === 'assistant') content = stripPerformanceCues(content);
-					return {
-						role: message.role as 'user' | 'assistant',
-						content: message.role === 'user' ? this.agentStickerService.convertUserTextForLlm(content, stickerBlocks.emojiList) : content,
-					};
-				});
-			const filteredTrigger = this.agentService.applyRegexRules(trigger, 'user', 'aiInvisible', regexRules);
+				.filter(message => message.id !== internalMessageId);
+			const regexRules = this.agentService.normalizeRegexRules(character.regexRules);
+			// 单次有界 worker 批量：触发文本与全部可见历史只进一次 regex 过滤；
+			// 超时/失败以显式错误码终止本轮主动消息，绝不回到主线程逐条无界替换。
+			let regexFiltered: string[];
+			try {
+				regexFiltered = await this.agentService.applyRegexRulesBatch(
+					regexRules,
+					'aiInvisible',
+					[
+						{ role: 'user', text: trigger },
+						...historyRows.map(message => ({ role: message.role as 'user' | 'assistant', text: message.content })),
+					],
+				);
+			} catch {
+				throw new ProactiveAttemptError('PROACTIVE_REGEX_FILTER_FAILED');
+			}
+			const filteredTrigger = regexFiltered[0];
+			const filteredHistoryTexts = regexFiltered.slice(1);
+			const history = historyRows.map((message, index) => {
+				let content = filteredHistoryTexts[index];
+				// 主动消息无桌宠请求上下文：历史中的表演指令一律剥离，避免诱导输出
+				if (message.role === 'assistant') content = stripPerformanceCues(content);
+				return {
+					role: message.role as 'user' | 'assistant',
+					content: message.role === 'user' ? this.agentStickerService.convertUserTextForLlm(content, stickerBlocks.emojiList) : content,
+				};
+			});
 			const selectedWorldbook = this.agentService.selectWorldbookEntriesForPrompt(character, filteredTrigger);
 			const scheduledTrigger = await this.agentProactiveScheduleService.prependScheduleContext(filteredTrigger, session);
 			const userText = this.agentService.wrapLatestUserTextWithStyleDirective(

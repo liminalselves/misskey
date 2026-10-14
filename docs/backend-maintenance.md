@@ -1,4 +1,4 @@
-# 后端定时清理与活跃时间写入
+# 后端维护与数据一致性
 
 ## 智能体空会话清理
 
@@ -19,6 +19,46 @@
 每条 WebSocket 仍保持 30 秒心跳。数据库活跃时间写入通过现有 Redis 的 `SET PX 30000 NX` 按用户合并，同一用户的多页面、多设备和多个 worker 共用一个写入窗口。写入失败时仅释放自己的随机 token，不删除已过期后被其他 worker 取得的新 token；下一次调用可重试。
 
 Redis 在线状态、连接计数、离线推送判断和用户休眠唤醒逻辑保持原有职责。不能把数据库写入节流直接套到在线心跳上。
+
+## 表情包批量描述任务状态
+
+实现：`packages/backend/src/core/AgentStickerService.ts`（启动/轮询端点：`admin/emoji/generate-agent-descriptions`、`admin/emoji/agent-description-status`）。
+
+运行状态存 Redis（`agentStickerBatchFill:lock` / `agentStickerBatchFill:state`），供不同 HTTP worker 共享。锁使用随机 token，以 `SET NX EX 300` 取得；每项开始前经 Lua 核对归属、发布进度并续期，失去锁或 Redis 报错时不开始下一项。释放和最终状态写入也核对 token，过期的旧 runner 不能覆盖新任务。已在途的模型调用不会因失去锁自动取消。state 保存 total/done/failed，结束后保留 1 小时；running 需状态 token 与锁 token 一致。崩溃且不再续期时，锁最多 5 分钟过期。
+
+## 会话写入与资源删除
+
+`agents/messages/send` 用条件 UPDATE 原子取得回复占位；`agents/_with-agent-lock.ts` 的 `withWritableAgentSession` 供导入、回滚、编辑、删除消息和删除会话使用，在短事务内锁定会话、检查属主并重检 pending。LLM、外审和记忆检索不在事务内等待。更新只写本次修改的列，不保存旧的整行会话快照。`sessions/show` 的自愈预算见 [外审文档](agent-external-audit.md)。
+
+角色和文风的 session 外键是 CASCADE；删除资源必须在既有资源锁内检查任何会话引用，存在引用时拒绝删除并提示下架。此限制包括作者自己的会话，不是只保护他人的会话。
+
+## 压缩便签与消息历史
+
+`AgentCompressionMemoryService` 在 LLM 返回后取得会话行锁，重读源消息并核对条数、格式化内容 SHA256 和时间感知设置；历史已变更或会话已删除则丢弃旧结果。失败摘要的重试只更新仍为 failed、非用户改写且同指纹的行。状态、文本和排序使用窄列更新，不复活已删除的便签。
+
+编辑、删除和回滚消息经 `messages/_invalidate-compression.ts` 将自动摘要标记 stale 并清除 sourceFingerprint；用户改写摘要是独立内容，不随缓存失效删除。替换历史导入删除全部旧便签，因为消息边界已被替换。
+
+## 未读状态
+
+`ChatService`、`AgentMessageNotifyService` 使用 Redis MULTI 同步 marker、firstUnread、count 与聚合集合。read-all 只移除本次读取的集合成员，不能删除整个集合，以免抹掉并发的新对话。
+
+删消息后通过 `misc/reconcile-unread.ts` 重查仍存在的未读消息，用 Lua 对三个 Redis 快照值做 compare-and-set；被新消息或已读操作改变则重试。缺少旧数据的 first/count 时保留未知计数，不虚构已读状态。会话删除清除该会话三键及集合成员。前端先抓未读快照再发 read，审查模式不发 read；前端协议仍以项目规范的未读章节为准。
+
+## 额度与签到
+
+兑换码认领与余额入账、奖励流水与入账、模型 pending 流水终结与扣费分别在同一数据库事务。模型流水只在事务提交后修改调用方对象；事务失败或重复结算补偿本次免费额度，Redis INCR 与 TTL 经 Lua 原子执行。保留允许负余额的既有规则；Redis 与 PostgreSQL 之间仍不是分布式事务，进程崩溃窗口不能由离线单测消除。
+
+普通签到、补签和奖励流水同事务；同一用户补签通过 user_profile 行锁序列化月度次数检查。管理员撤销先用 DELETE RETURNING 取得实际撤销的签到，再在同事务撤销奖励与原流水，避免按旧查询结果重复扣减。日期必须能往返为同一个有效公历日期，不能让 `2026-02-30` 自动归一为三月。
+
+`agents/_billing-logs.ts` 在 SQL 内 UNION 用量和兑换，统一筛选、稳定排序、计数和分页；PostgreSQL numeric 的原始结果显式转 number。签到治理汇总保持全历史口径，重聚合缓存 5 分钟；因此写入后汇总可能延迟，明细不借此删掉历史记录。
+
+## 正则与上游响应
+
+角色正则保留 JavaScript `gu` 语义，在 Node worker_threads 或浏览器 Worker 中按批次编译一次。后端默认 2 秒，超时抛明确 API 错误；浏览器默认 1 秒，失败回退原文。浏览器过滤未完成时不先闪出被隐藏文本，流式消息可保留上一版已过滤文本。Worker 终止会结算待处理调用，下一批重建；服务释放不得遗留 pending promise。
+
+上游请求复用 `assertSafeLlmHttpsUrl`、`readBodyWithLimit` 并禁止重定向。外审响应预算见 [外审文档](agent-external-audit.md)。生成图片在大小、MIME 检测后经 sharp 实际解码，不能仅靠 base64 字符集或 metadata 认定有效；当前不声称检查了动画全部帧。
+
+图片封禁两张数据库表同事务更新，S3 ACL 在事务外改动并在失败时补偿，补偿失败记日志。它不构成跨存储事务，也未串行化所有并发 ACL 操作。
 
 ## 验证与部署边界
 

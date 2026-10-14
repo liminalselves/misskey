@@ -20,6 +20,19 @@ spec:
           env:
             - name: NODE_ENV
               value: {{ .Values.environment }}
+            # DB credentials come from the Secret, not the ConfigMap (config.ts
+            # falls back to DATABASE_USER / DATABASE_PASSWORD when db.user/db.pass
+            # are absent in default.yml)
+            - name: DATABASE_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "misskey.fullname" . }}-db-credentials
+                  key: user
+            - name: DATABASE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "misskey.fullname" . }}-db-credentials
+                  key: password
           volumeMounts:
             - name: {{ include "misskey.fullname" . }}-configuration
               mountPath: /misskey/.config
@@ -30,9 +43,15 @@ spec:
           image: postgres:18-alpine
           env:
             - name: POSTGRES_USER
-              value: "example-misskey-user"
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "misskey.fullname" . }}-db-credentials
+                  key: user
             - name: POSTGRES_PASSWORD
-              value: "example-misskey-pass"
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "misskey.fullname" . }}-db-credentials
+                  key: password
             - name: POSTGRES_DB
               value: "misskey"
           ports:

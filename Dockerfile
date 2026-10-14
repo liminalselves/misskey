@@ -53,17 +53,25 @@ RUN mkdir -p /tmp/vertexai_tokenizer_model \
 # 预置 GLM / DeepSeek 真分词器词表（与上方 Gemini 词表同思路），供 AgentTokenService 精确计数、生产离线可用。
 # 运行时若词表缺失会自动回退 cl100k 兼容近似（approx），故此处获取/转换失败不阻断构建。
 # 国内构建可以 --build-arg HF_ENDPOINT=https://hf-mirror.com 覆盖下载源。
+# 词表 URL 固定到官方仓库的具体 commit，并在下载后校验 sha256，防止上游分支移动或镜像被篡改悄悄改变词表；
+# 换用新型号词表仓库时须同步更新 *_REVISION 与 *_SHA256 这三个 build-arg（可通过
+# https://huggingface.co/api/models/<repo>/revision/main 查询当前 commit 后下载计算 sha256）。
 # 同系列词表同源（GLM 全系 tiktoken 格式 ~151k 词表；DeepSeek 全系 byte-level BPE 129280 词表），
 # 新型号（如 GLM-5.x / DeepSeek-V4）若确认词表格式不变，可用 build-arg 切换词表仓库：
-#   --build-arg GLM_TOKENIZER_REPO=THUDM/glm-5.5 --build-arg DEEPSEEK_TOKENIZER_REPO=deepseek-ai/DeepSeek-V4
+#   --build-arg GLM_TOKENIZER_REPO=THUDM/glm-5.5 --build-arg GLM_TOKENIZER_REVISION=<commit> --build-arg GLM_TOKENIZER_SHA256=<sha256>
+#   --build-arg DEEPSEEK_TOKENIZER_REPO=deepseek-ai/DeepSeek-V4 --build-arg DEEPSEEK_TOKENIZER_REVISION=<commit> --build-arg DEEPSEEK_TOKENIZER_SHA256=<sha256>
 # - GLM 的 tokenizer.model 原生即 tiktoken 格式（每行 "base64 rank"），直接用作 glm.tiktoken；
 # - DeepSeek 的 tokenizer.json 为 HF BPE，用随附脚本转换为 deepseek.tiktoken + deepseek.json。
 ARG HF_ENDPOINT=https://huggingface.co
 ARG GLM_TOKENIZER_REPO=THUDM/glm-4-9b-chat
+ARG GLM_TOKENIZER_REVISION=bd8234fe5e0c09c48637a92abb0c797cb5fa0e73
+ARG GLM_TOKENIZER_SHA256=5a493598071550244b2ee7f26118f3edec2150b9dfa967929a99052ac83fe716
 ARG DEEPSEEK_TOKENIZER_REPO=deepseek-ai/DeepSeek-V3
+ARG DEEPSEEK_TOKENIZER_REVISION=e815299b0bcbac849fa540c768ef21845365c9eb
+ARG DEEPSEEK_TOKENIZER_SHA256=621ac2e32d0dba658404412318818aaa8ce8cda492e59830109d8da6b517fb41
 RUN mkdir -p /tmp/agent_tokenizers \
-	&& node -e "(async()=>{const fs=require('fs');try{const r=await fetch('${HF_ENDPOINT}/${GLM_TOKENIZER_REPO}/resolve/main/tokenizer.model');if(!r.ok)throw new Error('HTTP '+r.status);const t=await r.text();const n=t.split('\n').filter(l=>l.trim());if(n.length<100000)throw new Error('glm vocab too small: '+n.length);if(!/^[A-Za-z0-9+/=]+ \d+\s*$/.test(n[0]))throw new Error('glm vocab bad format');fs.writeFileSync('/tmp/agent_tokenizers/glm.tiktoken',t);console.log('GLM tokenizer vocab pre-provisioned ('+n.length+' tokens)')}catch(e){console.warn('WARN: GLM vocab skipped (runtime falls back to cl100k approx): '+e.message)}})()" \
-	&& node -e "(async()=>{const fs=require('fs');try{const r=await fetch('${HF_ENDPOINT}/${DEEPSEEK_TOKENIZER_REPO}/resolve/main/tokenizer.json');if(!r.ok)throw new Error('HTTP '+r.status);fs.writeFileSync('/tmp/agent_tokenizers/deepseek_src.json',Buffer.from(await r.arrayBuffer()));console.log('DeepSeek tokenizer.json downloaded')}catch(e){console.warn('WARN: DeepSeek vocab download skipped (runtime falls back to cl100k approx): '+e.message)}})()" \
+	&& node -e "(async()=>{const fs=require('fs');const crypto=require('crypto');try{const r=await fetch('${HF_ENDPOINT}/${GLM_TOKENIZER_REPO}/resolve/${GLM_TOKENIZER_REVISION}/tokenizer.model');if(!r.ok)throw new Error('HTTP '+r.status);const buf=Buffer.from(await r.arrayBuffer());const h=crypto.createHash('sha256').update(buf).digest('hex');if(h!=='${GLM_TOKENIZER_SHA256}')throw new Error('glm vocab sha256 mismatch: '+h);const t=buf.toString('utf8');const n=t.split('\n').filter(l=>l.trim());if(n.length<100000)throw new Error('glm vocab too small: '+n.length);if(!/^[A-Za-z0-9+/=]+ \d+\s*$/.test(n[0]))throw new Error('glm vocab bad format');fs.writeFileSync('/tmp/agent_tokenizers/glm.tiktoken',t);console.log('GLM tokenizer vocab pre-provisioned ('+n.length+' tokens)')}catch(e){console.warn('WARN: GLM vocab skipped (runtime falls back to cl100k approx): '+e.message)}})()" \
+	&& node -e "(async()=>{const fs=require('fs');const crypto=require('crypto');try{const r=await fetch('${HF_ENDPOINT}/${DEEPSEEK_TOKENIZER_REPO}/resolve/${DEEPSEEK_TOKENIZER_REVISION}/tokenizer.json');if(!r.ok)throw new Error('HTTP '+r.status);const buf=Buffer.from(await r.arrayBuffer());const h=crypto.createHash('sha256').update(buf).digest('hex');if(h!=='${DEEPSEEK_TOKENIZER_SHA256}')throw new Error('deepseek vocab sha256 mismatch: '+h);fs.writeFileSync('/tmp/agent_tokenizers/deepseek_src.json',buf);console.log('DeepSeek tokenizer.json downloaded')}catch(e){console.warn('WARN: DeepSeek vocab download skipped (runtime falls back to cl100k approx): '+e.message)}})()" \
 	&& if [ -f /tmp/agent_tokenizers/deepseek_src.json ]; then \
 		node scripts/convert-hf-tokenizer-to-tiktoken.mjs /tmp/agent_tokenizers/deepseek_src.json /tmp/agent_tokenizers/deepseek \
 		|| { echo 'WARN: DeepSeek vocab convert failed (runtime falls back to cl100k approx)'; rm -f /tmp/agent_tokenizers/deepseek.tiktoken /tmp/agent_tokenizers/deepseek.json; }; \

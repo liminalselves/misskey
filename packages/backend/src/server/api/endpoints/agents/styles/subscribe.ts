@@ -5,6 +5,7 @@
 
 import ms from 'ms';
 import { Inject, Injectable } from '@nestjs/common';
+import { QueryFailedError } from 'typeorm';
 import type { AgentDialogueStylesRepository, AgentUserStyleSubscriptionsRepository } from '@/models/_.js';
 import { Endpoint } from '@/server/api/endpoint-base.js';
 import { DI } from '@/di-symbols.js';
@@ -52,15 +53,19 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			if (style.userId === me.id) {
 				return { success: true };
 			}
-			const existing = await this.agentUserStyleSubscriptionsRepository.findOneBy({ userId: me.id, styleId: style.id });
-			if (existing) {
-				return { success: true };
+			// 幂等：(userId, styleId) 为复合主键，先查后插在并发下会撞主键冲突，冲突即视为已订阅成功
+			try {
+				await this.agentUserStyleSubscriptionsRepository.insert({
+					userId: me.id,
+					styleId: style.id,
+					createdAt: new Date(),
+				});
+			} catch (err) {
+				if (err instanceof QueryFailedError && (err.driverError as { code?: string } | undefined)?.code === '23505') {
+					return { success: true };
+				}
+				throw err;
 			}
-			await this.agentUserStyleSubscriptionsRepository.insert({
-				userId: me.id,
-				styleId: style.id,
-				createdAt: new Date(),
-			});
 			return { success: true };
 		});
 	}

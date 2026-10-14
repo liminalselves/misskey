@@ -74,7 +74,8 @@ function createHarness(opts: { reply?: string; imageModelEnabled?: boolean; mode
 		buildSystemPrompt: jest.fn(() => 'system'),
 		loadRecentMessagesForContextWithMeta: jest.fn(async () => ({ messages: [] })),
 		normalizeRegexRules: jest.fn(() => []),
-		applyRegexRules: jest.fn((text: string) => text),
+		// 与真实实现同口径：批量 worker 过滤直接原样返回文本
+		applyRegexRulesBatch: jest.fn(async (_rules: unknown, _effect: unknown, items: Array<{ text: string }>) => items.map(item => item.text)),
 		selectWorldbookEntriesForPrompt: jest.fn(() => []),
 		wrapLatestUserTextWithStyleDirective: jest.fn((text: string) => text),
 		prependCurrentBeijingTime: jest.fn((text: string) => text),

@@ -33,6 +33,7 @@ import { compile } from '@/theme.js';
 import { useRouter } from '@/router.js';
 import {
 	agentControlSurfaceDefaults,
+	createAgentControlParentGuard,
 	isAgentControlPanel,
 	readAgentControlBootstrapAppearance,
 	setAgentControlEmbedActive,
@@ -78,9 +79,15 @@ const appearancePropertyMap: Record<Exclude<keyof AgentControlAppearance, 'color
 	spacing: '--agent-control-spacing',
 };
 
+// 宿主消息守卫：进站握手按 source+origin 校验，出站用具体 targetOrigin（token 绝不用 '*' 承载）
+const parentGuard = createAgentControlParentGuard();
+
 function postToParent(message: AgentControlEmbedMessage): void {
 	if (window.parent === window) return;
-	window.parent.postMessage(message, '*');
+	// origin 已知（referrer 推导或首个合法握手消息固定）时定向发送；
+	// 未知时仅剩 ready/height 等无敏感内容的启动消息可用 '*' 兜底，此后即固定不再使用
+	const targetOrigin = parentGuard.origin() ?? '*';
+	window.parent.postMessage(message, targetOrigin);
 }
 
 function normalizeCssVariableName(name: string): string | null {
@@ -174,7 +181,8 @@ function acceptToken(token: string): void {
 }
 
 function onParentMessage(event: MessageEvent<AgentControlParentMessage>): void {
-	if (event.source !== window.parent || event.data == null || typeof event.data !== 'object') return;
+	// 握手校验：source + origin（referrer 缺失时首个合法握手消息会固定 origin，此后按固定值比对）
+	if (!parentGuard.accept(event)) return;
 	if (event.data.type === 'misskey:agent-control:configure') {
 		applyAppearance(event.data.appearance);
 		acceptToken(event.data.token);

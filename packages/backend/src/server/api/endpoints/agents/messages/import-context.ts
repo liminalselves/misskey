@@ -14,6 +14,9 @@ import { AgentService } from '@/core/AgentService.js';
 import { ChatService } from '@/core/ChatService.js';
 import { MiAgentMessage } from '@/models/AgentMessage.js';
 import { MiAgentSession } from '@/models/AgentSession.js';
+import { MiAgentSessionCompressionSticky } from '@/models/AgentSessionCompressionSticky.js';
+import { AgentMessageNotifyService } from '@/core/AgentMessageNotifyService.js';
+import { withWritableAgentSession } from '../_with-agent-lock.js';
 
 const MAX_IMPORT_MESSAGES = 10_000;
 const IMPORT_INSERT_CHUNK_SIZE = 500;
@@ -105,7 +108,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		private agentDialogueStylesRepository: AgentDialogueStylesRepository,
 
 		private agentService: AgentService,
-		private chatService: ChatService,
+			private chatService: ChatService,
+			private agentMessageNotifyService: AgentMessageNotifyService,
 	) {
 		super(meta, paramDef, async (ps, me) => {
 			this.agentService.assertAgentsEnabled();
@@ -189,19 +193,21 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			}
 
 			const importedSessionCreatedAtMs = ps.sessionCreatedAt == null ? Number.NaN : new Date(ps.sessionCreatedAt).getTime();
-			if (Number.isFinite(importedSessionCreatedAtMs)) session.createdAt = new Date(importedSessionCreatedAtMs);
-			session.agentReplyPending = false;
-			session.updatedAt = now;
-			session.lastMessageAt = Number.isFinite(lastMessageAtMs) ? new Date(lastMessageAtMs) : null;
-			await this.db.transaction(async transactionalEntityManager => {
+				await withWritableAgentSession(this.db, ps.sessionId, me.id, async (locked, transactionalEntityManager) => {
 				await transactionalEntityManager.delete(MiAgentMessage, { sessionId: session.id });
 
 				for (let i = 0; i < rows.length; i += IMPORT_INSERT_CHUNK_SIZE) {
 					await transactionalEntityManager.insert(MiAgentMessage, rows.slice(i, i + IMPORT_INSERT_CHUNK_SIZE));
 				}
 
-				await transactionalEntityManager.save(MiAgentSession, session);
-			});
+					await transactionalEntityManager.delete(MiAgentSessionCompressionSticky, { sessionId: locked.id });
+					await transactionalEntityManager.update(MiAgentSession, { id: locked.id }, {
+						...(Number.isFinite(importedSessionCreatedAtMs) ? { createdAt: new Date(importedSessionCreatedAtMs) } : {}),
+						updatedAt: now,
+						lastMessageAt: Number.isFinite(lastMessageAtMs) ? new Date(lastMessageAtMs) : null,
+					});
+				});
+				await this.agentMessageNotifyService.reconcileUnreadMessages(me.id, session.id);
 
 			return { importedCount: rows.length, skippedImageCount, messageIdMap };
 		});

@@ -116,7 +116,10 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			const instanceMeta = await this.metaService.fetch(true);
 
 			if (ps.name !== undefined && ps.name !== null) {
-				row.name = ps.name.slice(0, 256);
+				// Trim like create does; a whitespace-only name is treated as "no change"
+				// instead of overwriting the session name with blank characters.
+				const trimmedName = ps.name.trim();
+				if (trimmedName !== '') row.name = trimmedName.slice(0, 256);
 			}
 			if (ps.dialogueStyleId !== undefined) {
 				if (ps.dialogueStyleId === null) {

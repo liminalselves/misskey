@@ -104,7 +104,10 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 
 			const instanceMeta = await this.metaService.fetch(true);
 			const eff = getActiveLlmModels(instanceMeta);
-			const agentModelId = ps.agentModelId ?? instanceMeta.agentDefaultModelId ?? eff[0]?.id ?? null;
+			// Normalize blank input ("" / whitespace) to "not specified" so the instance default
+			// applies and the empty string is never stored as a model id.
+			const requestedModelId = typeof ps.agentModelId === 'string' && ps.agentModelId.trim() !== '' ? ps.agentModelId.trim() : undefined;
+			const agentModelId = requestedModelId ?? instanceMeta.agentDefaultModelId ?? eff[0]?.id ?? null;
 			if (agentModelId) {
 				await this.agentService.resolveModelApiNameForUser(instanceMeta, agentModelId, me.id);
 			}

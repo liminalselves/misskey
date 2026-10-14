@@ -73,6 +73,11 @@ SPDX-License-Identifier: AGPL-3.0-only
 						<MkButton v-if="c.reviewStatus === 'pending' || c.isPublished" rounded @click="unpublishChar(c.id)">{{ i18n.ts._agents.unpublish }}</MkButton>
 					</div>
 				</div>
+				<div v-if="chHasMore">
+					<MkButton v-appear="prefer.s.enableInfiniteScroll && !loadingMoreCh ? loadMoreCharacters : null" small rounded :disabled="loadingMoreCh" @click="loadMoreCharacters">
+						<i class="ti ti-chevron-down"></i> {{ loadingMoreCh ? i18n.ts.loading : i18n.ts.loadMore }}
+					</MkButton>
+				</div>
 			</div>
 		</div>
 		<div v-else class="_gaps">
@@ -131,11 +136,16 @@ SPDX-License-Identifier: AGPL-3.0-only
 						<MkButton v-if="s.isMine && s.reviewStatus !== 'pending'" rounded @click="publishStyle(s.id)">{{ s.publishedVersion != null ? i18n.ts._agents.submitUpdateForReview : i18n.ts._agents.submitForReview }}</MkButton>
 						<MkButton v-if="s.isMine && (s.reviewStatus === 'pending' || s.isPublished)" rounded @click="unpublishStyle(s.id)">{{ i18n.ts._agents.unpublish }}</MkButton>
 					</div>
+					</div>
+				</div>
+				<div v-if="stHasMore">
+					<MkButton v-appear="prefer.s.enableInfiniteScroll && !loadingMoreSt ? loadMoreStyles : null" small rounded :disabled="loadingMoreSt" @click="loadMoreStyles">
+						<i class="ti ti-chevron-down"></i> {{ loadingMoreSt ? i18n.ts.loading : i18n.ts.loadMore }}
+					</MkButton>
 				</div>
 			</div>
 		</div>
-	</div>
-	<div v-else-if="mainTab === 'my-stats'" class="_spacer" style="--MI_SPACER-w: 700px;">
+		<div v-else-if="mainTab === 'my-stats'" class="_spacer" style="--MI_SPACER-w: 700px;">
 		<XMyStats/>
 	</div>
 	<div v-else-if="mainTab === 'models'" class="_spacer" style="--MI_SPACER-w: 700px;">
@@ -162,11 +172,13 @@ import MkUserName from '@/components/global/MkUserName.vue';
 import MkTime from '@/components/global/MkTime.vue';
 import MkDriveFileThumbnail from '@/components/MkDriveFileThumbnail.vue';
 import { misskeyApi, formatApiError } from '@/utility/misskey-api.js';
+import { appendCursorPage, takeCursorFirstPage } from '@/utility/cursor-page.js';
 import { confirmStartAgentSession } from '@/utility/confirm-start-agent-session.js';
 import { i18n } from '@/i18n.js';
 import { definePage } from '@/page.js';
 import * as os from '@/os.js';
 import { useRouter } from '@/router.js';
+import { prefer } from '@/preferences.js';
 
 const props = withDefaults(defineProps<{
 	view?: string;
@@ -195,6 +207,10 @@ const characters = ref<CharacterListMineItem[]>([]);
 const styles = ref<StyleListMineItem[]>([]);
 const loadingCh = ref(true);
 const loadingSt = ref(true);
+const chHasMore = ref(false);
+const stHasMore = ref(false);
+const loadingMoreCh = ref(false);
+const loadingMoreSt = ref(false);
 
 const mainHeaderTabs = computed(() => [
 	{ key: 'square', icon: 'ti ti-layout-grid', title: i18n.ts._agents.navSquare },
@@ -284,21 +300,66 @@ function rejectReasonLabel(reason: string) {
 	return labels[reason] ?? reason;
 }
 
+// list-mine 新增可选 limit/untilId 页面游标（(updatedAt,id) 复合游标的裸数组）：
+// 首页 limit+1 探测 hasMore，翻页带 untilId 按需加载，避免 take-100/200 截断，也不串行全量拉取
+const MINE_LIST_PAGE_SIZE = 30;
+// 端点新增参数未进 misskey-js 类型，按惯例页面内强转
+const fetchCharactersMine = misskeyApi as unknown as (endpoint: 'agents/characters/list-mine', data: { limit?: number; untilId?: string | null }) => Promise<CharacterListMineItem[]>;
+const fetchStylesMine = misskeyApi as unknown as (endpoint: 'agents/styles/list-mine', data: { limit?: number; untilId?: string | null }) => Promise<StyleListMineItem[]>;
+
 async function loadCharacters() {
+	if (loadingCh.value) return;
 	loadingCh.value = true;
 	try {
-		characters.value = await misskeyApi('agents/characters/list-mine', {});
+		const rows = await fetchCharactersMine('agents/characters/list-mine', { limit: MINE_LIST_PAGE_SIZE + 1 });
+		const page = takeCursorFirstPage(rows, MINE_LIST_PAGE_SIZE);
+		chHasMore.value = page.hasMore;
+		characters.value = page.items;
 	} finally {
 		loadingCh.value = false;
 	}
 }
 
+async function loadMoreCharacters() {
+	if (loadingCh.value || loadingMoreCh.value || !chHasMore.value) return;
+	const untilId = characters.value.at(-1)?.id;
+	if (untilId == null) return;
+	loadingMoreCh.value = true;
+	try {
+		const rows = await fetchCharactersMine('agents/characters/list-mine', { limit: MINE_LIST_PAGE_SIZE + 1, untilId });
+		const page = appendCursorPage(characters.value, rows, MINE_LIST_PAGE_SIZE);
+		chHasMore.value = page.hasMore;
+		characters.value = page.items;
+	} finally {
+		loadingMoreCh.value = false;
+	}
+}
+
 async function loadStyles() {
+	if (loadingSt.value) return;
 	loadingSt.value = true;
 	try {
-		styles.value = await misskeyApi('agents/styles/list-mine', {});
+		const rows = await fetchStylesMine('agents/styles/list-mine', { limit: MINE_LIST_PAGE_SIZE + 1 });
+		const page = takeCursorFirstPage(rows, MINE_LIST_PAGE_SIZE);
+		stHasMore.value = page.hasMore;
+		styles.value = page.items;
 	} finally {
 		loadingSt.value = false;
+	}
+}
+
+async function loadMoreStyles() {
+	if (loadingSt.value || loadingMoreSt.value || !stHasMore.value) return;
+	const untilId = styles.value.at(-1)?.id;
+	if (untilId == null) return;
+	loadingMoreSt.value = true;
+	try {
+		const rows = await fetchStylesMine('agents/styles/list-mine', { limit: MINE_LIST_PAGE_SIZE + 1, untilId });
+		const page = appendCursorPage(styles.value, rows, MINE_LIST_PAGE_SIZE);
+		stHasMore.value = page.hasMore;
+		styles.value = page.items;
+	} finally {
+		loadingMoreSt.value = false;
 	}
 }
 

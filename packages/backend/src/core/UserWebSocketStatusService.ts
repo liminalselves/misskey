@@ -43,20 +43,19 @@ export class UserWebSocketStatusService {
 	async setUserOffline(userId: MiUser['id']): Promise<void> {
 		const onlineKey = `${this.REDIS_KEY_PREFIX}${userId}`;
 		const connCountKey = `${this.REDIS_CONN_COUNT_KEY_PREFIX}${userId}`;
-		const remain = await this.redis.decr(connCountKey);
-		if (remain <= 0) {
-			await this.redis
-				.multi()
-				.del(connCountKey)
-				.del(onlineKey)
-				.exec();
-			return;
-		}
-		await this.redis
-			.multi()
-			.expire(connCountKey, this.TTL_SECONDS)
-			.setex(onlineKey, this.TTL_SECONDS, '1')
-			.exec();
+		// decr 与 del/expire 必须整体原子：decr 归零后、del 执行前若有新连接 INCR 计数，
+		// 会被随后的 del 误删，导致在线连接被误判为离线
+		await this.redis.eval(`
+			local v = redis.call('DECR', KEYS[1])
+			if v <= 0 then
+				redis.call('DEL', KEYS[1])
+				redis.call('DEL', KEYS[2])
+				return v
+			end
+			redis.call('EXPIRE', KEYS[1], ARGV[1])
+			redis.call('SETEX', KEYS[2], ARGV[1], '1')
+			return v
+		`, 2, connCountKey, onlineKey, this.TTL_SECONDS);
 	}
 
 	/**

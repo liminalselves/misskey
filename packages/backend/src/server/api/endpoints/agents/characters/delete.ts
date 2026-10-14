@@ -7,6 +7,7 @@ import ms from 'ms';
 import { Inject, Injectable } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { MiAgentCharacter } from '@/models/AgentCharacter.js';
+import { MiAgentSession } from '@/models/AgentSession.js';
 import { MiAgentPublishedVersion } from '@/models/AgentPublishedVersion.js';
 import { MiAgentPlazaReview } from '@/models/AgentPlazaReview.js';
 import { Endpoint } from '@/server/api/endpoint-base.js';
@@ -32,7 +33,10 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			this.agentService.assertAgentsEnabled();
 			return withLockedAgentCharacter(this.db, ps.characterId, async (row, manager) => {
 				if (!row || row.userId !== me.id) throw new ApiError({ message: 'No such character.', code: 'NO_SUCH_CHARACTER', id: '9aab27e7-bcc2-4eb2-96cb-cd4fcbfbd292' });
-				await manager.delete(MiAgentPublishedVersion, { kind: 'character', targetId: row.id });
+					if (await manager.existsBy(MiAgentSession, { characterId: row.id })) {
+						throw new ApiError({ message: 'This character is used by existing sessions. Unpublish it instead.', code: 'AGENT_CHARACTER_IN_USE', id: 'ece15743-bd7d-4a5a-9e1d-12a50baf965e', kind: 'client', httpStatusCode: 409 });
+					}
+					await manager.delete(MiAgentPublishedVersion, { kind: 'character', targetId: row.id });
 				await manager.delete(MiAgentPlazaReview, { characterId: row.id });
 				await manager.delete(MiAgentCharacter, { id: row.id });
 				return { success: true };

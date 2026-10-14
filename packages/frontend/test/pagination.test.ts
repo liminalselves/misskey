@@ -175,6 +175,54 @@ describe('Governance pagination', () => {
 		expect(paginator.hasMore.value).toBe(false);
 		expect(fetch).toHaveBeenCalledTimes(3);
 	});
+
+	// #56：后端忽略 untilId（或排序不稳定）时整页与现有条目重复，游标未推进必须停止翻页防无限循环
+	test('a fully duplicate page means the cursor did not advance and pagination stops', async () => {
+		const page1 = rows(3);
+		const fetch = vi.fn().mockResolvedValueOnce(page1).mockResolvedValue(page1);
+		const paginator = useGovernancePagination(fetch, { pageSize: 2 });
+		await paginator.load(true);
+		expect(paginator.hasMore.value).toBe(true);
+		await paginator.load();
+		expect(paginator.items.value).toHaveLength(2);
+		expect(paginator.hasMore.value).toBe(false);
+		// 停止后不再发第 3 次请求
+		await paginator.load();
+		expect(fetch).toHaveBeenCalledTimes(2);
+	});
+
+	// #23：在途请求期间收到显式 reset 不能被吞掉；旧筛选条件下的在途响应必须作废
+	test('a reset requested during an in-flight load is queued and the stale response is discarded', async () => {
+		let resolveFirst!: (items: ReturnType<typeof rows>) => void;
+		const fetch = vi.fn()
+			.mockImplementationOnce(() => new Promise(r => { resolveFirst = r; }))
+			.mockResolvedValueOnce(rows(2, 100));
+		const paginator = useGovernancePagination(fetch, { pageSize: 2 });
+		void paginator.load(true);
+		await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+		// 第一页在途时用户改了筛选并触发 reset
+		await paginator.load(true);
+		resolveFirst(rows(2, 0)); // 旧筛选的第一页迟到
+		await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
+		await vi.waitFor(() => expect(paginator.loading.value).toBe(false));
+		// 迟到的旧响应被丢弃，列表只包含补发 reset 后的新页
+		expect(paginator.items.value.map(item => item.id)).toEqual(['0100', '0101']);
+		expect(paginator.hasMore.value).toBe(false);
+	});
+
+	// #23：reset() 手动清空同样作废在途响应，迟到的旧数据不会回流
+	test('manual reset() invalidates an in-flight response', async () => {
+		let resolveFirst!: (items: ReturnType<typeof rows>) => void;
+		const fetch = vi.fn()
+			.mockImplementationOnce(() => new Promise(r => { resolveFirst = r; }));
+		const paginator = useGovernancePagination(fetch, { pageSize: 2 });
+		void paginator.load(true);
+		await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+		paginator.reset();
+		resolveFirst(rows(2, 0));
+		await vi.waitFor(() => expect(paginator.loading.value).toBe(false));
+		expect(paginator.items.value).toHaveLength(0);
+	});
 });
 
 describe('Appear directive lifecycle', () => {

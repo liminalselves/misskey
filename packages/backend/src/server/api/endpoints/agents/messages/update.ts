@@ -4,6 +4,10 @@
  */
 
 import ms from 'ms';
+import { DataSource } from 'typeorm';
+import { MiAgentMessage } from '@/models/AgentMessage.js';
+import { withWritableAgentSession } from '../_with-agent-lock.js';
+import { invalidateMessageCompression } from './_invalidate-compression.js';
 import { Inject, Injectable } from '@nestjs/common';
 import type { AgentMessagesRepository, AgentSessionsRepository } from '@/models/_.js';
 import { Endpoint } from '@/server/api/endpoint-base.js';
@@ -49,7 +53,9 @@ export const paramDef = {
 
 @Injectable()
 export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-disable-line import/no-default-export
-	constructor(
+		constructor(
+			@Inject(DI.db) private db: DataSource,
+
 		@Inject(DI.agentSessionsRepository)
 		private agentSessionsRepository: AgentSessionsRepository,
 
@@ -131,7 +137,13 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				// The executed control journal is immutable; editing changes only the visible reply.
 				row.rawContent = `${editedVisibleContent}\n${row.proactiveScheduleControlRaw}`;
 			}
-			await this.agentMessagesRepository.save(row);
+				await withWritableAgentSession(this.db, ps.sessionId, me.id, async (locked, manager) => {
+					const updated = await manager.update(MiAgentMessage, { id: row.id, sessionId: locked.id }, {
+						content: row.content, rawContent: row.rawContent,
+					});
+					if (updated.affected !== 1) throw new ApiError({ message: 'No such message.', code: 'NO_SUCH_MESSAGE', id: 'e3f4a5b6-c7d8-9012-e345-f67890123456' });
+					await invalidateMessageCompression(manager, locked.id);
+				});
 
 			return {
 				id: row.id,

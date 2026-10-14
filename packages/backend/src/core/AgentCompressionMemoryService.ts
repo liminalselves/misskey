@@ -14,6 +14,7 @@ import type {
 import { DI } from '@/di-symbols.js';
 import { AgentModelUsageService } from '@/core/AgentModelUsageService.js';
 import { MiAgentSession } from '@/models/AgentSession.js';
+import { MiAgentMessage } from '@/models/AgentMessage.js';
 import type { MiAgentDialogueStyle } from '@/models/AgentDialogueStyle.js';
 import type { MiAgentCharacter } from '@/models/AgentCharacter.js';
 import { MiAgentSessionCompressionSticky, type AgentCompressionStickyState } from '@/models/AgentSessionCompressionSticky.js';
@@ -429,7 +430,7 @@ export class AgentCompressionMemoryService {
 			where: { sessionId, fromMessageId: fromId, toMessageId: toId },
 		});
 		// 同区间已有「非失败」便签才视为重复；失败便签不拦截，交由下方指纹路径重试
-		if (existingByRange && existingByRange.state !== 'failed') return null;
+		if (existingByRange && (existingByRange.state === 'active' || existingByRange.state === 'dormant' || existingByRange.userOverridden)) return null;
 		// 与发信滑窗一致：按 `formatMessageForLlmHistory` 携带时间戳、图片识别 XML、主动调度控制块等必要数据（不携带则模型压缩时丢失发送时间与图片描述语义）
 		const formatFn = (m: CompressionScanRow): string => this.agentService.formatMessageForLlmHistory(
 			m as Parameters<AgentService['formatMessageForLlmHistory']>[0],
@@ -738,11 +739,12 @@ export class AgentCompressionMemoryService {
 		if (!row) {
 			throw new ApiError({ message: 'No such sticky.', code: 'NO_SUCH_ENTRY', id: '9b0c1d2e-3f4a-5678-9abc-def012345678' });
 		}
-		row.summaryText = summaryText;
-		row.userOverridden = true;
-		row.updatedAt = new Date();
-		await this.stickyRepository.save(row);
-		return row;
+		const updatedAt = new Date();
+		const result = await this.stickyRepository.update({ id: stickyId, sessionId }, { summaryText, userOverridden: true, updatedAt });
+		if (result.affected !== 1) {
+			throw new ApiError({ message: 'No such sticky.', code: 'NO_SUCH_ENTRY', id: '9b0c1d2e-3f4a-5678-9abc-def012345678' });
+		}
+		return { ...row, summaryText, userOverridden: true, updatedAt };
 	}
 
 	@bindThis
@@ -774,16 +776,14 @@ export class AgentCompressionMemoryService {
 		}
 		const byId = new Map(existing.map(e => [e.id, e]));
 		const now = new Date();
-		const changed: MiAgentSessionCompressionSticky[] = [];
-		for (let i = 0; i < orderedIds.length; i++) {
-			const row = byId.get(orderedIds[i]!)!;
-			if (row.sortIndex !== i) {
-				row.sortIndex = i;
-				row.updatedAt = now;
-				changed.push(row);
+		await this.stickyRepository.manager.transaction(async manager => {
+			for (let i = 0; i < orderedIds.length; i++) {
+				const row = byId.get(orderedIds[i]!)!;
+				if (row.sortIndex !== i) {
+					await manager.update(MiAgentSessionCompressionSticky, { id: row.id, sessionId }, { sortIndex: i, updatedAt: now });
+				}
 			}
-		}
-		if (changed.length > 0) await this.stickyRepository.save(changed);
+		});
 	}
 
 	@bindThis
@@ -835,7 +835,6 @@ export class AgentCompressionMemoryService {
 	): Promise<void> {
 		const stickies = await this.listStickies(sessionId);
 		const now = new Date();
-		const changed: MiAgentSessionCompressionSticky[] = [];
 		for (const s of stickies) {
 			// 仅收束侧车“休眠/可注入”两态，避免误覆盖 stale / failed 态
 			if (s.state !== 'dormant' && s.state !== 'active') continue;
@@ -850,12 +849,11 @@ export class AgentCompressionMemoryService {
 				newState = 'dormant';
 			}
 			if (s.state !== newState) {
-				s.state = newState;
-				s.updatedAt = now;
-				changed.push(s);
+				await this.stickyRepository.update({ id: s.id, state: s.state, updatedAt: s.updatedAt }, {
+					state: newState, updatedAt: now,
+				});
 			}
 		}
-		if (changed.length > 0) await this.stickyRepository.save(changed);
 	}
 
 	/**
@@ -914,21 +912,7 @@ export class AgentCompressionMemoryService {
 			await this.reconcileStickyStates(session.id, hSend, dMap);
 			return;
 		}
-		const { fromId, toId, textBlob, fingerprint, existingByFp } = gathered;
-		if (existingByFp) {
-			// 重试：递增计数，清除错误，后续复用此行更新摘要
-			existingByFp.retryCount += 1;
-			existingByFp.errorMessage = null;
-			await this.stickyRepository.save(existingByFp);
-		}
-		const rawMax = await this.stickyRepository
-			.createQueryBuilder('s')
-			.select('COALESCE(MAX(s.sortIndex), 0)', 'm')
-			.where('s.sessionId = :id', { id: session.id })
-			.getRawOne() as { m: string } | undefined;
-		const mRaw = Number.parseInt(String(rawMax?.m ?? '0'), 10);
-		const nextSort = (Number.isFinite(mRaw) ? mRaw : 0) + 1;
-		const now = new Date();
+		const { candidates, fromId, toId, textBlob, fingerprint, existingByFp } = gathered;
 		const customPrompt = instanceMeta.agentCompressionSystemPrompt;
 		const systemPrompt = typeof customPrompt === 'string' && customPrompt.trim().length > 0
 			? customPrompt.trim()
@@ -988,31 +972,40 @@ export class AgentCompressionMemoryService {
 		// 成功 → dormant（可注入）；失败 → failed（前端显式提示，不注入、不排除原文）
 		const finalState: AgentCompressionStickyState = compressionError == null ? 'dormant' : 'failed';
 		try {
-			if (existingByFp) {
-				// 重试路径：更新已有便签的摘要/状态
-				existingByFp.summaryText = summary;
-				existingByFp.state = finalState;
-				existingByFp.errorMessage = compressionError;
-				existingByFp.lastModelId = compModelId;
-				existingByFp.updatedAt = new Date();
-				await this.stickyRepository.save(existingByFp);
-			} else {
-				await this.stickyRepository.insertOne({
-					id: this.agentService.newId(),
-					createdAt: now,
-					updatedAt: now,
-					sessionId: session.id,
-					fromMessageId: fromId,
-					toMessageId: toId,
-					summaryText: summary,
-					state: finalState,
-					userOverridden: false,
-					sourceFingerprint: fingerprint,
-					errorMessage: compressionError,
-					lastModelId: compModelId,
-					sortIndex: nextSort,
+			await this.stickyRepository.manager.transaction(async manager => {
+				const currentSession = await manager.findOne(MiAgentSession, {
+					where: { id: session.id }, lock: { mode: 'pessimistic_write' },
 				});
-			}
+				if (!currentSession || currentSession.timeAwarenessEnabled !== session.timeAwarenessEnabled) return;
+				// The LLM runs outside this lock; reject results for deleted or edited source messages.
+				const currentRows = await manager.find(MiAgentMessage, {
+					where: { sessionId: session.id, id: In(candidates.map(m => m.id)) },
+					order: { createdAt: 'ASC', id: 'ASC' },
+				});
+				if (currentRows.length !== candidates.length) return;
+				const currentText = currentRows.map(m => `${m.role}: ${this.agentService.formatMessageForLlmHistory(m, {
+					timeAwarenessEnabled: session.timeAwarenessEnabled === true,
+				})}`).join('\n\n');
+				if (createHash('sha256').update(currentText, 'utf8').digest('hex') !== fingerprint) return;
+				const now = new Date();
+				if (existingByFp) {
+					await manager.createQueryBuilder().update(MiAgentSessionCompressionSticky).set({
+						summaryText: summary, state: finalState, errorMessage: compressionError,
+						lastModelId: compModelId, updatedAt: now, retryCount: () => '"retryCount" + 1',
+					}).where({ id: existingByFp.id, sourceFingerprint: fingerprint, state: 'failed', userOverridden: false }).execute();
+				} else {
+					const rawMax = await manager.createQueryBuilder(MiAgentSessionCompressionSticky, 's')
+						.select('COALESCE(MAX(s.sortIndex), 0)', 'm').where('s.sessionId = :id', { id: session.id })
+						.getRawOne<{ m: string }>();
+					await manager.insert(MiAgentSessionCompressionSticky, {
+						id: this.agentService.newId(), createdAt: now, updatedAt: now,
+						sessionId: session.id, fromMessageId: fromId, toMessageId: toId,
+						summaryText: summary, state: finalState, userOverridden: false,
+						sourceFingerprint: fingerprint, errorMessage: compressionError, lastModelId: compModelId,
+						sortIndex: Number(rawMax?.m ?? 0) + 1,
+					});
+				}
+			});
 		} catch (e: unknown) {
 			// 并发下可能触发 (sessionId, sourceFingerprint) 唯一索引冲突，此时已有等价便签，跳过即可
 			const code = (e as { code?: string })?.code;

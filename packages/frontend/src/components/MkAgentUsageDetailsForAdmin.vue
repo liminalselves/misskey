@@ -23,7 +23,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<div
 						v-for="item in billingItems"
 						:key="item.id"
-						:class="[$style.row, $style.rowData, $style.billingCols]"
+						:class="[$style.row, $style.billingCols]"
 					>
 						<span :class="$style.name"
 							><MkTime :time="item.createdAt" mode="detail"
@@ -165,7 +165,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<div
 					v-for="model in details.modelStats"
 					:key="model.modelId ?? '__null__'"
-					:class="[$style.row, $style.rowData, $style.modelCols]"
+					:class="[$style.row, $style.modelCols]"
 				>
 					<span :class="$style.name" :title="model.modelName ?? undefined">
 						{{ model.modelName ?? "—" }}
@@ -215,7 +215,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<div
 						v-for="item in characterStatsItems"
 						:key="item.characterId"
-						:class="[$style.row, $style.rowData, $style.simpleCols]"
+						:class="[$style.row, $style.simpleCols]"
 					>
 						<span :class="$style.name">{{ item.characterName ?? "—" }}</span>
 						<span :class="$style.num">{{ item.total }}</span>
@@ -248,7 +248,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<div
 						v-for="item in styleStatsItems"
 						:key="item.dialogueStyleId"
-						:class="[$style.row, $style.rowData, $style.simpleCols]"
+						:class="[$style.row, $style.simpleCols]"
 					>
 						<span :class="$style.name">{{
 							item.dialogueStyleName ?? "—"

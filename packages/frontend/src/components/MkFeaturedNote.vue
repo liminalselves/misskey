@@ -5,7 +5,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <template>
 <div :class="$style.wrapper">
-	<MkNote :note="note" :withHardMute="true" :class="$style.note"/>
+		<MkNote :note="note" :withHardMute="true"/>
 	<!-- 分数显示徽章 -->
 	<div v-if="featuredScore > 0" :class="$style.scoreBadge" :title="`热度分数: ${featuredScore.toFixed(1)}`">
 		<i class="ti ti-flame"></i>
@@ -38,10 +38,6 @@ function formatScore(score: number): string {
 <style lang="scss" module>
 .wrapper {
 	position: relative;
-}
-
-.note {
-	// 继承 MkNote 的样式
 }
 
 .scoreBadge {

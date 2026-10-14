@@ -128,7 +128,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { computed, onMounted, reactive, watch } from 'vue';
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
 import { isLink } from '@@/js/is-link.js';
 import type { DriveFile, UserLite } from 'misskey-js/entities.js';
 import { renderAgentChatMarkdown } from '@/utility/agent-chat-markdown.js';
@@ -149,6 +149,8 @@ import MkMediaList from '@/components/MkMediaList.vue';
 import MkDeletedFileMedia from '@/components/MkDeletedFileMedia.vue';
 import MkCustomEmoji from '@/components/global/MkCustomEmoji.vue';
 import { splitAgentMessageIntoSegments, stripAgentCueTokens } from '@/utility/agent-message-segments.js';
+import { filterAgentRegexTexts } from '@/utility/agent-regex-filter.js';
+import type { AgentRegexFilterRule } from '@/utility/agent-regex-filter.js';
 import { customEmojisMap } from '@/custom-emojis.js';
 
 const $i = ensureSignin();
@@ -225,16 +227,63 @@ const proactiveScheduleActionSummary = computed(() => {
 	};
 });
 
+const messageRegexRole = computed(() => props.message.role === 'user' ? 'user' as const : props.message.role === 'assistant' ? 'assistant' as const : null);
+/** 角色正则规则中命中本消息角色与 hide 效果的子集；绝大多数会话为空 → 完全同步渲染 */
+const applicableHideRules = computed<AgentRegexFilterRule[]>(() => {
+	const role = messageRegexRole.value;
+	if (role == null) return [];
+	return (props.regexRules ?? []).filter(rule => rule.targets.includes(role) && rule.effects.includes('hide'));
+});
+
+type HideFilterState = { status: 'pending' | 'done' | 'failed'; text: string };
+const hideFilterState = ref<HideFilterState | null>(null);
+let hideFilterToken = 0;
+
 const displayContent = computed(() => {
-	let content = props.message.content ?? '';
-	const role = props.message.role === 'user' ? 'user' : props.message.role === 'assistant' ? 'assistant' : null;
-	if (!role) return content;
-	for (const rule of props.regexRules ?? []) {
-		if (!rule.targets.includes(role) || !rule.effects.includes('hide')) continue;
-		try { content = content.replace(new RegExp(rule.pattern, 'gu'), ''); } catch { /* Invalid rules are ignored in the client too. */ }
+	const content = props.message.content ?? '';
+	const role = messageRegexRole.value;
+	if (role == null) return content;
+	if (applicableHideRules.value.length > 0) {
+		// hide 规则在有界 Web Worker 中执行（绝不在主线程跑角色正则）：灾难性回溯只影响
+		// 该 worker，超时/worker 不可用时回退原文展示，页面不冻结。
+		const state = hideFilterState.value;
+		if (state == null) return '';
+		if (state.status === 'failed') return stripAgentCueTokens(content);
+		// pending 时沿用上一次已过滤文本（流式更新不闪烁），首次渲染先空占位
+		return stripAgentCueTokens(state.text);
 	}
 	// 表演指令只服务桌宠客户端，网页展示一律剥离（编辑视图仍读原文）
 	return stripAgentCueTokens(content);
+});
+
+async function refreshHideFilter(): Promise<void> {
+	const token = ++hideFilterToken;
+	const rules = applicableHideRules.value;
+	if (rules.length === 0) {
+		hideFilterState.value = null;
+		return;
+	}
+	const previous = hideFilterState.value;
+	hideFilterState.value = { status: 'pending', text: previous?.status === 'done' ? previous.text : '' };
+	// 该工具永不 reject：null 表示 worker 不可用或超时，调用方回退原文即可
+	const results = await filterAgentRegexTexts(rules, 'hide', [{ role: messageRegexRole.value ?? 'user', text: props.message.content ?? '' }]);
+	// 结果被更新一代的请求或组件卸载取代时直接丢弃，避免旧文本回写
+	if (token !== hideFilterToken) return;
+	hideFilterState.value = results == null
+		? { status: 'failed', text: '' }
+		: { status: 'done', text: results[0] ?? '' };
+}
+
+watch(
+	[() => props.message.id, () => props.message.content, applicableHideRules],
+	() => {
+		void refreshHideFilter();
+	},
+	{ immediate: true },
+);
+// 卸载后令牌自增：在途结果被判定过期，且所有 Promise 链都已兜底，不产生未处理错误
+onUnmounted(() => {
+	hideFilterToken++;
 });
 
 const systemHtml = computed(() => renderAgentChatMarkdown(props.message.content ?? ''));

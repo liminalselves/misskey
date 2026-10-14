@@ -5,12 +5,13 @@
 
 import ms from 'ms';
 import { Inject, Injectable } from '@nestjs/common';
-import type { AgentMessagesRepository, AgentSessionsRepository } from '@/models/_.js';
+import type { AgentSessionsRepository } from '@/models/_.js';
 import { Endpoint } from '@/server/api/endpoint-base.js';
 import { DI } from '@/di-symbols.js';
 import { ApiError } from '@/server/api/error.js';
 import { AgentService } from '@/core/AgentService.js';
 import { MetaService } from '@/core/MetaService.js';
+import { AgentExternalAuditService } from '@/core/AgentExternalAuditService.js';
 import { DriveFileEntityService } from '@/core/entities/DriveFileEntityService.js';
 import type { MiAgentCharacter } from '@/models/AgentCharacter.js';
 
@@ -82,14 +83,8 @@ export const paramDef = {
 	required: ['sessionId'],
 } as const;
 
-/**
- * pending 标志位的「孤儿」判定阈值。
- * LLM 调用本身硬上限 120s（超时即 abort），加上图像识别/审核等环节也远小于此值；
- * 若 agentReplyPending=true 但 updatedAt 超过该阈值无任何变化，基本可判定为
- * 后端热重启/崩溃杀死了在途请求而遗留的孤儿标志位，需主动清除，
- * 否则会话将永久无法再发送（原子 occupy 的 WHERE "agentReplyPending"=false 永远失败）。
- */
-const AGENT_REPLY_PENDING_STALE_MS = ms('5min');
+// Covers vision, LLM, memory lookup and local work; serial audit failover adds its own budget.
+const AGENT_REPLY_PENDING_BASE_STALE_MS = ms('5min');
 
 @Injectable()
 export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-disable-line import/no-default-export
@@ -97,12 +92,10 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		@Inject(DI.agentSessionsRepository)
 		private agentSessionsRepository: AgentSessionsRepository,
 
-		@Inject(DI.agentMessagesRepository)
-		private agentMessagesRepository: AgentMessagesRepository,
-
 		private agentService: AgentService,
 		private driveFileEntityService: DriveFileEntityService,
 		private metaService: MetaService,
+		private agentExternalAuditService: AgentExternalAuditService,
 	) {
 		super(meta, paramDef, async (ps, me) => {
 			this.agentService.assertAgentsEnabled();
@@ -111,20 +104,12 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			if (!row || row.userId !== me.id) {
 				throw new ApiError({ message: 'No such session.', code: 'NO_SUCH_SESSION', id: 'a5b6c7d8-e9f0-1234-8901-345678901234' });
 			}
-			if (row.agentReplyPending) {
-				const latest = await this.agentMessagesRepository.findOne({
-					where: { sessionId: row.id },
-					order: { createdAt: 'DESC', id: 'DESC' },
-				});
-				// 自愈①：最新一条已是助手回复，说明回复其实已落库，仅标志位未清。
-				const healedByLatestAssistant = latest?.role === 'assistant';
-				// 自愈②：标志位卡死超时（典型为后端热重启杀死在途请求遗留的孤儿 pending）。
-				const healedByStale = Date.now() - row.updatedAt.getTime() > AGENT_REPLY_PENDING_STALE_MS;
-				if (healedByLatestAssistant || healedByStale) {
-					row.agentReplyPending = false;
-					await this.agentSessionsRepository.save(row);
+				if (row.agentReplyPending && Date.now() - row.updatedAt.getTime() > AGENT_REPLY_PENDING_BASE_STALE_MS + this.agentExternalAuditService.getAuditTimeoutBudgetMs(instance)) {
+					const healed = await this.agentSessionsRepository.update({
+						id: row.id, agentReplyPending: true, updatedAt: row.updatedAt,
+					}, { agentReplyPending: false });
+					if (healed.affected === 1) row.agentReplyPending = false;
 				}
-			}
 			const characterRow = await this.agentService.loadCharacterForAgentSessionOrThrow(row);
 			const characterDisplay = row.sessionKind === 'community' && this.agentService.isListedOnPlazaCharacter(characterRow as MiAgentCharacter)
 				? this.agentService.characterPlazaDisplayFields(characterRow as MiAgentCharacter)
@@ -144,10 +129,15 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					// fall through：使用草稿 stickers 兜底
 				}
 			}
-			const characterStickers = await Promise.all(effectiveCharacter.stickers.map(async sticker => ({
+			// 表情文件批量打包：一次 packManyByIdsMap 替代逐条 pack 的 N+1 查询
+			const stickerFileIds = [...new Set(effectiveCharacter.stickers.map(s => s.fileId))];
+			const stickerFileMap = stickerFileIds.length > 0
+				? await this.driveFileEntityService.packManyByIdsMap(stickerFileIds, { withDeleted: true })
+				: new Map();
+			const characterStickers = effectiveCharacter.stickers.map(sticker => ({
 				key: sticker.key,
-				file: await this.driveFileEntityService.pack(sticker.fileId, { withDeleted: true }).catch(() => null),
-			})));
+				file: stickerFileMap.get(sticker.fileId) ?? null,
+			}));
 			return {
 				id: row.id,
 				name: row.name,

@@ -61,9 +61,10 @@ db:
   # Database name
   db: misskey
 
-  # Auth
-  user: example-misskey-user
-  pass: example-misskey-pass
+  # Auth: user and pass are intentionally omitted here so the rendered
+  # ConfigMap carries no credentials. The backend reads DATABASE_USER /
+  # DATABASE_PASSWORD environment variables instead, injected from the
+  # <release>-db-credentials Secret (see templates/Secret.yml).
 
   # Whether disable Caching queries
   #disableCache: true

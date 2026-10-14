@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
-import { Inject, Injectable, OnApplicationShutdown } from '@nestjs/common';
+import { Inject, Injectable, Logger, OnApplicationShutdown } from '@nestjs/common';
 import push from 'web-push';
 import * as Redis from 'ioredis';
 import { DI } from '@/di-symbols.js';
@@ -53,6 +53,7 @@ function truncateBody<T extends keyof PushNotificationsTypes>(type: T, body: Pus
 
 @Injectable()
 export class PushNotificationService implements OnApplicationShutdown {
+	private readonly logger = new Logger(PushNotificationService.name);
 	private subscriptionsCache: RedisKVCache<MiSwSubscription[]>;
 
 	private getVapidSubject(): string {
@@ -120,7 +121,6 @@ export class PushNotificationService implements OnApplicationShutdown {
 			}
 			return;
 		}
-		await this.aliyunMobilePushService.deliver(userId, type, body);
 
 		if (!this.meta.enableServiceWorker || this.meta.swPublicKey == null || this.meta.swPrivateKey == null) return;
 
@@ -153,28 +153,25 @@ export class PushNotificationService implements OnApplicationShutdown {
 				dateTime: Date.now(),
 			}), {
 				proxy: this.config.proxy,
-			}).catch((err: any) => {
-				//swLogger.info(err.statusCode);
-				//swLogger.info(err.headers);
-				//swLogger.info(err.body);
-
+			}).catch(async (err: { statusCode?: number }) => {
 				if (err.statusCode === 410) {
-					this.swSubscriptionsRepository.delete({
-						userId: userId,
+					await this.swSubscriptionsRepository.delete({
+						userId,
 						endpoint: subscription.endpoint,
 						auth: subscription.auth,
 						publickey: subscription.publickey,
-					}).then(() => {
-						this.refreshCache(userId);
 					});
+					this.refreshCache(userId);
+				} else {
+					this.logger.warn(`Web push failed with status ${err.statusCode ?? 'unknown'}`);
 				}
-			});
+			}).catch(() => this.logger.error('Failed to remove expired web push subscription'));
 		}
 	}
 
 	@bindThis
 	public refreshCache(userId: string): void {
-		this.subscriptionsCache.refresh(userId);
+		void this.subscriptionsCache.refresh(userId).catch(() => this.logger.error('Failed to refresh web push subscriptions'));
 	}
 
 	@bindThis

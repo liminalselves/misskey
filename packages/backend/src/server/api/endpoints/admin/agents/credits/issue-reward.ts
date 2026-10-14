@@ -5,7 +5,10 @@
 
 import ms from 'ms';
 import { Inject, Injectable } from '@nestjs/common';
-import type { AgentModelUsageLogsRepository, UserProfilesRepository, UsersRepository } from '@/models/_.js';
+import { DataSource } from 'typeorm';
+import type { UsersRepository } from '@/models/_.js';
+import { MiAgentModelUsageLog } from '@/models/AgentModelUsageLog.js';
+import { MiUserProfile } from '@/models/UserProfile.js';
 import { Endpoint } from '@/server/api/endpoint-base.js';
 import { DI } from '@/di-symbols.js';
 import { ApiError } from '@/server/api/error.js';
@@ -53,11 +56,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		@Inject(DI.usersRepository)
 		private usersRepository: UsersRepository,
 
-		@Inject(DI.userProfilesRepository)
-		private userProfilesRepository: UserProfilesRepository,
-
-		@Inject(DI.agentModelUsageLogsRepository)
-		private agentModelUsageLogsRepository: AgentModelUsageLogsRepository,
+		@Inject(DI.db)
+		private db: DataSource,
 
 		private agentService: AgentService,
 		private idService: IdService,
@@ -88,30 +88,40 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			const now = new Date();
 			const reason = ps.reason?.trim() || null;
 
-			// 余额入账
-			await this.userProfilesRepository.increment({ userId: targetUserId }, 'agentCreditBalance', amount);
+			// 余额入账与流水同事务：奖励要么两者都落库，要么都不落；
+			// 无 profile 行时 increment 命中 0 行，宁可整体失败也不写“有流水无入账”
+			let newBalance = amount;
+			await this.db.transaction(async em => {
+				const credited = await em.increment(MiUserProfile, { userId: targetUserId }, 'agentCreditBalance', amount);
+				if ((credited.affected ?? 0) !== 1) {
+					throw new Error('agent reward target user profile missing');
+				}
 
-			// 写入消费日志（usageKind='admin_reward'，cost 为负数表示收入）
-			await this.agentModelUsageLogsRepository.insertOne({
-				id: this.idService.gen(),
-				requestedAt: now,
-				completedAt: now,
-				durationMs: 0,
-				userId: targetUserId,
-				sessionId: null,
-				characterId: null,
-				dialogueStyleId: null,
-				modelId: null,
-				modelApiName: null,
-				usageKind: 'admin_reward',
-				status: 'success',
-				errorCode: reason,
-				cost: -amount,
-				promptTokens: null,
-				completionTokens: null,
+				// 写入消费日志（usageKind='admin_reward'，cost 为负数表示收入）
+				await em.insert(MiAgentModelUsageLog, {
+					id: this.idService.gen(),
+					requestedAt: now,
+					completedAt: now,
+					durationMs: 0,
+					userId: targetUserId,
+					sessionId: null,
+					characterId: null,
+					dialogueStyleId: null,
+					modelId: null,
+					modelApiName: null,
+					usageKind: 'admin_reward',
+					status: 'success',
+					errorCode: reason,
+					cost: -amount,
+					promptTokens: null,
+					completionTokens: null,
+				});
+
+				const profile = await em.findOneOrFail(MiUserProfile, { where: { userId: targetUserId } });
+				newBalance = profile.agentCreditBalance;
 			});
 
-			// 发送通知（使用实例图标作为通知头像）
+			// 发送通知（使用实例图标作为通知头像；事务提交后才发，避免回滚后误通知）
 			const instance = await this.metaService.fetch(true);
 			this.notificationService.createNotification(targetUserId, 'app', {
 				appAccessTokenId: null,
@@ -121,10 +131,6 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				customHeader: '奖励入账',
 				customIcon: instance.iconUrl ?? instance.logoImageUrl ?? null,
 			});
-
-			// 查询新余额
-			const profile = await this.userProfilesRepository.findOneBy({ userId: targetUserId });
-			const newBalance = profile?.agentCreditBalance ?? amount;
 
 			return { userId: targetUserId, amount, newBalance };
 		});

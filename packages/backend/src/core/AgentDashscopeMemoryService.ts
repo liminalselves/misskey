@@ -7,6 +7,9 @@ import { Injectable, Logger } from '@nestjs/common';
 import { bindThis } from '@/decorators.js';
 import type { MiMeta } from '@/models/Meta.js';
 import { assertSafeLlmHttpsUrl, UnsafeLlmUrlError } from '@/misc/validate-llm-endpoint-url.js';
+import { readBodyWithLimit } from '@/misc/read-body-with-limit.js';
+
+const MEMORY_BODY_LIMIT_BYTES = 2 * 1024 * 1024;
 
 const DEFAULT_API_ORIGIN = 'https://dashscope.aliyuncs.com';
 const SEARCH_TIMEOUT_MS = 10_000;
@@ -98,13 +101,14 @@ export class AgentDashscopeMemoryService {
 				},
 				body: JSON.stringify(body),
 				signal: ac.signal,
+				redirect: 'error',
 			});
 			if (!res.ok) {
-				const txt = await res.text().catch(() => '');
+				const txt = await readBodyWithLimit(res, MEMORY_BODY_LIMIT_BYTES).then(body => body.toString('utf8')).catch(() => '');
 				this.logger.warn(`Dashscope search memory failed: ${res.status} ${txt.slice(0, 200)}`);
 				return null;
 			}
-			const json = await res.json() as { memory_nodes?: { content?: string }[] };
+			const json = JSON.parse((await readBodyWithLimit(res, MEMORY_BODY_LIMIT_BYTES)).toString('utf8')) as { memory_nodes?: { content?: string }[] };
 			const nodes = json.memory_nodes;
 			if (!Array.isArray(nodes) || nodes.length === 0) return '';
 			const parts: string[] = [];
@@ -197,8 +201,9 @@ export class AgentDashscopeMemoryService {
 						},
 						body: JSON.stringify(body),
 						signal: ac.signal,
+				redirect: 'error',
 					});
-					const txt = await res.text().catch(() => '');
+					const txt = await readBodyWithLimit(res, MEMORY_BODY_LIMIT_BYTES).then(body => body.toString('utf8')).catch(() => '');
 					if (!res.ok) {
 						this.logger.warn(`Dashscope add memory failed: ${res.status} ${txt.slice(0, 200)}`);
 						return;
@@ -223,8 +228,8 @@ export class AgentDashscopeMemoryService {
 				} finally {
 					clearTimeout(t);
 				}
-			})();
-		});
+				})().catch(() => this.logger.warn('Dashscope add memory failed before request initialization'));
+			});
 	}
 
 	private memoryLibraryBody(meta: MiMeta): Record<string, unknown> | null {
@@ -265,13 +270,14 @@ export class AgentDashscopeMemoryService {
 					'Authorization': `Bearer ${key}`,
 				},
 				signal: ac.signal,
+				redirect: 'error',
 			});
 			if (!res.ok) {
-				const txt = await res.text().catch(() => '');
+				const txt = await readBodyWithLimit(res, MEMORY_BODY_LIMIT_BYTES).then(body => body.toString('utf8')).catch(() => '');
 				this.logger.warn(`Dashscope list memory failed: ${res.status} ${txt.slice(0, 200)}`);
 				return null;
 			}
-			const json = await res.json() as {
+			const json = JSON.parse((await readBodyWithLimit(res, MEMORY_BODY_LIMIT_BYTES)).toString('utf8')) as {
 				memory_nodes?: { memory_node_id?: string; content?: string; created_at?: number; updated_at?: number }[];
 				total?: string | number;
 				page_num?: number;
@@ -334,13 +340,14 @@ export class AgentDashscopeMemoryService {
 				},
 				body: JSON.stringify(body),
 				signal: ac.signal,
+				redirect: 'error',
 			});
 			if (!res.ok) {
-				const txt = await res.text().catch(() => '');
+				const txt = await readBodyWithLimit(res, MEMORY_BODY_LIMIT_BYTES).then(body => body.toString('utf8')).catch(() => '');
 				this.logger.warn(`Dashscope add custom memory failed: ${res.status} ${txt.slice(0, 200)}`);
 				return null;
 			}
-			const json = await res.json() as { memory_nodes?: { memory_node_id?: string; content?: string }[] };
+			const json = JSON.parse((await readBodyWithLimit(res, MEMORY_BODY_LIMIT_BYTES)).toString('utf8')) as { memory_nodes?: { memory_node_id?: string; content?: string }[] };
 			const raw = json.memory_nodes;
 			const memoryNodes: { memoryNodeId: string; content: string }[] = [];
 			if (Array.isArray(raw)) {
@@ -389,9 +396,10 @@ export class AgentDashscopeMemoryService {
 				},
 				body: JSON.stringify(body),
 				signal: ac.signal,
+				redirect: 'error',
 			});
 			if (!res.ok) {
-				const txt = await res.text().catch(() => '');
+				const txt = await readBodyWithLimit(res, MEMORY_BODY_LIMIT_BYTES).then(body => body.toString('utf8')).catch(() => '');
 				this.logger.warn(`Dashscope update memory failed: ${res.status} ${txt.slice(0, 200)}`);
 				return false;
 			}
@@ -428,9 +436,10 @@ export class AgentDashscopeMemoryService {
 				},
 				body: '{}',
 				signal: ac.signal,
+				redirect: 'error',
 			});
 			if (!res.ok) {
-				const txt = await res.text().catch(() => '');
+				const txt = await readBodyWithLimit(res, MEMORY_BODY_LIMIT_BYTES).then(body => body.toString('utf8')).catch(() => '');
 				this.logger.warn(`Dashscope delete memory failed: ${res.status} ${txt.slice(0, 200)}`);
 				return false;
 			}
