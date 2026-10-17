@@ -3,8 +3,11 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
-import { AgentProactiveMessageService } from '@/core/AgentProactiveMessageService.js';
 import { jest } from '@jest/globals';
+import { AgentProactiveMessageService } from '@/core/AgentProactiveMessageService.js';
+import { AgentCompressionMemoryService, AGENT_OVERVIEW_SCAN_LIMIT } from '@/core/AgentCompressionMemoryService.js';
+import type { AgentService } from '@/core/AgentService.js';
+import type { MiAgentSessionCompressionSticky } from '@/models/AgentSessionCompressionSticky.js';
 // 依存チェーン上の ESM-only パッケージ（node-fetch / nanoid / chalk 等）は
 // jest.config.unit.cjs の moduleNameMapper で共通スタブに解決される
 
@@ -13,7 +16,7 @@ type ProactivePrivate = {
 	processScheduled: (schedule: Record<string, unknown>, now: Date) => Promise<void>;
 };
 
-function createHarness(opts: { reply?: string; imageModelEnabled?: boolean; modelCost?: number; hasFreeQuota?: boolean; creditBalance?: number } = {}) {
+function createHarness(opts: { reply?: string; imageModelEnabled?: boolean; modelCost?: number; hasFreeQuota?: boolean; creditBalance?: number; compression?: boolean } = {}) {
 	const session = {
 		id: 'session-id',
 		userId: 'user-id',
@@ -21,6 +24,7 @@ function createHarness(opts: { reply?: string; imageModelEnabled?: boolean; mode
 		dialogueStyleId: 'style-id',
 		sessionKind: 'draft_test',
 		name: 'Test session',
+		agentLongMemoryProvider: opts.compression ? 'compression' : 'none',
 		agentModelId: 'model-id',
 		agentReplyPending: false,
 		timeAwarenessEnabled: true,
@@ -72,7 +76,7 @@ function createHarness(opts: { reply?: string; imageModelEnabled?: boolean; mode
 		effectiveCharacterForLlm: jest.fn((character: unknown) => character),
 		effectiveStyleForSession: jest.fn((style: unknown) => style),
 		buildSystemPrompt: jest.fn(() => 'system'),
-		loadRecentMessagesForContextWithMeta: jest.fn(async () => ({ messages: [] })),
+		loadRecentMessagesForContextWithMeta: jest.fn<AgentService['loadRecentMessagesForContextWithMeta']>(async () => ({ messages: [], truncated: false, oldestIncludedId: null })),
 		normalizeRegexRules: jest.fn(() => []),
 		// 与真实实现同口径：批量 worker 过滤直接原样返回文本
 		applyRegexRulesBatch: jest.fn(async (_rules: unknown, _effect: unknown, items: Array<{ text: string }>) => items.map(item => item.text)),
@@ -85,7 +89,7 @@ function createHarness(opts: { reply?: string; imageModelEnabled?: boolean; mode
 		resolveModelApiNameForUser: jest.fn(async () => 'provider-model'),
 		resolveEffectiveModelId: jest.fn(() => 'effective-model-id'),
 		getUserFacingModelCostPerCall: jest.fn(() => opts.modelCost ?? 0),
-		invokeChatCompletions: jest.fn(async () => {
+		invokeChatCompletions: jest.fn<AgentService['invokeChatCompletions']>(async () => {
 			if (opts.reply != null) return { text: opts.reply, usage: null };
 			throw new Error('provider unavailable');
 		}),
@@ -108,6 +112,15 @@ function createHarness(opts: { reply?: string; imageModelEnabled?: boolean; mode
 		enforceReplyLimits: jest.fn((text: string) => text),
 		normalizeCharacterStickers: jest.fn(() => []),
 	};
+	const compressionCalculator = Object.create(AgentCompressionMemoryService.prototype) as AgentCompressionMemoryService;
+	const compressionMemory = {
+		resolveEffectiveProvider: jest.fn(() => opts.compression ? 'compression' : 'none'),
+		buildSendPathBudgets: jest.fn(async () => ({ historyBudget: 9000, historyBudgetTokens: 3000, charsPerToken: 3 })),
+		buildCompressionContext: jest.fn<AgentCompressionMemoryService['buildCompressionContext']>(async () => ({ block: '<compression_memory>remember</compression_memory>', injectedStickies: [], boundaries: new Map() })),
+		buildPairsExcludingInjectedCompression: jest.fn<AgentCompressionMemoryService['buildPairsExcludingInjectedCompression']>((...args) => compressionCalculator.buildPairsExcludingInjectedCompression(...args)),
+		afterAssistantForCompression: jest.fn<AgentCompressionMemoryService['afterAssistantForCompression']>(async () => undefined),
+	};
+	const tokenService = { resolveTokenConfigForUser: jest.fn(async () => ({ tokenMode: 'estimate' })), makeCounter: jest.fn(() => undefined) };
 	const service = new AgentProactiveMessageService(
 		sessionsRepository as never,
 		messagesRepository as never,
@@ -124,10 +137,62 @@ function createHarness(opts: { reply?: string; imageModelEnabled?: boolean; mode
 		{ fetch: jest.fn(async () => ({ agentGlobalSystemPrompt: null })) } as never,
 		{ notifyAgentMessage: jest.fn(async () => undefined) } as never,
 		{} as never,
+		compressionMemory as never,
+		tokenService as never,
 	);
 
-	return { service: service as unknown as ProactivePrivate, session, usage, schedules, agentService, imageService };
+	return { service: service as unknown as ProactivePrivate, session, usage, schedules, agentService, imageService, compressionMemory, messagesRepository };
 }
+
+describe('Proactive compression memory', () => {
+	test.each(['random', 'scheduled'])('%s delivery injects memory, excludes only its sources, then compresses the new reply', async kind => {
+		const h = createHarness({ compression: true, reply: 'Remembered reply.' });
+		const rows = ['m1', 'm2', 'm3'].map((id, index) => ({
+			id, createdAt: new Date(index * 1000), role: 'user' as const, content: `source-${id}`,
+			imageFileId: null, imageRecognitionStatus: null, imageRecognitionDescription: null,
+			proactiveScheduleControlRaw: null, proactiveScheduleControlError: null, timeTrusted: true,
+		}));
+		const dMap = new Map([['m1', 3100], ['m2', 2900], ['m3', 100]]);
+		h.agentService.loadRecentMessagesForContextWithMeta.mockResolvedValue({ messages: rows, dMap, truncated: true, oldestIncludedId: 'm1' });
+		h.compressionMemory.buildCompressionContext.mockResolvedValue({
+			block: '<compression_memory>remember</compression_memory>',
+			injectedStickies: [{ id: 'sticky', fromMessageId: 'm1', toMessageId: 'm2' } as MiAgentSessionCompressionSticky],
+			boundaries: new Map(rows.slice(0, 2).map(row => [row.id, row])),
+		});
+		if (kind === 'random') {
+			await h.service.processRandom(h.session);
+		} else {
+			await h.service.processScheduled({ id: 'schedule', sessionId: h.session.id, description: 'hello' }, new Date());
+		}
+		expect(h.agentService.loadRecentMessagesForContextWithMeta).toHaveBeenCalledWith(h.session.id, 9000, AGENT_OVERVIEW_SCAN_LIMIT,
+			expect.objectContaining({ tokenBudget: 3000, charsPerToken: 3, timeAwarenessEnabled: true }));
+		expect(h.compressionMemory.buildCompressionContext).toHaveBeenCalledWith(expect.objectContaining({ sidecar: { dMap, hSend: 3000 } }));
+		expect(h.agentService.invokeChatCompletions).toHaveBeenCalledWith(expect.objectContaining({
+			system: expect.stringContaining('<compression_memory>remember</compression_memory>'),
+			messages: [{ role: 'user', content: 'source-m3' }],
+		}));
+		expect(h.messagesRepository.insertOne).toHaveBeenCalledWith(expect.objectContaining({ role: 'assistant', content: 'Remembered reply.' }));
+		expect(h.compressionMemory.afterAssistantForCompression).toHaveBeenCalledTimes(1);
+		expect(h.compressionMemory.afterAssistantForCompression.mock.calls[0]).toHaveLength(5);
+		expect(h.compressionMemory.afterAssistantForCompression.mock.invocationCallOrder[0]).toBeGreaterThan(h.messagesRepository.insertOne.mock.invocationCallOrder.at(1) ?? Infinity);
+	});
+
+	test('does not compress after a failed generation', async () => {
+		const h = createHarness({ compression: true });
+		await h.service.processRandom(h.session);
+		expect(h.compressionMemory.afterAssistantForCompression).not.toHaveBeenCalled();
+		expect(h.session.randomProactiveLastError).toEqual(expect.objectContaining({ code: 'PROACTIVE_LLM_FAILED' }));
+	});
+
+	test('a failed background compression cannot retract a delivered reply', async () => {
+		const h = createHarness({ compression: true, reply: 'Delivered.' });
+		h.compressionMemory.afterAssistantForCompression.mockRejectedValue(new Error('compression unavailable'));
+		await h.service.processRandom(h.session);
+		expect(h.messagesRepository.insertOne).toHaveBeenCalledWith(expect.objectContaining({ role: 'assistant', content: 'Delivered.' }));
+		expect(h.messagesRepository.delete).not.toHaveBeenCalled();
+		expect(h.session.randomProactiveLastError).toBeNull();
+	});
+});
 
 describe('AgentProactiveMessageService failed attempts', () => {
 	test('records a failed random proactive request once and consumes the delivery', async () => {
@@ -168,13 +233,16 @@ describe('AgentProactiveMessageService failed attempts', () => {
 	});
 
 	test('settles a delivered proactive request as a successful billed usage', async () => {
-		const { service, session, usage } = createHarness({ reply: '你好，想和你聊聊。' });
+		const { service, session, usage, agentService, compressionMemory } = createHarness({ reply: '你好，想和你聊聊。' });
 
 		await service.processRandom(session);
 
 		expect(usage.startLog).toHaveBeenCalledWith(expect.objectContaining({ usageKind: 'proactive_random' }));
 		expect(usage.finishLog).toHaveBeenCalledWith(expect.anything(), expect.anything(), { status: 'success' });
 		expect(session.randomProactiveLastError).toBeNull();
+		expect(agentService.loadRecentMessagesForContextWithMeta).toHaveBeenCalledWith(session.id, 48_000, 500, expect.objectContaining({ timeAwarenessEnabled: true }));
+		expect(compressionMemory.buildCompressionContext).not.toHaveBeenCalled();
+		expect(compressionMemory.afterAssistantForCompression).not.toHaveBeenCalled();
 	});
 
 	test('adds the unchanged image protocol when an image model is selected', async () => {

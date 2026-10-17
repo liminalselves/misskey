@@ -72,12 +72,12 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				throw new ApiError({ message: 'No such message.', code: 'NO_SUCH_MESSAGE', id: 'bd8b45b6-52d7-4a64-8c64-b893d29a4623' });
 			}
 
+				await invalidateMessageCompression(manager, locked.id, row);
 				await manager.delete(MiAgentMessage, {
 				id: ps.messageId,
 				sessionId: ps.sessionId,
 			});
 
-				await invalidateMessageCompression(manager, locked.id);
 				const latest = await manager.findOne(MiAgentMessage, { where: { sessionId: locked.id }, order: { createdAt: 'DESC', id: 'DESC' } });
 				await manager.update(MiAgentSession, { id: locked.id }, { updatedAt: new Date(), lastMessageAt: latest?.createdAt ?? null });
 				});

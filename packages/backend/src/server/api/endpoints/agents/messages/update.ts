@@ -132,6 +132,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				}
 			}
 
+			const contentChanged = row.content !== editedVisibleContent;
 			row.content = editedVisibleContent;
 			if (row.role === 'assistant' && row.proactiveScheduleControlRaw) {
 				// The executed control journal is immutable; editing changes only the visible reply.
@@ -142,7 +143,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 						content: row.content, rawContent: row.rawContent,
 					});
 					if (updated.affected !== 1) throw new ApiError({ message: 'No such message.', code: 'NO_SUCH_MESSAGE', id: 'e3f4a5b6-c7d8-9012-e345-f67890123456' });
-					await invalidateMessageCompression(manager, locked.id);
+					if (contentChanged) await invalidateMessageCompression(manager, locked.id, row);
 				});
 
 			return {

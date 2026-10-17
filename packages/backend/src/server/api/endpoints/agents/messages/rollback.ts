@@ -94,11 +94,11 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				});
 			}
 
+				await invalidateMessageCompression(manager, locked.id, anchor, null);
 				const deleted = await manager.createQueryBuilder().delete().from(MiAgentMessage)
 					.where('"sessionId" = :sessionId', { sessionId: locked.id })
 					.andWhere('("createdAt" > :createdAt OR ("createdAt" = :createdAt AND id >= :id))', { createdAt: anchor.createdAt, id: anchor.id })
 					.execute();
-				await invalidateMessageCompression(manager, locked.id);
 				const latest = await manager.findOne(MiAgentMessage, { where: { sessionId: locked.id }, order: { createdAt: 'DESC', id: 'DESC' } });
 				await manager.update(MiAgentSession, { id: locked.id }, { updatedAt: new Date(), lastMessageAt: latest?.createdAt ?? null });
 				return { deletedCount: deleted.affected ?? 0, content: anchor.content };

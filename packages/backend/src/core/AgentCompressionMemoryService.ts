@@ -413,6 +413,51 @@ export class AgentCompressionMemoryService {
 		};
 	}
 
+	private currentStickyState(sticky: MiAgentSessionCompressionSticky, budget: number, dMap: Map<string, number>): AgentCompressionStickyState {
+		if (sticky.state !== 'dormant' && sticky.state !== 'active') return sticky.state;
+		const from = dMap.get(sticky.fromMessageId);
+		const to = dMap.get(sticky.toMessageId);
+		return from == null || to == null || Math.max(from, to) > budget ? 'active' : 'dormant';
+	}
+
+	private hasUsableSummary(sticky: MiAgentSessionCompressionSticky): boolean {
+		return (sticky.state === 'active' || sticky.state === 'dormant')
+			&& (sticky.userOverridden || sticky.errorMessage == null)
+			&& sticky.summaryText.trim().length > 0;
+	}
+
+	@bindThis
+	public async buildCompressionContext(params: {
+		session: MiAgentSession;
+		character: ReturnType<AgentService['effectiveCharacterForLlm']>;
+		style: ReturnType<AgentService['effectiveStyleForLlm']>;
+		instanceMeta: MiMeta;
+		sidecar?: Pick<CompressionSidecarTokenD, 'dMap' | 'hSend'>;
+	}): Promise<{
+		block: string;
+		injectedStickies: MiAgentSessionCompressionSticky[];
+		boundaries: Map<string, { createdAt: Date; id: string }>;
+	}> {
+		const sidecar = params.sidecar ?? await this.computeSidecarTokenD({
+			...params,
+			rows: await this.loadScanRows(params.session.id),
+		});
+		const stickies = (await this.listStickies(params.session.id)).map(sticky => ({
+			...sticky, state: this.currentStickyState(sticky, sidecar.hSend, sidecar.dMap),
+		}));
+		const injection = this.buildCompressionSystemBlock(stickies, this.resolveCompressionInjectMaxChars(params.instanceMeta));
+		const injectedStickies = stickies.filter(sticky => injection.injectedIds.has(sticky.id));
+		const boundaries = await this.loadBoundaryMap(params.session.id, injectedStickies.flatMap(sticky => [sticky.fromMessageId, sticky.toMessageId]));
+		return { block: injection.block, injectedStickies, boundaries };
+	}
+
+	private async loadScanRows(sessionId: string): Promise<CompressionScanRow[]> {
+		return this.agentMessagesRepository.find({
+			where: { sessionId }, order: { createdAt: 'DESC', id: 'DESC' }, take: AGENT_OVERVIEW_SCAN_LIMIT,
+			select: ['id', 'role', 'content', 'createdAt', 'imageFileId', 'imageRecognitionStatus', 'imageRecognitionDescription', 'proactiveScheduleControlRaw', 'proactiveScheduleControlError', 'timeTrusted'],
+		});
+	}
+
 	@bindThis
 	public async listStickies(sessionId: string): Promise<MiAgentSessionCompressionSticky[]> {
 		return this.stickyRepository.find({
@@ -452,6 +497,10 @@ export class AgentCompressionMemoryService {
 	}> {
 		const { sessionId, rows, dMap, hSend, t1, t2, maxInputChars } = params;
 		const stickies = await this.listStickies(sessionId);
+		const formatFn = (m: CompressionScanRow): string => this.agentService.formatMessageForLlmHistory(
+			m as Parameters<AgentService['formatMessageForLlmHistory']>[0],
+			{ timeAwarenessEnabled: params.timeAwarenessEnabled },
+		);
 		const b = stickies.length === 0
 			? new Map<string, { createdAt: Date; id: string }>()
 			: await this.loadBoundaryMap(sessionId, stickies.flatMap(s => [s.fromMessageId, s.toMessageId]));
@@ -461,12 +510,10 @@ export class AgentCompressionMemoryService {
 			if (m.role !== 'user' && m.role !== 'assistant') continue;
 			const d = dMap.get(m.id) ?? 0;
 			if (d <= t1 || d > hSend) continue;
-			if (m.content.length === 0) continue;
+			if (formatFn(m).trim().length === 0) continue;
 			let covered = false;
 			for (const s of stickies) {
-				// stale 不参与；failed 便签未压缩成功，其区间消息视为「未覆盖」，
-				// 从而下一次发信仍会命中未压 staged 消息、自动重试压缩（与 buildPairs 失败不排除原文的语义对称）
-				if (s.state === 'stale' || s.state === 'failed') continue;
+				if (!this.hasUsableSummary(s)) continue;
 				if (this.messageInStickyRange({ id: m.id, createdAt: m.createdAt }, s, b)) {
 					covered = true;
 					break;
@@ -477,18 +524,17 @@ export class AgentCompressionMemoryService {
 			if (d > t2) hasUncoveredStaged = true;
 		}
 		if (!hasUncoveredStaged || uncoveredT1H.length === 0) return null;
-		const allCandidates = uncoveredT1H;
-		allCandidates.sort((a, c) => this.compareMessageOrder(a, c));
-		// 与发信滑窗一致：按 `formatMessageForLlmHistory` 携带时间戳、图片识别 XML、主动调度控制块等必要数据（不携带则模型压缩时丢失发送时间与图片描述语义）
-		const formatFn = (m: CompressionScanRow): string => this.agentService.formatMessageForLlmHistory(
-			m as Parameters<AgentService['formatMessageForLlmHistory']>[0],
-			{ timeAwarenessEnabled: params.timeAwarenessEnabled },
-		);
-		// Preserve whole messages, even when the oldest message alone exceeds the batch budget.
+		const candidateIds = new Set(uncoveredT1H.map(m => m.id));
+		const rowsOldestFirst = filterRowsForChatHistoryD(rows).sort((a, c) => this.compareMessageOrder(a, c));
 		const candidates: CompressionScanRow[] = [];
 		const blobParts: string[] = [];
 		let blobLen = 0;
-		for (const m of allCandidates) {
+		for (const m of rowsOldestFirst) {
+			// A from/to range cannot claim messages omitted from the model input.
+			if (!candidateIds.has(m.id)) {
+				if (candidates.length > 0) break;
+				continue;
+			}
 			const piece = `${m.role}: ${formatFn(m)}`;
 			const addLen = piece.length + (blobParts.length > 0 ? 2 : 0);
 			if (candidates.length > 0 && blobLen + addLen > maxInputChars) break;
@@ -501,14 +547,13 @@ export class AgentCompressionMemoryService {
 		const existingByRange = await this.stickyRepository.findOne({
 			where: { sessionId, fromMessageId: fromId, toMessageId: toId },
 		});
-		// 同区间已有「非失败」便签才视为重复；失败便签不拦截，交由下方指纹路径重试
-		if (existingByRange && (existingByRange.state === 'active' || existingByRange.state === 'dormant' || existingByRange.userOverridden)) return null;
+		if (existingByRange && this.hasUsableSummary(existingByRange)) return null;
 		const textBlob = blobParts.join('\n\n');
 		const fingerprint = createHash('sha256').update(textBlob, 'utf8').digest('hex');
 		const existingByFp = await this.stickyRepository.findOne({ where: { sessionId, sourceFingerprint: fingerprint } });
 		// 已有等价便签（成功/用户已修正）→ 视为已覆盖，无需再压；
 		// 失败便签不设重试上限——每轮发信持续重试直至成功，避免压缩永久失败导致旧消息丢失上下文
-		if (existingByFp && (existingByFp.errorMessage == null || existingByFp.userOverridden)) return null;
+		if (existingByFp && (this.hasUsableSummary(existingByFp) || existingByFp.userOverridden)) return null;
 		return { candidates, fromId, toId, textBlob, fingerprint, existingByFp };
 	}
 
@@ -526,12 +571,7 @@ export class AgentCompressionMemoryService {
 	): Promise<boolean> {
 		if (this.resolveEffectiveProvider(session.agentLongMemoryProvider, instanceMeta) !== 'compression') return false;
 
-		const rows = preloadedRows ?? await this.agentMessagesRepository.find({
-			where: { sessionId: session.id },
-			order: { createdAt: 'DESC', id: 'DESC' },
-			take: AGENT_SEND_PATH_SCAN_LIMIT,
-			select: ['id', 'role', 'content', 'createdAt', 'imageFileId', 'imageRecognitionStatus', 'imageRecognitionDescription', 'proactiveScheduleControlRaw', 'proactiveScheduleControlError', 'timeTrusted'],
-		});
+		const rows = preloadedRows ?? await this.loadScanRows(session.id);
 		const { dMap, hSend, t1, t2 } = precomputedSidecar ?? await this.computeSidecarTokenD({ session, character, style, instanceMeta, rows });
 		const gathered = await this.gatherCompressionCandidates({ sessionId: session.id, rows, dMap, hSend, t1, t2, timeAwarenessEnabled: session.timeAwarenessEnabled === true, maxInputChars: this.resolveCompressionMaxInputChars(instanceMeta) });
 		if (!gathered) return false;
@@ -546,7 +586,9 @@ export class AgentCompressionMemoryService {
 	}
 
 	/**
-	 * D/区带划分：`historyBudget` 在压缩便签会话下应与 `buildSendPathBudgets` 发信 history 一致（见 compression-overview）。	 * messages 为近 `AGENT_OVERVIEW_SCAN_LIMIT`（50 000）条内、仅 user/assistant，自新向旧，D 累计口径与 `dMapFromRowsNewestFirst` 一致。	 * `reconcileDormantActive`：为真时在读取便签前按当前对话刷新 dormant/active（与仅依赖上次助理侧车写入相比，可避免前端长期看到「休眠中」）。	 */
+	 * Uses the same history budget and scan limit as sending.
+	 * Dormant/active projection does not persist preview state.
+	 */
 	@bindThis
 	public async getCompressionOverviewData(
 		sessionId: string,
@@ -597,15 +639,14 @@ export class AgentCompressionMemoryService {
 			charsPerToken: cpt,
 			budgetForExact: exactTokenCounter ? budgetTokens : undefined,
 		});
-		if (reconcileDormantActive) {
-			await this.reconcileStickyStates(sessionId, budgetTokens, weights.dMap);
-		}
 		const bands = this.agentTokenService.computeWindowAndBands(rowsD, weights.dMap, {
 			historyBudgetTokens: budgetTokens,
 			t1Ratio,
 			t2Ratio,
 		});
-		const stickies = await this.listStickies(sessionId);
+		const stickies = (await this.listStickies(sessionId)).map(sticky => reconcileDormantActive
+			? { ...sticky, state: this.currentStickyState(sticky, budgetTokens, weights.dMap) }
+			: sticky);
 		/** 便签端点消息在对话中的短预览（供总览页展示，非 ID）——经 agentPreviewText 过滤 MD/MFM/XML 语法 */
 		const formatStickyMsgPreview = (raw: string | null | undefined): string => {
 			if (raw == null || raw === '') return '…';
@@ -903,18 +944,7 @@ export class AgentCompressionMemoryService {
 		const stickies = await this.listStickies(sessionId);
 		const now = new Date();
 		for (const s of stickies) {
-			// 仅收束侧车“休眠/可注入”两态，避免误覆盖 stale / failed 态
-			if (s.state !== 'dormant' && s.state !== 'active') continue;
-			const dEnd1 = dMap.get(s.fromMessageId);
-			const dEnd2 = dMap.get(s.toMessageId);
-			let newState: AgentCompressionStickyState;
-			if (dEnd1 == null || dEnd2 == null) {
-				newState = 'active';
-			} else if (Math.max(dEnd1, dEnd2) > budget) {
-				newState = 'active';
-			} else {
-				newState = 'dormant';
-			}
+			const newState = this.currentStickyState(s, budget, dMap);
 			if (s.state !== newState) {
 				await this.stickyRepository.update({ id: s.id, state: s.state, updatedAt: s.updatedAt }, {
 					state: newState, updatedAt: now,
@@ -953,7 +983,9 @@ export class AgentCompressionMemoryService {
 	}
 
 	/**
-	 * 在助理消息已落库后调用；D 与候选区间在**含本条 assistant** 的近 500 条上累计，与「回复后再算」一致。	 * **自动压缩 LLM**：仅当未压消息已进入「排队较后」带 (t2,hSend]（界面「排队较后」，即预备进入压条的下段）时才成条并调用模型；未压仅在「排队较前」 t1,t2]（上段）时只调 reconcile。`t1/t2` 与发信 H 同 `buildSendPathBudgets`。	 */
+	 * Supplied rows and token depths must include the persisted assistant reply.
+	 * Only uncovered messages in (t2, hSend] trigger a model call.
+	 */
 	@bindThis
 	public async afterAssistantForCompression(
 		session: MiAgentSession,
@@ -966,12 +998,7 @@ export class AgentCompressionMemoryService {
 	): Promise<void> {
 		if (this.resolveEffectiveProvider(session.agentLongMemoryProvider, instanceMeta) !== 'compression') return;
 
-		const rows = preloadedRows ?? await this.agentMessagesRepository.find({
-			where: { sessionId: session.id },
-			order: { createdAt: 'DESC', id: 'DESC' },
-			take: AGENT_SEND_PATH_SCAN_LIMIT,
-			select: ['id', 'role', 'content', 'createdAt', 'imageFileId', 'imageRecognitionStatus', 'imageRecognitionDescription', 'proactiveScheduleControlRaw', 'proactiveScheduleControlError', 'timeTrusted'],
-		});
+		const rows = preloadedRows ?? await this.loadScanRows(session.id);
 		const { dMap, hSend, t1, t2 } = precomputedSidecar ?? await this.computeSidecarTokenD({ session, character, style, instanceMeta, rows });
 		const maxInput = this.resolveCompressionMaxInputChars(instanceMeta);
 		// 仅在「排队较后」(t2,hSend]（预备下段）出现未压 raw 时触发 LLM；未压若只在「排队较前」(t1,t2]（上段）则仅 reconcile。
@@ -1020,6 +1047,7 @@ export class AgentCompressionMemoryService {
 				maxTokens: maxOut,
 			});
 			summary = llmResult.text;
+			if (summary.trim().length === 0) throw new Error('Empty compression summary.');
 			// 计费 token 数一律取自响应 usage（禁止本地估算）；缺失时由 finishLog 按策略兜底
 			const usageFields = llmResult.usage ? {
 				promptTokens: llmResult.usage.promptTokens,
@@ -1029,6 +1057,7 @@ export class AgentCompressionMemoryService {
 			} : {};
 			await this.agentModelUsageService.finishLog(usageLog, instanceMeta, { status: 'success', ...usageFields });
 		} catch {
+			summary = '';
 			compressionError = 'COMPRESSION_LLM_FAILED';
 			try {
 				await this.agentModelUsageService.finishLog(usageLog, instanceMeta, { status: 'failed', errorCode: 'COMPRESSION_LLM' });
@@ -1059,7 +1088,10 @@ export class AgentCompressionMemoryService {
 					await manager.createQueryBuilder().update(MiAgentSessionCompressionSticky).set({
 						summaryText: summary, state: finalState, errorMessage: compressionError,
 						lastModelId: compModelId, updatedAt: now, retryCount: () => '"retryCount" + 1',
-					}).where({ id: existingByFp.id, sourceFingerprint: fingerprint, state: 'failed', userOverridden: false }).execute();
+					}).where({
+						id: existingByFp.id, sourceFingerprint: fingerprint, state: existingByFp.state,
+						updatedAt: existingByFp.updatedAt, userOverridden: false,
+					}).execute();
 				} else {
 					const rawMax = await manager.createQueryBuilder(MiAgentSessionCompressionSticky, 's')
 						.select('COALESCE(MAX(s.sortIndex), 0)', 'm').where('s.sessionId = :id', { id: session.id })

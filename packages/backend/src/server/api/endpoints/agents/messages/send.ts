@@ -29,7 +29,7 @@ import { AgentDashscopeMemoryService } from '@/core/AgentDashscopeMemoryService.
 import { AgentModelUsageService } from '@/core/AgentModelUsageService.js';
 import { ChatService } from '@/core/ChatService.js';
 import { MetaService } from '@/core/MetaService.js';
-import { AgentCompressionMemoryService, AGENT_OVERVIEW_SCAN_LIMIT, type CompressionSidecarTokenD } from '@/core/AgentCompressionMemoryService.js';
+import { AgentCompressionMemoryService, AGENT_OVERVIEW_SCAN_LIMIT } from '@/core/AgentCompressionMemoryService.js';
 import { AgentTokenService } from '@/core/AgentTokenService.js';
 import { AgentImageService } from '@/core/AgentImageService.js';
 import { AgentVisionService } from '@/core/AgentVisionService.js';
@@ -442,7 +442,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				const memActive = this.agentCompressionMemoryService.isAliyunPathActive(longMemProvider, session, instanceMeta);
 				const maxMemChars = Math.max(200, Math.min(50_000, session.agentLongMemoryInjectMaxChars || instanceMeta.agentMem0InjectMaxChars));
 
-				const { messages: history, scannedRows: historyScannedRows, dMap: historyDMap } = await this.agentService.loadRecentMessagesForContextWithMeta(session.id, historyBudget, AGENT_OVERVIEW_SCAN_LIMIT, { exactTokenCounter: sendExactCounter, tokenBudget: historyBudgetTokens, charsPerToken, timeAwarenessEnabled: session.timeAwarenessEnabled === true });
+				const { messages: history, dMap: historyDMap } = await this.agentService.loadRecentMessagesForContextWithMeta(session.id, historyBudget, AGENT_OVERVIEW_SCAN_LIMIT, { exactTokenCounter: sendExactCounter, tokenBudget: historyBudgetTokens, charsPerToken, timeAwarenessEnabled: session.timeAwarenessEnabled === true });
 				const historyForApi = history.filter(m => (m.role === 'user' || m.role === 'assistant') && m.id !== userMsg!.id);
 				const regexRules = this.agentService.normalizeRegexRules(character.regexRules);
 				const regexFiltered = await this.agentService.applyRegexRulesBatch(
@@ -463,18 +463,15 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					: userMsg.imageRecognitionStatus === 'succeeded' && userMsg.imageRecognitionDescription
 						? `<image-recognition source="server" not-user-input="true">${escapeAgentXmlText(userMsg.imageRecognitionDescription)}</image-recognition>${llmUserText.length > 0 ? `\n${llmUserText}` : ''}`
 						: `<image-recognition source="server" not-user-input="true" status="unavailable" />${llmUserText.length > 0 ? `\n${llmUserText}` : ''}`;
-				const cStickies = longMemProvider === 'compression'
-					? await this.agentCompressionMemoryService.listStickies(session.id)
-					: [];
-				const compMaxInject = this.agentCompressionMemoryService.resolveCompressionInjectMaxChars(instanceMeta);
-				const compInject = longMemProvider === 'compression' && cStickies.length > 0
-					? this.agentCompressionMemoryService.buildCompressionSystemBlock(cStickies, compMaxInject)
-					: { block: '', injectedIds: new Set<string>() };
-				const injectedStickies = cStickies.filter(s => compInject.injectedIds.has(s.id));
+				const compInject = longMemProvider === 'compression'
+					? await this.agentCompressionMemoryService.buildCompressionContext({
+						session, character, style, instanceMeta,
+						sidecar: historyDMap ? { dMap: historyDMap, hSend: historyBudgetTokens } : undefined,
+					})
+					: { block: '', injectedStickies: [], boundaries: new Map() };
+				const { injectedStickies, boundaries } = compInject;
 				let pairs: { role: 'user' | 'assistant'; content: string }[] = [];
 				if (injectedStickies.length > 0) {
-					const bIds = injectedStickies.flatMap(s => [s.fromMessageId, s.toMessageId]);
-					const boundaries = await this.agentCompressionMemoryService.loadBoundaryMap(session.id, bIds);
 					pairs = this.agentCompressionMemoryService.buildPairsExcludingInjectedCompression(
 						historyForApi.map((m, index) => ({ ...m, content: m.role === 'user' ? convertUserStickersForLlm(filteredHistoryTexts[index]) : historyForAi(filteredHistoryTexts[index], m.role as 'user' | 'assistant') })),
 						injectedStickies,
@@ -772,27 +769,16 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					let baselineMaxMs = 0;
 					for (const s of baselineStickies) baselineMaxMs = Math.max(baselineMaxMs, s.updatedAt.getTime());
 					compressionStickiesBaselineMaxUpdatedAt = baselineMaxMs > 0 ? new Date(baselineMaxMs).toISOString() : null;
-					// 复用主路径已加载的全量扫描行与 D 累计（AGENT_OVERVIEW_SCAN_LIMIT 口径）：
-					// 既避免侧车另查 DB 与重复分词，更修复了侧车旧实现仅扫 500 条、
-					// 在大上下文窗口（staged 区带位于 500 条之外）下永远触达不到而压缩不触发的问题。
-					const { t1Ratio, t2Ratio } = this.agentCompressionMemoryService.resolveCompressionBandRatios(instanceMeta);
-					let compressionRows: Pick<MiAgentMessage, 'id' | 'role' | 'content' | 'createdAt' | 'imageFileId' | 'imageRecognitionStatus' | 'imageRecognitionDescription' | 'proactiveScheduleControlRaw' | 'proactiveScheduleControlError' | 'timeTrusted'>[];
-					let compressionSidecar: CompressionSidecarTokenD;
-					if (historyScannedRows && historyDMap) {
-						compressionRows = historyScannedRows;
-						compressionSidecar = { dMap: historyDMap, hSend: historyBudgetTokens, t1: t1Ratio * historyBudgetTokens, t2: t2Ratio * historyBudgetTokens };
-					} else {
-						// 字符口径等非常规路径的兑底：仍按发信扫描上限加载并现算 D
-						compressionRows = await this.agentMessagesRepository.find({
-							where: { sessionId: session.id },
-							order: { createdAt: 'DESC', id: 'DESC' },
-							take: AGENT_OVERVIEW_SCAN_LIMIT,
-							select: ['id', 'role', 'content', 'createdAt', 'imageFileId', 'imageRecognitionStatus', 'imageRecognitionDescription', 'proactiveScheduleControlRaw', 'proactiveScheduleControlError', 'timeTrusted'],
-						});
-						compressionSidecar = await this.agentCompressionMemoryService.computeSidecarTokenD({
-							session, character, style, instanceMeta, rows: compressionRows,
-						});
-					}
+					// The pre-call snapshot omits the new assistant and cannot define the post-reply window.
+					const compressionRows = await this.agentMessagesRepository.find({
+						where: { sessionId: session.id },
+						order: { createdAt: 'DESC', id: 'DESC' },
+						take: AGENT_OVERVIEW_SCAN_LIMIT,
+						select: ['id', 'role', 'content', 'createdAt', 'imageFileId', 'imageRecognitionStatus', 'imageRecognitionDescription', 'proactiveScheduleControlRaw', 'proactiveScheduleControlError', 'timeTrusted'],
+					});
+					const compressionSidecar = await this.agentCompressionMemoryService.computeSidecarTokenD({
+						session, character, style, instanceMeta, rows: compressionRows,
+					});
 					compressionLlmPending = await this.agentCompressionMemoryService.peekWillInvokeCompressionLlm(
 						session, character, style, instanceMeta, me.id, compressionRows, compressionSidecar,
 					);

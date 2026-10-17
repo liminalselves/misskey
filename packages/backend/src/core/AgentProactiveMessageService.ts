@@ -23,6 +23,8 @@ import { AgentExternalAuditService } from '@/core/AgentExternalAuditService.js';
 import { AgentModelUsageService } from '@/core/AgentModelUsageService.js';
 import { AgentImageService } from '@/core/AgentImageService.js';
 import { AgentStickerService } from '@/core/AgentStickerService.js';
+import { AgentCompressionMemoryService, AGENT_OVERVIEW_SCAN_LIMIT } from '@/core/AgentCompressionMemoryService.js';
+import { AgentTokenService } from '@/core/AgentTokenService.js';
 import { MetaService } from '@/core/MetaService.js';
 import { AgentMessageNotifyService } from '@/core/AgentMessageNotifyService.js';
 import { buildAgentProactiveNotificationText } from '@/core/agent-proactive-notification-text.js';
@@ -76,6 +78,8 @@ export class AgentProactiveMessageService {
 		private metaService: MetaService,
 		private agentMessageNotifyService: AgentMessageNotifyService,
 		private driveFileEntityService: DriveFileEntityService,
+		private agentCompressionMemoryService: AgentCompressionMemoryService,
+		private agentTokenService: AgentTokenService,
 	) {}
 
 	public async processDue(): Promise<void> {
@@ -306,8 +310,24 @@ export class AgentProactiveMessageService {
 			if (this.agentImageService.resolveImageModel(instance, session.agentImageModelId) != null) {
 				system += `\n\n<agent_image_generation_protocol>\n${AGENT_IMAGE_WORLD_PROMPT}\n</agent_image_generation_protocol>`;
 			}
-			// 主动消息仅在对 timeAwarenessEnabled 已前置校验（processScheduled / armRandomAfterVisibleAssistant）的会话触发，历史一并注入发送时间
-			const { messages } = await this.agentService.loadRecentMessagesForContextWithMeta(session.id, 48_000, 500, { timeAwarenessEnabled: true });
+			const compressionOn = this.agentCompressionMemoryService.resolveEffectiveProvider(session.agentLongMemoryProvider, instance) === 'compression';
+			const budgets = compressionOn ? await this.agentCompressionMemoryService.buildSendPathBudgets({
+				session, character, style, instanceMeta: instance, provider: 'compression',
+			}) : null;
+			const tokenConfig = budgets ? await this.agentTokenService.resolveTokenConfigForUser(instance, session.agentModelId ?? null, session.userId) : null;
+			const { messages, dMap } = await this.agentService.loadRecentMessagesForContextWithMeta(
+				session.id, budgets?.historyBudget ?? 48_000, budgets ? AGENT_OVERVIEW_SCAN_LIMIT : 500, {
+					timeAwarenessEnabled: true,
+					tokenBudget: budgets?.historyBudgetTokens,
+					charsPerToken: budgets?.charsPerToken,
+					exactTokenCounter: tokenConfig ? this.agentTokenService.makeCounter(tokenConfig) : undefined,
+				},
+			);
+			const compression = budgets ? await this.agentCompressionMemoryService.buildCompressionContext({
+				session, character, style, instanceMeta: instance,
+				sidecar: dMap ? { dMap, hSend: budgets.historyBudgetTokens } : undefined,
+			}) : null;
+			if (compression) system += compression.block;
 			const historyRows = messages
 				.filter(message => message.role === 'user' || message.role === 'assistant')
 				.filter(message => message.id !== internalMessageId);
@@ -329,15 +349,19 @@ export class AgentProactiveMessageService {
 			}
 			const filteredTrigger = regexFiltered[0];
 			const filteredHistoryTexts = regexFiltered.slice(1);
-			const history = historyRows.map((message, index) => {
+			const filteredHistory = historyRows.map((message, index) => {
 				let content = filteredHistoryTexts[index];
 				// 主动消息无桌宠请求上下文：历史中的表演指令一律剥离，避免诱导输出
 				if (message.role === 'assistant') content = stripPerformanceCues(content);
 				return {
+					id: message.id, createdAt: message.createdAt,
 					role: message.role as 'user' | 'assistant',
 					content: message.role === 'user' ? this.agentStickerService.convertUserTextForLlm(content, stickerBlocks.emojiList) : content,
 				};
 			});
+			const history = compression
+				? this.agentCompressionMemoryService.buildPairsExcludingInjectedCompression(filteredHistory, compression.injectedStickies, compression.boundaries)
+				: filteredHistory.map(({ role, content }) => ({ role, content }));
 			const selectedWorldbook = this.agentService.selectWorldbookEntriesForPrompt(character, filteredTrigger);
 			const scheduledTrigger = await this.agentProactiveScheduleService.prependScheduleContext(filteredTrigger, session);
 			const userText = this.agentService.wrapLatestUserTextWithStyleDirective(
@@ -468,6 +492,10 @@ export class AgentProactiveMessageService {
 				.where('id = :id', { id: session.id });
 			if (drawAfterAt != null) releaseQuery.setParameter('drawAfterAt', drawAfterAt);
 			await releaseQuery.execute();
+			if (compressionOn) {
+				void this.agentCompressionMemoryService.afterAssistantForCompression(session, character, style, instance, session.userId)
+					.catch(() => { /* Compression cannot undo a delivered proactive reply. */ });
+			}
 			// The effective character avatar is the agent's avatar for this session. When a
 			// session has no separate avatar, it naturally falls back to the role avatar.
 			const avatarFileId = character.avatarFileId ?? characterRow.avatarFileId;
