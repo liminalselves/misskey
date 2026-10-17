@@ -7,6 +7,7 @@ import { jest } from '@jest/globals';
 import { AgentModelUsageService } from '@/core/AgentModelUsageService.js';
 import { MiAgentModelUsageLog } from '@/models/AgentModelUsageLog.js';
 import { MiUserProfile } from '@/models/UserProfile.js';
+import type { MiMeta } from '@/models/Meta.js';
 
 /** dailyFreeQuota=2 的按次计费模型（id 不能以 BYOK 前缀 u 开头） */
 const instance = {
@@ -22,7 +23,7 @@ const instance = {
 		billingMode: 'per_call',
 		dailyFreeQuota: 2,
 	}],
-} as never;
+} as unknown as MiMeta;
 
 type ServiceOptions = {
 	/** Lua INCR 返回值（当日已用计数 + 1） */
@@ -60,7 +61,7 @@ function createService(opts: ServiceOptions = {}) {
 		redis as never,
 		db as never,
 		{ gen: jest.fn(() => 'log-id') } as never,
-		{} as never,
+		{ getUserFacingModelCostPerCall: jest.fn(() => 1) } as never,
 	);
 	return { service, redis, em, db, updates };
 }
@@ -93,6 +94,43 @@ describe('AgentModelUsageService finishLog atomicity', () => {
 
 	afterEach(() => {
 		jest.useRealTimers();
+	});
+
+	test.each([
+		['per_call', 'success', 2, true, 1],
+		['per_call', 'success', 2, false, 1],
+		['per_call', 'aborted', 2, false, 1],
+		['per_call', 'success', 5, true, 1],
+		['usage', 'success', 2, true, 2],
+		['usage', 'success', 5, true, 1],
+		['usage', 'success', 2, false, 2],
+		['usage', 'success', 5, false, 1],
+	] as const)('%s / %s / UTC hour %i / usage %s: charges %s', async (billingMode, status, hour, withUsage, expectedCost) => {
+		jest.setSystemTime(new Date(Date.UTC(2026, 9, 17, hour)));
+		const pricedInstance = {
+			...instance,
+			agentLlmModels: [{
+				...instance.agentLlmModels![0]!,
+				billingMode,
+				dailyFreeQuota: 0,
+				peakPriceMultiplier: 2,
+				pricePerMillionInputCacheHitTokens: 1,
+				pricePerMillionInputCacheMissTokens: 1,
+				pricePerMillionOutputTokens: 1,
+			}],
+		};
+		const { service, em, updates } = createService();
+		const log = createLog();
+
+		await service.finishLog(log, pricedInstance, {
+			status,
+			...(withUsage ? { promptTokens: 500_000, completionTokens: 500_000 } : {}),
+		});
+
+		expect(log.cost).toBe(expectedCost);
+		expect(updates[0]![2]).toMatchObject({ status, cost: expectedCost });
+		expect(em.decrement).toHaveBeenCalledTimes(1);
+		expect(em.decrement).toHaveBeenCalledWith(MiUserProfile, { userId: log.userId }, 'agentCreditBalance', expectedCost);
 	});
 
 	test('paid call: settles log and decrements balance in the same transaction', async () => {

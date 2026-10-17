@@ -265,16 +265,16 @@ export class AgentModelUsageService {
 	 * - usage 模式且 usage 存在：三档单价 × token 数 ÷ 1e6（无缓存分段时全部输入按未命中价）；
 	 * - usage 模式但 usage 缺失：回退 costPerCall 兜底；
 	 * - per_call 模式：按次价格；
-	 * - 峰谷定价：结算时刻处于高峰时段（北京时间 9:00～12:00 / 14:00～18:00）且模型配置了 peakPriceMultiplier 时，
-	 *   所有计费项统一乘以倍率（与 DeepSeek 官方口径一致）。
+	 * - 峰谷定价：仅 usage 模式（含 usage 缺失的兜底价）在高峰时段（北京时间 9:00～12:00 / 14:00～18:00）
+	 *   乘以 peakPriceMultiplier；per_call 模式始终按次价格。
 	 */
 	@bindThis
 	private resolveLlmCallCost(instance: MiMeta, modelId: string | null, params: FinishLogParams): number {
 		// BYOK 用户自定义模型：用户自带 Key，平台不扣费
 		if (modelId && isAgentUserModelId(modelId)) return 0;
 		const model = modelId ? getEffectiveLlmModels(instance).find(m => m.id === modelId) : undefined;
-		// 高峰倍率：仅当模型显式配置（>1）且结算时刻处于高峰时段时生效
-		const peakMultiplier = model?.peakPriceMultiplier != null && model.peakPriceMultiplier > 1 && isAgentLlmPeakTimeBeijing()
+		// Only usage billing applies peak pricing, including its missing-usage fallback.
+		const peakMultiplier = model?.billingMode === 'usage' && model.peakPriceMultiplier != null && model.peakPriceMultiplier > 1 && isAgentLlmPeakTimeBeijing()
 			? model.peakPriceMultiplier
 			: 1;
 		if (model && model.billingMode === 'usage' && params.promptTokens != null && params.completionTokens != null) {
