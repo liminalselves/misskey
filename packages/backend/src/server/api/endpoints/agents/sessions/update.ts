@@ -45,6 +45,7 @@ export const meta = {
 			agentImageSettings: { type: 'object' },
 			segmentedOutputEnabled: { type: 'boolean' },
 			compressionCacheInvalidated: { type: 'boolean' },
+			defaultedFields: { type: 'array', items: { type: 'string' } },
 			updatedAt: { type: 'string', format: 'date-time' },
 		},
 	},
@@ -54,6 +55,7 @@ export const paramDef = {
 	type: 'object',
 	properties: {
 		sessionId: { type: 'string', format: 'misskey:id' },
+		importSettings: { type: 'boolean' },
 		name: { type: 'string', minLength: 1, maxLength: 256, nullable: true },
 			dialogueStyleId: { type: 'string', format: 'misskey:id', nullable: true },
 			plazaStatsDialogueStyleId: { type: 'string', format: 'misskey:id', nullable: true },
@@ -116,6 +118,25 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			const characterRow = await this.agentService.loadCharacterForAgentSessionOrThrow(row);
 			this.agentService.assertAgentUserSessionChatAllowed(characterRow, row);
 			const instanceMeta = await this.metaService.fetch(true);
+			const defaultedFields: string[] = [];
+			const resolveReference = async (
+				field: string,
+				id: string | null,
+				validate: (id: string) => void | Promise<void>,
+				unavailableCodes: readonly string[],
+			): Promise<string | null> => {
+				if (id === null) return null;
+				try {
+					await validate(id);
+					return id;
+				} catch (error) {
+					if (!ps.importSettings || !(error instanceof ApiError) || !unavailableCodes.includes(error.code)) throw error;
+					defaultedFields.push(field);
+					return null;
+				}
+			};
+			const styleUnavailableCodes = ['NO_SUCH_STYLE', 'NO_SUCH_PLAZA_STATS_STYLE', 'STYLE_NOT_AVAILABLE', 'STYLE_NOT_SUBSCRIBED', 'STYLE_NOT_PUBLISHED'];
+			const modelUnavailableCodes = ['AGENTS_MODEL_UNAVAILABLE', 'AGENTS_MODEL_NOT_CONFIGURED', 'NO_SUCH_AGENT_USER_MODEL', 'AGENT_USER_MODEL_DISABLED', 'AGENT_USER_MODEL_MISCONFIGURED', 'AGENT_BYOK_DISABLED'];
 
 			if (ps.name !== undefined && ps.name !== null) {
 				// Trim like create does; a whitespace-only name is treated as "no change"
@@ -124,40 +145,32 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				if (trimmedName !== '') row.name = trimmedName.slice(0, 256);
 			}
 			if (ps.dialogueStyleId !== undefined) {
-				if (ps.dialogueStyleId === null) {
-					row.dialogueStyleId = null;
-				} else {
-					const style = await this.agentDialogueStylesRepository.findOneBy({ id: ps.dialogueStyleId });
+				row.dialogueStyleId = await resolveReference('对话文风', ps.dialogueStyleId, async id => {
+					const style = await this.agentDialogueStylesRepository.findOneBy({ id });
 					if (!style) {
 						throw new ApiError({ message: 'No such style.', code: 'NO_SUCH_STYLE', id: 'b4c5d6e7-f8a9-0123-4567-890123456789' });
 					}
 					await this.agentService.assertCanUseDialogueStyle(me.id, style, { forNewSession: true });
 					this.agentService.assertSessionStylePolicy({ sessionKind: row.sessionKind, style, userId: me.id });
-					row.dialogueStyleId = style.id;
-					if (row.plazaStatsDialogueStyleId == null) {
-						row.plazaStatsDialogueStyleId = style.id;
-					}
+				}, styleUnavailableCodes);
+				if (row.dialogueStyleId != null && row.plazaStatsDialogueStyleId == null) {
+					row.plazaStatsDialogueStyleId = row.dialogueStyleId;
 				}
 			}
-				if (ps.plazaStatsDialogueStyleId !== undefined) {
-					if (ps.plazaStatsDialogueStyleId === null) {
-						row.plazaStatsDialogueStyleId = null;
-					} else {
-						const style = await this.agentDialogueStylesRepository.findOneBy({ id: ps.plazaStatsDialogueStyleId });
-						if (!style) {
-							throw new ApiError({ message: 'No such plaza statistics style.', code: 'NO_SUCH_PLAZA_STATS_STYLE', id: '6ee792d0-b5c6-4a2a-a112-2b8345c53e17' });
-						}
-						await this.agentService.assertCanUseDialogueStyle(me.id, style, { forNewSession: true });
-						this.agentService.assertSessionStylePolicy({ sessionKind: row.sessionKind, style, userId: me.id });
-						row.plazaStatsDialogueStyleId = style.id;
+			if (ps.plazaStatsDialogueStyleId !== undefined) {
+				row.plazaStatsDialogueStyleId = await resolveReference('广场统计文风', ps.plazaStatsDialogueStyleId, async id => {
+					const style = await this.agentDialogueStylesRepository.findOneBy({ id });
+					if (!style) {
+						throw new ApiError({ message: 'No such plaza statistics style.', code: 'NO_SUCH_PLAZA_STATS_STYLE', id: '6ee792d0-b5c6-4a2a-a112-2b8345c53e17' });
 					}
-				}
-				if (ps.agentModelId !== undefined) {
-				const mid = ps.agentModelId === '' ? null : ps.agentModelId;
-				if (mid) {
-					await this.agentService.resolveModelApiNameForUser(instanceMeta, mid, me.id);
-				}
-				row.agentModelId = mid;
+					await this.agentService.assertCanUseDialogueStyle(me.id, style, { forNewSession: true });
+					this.agentService.assertSessionStylePolicy({ sessionKind: row.sessionKind, style, userId: me.id });
+				}, styleUnavailableCodes);
+			}
+			if (ps.agentModelId !== undefined) {
+				row.agentModelId = await resolveReference('对话模型', ps.agentModelId === '' ? null : ps.agentModelId, async id => {
+					await this.agentService.resolveModelApiNameForUser(instanceMeta, id, me.id);
+				}, modelUnavailableCodes);
 			}
 			if (ps.agentLongMemoryEnabled !== undefined && ps.agentLongMemoryEnabled !== null) {
 				row.agentLongMemoryEnabled = ps.agentLongMemoryEnabled;
@@ -196,29 +209,34 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				row.agentCompressionInjectMaxChars = ps.agentCompressionInjectMaxChars;
 			}
 			if (ps.agentCompressionModelId !== undefined) {
-				if (ps.agentCompressionModelId === null || ps.agentCompressionModelId === '') {
-					row.agentCompressionModelId = null;
-				} else {
-					await this.agentService.resolveModelApiNameForUser(instanceMeta, ps.agentCompressionModelId.trim(), me.id);
-					row.agentCompressionModelId = ps.agentCompressionModelId.trim();
-				}
+				const mid = ps.agentCompressionModelId == null || ps.agentCompressionModelId.trim() === '' ? null : ps.agentCompressionModelId.trim();
+				row.agentCompressionModelId = await resolveReference('压缩模型', mid, async id => {
+					await this.agentService.resolveModelApiNameForUser(instanceMeta, id, me.id);
+				}, modelUnavailableCodes);
 			}
 			if (ps.agentImageModelId !== undefined) {
 				const mid = ps.agentImageModelId == null || ps.agentImageModelId.trim() === '' ? null : ps.agentImageModelId.trim();
-				if (mid != null && this.agentImageService.resolveImageModel(instanceMeta, mid) == null) {
-					throw new ApiError({ message: 'No such image model.', code: 'NO_SUCH_AGENT_IMAGE_MODEL', id: '02065f09-7ac7-49e0-ac0a-d9f64a82a0f9' });
-				}
-				row.agentImageModelId = mid;
+				row.agentImageModelId = await resolveReference('生图模型（默认关闭）', mid, id => {
+					if (this.agentImageService.resolveImageModel(instanceMeta, id) == null) {
+						throw new ApiError({ message: 'No such image model.', code: 'NO_SUCH_AGENT_IMAGE_MODEL', id: '02065f09-7ac7-49e0-ac0a-d9f64a82a0f9' });
+					}
+				}, ['NO_SUCH_AGENT_IMAGE_MODEL']);
 			}
 			if (ps.agentVisionModelId !== undefined) {
 				const mid = ps.agentVisionModelId == null || ps.agentVisionModelId.trim() === '' ? null : ps.agentVisionModelId.trim();
-				if (mid != null && await this.agentVisionService.resolveVisionModel(instanceMeta, mid) == null) {
-					throw new ApiError({ message: 'No such image recognition model.', code: 'NO_SUCH_AGENT_VISION_MODEL', id: '1b2541f8-0cb5-4ef1-b633-7b5c89ad3b3e' });
-				}
-				row.agentVisionModelId = mid;
+				row.agentVisionModelId = await resolveReference('视觉模型', mid, async id => {
+					if (await this.agentVisionService.resolveVisionModel(instanceMeta, id) == null) {
+						throw new ApiError({ message: 'No such image recognition model.', code: 'NO_SUCH_AGENT_VISION_MODEL', id: '1b2541f8-0cb5-4ef1-b633-7b5c89ad3b3e' });
+					}
+				}, ['NO_SUCH_AGENT_VISION_MODEL']);
 			}
 			if (ps.agentImageSettings !== undefined) {
 				row.agentImageSettings = this.normalizeAgentImageSettings(ps.agentImageSettings);
+				const artistPresetId = row.agentImageSettings.artistPresetId;
+				if (ps.importSettings && typeof artistPresetId === 'string' && !instanceMeta.agentImageArtistPresets.some(preset => preset.id === artistPresetId)) {
+					delete row.agentImageSettings.artistPresetId;
+					defaultedFields.push('生图画师预设');
+				}
 			}
 			if (ps.segmentedOutputEnabled !== undefined) {
 				row.segmentedOutputEnabled = ps.segmentedOutputEnabled;
@@ -362,6 +380,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				randomProactiveEnabled: row.randomProactiveEnabled,
 				scheduledProactiveEnabled: row.scheduledProactiveEnabled,
 				compressionCacheInvalidated: false,
+				defaultedFields,
 				updatedAt: row.updatedAt.toISOString(),
 			};
 		});

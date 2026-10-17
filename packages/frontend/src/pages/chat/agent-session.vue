@@ -746,7 +746,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 						@change="onContextImportFileChange"
 					>
 				</div>
-				<MkInfo warn>导出文件包含聊天记录和当前会话配置（对话风格、模型、长期记忆、压缩、生图设置）。导入会先验证并应用配置，再覆盖当前会话消息；旧版仅上下文文件仍可导入。</MkInfo>
+				<MkInfo warn>导出文件包含聊天记录和当前会话配置（对话风格、模型、长期记忆、压缩、生图设置）。导入会先验证并应用配置，再覆盖当前会话消息；已下架或不可用的文风、模型等配置会恢复默认，并在完成后列出。旧版仅上下文文件仍可导入。</MkInfo>
 			</div>
 			<div v-panel :class="[$style.memContextPorter, $style.memPorterPanel]">
 				<div :class="$style.memContextPorterLabel">会话管理</div>
@@ -4794,76 +4794,17 @@ function validateAgentImageSettings(raw: unknown): Record<string, unknown> {
 	return out;
 }
 
-async function applyImportedSessionSettings(settings: SessionExportSettings | null): Promise<{ applied: boolean; skippedFields: string[] }> {
-	if (settings == null || Object.keys(settings).length === 0) return { applied: false, skippedFields: [] };
-	// 安全忽略可能不存在的引用字段（如 dialogueStyleId、agentModelId 等），
-	// 避免导入时因目标服务器缺少对应资源而整体失败。
-	const safeSettings = { ...settings };
-	// 记录被移除的字段，用于最终提示用户
-	const removedFields: string[] = [];
-	const tryUpdate = async (): Promise<void> => {
-		await misskeyApi('agents/sessions/update', {
-			sessionId,
-			...safeSettings,
-		});
-	};
-	// 递归重试：逐个移除可能的问题字段
-	const attemptWithFallback = async (): Promise<{ applied: boolean; skippedFields: string[] }> => {
-		try {
-			await tryUpdate();
-			return { applied: true, skippedFields: removedFields };
-		} catch (e: unknown) {
-			const err = e as { code?: string; message?: string };
-			const errorMsg = err.message ?? '';
-			// 对话风格不存在
-				if (err.code === 'NO_SUCH_STYLE' && safeSettings.dialogueStyleId != null) {
-					delete safeSettings.dialogueStyleId;
-					removedFields.push('对话风格');
-					return await attemptWithFallback();
-				}
-				if (err.code === 'NO_SUCH_PLAZA_STATS_STYLE' && safeSettings.plazaStatsDialogueStyleId != null) {
-					delete safeSettings.plazaStatsDialogueStyleId;
-					removedFields.push('广场统计风格快照');
-					return await attemptWithFallback();
-				}
-				// 生图模型不存在
-			if (err.code === 'NO_SUCH_AGENT_IMAGE_MODEL' && safeSettings.agentImageModelId != null) {
-				delete safeSettings.agentImageModelId;
-				removedFields.push('生图模型');
-				return await attemptWithFallback();
-			}
-			// 视觉模型不存在
-			if (err.code === 'NO_SUCH_AGENT_VISION_MODEL' && safeSettings.agentVisionModelId != null) {
-				delete safeSettings.agentVisionModelId;
-				removedFields.push('视觉模型');
-				return await attemptWithFallback();
-			}
-			// 模型相关错误（INVALID_PARAM 可能是对话模型或压缩模型无效）
-			if (err.code === 'INVALID_PARAM' || err.code === 'NO_SUCH_MODEL' || err.code === 'INVALID_MODEL') {
-				// 根据错误消息判断是哪个模型的问题
-				const isLlmModelError = errorMsg.includes('LLM model') || errorMsg.includes('Invalid LLM');
-				// 如果明确是 LLM 模型错误，优先移除对话模型
-				if (isLlmModelError && safeSettings.agentModelId != null) {
-					delete safeSettings.agentModelId;
-					removedFields.push('对话模型');
-					return await attemptWithFallback();
-				}
-				// 否则按顺序尝试：先压缩模型，再对话模型
-				if (safeSettings.agentCompressionModelId != null) {
-					delete safeSettings.agentCompressionModelId;
-					removedFields.push('压缩模型');
-					return await attemptWithFallback();
-				}
-				if (safeSettings.agentModelId != null) {
-					delete safeSettings.agentModelId;
-					removedFields.push('对话模型');
-					return await attemptWithFallback();
-				}
-			}
-			throw e;
-		}
-	};
-	return await attemptWithFallback();
+async function applyImportedSessionSettings(settings: SessionExportSettings | null): Promise<{ applied: boolean; defaultedFields: string[] }> {
+	if (settings == null || Object.keys(settings).length === 0) return { applied: false, defaultedFields: [] };
+	const result = await (misskeyApi as unknown as (
+		endpoint: 'agents/sessions/update',
+		data: SessionExportSettings & { sessionId: string; importSettings: boolean },
+	) => Promise<{ defaultedFields: string[] }>)('agents/sessions/update', {
+		sessionId,
+		...settings,
+		importSettings: true,
+	});
+	return { applied: true, defaultedFields: result.defaultedFields };
 }
 
 async function applyImportedProactiveSchedules(schedules: SessionExportProactiveSchedule[]): Promise<number> {
@@ -4904,6 +4845,10 @@ async function onContextImportFileChange(ev: Event) {
 	if (contextImporting.value || moderationLocksSessionWrites.value) return;
 	contextImporting.value = true;
 	const completedSteps: string[] = [];
+	let defaultedFields: string[] = [];
+	const defaultedNotice = () => defaultedFields.length > 0
+		? `\n\n以下配置已下架、不存在或当前账号不可用，已恢复默认：\n${defaultedFields.map(field => `• ${field}`).join('\n')}`
+		: '';
 	try {
 		const text = await file.text();
 		const importedPayload = parseImportedContext(text);
@@ -4916,6 +4861,7 @@ async function onContextImportFileChange(ev: Event) {
 		});
 		if (canceled) return;
 		const settingsResult = await applyImportedSessionSettings(importedPayload.settings);
+		defaultedFields = settingsResult.defaultedFields;
 		if (settingsResult.applied) completedSteps.push('会话配置');
 		const shouldReplaceAllResources = importedPayload.version === 7;
 		let skippedImageCount = 0;
@@ -4954,9 +4900,6 @@ async function onContextImportFileChange(ev: Event) {
 		let toastText = settingsResult.applied
 			? `已导入会话配置并覆盖 ${importedMessages.length} 条消息`
 			: i18n.tsx._agents.sessionMemoryImportContextDone({ n: importedMessages.length });
-		if (settingsResult.skippedFields.length > 0) {
-			toastText += `（已跳过不存在的配置：${settingsResult.skippedFields.join('、')}）`;
-		}
 		if (schedulesImported > 0) {
 			toastText += `，含 ${schedulesImported} 条定时计划`;
 		}
@@ -4966,13 +4909,17 @@ async function onContextImportFileChange(ev: Event) {
 		if (skippedImageCount > 0) {
 			toastText += `；${skippedImageCount} 个原图片附件在当前账号不可用，已跳过附件但保留消息与识别文本`;
 		}
-		os.toast(toastText);
+		if (defaultedFields.length > 0) {
+			os.alert({ type: 'success', title: '导入完成', text: `${toastText}${defaultedNotice()}` });
+		} else {
+			os.toast(toastText);
+		}
 	} catch (e) {
 		const errorText = e instanceof Error ? e.message : formatApiError(e);
 		const progressText = completedSteps.length > 0
 			? `\n\n已完成：${completedSteps.join('、')}。未完成的部分未导入，请修正问题后重新导入同一文件。`
 			: '';
-		os.alert({ type: 'error', text: `${errorText}${progressText}` });
+		os.alert({ type: 'error', text: `${errorText}${progressText}${defaultedNotice()}` });
 	} finally {
 		contextImporting.value = false;
 	}
