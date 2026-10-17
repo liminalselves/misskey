@@ -1108,8 +1108,13 @@ export class MiMeta {
 	})
 	public agentCompressionSystemPrompt: string | null;
 
+	@Column('integer', {
+		default: 4000,
+	})
+	public agentCompressionInjectMaxChars: number;
+
 	/**
-	 * 送入压缩模型的对话节录最大字符数（节录在服务端截断）
+	 * Batch input budget; a single oversized message is sent in full.
 	 */
 	@Column('integer', {
 		default: 12000,

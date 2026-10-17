@@ -179,7 +179,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				})),
 				compressionSidecarFailedAt,
 				injectionPreview: longMemProvider === 'compression'
-					? this.agentCompressionMemoryService.computeCompressionInjectionPreview(stickies, row.agentCompressionInjectMaxChars)
+					? this.agentCompressionMemoryService.computeCompressionInjectionPreview(stickies, this.agentCompressionMemoryService.resolveCompressionInjectMaxChars(instanceMeta))
 					: null,
 			};
 		});

@@ -124,7 +124,6 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					plazaStatsDialogueStyleId: session.plazaStatsDialogueStyleId,
 					agentModelId: session.agentModelId,
 					agentCompressionModelId: session.agentCompressionModelId,
-					agentCompressionInjectMaxChars: session.agentCompressionInjectMaxChars,
 					agentImageModelId: session.agentImageModelId,
 					agentVisionModelId: session.agentVisionModelId,
 					agentImageSettings: session.agentImageSettings ?? {},

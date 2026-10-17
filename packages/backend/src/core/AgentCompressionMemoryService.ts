@@ -108,6 +108,11 @@ export class AgentCompressionMemoryService {
 	}
 
 	@bindThis
+	public resolveCompressionInjectMaxChars(instanceMeta: MiMeta): number {
+		return Math.max(200, Math.min(50_000, instanceMeta.agentCompressionInjectMaxChars ?? 4000));
+	}
+
+	@bindThis
 	public resolveCompressionMaxInputChars(instanceMeta: MiMeta): number {
 		return Math.max(500, Math.min(200_000, instanceMeta.agentCompressionMaxInputChars ?? 12000));
 	}
@@ -193,7 +198,7 @@ export class AgentCompressionMemoryService {
 			timeAwarenessEnabled: session.timeAwarenessEnabled === true,
 		});
 		const memReserve = this.computeAliyunMemoryXmlReserveIfActive(provider, session, instanceMeta);
-		const maxComp = Math.max(200, Math.min(50_000, session.agentCompressionInjectMaxChars));
+		const maxComp = this.resolveCompressionInjectMaxChars(instanceMeta);
 		const compReserve = provider === 'compression' ? this.computeCompressionReserveChars(maxComp) : 0;
 		const systemChars = systemBase.length + memReserve + compReserve;
 		// 与 `send.ts` 注入到最末 user 的 directive 同步预扣，避免历史填到上限后叠加 directive 溢出上下文窗口		// 世界书已从 system 移除、改由 directive 的 <active-worldbook> 交付，这里按「全部已启用条目」保守预扣（上界），

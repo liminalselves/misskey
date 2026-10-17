@@ -238,6 +238,7 @@ export const paramDef = {
 		agentMem0AddMemoryMaxRounds: { type: 'integer', minimum: 1, maximum: 24 },
 		agentMem0AddMemoryEveryNRounds: { type: 'integer', minimum: 1, maximum: 48 },
 		agentCompressionSystemPrompt: { type: 'string', nullable: true, maxLength: 20000 },
+		agentCompressionInjectMaxChars: { type: 'integer', minimum: 200, maximum: 50000 },
 		agentCompressionMaxInputChars: { type: 'integer', minimum: 500, maximum: 200000 },
 		agentCompressionMaxOutputTokens: { type: 'integer', minimum: 1, maximum: 32000 },
 		/** 0.01–0.99 或 null 清空回默认 0.8/0.9 */
@@ -1054,6 +1055,9 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				set.agentCompressionSystemPrompt = ps.agentCompressionSystemPrompt === null || String(ps.agentCompressionSystemPrompt).trim() === ''
 					? null
 					: String(ps.agentCompressionSystemPrompt).trim();
+			}
+			if (ps.agentCompressionInjectMaxChars !== undefined) {
+				set.agentCompressionInjectMaxChars = ps.agentCompressionInjectMaxChars;
 			}
 			if (ps.agentCompressionMaxInputChars !== undefined) {
 				set.agentCompressionMaxInputChars = Math.max(500, Math.min(200000, ps.agentCompressionMaxInputChars));

@@ -466,7 +466,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				const cStickies = longMemProvider === 'compression'
 					? await this.agentCompressionMemoryService.listStickies(session.id)
 					: [];
-				const compMaxInject = Math.max(200, Math.min(50_000, session.agentCompressionInjectMaxChars));
+				const compMaxInject = this.agentCompressionMemoryService.resolveCompressionInjectMaxChars(instanceMeta);
 				const compInject = longMemProvider === 'compression' && cStickies.length > 0
 					? this.agentCompressionMemoryService.buildCompressionSystemBlock(cStickies, compMaxInject)
 					: { block: '', injectedIds: new Set<string>() };

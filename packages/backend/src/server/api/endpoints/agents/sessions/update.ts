@@ -39,7 +39,6 @@ export const meta = {
 			agentLongMemoryAddEveryNRounds: { type: 'integer', nullable: true },
 			agentLongMemoryProvider: { type: 'string' },
 			agentCompressionModelId: { type: 'string', nullable: true },
-			agentCompressionInjectMaxChars: { type: 'integer' },
 			agentImageModelId: { type: 'string', nullable: true },
 			agentVisionModelId: { type: 'string', nullable: true },
 			agentImageSettings: { type: 'object' },
@@ -68,7 +67,6 @@ export const paramDef = {
 		agentLongMemoryAddEveryNRounds: { type: 'integer', minimum: 1, maximum: 48, nullable: true },
 		agentLongMemoryProvider: { type: 'string', enum: [...agentLongMemoryProviderIds] },
 		agentCompressionModelId: { type: 'string', nullable: true, maxLength: 64 },
-		agentCompressionInjectMaxChars: { type: 'integer', minimum: 200, maximum: 50000 },
 		agentImageModelId: { type: 'string', nullable: true, maxLength: 128 },
 		agentVisionModelId: { type: 'string', nullable: true, maxLength: 128 },
 		agentImageSettings: {
@@ -205,9 +203,6 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			if (ps.agentLongMemoryProvider !== undefined) {
 				row.agentLongMemoryProvider = ps.agentLongMemoryProvider;
 			}
-			if (ps.agentCompressionInjectMaxChars !== undefined) {
-				row.agentCompressionInjectMaxChars = ps.agentCompressionInjectMaxChars;
-			}
 			if (ps.agentCompressionModelId !== undefined) {
 				const mid = ps.agentCompressionModelId == null || ps.agentCompressionModelId.trim() === '' ? null : ps.agentCompressionModelId.trim();
 				row.agentCompressionModelId = await resolveReference('压缩模型', mid, async id => {
@@ -327,7 +322,6 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					agentLongMemoryAddEveryNRounds: row.agentLongMemoryAddEveryNRounds,
 					agentLongMemoryProvider: row.agentLongMemoryProvider,
 					agentCompressionModelId: row.agentCompressionModelId,
-					agentCompressionInjectMaxChars: row.agentCompressionInjectMaxChars,
 					agentImageModelId: row.agentImageModelId,
 					agentVisionModelId: row.agentVisionModelId,
 					agentImageSettings: () => 'CAST(:agentImageSettings AS jsonb)',
@@ -371,7 +365,6 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				agentLongMemoryAddEveryNRounds: row.agentLongMemoryAddEveryNRounds,
 				agentLongMemoryProvider: row.agentLongMemoryProvider,
 				agentCompressionModelId: row.agentCompressionModelId,
-				agentCompressionInjectMaxChars: row.agentCompressionInjectMaxChars,
 				agentImageModelId: row.agentImageModelId,
 				agentVisionModelId: row.agentVisionModelId,
 				agentImageSettings: row.agentImageSettings ?? {},

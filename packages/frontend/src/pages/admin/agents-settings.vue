@@ -389,6 +389,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 							<template #caption>{{ i18n.ts._agents.agentCompressionMaxOutputTokensCaption }}</template>
 						</MkInput>
 					</FormSplit>
+					<MkInput v-model="form.state.agentCompressionInjectMaxChars" type="text">
+						<template #label>便签注入上限（字符）</template>
+						<template #caption>全站便签压缩会话统一使用，范围 200～50,000，默认 4,000。与阿里云记忆独立；上限越大，留给聊天原文的空间越少。</template>
+					</MkInput>
 					<FormSplit :minWidth="200">
 						<MkInput v-model="form.state.agentCompressionBandT1Ratio" type="text">
 							<template #label>{{ i18n.ts._agents.agentCompressionBandT1Ratio }}</template>
@@ -1516,6 +1520,7 @@ const form = useForm({
 	agentMem0AddMemoryMaxRounds: String(numFromMeta(meta.agentMem0AddMemoryMaxRounds, 3)),
 	agentMem0AddMemoryEveryNRounds: String(numFromMeta(meta.agentMem0AddMemoryEveryNRounds, 1)),
 	agentCompressionSystemPrompt: typeof meta.agentCompressionSystemPrompt === 'string' ? meta.agentCompressionSystemPrompt : '',
+	agentCompressionInjectMaxChars: String(numFromMeta(meta.agentCompressionInjectMaxChars, 4000)),
 	agentCompressionMaxInputChars: String(numFromMeta(meta.agentCompressionMaxInputChars, 12000)),
 	agentCompressionMaxOutputTokens: String(numFromMeta(meta.agentCompressionMaxOutputTokens, 2048)),
 	agentCompressionBandT1Ratio: ratioFromMeta((meta as Record<string, unknown>).agentCompressionBandT1Ratio, 0.8),
@@ -1975,6 +1980,11 @@ const form = useForm({
 		throw new Error('invalid add memory every n');
 	}
 
+	const compInject = Number(state.agentCompressionInjectMaxChars);
+	if (!Number.isInteger(compInject) || compInject < 200 || compInject > 50000) {
+		os.alert({ type: 'error', text: '便签注入上限须为 200～50,000 之间的整数。' });
+		throw new Error('invalid compression inject limit');
+	}
 	const compMaxIn = Math.trunc(Number(state.agentCompressionMaxInputChars));
 	const compMaxOut = Math.trunc(Number(state.agentCompressionMaxOutputTokens));
 	if (!Number.isFinite(compMaxIn) || compMaxIn < 500 || compMaxIn > 200000) {
@@ -2043,6 +2053,7 @@ const form = useForm({
 		agentMem0AddMemoryMaxRounds: memAddRounds,
 		agentMem0AddMemoryEveryNRounds: memAddEveryN,
 		agentCompressionSystemPrompt: state.agentCompressionSystemPrompt.trim() === '' ? null : state.agentCompressionSystemPrompt,
+		agentCompressionInjectMaxChars: compInject,
 		agentCompressionMaxInputChars: compMaxIn,
 		agentCompressionMaxOutputTokens: compMaxOut,
 		agentCompressionBandT1Ratio: bandT1,

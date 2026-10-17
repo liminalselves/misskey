@@ -487,6 +487,10 @@ export const meta = {
 				type: 'string',
 				optional: false, nullable: true,
 			},
+			agentCompressionInjectMaxChars: {
+				type: 'number',
+				optional: false, nullable: false,
+			},
 			agentCompressionMaxInputChars: {
 				type: 'number',
 				optional: false, nullable: false,
@@ -1211,6 +1215,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				agentMem0AddMemoryMaxRounds: instance.agentMem0AddMemoryMaxRounds,
 				agentMem0AddMemoryEveryNRounds: instance.agentMem0AddMemoryEveryNRounds,
 				agentCompressionSystemPrompt: instance.agentCompressionSystemPrompt,
+				agentCompressionInjectMaxChars: instance.agentCompressionInjectMaxChars,
 				agentCompressionMaxInputChars: instance.agentCompressionMaxInputChars,
 				agentCompressionMaxOutputTokens: instance.agentCompressionMaxOutputTokens,
 				agentCompressionBandT1Ratio: instance.agentCompressionBandT1Ratio,

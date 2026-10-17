@@ -218,7 +218,8 @@ describe('Compression overview preview mirrors', () => {
 			stickies: stickies.map(s => Object.assign(s, { fromMessagePreview: '…', toMessagePreview: '…' })),
 			compressionSidecarFailedAt: null,
 		});
-		const row = { id: 's1', userId: 'owner', dialogueStyleId: 'style', agentLongMemoryProvider: 'compression', agentCompressionInjectMaxChars: 400 };
+		const row = { id: 's1', userId: 'owner', dialogueStyleId: 'style', agentLongMemoryProvider: 'compression', agentCompressionInjectMaxChars: 50000 };
+		const instance = { agentCompressionInjectMaxChars: 400 };
 		const sessions = { findOneBy: async () => row };
 		const resource = { findOneByOrFail: async () => ({}) };
 		const agent = {
@@ -227,10 +228,13 @@ describe('Compression overview preview mirrors', () => {
 		};
 		const Endpoint = kind === 'user' ? UserOverview : ReviewOverview;
 		const endpoint = new Endpoint(sessions as never, resource as never, resource as never, agent as never,
-			{ fetch: async () => ({}) } as never, service, {
+			{ fetch: async () => instance } as never, service, {
 				resolveTokenConfigForUser: async () => ({ tokenMode: 'estimate' }), makeCounter: () => undefined,
 			} as never);
 		const result = await endpoint.exec({ sessionId: 's1' }, { id: 'owner' } as never, null);
 		expect(result.injectionPreview).toEqual({ maxChars: 400, eligibleCount: 1, eligibleChars: 800, willInjectCount: 1, willInjectChars: 400 });
+		instance.agentCompressionInjectMaxChars = 600;
+		const updated = await endpoint.exec({ sessionId: 's1' }, { id: 'owner' } as never, null);
+		expect(updated.injectionPreview).toMatchObject({ maxChars: 600, willInjectChars: 600 });
 	});
 });

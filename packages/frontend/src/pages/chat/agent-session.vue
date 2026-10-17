@@ -654,16 +654,6 @@ SPDX-License-Identifier: AGPL-3.0-only
 							</MkSelect>
 							<p :class="$style.compressionBillingNote">{{ i18n.ts._agents.compressionModelSessionBillingLine }}</p>
 						</template>
-						<MkInput v-model="memCompressionInject" type="text" :disabled="memSaving || moderationLocksSessionWrites">
-							<template #label>便签注入上限（字符）</template>
-							<template #caption>范围 200～50,000，默认 4,000。与阿里云记忆分别保存；上限越大，留给聊天原文的空间越少。</template>
-						</MkInput>
-						<div>
-							<MkButton primary rounded :disabled="memSaving || moderationLocksSessionWrites" @click="saveCompressionInjectLimit">
-								<template v-if="memSaving"><MkLoading :em="true"/></template>
-								<template v-else>保存便签注入上限</template>
-							</MkButton>
-						</div>
 						<XCompression
 							ref="compressionRef"
 							:sessionId="sessionId"
@@ -1297,7 +1287,6 @@ const session = ref<{
 	dialogueStyleId: string | null;
 	agentModelId: string | null;
 	agentCompressionModelId?: string | null;
-	agentCompressionInjectMaxChars?: number;
 	agentImageModelId?: string | null;
 	agentImageSettings?: Record<string, unknown>;
 	agentVisionModelId?: string | null;
@@ -1625,7 +1614,6 @@ const memAddEveryN = ref('');
 const memProvider = ref<'none' | 'aliyun' | 'compression'>('none');
 /** 记忆页为便签摘要选择的会话模型，与会话字段 `agentCompressionModelId` 一致 */
 const memCompressionModelId = ref('');
-const memCompressionInject = ref('4000');
 const longMemoryProviderItems = computed((): { value: 'none' | 'aliyun' | 'compression'; label: string }[] => {
 	const items: { value: 'none' | 'aliyun' | 'compression'; label: string }[] = [
 		{ value: 'none', label: i18n.ts._agents.sessionLongMemoryProviderNone },
@@ -2896,7 +2884,6 @@ async function loadSession() {
 				}
 			}
 			memCompressionModelId.value = displayCompressionModelIdForSession(session.value.agentCompressionModelId);
-			memCompressionInject.value = String(session.value.agentCompressionInjectMaxChars ?? 4000);
 			segmentedOutputEnabled.value = session.value.segmentedOutputEnabled === true;
 			timeAwarenessEnabled.value = session.value.timeAwarenessEnabled !== false;
 			randomProactiveEnabled.value = session.value.randomProactiveEnabled === true;
@@ -4175,32 +4162,6 @@ async function loadCompressionOverview() {
 	]);
 }
 
-async function saveCompressionInjectLimit() {
-	if (!session.value || memSaving.value || memProvider.value !== 'compression' || moderationLocksSessionWrites.value) return;
-	const limit = Number(memCompressionInject.value);
-	if (!Number.isInteger(limit) || limit < 200 || limit > 50000) {
-		os.alert({ type: 'error', text: '便签注入上限须为 200～50,000 之间的整数。' });
-		return;
-	}
-	memSaving.value = true;
-	try {
-		await (misskeyApi as unknown as (
-			endpoint: 'agents/sessions/update',
-			data: { sessionId: string; agentCompressionInjectMaxChars: number },
-		) => Promise<unknown>)('agents/sessions/update', {
-			sessionId,
-			agentCompressionInjectMaxChars: limit,
-		});
-		await loadSession();
-		await loadCompressionOverview();
-		os.toast('便签注入上限已保存');
-	} catch (error) {
-		os.alert({ type: 'error', text: formatApiError(error) });
-	} finally {
-		memSaving.value = false;
-	}
-}
-
 async function persistMemCompressionModelId() {
 	if (!session.value || settingsHydrating.value || memProvider.value !== 'compression' || moderationLocksSessionWrites.value) {
 		return;
@@ -4365,7 +4326,6 @@ type SessionExportSettings = {
 	agentLongMemoryAddEveryNRounds?: number | null;
 	agentLongMemoryProvider?: 'none' | 'aliyun' | 'compression';
 	agentCompressionModelId?: string | null;
-	agentCompressionInjectMaxChars?: number;
 	agentImageModelId?: string | null;
 	agentImageSettings?: Record<string, unknown>;
 	segmentedOutputEnabled?: boolean;
@@ -4703,7 +4663,6 @@ function parseImportedSessionSettings(raw: unknown): SessionExportSettings | nul
 		out.agentLongMemoryProvider = src.agentLongMemoryProvider;
 	}
 	if ('agentCompressionModelId' in src) out.agentCompressionModelId = validateOptionalString(src.agentCompressionModelId, 'agentCompressionModelId', 1, 64, true);
-	if ('agentCompressionInjectMaxChars' in src) out.agentCompressionInjectMaxChars = validateInteger(src.agentCompressionInjectMaxChars, 'agentCompressionInjectMaxChars', 200, 50000);
 	if ('agentImageModelId' in src) out.agentImageModelId = validateOptionalString(src.agentImageModelId, 'agentImageModelId', 1, 128, true);
 	if ('agentImageSettings' in src) out.agentImageSettings = validateAgentImageSettings(src.agentImageSettings);
 	if ('segmentedOutputEnabled' in src) out.segmentedOutputEnabled = validateBoolean(src.segmentedOutputEnabled, 'segmentedOutputEnabled');

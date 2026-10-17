@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { createApp, nextTick } from 'vue';
 import type { App } from 'vue';
@@ -44,6 +46,15 @@ afterEach(() => {
 });
 
 describe('Compression injection preview panel', () => {
+	test('exposes the editable limit only in the admin compression tab', () => {
+		const admin = readFileSync(resolve(process.cwd(), 'src/pages/admin/agents-settings.vue'), 'utf8');
+		const compressionTab = admin.match(/<MkFolder v-if="activeTab === 'compression'"[\s\S]*?<\/MkFolder>/)?.[0];
+		expect(compressionTab).toContain('v-model="form.state.agentCompressionInjectMaxChars"');
+		const session = readFileSync(resolve(process.cwd(), 'src/pages/chat/agent-session.vue'), 'utf8');
+		expect(session).not.toContain('agentCompressionInjectMaxChars');
+		expect(session).not.toContain('saveCompressionInjectLimit');
+	});
+
 	test.each([false, true])('renders and refreshes the server preview with review=%s', async review => {
 		vi.mocked(misskeyApi).mockResolvedValue(overview({
 			maxChars: 4000, eligibleCount: 12, eligibleChars: 15000, willInjectCount: 4, willInjectChars: 3998,
