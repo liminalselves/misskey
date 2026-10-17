@@ -35,6 +35,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<Transition :name="prefer.s.animation ? 'bands-toggle' : ''">
 				<div v-show="stickiesOpen" :class="$style.stickyBody">
 					<p :class="$style.sectionCaption">{{ i18n.ts._agents.compressionStickyFolderCaption }}</p>
+					<p v-if="overview.injectionPreview" :class="$style.sectionCaption">
+						预计注入 {{ overview.injectionPreview.willInjectCount }}/{{ overview.injectionPreview.eligibleCount }} 条 · {{ overview.injectionPreview.willInjectChars }}/{{ overview.injectionPreview.maxChars }} 字符。仅拼接激活便签，超出上限时保留末尾内容，首条可能只保留部分。
+					</p>
 
 					<!-- 空状态引导 -->
 					<div v-if="overview.stickies.length === 0" :class="$style.emptyState">
@@ -180,6 +183,13 @@ export type CompressionOverviewPayload = {
 	}[];
 	/** 最近一次压缩侧车失败时间（ISO）；失败便签不在 stickies 列表，轮询据此弹失败提示 */
 	compressionSidecarFailedAt?: string | null;
+	injectionPreview?: {
+		maxChars: number;
+		eligibleCount: number;
+		eligibleChars: number;
+		willInjectCount: number;
+		willInjectChars: number;
+	} | null;
 };
 
 const props = withDefaults(defineProps<{

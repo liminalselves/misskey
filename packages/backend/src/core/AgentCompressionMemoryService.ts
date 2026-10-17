@@ -108,6 +108,11 @@ export class AgentCompressionMemoryService {
 	}
 
 	@bindThis
+	public resolveCompressionMaxInputChars(instanceMeta: MiMeta): number {
+		return Math.max(500, Math.min(200_000, instanceMeta.agentCompressionMaxInputChars ?? 12000));
+	}
+
+	@bindThis
 	public resolveEffectiveProvider(
 		providerColumn: string | null | undefined,
 		meta: MiMeta,
@@ -188,7 +193,7 @@ export class AgentCompressionMemoryService {
 			timeAwarenessEnabled: session.timeAwarenessEnabled === true,
 		});
 		const memReserve = this.computeAliyunMemoryXmlReserveIfActive(provider, session, instanceMeta);
-		const maxComp = Math.max(200, Math.min(50_000, session.agentLongMemoryInjectMaxChars));
+		const maxComp = Math.max(200, Math.min(50_000, session.agentCompressionInjectMaxChars));
 		const compReserve = provider === 'compression' ? this.computeCompressionReserveChars(maxComp) : 0;
 		const systemChars = systemBase.length + memReserve + compReserve;
 		// 与 `send.ts` 注入到最末 user 的 directive 同步预扣，避免历史填到上限后叠加 directive 溢出上下文窗口		// 世界书已从 system 移除、改由 directive 的 <active-worldbook> 交付，这里按「全部已启用条目」保守预扣（上界），
@@ -285,19 +290,17 @@ export class AgentCompressionMemoryService {
 		return m;
 	}
 
+	/** Only injected summaries with resolvable boundaries replace source messages. */
 	@bindThis
-	public buildPairsExcludingActiveCompression(
+	public buildPairsExcludingInjectedCompression(
 		pickedOldestFirst: { id: string; role: string; content: string; createdAt: Date }[],
-		activeStickies: MiAgentSessionCompressionSticky[],
+		injectedStickies: MiAgentSessionCompressionSticky[],
 		boundaries: Map<string, { createdAt: Date; id: string }>,
 	): { role: 'user' | 'assistant'; content: string }[] {
 		const pairs: { role: 'user' | 'assistant'; content: string }[] = [];
 		// 预计算参与排除的便签时间区间（归一化 [lo,hi]），避免逐消息重复 boundaries.get 与 from/to 排序
 		const intervals: { lo: { createdAt: Date; id: string }; hi: { createdAt: Date; id: string } }[] = [];
-		for (const s of activeStickies) {
-			if (s.state !== 'active') continue;
-			// 与 buildCompressionSystemBlock 对称：压缩失败且未被用户修正的便签不排除消息
-			if (s.errorMessage != null && !s.userOverridden) continue;
+		for (const s of injectedStickies) {
 			const f = boundaries.get(s.fromMessageId);
 			const t = boundaries.get(s.toMessageId);
 			if (!f || !t) continue;
@@ -321,42 +324,88 @@ export class AgentCompressionMemoryService {
 		return pairs;
 	}
 
+	/** Source boundaries do not constrain injection; partially retained summaries count as injected. */
 	@bindThis
-	public buildCompressionSystemBlock(
-		actives: MiAgentSessionCompressionSticky[],
-		boundaries: Map<string, { createdAt: Date; id: string }>,
-		maxInjectChars = 50_000,
-	): string {
-		const sorted = [...actives]
+	public computeCompressionInjectText(
+		stickies: Pick<MiAgentSessionCompressionSticky, 'id' | 'state' | 'userOverridden' | 'errorMessage' | 'summaryText' | 'sortIndex'>[],
+		maxInjectChars: number,
+	): {
+		text: string;
+		injectedIds: Set<string>;
+		eligibleCount: number;
+		eligibleChars: number;
+		injectedChars: number;
+	} {
+		const cap = Math.max(200, Math.min(50_000, maxInjectChars));
+		const eligible = stickies
 			.filter(s => s.state === 'active')
-			// 跳过 LLM 压缩失败且用户未手动修正的便签，避免将原始截断文本当作摘要注入			.filter(s => s.userOverridden || s.errorMessage == null)
-			.filter(s => boundaries.has(s.fromMessageId) && boundaries.has(s.toMessageId))
+			.filter(s => s.userOverridden || s.errorMessage == null)
+			.filter(s => s.summaryText.trim().length > 0)
 			.sort((a, b) => (a.sortIndex !== b.sortIndex
 				? a.sortIndex - b.sortIndex
 				: a.id.localeCompare(b.id)));
-		const parts: string[] = [];
-		let totalLen = 0;
-		const cap = Math.max(200, Math.min(50_000, maxInjectChars));
-		for (const s of sorted) {
-			// 先转义再计量，确保实际注入长度不超出预留预算
-			const escaped = escapeAgentXmlText(s.summaryText.trim());
-			if (totalLen + escaped.length + 2 > cap) {
-				const remaining = cap - totalLen - 2;
-				if (remaining > 0) {
-					// 回退到最后一个完整字符边界，避免切断 &amp; 等实体
-					let cut = escaped.slice(0, remaining);
-					const ampIdx = cut.lastIndexOf('&');
-					if (ampIdx > remaining - 6) cut = cut.slice(0, ampIdx);
-					parts.push(cut);
-				}
-				break;
-			}
-			parts.push(escaped);
-			totalLen += escaped.length + 2; // +2 for '\n\n' separator
+		const segs = eligible.map(s => ({ id: s.id, text: escapeAgentXmlText(s.summaryText.trim()) }));
+		const joined = segs.map(s => s.text).join('\n\n');
+		const eligibleChars = joined.length;
+		if (joined.length === 0) {
+			return { text: '', injectedIds: new Set(), eligibleCount: 0, eligibleChars: 0, injectedChars: 0 };
 		}
-		const body = parts.join('\n\n');
-		if (body.length === 0) return '';
-		return AGENT_COMPRESSION_MEMORY_XML_OPEN + body + AGENT_COMPRESSION_MEMORY_XML_CLOSE;
+		let start = 0;
+		if (joined.length > cap) {
+			start = joined.length - cap;
+			// Escaping precedes budgeting; discard any partial entity at the cut.
+			const before = joined.slice(Math.max(0, start - 6), start);
+			const ampIdx = before.lastIndexOf('&');
+			if (ampIdx !== -1 && before.indexOf(';', ampIdx) === -1) {
+				const semiIdx = joined.indexOf(';', start);
+				if (semiIdx !== -1 && semiIdx - start <= 6) start = semiIdx + 1;
+			}
+		}
+		if (start > 0 && joined.charCodeAt(start) >= 0xDC00 && joined.charCodeAt(start) <= 0xDFFF
+			&& joined.charCodeAt(start - 1) >= 0xD800 && joined.charCodeAt(start - 1) <= 0xDBFF) start++;
+		while (start < joined.length && (joined[start] === '\n' || joined[start] === ' ' || joined[start] === '\t')) start++;
+		const text = joined.slice(start);
+		const injectedIds = new Set<string>();
+		let off = 0;
+		for (const s of segs) {
+			if (off < joined.length && off + s.text.length > start) injectedIds.add(s.id);
+			off += s.text.length + 2;
+		}
+		return { text, injectedIds, eligibleCount: eligible.length, eligibleChars, injectedChars: text.length };
+	}
+
+	@bindThis
+	public computeCompressionInjectionPreview(
+		stickies: Pick<MiAgentSessionCompressionSticky, 'id' | 'state' | 'userOverridden' | 'errorMessage' | 'summaryText' | 'sortIndex'>[],
+		maxInjectChars: number,
+	): {
+		maxChars: number;
+		eligibleCount: number;
+		eligibleChars: number;
+		willInjectCount: number;
+		willInjectChars: number;
+	} {
+		const r = this.computeCompressionInjectText(stickies, maxInjectChars);
+		return {
+			maxChars: Math.max(200, Math.min(50_000, maxInjectChars)),
+			eligibleCount: r.eligibleCount,
+			eligibleChars: r.eligibleChars,
+			willInjectCount: r.injectedIds.size,
+			willInjectChars: r.injectedChars,
+		};
+	}
+
+	@bindThis
+	public buildCompressionSystemBlock(
+		stickies: MiAgentSessionCompressionSticky[],
+		maxInjectChars = 50_000,
+	): { block: string; injectedIds: Set<string> } {
+		const r = this.computeCompressionInjectText(stickies, maxInjectChars);
+		if (r.text.length === 0) return { block: '', injectedIds: r.injectedIds };
+		return {
+			block: AGENT_COMPRESSION_MEMORY_XML_OPEN + r.text + AGENT_COMPRESSION_MEMORY_XML_CLOSE,
+			injectedIds: r.injectedIds,
+		};
 	}
 
 	@bindThis
@@ -387,6 +436,7 @@ export class AgentCompressionMemoryService {
 		t1: number;
 		t2: number;
 		timeAwarenessEnabled: boolean;
+		maxInputChars: number;
 	}): Promise<null | {
 		candidates: CompressionScanRow[];
 		fromId: string;
@@ -395,7 +445,7 @@ export class AgentCompressionMemoryService {
 		fingerprint: string;
 		existingByFp: MiAgentSessionCompressionSticky | null;
 	}> {
-		const { sessionId, rows, dMap, hSend, t1, t2 } = params;
+		const { sessionId, rows, dMap, hSend, t1, t2, maxInputChars } = params;
 		const stickies = await this.listStickies(sessionId);
 		const b = stickies.length === 0
 			? new Map<string, { createdAt: Date; id: string }>()
@@ -422,8 +472,25 @@ export class AgentCompressionMemoryService {
 			if (d > t2) hasUncoveredStaged = true;
 		}
 		if (!hasUncoveredStaged || uncoveredT1H.length === 0) return null;
-		const candidates = uncoveredT1H;
-		candidates.sort((a, c) => this.compareMessageOrder(a, c));
+		const allCandidates = uncoveredT1H;
+		allCandidates.sort((a, c) => this.compareMessageOrder(a, c));
+		// 与发信滑窗一致：按 `formatMessageForLlmHistory` 携带时间戳、图片识别 XML、主动调度控制块等必要数据（不携带则模型压缩时丢失发送时间与图片描述语义）
+		const formatFn = (m: CompressionScanRow): string => this.agentService.formatMessageForLlmHistory(
+			m as Parameters<AgentService['formatMessageForLlmHistory']>[0],
+			{ timeAwarenessEnabled: params.timeAwarenessEnabled },
+		);
+		// Preserve whole messages, even when the oldest message alone exceeds the batch budget.
+		const candidates: CompressionScanRow[] = [];
+		const blobParts: string[] = [];
+		let blobLen = 0;
+		for (const m of allCandidates) {
+			const piece = `${m.role}: ${formatFn(m)}`;
+			const addLen = piece.length + (blobParts.length > 0 ? 2 : 0);
+			if (candidates.length > 0 && blobLen + addLen > maxInputChars) break;
+			candidates.push(m);
+			blobParts.push(piece);
+			blobLen += addLen;
+		}
 		const fromId = candidates[0]!.id;
 		const toId = candidates[candidates.length - 1]!.id;
 		const existingByRange = await this.stickyRepository.findOne({
@@ -431,12 +498,7 @@ export class AgentCompressionMemoryService {
 		});
 		// 同区间已有「非失败」便签才视为重复；失败便签不拦截，交由下方指纹路径重试
 		if (existingByRange && (existingByRange.state === 'active' || existingByRange.state === 'dormant' || existingByRange.userOverridden)) return null;
-		// 与发信滑窗一致：按 `formatMessageForLlmHistory` 携带时间戳、图片识别 XML、主动调度控制块等必要数据（不携带则模型压缩时丢失发送时间与图片描述语义）
-		const formatFn = (m: CompressionScanRow): string => this.agentService.formatMessageForLlmHistory(
-			m as Parameters<AgentService['formatMessageForLlmHistory']>[0],
-			{ timeAwarenessEnabled: params.timeAwarenessEnabled },
-		);
-		const textBlob = candidates.map(m => `${m.role}: ${formatFn(m)}`).join('\n\n');
+		const textBlob = blobParts.join('\n\n');
 		const fingerprint = createHash('sha256').update(textBlob, 'utf8').digest('hex');
 		const existingByFp = await this.stickyRepository.findOne({ where: { sessionId, sourceFingerprint: fingerprint } });
 		// 已有等价便签（成功/用户已修正）→ 视为已覆盖，无需再压；
@@ -466,7 +528,7 @@ export class AgentCompressionMemoryService {
 			select: ['id', 'role', 'content', 'createdAt', 'imageFileId', 'imageRecognitionStatus', 'imageRecognitionDescription', 'proactiveScheduleControlRaw', 'proactiveScheduleControlError', 'timeTrusted'],
 		});
 		const { dMap, hSend, t1, t2 } = precomputedSidecar ?? await this.computeSidecarTokenD({ session, character, style, instanceMeta, rows });
-		const gathered = await this.gatherCompressionCandidates({ sessionId: session.id, rows, dMap, hSend, t1, t2, timeAwarenessEnabled: session.timeAwarenessEnabled === true });
+		const gathered = await this.gatherCompressionCandidates({ sessionId: session.id, rows, dMap, hSend, t1, t2, timeAwarenessEnabled: session.timeAwarenessEnabled === true, maxInputChars: this.resolveCompressionMaxInputChars(instanceMeta) });
 		if (!gathered) return false;
 		const compModelId = this.resolveEffectiveCompressionModelId(session, instanceMeta);
 		try {
@@ -906,8 +968,9 @@ export class AgentCompressionMemoryService {
 			select: ['id', 'role', 'content', 'createdAt', 'imageFileId', 'imageRecognitionStatus', 'imageRecognitionDescription', 'proactiveScheduleControlRaw', 'proactiveScheduleControlError', 'timeTrusted'],
 		});
 		const { dMap, hSend, t1, t2 } = precomputedSidecar ?? await this.computeSidecarTokenD({ session, character, style, instanceMeta, rows });
+		const maxInput = this.resolveCompressionMaxInputChars(instanceMeta);
 		// 仅在「排队较后」(t2,hSend]（预备下段）出现未压 raw 时触发 LLM；未压若只在「排队较前」(t1,t2]（上段）则仅 reconcile。
-		const gathered = await this.gatherCompressionCandidates({ sessionId: session.id, rows, dMap, hSend, t1, t2, timeAwarenessEnabled: session.timeAwarenessEnabled === true });
+		const gathered = await this.gatherCompressionCandidates({ sessionId: session.id, rows, dMap, hSend, t1, t2, timeAwarenessEnabled: session.timeAwarenessEnabled === true, maxInputChars: maxInput });
 		if (!gathered) {
 			await this.reconcileStickyStates(session.id, hSend, dMap);
 			return;
@@ -917,7 +980,6 @@ export class AgentCompressionMemoryService {
 		const systemPrompt = typeof customPrompt === 'string' && customPrompt.trim().length > 0
 			? customPrompt.trim()
 			: DEFAULT_AGENT_COMPRESSION_SYSTEM_PROMPT;
-		const maxInput = Math.max(500, Math.min(200_000, instanceMeta.agentCompressionMaxInputChars ?? 12000));
 		const maxOut = Math.max(1, Math.min(32_000, instanceMeta.agentCompressionMaxOutputTokens ?? 2048));
 		const compModelId = this.resolveEffectiveCompressionModelId(session, instanceMeta);
 		let modelApiName: string | null = null;
@@ -947,7 +1009,7 @@ export class AgentCompressionMemoryService {
 			const llmResult = await this.agentService.invokeChatCompletions({
 				system: systemPrompt,
 				messages: [],
-				userText: textBlob.length > maxInput ? textBlob.slice(0, maxInput) : textBlob,
+				userText: textBlob,
 				sessionModelId: compModelId,
 				userId,
 				maxTokens: maxOut,

@@ -98,6 +98,11 @@ export class MiAgentSession {
 	})
 	public agentCompressionModelId: string | null;
 
+	@Column('integer', {
+		default: 4000,
+	})
+	public agentCompressionInjectMaxChars: number;
+
 	/** 当前会话启用的生图模型；空表示关闭自动生图 */
 	@Column('varchar', {
 		length: 128, nullable: true,

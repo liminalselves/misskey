@@ -466,14 +466,18 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				const cStickies = longMemProvider === 'compression'
 					? await this.agentCompressionMemoryService.listStickies(session.id)
 					: [];
+				const compMaxInject = Math.max(200, Math.min(50_000, session.agentCompressionInjectMaxChars));
+				const compInject = longMemProvider === 'compression' && cStickies.length > 0
+					? this.agentCompressionMemoryService.buildCompressionSystemBlock(cStickies, compMaxInject)
+					: { block: '', injectedIds: new Set<string>() };
+				const injectedStickies = cStickies.filter(s => compInject.injectedIds.has(s.id));
 				let pairs: { role: 'user' | 'assistant'; content: string }[] = [];
-				if (longMemProvider === 'compression') {
-					const actives = cStickies.filter(s => s.state === 'active');
-					const bIds = actives.flatMap(s => [s.fromMessageId, s.toMessageId]);
+				if (injectedStickies.length > 0) {
+					const bIds = injectedStickies.flatMap(s => [s.fromMessageId, s.toMessageId]);
 					const boundaries = await this.agentCompressionMemoryService.loadBoundaryMap(session.id, bIds);
-					pairs = this.agentCompressionMemoryService.buildPairsExcludingActiveCompression(
+					pairs = this.agentCompressionMemoryService.buildPairsExcludingInjectedCompression(
 						historyForApi.map((m, index) => ({ ...m, content: m.role === 'user' ? convertUserStickersForLlm(filteredHistoryTexts[index]) : historyForAi(filteredHistoryTexts[index], m.role as 'user' | 'assistant') })),
-						actives,
+						injectedStickies,
 						boundaries,
 					);
 				} else {
@@ -526,16 +530,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				if (memoryBlock.length > 0) {
 					system += AGENT_LLM_MEMORY_XML_OPEN + escapeAgentXmlText(memoryBlock) + AGENT_LLM_MEMORY_XML_CLOSE;
 				}
-				if (longMemProvider === 'compression' && cStickies.length > 0) {
-					const cIds = cStickies
-						.filter(s => s.state === 'active')
-						.flatMap(s => [s.fromMessageId, s.toMessageId]);
-					const cBound = await this.agentCompressionMemoryService.loadBoundaryMap(session.id, cIds);
-					const compMaxInject = Math.max(200, Math.min(50_000, session.agentLongMemoryInjectMaxChars));
-					const comp = this.agentCompressionMemoryService.buildCompressionSystemBlock(cStickies, cBound, compMaxInject);
-					if (comp.length > 0) {
-						system += comp;
-					}
+				if (compInject.block.length > 0) {
+					system += compInject.block;
 				}
 
 				// 首轮 `pairs` 用 `buildSendPathBudgets` 的 H（阿里云路径预扣 memory、压缩路径另预扣 comp 占位）。

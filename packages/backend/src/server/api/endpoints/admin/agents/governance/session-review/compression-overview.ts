@@ -71,6 +71,16 @@ export const meta = {
 				},
 			},
 			compressionSidecarFailedAt: { type: 'string', nullable: true },
+			injectionPreview: {
+				type: 'object', nullable: true,
+				properties: {
+					maxChars: { type: 'number' },
+					eligibleCount: { type: 'number' },
+					eligibleChars: { type: 'number' },
+					willInjectCount: { type: 'number' },
+					willInjectChars: { type: 'number' },
+				},
+			},
 		},
 	},
 } as const;
@@ -108,6 +118,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					messages: [],
 					stickies: [],
 					compressionSidecarFailedAt: null,
+					injectionPreview: null,
 				};
 			}
 			const characterRow = await this.agentCharactersRepository.findOneByOrFail({ id: row.characterId });
@@ -167,6 +178,9 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					toMessagePreview: (r as { toMessagePreview?: string }).toMessagePreview ?? '…',
 				})),
 				compressionSidecarFailedAt,
+				injectionPreview: longMemProvider === 'compression'
+					? this.agentCompressionMemoryService.computeCompressionInjectionPreview(stickies, row.agentCompressionInjectMaxChars)
+					: null,
 			};
 		});
 	}

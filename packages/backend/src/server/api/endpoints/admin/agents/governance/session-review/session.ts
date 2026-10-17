@@ -95,6 +95,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				createdAt: row.createdAt.toISOString(),
 				agentModelId: row.agentModelId,
 				agentCompressionModelId: row.agentCompressionModelId,
+				agentCompressionInjectMaxChars: row.agentCompressionInjectMaxChars,
 				agentImageModelId: row.agentImageModelId,
 				agentVisionModelId: row.agentVisionModelId,
 				agentImageSettings: { autoDraw: true, autoDrawCount: instance.agentImageMaxPerReply, ...(row.agentImageSettings ?? {}) },
