@@ -24,6 +24,7 @@ export * as 'admin/ad/delete' from './endpoints/admin/ad/delete.js';
 export * as 'admin/ad/list' from './endpoints/admin/ad/list.js';
 export * as 'admin/ad/update' from './endpoints/admin/ad/update.js';
 export * as 'admin/agents/characters/set-moderation-banned' from './endpoints/admin/agents/characters/set-moderation-banned.js';
+export * as 'admin/agents/credits/issue-batch' from './endpoints/admin/agents/credits/issue-batch.js';
 export * as 'admin/agents/credits/issue-reward' from './endpoints/admin/agents/credits/issue-reward.js';
 export * as 'admin/agents/credits/migration/generate-key' from './endpoints/admin/agents/credits/migration/generate-key.js';
 export * as 'admin/agents/credits/migration/logs' from './endpoints/admin/agents/credits/migration/logs.js';

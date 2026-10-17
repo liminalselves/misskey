@@ -87,6 +87,31 @@ function createLog(): MiAgentModelUsageLog {
 	} as MiAgentModelUsageLog;
 }
 
+describe('AgentModelUsageService report exclusions', () => {
+	test('excludes rewards and compensation from model and overall model-call totals', async () => {
+		const qb = {
+			select: jest.fn().mockReturnThis(),
+			addSelect: jest.fn().mockReturnThis(),
+			where: jest.fn().mockReturnThis(),
+			andWhere: jest.fn().mockReturnThis(),
+			groupBy: jest.fn().mockReturnThis(),
+			getRawMany: async () => [],
+			getRawOne: async () => ({}),
+		};
+		const service = new AgentModelUsageService({ createQueryBuilder: () => qb } as never,
+			{} as never, {} as never, {} as never, {} as never, {} as never);
+		const since = new Date('2026-10-01');
+		await service.aggregateByModel({ since });
+		await service.overallStats({ since, modelCallsOnly: true });
+		expect(qb.andWhere).toHaveBeenCalledTimes(2);
+		for (const call of qb.andWhere.mock.calls) {
+			expect(call).toEqual(['log.usageKind NOT IN (:...nonModelKinds)', {
+				nonModelKinds: expect.arrayContaining(['checkin', 'admin_reward', 'admin_compensation', 'credit_migration']),
+			}]);
+		}
+	});
+});
+
 describe('AgentModelUsageService finishLog atomicity', () => {
 	beforeEach(() => {
 		jest.useFakeTimers().setSystemTime(new Date('2026-09-21T04:00:00.000Z'));

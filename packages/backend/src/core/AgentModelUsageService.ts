@@ -23,8 +23,8 @@ import { AgentService } from '@/core/AgentService.js';
 import { AGENT_USER_MODEL_ID_PREFIX, isAgentUserModelId } from '@/core/AgentUserModelService.js';
 import { getEffectiveLlmModels, isAgentLlmPeakTimeBeijing } from '@/misc/agent-llm-models.js';
 
-/** 非模型调用类记录（签到/管理员奖励/额度迁移）：管理端模型报表统计时一律排除，避免负 cost 污染费用汇总 */
-export const nonModelUsageKinds: AgentModelUsageKind[] = ['checkin', 'admin_reward', 'credit_migration'];
+/** Non-model credits must be excluded from model-call reports and cost totals. */
+export const nonModelUsageKinds: AgentModelUsageKind[] = ['checkin', 'admin_reward', 'admin_compensation', 'credit_migration'];
 
 /** 管理端报表的模型筛选：modelId 精确匹配；byokOnly/unassignedOnly 时按 BYOK 前缀/未关联模型聚合 */
 export type ModelReportFilter = {

@@ -10,7 +10,7 @@ import { MiUser } from './User.js';
 export const agentModelUsageStatuses = ['pending', 'success', 'failed', 'aborted'] as const;
 export type AgentModelUsageStatus = typeof agentModelUsageStatuses[number];
 
-export const agentModelUsageKinds = ['chat', 'compression', 'image_generation', 'vision', 'sticker_description', 'proactive_random', 'proactive_scheduled', 'checkin', 'admin_reward', 'credit_migration'] as const;
+export const agentModelUsageKinds = ['chat', 'compression', 'image_generation', 'vision', 'sticker_description', 'proactive_random', 'proactive_scheduled', 'checkin', 'admin_reward', 'admin_compensation', 'credit_migration'] as const;
 export type AgentModelUsageKind = typeof agentModelUsageKinds[number];
 
 @Entity('agent_model_usage_log')
@@ -60,7 +60,7 @@ export class MiAgentModelUsageLog {
 	@Column('varchar', { length: 32, default: 'chat' })
 	public usageKind: AgentModelUsageKind;
 
-	@Column('varchar', { length: 128, nullable: true })
+	@Column('varchar', { length: 200, nullable: true })
 	public errorCode: string | null;
 
 	@Column('double precision', { default: 0 })

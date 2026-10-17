@@ -39,6 +39,11 @@ export function agentUsageKindLabel(kind: string): string {
 		case 'sticker_description': return t.usageLogKindStickerDescription;
 		case 'proactive_random': return t.usageLogKindProactiveRandom;
 		case 'proactive_scheduled': return t.usageLogKindProactiveScheduled;
+		// 非模型调用流水可能出现在最近调用列表中（chart 聚合已被后端排除）
+		case 'checkin': return '签到';
+		case 'admin_reward': return '奖励签发';
+		case 'admin_compensation': return '补偿签发';
+		case 'credit_migration': return '额度迁移';
 		default: return kind;
 	}
 }

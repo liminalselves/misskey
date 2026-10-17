@@ -160,7 +160,7 @@ import { initChart } from '@/utility/init-chart.js';
 
 initChart();
 
-type UsageKind = 'chat' | 'compression' | 'image_generation' | 'vision' | 'sticker_description' | 'proactive_random' | 'proactive_scheduled' | 'checkin' | 'admin_reward' | 'credit_migration';
+type UsageKind = 'chat' | 'compression' | 'image_generation' | 'vision' | 'sticker_description' | 'proactive_random' | 'proactive_scheduled' | 'checkin' | 'admin_reward' | 'admin_compensation' | 'credit_migration';
 
 type RecentLog = {
 	id: string;

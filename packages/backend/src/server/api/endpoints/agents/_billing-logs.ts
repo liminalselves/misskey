@@ -20,7 +20,7 @@ export type BillingItem = {
 	createdAt: string;
 	amount: number;
 	modelName: string | null;
-	usageKind: 'chat' | 'compression' | 'image_generation' | 'vision' | 'sticker_description' | 'proactive_random' | 'proactive_scheduled' | 'checkin' | 'admin_reward' | 'credit_migration' | null;
+	usageKind: 'chat' | 'compression' | 'image_generation' | 'vision' | 'sticker_description' | 'proactive_random' | 'proactive_scheduled' | 'checkin' | 'admin_reward' | 'admin_compensation' | 'credit_migration' | null;
 	status: string | null;
 	durationMs: number | null;
 	redeemCode: string | null;
@@ -128,8 +128,8 @@ export async function fetchAgentBillingPage(
 			kind: 'usage',
 			createdAt: new Date(row.ts).toISOString(),
 			amount: -(row.cost ?? 0),
-			modelName: (row.usageKind === 'admin_reward' || row.usageKind === 'credit_migration')
-				? (row.errorCode ?? (row.usageKind === 'credit_migration' ? '额度迁移' : '管理员签发'))
+			modelName: (row.usageKind === 'admin_reward' || row.usageKind === 'admin_compensation' || row.usageKind === 'credit_migration')
+				? (row.errorCode ?? (row.usageKind === 'credit_migration' ? '额度迁移' : row.usageKind === 'admin_compensation' ? '管理员补偿' : '管理员签发'))
 				: (row.modelId ? (modelNameMap.get(row.modelId) ?? row.modelApiName) : null),
 			usageKind: row.usageKind,
 			status: row.status,

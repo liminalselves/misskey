@@ -7,16 +7,13 @@ import ms from 'ms';
 import { Inject, Injectable } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import type { UsersRepository } from '@/models/_.js';
-import { MiAgentModelUsageLog } from '@/models/AgentModelUsageLog.js';
-import { MiUserProfile } from '@/models/UserProfile.js';
 import { Endpoint } from '@/server/api/endpoint-base.js';
 import { DI } from '@/di-symbols.js';
-import { ApiError } from '@/server/api/error.js';
 import { AgentService } from '@/core/AgentService.js';
 import { IdService } from '@/core/IdService.js';
 import { MetaService } from '@/core/MetaService.js';
 import { NotificationService } from '@/core/NotificationService.js';
-import { resolveUserIdFromAcctOrId } from '../governance/_utils.js';
+import { creditGrantErrors, issueAgentCreditGrant } from './_issue-grant.js';
 
 export const meta = {
 	tags: ['admin', 'agents'],
@@ -26,18 +23,7 @@ export const meta = {
 	kind: 'write:admin',
 	limit: { duration: ms('1hour'), max: 60 },
 	res: { type: 'object', optional: false, nullable: false, additionalProperties: true },
-	errors: {
-		noSuchUser: {
-			message: 'No such user.',
-			code: 'NO_SUCH_USER',
-			id: 'f3a1b2c4-d5e6-4f7a-8b9c-0d1e2f3a4b5c',
-		},
-		invalidAmount: {
-			message: 'Amount must be a positive finite number.',
-			code: 'INVALID_AMOUNT',
-			id: 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d',
-		},
-	},
+	errors: creditGrantErrors,
 } as const;
 
 export const paramDef = {
@@ -64,75 +50,21 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		private metaService: MetaService,
 		private notificationService: NotificationService,
 	) {
-		super(meta, paramDef, async (ps, me) => {
+		super(meta, paramDef, async (ps, _me) => {
 			this.agentService.assertAgentsEnabled();
-
-			// 解析目标用户
-			const targetUserId = await resolveUserIdFromAcctOrId(this.usersRepository, ps.userId);
-			if (!targetUserId) {
-				throw new ApiError(meta.errors.noSuchUser);
-			}
-
-			// 验证用户确实存在
-			const targetUser = await this.usersRepository.findOneBy({ id: targetUserId });
-			if (!targetUser) {
-				throw new ApiError(meta.errors.noSuchUser);
-			}
-
-			// 校验金额
-			const amount = Math.round(ps.amount * 100) / 100;
-			if (!Number.isFinite(amount) || amount <= 0) {
-				throw new ApiError(meta.errors.invalidAmount);
-			}
-
-			const now = new Date();
-			const reason = ps.reason?.trim() || null;
-
-			// 余额入账与流水同事务：奖励要么两者都落库，要么都不落；
-			// 无 profile 行时 increment 命中 0 行，宁可整体失败也不写“有流水无入账”
-			let newBalance = amount;
-			await this.db.transaction(async em => {
-				const credited = await em.increment(MiUserProfile, { userId: targetUserId }, 'agentCreditBalance', amount);
-				if ((credited.affected ?? 0) !== 1) {
-					throw new Error('agent reward target user profile missing');
-				}
-
-				// 写入消费日志（usageKind='admin_reward'，cost 为负数表示收入）
-				await em.insert(MiAgentModelUsageLog, {
-					id: this.idService.gen(),
-					requestedAt: now,
-					completedAt: now,
-					durationMs: 0,
-					userId: targetUserId,
-					sessionId: null,
-					characterId: null,
-					dialogueStyleId: null,
-					modelId: null,
-					modelApiName: null,
-					usageKind: 'admin_reward',
-					status: 'success',
-					errorCode: reason,
-					cost: -amount,
-					promptTokens: null,
-					completionTokens: null,
-				});
-
-				const profile = await em.findOneOrFail(MiUserProfile, { where: { userId: targetUserId } });
-				newBalance = profile.agentCreditBalance;
-			});
-
-			// 发送通知（使用实例图标作为通知头像；事务提交后才发，避免回滚后误通知）
 			const instance = await this.metaService.fetch(true);
-			this.notificationService.createNotification(targetUserId, 'app', {
-				appAccessTokenId: null,
-				customBody: reason
-					? `你收到了 ${amount.toFixed(2)} 额度奖励：${reason}`
-					: `你收到了 ${amount.toFixed(2)} 额度奖励`,
-				customHeader: '奖励入账',
-				customIcon: instance.iconUrl ?? instance.logoImageUrl ?? null,
+			return issueAgentCreditGrant({
+				usersRepository: this.usersRepository,
+				db: this.db,
+				idService: this.idService,
+				notificationService: this.notificationService,
+				notificationIcon: instance.iconUrl ?? instance.logoImageUrl ?? null,
+			}, {
+				kind: 'reward',
+				userRef: ps.userId,
+				amount: Math.round(ps.amount * 100) / 100,
+				reason: ps.reason,
 			});
-
-			return { userId: targetUserId, amount, newBalance };
 		});
 	}
 }

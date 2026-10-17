@@ -891,6 +891,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 				@revokeToday="revokeTodayCheckin"
 			/>
 
+			<XCreditGrants v-if="activeTab === 'credits'"/>
+
 			<XCreditsPanel
 				v-if="activeTab === 'credits'"
 				v-model:status="redeemStatus"
@@ -898,8 +900,6 @@ SPDX-License-Identifier: AGPL-3.0-only
 				v-model:pageSize="redeemPageSize"
 				v-model:pageInput="redeemListPageInput"
 				v-model:purchaseUrl="form.state.agentRedeemPurchaseUrl"
-				:rewardForm="rewardForm"
-				:rewardIssuing="rewardIssuing"
 				:redeemForm="redeemForm"
 				:redeemGenerating="redeemGenerating"
 				:generatedCodes="generatedCodes"
@@ -908,7 +908,6 @@ SPDX-License-Identifier: AGPL-3.0-only
 				:redeemRevoking="redeemRevoking"
 				:hasNext="redeemHasNext"
 				:listPage="redeemListPage"
-				@issueReward="issueReward"
 				@generate="generateRedeemCodes"
 				@refresh="loadRedeemListPage(1, true)"
 				@revoke="revokeRedeemCode"
@@ -1017,6 +1016,7 @@ import XCheckinReports from './agents-checkin-reports.vue';
 import XModelReports from './agents-model-reports.vue';
 import XCheckinPanel from './agents-settings-checkin.vue';
 import XCreditsPanel from './agents-settings-credits.vue';
+import XCreditGrants from './agents-settings-credit-grants.vue';
 import XMigrationPanel from './agents-settings-migration.vue';
 import type { RedeemCodeRow } from './agents-settings-credits.vue';
 import type { MigrationLogRow } from './agents-settings-migration.vue';
@@ -2243,40 +2243,6 @@ const redeemForm = reactive({
 	note: '',
 	expiresAt: '',
 });
-
-const rewardForm = reactive({
-	userId: '',
-	reason: '',
-	amount: null as number | null,
-});
-const rewardIssuing = ref(false);
-
-async function issueReward() {
-	const amount = Number(rewardForm.amount);
-	if (!rewardForm.userId.trim() || !Number.isFinite(amount) || amount <= 0) return;
-	const { canceled } = await os.confirm({
-		type: 'question',
-		title: i18n.ts._agents.adminIssueRewardTitle,
-		text: i18n.tsx._agents.adminIssueRewardConfirm({ user: rewardForm.userId.trim(), amount: amount.toFixed(2) }),
-	});
-	if (canceled) return;
-	rewardIssuing.value = true;
-	try {
-		const res = await misskeyApi('admin/agents/credits/issue-reward' as any, {
-			userId: rewardForm.userId.trim(),
-			amount,
-			reason: rewardForm.reason.trim() || null,
-		}) as { userId: string; amount: number; newBalance: number };
-		os.alert({ type: 'success', text: i18n.tsx._agents.adminRewardIssued({ user: rewardForm.userId.trim(), amount: res.amount.toFixed(2) }) });
-		rewardForm.userId = '';
-		rewardForm.reason = '';
-		rewardForm.amount = null;
-	} catch (err) {
-		os.alert({ type: 'error', text: formatApiError(err) });
-	} finally {
-		rewardIssuing.value = false;
-	}
-}
 
 const redeemGenerating = ref(false);
 const generatedCodes = ref<{ id: string; code: string; creditAmount: number }[]>([]);

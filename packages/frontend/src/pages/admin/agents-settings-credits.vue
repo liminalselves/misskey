@@ -6,28 +6,6 @@ SPDX-License-Identifier: AGPL-3.0-only
 <template>
 <div class="_gaps">
 	<MkFolder :defaultOpen="true">
-		<template #icon><i class="ti ti-gift"></i></template>
-		<template #label>签发奖励</template>
-		<div class="_gaps">
-			<MkInfo>向指定用户发放奖励额度，入账后用户会收到通知，并在消费日志中显示。</MkInfo>
-			<MkInput v-model="rewardForm.userId" type="text">
-				<template #label>指定用户</template>
-				<template #caption>用户 ID 或 @username / @username@host</template>
-			</MkInput>
-			<MkInput v-model="rewardForm.reason" type="text" :maxlength="200">
-				<template #label>{{ i18n.ts._agents.adminRewardReason }}</template>
-			</MkInput>
-			<MkInput v-model="rewardForm.amount" type="number" :min="0.01" :max="100000" :step="0.01">
-				<template #label>{{ i18n.ts._agents.adminRewardAmount }}</template>
-				<template #prefix><i class="ti ti-coin"></i></template>
-			</MkInput>
-			<MkButton primary rounded :disabled="rewardIssuing || !rewardForm.userId.trim() || !rewardForm.amount || Number(rewardForm.amount) <= 0" @click="emit('issueReward')">
-				<i class="ti ti-gift"></i> {{ i18n.ts._agents.adminIssueRewardBtn }}
-			</MkButton>
-		</div>
-	</MkFolder>
-
-	<MkFolder :defaultOpen="true">
 		<template #icon><i class="ti ti-plus"></i></template>
 		<template #label>{{ i18n.ts._agents.redeemCodesGenerate }}</template>
 		<div class="_gaps">
@@ -199,7 +177,6 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <script lang="ts" setup>
 import type { MkSelectItem } from '@/components/MkSelect.vue';
-import MkInfo from '@/components/MkInfo.vue';
 import MkInput from '@/components/MkInput.vue';
 import MkButton from '@/components/MkButton.vue';
 import MkSelect from '@/components/MkSelect.vue';
@@ -226,12 +203,6 @@ export type RedeemCodeRow = {
 	status: 'available' | 'redeemed' | 'expired' | 'revoked';
 };
 
-export type RewardFormState = {
-	userId: string;
-	reason: string;
-	amount: number | null;
-};
-
 export type RedeemFormState = {
 	amount: number;
 	count: number;
@@ -240,14 +211,13 @@ export type RedeemFormState = {
 };
 
 /**
- * Credits panel (reward issuing + redeem code management). Presentational
- * only: list fetching/caching, pager navigation and API calls stay in
+ * Credits panel (redeem code management). Presentational only: list
+ * fetching/caching, pager navigation and API calls stay in
  * agents-settings.vue; filter/page state is forwarded via v-model so the
- * parent watchers keep driving reloads.
+ * parent watchers keep driving reloads. Reward/compensation issuing lives in
+ * the self-contained agents-settings-credit-grants.vue.
  */
 const props = defineProps<{
-	rewardForm: RewardFormState;
-	rewardIssuing: boolean;
 	redeemForm: RedeemFormState;
 	redeemGenerating: boolean;
 	generatedCodes: { id: string; code: string; creditAmount: number }[];
@@ -259,7 +229,6 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{
-	(ev: 'issueReward'): void;
 	(ev: 'generate'): void;
 	(ev: 'refresh'): void;
 	(ev: 'revoke', row: RedeemCodeRow): void;

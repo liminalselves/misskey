@@ -49,6 +49,14 @@ SPDX-License-Identifier: AGPL-3.0-only
 								>{{ billingUsageSubkindLabel(item) }}</span
 							>
 							<span
+								v-else-if="
+									item.kind === 'usage' &&
+									item.usageKind === 'admin_compensation'
+								"
+								:class="[$style.billingStatusChip, $style.badgeAdminCompensation]"
+								>{{ billingUsageSubkindLabel(item) }}</span
+							>
+							<span
 								v-else-if="item.kind === 'usage'"
 								:class="[
 									$style.billingStatusChip,
@@ -289,6 +297,7 @@ type UsageKind =
 	| "proactive_scheduled"
 	| "checkin"
 	| "admin_reward"
+	| "admin_compensation"
 	| "credit_migration";
 type ModelStat = {
 	modelId: string | null;
@@ -455,6 +464,7 @@ async function loadMoreStyleStats() {
 function billingUsageSubkindLabel(item: BillingItem): string {
 	if (item.usageKind === "checkin") return item.amount > 0 ? "签到奖励" : "补签消耗";
 	if (item.usageKind === "admin_reward") return "奖励签发";
+	if (item.usageKind === "admin_compensation") return "补偿签发";
 	if (item.usageKind === "credit_migration") return "额度迁移";
 	return item.usageKind
 		? agentUsageKindLabel(item.usageKind)
@@ -593,6 +603,10 @@ onMounted(reload);
 .badgeAdminReward {
 	color: #a855f7;
 	background: color-mix(in srgb, #a855f7 16%, transparent);
+}
+.badgeAdminCompensation {
+	color: #14b8a6;
+	background: color-mix(in srgb, #14b8a6 16%, transparent);
 }
 .billingTypeCell {
 	display: flex;
