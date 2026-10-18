@@ -227,6 +227,7 @@ export * as 'admin/agents/redeem-codes/revoke' from './endpoints/admin/agents/re
 export * as 'admin/users/agent-success-rate' from './endpoints/admin/users/agent-success-rate.js';
 export * as 'admin/users/agent-billing-logs' from './endpoints/admin/users/agent-billing-logs.js';
 export * as 'admin/users/agent-usage-details' from './endpoints/admin/users/agent-usage-details.js';
+export * as 'admin/users/agent-usage-logs' from './endpoints/admin/users/agent-usage-logs.js';
 export * as 'admin/users/agent-usage' from './endpoints/admin/users/agent-usage.js';
 export * as 'agents/messages/send' from './endpoints/agents/messages/send.js';
 export * as 'agents/messages/abort' from './endpoints/agents/messages/abort.js';

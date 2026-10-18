@@ -305,8 +305,13 @@ function redeemStatusColor(codeStatus: RedeemCodeRow['status']) {
 	color: var(--MI_THEME-fgTransparentWeak);
 	font-size: 0.9em;
 }
+/*
+ * 表级单一 grid + 行 display:contents：列宽按全表内容 max-content 计算并跨行对齐，
+ * 内容超宽时整个表格横向滚动，任何情况下都不截断省略。
+ */
 .redeemTable {
-	display: block;
+	display: grid;
+	grid-template-columns: max-content minmax(max-content, 1fr) max-content max-content minmax(max-content, 0.7fr) minmax(max-content, 0.9fr) max-content;
 	border-radius: var(--MI-radius);
 	border: solid 1px var(--MI_THEME-divider);
 	overflow-x: auto;
@@ -314,71 +319,69 @@ function redeemStatusColor(codeStatus: RedeemCodeRow['status']) {
 }
 .redeemHead,
 .redeemRow {
-	display: grid;
-	grid-template-columns: 132px minmax(132px, 1fr) 54px 54px minmax(70px, 0.7fr) minmax(110px, 0.9fr) 62px;
-	gap: 6px;
-	min-width: 620px;
-	padding: 8px 12px;
+	display: contents;
+}
+.redeemHead > *,
+.redeemRow > * {
+	display: flex;
+	align-items: center;
+	padding: 8px 4px;
+	white-space: nowrap;
+}
+.redeemHead > *:first-child,
+.redeemRow > *:first-child {
+	padding-left: 12px;
+}
+.redeemHead > *:last-child,
+.redeemRow > *:last-child {
+	padding-right: 12px;
 }
 .redeemHead {
-	background: var(--MI_THEME-bg);
 	font-size: 0.78em;
+}
+.redeemHead > * {
 	font-weight: 700;
 	color: var(--MI_THEME-fgTransparentWeak);
+	background: var(--MI_THEME-bg);
 }
 .redeemRow {
-	border-top: solid 1px var(--MI_THEME-divider);
 	font-size: 0.83em;
-	align-items: center;
-	&:hover {
-		background: color-mix(in srgb, var(--MI_THEME-accent) 3%, transparent);
-	}
+}
+.redeemRow > * {
+	border-top: solid 1px var(--MI_THEME-divider);
+}
+.redeemRow:hover > * {
+	background: color-mix(in srgb, var(--MI_THEME-accent) 3%, transparent);
 }
 .colCreatedAt {
-	min-width: 140px;
 	font-variant-numeric: tabular-nums;
 	color: var(--MI_THEME-fgTransparentWeak);
 	font-size: 0.86em;
 }
 .colCode {
-	min-width: 0;
-	overflow: hidden;
-	text-overflow: ellipsis;
 	font-size: 0.88em;
 	letter-spacing: 0.02em;
 }
 .colAmount {
-	min-width: 54px;
+	justify-content: flex-end;
 	font-variant-numeric: tabular-nums;
 	font-weight: 600;
-	text-align: right;
 }
 .colStatus {
-	min-width: 54px;
+	justify-content: center;
 	font-weight: 600;
 	font-size: 0.85em;
-	text-align: center;
 }
 .colNote {
-	min-width: 0;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
+	justify-content: center;
 	color: var(--MI_THEME-fgTransparentWeak);
 	font-size: 0.88em;
-	text-align: center;
 }
 .colUser {
-	min-width: 0;
-	display: flex;
-	align-items: center;
 	justify-content: center;
 	gap: 4px;
-	overflow: hidden;
 }
 .colActions {
-	min-width: 52px;
-	display: flex;
 	justify-content: flex-end;
 }
 .revokeBtn {
@@ -396,20 +399,6 @@ function redeemStatusColor(codeStatus: RedeemCodeRow['status']) {
 	border: solid 1px color-mix(in srgb, var(--MI_THEME-error) 35%, var(--MI_THEME-divider));
 	&:hover {
 		background: color-mix(in srgb, var(--MI_THEME-error) 18%, transparent);
-	}
-}
-@media (max-width: 1100px) {
-	.redeemHead,
-	.redeemRow {
-		grid-template-columns: 126px minmax(120px, 1fr) 52px 52px 62px 96px 58px;
-		min-width: 580px;
-	}
-	.redeemHead {
-		font-size: 0.74em;
-	}
-	.redeemRow {
-		padding: 7px 10px;
-		font-size: 0.82em;
 	}
 }
 
@@ -650,13 +639,7 @@ function redeemStatusColor(codeStatus: RedeemCodeRow['status']) {
 	display: inline-flex;
 	align-items: baseline;
 	gap: 4px;
-	min-width: 0;
-	overflow: hidden;
 	white-space: nowrap;
-	> span:first-child {
-		overflow: hidden;
-		text-overflow: ellipsis;
-	}
 }
 
 .userAcct {

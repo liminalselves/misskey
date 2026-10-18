@@ -91,14 +91,14 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<MkLoading v-if="billingLoading"/>
 			<MkInfo v-else-if="billingItems.length === 0">{{ i18n.ts._agents.myStatsNoLogs }}</MkInfo>
 			<template v-else>
-				<div :class="$style.table">
-					<div :class="[$style.row, $style.headRow, $style.billingCols]">
+				<div :class="[$style.table, $style.billingCols]">
+					<div :class="[$style.row, $style.headRow]">
 						<span>{{ i18n.ts._agents.myStatsTime }}</span>
 						<span>{{ i18n.ts._agents.billingType }}</span>
 						<span>{{ i18n.ts._agents.billingDetail }}</span>
 						<span :class="$style.num">{{ i18n.ts._agents.billingAmount }}</span>
 					</div>
-					<div v-for="item in billingItems" :key="item.id" :class="[$style.row, $style.rowData, $style.billingCols]">
+					<div v-for="item in billingItems" :key="item.id" :class="[$style.row, $style.rowData]">
 						<span :class="$style.name">{{ toBJT(item.createdAt) }}</span>
 						<span :class="$style.billingTypeCell">
 							<!-- 签到/补签：专属芯片，不带“· 成功”状态，不用模型扣费颜色 -->
@@ -106,32 +106,32 @@ SPDX-License-Identifier: AGPL-3.0-only
 								v-if="item.kind === 'usage' && item.usageKind === 'checkin'"
 								:class="[$style.billingStatusChip, item.amount > 0 ? $style.badgeCheckinReward : $style.badgeCheckinMakeup]"
 							>
-								<span :class="$style.billingStatusPrefix">{{ billingUsageSubkindLabel(item) }}</span>
+								{{ billingUsageSubkindLabel(item) }}
 							</span>
 							<span
 								v-else-if="item.kind === 'usage' && item.usageKind === 'admin_reward'"
 								:class="[$style.billingStatusChip, $style.badgeAdminReward]"
 							>
-								<span :class="$style.billingStatusPrefix">{{ billingUsageSubkindLabel(item) }}</span>
+								{{ billingUsageSubkindLabel(item) }}
 							</span>
 							<span
 								v-else-if="item.kind === 'usage' && item.usageKind === 'admin_compensation'"
 								:class="[$style.billingStatusChip, $style.badgeAdminCompensation]"
 							>
-								<span :class="$style.billingStatusPrefix">{{ billingUsageSubkindLabel(item) }}</span>
+								{{ billingUsageSubkindLabel(item) }}
 							</span>
 							<span
 								v-else-if="item.kind === 'usage' && item.usageKind === 'credit_migration'"
 								:class="[$style.billingStatusChip, $style.badgeAdminReward]"
 							>
-								<span :class="$style.billingStatusPrefix">{{ billingUsageSubkindLabel(item) }}</span>
+								{{ billingUsageSubkindLabel(item) }}
 							</span>
 							<span
 								v-else-if="item.kind === 'usage'"
 								:class="[$style.billingStatusChip, item.status === 'pending' ? $style.badgePending : item.status === 'success' ? $style.badgeOk : item.status === 'failed' ? $style.badgeErr : $style.badgeWarn]"
 								:title="billingUsageRowTitle(item.status)"
 							>
-								<span :class="$style.billingStatusPrefix">{{ billingUsageSubkindLabel(item) }}</span>
+								{{ billingUsageSubkindLabel(item) }}
 								<span :class="$style.billingStatusSep" aria-hidden="true">·</span>
 								<span :class="$style.billingStatusValue">{{ billingUsageRowStatus(item.status) }}</span>
 							</span>
@@ -216,8 +216,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<template #icon><i class="ti ti-chart-bar"></i></template>
 			<template #label>{{ i18n.ts._agents.myStatsModelStats }}</template>
 			<MkInfo v-if="summary.modelStats.length === 0">{{ i18n.ts._agents.noDataAvailable }}</MkInfo>
-			<div v-else :class="$style.table">
-				<div :class="[$style.row, $style.headRow, $style.modelCols]">
+			<div v-else :class="[$style.table, $style.modelCols]">
+				<div :class="[$style.row, $style.headRow]">
 					<span>{{ i18n.ts._agents.myStatsModel }}</span>
 					<span :class="$style.num">{{ i18n.ts._agents.myStatsStatusSuccess }}</span>
 					<span :class="$style.num">{{ i18n.ts._agents.myStatsStatusFailed }}</span>
@@ -226,7 +226,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<span :class="$style.num">{{ i18n.ts._agents.myStatsCost }}</span>
 					<span :class="$style.num">免费次数</span>
 				</div>
-				<div v-for="ms in summary.modelStats" :key="ms.modelId ?? '__null__'" :class="[$style.row, $style.rowData, $style.modelCols]">
+				<div v-for="ms in summary.modelStats" :key="ms.modelId ?? '__null__'" :class="[$style.row, $style.rowData]">
 					<span :class="$style.name" :title="ms.modelName ?? undefined">
 						{{ ms.modelName ?? (ms.modelId?.startsWith('u') ? '自定义模型' : '—') }}
 						<span v-if="ms.modelSource === 'user'" :class="$style.customBadge">{{ i18n.ts._agents.byokCustomBadge }}</span>
@@ -246,8 +246,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<template #label>{{ i18n.ts._agents.myStatsRecentLogs }}</template>
 			<MkInfo v-if="summary.recentLogs.length === 0">{{ i18n.ts._agents.myStatsNoLogs }}</MkInfo>
 			<template v-else>
-				<div :class="$style.table">
-					<div :class="[$style.row, $style.headRow, $style.logCols]">
+				<div :class="[$style.table, $style.logCols]">
+					<div :class="[$style.row, $style.headRow]">
 						<span>{{ i18n.ts._agents.myStatsTime }}</span>
 						<span>{{ i18n.ts._agents.myStatsUsageKind }}</span>
 						<span>{{ i18n.ts._agents.myStatsModel }}</span>
@@ -255,7 +255,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 						<span :class="$style.num">{{ i18n.ts._agents.myStatsDuration }}</span>
 						<span :class="$style.num">{{ i18n.ts._agents.myStatsCost }}</span>
 					</div>
-					<div v-for="log in summary.recentLogs" :key="log.id" :class="[$style.row, $style.rowData, $style.logCols]">
+					<div v-for="log in summary.recentLogs" :key="log.id" :class="[$style.row, $style.rowData]">
 						<span :class="$style.name">{{ toBJT(log.requestedAt) }}</span>
 						<span :class="$style.name">{{ usageLogKindLabel(log.usageKind) }}</span>
 						<span :class="$style.name" :title="log.modelName ?? undefined">
@@ -342,8 +342,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<template #label>{{ i18n.ts._agents.myStatsCharacterStats }} ({{ summary.characterStatsTotal }})</template>
 			<MkInfo v-if="characterStatsItems.length === 0">{{ i18n.ts._agents.noDataAvailable }}</MkInfo>
 			<template v-else>
-				<div :class="$style.table">
-					<div v-for="cs in characterStatsItems" :key="cs.characterId" :class="[$style.row, $style.rowData, $style.simpleCols]">
+				<div :class="[$style.table, $style.simpleCols]">
+					<div v-for="cs in characterStatsItems" :key="cs.characterId" :class="[$style.row, $style.rowData]">
 						<span :class="$style.name">{{ cs.characterName ?? '—' }}</span>
 						<span :class="$style.num">{{ cs.total }}</span>
 					</div>
@@ -359,8 +359,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<template #label>{{ i18n.ts._agents.myStatsStyleStats }} ({{ summary.dialogueStyleStatsTotal }})</template>
 			<MkInfo v-if="styleStatsItems.length === 0">{{ i18n.ts._agents.noDataAvailable }}</MkInfo>
 			<template v-else>
-				<div :class="$style.table">
-					<div v-for="ds in styleStatsItems" :key="ds.dialogueStyleId" :class="[$style.row, $style.rowData, $style.simpleCols]">
+				<div :class="[$style.table, $style.simpleCols]">
+					<div v-for="ds in styleStatsItems" :key="ds.dialogueStyleId" :class="[$style.row, $style.rowData]">
 						<span :class="$style.name">{{ ds.dialogueStyleName ?? '—' }}</span>
 						<span :class="$style.num">{{ ds.total }}</span>
 					</div>
@@ -892,9 +892,12 @@ onBeforeUnmount(() => {
 .cardRate .cardIcon { background: #86b30026; color: #86b300; }
 .cardCost .cardIcon { background: #e96b0026; color: #d76d00; }
 
+/*
+ * 表级单一 grid + 行 display:contents：列宽按全表内容 max-content 计算并跨行对齐，
+ * 内容超宽时整个表格横向滚动，任何情况下都不截断省略。
+ */
 .table {
-	display: flex;
-	flex-direction: column;
+	display: grid;
 	border-radius: 12px;
 	overflow-x: auto;
 	border: solid 1px var(--MI_THEME-divider);
@@ -903,73 +906,77 @@ onBeforeUnmount(() => {
 }
 
 .row {
-	display: grid;
-	padding: 10px 14px;
-	align-items: center;
-	gap: 8px;
+	display: contents;
 	font-size: 0.9em;
 
 	> * {
-		min-width: 0;
+		display: flex;
+		align-items: center;
+		padding: 10px 4px;
+		border-bottom: solid 1px var(--MI_THEME-divider);
+		white-space: nowrap;
 	}
 
-	&:not(:last-child) {
-		border-bottom: solid 1px var(--MI_THEME-divider);
+	> *:first-child {
+		padding-left: 14px;
+	}
+
+	> *:last-child {
+		padding-right: 14px;
+	}
+
+	&:last-child > * {
+		border-bottom: none;
 	}
 }
 
 .headRow {
-	padding: 8px 14px;
 	font-size: 0.76em;
-	font-weight: 600;
-	opacity: 0.56;
-	text-transform: uppercase;
-	letter-spacing: 0.04em;
-	background: color-mix(in srgb, var(--MI_THEME-panel) 70%, var(--MI_THEME-divider));
+
+	> * {
+		padding-top: 8px;
+		padding-bottom: 8px;
+		font-weight: 600;
+		opacity: 0.56;
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+		background: color-mix(in srgb, var(--MI_THEME-panel) 70%, var(--MI_THEME-divider));
+	}
 }
 
-.rowData {
+.rowData > * {
 	transition: background-color 0.12s ease;
+}
 
-	@media (hover: hover) {
-		&:hover {
-			background: color-mix(in srgb, var(--MI_THEME-fg) 3.5%, var(--MI_THEME-panel));
-		}
+@media (hover: hover) {
+	.rowData:hover > * {
+		background: color-mix(in srgb, var(--MI_THEME-fg) 3.5%, var(--MI_THEME-panel));
 	}
 }
 
 .billingCols {
-	grid-template-columns: minmax(170px, 1.3fr) minmax(180px, 1.1fr) minmax(120px, 1fr) minmax(80px, 0.55fr);
-	min-width: 640px;
+	grid-template-columns: minmax(max-content, 1.3fr) minmax(max-content, 1.1fr) minmax(max-content, 1fr) minmax(max-content, 0.55fr);
 }
 
 .modelCols {
-	grid-template-columns: 2.4fr 0.7fr 0.7fr 0.7fr 0.9fr 1fr 0.9fr;
-	min-width: 700px;
+	grid-template-columns: minmax(max-content, 2.4fr) minmax(max-content, 0.7fr) minmax(max-content, 0.7fr) minmax(max-content, 0.7fr) minmax(max-content, 0.9fr) minmax(max-content, 1fr) minmax(max-content, 0.9fr);
 }
 
 .logCols {
-	grid-template-columns: 1.45fr 0.8fr 1.15fr 0.8fr 0.75fr 0.85fr;
-	min-width: 660px;
+	grid-template-columns: minmax(max-content, 1.45fr) minmax(max-content, 0.8fr) minmax(max-content, 1.15fr) minmax(max-content, 0.8fr) minmax(max-content, 0.75fr) minmax(max-content, 0.85fr);
 }
 
 .simpleCols {
-	grid-template-columns: 1fr auto;
-	gap: 12px;
+	grid-template-columns: minmax(max-content, 1fr) max-content;
 }
 
 .name {
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
 	font-weight: 500;
 }
 
 .num {
-	text-align: right;
+	justify-content: flex-end;
 	font-variant-numeric: tabular-nums;
-	overflow: hidden;
-	text-overflow: ellipsis;
 }
 
 .colorOk { color: var(--MI_THEME-success); }
@@ -1083,29 +1090,19 @@ onBeforeUnmount(() => {
 .billingTypeCell {
 	display: flex;
 	align-items: center;
-	min-width: 0;
 }
 
 .billingStatusChip {
 	display: inline-flex;
 	align-items: center;
 	gap: 0.15em;
-	max-width: 100%;
-	overflow: hidden;
 	padding: 2px 8px;
 	border-radius: 999px;
 	font-size: 0.82em;
 	font-weight: 600;
 	line-height: 1.35;
-	min-width: 0;
 	white-space: nowrap;
-}
-
-.billingStatusPrefix {
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-	font-weight: 500;
+	flex-shrink: 0;
 }
 
 .billingStatusSep {

@@ -146,45 +146,43 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<MkInfo v-if="data.byModel.length === 0">{{ i18n.ts._agents.noDataAvailable }}</MkInfo>
 				<template v-else>
 					<div :class="$style.tableHint"><i class="ti ti-hand-click"></i> {{ i18n.ts._agents.adminReportsClickRowToFilter }}</div>
-					<div :class="$style.modelTableWrap">
-						<div :class="$style.modelTable">
-							<div :class="$style.modelHeader">
-								<span>{{ i18n.ts._agents.adminReportsModelColumn }}</span>
-								<button
-									v-for="col in modelSortColumns"
-									:key="col.key"
-									type="button"
-									:class="[$style.sortHeader, sortKey === col.key ? $style.sortHeaderActive : null]"
-									@click="toggleSort(col.key)"
-								>
-									{{ col.label }}
-									<i v-if="sortKey === col.key" :class="sortDesc ? 'ti ti-chevron-down' : 'ti ti-chevron-up'"></i>
-								</button>
-							</div>
-							<div
-								v-for="m in sortedByModel"
-								:key="m.modelId ?? '__null__'"
-								:class="[
-									$style.modelRow,
-									m.unlisted ? $style.modelRowUnlisted : null,
-									isDeletedModel(m) ? $style.modelRowDeleted : null,
-									selectedModelId === m.modelId ? $style.modelRowSelected : null,
-								]"
-								@click="onModelRowClick(m)"
+					<div :class="$style.modelTable">
+						<div :class="$style.modelHeader">
+							<span>{{ i18n.ts._agents.adminReportsModelColumn }}</span>
+							<button
+								v-for="col in modelSortColumns"
+								:key="col.key"
+								type="button"
+								:class="[$style.sortHeader, sortKey === col.key ? $style.sortHeaderActive : null]"
+								@click="toggleSort(col.key)"
 							>
-								<span :class="$style.modelName">
-									{{ modelDisplayName(m) }}
-									<span v-if="m.unlisted" :class="$style.unlistedBadge">{{ i18n.ts._agents.adminReportsUnlistedBadge }}</span>
-									<span v-else-if="isDeletedModel(m)" :class="$style.deletedBadge">{{ i18n.ts._agents.adminReportsDeletedBadge }}</span>
-								</span>
-								<span>{{ m.total }}</span>
-								<span>{{ pct(m.success, m.total) }}</span>
-								<span :class="$style.success">{{ m.freeCalls }}</span>
-								<span :class="m.paidCalls > 0 ? $style.aborted : ''">{{ m.paidCalls }}</span>
-								<span :class="$style.charged">{{ fmtCredits(m.creditsCharged) }}</span>
-								<span>{{ m.uniqueUsers }}</span>
-								<span>{{ fmtDuration(m.avgDurationMs) }}</span>
-							</div>
+								{{ col.label }}
+								<i v-if="sortKey === col.key" :class="sortDesc ? 'ti ti-chevron-down' : 'ti ti-chevron-up'"></i>
+							</button>
+						</div>
+						<div
+							v-for="m in sortedByModel"
+							:key="m.modelId ?? '__null__'"
+							:class="[
+								$style.modelRow,
+								m.unlisted ? $style.modelRowUnlisted : null,
+								isDeletedModel(m) ? $style.modelRowDeleted : null,
+								selectedModelId === m.modelId ? $style.modelRowSelected : null,
+							]"
+							@click="onModelRowClick(m)"
+						>
+							<span :class="$style.modelName">
+								{{ modelDisplayName(m) }}
+								<span v-if="m.unlisted" :class="$style.unlistedBadge">{{ i18n.ts._agents.adminReportsUnlistedBadge }}</span>
+								<span v-else-if="isDeletedModel(m)" :class="$style.deletedBadge">{{ i18n.ts._agents.adminReportsDeletedBadge }}</span>
+							</span>
+							<span>{{ m.total }}</span>
+							<span>{{ pct(m.success, m.total) }}</span>
+							<span :class="$style.success">{{ m.freeCalls }}</span>
+							<span :class="m.paidCalls > 0 ? $style.aborted : ''">{{ m.paidCalls }}</span>
+							<span :class="$style.charged">{{ fmtCredits(m.creditsCharged) }}</span>
+							<span>{{ m.uniqueUsers }}</span>
+							<span>{{ fmtDuration(m.avgDurationMs) }}</span>
 						</div>
 					</div>
 				</template>
@@ -199,27 +197,25 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<div v-if="topUsers == null" :class="$style.topUsersLoading"><MkLoading/></div>
 				<MkInfo v-else-if="topUsers.users.length === 0">{{ i18n.ts._agents.noDataAvailable }}</MkInfo>
 				<template v-else>
-					<div :class="[$style.modelTableWrap, topUsersLoading ? $style.contentLoading : null]">
-						<div :class="$style.topUserTable">
-							<div :class="$style.topUserHeader">
-								<span>#</span>
-								<span>{{ i18n.ts._agents.adminReportsUsersColumn }}</span>
-								<span>{{ i18n.ts._agents.adminReportsCallsColumn }}</span>
-								<span>{{ i18n.ts._agents.adminReportsFreeColumn }}</span>
-								<span>{{ i18n.ts._agents.adminReportsPaidColumn }}</span>
-								<span>{{ i18n.ts._agents.adminReportsCreditsCharged }}</span>
-							</div>
-							<div v-for="(u, idx) in topUsers.users" :key="u.userId" :class="$style.topUserRow" @click="goUserUsage(u)">
-								<span :class="$style.topUserRank">{{ (topUsersPage - 1) * TOP_USERS_PAGE_SIZE + idx + 1 }}</span>
-								<span :class="$style.topUserName">
-									{{ u.name ?? u.username }}
-									<small :class="$style.muted">@{{ u.username }}</small>
-								</span>
-								<span>{{ u.total }}</span>
-								<span :class="$style.success">{{ u.freeCalls }}</span>
-								<span :class="u.paidCalls > 0 ? $style.aborted : ''">{{ u.paidCalls }}</span>
-								<span :class="$style.charged">{{ fmtCredits(u.creditsCharged) }}</span>
-							</div>
+					<div :class="[$style.topUserTable, topUsersLoading ? $style.contentLoading : null]">
+						<div :class="$style.topUserHeader">
+							<span>#</span>
+							<span>{{ i18n.ts._agents.adminReportsUsersColumn }}</span>
+							<span>{{ i18n.ts._agents.adminReportsCallsColumn }}</span>
+							<span>{{ i18n.ts._agents.adminReportsFreeColumn }}</span>
+							<span>{{ i18n.ts._agents.adminReportsPaidColumn }}</span>
+							<span>{{ i18n.ts._agents.adminReportsCreditsCharged }}</span>
+						</div>
+						<div v-for="(u, idx) in topUsers.users" :key="u.userId" :class="$style.topUserRow" @click="goUserUsage(u)">
+							<span :class="$style.topUserRank">{{ (topUsersPage - 1) * TOP_USERS_PAGE_SIZE + idx + 1 }}</span>
+							<span :class="$style.topUserName">
+								{{ u.name ?? u.username }}
+								<small :class="$style.muted">@{{ u.username }}</small>
+							</span>
+							<span>{{ u.total }}</span>
+							<span :class="$style.success">{{ u.freeCalls }}</span>
+							<span :class="u.paidCalls > 0 ? $style.aborted : ''">{{ u.paidCalls }}</span>
+							<span :class="$style.charged">{{ fmtCredits(u.creditsCharged) }}</span>
 						</div>
 					</div>
 					<div v-if="topUsersTotalPages > 1" :class="$style.pagination">
@@ -1135,30 +1131,42 @@ onBeforeUnmount(() => {
 	gap: 6px;
 }
 
-.modelTableWrap {
-	overflow-x: auto;
+/*
+ * 表级单一 grid + 行 display:contents：列宽按全表内容 max-content 计算并跨行对齐，
+ * 内容超宽时整个表格横向滚动，任何情况下都不截断省略。
+ */
+.modelTable {
+	display: grid;
+	grid-template-columns: minmax(max-content, 2fr) minmax(max-content, 0.7fr) minmax(max-content, 0.8fr) minmax(max-content, 0.6fr) minmax(max-content, 0.6fr) minmax(max-content, 1fr) minmax(max-content, 0.6fr) minmax(max-content, 0.8fr);
 	border-radius: 10px;
+	overflow-x: auto;
 	border: solid 1px var(--MI_THEME-divider);
 }
 
-.modelTable {
-	display: flex;
-	flex-direction: column;
-	min-width: 720px;
-}
-
 .modelHeader {
-	display: grid;
-	grid-template-columns: 2fr 0.7fr 0.8fr 0.6fr 0.6fr 1fr 0.6fr 0.8fr;
-	padding: 8px 14px;
+	display: contents;
 	font-size: 0.78em;
-	font-weight: 600;
-	opacity: 0.56;
-	text-transform: uppercase;
-	letter-spacing: 0.04em;
-	background: var(--MI_THEME-panel);
-	border-bottom: solid 1px var(--MI_THEME-divider);
-	align-items: center;
+
+	> * {
+		display: flex;
+		align-items: center;
+		padding: 8px 4px;
+		font-weight: 600;
+		opacity: 0.56;
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+		background: var(--MI_THEME-panel);
+		border-bottom: solid 1px var(--MI_THEME-divider);
+		white-space: nowrap;
+	}
+
+	> *:first-child {
+		padding-left: 14px;
+	}
+
+	> *:last-child {
+		padding-right: 14px;
+	}
 }
 
 .sortHeader {
@@ -1186,44 +1194,55 @@ onBeforeUnmount(() => {
 }
 
 .modelRow {
-	display: grid;
-	grid-template-columns: 2fr 0.7fr 0.8fr 0.6fr 0.6fr 1fr 0.6fr 0.8fr;
-	padding: 9px 14px;
+	display: contents;
 	font-size: 0.88em;
-	align-items: center;
-	cursor: pointer;
 	font-variant-numeric: tabular-nums;
+	cursor: pointer;
 
-	&:not(:last-child) {
+	> * {
+		display: flex;
+		align-items: center;
+		padding: 9px 4px;
 		border-bottom: solid 1px var(--MI_THEME-divider);
+		white-space: nowrap;
 	}
 
-	&:hover {
+	> *:first-child {
+		padding-left: 14px;
+	}
+
+	> *:last-child {
+		padding-right: 14px;
+	}
+
+	&:last-child > * {
+		border-bottom: none;
+	}
+
+	&:hover > * {
 		background: color-mix(in srgb, var(--MI_THEME-accent) 6%, transparent);
 	}
 }
 
-.modelRowUnlisted {
+.modelRowUnlisted > * {
 	opacity: 0.72;
 	background: color-mix(in srgb, var(--MI_THEME-panel) 88%, var(--MI_THEME-warn) 12%);
 }
 
-.modelRowDeleted {
+.modelRowDeleted > * {
 	opacity: 0.55;
 }
 
-.modelRowSelected {
+.modelRowSelected > * {
 	background: color-mix(in srgb, var(--MI_THEME-accent) 12%, transparent);
+}
+
+.modelRowSelected > *:first-child {
 	box-shadow: inset 3px 0 0 var(--MI_THEME-accent);
 }
 
 .modelName {
-	display: flex;
-	align-items: center;
 	gap: 8px;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
 	font-weight: 600;
 }
 
@@ -1248,38 +1267,66 @@ onBeforeUnmount(() => {
 }
 
 .topUserTable {
-	display: flex;
-	flex-direction: column;
-	min-width: 560px;
+	display: grid;
+	grid-template-columns: minmax(max-content, 0.4fr) minmax(max-content, 2fr) minmax(max-content, 0.8fr) minmax(max-content, 0.7fr) minmax(max-content, 0.7fr) minmax(max-content, 1fr);
+	border-radius: 10px;
+	overflow-x: auto;
+	border: solid 1px var(--MI_THEME-divider);
 }
 
 .topUserHeader {
-	display: grid;
-	grid-template-columns: 0.4fr 2fr 0.8fr 0.7fr 0.7fr 1fr;
-	padding: 8px 14px;
+	display: contents;
 	font-size: 0.78em;
-	font-weight: 600;
-	opacity: 0.56;
-	text-transform: uppercase;
-	letter-spacing: 0.04em;
-	background: var(--MI_THEME-panel);
-	border-bottom: solid 1px var(--MI_THEME-divider);
+
+	> * {
+		display: flex;
+		align-items: center;
+		padding: 8px 4px;
+		font-weight: 600;
+		opacity: 0.56;
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+		background: var(--MI_THEME-panel);
+		border-bottom: solid 1px var(--MI_THEME-divider);
+		white-space: nowrap;
+	}
+
+	> *:first-child {
+		padding-left: 14px;
+	}
+
+	> *:last-child {
+		padding-right: 14px;
+	}
 }
 
 .topUserRow {
-	display: grid;
-	grid-template-columns: 0.4fr 2fr 0.8fr 0.7fr 0.7fr 1fr;
-	padding: 9px 14px;
+	display: contents;
 	font-size: 0.88em;
-	align-items: center;
 	font-variant-numeric: tabular-nums;
 	cursor: pointer;
 
-	&:not(:last-child) {
+	> * {
+		display: flex;
+		align-items: center;
+		padding: 9px 4px;
 		border-bottom: solid 1px var(--MI_THEME-divider);
+		white-space: nowrap;
 	}
 
-	&:hover {
+	> *:first-child {
+		padding-left: 14px;
+	}
+
+	> *:last-child {
+		padding-right: 14px;
+	}
+
+	&:last-child > * {
+		border-bottom: none;
+	}
+
+	&:hover > * {
 		background: color-mix(in srgb, var(--MI_THEME-accent) 6%, transparent);
 	}
 }
@@ -1326,12 +1373,8 @@ onBeforeUnmount(() => {
 }
 
 .topUserName {
-	display: flex;
 	align-items: baseline;
 	gap: 8px;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
 	font-weight: 600;
 }
 

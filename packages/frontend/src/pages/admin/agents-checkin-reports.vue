@@ -141,7 +141,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 							<span :class="r.isMakeup ? $style.makeupColor : $style.rewardColor">{{ r.isMakeup ? (r.makeupSource === 'admin' ? '免费' : `-${(r.makeupCost ?? 0).toFixed(2)}`) : `+${r.reward.toFixed(2)}` }}</span>
 							<span>{{ r.isMakeup ? (r.makeupSource === 'admin' ? '管理员补签' : '补签') : '签到' }}</span>
 						</div>
-						<MkInfo v-if="records.length === 0">暂无记录</MkInfo>
+						<MkInfo v-if="records.length === 0" :class="$style.recEmpty">暂无记录</MkInfo>
 					</div>
 					<!-- 分页 -->
 					<div v-if="totalPages > 1" :class="$style.pagination">
@@ -637,50 +637,76 @@ onMounted(() => { load(); });
 }
 
 // Records table
+// 表级单一 grid + 行 display:contents：列宽按全表内容 max-content 计算并跨行对齐，
+// 内容超宽时整个表格横向滚动，任何情况下都不截断省略。
 .recTable {
-	display: flex;
-	flex-direction: column;
+	display: grid;
+	grid-template-columns: minmax(max-content, 1fr) minmax(max-content, 0.8fr) minmax(max-content, 2.5fr) minmax(max-content, 0.8fr) minmax(max-content, 0.5fr);
 	border-radius: 10px;
 	overflow-x: auto;
 	border: solid 1px var(--MI_THEME-divider);
 }
 
 .recHeader {
-	display: grid;
-	grid-template-columns: 1fr 0.8fr 2.5fr 0.8fr 0.5fr;
-	min-width: 580px;
-	padding: 8px 12px;
+	display: contents;
 	font-size: 0.75em;
-	font-weight: 600;
-	opacity: 0.56;
-	background: var(--MI_THEME-panel);
-	border-bottom: solid 1px var(--MI_THEME-divider);
+
+	> * {
+		display: flex;
+		align-items: center;
+		padding: 8px 4px;
+		font-weight: 600;
+		opacity: 0.56;
+		background: var(--MI_THEME-panel);
+		border-bottom: solid 1px var(--MI_THEME-divider);
+		white-space: nowrap;
+	}
+
+	> *:first-child {
+		padding-left: 12px;
+	}
+
+	> *:last-child {
+		padding-right: 12px;
+	}
 }
 
 .recRow {
-	display: grid;
-	grid-template-columns: 1fr 0.8fr 2.5fr 0.8fr 0.5fr;
-	min-width: 580px;
-	padding: 7px 12px;
+	display: contents;
 	font-size: 0.82em;
-	align-items: center;
 
-	&:not(:last-child) { border-bottom: solid 1px var(--MI_THEME-divider); }
+	> * {
+		display: flex;
+		align-items: center;
+		padding: 7px 4px;
+		border-bottom: solid 1px var(--MI_THEME-divider);
+		white-space: nowrap;
+	}
+
+	> *:first-child {
+		padding-left: 12px;
+	}
+
+	> *:last-child {
+		padding-right: 12px;
+	}
+
+	&:last-child > * {
+		border-bottom: none;
+	}
+}
+
+.recEmpty {
+	grid-column: 1 / -1;
 }
 
 .recUser {
 	font-weight: 600;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
 }
 
 .recFormula {
 	font-size: 0.9em;
 	opacity: 0.8;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
 }
 
 // Pagination

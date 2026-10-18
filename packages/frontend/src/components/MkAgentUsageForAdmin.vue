@@ -82,66 +82,79 @@ SPDX-License-Identifier: AGPL-3.0-only
 			</div>
 		</MkFolder>
 
-			<MkAgentUsageDetailsForAdmin ref="detailsRef" :userId="props.userId" :hours="hours" :rangeLabel="rangeLabel">
-				<template #recentLogs>
-					<MkFolder :defaultOpen="false">
-			<template #icon><i class="ti ti-history"></i></template>
-			<template #label>{{ i18n.ts._agents.myStatsRecentLogs }}（{{ data.recentLogsTotal }}）</template>
-			<MkInfo v-if="data.recentLogs.length === 0">{{ i18n.ts._agents.myStatsNoLogs }}</MkInfo>
-			<template v-else>
-				<div :class="$style.table">
-					<div :class="[$style.row, $style.headRow, $style.logCols]">
-						<span>{{ i18n.ts._agents.myStatsTime }}</span>
-						<span>{{ i18n.ts._agents.myStatsUsageKind }}</span>
-						<span>{{ i18n.ts._agents.myStatsModel }}</span>
-						<span :class="$style.num">{{ i18n.ts._agents.myStatsStatus }}</span>
-						<span :class="$style.num">{{ i18n.ts._agents.myStatsDuration }}</span>
-						<span :class="$style.num">{{ i18n.ts._agents.myStatsCost }}</span>
-					</div>
-					<div v-for="log in data.recentLogs" :key="log.id" :class="[$style.row, $style.logCols]">
-						<span :class="$style.name"><MkTime :time="log.requestedAt" mode="detail"/></span>
-						<span :class="$style.name">{{ usageKindLabel(log.usageKind) }}</span>
-						<span :class="$style.name" :title="log.modelName ?? log.modelApiName ?? undefined">
-							{{ log.modelName ?? (log.modelApiName ?? '—') }}
-							<span v-if="log.modelSource === 'user'" :class="$style.customBadge">{{ i18n.ts._agents.byokCustomBadge }}</span>
-						</span>
-						<span :class="$style.num">
-							<span :class="[$style.badge, log.status === 'pending' ? $style.badgePending : log.status === 'success' ? $style.badgeOk : log.status === 'failed' ? $style.badgeErr : $style.badgeWarn]">{{ statusLabel(log.status) }}</span>
-						</span>
-						<span :class="$style.num">{{ log.durationMs != null ? (log.durationMs / 1000).toFixed(1) + 's' : '—' }}</span>
-						<span :class="$style.num">
-							<template v-if="log.usedFreeQuota === true">{{ i18n.ts._agents.adminReportsFreeQuota }} {{ log.freeQuotaUsedAtCall }}/{{ log.freeQuotaTotalAtCall }}</template>
-							<template v-else>{{ log.cost.toFixed(4) }}</template>
-						</span>
-					</div>
-				</div>
-				<div :class="$style.pagerBar">
-					<button
-						type="button"
-						class="_button"
-						:class="$style.pagerNavBtn"
-						:disabled="logsPage <= 1 || loading"
-						@click="loadLogs(logsPage - 1)"
-					>
-						<i class="ti ti-chevron-left"></i>
-					</button>
-					<span :class="$style.pagerText">{{ logsPage }} / {{ logsTotalPages }}</span>
-					<button
-						type="button"
-						class="_button"
-						:class="$style.pagerNavBtn"
-						:disabled="logsPage >= logsTotalPages || loading"
-						@click="loadLogs(logsPage + 1)"
-					>
-						<i class="ti ti-chevron-right"></i>
-					</button>
-				</div>
+		<MkAgentUsageDetailsForAdmin ref="detailsRef" :userId="props.userId" :hours="hours" :rangeLabel="rangeLabel">
+			<template #recentLogs>
+				<MkFolder :defaultOpen="false" @opened="onLogsFolderOpened">
+					<template #icon><i class="ti ti-history"></i></template>
+					<template #label>{{ i18n.ts._agents.myStatsRecentLogs }}（{{ data.recentLogsTotal }}）</template>
+					<MkLoading v-if="logsLoading && logsItems.length === 0"/>
+					<MkInfo v-else-if="logsItems.length === 0">{{ i18n.ts._agents.myStatsNoLogs }}</MkInfo>
+					<template v-else>
+						<div :class="[$style.table, $style.logCols]">
+							<div :class="[$style.row, $style.headRow]">
+								<span>{{ i18n.ts._agents.myStatsTime }}</span>
+								<span>{{ i18n.ts._agents.myStatsUsageKind }}</span>
+								<span>{{ i18n.ts._agents.myStatsModel }}</span>
+								<span :class="$style.num">{{ i18n.ts._agents.myStatsStatus }}</span>
+								<span :class="$style.num">{{ i18n.ts._agents.myStatsDuration }}</span>
+								<span :class="$style.num">{{ i18n.ts._agents.myStatsCost }}</span>
+							</div>
+							<div v-for="log in logsItems" :key="log.id" :class="$style.row">
+								<span :class="$style.name"><MkTime :time="log.requestedAt" mode="detail"/></span>
+								<span :class="$style.name">{{ usageKindLabel(log.usageKind) }}</span>
+								<span :class="$style.name" :title="log.modelName ?? log.modelApiName ?? undefined">
+									{{ log.modelName ?? (log.modelApiName ?? '—') }}
+									<span v-if="log.modelSource === 'user'" :class="$style.customBadge">{{ i18n.ts._agents.byokCustomBadge }}</span>
+								</span>
+								<span :class="$style.num">
+									<span :class="[$style.badge, log.status === 'pending' ? $style.badgePending : log.status === 'success' ? $style.badgeOk : log.status === 'failed' ? $style.badgeErr : $style.badgeWarn]">{{ statusLabel(log.status) }}</span>
+								</span>
+								<span :class="$style.num">{{ log.durationMs != null ? (log.durationMs / 1000).toFixed(1) + 's' : '—' }}</span>
+								<span :class="$style.num">
+									<template v-if="log.usedFreeQuota === true">{{ i18n.ts._agents.adminReportsFreeQuota }} {{ log.freeQuotaUsedAtCall }}/{{ log.freeQuotaTotalAtCall }}</template>
+									<template v-else>{{ log.cost.toFixed(4) }}</template>
+								</span>
+							</div>
+						</div>
+						<div :class="$style.pagerBar">
+							<div :class="$style.pageSizes">
+								<button
+									v-for="size in pageSizeOptions"
+									:key="size"
+									type="button"
+									class="_button"
+									:class="[$style.pagerSizeBtn, logsPageSize === size ? $style.pagerSizeBtnActive : null]"
+									@click="setLogsPageSize(size)"
+								>
+									{{ size }}
+								</button>
+							</div>
+							<button
+								type="button"
+								class="_button"
+								:class="$style.pagerNavBtn"
+								:disabled="logsPage <= 1 || logsLoading"
+								@click="loadLogs(logsPage - 1)"
+							>
+								<i class="ti ti-chevron-left"></i>
+							</button>
+							<span :class="$style.pagerText">{{ logsPage }} / {{ logsTotalPages }}</span>
+							<button
+								type="button"
+								class="_button"
+								:class="$style.pagerNavBtn"
+								:disabled="logsPage >= logsTotalPages || logsLoading"
+								@click="loadLogs(logsPage + 1)"
+							>
+								<i class="ti ti-chevron-right"></i>
+							</button>
+						</div>
+					</template>
+				</MkFolder>
 			</template>
-					</MkFolder>
-				</template>
-			</MkAgentUsageDetailsForAdmin>
-		</template>
-	</div>
+		</MkAgentUsageDetailsForAdmin>
+	</template>
+</div>
 </template>
 
 <script lang="ts" setup>
@@ -162,7 +175,9 @@ initChart();
 
 type UsageKind = 'chat' | 'compression' | 'image_generation' | 'vision' | 'sticker_description' | 'proactive_random' | 'proactive_scheduled' | 'checkin' | 'admin_reward' | 'admin_compensation' | 'credit_migration';
 
-type RecentLog = {
+type UsageLogStatus = 'pending' | 'success' | 'failed' | 'aborted';
+
+type UsageLogItem = {
 	id: string;
 	requestedAt: string;
 	completedAt: string | null;
@@ -172,13 +187,20 @@ type RecentLog = {
 	modelSource: 'official' | 'user' | null;
 	modelApiName: string | null;
 	usageKind: UsageKind;
-	status: 'pending' | 'success' | 'failed' | 'aborted';
+	status: UsageLogStatus;
 	cost: number;
 	promptTokens: number | null;
 	completionTokens: number | null;
 	usedFreeQuota: boolean | null;
 	freeQuotaUsedAtCall: number | null;
 	freeQuotaTotalAtCall: number | null;
+};
+
+type UsageLogsResponse = {
+	items: UsageLogItem[];
+	total: number;
+	page: number;
+	pageSize: number;
 };
 
 type ModelStat = {
@@ -212,16 +234,11 @@ type UsageResponse = {
 		avgDurationMs: number | null;
 	};
 	byModel: ModelStat[];
-	recentLogs: RecentLog[];
 	recentLogsTotal: number;
-	recentLogsPage: number;
-	recentLogsPageSize: number;
 	bucket: 'hour' | 'day';
 	buckets: AgentUsageBucket[];
 	byUsageKind: AgentUsageKindRow[];
 };
-
-const LOGS_PAGE_SIZE = 20;
 
 const props = defineProps<{
 	userId: string;
@@ -238,10 +255,47 @@ const hours = ref(720);
 const rangeLabel = computed(() => rangeOptions.find(r => r.hours === hours.value)?.label ?? '');
 const data = ref<UsageResponse | null>(null);
 const loading = ref(false);
-const logsPage = ref(1);
-const logsTotalPages = computed(() => Math.max(1, Math.ceil((data.value?.recentLogsTotal ?? 0) / LOGS_PAGE_SIZE)));
 const usageKindTotal = computed(() => (data.value?.byUsageKind ?? []).reduce((s, k) => s + k.total, 0));
 const detailsRef = useTemplateRef('detailsRef');
+
+// 最近请求记录：与消费日志同款的页码翻页（端点未再生成 misskey-js 类型，按 fork 惯例强转）
+const pageSizeOptions = [10, 20, 50] as const;
+const logsItems = ref<UsageLogItem[]>([]);
+const logsLoading = ref(false);
+const logsLoaded = ref(false);
+const logsPage = ref(1);
+const logsTotal = ref(0);
+const logsPageSize = ref(20);
+const logsTotalPages = computed(() => Math.max(1, Math.ceil(logsTotal.value / logsPageSize.value)));
+
+async function loadLogs(page: number) {
+	logsLoading.value = true;
+	try {
+		const response = await misskeyApi('admin/users/agent-usage-logs' as any, {
+			userId: props.userId,
+			page,
+			pageSize: logsPageSize.value,
+		}) as UsageLogsResponse;
+		logsItems.value = response.items;
+		logsTotal.value = response.total;
+		logsPage.value = response.page;
+		logsLoaded.value = true;
+	} finally {
+		logsLoading.value = false;
+	}
+}
+
+function setLogsPageSize(pageSize: number) {
+	if (logsPageSize.value === pageSize) return;
+	logsPageSize.value = pageSize;
+	loadLogs(1);
+}
+
+// MkFolder 懒挂载：首次展开时才拉取，避免进入页面就多发请求
+function onLogsFolderOpened() {
+	if (logsLoaded.value || logsLoading.value) return;
+	loadLogs(1);
+}
 
 const requestsChartEl = useTemplateRef('requestsChartEl');
 const creditsChartEl = useTemplateRef('creditsChartEl');
@@ -261,20 +315,17 @@ async function renderCharts() {
 	}
 }
 
-async function fetchUsage(page: number): Promise<UsageResponse> {
+async function fetchUsage(): Promise<UsageResponse> {
 	return await misskeyApi('admin/users/agent-usage' as any, {
 		userId: props.userId,
 		hours: hours.value,
-		logsPage: page,
-		logsPageSize: LOGS_PAGE_SIZE,
 	}) as UsageResponse;
 }
 
 async function loadAll() {
 	loading.value = true;
 	try {
-		data.value = await fetchUsage(1);
-		logsPage.value = data.value.recentLogsPage;
+		data.value = await fetchUsage();
 		await renderCharts();
 	} finally {
 		loading.value = false;
@@ -285,18 +336,9 @@ async function reloadAll() {
 	await Promise.all([
 		loadAll(),
 		detailsRef.value?.reload(),
+		// 折叠夹未展开过则无数据可刷
+		logsLoaded.value ? loadLogs(logsPage.value) : Promise.resolve(),
 	]);
-}
-
-async function loadLogs(page: number) {
-	const p = Math.min(Math.max(1, page), logsTotalPages.value);
-	loading.value = true;
-	try {
-		data.value = await fetchUsage(p);
-		logsPage.value = data.value.recentLogsPage;
-	} finally {
-		loading.value = false;
-	}
 }
 
 function setRange(h: number) {
@@ -309,7 +351,7 @@ function usageKindLabel(kind: UsageKind): string {
 	return agentUsageKindLabel(kind);
 }
 
-function statusLabel(status: RecentLog['status']): string {
+function statusLabel(status: UsageLogStatus): string {
 	const t = i18n.ts._agents;
 	if (status === 'pending') return t.myStatsStatusPending;
 	if (status === 'success') return t.myStatsStatusSuccess;
@@ -414,9 +456,12 @@ onBeforeUnmount(() => {
 .cardRate .cardIcon { background: #86b30026; color: #86b300; }
 .cardCost .cardIcon { background: #e96b0026; color: #d76d00; }
 
+/*
+ * 表级单一 grid + 行 display:contents：列宽按全表内容 max-content 计算并跨行对齐，
+ * 内容超宽时整个表格横向滚动，任何情况下都不截断省略。
+ */
 .table {
-	display: flex;
-	flex-direction: column;
+	display: grid;
 	border-radius: 12px;
 	overflow-x: auto;
 	border: solid 1px var(--MI_THEME-divider);
@@ -424,52 +469,55 @@ onBeforeUnmount(() => {
 }
 
 .row {
-	display: grid;
-	padding: 10px 14px;
-	align-items: center;
-	gap: 8px;
+	display: contents;
 	font-size: 0.9em;
 
 	> * {
-		min-width: 0;
+		display: flex;
+		align-items: center;
+		padding: 10px 4px;
+		border-bottom: solid 1px var(--MI_THEME-divider);
+		white-space: nowrap;
 	}
 
-	&:not(:last-child) {
-		border-bottom: solid 1px var(--MI_THEME-divider);
+	> *:first-child {
+		padding-left: 14px;
+	}
+
+	> *:last-child {
+		padding-right: 14px;
+	}
+
+	&:last-child > * {
+		border-bottom: none;
 	}
 }
 
 .headRow {
-	padding: 8px 14px;
 	font-size: 0.76em;
-	font-weight: 600;
-	opacity: 0.56;
-	text-transform: uppercase;
-	letter-spacing: 0.04em;
-	background: color-mix(in srgb, var(--MI_THEME-panel) 70%, var(--MI_THEME-divider));
-}
 
-.modelCols {
-	grid-template-columns: 2.2fr 0.6fr 0.6fr 0.6fr 0.6fr 0.6fr 0.9fr;
+	> * {
+		padding-top: 8px;
+		padding-bottom: 8px;
+		font-weight: 600;
+		opacity: 0.56;
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+		background: color-mix(in srgb, var(--MI_THEME-panel) 70%, var(--MI_THEME-divider));
+	}
 }
 
 .logCols {
-	grid-template-columns: 1.4fr 0.8fr 1.2fr 0.8fr 0.7fr 0.9fr;
-	min-width: 660px;
+	grid-template-columns: minmax(max-content, 1.4fr) minmax(max-content, 0.8fr) minmax(max-content, 1.2fr) minmax(max-content, 0.8fr) minmax(max-content, 0.7fr) minmax(max-content, 0.9fr);
 }
 
 .name {
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
 	font-weight: 500;
 }
 
 .num {
-	text-align: right;
+	justify-content: flex-end;
 	font-variant-numeric: tabular-nums;
-	overflow: hidden;
-	text-overflow: ellipsis;
 }
 
 .colorOk { color: var(--MI_THEME-success); }
@@ -522,29 +570,39 @@ onBeforeUnmount(() => {
 	background: color-mix(in srgb, var(--MI_THEME-accent) 18%, transparent);
 }
 
-.customBadge {
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	height: 20px;
-	padding: 0 8px;
-	margin-left: 6px;
-	border-radius: 999px;
-	font-size: 0.74em;
-	font-weight: 700;
-	line-height: 1;
-	vertical-align: middle;
-	background: color-mix(in srgb, var(--MI_THEME-accent) 14%, var(--MI_THEME-panel));
-	color: var(--MI_THEME-accent);
-	border: solid 1px color-mix(in srgb, var(--MI_THEME-accent) 34%, var(--MI_THEME-divider));
-}
-
 .pagerBar {
 	display: flex;
+	flex-wrap: wrap;
 	align-items: center;
 	justify-content: center;
 	gap: 8px;
 	padding: 10px 0 4px;
+}
+
+.pageSizes {
+	display: inline-flex;
+	overflow: hidden;
+	border: solid 1px var(--MI_THEME-divider);
+	border-radius: 6px;
+}
+
+.pagerSizeBtn {
+	min-width: 36px;
+	height: 28px;
+	padding: 0 8px;
+	border-right: solid 1px var(--MI_THEME-divider);
+	color: var(--MI_THEME-fgTransparentWeak);
+	font-size: 0.82em;
+	font-weight: 600;
+}
+
+.pagerSizeBtn:last-child {
+	border-right: none;
+}
+
+.pagerSizeBtnActive {
+	color: var(--MI_THEME-accent);
+	background: color-mix(in srgb, var(--MI_THEME-accent) 12%, transparent);
 }
 
 .pagerNavBtn {
@@ -557,14 +615,10 @@ onBeforeUnmount(() => {
 	border: solid 1px var(--MI_THEME-divider);
 	background: var(--MI_THEME-panel);
 	color: var(--MI_THEME-fg);
+}
 
-	&:disabled {
-		opacity: 0.4;
-	}
-
-	&:hover:not(:disabled) {
-		background: var(--MI_THEME-buttonHoverBg);
-	}
+.pagerNavBtn:disabled {
+	opacity: 0.4;
 }
 
 .pagerText {
@@ -573,5 +627,23 @@ onBeforeUnmount(() => {
 	font-variant-numeric: tabular-nums;
 	min-width: 4em;
 	text-align: center;
+}
+
+.customBadge {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	height: 20px;
+	padding: 0 8px;
+	margin-left: 6px;
+	border-radius: 999px;
+	font-size: 0.74em;
+	font-weight: 700;
+	line-height: 1;
+	vertical-align: middle;
+	flex-shrink: 0;
+	background: color-mix(in srgb, var(--MI_THEME-accent) 14%, var(--MI_THEME-panel));
+	color: var(--MI_THEME-accent);
+	border: solid 1px color-mix(in srgb, var(--MI_THEME-accent) 34%, var(--MI_THEME-divider));
 }
 </style>

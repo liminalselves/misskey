@@ -392,7 +392,8 @@ export class AgentModelUsageService {
 			.andWhere('log.usageKind != :checkinKind', { checkinKind: 'checkin' })
 			.orderBy('log.requestedAt', 'DESC')
 			.take(opts.limit)
-			.offset(opts.offset ?? 0);
+			// 必须用 skip 而非 offset：offset() 与 take() 混用时 TypeORM 会丢弃 take（createLimitOffsetExpression 仅在两者皆空时才回退到 skip/take），导致分页失效返回全量
+			.skip(opts.offset ?? 0);
 		if (opts.untilDate != null) {
 			qb.andWhere('log.requestedAt < :until', { until: opts.untilDate });
 		}

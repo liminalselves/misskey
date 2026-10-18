@@ -13,8 +13,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 				i18n.ts._agents.myStatsNoLogs
 			}}</MkInfo>
 			<template v-else>
-				<div :class="$style.table">
-					<div :class="[$style.row, $style.headRow, $style.billingCols]">
+				<div :class="[$style.table, $style.billingCols]">
+					<div :class="[$style.row, $style.headRow]">
 						<span>{{ i18n.ts._agents.myStatsTime }}</span>
 						<span>{{ i18n.ts._agents.billingType }}</span>
 						<span>{{ i18n.ts._agents.billingDetail }}</span>
@@ -23,7 +23,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<div
 						v-for="item in billingItems"
 						:key="item.id"
-						:class="[$style.row, $style.billingCols]"
+						:class="$style.row"
 					>
 						<span :class="$style.name"
 							><MkTime :time="item.createdAt" mode="detail"
@@ -68,13 +68,11 @@ SPDX-License-Identifier: AGPL-3.0-only
 												? $style.badgeErr
 												: $style.badgeWarn,
 								]"
-							>
-								<span :class="$style.billingStatusPrefix">{{
-									billingUsageSubkindLabel(item)
-								}}</span>
-								<span :class="$style.billingStatusSep">·</span>
-								<span>{{ billingUsageRowStatus(item.status) }}</span>
-							</span>
+								>
+									{{ billingUsageSubkindLabel(item) }}
+									<span :class="$style.billingStatusSep">·</span>
+									{{ billingUsageRowStatus(item.status) }}
+								</span>
 							<span v-else :class="[$style.badge, $style.badgeRedeem]"
 								><i class="ti ti-ticket"></i>
 								{{ i18n.ts._agents.billingKindRedeem }}</span
@@ -154,8 +152,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<MkInfo v-else-if="details == null || details.modelStats.length === 0">{{
 				i18n.ts._agents.noDataAvailable
 			}}</MkInfo>
-			<div v-else :class="$style.table">
-				<div :class="[$style.row, $style.headRow, $style.modelCols]">
+			<div v-else :class="[$style.table, $style.modelCols]">
+				<div :class="[$style.row, $style.headRow]">
 					<span>{{ i18n.ts._agents.myStatsModel }}</span>
 					<span :class="$style.num">{{
 						i18n.ts._agents.myStatsStatusSuccess
@@ -173,7 +171,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<div
 					v-for="model in details.modelStats"
 					:key="model.modelId ?? '__null__'"
-					:class="[$style.row, $style.modelCols]"
+					:class="$style.row"
 				>
 					<span :class="$style.name" :title="model.modelName ?? undefined">
 						{{ model.modelName ?? "—" }}
@@ -219,11 +217,11 @@ SPDX-License-Identifier: AGPL-3.0-only
 				i18n.ts._agents.noDataAvailable
 			}}</MkInfo>
 			<template v-else>
-				<div :class="$style.table">
+				<div :class="[$style.table, $style.simpleCols]">
 					<div
 						v-for="item in characterStatsItems"
 						:key="item.characterId"
-						:class="[$style.row, $style.simpleCols]"
+						:class="$style.row"
 					>
 						<span :class="$style.name">{{ item.characterName ?? "—" }}</span>
 						<span :class="$style.num">{{ item.total }}</span>
@@ -252,11 +250,11 @@ SPDX-License-Identifier: AGPL-3.0-only
 				i18n.ts._agents.noDataAvailable
 			}}</MkInfo>
 			<template v-else>
-				<div :class="$style.table">
+				<div :class="[$style.table, $style.simpleCols]">
 					<div
 						v-for="item in styleStatsItems"
 						:key="item.dialogueStyleId"
-						:class="[$style.row, $style.simpleCols]"
+						:class="$style.row"
 					>
 						<span :class="$style.name">{{
 							item.dialogueStyleName ?? "—"
@@ -494,30 +492,43 @@ onMounted(reload);
 </script>
 
 <style lang="scss" module>
+/*
+ * 表级单一 grid + 行 display:contents：列宽按全表内容 max-content 计算并跨行对齐，
+ * 内容超宽时整个表格横向滚动，任何情况下都不截断省略。
+ */
 .table {
-	display: flex;
-	flex-direction: column;
+	display: grid;
 	border-radius: 12px;
 	overflow-x: auto;
 	border: solid 1px var(--MI_THEME-divider);
 	background: var(--MI_THEME-panel);
 }
 .row {
-	display: grid;
-	padding: 10px 14px;
-	align-items: center;
-	gap: 8px;
+	display: contents;
 	font-size: 0.9em;
 }
 .row > * {
-	min-width: 0;
-}
-.row:not(:last-child) {
+	display: flex;
+	align-items: center;
+	padding: 10px 4px;
 	border-bottom: solid 1px var(--MI_THEME-divider);
+	white-space: nowrap;
+}
+.row > *:first-child {
+	padding-left: 14px;
+}
+.row > *:last-child {
+	padding-right: 14px;
+}
+.row:last-child > * {
+	border-bottom: none;
 }
 .headRow {
-	padding: 8px 14px;
 	font-size: 0.76em;
+}
+.headRow > * {
+	padding-top: 8px;
+	padding-bottom: 8px;
 	font-weight: 600;
 	opacity: 0.56;
 	text-transform: uppercase;
@@ -529,31 +540,20 @@ onMounted(reload);
 	);
 }
 .billingCols {
-	grid-template-columns: minmax(150px, 1.3fr) minmax(170px, 1.1fr) minmax(
-			120px,
-			1fr
-		) minmax(80px, 0.55fr);
-	min-width: 620px;
+	grid-template-columns: minmax(max-content, 1.3fr) minmax(max-content, 1.1fr) minmax(max-content, 1fr) minmax(max-content, 0.55fr);
 }
 .modelCols {
-	grid-template-columns: 2.4fr 0.7fr 0.7fr 0.7fr 0.9fr 1fr 0.9fr;
-	min-width: 700px;
+	grid-template-columns: minmax(max-content, 2.4fr) minmax(max-content, 0.7fr) minmax(max-content, 0.7fr) minmax(max-content, 0.7fr) minmax(max-content, 0.9fr) minmax(max-content, 1fr) minmax(max-content, 0.9fr);
 }
 .simpleCols {
-	grid-template-columns: 1fr auto;
-	gap: 12px;
+	grid-template-columns: minmax(max-content, 1fr) max-content;
 }
 .name {
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
 	font-weight: 500;
 }
 .num {
-	text-align: right;
+	justify-content: flex-end;
 	font-variant-numeric: tabular-nums;
-	overflow: hidden;
-	text-overflow: ellipsis;
 }
 .colorOk {
 	color: var(--MI_THEME-success);
@@ -611,25 +611,18 @@ onMounted(reload);
 .billingTypeCell {
 	display: flex;
 	align-items: center;
-	min-width: 0;
 }
 .billingStatusChip {
 	display: inline-flex;
 	align-items: center;
 	gap: 0.15em;
-	max-width: 100%;
-	overflow: hidden;
 	padding: 2px 8px;
 	border-radius: 999px;
 	font-size: 0.82em;
 	font-weight: 600;
 	line-height: 1.35;
 	white-space: nowrap;
-}
-.billingStatusPrefix {
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
+	flex-shrink: 0;
 }
 .billingStatusSep {
 	opacity: 0.5;

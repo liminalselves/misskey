@@ -15,7 +15,7 @@ import { AgentService } from '@/core/AgentService.js';
 import { AgentImageService } from '@/core/AgentImageService.js';
 import { AgentModelUsageService } from '@/core/AgentModelUsageService.js';
 import { MetaService } from '@/core/MetaService.js';
-import { getEffectiveLlmModels } from '@/misc/agent-llm-models.js';
+import { createAgentUsageModelResolver } from '@/misc/agent-usage-model-resolver.js';
 
 export const meta = {
 	tags: ['admin', 'agents'],
@@ -67,34 +67,7 @@ export const meta = {
 					required: ['modelId', 'modelName', 'modelSource', 'total', 'success', 'failed', 'aborted', 'totalCost', 'freeCalls', 'paidCalls', 'creditsCharged', 'avgDurationMs'],
 				},
 			},
-			recentLogs: {
-				type: 'array',
-				items: {
-					type: 'object',
-					properties: {
-						id: { type: 'string' },
-						requestedAt: { type: 'string' },
-						completedAt: { type: 'string', nullable: true },
-						durationMs: { type: 'integer', nullable: true },
-						modelId: { type: 'string', nullable: true },
-						modelName: { type: 'string', nullable: true },
-						modelSource: { type: 'string', enum: ['official', 'user'], nullable: true },
-						modelApiName: { type: 'string', nullable: true },
-						usageKind: { type: 'string', enum: ['chat', 'compression', 'image_generation', 'vision', 'sticker_description', 'proactive_random', 'proactive_scheduled', 'checkin', 'admin_reward', 'admin_compensation', 'credit_migration'] },
-						status: { type: 'string' },
-						cost: { type: 'number' },
-						promptTokens: { type: 'integer', nullable: true },
-						completionTokens: { type: 'integer', nullable: true },
-						usedFreeQuota: { type: 'boolean', nullable: true },
-						freeQuotaUsedAtCall: { type: 'integer', nullable: true },
-						freeQuotaTotalAtCall: { type: 'integer', nullable: true },
-					},
-					required: ['id', 'requestedAt', 'status', 'cost', 'usageKind'],
-				},
-			},
 			recentLogsTotal: { type: 'integer' },
-			recentLogsPage: { type: 'integer' },
-			recentLogsPageSize: { type: 'integer' },
 			bucket: { type: 'string', enum: ['hour', 'day'] },
 			buckets: {
 				type: 'array',
@@ -131,7 +104,7 @@ export const meta = {
 				},
 			},
 		},
-		required: ['creditBalance', 'since', 'hours', 'overall', 'byModel', 'recentLogs', 'recentLogsTotal', 'recentLogsPage', 'recentLogsPageSize', 'bucket', 'buckets', 'byUsageKind'],
+		required: ['creditBalance', 'since', 'hours', 'overall', 'byModel', 'recentLogsTotal', 'bucket', 'buckets', 'byUsageKind'],
 	},
 } as const;
 
@@ -140,8 +113,6 @@ export const paramDef = {
 	properties: {
 		userId: { type: 'string', format: 'misskey:id' },
 		hours: { type: 'integer', minimum: 1, maximum: 2160 },
-		logsPage: { type: 'integer', minimum: 1, default: 1 },
-		logsPageSize: { type: 'integer', minimum: 1, maximum: 100, default: 20 },
 	},
 	required: ['userId'],
 } as const;
@@ -165,48 +136,22 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 
 			const hours = ps.hours ?? 720;
 			const since = new Date(Date.now() - hours * 60 * 60 * 1000);
-			const logsPage = ps.logsPage ?? 1;
-			const logsPageSize = ps.logsPageSize ?? 20;
-			const logsOffset = (logsPage - 1) * logsPageSize;
 			// 分桶粒度：短窗口（≤7 天）按小时，长窗口按天
 			const bucketUnit: 'hour' | 'day' = hours <= 168 ? 'hour' : 'day';
 
-			const [profile, instanceMeta, userModels, overall, byModelRaw, recentLogsRaw, recentLogsTotal, buckets, byUsageKind] = await Promise.all([
+			// 最近请求记录列表由 admin/users/agent-usage-logs 单独分页下发，此处仅返回总数供标签展示
+			const [profile, instanceMeta, userModels, overall, byModelRaw, recentLogsTotal, buckets, byUsageKind] = await Promise.all([
 				this.userProfilesRepository.findOneBy({ userId: ps.userId }),
 				this.metaService.fetch(true),
 				this.agentUserModelsRepository.find({ where: { userId: ps.userId } }),
 				this.agentModelUsageService.overallStats({ since, userId: ps.userId, modelCallsOnly: true }),
 				this.agentModelUsageService.aggregateByModel({ userId: ps.userId, since }),
-				this.agentModelUsageService.listUserRecent(ps.userId, { limit: logsPageSize, offset: logsOffset }),
 				this.agentModelUsageService.countUserLogs(ps.userId),
 				this.agentModelUsageService.timeBuckets({ since, userId: ps.userId, unit: bucketUnit, modelCallsOnly: true }),
 				this.agentModelUsageService.aggregateByUsageKind({ since, userId: ps.userId }),
 			]);
 
-			// 名称映射使用全量模型（含已下架/禁用），避免历史用量记录因模型下架而显示为「—」
-			const modelNameMap = new Map<string, string>([
-				...getEffectiveLlmModels(instanceMeta).map(m => [m.id, m.name] as const),
-				...this.agentImageService.listAvailableImageModels(instanceMeta, true).map(m => [m.id, m.name] as const),
-				...(instanceMeta.agentVisionModels ?? []).map(m => [m.id, m.name] as const),
-				...userModels.map(m => [m.id, m.name] as const),
-			]);
-
-			const modelSourceOf = (modelId: string | null): 'official' | 'user' | null => {
-				if (!modelId) return null;
-				if (userModels.some(m => m.id === modelId)) return 'user';
-				// BYOK 自定义模型 id 以 u 前缀开头；即使模型已删除也能识别为自定义模型
-				if (modelId.startsWith('u')) return 'user';
-				if (modelNameMap.has(modelId)) return 'official';
-				return null;
-			};
-
-			// 模型名兜底：已删除/查不到的自定义模型显示为「自定义模型」，而非「—」
-			const resolveModelName = (modelId: string | null): string | null => {
-				if (!modelId) return null;
-				const n = modelNameMap.get(modelId);
-				if (n) return n;
-				return modelId.startsWith('u') ? '自定义模型' : null;
-			};
+			const { modelSourceOf, resolveModelName } = createAgentUsageModelResolver(instanceMeta, userModels, this.agentImageService);
 
 			const byModel = byModelRaw.map(r => ({
 				modelId: r.modelId,
@@ -223,35 +168,13 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				avgDurationMs: r.avgDurationMs,
 			})).sort((a, b) => b.total - a.total);
 
-			const recentLogs = recentLogsRaw.map(log => ({
-				id: log.id,
-				requestedAt: log.requestedAt.toISOString(),
-				completedAt: log.completedAt?.toISOString() ?? null,
-				durationMs: log.durationMs,
-				modelId: log.modelId,
-				modelName: resolveModelName(log.modelId),
-				modelSource: modelSourceOf(log.modelId),
-				modelApiName: log.modelApiName,
-				usageKind: log.usageKind,
-				status: log.status,
-				cost: log.cost,
-				promptTokens: log.promptTokens,
-				completionTokens: log.completionTokens,
-				usedFreeQuota: log.usedFreeQuota ?? null,
-				freeQuotaUsedAtCall: log.freeQuotaUsedAtCall ?? null,
-				freeQuotaTotalAtCall: log.freeQuotaTotalAtCall ?? null,
-			}));
-
 			return {
 				creditBalance: profile?.agentCreditBalance ?? 0,
 				since: since.toISOString(),
 				hours,
 				overall,
 				byModel,
-				recentLogs,
 				recentLogsTotal,
-				recentLogsPage: logsPage,
-				recentLogsPageSize: logsPageSize,
 				bucket: bucketUnit,
 				buckets,
 				byUsageKind,
