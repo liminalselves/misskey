@@ -790,7 +790,7 @@ const form = useForm(empty(), async (state) => {
 			return;
 		}
 	}
-	await misskeyApi('agents/characters/update', {
+	await os.apiWithDialog('agents/characters/update', {
 		characterId: props.characterId,
 		name: state.name,
 		summary: state.summary.trim() === '' ? null : state.summary,
@@ -811,6 +811,10 @@ const form = useForm(empty(), async (state) => {
 			description: sticker.description.trim().slice(0, 200),
 		})),
 		promptOpenSourced: state.promptOpenSourced,
+	}, undefined, {
+		'd04b0a9b-a4e1-49a0-b9db-5e2e4aa9dd84': {
+			text: '新增的参考图不可用。请选择自己网盘中不大于 5 MiB 的图片；文件若已被删除，请移除后重新上传。',
+		},
 	});
 	await Promise.all([loadVersions(), loadCharacterDiff()]);
 });

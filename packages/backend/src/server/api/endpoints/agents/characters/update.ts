@@ -166,7 +166,11 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					const referenceImageFileIds = ps.referenceImageFileIds !== undefined
 						? [...new Set(ps.referenceImageFileIds ?? [])].slice(0, 5)
 						: ps.referenceImageFileId !== undefined ? (ps.referenceImageFileId ? [ps.referenceImageFileId] : []) : null;
+					const existingReferenceImageFileIds = new Set(Array.isArray(row.referenceImageFileIds)
+						? row.referenceImageFileIds : row.referenceImageFileId ? [row.referenceImageFileId] : []);
 					for (const referenceImageFileId of referenceImageFileIds ?? []) {
+						// Existing references can outlive Drive files without blocking unrelated edits.
+						if (existingReferenceImageFileIds.has(referenceImageFileId)) continue;
 						const f = await this.driveFilesRepository.findOneBy({ id: referenceImageFileId, userId: me.id });
 						if (!f || !f.type.startsWith('image/') || f.size > 5 * 1024 * 1024) {
 							throw new ApiError({ message: 'Each reference image must be an image up to 5 MiB from your Drive.', code: 'INVALID_REFERENCE_IMAGE', id: 'd04b0a9b-a4e1-49a0-b9db-5e2e4aa9dd84' });
