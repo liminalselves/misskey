@@ -83,7 +83,7 @@ const SESSIONS_PAGE_SIZE = 30;
 const fetchSessions = misskeyApi as unknown as (endpoint: 'agents/sessions/list-mine', data: { limit?: number; untilId?: string | null }) => Promise<SessionRow[]>;
 
 const sessions = ref<SessionRow[]>([]);
-const loading = ref(true);
+const loading = ref(false);
 const loadingMore = ref(false);
 const hasMoreSessions = ref(false);
 const searchQuery = ref('');

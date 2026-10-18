@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
+import { deepClone } from '@/utility/clone.js';
+
 export type AgentRegexFilterRole = 'user' | 'assistant';
 export type AgentRegexFilterEffect = 'hide' | 'aiInvisible';
 export type AgentRegexFilterRule = {
@@ -126,7 +128,8 @@ async function flush(): Promise<void> {
 					},
 					timer: window.setTimeout(() => timeoutWorker(activeWorker), group.timeoutMs),
 				});
-				activeWorker.postMessage({ requestId, ...group.request });
+				// Nested Vue proxies cannot cross the worker's structured-clone boundary.
+				activeWorker.postMessage(deepClone({ requestId, ...group.request }));
 			}
 		} catch {
 			// postMessage threw (e.g. a dying worker): fail registered entries, resolve
@@ -171,6 +174,7 @@ async function ensureWorker(): Promise<Worker | null> {
 	}
 	const created = await workerSetup;
 	worker = created;
+	if (created == null) workerSetup = null;
 	return created;
 }
 

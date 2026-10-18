@@ -76,7 +76,7 @@ Redis 在线状态、连接计数、离线推送判断和用户休眠唤醒逻�
 
 ## 正则与上游响应
 
-角色正则保留 JavaScript `gu` 语义，在 Node worker_threads 或浏览器 Worker 中按批次编译一次。后端默认 2 秒，超时抛明确 API 错误；浏览器默认 1 秒，失败回退原文。浏览器过滤未完成时不先闪出被隐藏文本，流式消息可保留上一版已过滤文本。Worker 终止会结算待处理调用，下一批重建；服务释放不得遗留 pending promise。
+角色正则保留 JavaScript `gu` 语义，在 Node worker_threads 或浏览器 Worker 中按批次编译一次。后端默认 2 秒，超时抛明确 API 错误；浏览器默认 1 秒，失败回退原文，过滤完成前不闪出隐藏文本，流式更新可保留上一版已过滤文本。浏览器发送前用 `deepClone` 去除请求中的嵌套 Vue Proxy；回归测试须实际经过结构化克隆。Worker 终止会结算待处理调用，创建失败或终止后下一批重建；服务释放不得遗留 pending promise。
 
 上游请求复用 `assertSafeLlmHttpsUrl`、`readBodyWithLimit` 并禁止重定向。外审响应预算见 [外审文档](agent-external-audit.md)。生成图片在大小、MIME 检测后经 sharp 实际解码，不能仅靠 base64 字符集或 metadata 认定有效；当前不声称检查了动画全部帧。
 

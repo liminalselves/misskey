@@ -4,6 +4,7 @@
  */
 
 import { afterEach, describe, expect, test } from 'vitest';
+import { reactive } from 'vue';
 import {
 	filterAgentRegexTexts,
 	setAgentRegexWorkerFactoryForTesting,
@@ -33,6 +34,7 @@ class FakeWorker {
 	constructor(private readonly mode: 'echo' | 'silent') {}
 
 	public postMessage(data: unknown): void {
+		data = structuredClone(data);
 		this.posted.push(data);
 		if (this.mode !== 'echo') return;
 		const req = data as {
@@ -80,6 +82,27 @@ describe('filterAgentRegexTexts', () => {
 		expect(created[0].terminated).toBe(false);
 		expect(first).toEqual(['one']);
 		expect(second).toEqual(['two']);
+	});
+
+	test.each([false, true])('filters reactive rules and items through structured cloning (filtered rules: %s)', async (filtered) => {
+		const worker = new FakeWorker('echo');
+		setAgentRegexWorkerFactoryForTesting(() => worker as unknown as Worker);
+		const rules = reactive([{ ...HIDE_RULE, targets: [...HIDE_RULE.targets], effects: [...HIDE_RULE.effects] }]);
+		const applicableRules = filtered ? rules.filter(rule => rule.effects.includes('hide')) : rules;
+		const items = reactive([{ role: 'user' as const, text: 'hidden-visible' }]);
+		await expect(filterAgentRegexTexts(applicableRules, 'hide', items)).resolves.toEqual(['visible']);
+		expect(worker.terminated).toBe(false);
+	});
+
+	test('retries worker creation on the next batch after a setup failure', async () => {
+		let attempts = 0;
+		setAgentRegexWorkerFactoryForTesting(() => {
+			if (++attempts === 1) throw new Error('temporary setup failure');
+			return new FakeWorker('echo') as unknown as Worker;
+		});
+		await expect(filterAgentRegexTexts([HIDE_RULE], 'hide', [{ role: 'user', text: 'hidden-first' }])).resolves.toBeNull();
+		await expect(filterAgentRegexTexts([HIDE_RULE], 'hide', [{ role: 'user', text: 'hidden-second' }])).resolves.toEqual(['second']);
+		expect(attempts).toBe(2);
 	});
 
 	test('resolves null and terminates the worker when the batch exceeds its time budget', async () => {
