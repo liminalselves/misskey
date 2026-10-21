@@ -13,7 +13,7 @@
 - 会话导入导出升级至 v7：完整备份会话配置、消息私有上下文、内部轮次、定时计划与压缩便签元数据；v1-v6 与旧上下文文件仍可导入。跨账号不可用的图片附件会跳过附件，但保留消息和识别文本。
 - 自定义表情符号（beta）表格新增「智能体描述」列（可直接编辑、随批量更新提交），全部列标题与搜索/排序控件本地化（此前为硬编码英文）。
 
-## 2026.2.0-liminalselves.2
+## 2025.12.2-liminalselves.3
 
 [#misskey](https://misskey.liminalselves.top/tags/misskey)
 
@@ -42,7 +42,7 @@
 
 部署须按时间戳顺序执行迁移：`1773000000000-AgentCompressionStickyUniqueFingerprint`、`1775700000000-AgentCompressionStickyRetryCount`、`1775800000000-AgentCheckin`、`1775900000000-RoleCheckinMultiplier`、`1776000000000-AgentRedeemPurchaseUrl`、`1776100000000-AgentSessionModerationBannedReason`。
 
-## 2026.2.0-liminalselves.1
+## 2025.12.2-liminalselves.2
 
 [#misskey](https://misskey.liminalselves.top/tags/misskey)
 
@@ -76,7 +76,7 @@
 - 修复智能体治理工作台中继续载入按钮、消息检索、重置、导航排版和列表滚动等交互问题。
 - 修复右下角“已和服务器断开连接”提示在流连接恢复后仍持续显示的问题；断连超过 5 秒才显示提示。
 
-## 2026.2.0
+## 2025.12.2-liminalselves.1
 
 ### 智能体功能全面更新上线
 
