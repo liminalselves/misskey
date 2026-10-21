@@ -46,6 +46,7 @@
 - `MkPagination`、时间线、通知、网盘与治理列表在加载或失败时将 `v-appear` 置为 null，成功且仍有下一页时重新观察；失败保留手动重试。`appear` 必须响应绑定更新，停用/卸载取消延迟回调，不能只在首次 mounted 读取设置。
 - 分页加载保留已显示条目和加载控件高度，不用大号 `MkLoading` 替换整段列表或按钮。用户分页调用 `fetchNewer({ pagination: true })`，结束后不再请求；时间线轮询不带该选项，仍可发现新消息，且不会清除历史分页失败态触发自动重试。
 - 智能体广场的角色/风格追加加载保留卡片，末尾预留 64px 状态区；搜索时不加载被隐藏的广场列表。治理消息检索只在初次空列表加载时显示整块加载指示。
+- 智能体聊天的 `agent-opt:` 临时消息仅供本地显示，不作两向分页游标；没有正式消息时暂不分页。发送、分段播放或通知同步期间到达的同会话通知合并为待同步通知，发送状态复位或当前同步结束后补拉，不依赖下一条通知；延后的通知不提前清未读，后台同步仍不清未读，卸载后不补拉。发送失败仍沿用原有时间线重载与草稿恢复。回归：`pnpm --filter frontend exec vitest run test/agent-session-message-sync.test.ts`。
 - 2026-10-06：`pnpm --filter frontend test pagination.test.ts drive-navigation.test.ts scroll.test.ts` 共 23 项通过，frontend typecheck 通过，改动源码 ESLint 无错误（存量警告保留）。Chrome 393×852 移动视口使用实际搜索页/用户列表、时间线、通知、反向分页和广场组件，配合模拟 API 验证失败不自动重试、按钮与页面高度/scrollY 不变、手动重试后末页停止、重复页停止及广场加载时卡片不消失。无数据库操作；未替代 Android WebView 真机验收。
 
 ## 验证

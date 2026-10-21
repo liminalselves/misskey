@@ -3236,9 +3236,10 @@ async function loadContextAround(targetId: string, limit = PAGE_LIMIT) {
 
 async function fetchOlderMessages() {
 	if (moreFetching.value || messages.value.length === 0) return;
+	const tailId = messages.value.findLast(message => !message.id.startsWith(OPTIMISTIC_MESSAGE_ID_PREFIX))?.id;
+	if (tailId == null) return;
 	moreFetching.value = true;
 	try {
-		const tailId = messages.value[messages.value.length - 1]!.id;
 		const list = await callAgentApi('agents/messages/timeline', {
 			sessionId,
 			limit: PAGE_LIMIT,
@@ -3256,9 +3257,10 @@ async function fetchOlderMessages() {
 
 async function fetchNewerMessages() {
 	if (fetchingNewer.value || messages.value.length === 0) return;
+	const headId = messages.value.find(message => !message.id.startsWith(OPTIMISTIC_MESSAGE_ID_PREFIX))?.id;
+	if (headId == null) return;
 	fetchingNewer.value = true;
 	try {
-		const headId = messages.value[0]!.id;
 		const list = await callAgentApi('agents/messages/timeline', {
 			sessionId,
 			limit: PAGE_LIMIT,
@@ -3409,16 +3411,34 @@ function stopReviewPoll() {
 	}
 }
 
+let pendingAgentMessageNotification: unknown = null;
+
+function flushPendingAgentMessageNotification(): void {
+	if (sending.value || proactiveMessageSyncing || isComponentUnmounted || pendingAgentMessageNotification == null) return;
+	const payload = pendingAgentMessageNotification;
+	pendingAgentMessageNotification = null;
+	void onNewAgentMessage(payload);
+}
+
+watch(sending, value => {
+	if (!value) flushPendingAgentMessageNotification();
+});
+
 async function onNewAgentMessage(payload: unknown): Promise<void> {
 	const data = payload as { sessionId?: unknown; messageId?: unknown };
 	if (data.sessionId !== sessionId) return;
+
+	// Coalesce notifications until the send response and segmented playback settle.
+	if (sending.value || proactiveMessageSyncing) {
+		pendingAgentMessageNotification = payload;
+		return;
+	}
 
 	// 页面可见且正在查看本会话（KeepAlive 缓存页未激活时用户不在本页，不得误清未读）：立即清未读，避免徒增徽标
 	if (!window.document.hidden && isPageActivated && !isComponentUnmounted) {
 		void markAgentSessionRead();
 	}
 
-	if (proactiveMessageSyncing) return;
 	proactiveMessageSyncing = true;
 	try {
 		const existingIds = new Set(messages.value.map(message => message.id));
@@ -3439,6 +3459,7 @@ async function onNewAgentMessage(payload: unknown): Promise<void> {
 		}
 	} finally {
 		proactiveMessageSyncing = false;
+		flushPendingAgentMessageNotification();
 	}
 }
 
