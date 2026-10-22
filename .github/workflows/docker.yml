@@ -1,18 +1,21 @@
 name: Publish Docker image
 
 on:
-  release:
-    types: [published]
+  push:
+    tags:
+      - '*-liminalselves.*'
   workflow_dispatch:
+    inputs:
+      no_cache:
+        description: '禁用构建缓存强制全量重建（修复 GHA 缓存导致镜像不更新）'
+        type: boolean
+        default: false
 
 env:
-  # Fork convention: publish to GHCR (ghcr.io/<owner>/<repo>) like docker-develop.yml,
-  # not the upstream misskey/misskey Docker Hub repository.
+  # Fork convention: publish to GHCR (ghcr.io/<owner>/<repo>), not the upstream misskey/misskey Docker Hub repository.
+  # Release-only builds: a version tag (<upstream-baseline>-liminalselves.<N>) must point at a commit on master.
   REGISTRY_IMAGE: ghcr.io/${{ github.repository }}
   TAGS: |
-    type=edge
-    type=ref,event=pr
-    type=ref,event=branch
     type=semver,pattern={{version}}
     type=semver,pattern={{major}}.{{minor}}
     type=semver,pattern={{major}}
@@ -21,9 +24,31 @@ permissions:
   contents: read
 
 jobs:
+  # Release tags must point at a commit on master. compare/{tag}...master yields
+  # "ahead" (tag is an ancestor of master) or "identical" (same commit); anything else is rejected.
+  check:
+    name: Check release tag is on master
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Verify the tagged commit is on master
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          status=$(gh api "repos/${{ github.repository }}/compare/${{ github.ref_name }}...master" --jq .status)
+          if [ "$status" != "ahead" ] && [ "$status" != "identical" ]; then
+            echo "::error::tag ${{ github.ref_name }} does not point to a commit on master (compare: $status); refusing to build"
+            exit 1
+          fi
+          echo "tag ${{ github.ref_name }} is on master (compare: $status)"
+
   # see https://docs.docker.com/build/ci/github-actions/multi-platform/#distribute-build-across-multiple-runners
   build:
     name: Build
+    needs:
+      - check
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -66,6 +91,7 @@ jobs:
           platforms: ${{ matrix.platform }}
           provenance: false
           labels: ${{ steps.meta.outputs.labels }}
+          no-cache: ${{ inputs.no_cache || false }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           outputs: type=image,name=${{ env.REGISTRY_IMAGE }},push-by-digest=true,name-canonical=true,push=true
