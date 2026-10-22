@@ -17,6 +17,7 @@
 - 维护方：阈界人格项目组
 - 实例地址：[misskey.liminalselves.top](https://misskey.liminalselves.top)
 - 上游同步：以 `misskey-dev/misskey` 为基础，根据项目需要选择性合并上游更新
+- 发布与镜像：[版本 tag、ACR 构建与发布流程](./docs/releasing.md)
 - 问题反馈：请优先通过阈界人格项目组指定渠道反馈站点相关问题
 
 ## 与上游 Misskey 的关系
