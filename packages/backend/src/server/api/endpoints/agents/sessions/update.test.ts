@@ -5,7 +5,7 @@
 
 process.env.NODE_ENV = 'test';
 
-import { describe, expect, jest, test } from '@jest/globals';
+import { describe, expect, vi, test } from 'vitest';
 import { ApiError } from '@/server/api/error.js';
 import UpdateSession from './update.js';
 
@@ -34,30 +34,30 @@ function createHarness() {
 		scheduledProactiveEnabled: false,
 	};
 	const query = {
-		update: jest.fn(), set: jest.fn(), where: jest.fn(), setParameter: jest.fn(),
-		execute: jest.fn(async () => ({ affected: 1 })),
+		update: vi.fn(), set: vi.fn(), where: vi.fn(), setParameter: vi.fn(),
+		execute: vi.fn(async () => ({ affected: 1 })),
 	};
 	for (const key of ['update', 'set', 'where', 'setParameter'] as const) query[key].mockReturnValue(query);
 	const sessions = {
-		findOneBy: jest.fn(async () => row),
-		createQueryBuilder: jest.fn(() => query),
+		findOneBy: vi.fn(async () => row),
+		createQueryBuilder: vi.fn(() => query),
 	};
 	const styles = {
-		findOneBy: jest.fn(async ({ id }: { id: string }) => id === 'missingStyle' ? null : { id, userId: USER_ID }),
+		findOneBy: vi.fn(async ({ id }: { id: string }) => id === 'missingStyle' ? null : { id, userId: USER_ID }),
 	};
 	const agentService = {
-		assertAgentsEnabled: jest.fn(),
-		loadCharacterForAgentSessionOrThrow: jest.fn(async () => ({})),
-		assertAgentUserSessionChatAllowed: jest.fn(),
-		assertCanUseDialogueStyle: jest.fn<() => Promise<void>>().mockResolvedValue(undefined),
-		assertSessionStylePolicy: jest.fn(),
-		resolveModelApiNameForUser: jest.fn(async (_meta: unknown, id: string) => {
+		assertAgentsEnabled: vi.fn(),
+		loadCharacterForAgentSessionOrThrow: vi.fn(async () => ({})),
+		assertAgentUserSessionChatAllowed: vi.fn(),
+		assertCanUseDialogueStyle: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
+		assertSessionStylePolicy: vi.fn(),
+		resolveModelApiNameForUser: vi.fn(async (_meta: unknown, id: string) => {
 			if (id === 'missingModel') throw unavailable('AGENTS_MODEL_UNAVAILABLE');
 			return id;
 		}),
 	};
-	const imageService = { resolveImageModel: jest.fn((_meta: unknown, id: string) => id === 'missingImage' ? null : { id }) };
-	const visionService = { resolveVisionModel: jest.fn(async (_meta: unknown, id: string) => id === 'missingVision' ? null : { id }) };
+	const imageService = { resolveImageModel: vi.fn((_meta: unknown, id: string) => id === 'missingImage' ? null : { id }) };
+	const visionService = { resolveVisionModel: vi.fn(async (_meta: unknown, id: string) => id === 'missingVision' ? null : { id }) };
 	const endpoint = new UpdateSession(
 		sessions as never,
 		styles as never,
@@ -65,7 +65,7 @@ function createHarness() {
 		{ fetch: async () => ({ agentImageArtistPresets: [{ id: 'validArtist' }], agentProactiveMaxChainLength: 7 }) } as never,
 		imageService as never,
 		visionService as never,
-		{ pauseAll: jest.fn(), resumeAll: jest.fn() } as never,
+		{ pauseAll: vi.fn(), resumeAll: vi.fn() } as never,
 	);
 	const run = (settings: Record<string, unknown>) => endpoint.exec({ sessionId: SESSION_ID, ...settings }, { id: USER_ID } as never, null);
 	return { run, row, query, styles, agentService };

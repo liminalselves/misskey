@@ -467,7 +467,6 @@ import MkSelect from '@/components/MkSelect.vue';
 import MkFilterBand from '@/components/MkFilterBand.vue';
 import MkUserAcctInline from '@/components/MkUserAcctInline.vue';
 import MkDriveFileThumbnail from '@/components/MkDriveFileThumbnail.vue';
-import MkImgPreviewDialog from '@/components/MkImgPreviewDialog.vue';
 import FormSplit from '@/components/form/split.vue';
 import { misskeyApi, formatApiError } from '@/utility/misskey-api.js';
 import { copyToClipboard } from '@/utility/copy-to-clipboard.js';
@@ -1359,9 +1358,25 @@ function canPreviewImage(row: ImageRow): boolean {
 	return row.file != null && !row.file.isDeleted && !isImageBlocked(row) && row.status === 'succeeded';
 }
 
-function openImagePreview(row: ImageRow) {
+// 点击缩略图用上游原生灯箱加载全图（封禁/已清理/无文件已在 canPreviewImage 拦下）
+async function openImagePreview(row: ImageRow) {
 	if (!canPreviewImage(row) || row.file == null) return;
-	os.popup(MkImgPreviewDialog, { file: row.file }, {});
+	const file = row.file;
+	const { dispose } = await os.popupAsyncWithDialog(import('@/components/MkLightbox.vue').then(x => x.default), {
+		defaultIndex: 0,
+		contents: [{
+			id: file.id,
+			type: 'image' as const,
+			url: file.url,
+			thumbnailUrl: file.thumbnailUrl,
+			width: file.properties.width ?? null,
+			height: file.properties.height ?? null,
+			filename: file.name,
+			file,
+		}],
+	}, {
+		closed: () => dispose(),
+	});
 }
 
 function imageSizeLabel(size: string) {

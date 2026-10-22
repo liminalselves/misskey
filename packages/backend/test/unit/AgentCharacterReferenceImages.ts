@@ -4,7 +4,7 @@
  */
 
 import 'reflect-metadata';
-import { jest } from '@jest/globals';
+import { vi, describe, test, expect } from 'vitest';
 import { MiAgentCharacter } from '@/models/AgentCharacter.js';
 import CreateCharacter from '@/server/api/endpoints/agents/characters/create.js';
 import UpdateCharacter from '@/server/api/endpoints/agents/characters/update.js';
@@ -17,8 +17,8 @@ function harness(files = [image]) {
 		id: 'character1', userId: owner.id, name: 'Original', reviewStatus: 'draft',
 		referenceImageFileIds: ['missing1'], referenceImageFileId: 'missing1', draftRevision: 1,
 	});
-	const findOneBy = jest.fn(async (where: { id: string; userId: string }) => files.find(file => file.id === where.id && file.userId === where.userId) ?? null);
-	const save = jest.fn(async () => row);
+	const findOneBy = vi.fn(async (where: { id: string; userId: string }) => files.find(file => file.id === where.id && file.userId === where.userId) ?? null);
+	const save = vi.fn(async () => row);
 	const manager = { findOne: async () => row, save };
 	const db = { transaction: async (callback: (manager: unknown) => Promise<unknown>) => callback(manager) };
 	const agent = {
@@ -27,7 +27,7 @@ function harness(files = [image]) {
 		serializeExampleTurns: () => '',
 	};
 	const stickers = { validateCharacterStickersForOwner: async () => [] };
-	const insertOne = jest.fn(async (data: Partial<MiAgentCharacter>) => data as MiAgentCharacter);
+	const insertOne = vi.fn(async (data: Partial<MiAgentCharacter>) => data as MiAgentCharacter);
 	const update = new UpdateCharacter(db as never, { findOneBy } as never, agent as never, stickers as never);
 	const create = new CreateCharacter({ insertOne } as never, { findOneBy } as never, agent as never, stickers as never);
 	return { row, findOneBy, save, insertOne, update, create };

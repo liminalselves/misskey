@@ -157,7 +157,7 @@ export class AgentRegexBatchFilter {
 		});
 		worker.on('error', (error) => {
 			if (this.worker !== worker) return;
-			this.failAllPending(new AgentRegexFilterUnavailableError(error.message));
+			this.failAllPending(new AgentRegexFilterUnavailableError(error instanceof Error ? error.message : String(error)));
 			this.destroyWorker();
 		});
 		worker.on('exit', () => {

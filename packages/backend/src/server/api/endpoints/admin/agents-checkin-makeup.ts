@@ -65,7 +65,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 
 			const targetUserId = await resolveUserIdFromAcctOrId(this.usersRepository, ps.userId);
 			const targetUser = targetUserId
-				? await this.usersRepository.findOne({ where: { id: targetUserId }, select: ['id'] })
+				? await this.usersRepository.findOne({ where: { id: targetUserId }, select: { id: true } })
 				: null;
 			if (!targetUser) {
 				throw new ApiError(meta.errors.noSuchUser);

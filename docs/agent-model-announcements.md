@@ -24,7 +24,7 @@
 针对本功能的离线测试：
 
 ```sh
-pnpm --filter backend exec node jest.js --config jest.config.unit.cjs --runInBand --runTestsByPath test/unit/AgentModelAnnouncements.ts
+pnpm --filter backend exec vitest run --config vitest.config.unit.ts test/unit/AgentModelAnnouncements.ts
 pnpm --filter frontend exec vitest run test/agent-model-announcements.test.ts
 ```
 

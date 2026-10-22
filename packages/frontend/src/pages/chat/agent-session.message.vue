@@ -962,7 +962,7 @@ async function confirmDelete() {
 	line-height: 1.45;
 	word-break: break-word;
 
-	&:deep(p) {
+	& :global(p) {
 		margin: 0.35em 0;
 
 		&:first-child {
@@ -974,12 +974,12 @@ async function confirmDelete() {
 		}
 	}
 
-	&:deep(h1),
-	&:deep(h2),
-	&:deep(h3),
-	&:deep(h4),
-	&:deep(h5),
-	&:deep(h6) {
+	& :global(h1),
+	& :global(h2),
+	& :global(h3),
+	& :global(h4),
+	& :global(h5),
+	& :global(h6) {
 		margin: 0.5em 0 0.25em;
 		font-weight: 700;
 		line-height: 1.25;
@@ -989,34 +989,34 @@ async function confirmDelete() {
 		}
 	}
 
-	&:deep(h1) { font-size: 1.25em; }
-	&:deep(h2) { font-size: 1.15em; }
-	&:deep(h3) { font-size: 1.08em; }
+	& :global(h1) { font-size: 1.25em; }
+	& :global(h2) { font-size: 1.15em; }
+	& :global(h3) { font-size: 1.08em; }
 
-	&:deep(ul),
-	&:deep(ol) {
+	& :global(ul),
+	& :global(ol) {
 		margin: 0.35em 0;
 		padding-left: 1.35em;
 	}
 
-	&:deep(li) {
+	& :global(li) {
 		margin: 0.15em 0;
 	}
 
-	&:deep(blockquote) {
+	& :global(blockquote) {
 		margin: 0.35em 0;
 		padding: 0.2em 0 0.2em 0.65em;
 		border-left: 3px solid var(--MI_THEME-divider);
 		color: var(--MI_THEME-fgTransparentWeak);
 	}
 
-	&:deep(hr) {
+	& :global(hr) {
 		margin: 0.6em 0;
 		border: none;
 		border-top: 1px solid var(--MI_THEME-divider);
 	}
 
-	&:deep(pre) {
+	& :global(pre) {
 		margin: 0.4em 0;
 		padding: 0.5em 0.65em;
 		overflow-x: auto;
@@ -1025,50 +1025,50 @@ async function confirmDelete() {
 		font-size: 0.88em;
 	}
 
-	&:deep(code) {
+	& :global(code) {
 		padding: 0.1em 0.35em;
 		border-radius: 4px;
 		background: color-mix(in srgb, var(--MI_THEME-panel) 88%, var(--MI_THEME-fg));
 		font-size: 0.9em;
 	}
 
-	&:deep(pre code) {
+	& :global(pre code) {
 		padding: 0;
 		background: transparent;
 		font-size: inherit;
 	}
 
-	&:deep(a) {
+	& :global(a) {
 		color: var(--MI_THEME-link);
 		text-decoration: underline;
 		text-underline-offset: 2px;
 	}
 
-	&:deep(table) {
+	& :global(table) {
 		margin: 0.4em 0;
 		width: 100%;
 		border-collapse: collapse;
 		font-size: 0.92em;
 	}
 
-	&:deep(th),
-	&:deep(td) {
+	& :global(th),
+	& :global(td) {
 		border: 1px solid var(--MI_THEME-divider);
 		padding: 0.25em 0.45em;
 	}
 
-	&:deep(th) {
+	& :global(th) {
 		background: color-mix(in srgb, var(--MI_THEME-panel) 80%, transparent);
 	}
 
-	&:deep(img) {
+	& :global(img) {
 		max-width: 100%;
 		height: auto;
 		vertical-align: middle;
 		border-radius: 4px;
 	}
 
-	&:deep(input[type="checkbox"]) {
+	& :global(input[type="checkbox"]) {
 		margin-right: 0.35em;
 		vertical-align: middle;
 		pointer-events: none;

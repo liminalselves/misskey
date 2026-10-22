@@ -27,12 +27,12 @@ pnpm --filter frontend exec vitest run test/<affected-test>.test.ts
 pnpm --filter backend build
 pnpm --filter backend typecheck
 pnpm --filter backend eslint
-pnpm --filter backend exec node jest.js --config jest.config.unit.cjs --runInBand --runTestsByPath test/unit/<affected-test>.ts
+pnpm --filter backend exec vitest run --config vitest.config.unit.ts test/unit/<affected-test>.ts
 ```
 
-后端构建使用 SWC，不等于 TypeScript 类型检查。最后一条只运行已确认不连接数据库的测试；先读测试的导入、初始化和清理代码。
+后端构建使用 Rolldown，不等于 TypeScript 类型检查。最后一条只运行已确认不连接数据库的测试；先读测试的导入、初始化和清理代码。上游同步和完整验证边界见 [2026.10.0 同步记录](upstream-sync-2026.10.0.md)。
 
-服务构造函数新增依赖时，搜索该服务的所有 `new Service(...)` 和 `Test.createTestingModule`，包括其他服务的间接依赖。同步真实测试模块的 `providers` 或测试桩，不能只改 `CoreModule`，也不能只跑新增功能的测试。后端的 ESLint 脚本不包含 `test/unit`，测试文件主要由 `typecheck` 和实际 Jest 验证。
+服务构造函数新增依赖时，搜索该服务的所有 `new Service(...)` 和 `Test.createTestingModule`，包括其他服务的间接依赖。同步真实测试模块的 `providers` 或测试桩，不能只改 `CoreModule`，也不能只跑新增功能的测试。后端的 ESLint 脚本不包含 `test/unit`，测试文件主要由 `typecheck` 和实际 Vitest 验证。
 
 2026-10-07 的 CI 中，`ModerationLogService` 新增日志依赖，但 `CustomEmojiService` 测试没有注册 `LoggerService`，使同一套测试的 42 个用例连带失败。后续 `undefined` 清理异常是初始化失败的结果，不是另一项业务缺陷。
 

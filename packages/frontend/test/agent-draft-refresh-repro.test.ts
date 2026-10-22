@@ -6,9 +6,8 @@
 import { assert, describe, test, vi } from 'vitest';
 import { createApp, defineComponent, h, nextTick, ref, vShow, withDirectives } from 'vue';
 
-// 桩掉组件依赖的重模块，只保留草稿逻辑（i18n 初始化见 ./init）
-import './init';
-import { preferState } from './init.js';
+// 桩掉组件依赖的重模块，只保留草稿逻辑（i18n setup is shared by the unit-test configuration）
+import { preferState } from './setup.unit.js';
 
 preferState['chat.sendOnEnter'] = true;
 

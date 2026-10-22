@@ -14,44 +14,26 @@ jobs:
     runs-on: ubuntu-latest
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     permissions:
+      actions: read
       pull-requests: write
 
 # api-artifact
     steps:
-      - name: Download artifact
-        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+      - name: Download artifacts
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          script: |
-            const fs = require('fs');
-            let allArtifacts = await github.rest.actions.listWorkflowRunArtifacts({
-               owner: context.repo.owner,
-               repo: context.repo.repo,
-               run_id: context.payload.workflow_run.id,
-            });
-            let matchArtifacts = allArtifacts.data.artifacts.filter((artifact) => {
-              return artifact.name.startsWith("api-artifact-") || artifact.name == "api-artifact"
-            });
-            await Promise.all(matchArtifacts.map(async (artifact) => {
-              let download = await github.rest.actions.downloadArtifact({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                artifact_id: artifact.id,
-                archive_format: 'zip',
-              });
-              await fs.promises.writeFile(`${process.env.GITHUB_WORKSPACE}/${artifact.name}.zip`, Buffer.from(download.data));
-            }));
-      - name: Extract all artifacts
-        run: |
-          find . -mindepth 1 -maxdepth 1 -type f -name '*.zip' -exec unzip {} -d artifacts ';'
-          ls -la
+          pattern: api-artifact-*
+          path: artifacts
+          merge-multiple: true
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ github.event.workflow_run.id }}
+      - name: Check artifacts
+        run: ls -lh artifacts/
       - name: Load PR Number
         id: load-pr-num
         run: echo "pr-number=$(cat artifacts/pr_number)" >> "$GITHUB_OUTPUT"
 
-      - name: Output base
-        run: cat ./artifacts/api-base.json
-      - name: Output head
-        run: cat ./artifacts/api-head.json
       - name: Arrange json files
         run: |
           jq '.' ./artifacts/api-base.json > ./api-base.json
@@ -60,10 +42,8 @@ jobs:
         run: diff -u --label=base --label=head ./api-base.json ./api-head.json | cat > api.json.diff
       - name: Get full diff
         run: diff --label=base --label=head --new-line-format='+%L' --old-line-format='-%L' --unchanged-line-format=' %L' ./api-base.json ./api-head.json | cat > api-full.json.diff
-      - name: Echo full diff
-        run: cat ./api-full.json.diff
       - name: Upload full diff to Artifact
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: api-artifact
           path: |
@@ -92,13 +72,13 @@ jobs:
           fi
 
           echo "$FOOTER" >> ./output.md
-      - uses: thollander/actions-comment-pull-request@65f9e5c9a1f2cd378bd74b2e057c9736982a8e74 # v3
+      - uses: thollander/actions-comment-pull-request@24bffb9b452ba05a4f3f77933840a6a841d1b32b # v3.0.1
         with:
           pr-number: ${{ steps.load-pr-num.outputs.pr-number }}
           comment-tag: show_diff
           file-path: ./output.md
       - name: Tell error to PR
-        uses: thollander/actions-comment-pull-request@65f9e5c9a1f2cd378bd74b2e057c9736982a8e74 # v3
+        uses: thollander/actions-comment-pull-request@24bffb9b452ba05a4f3f77933840a6a841d1b32b # v3.0.1
         if: failure() && steps.load-pr-num.outputs.pr-number
         with:
           pr-number: ${{ steps.load-pr-num.outputs.pr-number }}
