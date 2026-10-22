@@ -13,6 +13,7 @@ on:
       - packages-private/diagnostics-backend/**
       - .github/workflows/backend-diagnostics.inspect.yml
       - .github/workflows/backend-diagnostics.comment.yml
+      - scripts/check-diagnostics-baseline*.mjs
 
 jobs:
   get-memory-usage:
@@ -37,7 +38,7 @@ jobs:
     - name: Checkout base
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
-        ref: ${{ github.base_ref }}
+        ref: ${{ github.event.pull_request.base.sha }}
         path: base
         submodules: true
     - name: Checkout head
@@ -58,18 +59,27 @@ jobs:
         cache-dependency-path: |
           base/pnpm-lock.yaml
           head/pnpm-lock.yaml
+    - name: Check baseline capabilities
+      id: baseline
+      run: >-
+        node head/scripts/check-diagnostics-baseline.mjs backend
+        "$GITHUB_WORKSPACE/base" "$GITHUB_WORKSPACE/comparison-unavailable.md"
     - name: Install base dependencies
+      if: steps.baseline.outputs.supported == 'true'
       working-directory: base
       run: pnpm i --frozen-lockfile
     - name: Check base pnpm-lock.yaml
+      if: steps.baseline.outputs.supported == 'true'
       working-directory: base
       run: git diff --exit-code pnpm-lock.yaml
     - name: Configure base
+      if: steps.baseline.outputs.supported == 'true'
       working-directory: base
       run: |
         cp .github/misskey/test.yml .config/default.yml
         pnpm compile-config
     - name: Build base
+      if: steps.baseline.outputs.supported == 'true'
       working-directory: base
       run: pnpm build
     - name: Install head dependencies
@@ -87,6 +97,7 @@ jobs:
       working-directory: head
       run: pnpm build
     - name: Measure backend memory usage
+      if: steps.baseline.outputs.supported == 'true'
       working-directory: head
       env:
         MK_MEMORY_COMPARE_ROUNDS: 15
@@ -100,6 +111,7 @@ jobs:
         "$GITHUB_WORKSPACE/base" "$GITHUB_WORKSPACE/head"
         "$GITHUB_WORKSPACE/memory-base.json" "$GITHUB_WORKSPACE/memory-head.json"
     - name: Upload base heap snapshot
+      if: steps.baseline.outputs.supported == 'true'
       uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
       with:
         path: base-heap-snapshot.heapsnapshot
@@ -107,6 +119,7 @@ jobs:
         if-no-files-found: error
         retention-days: 7
     - name: Upload head heap snapshot
+      if: steps.baseline.outputs.supported == 'true'
       uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
       with:
         path: head-heap-snapshot.heapsnapshot
@@ -114,12 +127,24 @@ jobs:
         if-no-files-found: error
         retention-days: 7
     - name: Upload Artifact
+      if: steps.baseline.outputs.supported == 'true'
       uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
       with:
         name: memory-artifact-results
         path: |
           memory-base.json
           memory-head.json
+
+    - name: Report unavailable comparison
+      if: steps.baseline.outputs.supported == 'false'
+      run: cat comparison-unavailable.md >> "$GITHUB_STEP_SUMMARY"
+    - name: Upload unavailable comparison
+      if: steps.baseline.outputs.supported == 'false'
+      uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      with:
+        name: memory-artifact-results
+        path: comparison-unavailable.md
+        if-no-files-found: error
 
   save-pr-number:
     runs-on: ubuntu-latest

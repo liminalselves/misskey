@@ -43,7 +43,18 @@ jobs:
       - name: Load PR Number
         id: load-pr-num
         run: echo "pr-number=$(cat artifacts/pr_number)" >> "$GITHUB_OUTPUT"
+      - name: Resolve comparison availability
+        id: comparison
+        run: |
+          if [ -f artifacts/comparison-unavailable.md ]; then
+            test -s artifacts/comparison-unavailable.md
+            cp artifacts/comparison-unavailable.md output.md
+            echo "supported=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "supported=true" >> "$GITHUB_OUTPUT"
+          fi
       - name: Find heap snapshot artifacts
+        if: steps.comparison.outputs.supported == 'true'
         id: find-heap-snapshot-artifacts
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
@@ -67,6 +78,7 @@ jobs:
 
       - id: build-comment
         name: Build memory comment
+        if: steps.comparison.outputs.supported == 'true'
         env:
           MK_MEMORY_HEAP_SNAPSHOT_ARTIFACT_URL_BASE: ${{ steps.find-heap-snapshot-artifacts.outputs.base-url }}
           MK_MEMORY_HEAP_SNAPSHOT_ARTIFACT_URL_HEAD: ${{ steps.find-heap-snapshot-artifacts.outputs.head-url }}

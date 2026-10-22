@@ -26,6 +26,7 @@ on:
       - packages-private/diagnostics-frontend/**
       - .github/workflows/frontend-diagnostics.inspect.yml
       - .github/workflows/frontend-diagnostics.comment.yml
+      - scripts/check-diagnostics-baseline*.mjs
 
 permissions:
   contents: read
@@ -91,15 +92,24 @@ jobs:
         shell: bash
         run: mkdir -p "$RUNNER_TEMP/frontend-diagnostics"
 
+      - name: Check baseline capabilities
+        id: baseline
+        run: >-
+          node head/scripts/check-diagnostics-baseline.mjs frontend
+          "$GITHUB_WORKSPACE/base" "$RUNNER_TEMP/frontend-diagnostics/frontend-diagnostics.md"
+
       - name: Install dependencies for base
+        if: steps.baseline.outputs.supported == 'true'
         working-directory: base
         run: pnpm i --frozen-lockfile
 
       - name: Configure base
+        if: steps.baseline.outputs.supported == 'true'
         working-directory: base
         run: cp .github/misskey/test.yml .config
 
       - name: Build base
+        if: steps.baseline.outputs.supported == 'true'
         working-directory: base
         env:
           FRONTEND_BUNDLE_VISUALIZER: 'true'
@@ -133,10 +143,12 @@ jobs:
           retention-days: 7
 
       - name: Install Playwright browsers
+        if: steps.baseline.outputs.supported == 'true'
         working-directory: head/packages-private/diagnostics-frontend
         run: pnpm exec playwright install --with-deps --no-shell chromium
 
       - name: Measure frontend browser metrics
+        if: steps.baseline.outputs.supported == 'true'
         shell: bash
         working-directory: head
         env:
@@ -151,6 +163,7 @@ jobs:
             "$REPORT_DIR/base-browser.json" "$REPORT_DIR/head-browser.json"
 
       - name: Upload browser base heap snapshot
+        if: steps.baseline.outputs.supported == 'true'
         id: upload-browser-base-heap-snapshot
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -161,6 +174,7 @@ jobs:
           retention-days: 7
 
       - name: Upload browser head heap snapshot
+        if: steps.baseline.outputs.supported == 'true'
         id: upload-browser-head-heap-snapshot
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -171,6 +185,7 @@ jobs:
           retention-days: 7
 
       - name: Generate browser detailed html
+        if: steps.baseline.outputs.supported == 'true'
         shell: bash
         working-directory: head
         run: |
@@ -182,6 +197,7 @@ jobs:
             "$REPORT_DIR/frontend-browser-detailed-html.html"
 
       - name: Upload browser detailed html
+        if: steps.baseline.outputs.supported == 'true'
         id: upload-browser-detailed-html
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -192,6 +208,7 @@ jobs:
           retention-days: 7
 
       - name: Generate frontend diagnostics report
+        if: steps.baseline.outputs.supported == 'true'
         shell: bash
         working-directory: head
         env:
@@ -213,6 +230,14 @@ jobs:
             "$REPORT_DIR/base-bundle-stats.json" "$REPORT_DIR/head-bundle-stats.json" \
             "$REPORT_DIR/base-browser.json" "$REPORT_DIR/head-browser.json" \
             "$REPORT_DIR/frontend-diagnostics.md"
+
+      - name: Write report metadata
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          REPORT_DIR="$RUNNER_TEMP/frontend-diagnostics"
           printf '%s\n' "$PR_NUMBER" > "$REPORT_DIR/pr-number.txt"
           printf '%s\n' "$BASE_SHA" > "$REPORT_DIR/base-sha.txt"
           printf '%s\n' "$HEAD_SHA" > "$REPORT_DIR/head-sha.txt"
@@ -220,10 +245,14 @@ jobs:
 
       - name: Check frontend diagnostics report
         shell: bash
+        env:
+          BASELINE_SUPPORTED: ${{ steps.baseline.outputs.supported }}
         run: |
           REPORT_DIR="$RUNNER_TEMP/frontend-diagnostics"
           test -s "$REPORT_DIR/frontend-diagnostics.md"
-          test -s "$REPORT_DIR/frontend-browser-detailed-html.html"
+          if [ "$BASELINE_SUPPORTED" = true ]; then
+            test -s "$REPORT_DIR/frontend-browser-detailed-html.html"
+          fi
           test -s "$REPORT_DIR/pr-number.txt"
           test -s "$REPORT_DIR/head-sha.txt"
           cat "$REPORT_DIR/frontend-diagnostics.md" >> "$GITHUB_STEP_SUMMARY"
