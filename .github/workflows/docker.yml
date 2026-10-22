@@ -1,29 +1,68 @@
 name: Publish Docker image
 
 on:
-  release:
-    types: [published]
+  push:
+    tags:
+      - 'release-v*-liminalselves.*'
   workflow_dispatch:
+    inputs:
+      no_cache:
+        description: '禁用构建缓存强制全量重建（修复 GHA 缓存导致镜像不更新）'
+        type: boolean
+        default: false
 
 env:
-  # Fork convention: publish to GHCR (ghcr.io/<owner>/<repo>) like docker-develop.yml,
-  # not the upstream misskey/misskey Docker Hub repository.
+  # Fork convention: publish to GHCR (ghcr.io/<owner>/<repo>), not the upstream misskey/misskey Docker Hub repository.
+  # ACR's built-in release-v$version rule publishes the version without the release-v prefix.
   REGISTRY_IMAGE: ghcr.io/${{ github.repository }}
-  TAGS: |
-    type=edge
-    type=ref,event=pr
-    type=ref,event=branch
-    type=semver,pattern={{version}}
-    type=semver,pattern={{major}}.{{minor}}
-    type=semver,pattern={{major}}
 
 permissions:
   contents: read
 
 jobs:
+  check:
+    name: Check release tag and version
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.release.outputs.version }}
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        with:
+          fetch-depth: 0
+      - name: Verify the release tag, master ancestry and package versions
+        id: release
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          if [ "$GITHUB_REF_TYPE" != "tag" ] || [[ ! "$RELEASE_TAG" =~ ^release-v[0-9]{4}\.[0-9]{1,2}\.[0-9]+-liminalselves\.[1-9][0-9]*$ ]]; then
+            echo "::error::Select a release-v<upstream-baseline>-liminalselves.<N> tag; branch builds are not allowed"
+            exit 1
+          fi
+          if ! git merge-base --is-ancestor HEAD refs/remotes/origin/master; then
+            echo "::error::The tagged commit is not on master; refusing to build"
+            exit 1
+          fi
+          export RELEASE_VERSION="${RELEASE_TAG#release-v}"
+          node --input-type=module <<'NODE'
+          import { readFileSync } from 'node:fs';
+          for (const path of ['package.json', 'packages/misskey-js/package.json']) {
+            const { version } = JSON.parse(readFileSync(path, 'utf8'));
+            if (version !== process.env.RELEASE_VERSION) {
+              console.error(`::error::${path} version ${version} does not match release version ${process.env.RELEASE_VERSION}`);
+              process.exit(1);
+            }
+          }
+          NODE
+          echo "version=$RELEASE_VERSION" >> "$GITHUB_OUTPUT"
+
   # see https://docs.docker.com/build/ci/github-actions/multi-platform/#distribute-build-across-multiple-runners
   build:
     name: Build
+    needs:
+      - check
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -50,7 +89,8 @@ jobs:
         uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
         with:
           images: ${{ env.REGISTRY_IMAGE }}
-          tags: ${{ env.TAGS }}
+          flavor: latest=false
+          tags: type=raw,value=${{ needs.check.outputs.version }}
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
@@ -66,6 +106,7 @@ jobs:
           platforms: ${{ matrix.platform }}
           provenance: false
           labels: ${{ steps.meta.outputs.labels }}
+          no-cache: ${{ inputs.no_cache || false }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           outputs: type=image,name=${{ env.REGISTRY_IMAGE }},push-by-digest=true,name-canonical=true,push=true
@@ -88,6 +129,7 @@ jobs:
       contents: read
       packages: write
     needs:
+      - check
       - build
     steps:
       - name: Prepare
@@ -107,7 +149,8 @@ jobs:
         uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
         with:
           images: ${{ env.REGISTRY_IMAGE }}
-          tags: ${{ env.TAGS }}
+          flavor: latest=false
+          tags: type=raw,value=${{ needs.check.outputs.version }}
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
