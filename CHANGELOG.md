@@ -1,5 +1,17 @@
 ## unreleased
 
+## 2025.12.2-liminalselves.5
+
+[#misskey](https://misskey.liminalselves.top/tags/misskey)
+
+### 优化
+- 智能体消息隐藏过滤结果可复用，减少发送及重新打开会话时的重复等待。
+
+### 修复
+- 修复配置隐藏正则后，消息气泡出现时横向移动、正文延迟显示的问题。
+- 修复分段回复过程中及回复结束后，阅读位置被反复拉回最新消息的问题。
+- 修复标签页切到后台后，返回时仍需等待已完成回复逐段补放的问题。
+
 ## 2025.12.2-liminalselves.4
 
 [#misskey](https://misskey.liminalselves.top/tags/misskey)
