@@ -4983,6 +4983,9 @@ async function playSegmentedReply(message: AgentMsg, precomputedSegments?: strin
 	if (session.value?.segmentedOutputEnabled !== true) return true;
 	const segments = precomputedSegments ?? playableSegmentsFor(message.content);
 	if (segments.length <= 1) return true;
+	// 后台标签页不做逐段回放：rAF 停发、定时器被节流会让播放冻结在半路，
+	// 用户回到前台时看到的不是已完成的消息，而是还要逐段放完的陈旧动画
+	if (window.document.hidden) return true;
 
 	const state = {
 		token: ++segmentPlaybackToken,
@@ -4992,6 +4995,12 @@ async function playSegmentedReply(message: AgentMsg, precomputedSegments?: strin
 		completed: false,
 		canceled: false,
 	};
+	// 播放中途切到后台：立即快进完成（清空回放状态即完整渲染），
+	// 被 rAF 冻结的循环醒来后经 completed 检查自然退出，不再继续逐段播放
+	const onVisibilityChange = () => {
+		if (window.document.hidden && segmentPlayback.value?.token === state.token) finishSegmentPlayback();
+	};
+	window.document.addEventListener('visibilitychange', onVisibilityChange);
 	try {
 		segmentPlayback.value = state;
 		void scrollToLatest().catch(() => {});
@@ -5010,7 +5019,6 @@ async function playSegmentedReply(message: AgentMsg, precomputedSegments?: strin
 				return false;
 			}
 			current.visibleCount = i + 1;
-			void scrollToLatest().catch(() => {});
 			await waitForSegmentRender();
 		}
 
@@ -5020,6 +5028,8 @@ async function playSegmentedReply(message: AgentMsg, precomputedSegments?: strin
 		console.error('[agents] segmented reply playback failed', err);
 		if (segmentPlayback.value?.token === state.token) segmentPlayback.value = null;
 		return true;
+	} finally {
+		window.document.removeEventListener('visibilitychange', onVisibilityChange);
 	}
 }
 
@@ -5209,7 +5219,6 @@ async function onFormSubmit(payload: { text: string; file: DriveFile | null }) {
 		if (res.proactiveScheduleControlFailed === true) {
 			await os.alert({ type: 'warning', text: i18n.ts._agents.proactiveScheduleSettingFailed });
 		}
-		await scrollToLatest();
 		await loadSession();
 		void loadAgentCreditBalance();
 		if (session.value?.dialogueStyleId) {
