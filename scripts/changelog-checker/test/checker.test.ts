@@ -8,6 +8,27 @@ import {Release, ReleaseCategory} from "../src/parser";
 import {checkNewRelease, checkNewTopic} from "../src/checker";
 
 suite('checkNewRelease', () => {
+	test.each(['unreleased', 'Unreleased'])('accepts a new release below the retained %s section', (name) => {
+		const base = [new Release(name), new Release('2025.12.2-liminalselves.4')];
+		const head = [new Release(name), new Release('2025.12.2-liminalselves.5'), new Release('2025.12.2-liminalselves.4')];
+
+		expect(checkNewRelease(base, head).success).toBe(true);
+	});
+
+	test('still rejects replacing the previous release below unreleased', () => {
+		const base = [new Release('unreleased'), new Release('2025.12.2-liminalselves.4')];
+		const head = [new Release('unreleased'), new Release('2025.12.2-liminalselves.5'), new Release('2025.12.2-liminalselves.3')];
+
+		expect(checkNewRelease(base, head).success).toBe(false);
+	});
+
+	test('does not count adding only an unreleased heading as a release', () => {
+		const base = [new Release('2025.12.2-liminalselves.4')];
+		const head = [new Release('unreleased'), new Release('2025.12.2-liminalselves.4')];
+
+		expect(checkNewRelease(base, head).success).toBe(false);
+	});
+
 	test('headに新しいリリースがある1', () => {
 		const base = [new Release('2024.12.0')]
 		const head = [new Release('2024.12.1'), new Release('2024.12.0')]

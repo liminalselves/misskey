@@ -2,6 +2,13 @@
 
 按实际改动选择下面的检查，不用每次重跑整个仓库。工作流的版本、矩阵和执行步骤以 [`.github/workflows`](../.github/workflows) 为准；本地通过不代表 GitHub 已通过，也不能保证 GitHub 服务、下载源和镜像仓库永远正常。
 
+## 发布准备
+
+- 版本与发布顺序见 [releasing.md](releasing.md)。顶层保留 `## unreleased`；CHANGELOG 检查器比较新增正式版本时排除该占位段，不将空占位段计为发布。
+- 修改检查器后运行 `npm --prefix scripts/changelog-checker test`；发布 PR 会运行同一组测试，再比较 base/head 日志。
+- 前端 E2E 使用已安装的 `start-server-and-test` 启动服务、等待就绪后运行 Cypress；完整命令与失败工件见 `test-frontend.yml`，不额外依赖 Action 内部的服务启动包装。
+- 推送后按最终提交 SHA 核对全部适用的检查；路径过滤未触发与 fork 主动跳过须单列，不能算作测试通过。仅准备发布时不合 master、不打 tag、不触发镜像发布。
+
 ## 基础检查
 
 - 使用 [`.node-version`](../.node-version) 指定的 Node.js；后端运行时改动还要考虑 [最低版本](../.github/min.node-version)。pnpm 版本以 [`package.json`](../package.json) 的 `packageManager` 为准。
