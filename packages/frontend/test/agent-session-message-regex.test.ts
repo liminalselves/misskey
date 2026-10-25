@@ -6,7 +6,7 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { createApp, defineComponent, h, nextTick, reactive } from 'vue';
 import type { App } from 'vue';
-import { filterAgentRegexTexts } from '@/utility/agent-regex-filter.js';
+import { filterAgentRegexTexts, type AgentRegexFilterRule } from '@/utility/agent-regex-filter.js';
 import AgentSessionMessage from '@/pages/chat/agent-session.message.vue';
 
 vi.mock('@/i.js', () => ({ ensureSignin: () => ({ id: 'user1' }) }));
@@ -27,6 +27,14 @@ vi.mock('@/components/global/MkLoading.vue', () => ({ default: { render: () => n
 vi.mock('@/components/global/MkCustomEmoji.vue', () => ({ default: { render: () => null } }));
 vi.mock('@/components/MkDeletedFileMedia.vue', () => ({ default: { render: () => null } }));
 vi.mock('@/components/MkMediaList.vue', () => ({ default: { render: () => null } }));
+vi.mock('@/components/MkFukidashi.vue', async () => {
+	const { defineComponent, h } = await import('vue');
+	return {
+		default: defineComponent({
+			setup: (_props, { slots }) => () => h('div', { 'data-bubble': '' }, slots.default?.()),
+		}),
+	};
+});
 // 仅替换异步过滤入口，保持模块其余导出为真实实现
 vi.mock('@/utility/agent-regex-filter.js', async (importOriginal) => ({
 	...(await importOriginal<object>()),
@@ -71,7 +79,7 @@ afterEach(() => {
 });
 
 describe('Agent session message hide-rules rendering', () => {
-	test('renders an empty bubble while the worker filters, then shows the filtered text', async () => {
+	test('does not render an empty bubble while the worker filters, then shows the filtered text', async () => {
 		let resolveFilter: ((results: string[] | null) => void) | undefined;
 		filterMock.mockReturnValue(new Promise<string[] | null>(resolve => {
 			resolveFilter = resolve;
@@ -80,16 +88,51 @@ describe('Agent session message hide-rules rendering', () => {
 			message: { id: 'm1', role: 'assistant', content: '[[agent_cue smile]] secret-plan visible', createdAt: '2026-10-07T00:00:00Z' },
 			regexRules: [{ id: 'r1', pattern: 'secret-plan\\s*', targets: ['assistant'], effects: ['hide'] }],
 		});
-		// Pending filter: neither the hidden content nor the final text is flashed.
+		// Pending filter: no empty bubble is mounted, so there is no empty-to-full-width move.
+		expect(host.querySelectorAll('[data-bubble]')).toHaveLength(0);
 		expect(host.textContent).not.toContain('secret-plan');
 		expect(host.textContent).not.toContain('visible');
 		resolveFilter?.(['visible']);
 		await settle();
+		expect(host.querySelectorAll('[data-bubble]')).toHaveLength(1);
 		expect(host.textContent).toContain('visible');
 		expect(host.textContent).not.toContain('secret-plan');
 		expect(host.textContent).not.toContain('agent_cue');
 		expect(filterMock).toHaveBeenCalledTimes(1);
 		expect(filterMock.mock.calls[0][1]).toBe('hide');
+	});
+
+	test('coalesces optimistic and persisted mounts and reuses the filtered text on later mounts', async () => {
+		let resolveFilter: ((results: string[] | null) => void) | undefined;
+		filterMock.mockReturnValue(new Promise<string[] | null>(resolve => {
+			resolveFilter = resolve;
+		}));
+		const rules: Array<AgentRegexFilterRule & { id: string }> = [{ id: 'r1', pattern: 'secret\\s*', targets: ['user'], effects: ['hide'] }];
+		await mountMessage({
+			message: { id: 'agent-opt:1', role: 'user', content: 'optimistic secret visible', createdAt: '2026-10-07T00:00:00Z' },
+			regexRules: rules,
+		});
+		app?.unmount();
+		host?.remove();
+
+		const persisted = await mountMessage({
+			message: { id: 'persisted-1', role: 'user', content: 'optimistic secret visible', createdAt: '2026-10-07T00:00:00Z' },
+			regexRules: rules,
+		});
+		expect(filterMock).toHaveBeenCalledTimes(1);
+		resolveFilter?.(['visible']);
+		await settle();
+		expect(persisted.host.textContent).toContain('visible');
+
+		app?.unmount();
+		host?.remove();
+		const history = await mountMessage({
+			message: { id: 'persisted-1', role: 'user', content: 'optimistic secret visible', createdAt: '2026-10-07T00:00:00Z' },
+			regexRules: rules,
+		});
+		expect(history.host.textContent).toContain('visible');
+		expect(history.host.querySelectorAll('[data-bubble]')).toHaveLength(1);
+		expect(filterMock).toHaveBeenCalledTimes(1);
 	});
 
 	test('falls back to the raw text when the worker times out', async () => {

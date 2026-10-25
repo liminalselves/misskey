@@ -30,7 +30,10 @@ async function main() {
 	writeFileSync('./built/api.json', JSON.stringify(spec), 'utf-8');
 }
 
-main().catch(e => {
+// Imported endpoint modules can own cache-GC timers; this CLI has no work after writing the spec.
+main().then(() => {
+	process.exit(0);
+}).catch(e => {
 	console.error(e);
 	process.exit(1);
 });

@@ -16,7 +16,11 @@ describe('XHome', () => {
 	const renderHome = (user: Partial<Misskey.entities.UserDetailed>): RenderResult => {
 		return render(XHome, {
 			props: { user: user as Misskey.entities.UserDetailed, disableNotes: true },
-			global: { directives, components },
+			global: {
+				directives,
+				components,
+				stubs: { XFiles: true, XActivity: true, XTimeline: true },
+			},
 		});
 	};
 

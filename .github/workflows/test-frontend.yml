@@ -109,14 +109,8 @@ jobs:
     - name: Cypress install
       run: pnpm exec cypress install
     - name: Cypress run
-      uses: cypress-io/github-action@f790eee7a50d9505912f50c2095510be7de06aa7 # v6
       timeout-minutes: 15
-      with:
-        install: false
-        start: pnpm start:test
-        wait-on: 'http://localhost:61812'
-        headed: true
-        browser: ${{ matrix.browser }}
+      run: pnpm exec start-server-and-test 'pnpm start:test' http://127.0.0.1:61812 'pnpm exec cypress run --headed --browser ${{ matrix.browser }} --config-file=cypress.config.ts'
     - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
       if: failure()
       with:
