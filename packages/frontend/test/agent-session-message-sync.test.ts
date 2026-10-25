@@ -57,7 +57,6 @@ function setup(ids: string[], sending = false) {
 		liveArrivedMessageIds: new Set<string>(),
 		tab: ref('chat'),
 		scrollToLatest: vi.fn(async () => {}),
-		scrollToLatestIfNear: vi.fn(async () => {}),
 		playSegmentedReply: vi.fn(async (_message: { id: string }) => true),
 		watch,
 		isReviewMode: ref(false),

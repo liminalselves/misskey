@@ -16,7 +16,7 @@ const playback = source.slice(
 	source.indexOf('const segmentPlayback = ref<'),
 	source.indexOf('\n/** 与后端 send 中 safeAgentMemEveryNRounds'),
 );
-const script = transpileModule(`${scrolling}\n${playback}\nreturn { playSegmentedReply, scrollToLatest, scrollToLatestIfNear };`, {}).outputText;
+const script = transpileModule(`${scrolling}\n${playback}\nreturn { playSegmentedReply };`, {}).outputText;
 
 function setup(scrollTop: number) {
 	const container = {
@@ -28,7 +28,6 @@ function setup(scrollTop: number) {
 	const state = {
 		timelineEl: { value: {} },
 		getScrollContainer: () => container,
-		SCROLL_HEAD_THRESHOLD: 200,
 		nextTick,
 		ref,
 		session: ref({ segmentedOutputEnabled: true }),
@@ -38,9 +37,7 @@ function setup(scrollTop: number) {
 		window,
 	};
 	const actions = new Function(...Object.keys(state), script)(...Object.values(state)) as {
-		playSegmentedReply: (message: { id: string; content: string }, segments?: string[], forceScrollOnStart?: boolean) => Promise<boolean>;
-		scrollToLatest: () => Promise<void>;
-		scrollToLatestIfNear: () => Promise<void>;
+		playSegmentedReply: (message: { id: string; content: string }, segments?: string[]) => Promise<boolean>;
 	};
 	return { ...actions, container };
 }
@@ -50,43 +47,17 @@ afterEach(() => {
 	vi.restoreAllMocks();
 });
 
-describe('Agent chat auto-scroll', () => {
-	test('only follows automatically while the reader is near the latest end', async () => {
-		const near = setup(-199);
-		await near.scrollToLatestIfNear();
-		expect(near.container.scrollTo).toHaveBeenCalledExactlyOnceWith({ top: 0, behavior: 'instant' });
-
-		const away = setup(-200);
-		await away.scrollToLatestIfNear();
-		expect(away.container.scrollTo).not.toHaveBeenCalled();
-		expect(away.container.scrollTop).toBe(-200);
-
-		await away.scrollToLatest();
-		expect(away.container.scrollTo).toHaveBeenCalledExactlyOnceWith({ top: 0, behavior: 'instant' });
-	});
-
-	test('does not pull the reader back during or after segmented playback', async () => {
+describe('Agent chat segmented playback scrolling', () => {
+	test.each([0, -500])('keeps only the initial scroll and never pulls the reader during or after playback (initial scrollTop: %i)', async initialScrollTop => {
 		vi.useFakeTimers();
 		vi.spyOn(window.document, 'hidden', 'get').mockReturnValue(false);
 		vi.spyOn(window, 'requestAnimationFrame').mockImplementation(callback => window.setTimeout(() => callback(0), 0));
-		const state = setup(-500);
+		const state = setup(initialScrollTop);
 		const promise = state.playSegmentedReply({ id: 'message1', content: '' }, ['一', '二', '三']);
-		await vi.advanceTimersByTimeAsync(10_000);
-
-		await expect(promise).resolves.toBe(true);
-		expect(state.container.scrollTo).not.toHaveBeenCalled();
-		expect(state.container.scrollTop).toBe(-500);
-	});
-
-	test('keeps the initial send scroll but does not force later segments after the reader leaves', async () => {
-		vi.useFakeTimers();
-		vi.spyOn(window.document, 'hidden', 'get').mockReturnValue(false);
-		vi.spyOn(window, 'requestAnimationFrame').mockImplementation(callback => window.setTimeout(() => callback(0), 0));
-		const state = setup(-500);
-		const promise = state.playSegmentedReply({ id: 'message1', content: '' }, ['一', '二', '三'], true);
 		await nextTick();
 		expect(state.container.scrollTo).toHaveBeenCalledExactlyOnceWith({ top: 0, behavior: 'instant' });
 
+		// 用户随后上翻阅读时，后续段与播放结束都不得再次滚动。
 		state.container.scrollTop = -500;
 		state.container.scrollTo.mockClear();
 		await vi.advanceTimersByTimeAsync(10_000);
