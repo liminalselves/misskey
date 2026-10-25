@@ -7,6 +7,7 @@
 - 版本与发布顺序见 [releasing.md](releasing.md)。顶层保留 `## unreleased`；CHANGELOG 检查器比较新增正式版本时排除该占位段，不将空占位段计为发布。
 - 修改检查器后运行 `npm --prefix scripts/changelog-checker test`；发布 PR 会运行同一组测试，再比较 base/head 日志。
 - 前端 E2E 使用已安装的 `start-server-and-test` 启动服务、等待就绪后运行 Cypress；完整命令与失败工件见 `test-frontend.yml`，不额外依赖 Action 内部的服务启动包装。
+- API JSON 生成是一次性 CLI：写完后必须退出，不能被端点导入时的缓存清理定时器保活。API base/head 对比统一采用候选提交的生成脚本，但各自构建、读取对应版本的端点定义；生命周期回归测试见 `test/unit/GenerateApiJson.ts`。
 - 推送后按最终提交 SHA 核对全部适用的检查；路径过滤未触发与 fork 主动跳过须单列，不能算作测试通过。仅准备发布时不合 master、不打 tag、不触发镜像发布。
 
 ## 基础检查
