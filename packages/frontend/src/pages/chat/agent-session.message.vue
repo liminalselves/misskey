@@ -149,7 +149,7 @@ import MkMediaList from '@/components/MkMediaList.vue';
 import MkDeletedFileMedia from '@/components/MkDeletedFileMedia.vue';
 import MkCustomEmoji from '@/components/global/MkCustomEmoji.vue';
 import { splitAgentMessageIntoSegments, stripAgentCueTokens } from '@/utility/agent-message-segments.js';
-import { filterAgentRegexTexts } from '@/utility/agent-regex-filter.js';
+import { filterAgentRegexTexts, getAgentRegexTextWithCache } from '@/utility/agent-regex-filter.js';
 import type { AgentRegexFilterRule } from '@/utility/agent-regex-filter.js';
 import { customEmojisMap } from '@/custom-emojis.js';
 
@@ -247,9 +247,10 @@ const displayContent = computed(() => {
 		// hide 规则在有界 Web Worker 中执行（绝不在主线程跑角色正则）：灾难性回溯只影响
 		// 该 worker，超时/worker 不可用时回退原文展示，页面不冻结。
 		const state = hideFilterState.value;
-		if (state == null) return '';
+		// 首次过滤完成前不渲染空气泡；右对齐气泡从空到满宽会触发横向位移动画
+		if (state == null) return null;
 		if (state.status === 'failed') return stripAgentCueTokens(content);
-		// pending 时沿用上一次已过滤文本（流式更新不闪烁），首次渲染先空占位
+		// pending 时沿用上一次已过滤文本，避免流式更新闪烁
 		return stripAgentCueTokens(state.text);
 	}
 	// 表演指令只服务桌宠客户端，网页展示一律剥离（编辑视图仍读原文）
@@ -259,19 +260,28 @@ const displayContent = computed(() => {
 async function refreshHideFilter(): Promise<void> {
 	const token = ++hideFilterToken;
 	const rules = applicableHideRules.value;
-	if (rules.length === 0) {
+	const role = messageRegexRole.value;
+	if (rules.length === 0 || role == null) {
 		hideFilterState.value = null;
 		return;
 	}
+	const content = props.message.content ?? '';
+	const { cached, request } = getAgentRegexTextWithCache(rules, 'hide', { role, text: content }, filterAgentRegexTexts);
+	if (cached != null) {
+		hideFilterState.value = { status: 'done', text: cached };
+		return;
+	}
 	const previous = hideFilterState.value;
-	hideFilterState.value = { status: 'pending', text: previous?.status === 'done' ? previous.text : '' };
+	hideFilterState.value = previous?.status === 'done'
+		? { status: 'pending', text: previous.text }
+		: null;
 	// 该工具永不 reject：null 表示 worker 不可用或超时，调用方回退原文即可
-	const results = await filterAgentRegexTexts(rules, 'hide', [{ role: messageRegexRole.value ?? 'user', text: props.message.content ?? '' }]);
+	const result = await request;
 	// 结果被更新一代的请求或组件卸载取代时直接丢弃，避免旧文本回写
 	if (token !== hideFilterToken) return;
-	hideFilterState.value = results == null
+	hideFilterState.value = result == null
 		? { status: 'failed', text: '' }
-		: { status: 'done', text: results[0] ?? '' };
+		: { status: 'done', text: result };
 }
 
 watch(
@@ -339,6 +349,7 @@ const manualPending = reactive<Record<number, boolean>>({});
 
 const displaySegmentContents = computed(() => {
 	const content = displayContent.value;
+	if (content == null) return [];
 	if (props.message.role !== 'assistant' || !props.segmentedOutputEnabled) return [content];
 	const segments = splitAgentMessageIntoSegments(content);
 	if (props.visibleSegmentCount == null) return segments;

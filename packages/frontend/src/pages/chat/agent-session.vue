@@ -2856,6 +2856,18 @@ async function scrollToLatest() {
 	scrollContainer?.scrollTo({ top: 0, behavior: 'instant' });
 }
 
+function isNearLatest(): boolean {
+	const el = timelineEl.value;
+	if (el == null) return false;
+	const scrollContainer = getScrollContainer(el);
+	if (scrollContainer == null) return false;
+	return -scrollContainer.scrollTop < SCROLL_HEAD_THRESHOLD;
+}
+
+async function scrollToLatestIfNear() {
+	if (isNearLatest()) await scrollToLatest();
+}
+
 async function loadSession() {
 	beginSettingsHydration();
 	try {
@@ -3454,7 +3466,7 @@ async function onNewAgentMessage(payload: unknown): Promise<void> {
 			liveArrivedMessageIds.add(incoming.id);
 		}
 		if (incoming && !existingIds.has(incoming.id) && tab.value === 'chat') {
-			await scrollToLatest();
+			await scrollToLatestIfNear();
 			void playSegmentedReply(incoming);
 		}
 	} finally {
@@ -4979,7 +4991,7 @@ function finishSegmentPlayback(complete = true): boolean {
 	return true;
 }
 
-async function playSegmentedReply(message: AgentMsg, precomputedSegments?: string[]): Promise<boolean> {
+async function playSegmentedReply(message: AgentMsg, precomputedSegments?: string[], forceScrollOnStart = false): Promise<boolean> {
 	if (session.value?.segmentedOutputEnabled !== true) return true;
 	const segments = precomputedSegments ?? playableSegmentsFor(message.content);
 	if (segments.length <= 1) return true;
@@ -5003,7 +5015,7 @@ async function playSegmentedReply(message: AgentMsg, precomputedSegments?: strin
 	window.document.addEventListener('visibilitychange', onVisibilityChange);
 	try {
 		segmentPlayback.value = state;
-		void scrollToLatest().catch(() => {});
+		void (forceScrollOnStart ? scrollToLatest() : scrollToLatestIfNear()).catch(() => {});
 		await waitForSegmentRender();
 
 		for (let i = 1; i < segments.length; i++) {
@@ -5019,7 +5031,7 @@ async function playSegmentedReply(message: AgentMsg, precomputedSegments?: strin
 				return false;
 			}
 			current.visibleCount = i + 1;
-			void scrollToLatest().catch(() => {});
+			void scrollToLatestIfNear().catch(() => {});
 			await waitForSegmentRender();
 		}
 
@@ -5194,7 +5206,7 @@ async function onFormSubmit(payload: { text: string; file: DriveFile | null }) {
 			const segments = playableSegmentsFor(asstMsg.content);
 			messages.value = [asstMsg, userMsg, ...withoutOpt];
 			liveArrivedMessageIds.add(asstMsg.id);
-			const playbackCompleted = await playSegmentedReply(asstMsg, segments);
+			const playbackCompleted = await playSegmentedReply(asstMsg, segments, true);
 			if (!playbackCompleted) return;
 		} else {
 			messages.value = [userMsg, ...withoutOpt];
@@ -5220,7 +5232,7 @@ async function onFormSubmit(payload: { text: string; file: DriveFile | null }) {
 		if (res.proactiveScheduleControlFailed === true) {
 			await os.alert({ type: 'warning', text: i18n.ts._agents.proactiveScheduleSettingFailed });
 		}
-		await scrollToLatest();
+		await scrollToLatestIfNear();
 		await loadSession();
 		void loadAgentCreditBalance();
 		if (session.value?.dialogueStyleId) {
