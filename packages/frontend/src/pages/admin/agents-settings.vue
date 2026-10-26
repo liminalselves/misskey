@@ -1004,7 +1004,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</div>
 			</MkFolder>
 
-			<MkAgentModelAnnouncementPublisher v-if="activeLeaf === 'models' || activeLeaf === 'images'" :key="activeLeaf" :kind="activeLeaf === 'models' ? 'chat' : 'image'"/>
+			<MkAgentModelAnnouncementPublisher v-if="activeLeaf === 'announcements'"/>
 
 			<!-- 全局保存栏：任何子页都可见，列出有改动的分区；保存只提交这些分区 -->
 			<div v-if="form.modified.value" :class="$style.saveBar">

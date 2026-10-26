@@ -28,6 +28,7 @@ export type LeafKey =
 	| 'basic'
 	| 'models'
 	| 'byok'
+	| 'announcements'
 	| 'images'
 	| 'vision'
 	| 'sticker'
@@ -60,6 +61,7 @@ export const settingsGroups: GroupDef[] = [
 		{ key: 'models', title: '对话模型', icon: 'ti ti-message-dots', sections: ['models'] },
 		{ key: 'images', title: '绘图模型', icon: 'ti ti-brush', sections: ['images'] },
 		{ key: 'byok', title: 'BYOK', icon: 'ti ti-key', sections: ['models'] },
+		{ key: 'announcements', title: '公告', icon: 'ti ti-speakerphone', sections: [] },
 	] },
 	{ key: 'capabilities', title: '能力', icon: 'ti ti-sparkles', leaves: [
 		{ key: 'vision', title: '识图', icon: 'ti ti-eye', sections: ['vision'] },
