@@ -97,13 +97,17 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<MkButton v-if="iAmModerator && detail.kind === 'character'" rounded :danger="!detail.moderationBanned" :disabled="acting" @click="toggleBan"><i class="ti ti-ban"></i> {{ detail.moderationBanned ? '解封角色' : '封禁角色' }}</MkButton>
 				<MkButton rounded @click="copyText(detail.id)"><i class="ti ti-copy"></i> 复制 ID</MkButton>
 			</div>
+			<div v-if="detail.reviewStatus !== 'pending' && nextPending != null" :class="$style.nextBar">
+				<span>还有待审内容：<b>{{ nextPending.name }}</b></span>
+				<MkButton primary rounded @click="openNextPending"><i class="ti ti-arrow-right"></i> 审查下一条</MkButton>
+			</div>
 		</template>
 	</div>
 </div>
 </template>
 
 <script lang="ts" setup>
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import MkButton from '@/components/MkButton.vue';
 import MkLoading from '@/components/global/MkLoading.vue';
 import MkInfo from '@/components/MkInfo.vue';
@@ -117,6 +121,7 @@ import * as os from '@/os.js';
 import { iAmModerator } from '@/i.js';
 import { useRouter } from '@/router.js';
 import { goBackInApp } from '@/utility/router-history.js';
+import { postGovernanceEvent } from '@/utility/agent-governance-events.js';
 
 type Kind = 'character' | 'style';
 type WorldbookEntry = { id: string; title: string; content: string; keywords: string[]; triggerMode: 'keyword' | 'manual' | 'always'; priority: number; enabled: boolean; revision: number };
@@ -219,9 +224,12 @@ async function resolveReview(decision: 'approve' | 'reject', extra: Record<strin
 	if (detail.value == null) return;
 	acting.value = true;
 	try {
-		await api('admin/agents/governance/review/resolve', { kind: detail.value.kind, id: detail.value.id, decision, ...extra });
-		os.toast('已处理');
+		const { kind, id } = detail.value;
+		await api('admin/agents/governance/review/resolve', { kind, id, decision, ...extra });
+		os.toast(decision === 'approve' ? '已通过' : '已拒绝');
 		await load();
+		postGovernanceEvent({ type: 'reviewResolved', kind, id, reviewStatus: detail.value?.reviewStatus ?? (decision === 'approve' ? 'published' : 'rejected') });
+		await refreshNextPending();
 	} catch (err) {
 		os.alert({ type: 'error', text: formatApiError(err) });
 	} finally {
@@ -240,13 +248,32 @@ async function toggleBan() {
 	acting.value = true;
 	try {
 		await api('admin/agents/governance/review/set-character-banned', { characterId: row.id, banned: next, reason: result.reason || null });
-		os.toast('已处理');
+		os.toast(next ? '已封禁' : '已解封');
 		await load();
+		postGovernanceEvent({ type: 'characterBanChanged', id: row.id, banned: next });
 	} catch (err) {
 		os.alert({ type: 'error', text: formatApiError(err) });
 	} finally {
 		acting.value = false;
 	}
+}
+
+// 处理完当前条目后提供「下一条待审」：在当前标签页内直接切换，不必回列表
+const nextPending = ref<{ kind: Kind; id: string; name: string } | null>(null);
+
+async function refreshNextPending() {
+	try {
+		const rows = await api<{ kind: Kind; id: string; name: string }[]>('admin/agents/governance/review/list', { kind: 'all', status: 'pending', limit: 2 });
+		nextPending.value = rows.find(r => !(r.kind === props.kind && r.id === props.id)) ?? null;
+	} catch {
+		nextPending.value = null;
+	}
+}
+
+function openNextPending() {
+	const next = nextPending.value;
+	if (next == null) return;
+	router.replaceByPath(`/admin/agent-library/${next.kind}/${next.id}`);
 }
 
 function copyText(text: string) {
@@ -352,6 +379,12 @@ definePage(() => ({
 }));
 
 onMounted(load);
+
+watch(() => [props.kind, props.id], () => {
+	detail.value = null;
+	nextPending.value = null;
+	void load();
+});
 </script>
 
 <style lang="scss" module>
@@ -529,6 +562,17 @@ onMounted(load);
 	font-size: 0.85em;
 	color: var(--MI_THEME-fgTransparentWeak);
 	overflow-wrap: anywhere;
+}
+.nextBar {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	flex-wrap: wrap;
+	gap: 10px;
+	padding: 12px 14px;
+	border-radius: 10px;
+	border: 1px solid color-mix(in srgb, var(--MI_THEME-accent) 40%, var(--MI_THEME-divider));
+	background: color-mix(in srgb, var(--MI_THEME-accent) 6%, var(--MI_THEME-panel));
 }
 .actions {
 	position: sticky;
