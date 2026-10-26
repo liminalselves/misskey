@@ -4,60 +4,62 @@ SPDX-License-Identifier: AGPL-3.0-only
 -->
 
 <template>
-<PageWithHeader v-model:tab="activeTab" :actions="headerActions" :tabs="headerTabs">
+<PageWithHeader v-model:tab="activeGroupKey" :actions="headerActions" :tabs="headerTabs">
 	<div class="_spacer" style="--MI_SPACER-w: 1000px; --MI_SPACER-min: 16px; --MI_SPACER-max: 32px;">
 		<div class="_gaps_m">
+			<MkTabs v-if="subTabs.length > 0" v-model:tab="activeSubTab" :tabs="subTabs" :class="$style.subTabs"/>
 
-			<template v-if="activeTab === 'overview'">
+			<template v-if="activeLeaf === 'overview'">
 				<div :class="$style.overviewGrid">
-					<div v-panel :class="$style.overviewCard">
+					<button v-panel type="button" class="_button" :class="$style.overviewCard" @click="activeLeaf = 'basic'">
 						<span>功能状态</span>
 						<b>{{ form.state.agentFeatureEnabled ? i18n.ts._agents.adminEnabled : i18n.ts._agents.adminDisabled }}</b>
-					</div>
-					<div v-panel :class="$style.overviewCard">
-						<span>可用模型</span>
+					</button>
+					<button v-panel type="button" class="_button" :class="$style.overviewCard" @click="activeLeaf = 'models'">
+						<span>上架模型</span>
 						<b>{{ listedModelCount }}</b>
-					</div>
-					<div v-panel :class="$style.overviewCard">
+					</button>
+					<button v-panel type="button" class="_button" :class="$style.overviewCard" @click="activeLeaf = 'models'">
 						<span>默认模型</span>
 						<b>{{ selectedDefaultModelName }}</b>
-					</div>
-					<div v-panel :class="$style.overviewCard">
+					</button>
+					<button v-panel type="button" class="_button" :class="$style.overviewCard" @click="activeLeaf = 'memory'">
 						<span>长期记忆</span>
 						<b>{{ form.state.agentMem0Enabled ? i18n.ts._agents.adminEnabled : i18n.ts._agents.adminNotEnabled }}</b>
-					</div>
-					<div v-panel :class="$style.overviewCard">
+					</button>
+					<button v-panel type="button" class="_button" :class="$style.overviewCard" @click="activeLeaf = 'reports'">
 						<span>24h 请求</span>
 						<b>{{ reportsData?.overall.total ?? '—' }}</b>
-					</div>
-					<div v-panel :class="$style.overviewCard">
+					</button>
+					<button v-panel type="button" class="_button" :class="$style.overviewCard" @click="activeLeaf = 'reports'">
 						<span>24h 成功率</span>
 						<b>{{ reportSuccessRate }}</b>
-					</div>
+					</button>
 				</div>
 
-				<!-- 词表缺失告警 -->
-				<div v-if="missingTokenizers.length > 0" class="_gaps_s">
-					<MkInfo v-for="t in missingTokenizers" :key="t.family" warn>
-						<i class="ti ti-alert-triangle"></i>
-						<strong>{{ tokenizerFamilyLabel(t.family) }}</strong> {{ i18n.ts._agents.adminTokenizerMissing }}
-						<br>
-						<small>{{ i18n.ts._agents.adminTokenizerMissingHint }}</small>
-					</MkInfo>
-				</div>
+				<section v-panel :class="$style.checkCard">
+					<div :class="$style.checkHead">
+						<b><i class="ti ti-checklist"></i> 配置检查</b>
+						<span :class="$style.checkCount">{{ configIssues.length === 0 ? '全部正常' : `${configIssues.length} 项待处理` }}</span>
+					</div>
+					<div v-if="configIssues.length === 0" :class="$style.checkOk"><i class="ti ti-circle-check"></i> 没有发现配置问题。</div>
+					<button v-for="issue in configIssues" :key="issue.key" type="button" class="_button" :class="$style.checkItem" @click="openIssue(issue)">
+						<i :class="issue.level === 'error' ? 'ti ti-alert-circle' : 'ti ti-alert-triangle'" :style="{ color: issue.level === 'error' ? 'var(--MI_THEME-error)' : 'var(--MI_THEME-warn)' }"></i>
+						<span>{{ issue.text }}</span>
+						<i class="ti ti-chevron-right" :class="$style.checkGo"></i>
+					</button>
+				</section>
 
 				<div :class="$style.quickGrid">
-					<MkButton rounded @click="activeTab = 'models'"><i class="ti ti-cpu"></i> {{ i18n.ts._agents.adminModelsTab }}</MkButton>
-					<MkButton rounded @click="activeTab = 'credits'"><i class="ti ti-ticket"></i> {{ i18n.ts._agents.adminCreditsTab }}</MkButton>
-					<MkButton rounded @click="activeTab = 'reports'"><i class="ti ti-report-analytics"></i> {{ i18n.ts._agents.adminReportsTab }}</MkButton>
-					<MkButton rounded @click="activeTab = 'externalAudit'"><i class="ti ti-shield-check"></i> {{ i18n.ts._agents.adminExternalAuditTab }}</MkButton>
-					<MkButton rounded @click="router.push('/admin/agents-review' as any)"><i class="ti ti-shield-check"></i> {{ i18n.ts._agents.adminAgentReview }}</MkButton>
+					<MkButton rounded @click="activeLeaf = 'models'"><i class="ti ti-cpu"></i> 对话模型</MkButton>
+					<MkButton rounded @click="activeLeaf = 'images'"><i class="ti ti-brush"></i> 绘图模型</MkButton>
+					<MkButton rounded @click="activeLeaf = 'externalAudit'"><i class="ti ti-shield-check"></i> 外审</MkButton>
+					<MkButton rounded @click="activeLeaf = 'credits'"><i class="ti ti-ticket"></i> 额度</MkButton>
+					<MkButton rounded @click="router.push('/admin/agents-review' as any)"><i class="ti ti-shield-search"></i> {{ i18n.ts._agents.adminAgentReview }}</MkButton>
 				</div>
 			</template>
 
-			<MkAgentModelAnnouncementPublisher v-if="activeTab === 'models' || activeTab === 'images'" :key="activeTab" :kind="activeTab === 'models' ? 'chat' : 'image'"/>
-
-			<MkFolder v-if="activeTab === 'basic'" :defaultOpen="true">
+			<MkFolder v-if="activeLeaf === 'basic'" :defaultOpen="true">
 				<template #icon><i class="ti ti-toggle-right"></i></template>
 				<template #label>{{ i18n.ts._agents.adminSectionFeature }}</template>
 				<div class="_gaps">
@@ -86,7 +88,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</div>
 			</MkFolder>
 
-			<MkFolder v-if="activeTab === 'models'" :defaultOpen="true">
+			<MkFolder v-if="activeLeaf === 'models'" :defaultOpen="true">
 				<template #icon><i class="ti ti-folder"></i></template>
 				<template #label>{{ i18n.ts._agents.modelGroups }}</template>
 				<div class="_gaps">
@@ -113,13 +115,20 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</div>
 			</MkFolder>
 
-			<MkFolder v-if="activeTab === 'models'" :defaultOpen="true">
+			<MkFolder v-if="activeLeaf === 'models'" :defaultOpen="true">
 				<template #icon><i class="ti ti-list-details"></i></template>
 				<template #label>{{ i18n.ts._agents.adminSectionModels }}</template>
 				<div class="_gaps">
 					<MkInfo>{{ i18n.ts._agents.adminModelListHint }}</MkInfo>
 
-					<template v-for="section in llmModelSections" :key="section.key">
+					<div :class="$style.listToolbar">
+						<MkInput v-model="llmModelQuery" type="search" :class="$style.listSearch" placeholder="搜索名称、上游模型名、Base URL">
+							<template #prefix><i class="ti ti-search"></i></template>
+						</MkInput>
+						<MkButton small rounded @click="setAllLlmExpanded(expandedLlmModelIds.length === 0)"><i :class="expandedLlmModelIds.length === 0 ? 'ti ti-arrows-maximize' : 'ti ti-arrows-minimize'"></i> {{ expandedLlmModelIds.length === 0 ? '全部展开' : '全部收起' }}</MkButton>
+					</div>
+
+					<template v-for="section in visibleLlmModelSections" :key="section.key">
 						<div v-if="section.key === 'active' || section.rows.length > 0" :class="[$style.modelSectionHead, section.key === 'unlisted' ? $style.modelSectionHeadMuted : null]">
 							<span>{{ section.label }}<span :class="$style.modelSectionCount">{{ section.rows.length }}</span></span>
 							<MkButton v-if="section.key === 'active'" small rounded @click="onAddModelMenu"><i class="ti ti-plus"></i> {{ i18n.ts._agents.addAgentModel }}</MkButton>
@@ -127,7 +136,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 						<div v-if="section.key === 'active' && section.rows.length === 0" :class="$style.emptyModels">
 							{{ i18n.ts._agents.adminModelListEmpty }}
 						</div>
-						<div v-for="row in section.rows" :key="row.id" :data-model-row-id="section.key === 'active' ? row.id : undefined" :class="[$style.modelRow, row.unlisted ? $style.modelRowUnlisted : null, modelRowDrag?.id === row.id ? $style.modelRowDragging : null, modelRowDrag?.id === row.id && modelRowDrag.snapping ? $style.modelRowSnapping : null, modelRowDrag != null && modelRowDrag.id !== row.id ? $style.modelRowShiftable : null, modelRowDrag != null && modelRowDrag.overId === row.id ? (modelRowDrag.overPos === 'before' ? $style.modelRowDropBefore : $style.modelRowDropAfter) : null]" :style="modelRowDragStyle(row.id)">
+						<div v-for="row in section.rows" :key="row.id" :data-settings-anchor="`llm:${row.id}`" :data-model-row-id="section.key === 'active' ? row.id : undefined" :class="[$style.modelRow, highlightedAnchor === `llm:${row.id}` ? $style.anchorHighlight : null, row.unlisted ? $style.modelRowUnlisted : null, modelRowDrag?.id === row.id ? $style.modelRowDragging : null, modelRowDrag?.id === row.id && modelRowDrag.snapping ? $style.modelRowSnapping : null, modelRowDrag != null && modelRowDrag.id !== row.id ? $style.modelRowShiftable : null, modelRowDrag != null && modelRowDrag.overId === row.id ? (modelRowDrag.overPos === 'before' ? $style.modelRowDropBefore : $style.modelRowDropAfter) : null]" :style="modelRowDragStyle(row.id)">
 							<div :class="$style.modelRowHead" @click="toggleLlmModelExpanded(row.id)">
 								<i class="ti ti-chevron-right" :class="[$style.modelRowChevron, isLlmModelExpanded(row.id) ? $style.modelRowChevronOpen : null]"></i>
 								<span :class="$style.modelRowTitle">{{ row.name.trim() || '未命名模型' }}</span>
@@ -141,7 +150,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 										<button type="button" class="_button" :class="$style.iconWarn" :title="i18n.ts._agents.adminModelUnlist" @click="toggleUnlist(row, true)">
 											<i class="ti ti-archive"></i>
 										</button>
-										<span :class="$style.modelRowGrip" title="长按拖动排序" @pointerdown="onModelRowGripPointerDown($event, 'llm', row)" @contextmenu.prevent>
+										<span v-if="llmModelQuery.trim() === ''" :class="$style.modelRowGrip" title="长按拖动排序" @pointerdown="onModelRowGripPointerDown($event, 'llm', row)" @contextmenu.prevent>
 											<i class="ti ti-grip-vertical"></i>
 										</span>
 									</template>
@@ -257,13 +266,13 @@ SPDX-License-Identifier: AGPL-3.0-only
 						</div>
 					</template>
 
-				<MkSelect v-model="form.state.agentDefaultModelId" :items="defaultModelItems">
+				<MkSelect v-model="form.state.agentDefaultModelId" data-settings-anchor="llm-default" :class="highlightedAnchor === 'llm-default' ? $style.anchorHighlight : null" :items="defaultModelItems">
 					<template #label>{{ i18n.ts._agents.agentDefaultModelId }}</template>
 				</MkSelect>
 			</div>
 		</MkFolder>
 
-		<MkFolder v-if="activeTab === 'models'" :defaultOpen="true">
+		<MkFolder v-if="activeLeaf === 'byok'" :defaultOpen="true">
 			<template #icon><i class="ti ti-key"></i></template>
 			<template #label>BYOK 自定义模型</template>
 			<div class="_gaps">
@@ -271,7 +280,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<MkSwitch v-model="form.state.agentByokEnabled">
 					<template #label>启用 BYOK（用户自带 Key）</template>
 				</MkSwitch>
-				<MkInput v-model="form.state.agentByokMaxUserModels" type="text">
+				<MkInput v-model="form.state.agentByokMaxUserModels" type="text" data-settings-anchor="byok-max">
 					<template #label>每用户自定义模型数量上限</template>
 				</MkInput>
 
@@ -284,7 +293,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 						<div v-if="form.state.agentByokProviderRows.length === 0" :class="$style.emptyModels">
 							尚未配置提供商模板
 						</div>
-						<div v-for="(row, i) in form.state.agentByokProviderRows" :key="i" :class="[$style.modelCard, $style.byokProviderCard]" class="_gaps_s">
+						<div v-for="(row, i) in form.state.agentByokProviderRows" :key="row.id" :data-settings-anchor="`byok:${row.id}`" :class="[$style.modelCard, $style.byokProviderCard, highlightedAnchor === `byok:${row.id}` ? $style.anchorHighlight : null]" class="_gaps_s">
 							<div :class="$style.modelCardHead">
 								<span :class="$style.modelCardTitle">提供商 #{{ i + 1 }}</span>
 								<div :class="$style.modelCardActions">
@@ -331,7 +340,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 			</div>
 		</MkFolder>
 
-			<MkFolder v-if="activeTab === 'memory'" :defaultOpen="true">
+			<MkFolder v-if="activeLeaf === 'memory'" :defaultOpen="true">
 				<template #icon><i class="ti ti-brain"></i></template>
 				<template #label>{{ i18n.ts._agents.adminSectionLongMemory }}</template>
 				<div class="_gaps">
@@ -351,7 +360,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 						<template #label>{{ i18n.ts._agents.memoryLibraryId }}</template>
 						<template #caption>{{ i18n.ts._agents.memoryLibraryIdCaption }}</template>
 					</MkInput>
-					<FormSplit :minWidth="260">
+					<FormSplit :minWidth="260" data-settings-anchor="memory-params">
 						<MkInput v-model="form.state.agentMem0TopK" type="text">
 							<template #label>{{ i18n.ts._agents.defaultMemoryTopK }}</template>
 						</MkInput>
@@ -370,7 +379,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</div>
 			</MkFolder>
 
-			<MkFolder v-if="activeTab === 'compression'" :defaultOpen="true">
+			<MkFolder v-if="activeLeaf === 'compression'" :defaultOpen="true">
 				<template #icon><i class="ti ti-file-zip"></i></template>
 				<template #label>{{ i18n.ts._agents.adminSectionCompression }}</template>
 				<div class="_gaps">
@@ -379,7 +388,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 						<template #label>{{ i18n.ts._agents.agentCompressionSystemPrompt }}</template>
 						<template #caption>{{ i18n.ts._agents.agentCompressionSystemPromptCaption }}</template>
 					</MkTextarea>
-					<FormSplit :minWidth="260">
+					<FormSplit :minWidth="260" data-settings-anchor="compression-params">
 						<MkInput v-model="form.state.agentCompressionMaxInputChars" type="text">
 							<template #label>{{ i18n.ts._agents.agentCompressionMaxInputChars }}</template>
 							<template #caption>{{ i18n.ts._agents.agentCompressionMaxInputCharsCaption }}</template>
@@ -393,7 +402,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 						<template #label>便签注入上限（字符）</template>
 						<template #caption>全站便签压缩会话统一使用，范围 200～50,000，默认 4,000。与阿里云记忆独立；上限越大，留给聊天原文的空间越少。</template>
 					</MkInput>
-					<FormSplit :minWidth="200">
+					<FormSplit :minWidth="200" data-settings-anchor="compression-band">
 						<MkInput v-model="form.state.agentCompressionBandT1Ratio" type="text">
 							<template #label>{{ i18n.ts._agents.agentCompressionBandT1Ratio }}</template>
 							<template #caption>{{ i18n.ts._agents.agentCompressionBandT1RatioCaption }}</template>
@@ -403,7 +412,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 							<template #caption>{{ i18n.ts._agents.agentCompressionBandT2RatioCaption }}</template>
 						</MkInput>
 					</FormSplit>
-					<MkSelect v-model="form.state.agentCompressionDefaultModelId" :items="compressionDefaultModelItems">
+					<MkSelect v-model="form.state.agentCompressionDefaultModelId" data-settings-anchor="compression-model" :items="compressionDefaultModelItems">
 						<template #label>{{ i18n.ts._agents.adminCompressionDefaultModel }}</template>
 						<template #caption>{{ i18n.ts._agents.adminCompressionDefaultModelCaption }}</template>
 					</MkSelect>
@@ -411,7 +420,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</div>
 			</MkFolder>
 
-			<MkFolder v-if="activeTab === 'externalAudit'" :defaultOpen="true">
+			<MkFolder v-if="activeLeaf === 'externalAudit'" :defaultOpen="true">
 				<template #icon><i class="ti ti-shield-check"></i></template>
 				<template #label>外部审核</template>
 				<div class="_gaps">
@@ -422,7 +431,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<MkInfo warn>外部审核模型只用于安全判断，不展示给用户，也不设置额度。优先级数字越小越优先；模型失败会自动尝试下一个。</MkInfo>
 
 					<div v-if="form.state.agentExternalAuditModelRows.length === 0" :class="$style.emptyModels">当前没有外审模型。启用开关打开后也会按 fail-open 放行。</div>
-					<div v-for="(row, i) in form.state.agentExternalAuditModelRows" :key="row.id" :class="$style.modelCard" class="_gaps_s">
+					<div v-for="(row, i) in form.state.agentExternalAuditModelRows" :key="row.id" :data-settings-anchor="`audit:${row.id}`" :class="[$style.modelCard, highlightedAnchor === `audit:${row.id}` ? $style.anchorHighlight : null]" class="_gaps_s">
 						<div :class="$style.modelCardHead">
 							<b>{{ row.name.trim() || `外审模型 #${i + 1}` }}</b>
 							<div :class="$style.modelCardActions">
@@ -455,7 +464,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 					</div>
 					<MkButton rounded @click="addExternalAuditModel"><i class="ti ti-plus"></i> 添加外审模型</MkButton>
 
-					<FormSplit :minWidth="220">
+					<FormSplit :minWidth="220" data-settings-anchor="audit-params">
 						<MkInput v-model="form.state.agentExternalAuditTimeoutMs" type="text"><template #label>超时时间（毫秒）</template></MkInput>
 						<MkInput v-model="form.state.agentExternalAuditFailureThresholdPercent" type="text"><template #label>自动禁用失败率（%）</template></MkInput>
 						<MkInput v-model="form.state.agentExternalAuditFailureMinRequests" type="text"><template #label>自动禁用最小样本数</template></MkInput>
@@ -464,21 +473,24 @@ SPDX-License-Identifier: AGPL-3.0-only
 						<template #label>通知邮箱</template>
 						<template #caption>多个邮箱可用换行、逗号或分号分隔。邮件服务未启用时不会发送。</template>
 					</MkTextarea>
+				</div>
+			</MkFolder>
+
+			<MkFolder v-if="activeLeaf === 'externalAuditRules'" :defaultOpen="true">
+				<template #icon><i class="ti ti-list-check"></i></template>
+				<template #label>判断标准与违规条目</template>
+				<div class="_gaps">
 						<MkTextarea v-model="form.state.agentExternalAuditSystemPrompt" tall>
 							<template #label>总体判断标准</template>
 							<template #caption>只描述共性审核边界、放行原则和例外。输出格式与违规条目由系统自动生成。</template>
 						</MkTextarea>
 						<div class="_buttons">
 							<MkButton rounded @click="restoreExternalAuditPrompt"><i class="ti ti-restore"></i> 恢复默认判断标准</MkButton>
-							<MkButton rounded :disabled="externalAuditStatsLoading" @click="loadExternalAuditStats"><i class="ti ti-refresh"></i> 刷新健康统计</MkButton>
+							
 						</div>
 
-						<MkFolder :defaultOpen="true">
-							<template #icon><i class="ti ti-list-check"></i></template>
-							<template #label>违规条目</template>
-							<div class="_gaps">
 								<MkInfo>模型只负责选择条目。命中普通条目后使用这里配置的固定原因；确属高风险但没有对应条目时选择“其他高风险内容”。</MkInfo>
-								<div v-for="(rule, i) in form.state.agentExternalAuditRuleRows" :key="rule.id" :class="$style.modelCard" class="_gaps_s">
+								<div v-for="(rule, i) in form.state.agentExternalAuditRuleRows" :key="rule.id" :data-settings-anchor="`rule:${i}`" :class="[$style.modelCard, highlightedAnchor === `rule:${i}` ? $style.anchorHighlight : null]" class="_gaps_s">
 									<div :class="$style.modelCardHead">
 										<b>{{ rule.name.trim() || `违规条目 #${i + 1}` }}</b>
 										<div :class="$style.modelCardActions">
@@ -497,21 +509,21 @@ SPDX-License-Identifier: AGPL-3.0-only
 								</div>
 								<MkButton rounded @click="addExternalAuditRule"><i class="ti ti-plus"></i> 添加违规条目</MkButton>
 
-								<div :class="$style.modelCard" class="_gaps_s">
+								<div data-settings-anchor="rule-other" :class="[$style.modelCard, highlightedAnchor === 'rule-other' ? $style.anchorHighlight : null]" class="_gaps_s">
 									<div :class="$style.modelCardHead"><b>其他高风险内容</b><span>固定兜底项</span></div>
 									<MkInput v-model="form.state.agentExternalAuditOtherRule.reason"><template #label>兜底原因</template><template #caption>决策模型无法生成原因，或 OpenAI 模型未提供有效原因时使用。</template></MkInput>
 									<MkTextarea v-model="form.state.agentExternalAuditOtherRule.criteria"><template #label>判断标准</template></MkTextarea>
 								</div>
 								<MkButton rounded @click="restoreExternalAuditRules"><i class="ti ti-restore"></i> 恢复默认规则集</MkButton>
 							</div>
-						</MkFolder>
+			</MkFolder>
 
-					<MkFolder :defaultOpen="true">
-						<template #icon><i class="ti ti-shield-exclamation"></i></template>
-						<template #label>人工复审触发条件</template>
+			<MkFolder v-if="activeLeaf === 'externalAuditReview'" :defaultOpen="true">
+				<template #icon><i class="ti ti-shield-exclamation"></i></template>
+				<template #label>人工复审触发条件</template>
 						<div class="_gaps">
 							<MkInfo>当用户在指定时间窗口内触发外审拦截达到设定次数时，自动将该用户标记为需要人工复审。可配置多条规则。</MkInfo>
-							<div v-for="(rule, i) in form.state.agentReviewTriggerRules" :key="rule.id" :class="$style.modelCard" class="_gaps_s">
+							<div v-for="(rule, i) in form.state.agentReviewTriggerRules" :key="rule.id" :data-settings-anchor="`trigger:${rule.id}`" :class="[$style.modelCard, highlightedAnchor === `trigger:${rule.id}` ? $style.anchorHighlight : null]" class="_gaps_s">
 								<div :class="$style.modelCardHead">
 									<b>规则 #{{ i + 1 }}</b>
 									<button type="button" class="_button" :class="$style.iconWarn" @click="removeReviewTriggerRule(i)"><i class="ti ti-trash"></i></button>
@@ -530,11 +542,11 @@ SPDX-License-Identifier: AGPL-3.0-only
 							</div>
 							<MkButton rounded @click="addReviewTriggerRule"><i class="ti ti-plus"></i> 添加复审规则</MkButton>
 						</div>
-					</MkFolder>
+			</MkFolder>
 
-					<MkFolder :defaultOpen="true">
-						<template #icon><i class="ti ti-chart-bar"></i></template>
-						<template #label>外审运行统计</template>
+			<MkFolder v-if="activeLeaf === 'externalAuditStats'" :defaultOpen="true">
+				<template #icon><i class="ti ti-chart-bar"></i></template>
+				<template #label>外审运行统计</template>
 						<div class="_gaps">
 							<MkTabs
 								v-model:tab="externalAuditSubTab"
@@ -601,25 +613,29 @@ SPDX-License-Identifier: AGPL-3.0-only
 								</div>
 							</template>
 						</div>
-					</MkFolder>
-				</div>
 			</MkFolder>
 
-			<MkFolder v-if="activeTab === 'images'" :defaultOpen="true">
+			<MkFolder v-if="activeLeaf === 'images'" :defaultOpen="true">
 				<template #icon><i class="ti ti-brush"></i></template>
-				<template #label>绘图</template>
+				<template #label>绘图模型</template>
 				<div class="_gaps">
 					<MkSwitch v-model="form.state.agentImageGenerationEnabled">
 						<template #label>站点绘图总开关</template>
 					</MkSwitch>
 					<MkInfo>默认不提供任何生图模型。先添加模型，填写显示名称并选择提供商；选择 Aurora 后才会展开 Aurora 专属配置。</MkInfo>
 					<MkInfo v-if="form.state.agentImageModelRows.length === 0">当前没有生图模型。用户聊天界面会显示“无”，即关闭生图。</MkInfo>
-					<template v-for="section in imageModelSections" :key="section.key">
+					<div :class="$style.listToolbar">
+						<MkInput v-model="imageModelQuery" type="search" :class="$style.listSearch" placeholder="搜索名称、提供商、上游模型名">
+							<template #prefix><i class="ti ti-search"></i></template>
+						</MkInput>
+						<MkButton small rounded @click="setAllImageExpanded(expandedImageModelIds.length === 0)"><i :class="expandedImageModelIds.length === 0 ? 'ti ti-arrows-maximize' : 'ti ti-arrows-minimize'"></i> {{ expandedImageModelIds.length === 0 ? '全部展开' : '全部收起' }}</MkButton>
+					</div>
+					<template v-for="section in visibleImageModelSections" :key="section.key">
 						<div v-if="section.key === 'active' || section.rows.length > 0" :class="[$style.modelSectionHead, section.key === 'unlisted' ? $style.modelSectionHeadMuted : null]">
 							<span>{{ section.label }}<span :class="$style.modelSectionCount">{{ section.rows.length }}</span></span>
 							<MkButton v-if="section.key === 'active'" small rounded @click="onAddImageModelMenu"><i class="ti ti-plus"></i> 添加生图模型</MkButton>
 						</div>
-						<div v-for="row in section.rows" :key="row.id" :data-model-row-id="section.key === 'active' ? row.id : undefined" :class="[$style.modelRow, row.enabled ? null : $style.modelRowUnlisted, modelRowDrag?.id === row.id ? $style.modelRowDragging : null, modelRowDrag?.id === row.id && modelRowDrag.snapping ? $style.modelRowSnapping : null, modelRowDrag != null && modelRowDrag.id !== row.id ? $style.modelRowShiftable : null, modelRowDrag != null && modelRowDrag.overId === row.id ? (modelRowDrag.overPos === 'before' ? $style.modelRowDropBefore : $style.modelRowDropAfter) : null]" :style="modelRowDragStyle(row.id)">
+						<div v-for="row in section.rows" :key="row.id" :data-settings-anchor="`image:${row.id}`" :data-model-row-id="section.key === 'active' ? row.id : undefined" :class="[$style.modelRow, highlightedAnchor === `image:${row.id}` ? $style.anchorHighlight : null, row.enabled ? null : $style.modelRowUnlisted, modelRowDrag?.id === row.id ? $style.modelRowDragging : null, modelRowDrag?.id === row.id && modelRowDrag.snapping ? $style.modelRowSnapping : null, modelRowDrag != null && modelRowDrag.id !== row.id ? $style.modelRowShiftable : null, modelRowDrag != null && modelRowDrag.overId === row.id ? (modelRowDrag.overPos === 'before' ? $style.modelRowDropBefore : $style.modelRowDropAfter) : null]" :style="modelRowDragStyle(row.id)">
 							<div :class="$style.modelRowHead" @click="toggleImageModelExpanded(row.id)">
 								<i class="ti ti-chevron-right" :class="[$style.modelRowChevron, isImageModelExpanded(row.id) ? $style.modelRowChevronOpen : null]"></i>
 								<span :class="$style.modelRowTitle">{{ row.name.trim() || '未命名生图模型' }}</span>
@@ -633,7 +649,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 										<button type="button" class="_button" :class="$style.iconWarn" :title="i18n.ts._agents.adminModelUnlist" @click="toggleImageModelEnabled(row, false)">
 											<i class="ti ti-archive"></i>
 										</button>
-										<span :class="$style.modelRowGrip" title="长按拖动排序" @pointerdown="onModelRowGripPointerDown($event, 'image', row)" @contextmenu.prevent>
+										<span v-if="imageModelQuery.trim() === ''" :class="$style.modelRowGrip" title="长按拖动排序" @pointerdown="onModelRowGripPointerDown($event, 'image', row)" @contextmenu.prevent>
 											<i class="ti ti-grip-vertical"></i>
 										</span>
 									</template>
@@ -743,7 +759,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 							</div>
 						</div>
 					</template>
-					<MkFolder v-if="hasAuroraImageModel">
+					<MkFolder v-if="hasAuroraImageModel" data-settings-anchor="aurora-provider">
 						<template #icon><i class="ti ti-cloud-cog"></i></template>
 						<template #label>Aurora 提供商配置</template>
 						<div class="_gaps">
@@ -780,7 +796,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 									<MkInfo>这些画师串只作用于 Aurora / Naval AI 模型。用户和智能体只选择名称，实际前缀、后缀、负面提示词由后端填充。</MkInfo>
 									<div v-if="form.state.agentImageArtistPresetRows.length === 0" :class="$style.emptyModels">当前没有画师串，聊天页将没有可选画师串。</div>
 									<div :class="$style.artistPresetGrid">
-										<div v-for="(preset, presetIndex) in form.state.agentImageArtistPresetRows" :key="preset.id" :class="$style.artistPresetCard" class="_gaps_s">
+										<div v-for="(preset, presetIndex) in form.state.agentImageArtistPresetRows" :key="preset.id" :data-settings-anchor="`preset:${preset.id}`" :class="[$style.artistPresetCard, highlightedAnchor === `preset:${preset.id}` ? $style.anchorHighlight : null]" class="_gaps_s">
 											<div :class="$style.modelCardHead">
 												<b>{{ preset.name.trim() || `画师串 #${presetIndex + 1}` }}</b>
 												<button type="button" class="_button" :class="$style.iconWarn" title="删除画师串" @click="removeImageArtistPreset(presetIndex)">
@@ -813,7 +829,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 							</MkFolder>
 						</div>
 					</MkFolder>
-					<FormSplit :minWidth="180">
+					<FormSplit :minWidth="180" data-settings-anchor="image-max-per-reply">
 						<MkInput v-model="form.state.agentImageMaxPerReply" type="text">
 							<template #label>每轮最多图片</template>
 							<template #caption>作为会话「自动生图张数」的默认值。每轮解析图片指令的数量不设上限，超出自动生成上限的指令将进入待手动生成状态。</template>
@@ -828,7 +844,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</div>
 			</MkFolder>
 
-			<MkFolder v-if="activeTab === 'sticker'" :defaultOpen="true">
+			<MkFolder v-if="activeLeaf === 'sticker'" :defaultOpen="true">
 				<template #icon><i class="ti ti-sticker"></i></template>
 				<template #label>{{ i18n.ts._agents.stickerTabTitle }}</template>
 				<div class="_gaps">
@@ -837,7 +853,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 						<template #label>{{ i18n.ts._agents.stickerEnabled }}</template>
 						<template #caption>{{ i18n.ts._agents.stickerEnabledCaption }}</template>
 					</MkSwitch>
-					<FormSplit :minWidth="180">
+					<FormSplit :minWidth="180" data-settings-anchor="sticker-params">
 						<MkInput v-model="form.state.agentStickerMaxPerMessage" type="text">
 							<template #label>{{ i18n.ts._agents.stickerMaxPerMessage }}</template>
 							<template #caption>{{ i18n.ts._agents.stickerMaxPerMessageCaption }}</template>
@@ -850,7 +866,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</div>
 			</MkFolder>
 
-			<MkFolder v-if="activeTab === 'pet'" :defaultOpen="true">
+			<MkFolder v-if="activeLeaf === 'pet'" :defaultOpen="true">
 				<template #icon><i class="ti ti-paw"></i></template>
 				<template #label>桌宠表演</template>
 				<div class="_gaps">
@@ -866,13 +882,13 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</div>
 			</MkFolder>
 
-			<MkFolder v-if="activeTab === 'vision'" :defaultOpen="true">
+			<MkFolder v-if="activeLeaf === 'vision'" :defaultOpen="true">
 				<template #icon><i class="ti ti-eye"></i></template>
 				<template #label>{{ i18n.ts._agents.adminVisionTitle }}</template>
 				<div class="_gaps">
 					<MkInfo>{{ i18n.ts._agents.adminVisionCaption }}</MkInfo>
-					<MkSelect v-model="form.state.agentVisionDefaultModelId" :items="agentVisionDefaultItems"><template #label>{{ i18n.ts._agents.adminVisionDefaultModel }}</template></MkSelect>
-					<div v-for="(row, i) in form.state.agentVisionModelRows" :key="row.id" :class="$style.modelCard" class="_gaps_s">
+					<MkSelect v-model="form.state.agentVisionDefaultModelId" data-settings-anchor="vision-default" :items="agentVisionDefaultItems"><template #label>{{ i18n.ts._agents.adminVisionDefaultModel }}</template></MkSelect>
+					<div v-for="(row, i) in form.state.agentVisionModelRows" :key="row.id" :data-settings-anchor="`vision:${row.id}`" :class="[$style.modelCard, highlightedAnchor === `vision:${row.id}` ? $style.anchorHighlight : null]" class="_gaps_s">
 						<div :class="$style.modelCardHead"><b>{{ row.name.trim() || `${i18n.ts._agents.adminVisionModel} #${i + 1}` }}</b><button type="button" class="_button" :class="$style.iconWarn" @click="removeVisionModel(i)"><i class="ti ti-trash"></i></button></div>
 						<FormSplit :minWidth="220"><MkInput v-model="row.name"><template #label>{{ i18n.ts._agents.adminVisionModel }}</template></MkInput><MkSwitch v-model="row.enabled"><template #label>{{ i18n.ts.enabled }}</template></MkSwitch></FormSplit>
 						<FormSplit :minWidth="220"><MkInput v-model="row.apiUrl"><template #label>{{ i18n.ts._agents.adminVisionRequestUrl }}</template><template #caption>{{ i18n.ts._agents.adminVisionRequestUrlCaption }}</template></MkInput><MkInput v-model="row.apiKey" type="password"><template #label>{{ i18n.ts._agents.adminVisionApiKey }}</template></MkInput></FormSplit>
@@ -883,7 +899,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 			</MkFolder>
 
 			<XCheckinPanel
-				v-if="activeTab === 'checkin'"
+				v-if="activeLeaf === 'checkin'"
 				:state="form.state"
 				:makeupForm="checkinMakeupForm"
 				:makeupSubmitting="checkinMakeupSubmitting"
@@ -891,10 +907,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 				@revokeToday="revokeTodayCheckin"
 			/>
 
-			<XCreditGrants v-if="activeTab === 'credits'"/>
+			<XCreditGrants v-if="activeLeaf === 'credits'"/>
 
 			<XCreditsPanel
-				v-if="activeTab === 'credits'"
+				v-if="activeLeaf === 'credits'"
 				v-model:status="redeemStatus"
 				v-model:query="redeemQuery"
 				v-model:pageSize="redeemPageSize"
@@ -916,7 +932,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 			/>
 
 			<XMigrationPanel
-				v-if="activeTab === 'migration'"
+				v-if="activeLeaf === 'migration'"
 				:keyExists="migrationKeyExists"
 				:keyGenerating="migrationKeyGenerating"
 				:logsLoading="migrationLogsLoading"
@@ -926,7 +942,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				@loadMore="loadMoreMigrationLogs"
 			/>
 
-			<template v-if="activeTab === 'reports'">
+			<template v-if="activeLeaf === 'reports'">
 				<!-- 报表分类切换：仅切换视图区域，不触发路由跳转 -->
 				<div :class="$style.reportTabRow">
 					<button
@@ -951,7 +967,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</KeepAlive>
 			</template>
 
-			<MkFolder v-if="activeTab === 'proactive'" :defaultOpen="true">
+			<MkFolder v-if="activeLeaf === 'proactive'" :defaultOpen="true">
 				<template #icon><i class="ti ti-message-chatbot"></i></template>
 				<template #label>主动消息默认设置</template>
 				<div class="_gaps">
@@ -965,7 +981,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 						<template #caption>新建会话时是否默认启用定时主动消息（需同时开启时间感知）</template>
 					</MkSwitch>
 					<hr>
-					<MkInput v-model="form.state.agentProactiveMinSilenceMinutes" type="text">
+					<MkInput v-model="form.state.agentProactiveMinSilenceMinutes" type="text" data-settings-anchor="proactive-params">
 						<template #label>最小静默时间（分钟）</template>
 						<template #caption>助手回复后至少等待多久才可能发送随机主动消息，范围 5–1440</template>
 					</MkInput>
@@ -988,8 +1004,17 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</div>
 			</MkFolder>
 
-			<div v-if="form.modified.value && ['basic', 'models', 'memory', 'compression', 'externalAudit', 'images', 'sticker', 'pet', 'vision', 'credits', 'checkin', 'proactive'].includes(activeTab)" :class="$style.saveBar">
-				<MkFormFooter :form="form"/>
+			<MkAgentModelAnnouncementPublisher v-if="activeLeaf === 'models' || activeLeaf === 'images'" :key="activeLeaf" :kind="activeLeaf === 'models' ? 'chat' : 'image'"/>
+
+			<!-- 全局保存栏：任何子页都可见，列出有改动的分区；保存只提交这些分区 -->
+			<div v-if="form.modified.value" :class="$style.saveBar">
+				<div :class="$style.saveBarInner">
+					<div :class="$style.saveBarSections">
+						<span :class="$style.saveBarLabel">未保存：</span>
+						<button v-for="sec in dirtySectionList" :key="sec" type="button" class="_button" :class="$style.saveBarChip" @click="gotoSection(sec)">{{ saveSectionLabels[sec] }}</button>
+					</div>
+					<MkFormFooter :form="form"/>
+				</div>
 			</div>
 		</div>
 	</div>
@@ -997,7 +1022,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
+import type * as Misskey from 'misskey-js';
 import type { MkSelectItem } from '@/components/MkSelect.vue';
 import type { MenuItem } from '@/types/menu.js';
 import MkInput from '@/components/MkInput.vue';
@@ -1020,6 +1046,8 @@ import XCreditGrants from './agents-settings-credit-grants.vue';
 import XMigrationPanel from './agents-settings-migration.vue';
 import type { RedeemCodeRow } from './agents-settings-credits.vue';
 import type { MigrationLogRow } from './agents-settings-migration.vue';
+import { SettingsValidationError, dirtyLeaves, dirtySections, groupOfLeaf, leafDef, resolveLeaf, saveSectionHomeLeaf, saveSectionLabels, settingsGroups } from './agents-settings-sections.js';
+import type { LeafKey, SaveSection } from './agents-settings-sections.js';
 import * as os from '@/os.js';
 import { misskeyApi, formatApiError } from '@/utility/misskey-api.js';
 import { fetchInstance } from '@/instance.js';
@@ -1034,20 +1062,26 @@ import { formatDateTimeString } from '@/utility/format-time-string.js';
 
 const router = useRouter();
 
-type TabKey = 'overview' | 'basic' | 'models' | 'memory' | 'compression' | 'externalAudit' | 'images' | 'sticker' | 'pet' | 'vision' | 'credits' | 'migration' | 'checkin' | 'proactive' | 'reports';
-const tabKeys: TabKey[] = ['overview', 'basic', 'models', 'memory', 'compression', 'externalAudit', 'images', 'sticker', 'pet', 'vision', 'credits', 'migration', 'checkin', 'proactive', 'reports'];
-
 const props = defineProps<{ view?: string }>();
 
-function resolveTab(view?: string): TabKey {
-	return tabKeys.includes(view as TabKey) ? view as TabKey : 'overview';
-}
-
-const activeTab = ref<TabKey>(resolveTab(props.view));
+// view query 只记录子页 key；旧链接里的 ?view=images 等仍是合法子页
+const activeLeaf = ref<LeafKey>(resolveLeaf(props.view));
+const activeGroup = computed(() => groupOfLeaf(activeLeaf.value));
+const activeLeafDef = computed(() => leafDef(activeLeaf.value));
 
 watch(() => props.view, view => {
-	const resolved = resolveTab(view);
-	if (resolved !== activeTab.value) activeTab.value = resolved;
+	const resolved = resolveLeaf(view);
+	if (resolved !== activeLeaf.value) activeLeaf.value = resolved;
+});
+
+// 顶部 tab 绑定分组；切分组时落到该组第一个子页（有未保存改动的子页优先）
+const activeGroupKey = computed<string>({
+	get: () => activeGroup.value.key,
+	set: (key) => {
+		const group = settingsGroups.find(g => g.key === key);
+		if (group == null || group.key === activeGroup.value.key) return;
+		activeLeaf.value = group.leaves.find(l => dirtyLeafSet.value.has(l.key))?.key ?? group.leaves[0].key;
+	},
 });
 
 const meta = await misskeyApi('admin/meta') as Record<string, unknown>;
@@ -1502,7 +1536,7 @@ function imageParamsFromMeta(): Record<string, unknown> {
 
 const imageParams = imageParamsFromMeta();
 
-const form = useForm({
+const initialFormState = {
 	agentFeatureEnabled: Boolean(meta.agentFeatureEnabled),
 	agentGlobalSystemPrompt: typeof meta.agentGlobalSystemPrompt === 'string' ? meta.agentGlobalSystemPrompt : '',
 	agentLlmModelRows: initAgentLlmModelRows(),
@@ -1586,550 +1620,463 @@ const form = useForm({
 	agentProactiveDaytimeWeight: String(numFromMeta(meta.agentProactiveDaytimeWeight, 3)),
 	agentProactiveRecencyBias: String(numFromMeta(meta.agentProactiveRecencyBias, 1)),
 	agentProactiveMaxChainLength: String(numFromMeta(meta.agentProactiveMaxChainLength, 7)),
-}, async (state) => {
-	type Normalized = {
-		id: string;
-		name: string;
-		description: string | null;
-		baseUrl: string;
-		apiKey: string;
-		apiKeys: string[];
-		multiKeyEnabled: boolean;
-		apiModelName: string;
-		maxContextTokens: number;
-		maxOutputTokensPerCall: number;
-		unlisted: boolean;
-		groupId: string | null;
-		costPerCall: number;
-		billingMode: 'per_call' | 'usage';
-		pricePerMillionInputCacheHitTokens: number;
-		pricePerMillionInputCacheMissTokens: number;
-		pricePerMillionOutputTokens: number;
-		peakPriceMultiplier?: number;
-		charsPerToken?: number;
-		tokenizerEncoding?: string;
-		dailyFreeQuota?: number;
-	};
-	const normalized: Normalized[] = [];
+};
+
+type FormState = typeof initialFormState;
+
+const checkinSettingsExtras: Record<string, unknown> = (() => {
+	const raw = (meta as Record<string, any>).agentCheckinSettings;
+	return raw && typeof raw === 'object' ? { ...raw } : {};
+})();
+
+const form = useForm(initialFormState, async (state) => {
+	const sections = dirtySections(form.modifiedStates as Record<string, boolean>);
+	const payload: Record<string, unknown> = {};
+	try {
+		for (const section of sections) Object.assign(payload, buildSectionPayload(section, state));
+	} catch (err) {
+		if (err instanceof SettingsValidationError) {
+			void revealValidationError(err);
+			os.alert({ type: 'error', title: `「${saveSectionLabels[err.section]}」未保存`, text: err.message });
+		}
+		throw err;
+	}
+	if (Object.keys(payload).length === 0) return;
+	try {
+		await os.promiseDialog(misskeyApi('admin/update-meta', payload as Misskey.Endpoints['admin/update-meta']['req']), null, () => {});
+	} catch (err) {
+		os.alert({ type: 'error', title: '保存失败', text: formatApiError(err) });
+		throw err;
+	}
+	void fetchInstance(true);
+});
+
+// ---- 分区保存：只校验、只提交有改动的分区 ----
+function fail(section: SaveSection, message: string, anchor: string | null = null, leaf: LeafKey | null = null): never {
+	throw new SettingsValidationError(section, message, anchor, leaf);
+}
+
+/** 整数字段：空串/非数字/越界一律报错，不再静默回退默认值 */
+function intField(section: SaveSection, raw: string, min: number, max: number, label: string, anchor: string): number {
+	const t = String(raw ?? '').trim();
+	const v = Number(t);
+	if (t === '' || !Number.isInteger(v) || v < min || v > max) fail(section, `「${label}」须为 ${min}～${max} 之间的整数。`, anchor);
+	return v;
+}
+
+function numField(section: SaveSection, raw: string, min: number, max: number, label: string, anchor: string): number {
+	const t = String(raw ?? '').trim();
+	const v = Number(t);
+	if (t === '' || !Number.isFinite(v) || v < min || v > max) fail(section, `「${label}」须为 ${min}～${max} 之间的数字。`, anchor);
+	return v;
+}
+
+function nullIfBlank(v: string): string | null {
+	return v.trim() === '' ? null : v.trim();
+}
+
+function buildModelsPayload(state: FormState): Record<string, unknown> {
+	const normalized: Record<string, unknown>[] = [];
 	const seen = new Set<string>();
 	for (const row of state.agentLlmModelRows) {
 		if (rowIsBlank(row)) continue;
-		let id = row.id.trim();
-		if (!id) {
-			id = genId();
-			row.id = id;
-		}
-		const name = row.name.trim();
-		const baseUrl = row.baseUrl.trim();
+		const anchor = `llm:${row.id}`;
+		const label = row.name.trim() || '未命名模型';
+		const id = row.id.trim() || genId();
 		const apiKeys = [...new Set(row.apiKeys.map(key => key.trim()).filter(key => key !== ''))];
-		const apiKey = apiKeys[0] ?? '';
-		const apiModelName = row.apiModelName.trim();
-		const descRaw = row.description.trim();
-		const maxCtx = Math.trunc(Number(row.maxContextTokens));
-		const maxOut = Math.trunc(Number(row.maxOutputTokensPerCall));
-		if (!name || !baseUrl || !apiKey || !apiModelName) {
-			os.alert({ type: 'error', text: i18n.ts._agents.agentLlmModelsRowIncomplete });
-			throw new Error('incomplete model row');
+		if (!row.name.trim() || !row.baseUrl.trim() || apiKeys.length === 0 || !row.apiModelName.trim()) {
+			fail('models', `模型「${label}」缺少显示名称、Base URL、API Key 或上游模型名。`, anchor);
 		}
-		if (seen.has(id)) {
-			os.alert({ type: 'error', text: i18n.ts._agents.agentLlmModelsDuplicateId });
-			throw new Error('duplicate model id');
-		}
+		if (seen.has(id)) fail('models', i18n.ts._agents.agentLlmModelsDuplicateId, anchor);
 		seen.add(id);
-		if (!Number.isFinite(maxCtx) || maxCtx < 256 || maxCtx > 2_000_000) {
-			os.alert({ type: 'error', text: i18n.ts._agents.agentLlmModelsInvalidContext });
-			throw new Error('invalid context');
-		}
-		if (!Number.isFinite(maxOut) || maxOut < 1 || maxOut > 128_000) {
-			os.alert({ type: 'error', text: i18n.ts._agents.agentLlmModelsInvalidOutput });
-			throw new Error('invalid output');
-		}
-		const costRaw = row.costPerCall.trim();
-		const cost = costRaw === '' ? 0 : Number(costRaw);
-		if (!Number.isFinite(cost) || cost < 0 || cost > 1_000_000) {
-			os.alert({ type: 'error', text: i18n.ts._agents.agentLlmModelsInvalidCost });
-			throw new Error('invalid cost');
-		}
-		const parseMillionTokenPrice = (raw: string, label: string): number => {
+		const price = (raw: string, name: string) => {
 			const t = raw.trim();
 			const v = t === '' ? 0 : Number(t);
-			if (!Number.isFinite(v) || v < 0 || v > 1_000_000) {
-				os.alert({ type: 'error', text: i18n.tsx._agents.adminMillionTokenPriceInvalid({ name, label }) });
-				throw new Error('invalid million token price');
-			}
+			if (!Number.isFinite(v) || v < 0 || v > 1_000_000) fail('models', `模型「${label}」的「${name}」须为 0～1,000,000 之间的数字。`, anchor);
 			return v;
 		};
-		const parsePeakMultiplier = (raw: string): number | undefined => {
-			const t = raw.trim();
-			if (t === '') return undefined;
-			const v = Number(t);
-			if (!Number.isFinite(v) || v < 1 || v > 10) {
-				os.alert({ type: 'error', text: i18n.tsx._agents.billingPeakMultiplierInvalid({ name }) });
-				throw new Error('invalid peak price multiplier');
-			}
-			return v <= 1 ? undefined : v;
-		};
+		const peakRaw = row.peakPriceMultiplier.trim();
+		let peak: number | undefined;
+		if (peakRaw !== '') {
+			const v = Number(peakRaw);
+			if (!Number.isFinite(v) || v < 1 || v > 10) fail('models', i18n.tsx._agents.billingPeakMultiplierInvalid({ name: label }), anchor);
+			peak = v <= 1 ? undefined : v;
+		}
+		const quotaRaw = row.dailyFreeQuota.trim();
+		const quota = quotaRaw === '' ? 0 : Number(quotaRaw);
+		if (!Number.isInteger(quota) || quota < 0) fail('models', `模型「${label}」的每日免费次数须为非负整数。`, anchor);
 		normalized.push({
 			id,
-			name,
-			description: descRaw === '' ? null : descRaw,
-			baseUrl,
-			apiKey,
+			name: row.name.trim(),
+			description: nullIfBlank(row.description),
+			baseUrl: row.baseUrl.trim(),
+			apiKey: apiKeys[0],
 			apiKeys,
 			multiKeyEnabled: row.multiKeyEnabled,
-			apiModelName,
-			maxContextTokens: maxCtx,
-			maxOutputTokensPerCall: maxOut,
+			apiModelName: row.apiModelName.trim(),
+			maxContextTokens: intField('models', row.maxContextTokens, 256, 2_000_000, `${label} · 上下文长度`, anchor),
+			maxOutputTokensPerCall: intField('models', row.maxOutputTokensPerCall, 1, 128_000, `${label} · 输出长度`, anchor),
 			unlisted: row.unlisted === true,
-			groupId: row.groupId.trim() === '' ? null : row.groupId.trim(),
-			costPerCall: cost,
+			groupId: nullIfBlank(row.groupId),
+			costPerCall: price(row.costPerCall, '每次扣费'),
 			billingMode: row.billingMode === 'usage' ? 'usage' : 'per_call',
-			pricePerMillionInputCacheHitTokens: parseMillionTokenPrice(row.pricePerMillionInputCacheHitTokens, i18n.ts._agents.billingInputCacheHit),
-			pricePerMillionInputCacheMissTokens: parseMillionTokenPrice(row.pricePerMillionInputCacheMissTokens, i18n.ts._agents.billingInputCacheMiss),
-			pricePerMillionOutputTokens: parseMillionTokenPrice(row.pricePerMillionOutputTokens, i18n.ts._agents.billingOutput),
-			peakPriceMultiplier: parsePeakMultiplier(row.peakPriceMultiplier),
+			pricePerMillionInputCacheHitTokens: price(row.pricePerMillionInputCacheHitTokens, i18n.ts._agents.billingInputCacheHit),
+			pricePerMillionInputCacheMissTokens: price(row.pricePerMillionInputCacheMissTokens, i18n.ts._agents.billingInputCacheMiss),
+			pricePerMillionOutputTokens: price(row.pricePerMillionOutputTokens, i18n.ts._agents.billingOutput),
+			peakPriceMultiplier: peak,
 			charsPerToken: row.charsPerToken.trim() !== '' ? Number(row.charsPerToken) : undefined,
 			tokenizerEncoding: row.tokenizerEncoding.trim() !== '' ? row.tokenizerEncoding.trim() : undefined,
-			dailyFreeQuota: row.dailyFreeQuota.trim() !== '' && Number(row.dailyFreeQuota) > 0 ? Number(row.dailyFreeQuota) : undefined,
+			dailyFreeQuota: quota > 0 ? quota : undefined,
 		});
 	}
-	if (normalized.length === 0) {
-		os.alert({ type: 'error', text: i18n.ts._agents.agentLlmModelsNeedOne });
-		throw new Error('no models');
-	}
-	const defTrim = state.agentDefaultModelId.trim();
-	if (defTrim !== '' && !normalized.some(m => m.id === defTrim && !m.unlisted)) {
-		os.alert({ type: 'error', text: i18n.ts._agents.agentDefaultModelInvalid });
-		throw new Error('invalid default model');
-	}
+	if (normalized.length === 0) fail('models', i18n.ts._agents.agentLlmModelsNeedOne);
+	const listedIds = new Set(normalized.filter(m => m.unlisted !== true).map(m => m.id as string));
+	const def = state.agentDefaultModelId.trim();
+	if (def !== '' && !listedIds.has(def)) fail('models', '默认模型已下架或不存在，请重新选择。', 'llm-default');
 
-	const compDefTrim = state.agentCompressionDefaultModelId.trim();
-	if (compDefTrim !== '' && !normalized.some(m => m.id === compDefTrim && !m.unlisted)) {
-		os.alert({ type: 'error', text: i18n.ts._agents.agentDefaultModelInvalid });
-		throw new Error('invalid compression default model');
-	}
-
-	const imageTokens = state.agentImageTokenRows
-		.filter(row => row.token.trim() !== '')
-		.map((row, i) => ({
-			id: row.id || genId(),
-			token: row.token.trim(),
-			name: row.name.trim() === '' ? null : row.name.trim(),
-			enabled: row.enabled,
-			sortOrder: Number.isFinite(Number(row.sortOrder)) ? Math.trunc(Number(row.sortOrder)) : i,
-			points: row.points === '' ? null : Number(row.points),
-			lastUsedAt: row.lastUsedAt || null,
-			lastCheckedAt: row.lastCheckedAt || null,
-			lastError: row.lastError || null,
-		}));
-	const imageModels = state.agentImageModelRows
-		.filter(row => row.name.trim() !== '' || row.apiModelName.trim() !== '' || row.apiUrl.trim() !== '')
-		.map((row) => {
-			const steps = Math.trunc(Number(row.steps));
-			const scale = Number(row.scale);
-			const cfgRescale = Number(row.cfgRescale);
-			return {
-				id: row.id.trim() || genId(),
-				name: row.name.trim(),
-				description: row.description.trim() === '' ? null : row.description.trim(),
-				// 未识别的 provider 在下方校验循环被拦截，这里必为已知值
-				provider: row.provider as 'aurora' | 'openai' | 'tiptotip' | 'qwen' | 'sensenova',
-				enabled: row.enabled,
-				apiModelName: row.apiModelName.trim() === '' ? null : row.apiModelName.trim(),
-				apiUrl: (row.provider === 'openai' || row.provider === 'tiptotip' || row.provider === 'qwen' || row.provider === 'sensenova') && row.apiUrl.trim() !== '' ? row.apiUrl.trim() : null,
-				apiKey: (row.provider === 'openai' || row.provider === 'tiptotip' || row.provider === 'qwen' || row.provider === 'sensenova') && row.apiKey.trim() !== '' ? row.apiKey.trim() : null,
-				supportsReferenceImage: (row.provider === 'openai' || row.provider === 'tiptotip' || row.provider === 'sensenova') && row.supportsReferenceImage,
-				costPerCall: row.costPerCall.trim() === '' ? null : Number(row.costPerCall),
-				dailyFreeQuota: row.dailyFreeQuota.trim() !== '' && Number(row.dailyFreeQuota) > 0 ? Number(row.dailyFreeQuota) : null,
-				defaultArtistPresetId: row.defaultArtistPresetId.trim() === '' ? null : row.defaultArtistPresetId.trim(),
-				defaultParams: row.provider === 'aurora' ? {
-					steps,
-					scale,
-					cfgRescale,
-					sampler: row.sampler.trim() || 'k_euler_ancestral',
-					noiseSchedule: row.noiseSchedule.trim() || 'karras',
-					promptPrefix: row.promptPrefix,
-					promptSuffix: row.promptSuffix.trim() || 'masterpiece,best quality,very aesthetic,highres,absurdres',
-				} : null,
-			};
-		});
-	for (const row of imageModels) {
-		if (!row.id || !row.name || !row.provider) {
-			os.alert({ type: 'error', text: i18n.ts._agents.adminImageModelInvalid });
-			throw new Error('invalid image model row');
-		}
-		if (!agentImageProviderValues.has(row.provider)) {
-			os.alert({ type: 'error', text: `生图模型「${row.name}」的提供商「${row.provider}」无法识别，请为其重新选择提供商后再保存` });
-			throw new Error('unknown image model provider');
-		}
-		if (row.provider === 'aurora' && !row.apiModelName) {
-			os.alert({ type: 'error', text: i18n.ts._agents.adminImageModelInvalid });
-			throw new Error('invalid aurora image model api name');
-		}
-		if (row.provider === 'openai' && (!row.apiModelName || !row.apiUrl || !row.apiKey)) {
-			os.alert({ type: 'error', text: i18n.ts._agents.adminOpenaiImageRequired });
-			throw new Error('invalid openai image model configuration');
-		}
-		if (row.provider === 'tiptotip' && (!row.apiModelName || !row.apiUrl || !row.apiKey)) {
-			os.alert({ type: 'error', text: i18n.ts._agents.adminOpenaiImageRequired });
-			throw new Error('invalid tiptotip image model configuration');
-		}
-		if (row.provider === 'qwen' && (!row.apiModelName || !row.apiUrl || !row.apiKey)) {
-			os.alert({ type: 'error', text: i18n.ts._agents.adminQwenImageRequired });
-			throw new Error('invalid qwen image model configuration');
-		}
-		if (row.provider === 'sensenova' && (!row.apiModelName || !row.apiUrl || !row.apiKey)) {
-			os.alert({ type: 'error', text: i18n.ts._agents.adminSenseNovaImageRequired });
-			throw new Error('invalid sensenova image model configuration');
-		}
-		if (row.provider === 'sensenova' && !/\/images\/generations\/?$/.test(row.apiUrl ?? '')) {
-			os.alert({ type: 'error', text: i18n.ts._agents.adminSenseNovaImageRequestUrlInvalid });
-			throw new Error('invalid sensenova image generations endpoint');
-		}
-			if (row.costPerCall != null && (!Number.isFinite(row.costPerCall) || row.costPerCall < 0)) {
-				os.alert({ type: 'error', text: i18n.ts._agents.adminImageModelInvalid });
-				throw new Error('invalid image model cost');
-			}
-		if (row.provider === 'aurora' && row.defaultParams != null) {
-			if (!Number.isFinite(row.defaultParams.steps) || row.defaultParams.steps < 1 || row.defaultParams.steps > 80) {
-				os.alert({ type: 'error', text: i18n.ts._agents.adminImageParamsInvalid });
-				throw new Error('invalid image model steps');
-			}
-			if (!Number.isFinite(row.defaultParams.scale) || row.defaultParams.scale < 0 || row.defaultParams.scale > 30) {
-				os.alert({ type: 'error', text: i18n.ts._agents.adminImageParamsInvalid });
-				throw new Error('invalid image model scale');
-			}
-			if (!Number.isFinite(row.defaultParams.cfgRescale) || row.defaultParams.cfgRescale < 0 || row.defaultParams.cfgRescale > 1) {
-				os.alert({ type: 'error', text: i18n.ts._agents.adminImageParamsInvalid });
-				throw new Error('invalid image model cfg rescale');
-			}
-		}
-	}
-	const visionModels = state.agentVisionModelRows
-		.filter(row => row.name.trim() !== '' || row.apiUrl.trim() !== '' || row.apiModelName.trim() !== '')
-		.map(row => ({ id: row.id.trim() || genId(), name: row.name.trim(), enabled: row.enabled, apiUrl: row.apiUrl.trim(), apiKey: row.apiKey.trim(), apiModelName: row.apiModelName.trim(), costPerCall: Number(row.costPerCall) }));
-	const visionIds = new Set<string>();
-	for (const row of visionModels) {
-		if (!row.id || !row.name || !row.apiUrl || !row.apiKey || !row.apiModelName || !Number.isFinite(row.costPerCall) || row.costPerCall < 0 || visionIds.has(row.id)) {
-			os.alert({ type: 'error', text: i18n.ts._agents.adminVisionInvalid });
-			throw new Error('invalid vision model');
-		}
-		visionIds.add(row.id);
-	}
-	const visionDefaultId = state.agentVisionDefaultModelId.trim();
-	if (visionDefaultId !== '' && !visionModels.some(row => row.id === visionDefaultId && row.enabled)) {
-		os.alert({ type: 'error', text: i18n.ts._agents.adminVisionInvalidDefault });
-		throw new Error('invalid vision default model');
-	}
-	const imageArtistPresets = state.agentImageArtistPresetRows
-		.filter(row => row.id.trim() !== '' || row.name.trim() !== '' || row.promptPrefix.trim() !== '' || row.promptSuffix.trim() !== '' || row.negativePrompt.trim() !== '' || row.thumbnailUrl.trim() !== '')
-		.map(row => ({
+	const byokProviders: Record<string, unknown>[] = [];
+	for (const row of state.agentByokProviderRows) {
+		if (row.name.trim() === '' && row.baseUrl.trim() === '') continue;
+		const anchor = `byok:${row.id}`;
+		if (!row.name.trim() || !row.baseUrl.trim()) fail('models', 'BYOK 提供商模板需要填写名称和 Base URL。', anchor, 'byok');
+		byokProviders.push({
 			id: row.id.trim() || genId(),
 			name: row.name.trim(),
-			promptPrefix: row.promptPrefix,
-			promptSuffix: row.promptSuffix,
-			negativePrompt: row.negativePrompt,
-			thumbnailUrl: row.thumbnailUrl.trim() === '' ? null : row.thumbnailUrl.trim(),
-		}));
-	const imageArtistPresetIds = new Set<string>();
-	for (const row of imageArtistPresets) {
-		if (!row.id || !row.name) {
-			os.alert({ type: 'error', text: i18n.ts._agents.adminArtistPresetInvalid });
-			throw new Error('invalid image artist preset row');
-		}
-		if (imageArtistPresetIds.has(row.id)) {
-			os.alert({ type: 'error', text: i18n.tsx._agents.adminArtistPresetDuplicate({ id: row.id }) });
-			throw new Error('duplicate image artist preset id');
-		}
-		imageArtistPresetIds.add(row.id);
-	}
-	const imageMaxPerReply = Math.trunc(Number(state.agentImageMaxPerReply));
-	const stickerMaxPerMessage = Math.trunc(Number(state.agentStickerMaxPerMessage));
-	const emojiPromptMaxCount = Math.trunc(Number(state.agentEmojiPromptMaxCount));
-	if (!Number.isFinite(stickerMaxPerMessage) || stickerMaxPerMessage < 0 || stickerMaxPerMessage > 10) {
-		os.alert({ type: 'error', text: i18n.ts._agents.stickerAdminParamsInvalid });
-		throw new Error('invalid sticker max per message');
-	}
-	if (!Number.isFinite(emojiPromptMaxCount) || emojiPromptMaxCount < 1 || emojiPromptMaxCount > 2000) {
-		os.alert({ type: 'error', text: i18n.ts._agents.stickerAdminParamsInvalid });
-		throw new Error('invalid emoji prompt max count');
-	}
-	const imageCost = Number(state.agentImageCostPerCall);
-	const imageMinPoints = Math.trunc(Number(state.agentImageTokenMinPoints));
-	const imageTtl = Math.trunc(Number(state.agentImageTokenBalanceTtlSeconds));
-	const imageSteps = Math.trunc(Number(state.agentImageSteps));
-	const imageScale = Number(state.agentImageScale);
-	const imageCfgRescale = Number(state.agentImageCfgRescale);
-	if (!Number.isFinite(imageMaxPerReply) || imageMaxPerReply < 0 || imageMaxPerReply > 12) {
-		os.alert({ type: 'error', text: i18n.ts._agents.adminImageParamsInvalid });
-		throw new Error('invalid image max per reply');
-	}
-	if (!Number.isFinite(imageCost) || imageCost < 0) {
-		os.alert({ type: 'error', text: i18n.ts._agents.adminImageParamsInvalid });
-		throw new Error('invalid image cost');
-	}
-	if (!Number.isFinite(imageMinPoints) || imageMinPoints < 0) {
-		os.alert({ type: 'error', text: i18n.ts._agents.adminImageParamsInvalid });
-		throw new Error('invalid image min points');
-	}
-	if (!Number.isFinite(imageTtl) || imageTtl < 0) {
-		os.alert({ type: 'error', text: i18n.ts._agents.adminImageParamsInvalid });
-		throw new Error('invalid image ttl');
-	}
-	if (!Number.isFinite(imageSteps) || imageSteps < 1 || imageSteps > 80) {
-		os.alert({ type: 'error', text: i18n.ts._agents.adminImageParamsInvalid });
-		throw new Error('invalid image steps');
-	}
-	if (!Number.isFinite(imageScale) || imageScale < 0 || imageScale > 30) {
-		os.alert({ type: 'error', text: i18n.ts._agents.adminImageParamsInvalid });
-		throw new Error('invalid image scale');
-	}
-	if (!Number.isFinite(imageCfgRescale) || imageCfgRescale < 0 || imageCfgRescale > 1) {
-		os.alert({ type: 'error', text: i18n.ts._agents.adminImageParamsInvalid });
-		throw new Error('invalid image cfg rescale');
-	}
-
-	const externalAuditModels = state.agentExternalAuditModelRows
-		.filter(row => row.name.trim() !== '' || row.baseUrl.trim() !== '' || row.apiModelName.trim() !== '' || row.apiKey.trim() !== '')
-		.map((row, i) => ({
-			id: row.id.trim() || genId(),
-			name: row.name.trim(),
-				provider: row.provider,
+			description: nullIfBlank(row.description),
 			baseUrl: row.baseUrl.trim(),
-			apiKey: row.apiKey.trim(),
-			apiModelName: row.apiModelName.trim(),
-			priority: Number.isFinite(Number(row.priority)) ? Math.trunc(Number(row.priority)) : i,
-			enabled: row.enabled,
-			autoDisabledAt: row.autoDisabledAt.trim() === '' ? null : row.autoDisabledAt.trim(),
-			autoDisabledReason: row.autoDisabledReason.trim() === '' ? null : row.autoDisabledReason.trim(),
-			lastError: row.lastError.trim() === '' ? null : row.lastError.trim(),
-		}));
-		const externalAuditIds = new Set<string>();
-		for (const row of externalAuditModels) {
-			if (!externalAuditProviderValues.has(row.provider)) {
-				os.alert({ type: 'error', text: `不支持的外审模型类型：${row.provider}` });
-				throw new Error('unsupported external audit provider');
-			}
-			if (!row.id || !row.name || !row.baseUrl || !row.apiKey || !row.apiModelName) {
-			os.alert({ type: 'error', text: i18n.ts._agents.adminExternalAuditInvalid });
-			throw new Error('invalid external audit model row');
-		}
-		if (externalAuditIds.has(row.id)) {
-			os.alert({ type: 'error', text: i18n.tsx._agents.adminExternalAuditDuplicate({ id: row.id }) });
-			throw new Error('duplicate external audit model id');
-		}
-		externalAuditIds.add(row.id);
-	}
-		const externalAuditRules = state.agentExternalAuditRuleRows.map(rule => ({
-			id: rule.id.trim(),
-			name: rule.name.trim(),
-			reason: rule.reason.trim(),
-			criteria: rule.criteria.trim(),
-			enabled: rule.enabled,
-		}));
-		const externalAuditRuleIds = new Set<string>();
-		for (const rule of externalAuditRules) {
-			if (!/^[a-z][a-z0-9_-]{0,63}$/.test(rule.id) || rule.id === 'allow' || rule.id === 'other_high_risk' || !rule.name || !rule.reason || !rule.criteria || externalAuditRuleIds.has(rule.id)) {
-				os.alert({ type: 'error', text: '违规条目的 ID、名称、固定原因和判断标准必须完整；ID 需唯一并使用小写字母、数字、下划线或连字符。' });
-				throw new Error('invalid external audit rule');
-			}
-			externalAuditRuleIds.add(rule.id);
-		}
-		const externalAuditOtherRule = {
-			reason: state.agentExternalAuditOtherRule.reason.trim(),
-			criteria: state.agentExternalAuditOtherRule.criteria.trim(),
-		};
-		if (!externalAuditOtherRule.reason || !externalAuditOtherRule.criteria) {
-			os.alert({ type: 'error', text: '“其他高风险内容”的兜底原因和判断标准不能为空。' });
-			throw new Error('invalid external audit other rule');
-		}
-		const externalAuditTimeoutMs = Math.trunc(Number(state.agentExternalAuditTimeoutMs));
-	const externalAuditFailureThresholdPercent = Math.trunc(Number(state.agentExternalAuditFailureThresholdPercent));
-	const externalAuditFailureMinRequests = Math.trunc(Number(state.agentExternalAuditFailureMinRequests));
-	if (!Number.isFinite(externalAuditTimeoutMs) || externalAuditTimeoutMs < 1000 || externalAuditTimeoutMs > 120000) {
-		os.alert({ type: 'error', text: '外审超时时间必须在 1000 到 120000 毫秒之间。' });
-		throw new Error('invalid external audit timeout');
-	}
-	if (!Number.isFinite(externalAuditFailureThresholdPercent) || externalAuditFailureThresholdPercent < 1 || externalAuditFailureThresholdPercent > 100) {
-		os.alert({ type: 'error', text: '外审自动禁用失败率必须在 1 到 100 之间。' });
-		throw new Error('invalid external audit failure threshold');
-	}
-	if (!Number.isFinite(externalAuditFailureMinRequests) || externalAuditFailureMinRequests < 1 || externalAuditFailureMinRequests > 100000) {
-		os.alert({ type: 'error', text: '外审自动禁用最小样本数必须大于 0。' });
-		throw new Error('invalid external audit min requests');
+			apiModelName: nullIfBlank(row.apiModelName),
+			maxContextTokens: row.maxContextTokens.trim() === '' ? undefined : intField('models', row.maxContextTokens, 256, 2_000_000, `${row.name} · 上下文长度`, anchor),
+			maxOutputTokensPerCall: row.maxOutputTokensPerCall.trim() === '' ? undefined : intField('models', row.maxOutputTokensPerCall, 1, 128_000, `${row.name} · 输出长度`, anchor),
+			tokenizerEncoding: nullIfBlank(row.tokenizerEncoding),
+			charsPerToken: row.charsPerToken.trim() === '' ? undefined : Number(row.charsPerToken),
+		});
 	}
 
-	const memTopK = Math.trunc(Number(state.agentMem0TopK));
-	const memInj = Math.trunc(Number(state.agentMem0InjectMaxChars));
-	if (!Number.isFinite(memTopK) || memTopK < 1 || memTopK > 100) {
-		os.alert({ type: 'error', text: i18n.ts._agents.adminLongMemoryInvalidTopK });
-		throw new Error('invalid memory top k');
-	}
-	if (!Number.isFinite(memInj) || memInj < 200 || memInj > 50000) {
-		os.alert({ type: 'error', text: i18n.ts._agents.adminLongMemoryInvalidInject });
-		throw new Error('invalid memory inject');
-	}
-	const memAddRounds = Math.trunc(Number(state.agentMem0AddMemoryMaxRounds));
-	if (!Number.isFinite(memAddRounds) || memAddRounds < 1 || memAddRounds > 24) {
-		os.alert({ type: 'error', text: i18n.ts._agents.adminLongMemoryInvalidAddRounds });
-		throw new Error('invalid add memory rounds');
-	}
-	const memAddEveryN = Math.trunc(Number(state.agentMem0AddMemoryEveryNRounds));
-	if (!Number.isFinite(memAddEveryN) || memAddEveryN < 1 || memAddEveryN > 48) {
-		os.alert({ type: 'error', text: i18n.ts._agents.adminLongMemoryInvalidAddEveryN });
-		throw new Error('invalid add memory every n');
-	}
-
-	const compInject = Number(state.agentCompressionInjectMaxChars);
-	if (!Number.isInteger(compInject) || compInject < 200 || compInject > 50000) {
-		os.alert({ type: 'error', text: '便签注入上限须为 200～50,000 之间的整数。' });
-		throw new Error('invalid compression inject limit');
-	}
-	const compMaxIn = Math.trunc(Number(state.agentCompressionMaxInputChars));
-	const compMaxOut = Math.trunc(Number(state.agentCompressionMaxOutputTokens));
-	if (!Number.isFinite(compMaxIn) || compMaxIn < 500 || compMaxIn > 200000) {
-		os.alert({ type: 'error', text: i18n.ts._agents.adminCompressionInvalidInput });
-		throw new Error('invalid compression max input');
-	}
-	if (!Number.isFinite(compMaxOut) || compMaxOut < 1 || compMaxOut > 32000) {
-		os.alert({ type: 'error', text: i18n.ts._agents.adminCompressionInvalidOutput });
-		throw new Error('invalid compression max output');
-	}
-
-	const t1s = String(state.agentCompressionBandT1Ratio ?? '').trim();
-	const t2s = String(state.agentCompressionBandT2Ratio ?? '').trim();
-	let bandT1: number | null = null;
-	let bandT2: number | null = null;
-	if (t1s === '' && t2s === '') {
-		bandT1 = null;
-		bandT2 = null;
-	} else {
-		bandT1 = Number(t1s);
-		bandT2 = Number(t2s);
-		if (!Number.isFinite(bandT1) || !Number.isFinite(bandT2) || bandT1 < 0.01 || bandT1 > 0.99 || bandT2 < 0.01 || bandT2 > 0.99) {
-			os.alert({ type: 'error', text: i18n.ts._agents.adminCompressionInvalidBandRatio });
-			throw new Error('invalid band ratio');
-		}
-		if (bandT1 >= bandT2) {
-			os.alert({ type: 'error', text: i18n.ts._agents.adminCompressionInvalidBandT1T2 });
-			throw new Error('invalid t1 t2 order');
-		}
-	}
-
-	await os.apiWithDialog('admin/update-meta', {
-		agentFeatureEnabled: state.agentFeatureEnabled,
-		agentGlobalSystemPrompt: state.agentGlobalSystemPrompt === '' ? null : state.agentGlobalSystemPrompt,
+	return {
 		agentLlmModels: normalized,
 		agentLlmModelGroups: state.agentLlmModelGroupRows
 			.filter(g => g.name.trim() !== '')
 			.map(g => ({ id: g.id.trim() || genId(), name: g.name.trim() })),
-		agentDefaultModelId: defTrim === '' ? null : defTrim,
+		agentDefaultModelId: def === '' ? null : def,
 		agentByokEnabled: state.agentByokEnabled,
-		agentByokMaxUserModels: Math.max(1, Math.min(500, Math.trunc(Number(state.agentByokMaxUserModels) || 20))),
-		agentByokProviders: state.agentByokProviderRows
-			.filter(row => row.name.trim() !== '' || row.baseUrl.trim() !== '')
-			.map(row => ({
-				id: row.id.trim() || genId(),
-				name: row.name.trim(),
-				description: row.description.trim() === '' ? null : row.description.trim(),
-				baseUrl: row.baseUrl.trim(),
-				apiModelName: row.apiModelName.trim() === '' ? null : row.apiModelName.trim(),
-				maxContextTokens: row.maxContextTokens.trim() === '' ? undefined : Math.trunc(Number(row.maxContextTokens)),
-				maxOutputTokensPerCall: row.maxOutputTokensPerCall.trim() === '' ? undefined : Math.trunc(Number(row.maxOutputTokensPerCall)),
-				tokenizerEncoding: row.tokenizerEncoding.trim() === '' ? null : row.tokenizerEncoding.trim(),
-				charsPerToken: row.charsPerToken.trim() === '' ? undefined : Number(row.charsPerToken),
-			})),
-		agentOpenaiCompatibleBaseUrl: null,
-		agentOpenaiCompatibleApiKey: null,
-		agentModelDisplayName: null,
-		agentModelDescription: null,
-		agentModelApiName: null,
-		agentMem0Enabled: state.agentMem0Enabled,
-		agentMem0ApiKey: state.agentMem0ApiKey.trim() === '' ? null : state.agentMem0ApiKey,
-		agentMem0ApiBaseUrl: state.agentMem0ApiBaseUrl.trim() === '' ? null : state.agentMem0ApiBaseUrl.trim(),
-		agentMem0OrgId: state.agentMem0OrgId.trim() === '' ? null : state.agentMem0OrgId.trim(),
-		agentMem0TopK: memTopK,
-		agentMem0InjectMaxChars: memInj,
-		agentMem0AddMemoryMaxRounds: memAddRounds,
-		agentMem0AddMemoryEveryNRounds: memAddEveryN,
-		agentCompressionSystemPrompt: state.agentCompressionSystemPrompt.trim() === '' ? null : state.agentCompressionSystemPrompt,
-		agentCompressionInjectMaxChars: compInject,
-		agentCompressionMaxInputChars: compMaxIn,
-		agentCompressionMaxOutputTokens: compMaxOut,
-		agentCompressionBandT1Ratio: bandT1,
-		agentCompressionBandT2Ratio: bandT2,
-		agentCompressionDefaultModelId: compDefTrim === '' ? null : compDefTrim,
+		agentByokMaxUserModels: intField('models', state.agentByokMaxUserModels, 1, 500, '每用户自定义模型数量上限', 'byok-max'),
+		agentByokProviders: byokProviders,
+	};
+}
+
+const endpointImageProviders = new Set(['openai', 'tiptotip', 'qwen', 'sensenova']);
+const referenceImageProviders = new Set(['openai', 'tiptotip', 'sensenova']);
+
+function buildImagesPayload(state: FormState): Record<string, unknown> {
+	const imageModels: Record<string, unknown>[] = [];
+	const ids = new Set<string>();
+	for (const row of state.agentImageModelRows) {
+		if (row.name.trim() === '' && row.apiModelName.trim() === '' && row.apiUrl.trim() === '') continue;
+		const anchor = `image:${row.id}`;
+		const label = row.name.trim() || '未命名生图模型';
+		const id = row.id.trim() || genId();
+		if (!row.name.trim()) fail('images', '生图模型需要填写显示名称。', anchor);
+		if (ids.has(id)) fail('images', `生图模型 ID 重复：${id}`, anchor);
+		ids.add(id);
+		if (!agentImageProviderValues.has(row.provider)) fail('images', `生图模型「${label}」的提供商「${row.provider}」无法识别，请重新选择。`, anchor);
+		const needsEndpoint = endpointImageProviders.has(row.provider);
+		if (!row.apiModelName.trim()) fail('images', `生图模型「${label}」需要填写上游模型名。`, anchor);
+		if (needsEndpoint && (!row.apiUrl.trim() || !row.apiKey.trim())) fail('images', `生图模型「${label}」需要填写请求地址和 API Key。`, anchor);
+		if (row.provider === 'sensenova' && !/\/images\/generations\/?$/.test(row.apiUrl.trim())) fail('images', i18n.ts._agents.adminSenseNovaImageRequestUrlInvalid, anchor);
+		const cost = row.costPerCall.trim() === '' ? null : numField('images', row.costPerCall, 0, 1_000_000, `${label} · 每张扣费`, anchor);
+		const quotaRaw = row.dailyFreeQuota.trim();
+		const quota = quotaRaw === '' ? 0 : intField('images', quotaRaw, 0, 1_000_000, `${label} · 每日免费次数`, anchor);
+		imageModels.push({
+			id,
+			name: row.name.trim(),
+			description: nullIfBlank(row.description),
+			provider: row.provider,
+			enabled: row.enabled,
+			apiModelName: row.apiModelName.trim(),
+			apiUrl: needsEndpoint ? row.apiUrl.trim() : null,
+			apiKey: needsEndpoint ? row.apiKey.trim() : null,
+			supportsReferenceImage: referenceImageProviders.has(row.provider) && row.supportsReferenceImage,
+			costPerCall: cost,
+			dailyFreeQuota: quota > 0 ? quota : null,
+			defaultArtistPresetId: nullIfBlank(row.defaultArtistPresetId),
+			defaultParams: row.provider === 'aurora' ? {
+				steps: intField('images', row.steps, 1, 80, `${label} · Steps`, anchor),
+				scale: numField('images', row.scale, 0, 30, `${label} · Scale`, anchor),
+				cfgRescale: numField('images', row.cfgRescale, 0, 1, `${label} · CFG Rescale`, anchor),
+				sampler: row.sampler.trim() || 'k_euler_ancestral',
+				noiseSchedule: row.noiseSchedule.trim() || 'karras',
+				promptPrefix: row.promptPrefix,
+				promptSuffix: row.promptSuffix.trim() || 'masterpiece,best quality,very aesthetic,highres,absurdres',
+			} : null,
+		});
+	}
+
+	const presets: Record<string, unknown>[] = [];
+	const presetIds = new Set<string>();
+	for (const row of state.agentImageArtistPresetRows) {
+		if ([row.id, row.name, row.promptPrefix, row.promptSuffix, row.negativePrompt, row.thumbnailUrl].every(v => v.trim() === '')) continue;
+		const anchor = `preset:${row.id}`;
+		const id = row.id.trim();
+		if (!id || !row.name.trim()) fail('images', i18n.ts._agents.adminArtistPresetInvalid, anchor);
+		if (presetIds.has(id)) fail('images', i18n.tsx._agents.adminArtistPresetDuplicate({ id }), anchor);
+		presetIds.add(id);
+		presets.push({
+			id,
+			name: row.name.trim(),
+			promptPrefix: row.promptPrefix,
+			promptSuffix: row.promptSuffix,
+			negativePrompt: row.negativePrompt,
+			thumbnailUrl: nullIfBlank(row.thumbnailUrl),
+		});
+	}
+
+	return {
 		agentImageGenerationEnabled: state.agentImageGenerationEnabled,
 		agentImageBaseUrl: state.agentImageBaseUrl.trim() || 'https://love.auroralove.cc',
-		agentImageTokens: imageTokens,
+		agentImageTokens: state.agentImageTokenRows
+			.filter(row => row.token.trim() !== '')
+			.map((row, i) => ({
+				id: row.id || genId(),
+				token: row.token.trim(),
+				name: nullIfBlank(row.name),
+				enabled: row.enabled,
+				sortOrder: Number.isFinite(Number(row.sortOrder)) ? Math.trunc(Number(row.sortOrder)) : i,
+				points: row.points === '' ? null : Number(row.points),
+				lastUsedAt: row.lastUsedAt || null,
+				lastCheckedAt: row.lastCheckedAt || null,
+				lastError: row.lastError || null,
+			})),
 		agentImageModels: imageModels,
-		agentVisionModels: visionModels,
-		agentVisionDefaultModelId: visionDefaultId === '' ? null : visionDefaultId,
-		agentImageArtistPresets: imageArtistPresets,
+		agentImageArtistPresets: presets,
 		agentImageDefaultModel: state.agentImageDefaultModel.trim() || 'nai-diffusion-4-5-full',
-		agentImageDefaultArtistPresetId: state.agentImageDefaultArtistPresetId.trim() === '' ? null : state.agentImageDefaultArtistPresetId.trim(),
+		agentImageDefaultArtistPresetId: nullIfBlank(state.agentImageDefaultArtistPresetId),
 		agentImageDefaultParams: {
-			steps: imageSteps,
-			scale: imageScale,
-			cfgRescale: imageCfgRescale,
+			steps: intField('images', state.agentImageSteps, 1, 80, '默认 Steps', 'image-params'),
+			scale: numField('images', state.agentImageScale, 0, 30, '默认 Scale', 'image-params'),
+			cfgRescale: numField('images', state.agentImageCfgRescale, 0, 1, '默认 CFG Rescale', 'image-params'),
 			sampler: state.agentImageSampler.trim() || 'k_euler_ancestral',
 			noiseSchedule: state.agentImageNoiseSchedule.trim() || 'karras',
 			promptPrefix: state.agentImagePromptPrefix,
 			promptSuffix: state.agentImagePromptSuffix,
 		},
 		agentImageDefaultNegativePrompt: state.agentImageDefaultNegativePrompt.trim() === '' ? null : state.agentImageDefaultNegativePrompt,
-		agentImageMaxPerReply: imageMaxPerReply,
-		agentStickerEnabled: state.agentStickerEnabled === true,
-		agentStickerMaxPerMessage: stickerMaxPerMessage,
-		agentEmojiPromptMaxCount: emojiPromptMaxCount,
-		agentPerformanceEnabled: state.agentPerformanceEnabled === true,
-		agentPerformanceSystemPrompt: state.agentPerformanceSystemPrompt.trim() === '' ? null : state.agentPerformanceSystemPrompt,
-		agentImageCostPerCall: imageCost,
-		agentImageTokenMinPoints: imageMinPoints,
-		agentImageTokenBalanceTtlSeconds: imageTtl,
+		agentImageMaxPerReply: intField('images', state.agentImageMaxPerReply, 0, 12, '每轮最多图片', 'image-max-per-reply'),
+		agentImageCostPerCall: numField('images', state.agentImageCostPerCall || '0', 0, 1_000_000, '默认每张扣费', 'image-params'),
+		agentImageTokenMinPoints: intField('images', state.agentImageTokenMinPoints, 0, 1_000_000_000, '最低可用点数', 'image-max-per-reply'),
+		agentImageTokenBalanceTtlSeconds: intField('images', state.agentImageTokenBalanceTtlSeconds, 0, 86_400 * 30, '余额缓存秒数', 'image-max-per-reply'),
+	};
+}
+
+function buildVisionPayload(state: FormState): Record<string, unknown> {
+	const models: Record<string, unknown>[] = [];
+	const ids = new Set<string>();
+	for (const row of state.agentVisionModelRows) {
+		if (row.name.trim() === '' && row.apiUrl.trim() === '' && row.apiModelName.trim() === '') continue;
+		const anchor = `vision:${row.id}`;
+		const id = row.id.trim() || genId();
+		if (!row.name.trim() || !row.apiUrl.trim() || !row.apiKey.trim() || !row.apiModelName.trim() || ids.has(id)) fail('vision', i18n.ts._agents.adminVisionInvalid, anchor);
+		ids.add(id);
+		models.push({
+			id,
+			name: row.name.trim(),
+			enabled: row.enabled,
+			apiUrl: row.apiUrl.trim(),
+			apiKey: row.apiKey.trim(),
+			apiModelName: row.apiModelName.trim(),
+			costPerCall: numField('vision', row.costPerCall || '0', 0, 1_000_000, `${row.name} · 每次扣费`, anchor),
+		});
+	}
+	const def = state.agentVisionDefaultModelId.trim();
+	if (def !== '' && !models.some(m => m.id === def && m.enabled)) fail('vision', i18n.ts._agents.adminVisionInvalidDefault, 'vision-default');
+	return { agentVisionModels: models, agentVisionDefaultModelId: def === '' ? null : def };
+}
+
+function buildExternalAuditPayload(state: FormState): Record<string, unknown> {
+	const models: Record<string, unknown>[] = [];
+	const ids = new Set<string>();
+	state.agentExternalAuditModelRows.forEach((row, i) => {
+		if ([row.name, row.baseUrl, row.apiModelName, row.apiKey].every(v => v.trim() === '')) return;
+		const anchor = `audit:${row.id}`;
+		const label = row.name.trim() || `外审模型 #${i + 1}`;
+		const id = row.id.trim() || genId();
+		if (!externalAuditProviderValues.has(row.provider)) fail('externalAudit', `外审模型「${label}」的类型不受支持：${row.provider}`, anchor);
+		if (!row.name.trim() || !row.baseUrl.trim() || !row.apiKey.trim() || !row.apiModelName.trim()) fail('externalAudit', `外审模型「${label}」需要填写模型名、请求端点、上游模型名和 API Key。`, anchor);
+		if (ids.has(id)) fail('externalAudit', i18n.tsx._agents.adminExternalAuditDuplicate({ id }), anchor);
+		ids.add(id);
+		models.push({
+			id,
+			name: row.name.trim(),
+			provider: row.provider,
+			baseUrl: row.baseUrl.trim(),
+			apiKey: row.apiKey.trim(),
+			apiModelName: row.apiModelName.trim(),
+			priority: intField('externalAudit', row.priority, -1_000_000, 1_000_000, `${label} · 优先级`, anchor),
+			enabled: row.enabled,
+			autoDisabledAt: nullIfBlank(row.autoDisabledAt),
+			autoDisabledReason: nullIfBlank(row.autoDisabledReason),
+			lastError: nullIfBlank(row.lastError),
+		});
+	});
+
+	const rules = state.agentExternalAuditRuleRows.map(rule => ({
+		id: rule.id.trim(),
+		name: rule.name.trim(),
+		reason: rule.reason.trim(),
+		criteria: rule.criteria.trim(),
+		enabled: rule.enabled,
+	}));
+	const ruleIds = new Set<string>();
+	state.agentExternalAuditRuleRows.forEach((raw, i) => {
+		const rule = rules[i];
+		const anchor = `rule:${i}`;
+		const label = rule.name || `违规条目 #${i + 1}`;
+		if (!rule.name || !rule.reason || !rule.criteria) fail('externalAudit', `「${label}」的名称、固定原因和判断标准不能为空。`, anchor, 'externalAuditRules');
+		if (!/^[a-z][a-z0-9_-]{0,63}$/.test(rule.id) || rule.id === 'allow' || rule.id === 'other_high_risk') fail('externalAudit', `「${label}」的 ID 须以小写字母开头，只含小写字母、数字、下划线或连字符，且不能是保留值。`, anchor, 'externalAuditRules');
+		if (ruleIds.has(rule.id)) fail('externalAudit', `违规条目 ID 重复：${rule.id}`, anchor, 'externalAuditRules');
+		ruleIds.add(rule.id);
+	});
+	const otherRule = {
+		reason: state.agentExternalAuditOtherRule.reason.trim(),
+		criteria: state.agentExternalAuditOtherRule.criteria.trim(),
+	};
+	if (!otherRule.reason || !otherRule.criteria) fail('externalAudit', '「其他高风险内容」的兜底原因和判断标准不能为空。', 'rule-other', 'externalAuditRules');
+
+	const triggerRules = state.agentReviewTriggerRules.map((r, i) => ({
+		id: r.id,
+		timeWindowMinutes: intField('externalAudit', r.timeWindowMinutes, 1, 10080, `复审规则 #${i + 1} · 时间窗口`, `trigger:${r.id}`),
+		blockThreshold: intField('externalAudit', r.blockThreshold, 1, 1000, `复审规则 #${i + 1} · 触发次数`, `trigger:${r.id}`),
+		enabled: r.enabled,
+	}));
+
+	return {
 		agentExternalAuditEnabled: state.agentExternalAuditEnabled,
-		agentExternalAuditModels: externalAuditModels,
-		agentExternalAuditTimeoutMs: externalAuditTimeoutMs,
-		agentExternalAuditFailureThresholdPercent: externalAuditFailureThresholdPercent,
-		agentExternalAuditFailureMinRequests: externalAuditFailureMinRequests,
+		agentExternalAuditModels: models,
+		agentExternalAuditTimeoutMs: intField('externalAudit', state.agentExternalAuditTimeoutMs, 1000, 120000, '超时时间（毫秒）', 'audit-params'),
+		agentExternalAuditFailureThresholdPercent: intField('externalAudit', state.agentExternalAuditFailureThresholdPercent, 1, 100, '自动禁用失败率', 'audit-params'),
+		agentExternalAuditFailureMinRequests: intField('externalAudit', state.agentExternalAuditFailureMinRequests, 1, 100000, '自动禁用最小样本数', 'audit-params'),
 		agentExternalAuditNotifyEmails: state.agentExternalAuditNotifyEmails.trim() === '' ? null : state.agentExternalAuditNotifyEmails,
-			agentExternalAuditSystemPrompt: state.agentExternalAuditSystemPrompt.trim() === '' ? null : state.agentExternalAuditSystemPrompt,
-			agentExternalAuditRules: externalAuditRules,
-			agentExternalAuditOtherRule: externalAuditOtherRule,
-			agentReviewTriggerRules: state.agentReviewTriggerRules
-			.filter(r => r.timeWindowMinutes.trim() !== '' && r.blockThreshold.trim() !== '')
-			.map(r => ({
-				id: r.id,
-				timeWindowMinutes: Math.max(1, Math.min(10080, Math.trunc(Number(r.timeWindowMinutes) || 60))),
-				blockThreshold: Math.max(1, Math.min(1000, Math.trunc(Number(r.blockThreshold) || 5))),
-				enabled: r.enabled,
-			})),
-		agentCheckinSettings: {
-			enabled: state.checkinEnabled,
-			streakMaxDays: Number(state.checkinStreakMaxDays) || 365,
-			streakMaxMultiplier: Number(state.checkinStreakMaxMultiplier) || 2.0,
-			specialDayMultiplier: Number(state.checkinSpecialDayMultiplier) || 2.0,
-			specialDays: state.checkinSpecialDays.split(',').map(s => s.trim()).filter(s => /^\d{2}-\d{2}$/.test(s)),
-			roleMultipliers: {},
-			makeupEnabled: state.checkinMakeupEnabled,
-			makeupMaxPerMonth: Number(state.checkinMakeupMaxPerMonth) || 3,
-			makeupBaseCost: Number(state.checkinMakeupBaseCost) || 20,
-			makeupCostIncrement: Number(state.checkinMakeupCostIncrement) || 10,
-			makeupAllowedWindowDays: Number(state.checkinMakeupAllowedWindowDays) || 7,
-		},
-		agentRedeemPurchaseUrl: state.agentRedeemPurchaseUrl.trim() === '' ? null : state.agentRedeemPurchaseUrl.trim(),
-		agentAliyaCharacterId: state.agentAliyaCharacterId.trim() === '' ? null : state.agentAliyaCharacterId.trim(),
-		agentAliyaWebUrl: state.agentAliyaWebUrl.trim() === '' ? null : state.agentAliyaWebUrl.trim(),
-		agentProactiveRandomDefaultEnabled: state.agentProactiveRandomDefaultEnabled,
-		agentProactiveScheduledDefaultEnabled: state.agentProactiveScheduledDefaultEnabled,
-		agentProactiveMinSilenceMinutes: Math.max(5, Math.min(1440, Number(state.agentProactiveMinSilenceMinutes) || 30)),
-		agentProactiveMaxWindowMinutes: Math.max(30, Math.min(10080, Number(state.agentProactiveMaxWindowMinutes) || 1410)),
-		agentProactiveDaytimeWeight: Math.max(1, Math.min(10, Number(state.agentProactiveDaytimeWeight) || 3)),
-		agentProactiveRecencyBias: Math.max(1, Math.min(10, Number(state.agentProactiveRecencyBias) || 1)),
-		agentProactiveMaxChainLength: Math.max(1, Math.min(100, Number(state.agentProactiveMaxChainLength) || 7)),
-	} as Record<string, unknown>);
-	fetchInstance(true);
-});
+		agentExternalAuditSystemPrompt: state.agentExternalAuditSystemPrompt.trim() === '' ? null : state.agentExternalAuditSystemPrompt,
+		agentExternalAuditRules: rules,
+		agentExternalAuditOtherRule: otherRule,
+		agentReviewTriggerRules: triggerRules,
+	};
+}
+
+function buildMemoryPayload(state: FormState): Record<string, unknown> {
+	return {
+		agentMem0Enabled: state.agentMem0Enabled,
+		agentMem0ApiKey: state.agentMem0ApiKey.trim() === '' ? null : state.agentMem0ApiKey,
+		agentMem0ApiBaseUrl: nullIfBlank(state.agentMem0ApiBaseUrl),
+		agentMem0OrgId: nullIfBlank(state.agentMem0OrgId),
+		agentMem0TopK: intField('memory', state.agentMem0TopK, 1, 100, i18n.ts._agents.defaultMemoryTopK, 'memory-params'),
+		agentMem0InjectMaxChars: intField('memory', state.agentMem0InjectMaxChars, 200, 50000, i18n.ts._agents.defaultMemoryInjectMaxChars, 'memory-params'),
+		agentMem0AddMemoryMaxRounds: intField('memory', state.agentMem0AddMemoryMaxRounds, 1, 24, i18n.ts._agents.defaultMemoryAddMaxRounds, 'memory-params'),
+		agentMem0AddMemoryEveryNRounds: intField('memory', state.agentMem0AddMemoryEveryNRounds, 1, 48, i18n.ts._agents.defaultMemoryAddEveryNRounds, 'memory-params'),
+	};
+}
+
+function buildCompressionPayload(state: FormState): Record<string, unknown> {
+	const t1s = String(state.agentCompressionBandT1Ratio ?? '').trim();
+	const t2s = String(state.agentCompressionBandT2Ratio ?? '').trim();
+	let bandT1: number | null = null;
+	let bandT2: number | null = null;
+	if (t1s !== '' || t2s !== '') {
+		bandT1 = numField('compression', t1s, 0.01, 0.99, i18n.ts._agents.agentCompressionBandT1Ratio, 'compression-band');
+		bandT2 = numField('compression', t2s, 0.01, 0.99, i18n.ts._agents.agentCompressionBandT2Ratio, 'compression-band');
+		if (bandT1 >= bandT2) fail('compression', i18n.ts._agents.adminCompressionInvalidBandT1T2, 'compression-band');
+	}
+	const def = state.agentCompressionDefaultModelId.trim();
+	if (def !== '' && !state.agentLlmModelRows.some(r => r.id.trim() === def && !r.unlisted)) {
+		fail('compression', '压缩默认模型已下架或不存在，请重新选择。', 'compression-model');
+	}
+	return {
+		agentCompressionSystemPrompt: state.agentCompressionSystemPrompt.trim() === '' ? null : state.agentCompressionSystemPrompt,
+		agentCompressionInjectMaxChars: intField('compression', state.agentCompressionInjectMaxChars, 200, 50000, '便签注入上限', 'compression-params'),
+		agentCompressionMaxInputChars: intField('compression', state.agentCompressionMaxInputChars, 500, 200000, i18n.ts._agents.agentCompressionMaxInputChars, 'compression-params'),
+		agentCompressionMaxOutputTokens: intField('compression', state.agentCompressionMaxOutputTokens, 1, 32000, i18n.ts._agents.agentCompressionMaxOutputTokens, 'compression-params'),
+		agentCompressionBandT1Ratio: bandT1,
+		agentCompressionBandT2Ratio: bandT2,
+		agentCompressionDefaultModelId: def === '' ? null : def,
+	};
+}
+
+function buildSectionPayload(section: SaveSection, state: FormState): Record<string, unknown> {
+	switch (section) {
+		case 'basic': return {
+			agentFeatureEnabled: state.agentFeatureEnabled,
+			agentGlobalSystemPrompt: state.agentGlobalSystemPrompt === '' ? null : state.agentGlobalSystemPrompt,
+			agentAliyaCharacterId: nullIfBlank(state.agentAliyaCharacterId),
+			agentAliyaWebUrl: nullIfBlank(state.agentAliyaWebUrl),
+		};
+		case 'models': return buildModelsPayload(state);
+		case 'memory': return buildMemoryPayload(state);
+		case 'compression': return buildCompressionPayload(state);
+		case 'externalAudit': return buildExternalAuditPayload(state);
+		case 'images': return buildImagesPayload(state);
+		case 'vision': return buildVisionPayload(state);
+		case 'sticker': return {
+			agentStickerEnabled: state.agentStickerEnabled === true,
+			agentStickerMaxPerMessage: intField('sticker', state.agentStickerMaxPerMessage, 0, 10, i18n.ts._agents.stickerMaxPerMessage, 'sticker-params'),
+			agentEmojiPromptMaxCount: intField('sticker', state.agentEmojiPromptMaxCount, 1, 2000, i18n.ts._agents.emojiPromptMaxCount, 'sticker-params'),
+		};
+		case 'pet': return {
+			agentPerformanceEnabled: state.agentPerformanceEnabled === true,
+			agentPerformanceSystemPrompt: state.agentPerformanceSystemPrompt.trim() === '' ? null : state.agentPerformanceSystemPrompt,
+		};
+		case 'credits': return {
+			agentRedeemPurchaseUrl: nullIfBlank(state.agentRedeemPurchaseUrl),
+		};
+		case 'checkin': {
+			const specialDays = state.checkinSpecialDays.split(',').map(s => s.trim()).filter(s => s !== '');
+			const badDay = specialDays.find(s => !/^(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/.test(s));
+			if (badDay != null) fail('checkin', `特殊日子「${badDay}」格式错误，应为 MM-DD。`, 'checkin-params');
+			return {
+				agentCheckinSettings: {
+					// 身份组倍率在本页不编辑，原样保留，避免保存签到设置时被清空
+					...checkinSettingsExtras,
+					enabled: state.checkinEnabled,
+					streakMaxDays: intField('checkin', state.checkinStreakMaxDays, 1, 3650, '连续达标天数', 'checkin-params'),
+					streakMaxMultiplier: numField('checkin', state.checkinStreakMaxMultiplier, 1, 100, '连续最大倍率', 'checkin-params'),
+					specialDayMultiplier: numField('checkin', state.checkinSpecialDayMultiplier, 1, 100, '节日倍率', 'checkin-params'),
+					specialDays,
+					makeupEnabled: state.checkinMakeupEnabled,
+					makeupMaxPerMonth: intField('checkin', state.checkinMakeupMaxPerMonth, 0, 31, '每月补签上限', 'checkin-params'),
+					makeupBaseCost: numField('checkin', state.checkinMakeupBaseCost, 0, 1_000_000, '补签基础消耗', 'checkin-params'),
+					makeupCostIncrement: numField('checkin', state.checkinMakeupCostIncrement, 0, 1_000_000, '补签消耗递增', 'checkin-params'),
+					makeupAllowedWindowDays: intField('checkin', state.checkinMakeupAllowedWindowDays, 1, 365, '可补签回溯天数', 'checkin-params'),
+				},
+			};
+		}
+		case 'proactive': return {
+			agentProactiveRandomDefaultEnabled: state.agentProactiveRandomDefaultEnabled,
+			agentProactiveScheduledDefaultEnabled: state.agentProactiveScheduledDefaultEnabled,
+			agentProactiveMinSilenceMinutes: intField('proactive', state.agentProactiveMinSilenceMinutes, 5, 1440, '最小静默时间', 'proactive-params'),
+			agentProactiveMaxWindowMinutes: intField('proactive', state.agentProactiveMaxWindowMinutes, 30, 10080, '最大等待窗口', 'proactive-params'),
+			agentProactiveDaytimeWeight: intField('proactive', state.agentProactiveDaytimeWeight, 1, 10, '白天权重倍率', 'proactive-params'),
+			agentProactiveRecencyBias: intField('proactive', state.agentProactiveRecencyBias, 1, 10, '近期偏好系数', 'proactive-params'),
+			agentProactiveMaxChainLength: intField('proactive', state.agentProactiveMaxChainLength, 1, 100, '最大连续主动次数', 'proactive-params'),
+		};
+	}
+}
+
+/** 校验失败：切到对应子页、展开对应卡片并滚动高亮 */
+async function revealValidationError(err: SettingsValidationError) {
+	const leaf = err.leaf ?? (err.anchor?.startsWith('byok:') || err.anchor === 'byok-max' ? 'byok' : saveSectionHomeLeaf[err.section]);
+	activeLeaf.value = leaf;
+	if (err.anchor?.startsWith('llm:')) expandLlmModel(err.anchor.slice(4));
+	if (err.anchor?.startsWith('image:')) expandImageModel(err.anchor.slice(6));
+	await nextTick();
+	if (err.anchor == null) return;
+	const el = window.document.querySelector<HTMLElement>(`[data-settings-anchor="${CSS.escape(err.anchor)}"]`);
+	if (el == null) return;
+	el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+	highlightedAnchor.value = err.anchor;
+	window.setTimeout(() => {
+		if (highlightedAnchor.value === err.anchor) highlightedAnchor.value = null;
+	}, 2400);
+}
+
+const highlightedAnchor = ref<string | null>(null);
 
 const defaultModelItems = computed((): MkSelectItem[] => {
 	const items: MkSelectItem[] = [{ value: '', label: i18n.ts._agents.agentsMetaDefaultModelUnset }];
@@ -2173,23 +2120,51 @@ const selectedDefaultModelName = computed(() => {
 	return form.state.agentLlmModelRows.find(r => r.id.trim() === id)?.name || id;
 });
 
-// 签到身份组倍率配置
-const checkinRoleRows = reactive<{ roleId: string; multiplier: string }[]>([]);
-const roleItems = ref<MkSelectItem[]>([]);
+type ConfigIssue = { key: string; level: 'error' | 'warn'; text: string; leaf: LeafKey; anchor?: string };
 
-async function loadRolesForCheckin() {
-	try {
-		const roles = await misskeyApi('admin/roles/list' as any, {}) as { id: string; name: string }[];
-		roleItems.value = roles.map(r => ({ value: r.id, label: r.name }));
-	} catch { /* ignore */ }
+/** 总览「配置检查」：只读推导，点击跳到对应子页/卡片 */
+const configIssues = computed((): ConfigIssue[] => {
+	const s = form.state;
+	const issues: ConfigIssue[] = [];
+	if (!s.agentFeatureEnabled) issues.push({ key: 'feature', level: 'warn', text: '智能体功能总开关未开启，用户侧不可用。', leaf: 'basic' });
+	if (listedModelCount.value === 0) issues.push({ key: 'noModel', level: 'error', text: '没有上架中的对话模型。', leaf: 'models' });
+	for (const r of s.agentLlmModelRows) {
+		if (r.unlisted || rowIsBlank(r)) continue;
+		if (!r.apiKeys.some(k => k.trim() !== '')) issues.push({ key: `llmKey:${r.id}`, level: 'error', text: `对话模型「${r.name || '未命名'}」没有填写 API Key。`, leaf: 'models', anchor: `llm:${r.id}` });
+	}
+	const def = s.agentDefaultModelId.trim();
+	if (def === '') issues.push({ key: 'noDefault', level: 'warn', text: '未设置默认对话模型，新会话将使用列表第一个模型。', leaf: 'models', anchor: 'llm-default' });
+	else if (!s.agentLlmModelRows.some(r => r.id === def && !r.unlisted)) issues.push({ key: 'badDefault', level: 'error', text: '默认对话模型已下架或不存在。', leaf: 'models', anchor: 'llm-default' });
+	if (s.agentImageGenerationEnabled && !s.agentImageModelRows.some(r => r.enabled)) issues.push({ key: 'noImage', level: 'warn', text: '已开启绘图，但没有上架中的生图模型。', leaf: 'images' });
+	if (s.agentImageModelRows.some(r => r.enabled && r.provider === 'aurora') && !s.agentImageTokenRows.some(t => t.enabled && t.token.trim() !== '')) {
+		issues.push({ key: 'auroraToken', level: 'error', text: 'Aurora 生图模型已上架，但没有可用的 Token。', leaf: 'images', anchor: 'aurora-provider' });
+	}
+	if (s.agentExternalAuditEnabled && !s.agentExternalAuditModelRows.some(r => r.enabled && !r.autoDisabledAt)) {
+		issues.push({ key: 'auditModel', level: 'warn', text: '外审已开启，但没有可用的外审模型（将按 fail-open 全部放行）。', leaf: 'externalAudit' });
+	}
+	for (const r of s.agentExternalAuditModelRows) {
+		if (r.autoDisabledAt) issues.push({ key: `auditAuto:${r.id}`, level: 'warn', text: `外审模型「${r.name || '未命名'}」已被自动禁用。`, leaf: 'externalAudit', anchor: `audit:${r.id}` });
+	}
+	if (s.agentMem0Enabled && s.agentMem0ApiKey.trim() === '') issues.push({ key: 'mem0', level: 'error', text: '长期记忆已开启，但没有填写 API Key。', leaf: 'memory' });
+	for (const t of missingTokenizers.value) {
+		issues.push({ key: `tok:${t.family}`, level: 'warn', text: `${tokenizerFamilyLabel(t.family)} 词表缺失，相关模型的 token 计数将降级为近似值。`, leaf: 'models' });
+	}
+	return issues;
+});
+
+async function openIssue(issue: ConfigIssue) {
+	activeLeaf.value = issue.leaf;
+	if (issue.anchor == null) return;
+	if (issue.anchor.startsWith('llm:')) expandLlmModel(issue.anchor.slice(4));
+	await nextTick();
+	const el = window.document.querySelector<HTMLElement>(`[data-settings-anchor="${CSS.escape(issue.anchor)}"]`);
+	el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
-function initCheckinRoleRows(meta: Record<string, any>) {
-	const rm = meta.agentCheckinSettings?.roleMultipliers ?? {};
-	checkinRoleRows.length = 0;
-	for (const [roleId, mul] of Object.entries(rm)) {
-		checkinRoleRows.push({ roleId, multiplier: String(mul) });
-	}
+function gotoSection(section: SaveSection) {
+	const leaf = saveSectionHomeLeaf[section];
+	const dirtyLeaf = settingsGroups.flatMap(g => g.leaves).find(l => l.sections.includes(section) && dirtyLeafSet.value.has(l.key));
+	activeLeaf.value = dirtyLeaf?.key ?? leaf;
 }
 
 const checkinMakeupForm = reactive({
@@ -2730,6 +2705,32 @@ async function toggleUnlist(row: AgentLlmModelRow, next: boolean) {
 const expandedLlmModelIds = ref<string[]>([]);
 const expandedImageModelIds = ref<string[]>([]);
 
+function expandLlmModel(id: string) {
+	if (!expandedLlmModelIds.value.includes(id)) expandedLlmModelIds.value.push(id);
+}
+
+function expandImageModel(id: string) {
+	if (!expandedImageModelIds.value.includes(id)) expandedImageModelIds.value.push(id);
+}
+
+/** 模型列表检索：匹配显示名、上游模型名、Base URL 与内部 id */
+const llmModelQuery = ref('');
+const imageModelQuery = ref('');
+
+function matchModelQuery(query: string, fields: string[]): boolean {
+	const q = query.trim().toLowerCase();
+	if (q === '') return true;
+	return fields.some(f => f.toLowerCase().includes(q));
+}
+
+function setAllLlmExpanded(open: boolean) {
+	expandedLlmModelIds.value = open ? llmModelSections.value.flatMap(s => s.rows.map(r => r.id)) : [];
+}
+
+function setAllImageExpanded(open: boolean) {
+	expandedImageModelIds.value = open ? imageModelSections.value.flatMap(s => s.rows.map(r => r.id)) : [];
+}
+
 function isLlmModelExpanded(id: string): boolean {
 	return expandedLlmModelIds.value.includes(id);
 }
@@ -2759,6 +2760,17 @@ const llmModelSections = computed(() => [
 	{ key: 'active', label: '上架中', rows: form.state.agentLlmModelRows.filter(r => !r.unlisted) },
 	{ key: 'unlisted', label: '已下架', rows: form.state.agentLlmModelRows.filter(r => r.unlisted) },
 ]);
+
+/** 展示用（含检索过滤）；拖拽排序仍基于未过滤的分区，检索中禁用拖拽 */
+const visibleLlmModelSections = computed(() => llmModelSections.value.map(section => ({
+	...section,
+	rows: section.rows.filter(r => matchModelQuery(llmModelQuery.value, [r.name, r.apiModelName, r.baseUrl, r.id])),
+})));
+
+const visibleImageModelSections = computed(() => imageModelSections.value.map(section => ({
+	...section,
+	rows: section.rows.filter(r => matchModelQuery(imageModelQuery.value, [r.name, r.apiModelName, r.apiUrl, r.provider, r.id])),
+})));
 
 const imageModelSections = computed(() => [
 	{ key: 'active', label: '上架中', rows: form.state.agentImageModelRows.filter(r => r.enabled) },
@@ -3176,67 +3188,26 @@ async function refreshImageTokens() {
 	}
 }
 
-const headerTabs = computed(() => [{
-	key: 'overview',
-	title: '总览',
-	icon: 'ti ti-dashboard',
-}, {
-	key: 'basic',
-	title: '基础',
-	icon: 'ti ti-toggle-right',
-}, {
-	key: 'models',
-	title: '模型',
-	icon: 'ti ti-cpu',
-}, {
-	key: 'memory',
-	title: '记忆',
-	icon: 'ti ti-brain',
-}, {
-	key: 'compression',
-	title: '压缩',
-	icon: 'ti ti-file-zip',
-}, {
-	key: 'externalAudit',
-	title: '外审',
-	icon: 'ti ti-shield-check',
-}, {
-	key: 'images',
-	title: '绘图',
-	icon: 'ti ti-brush',
-}, {
-	key: 'sticker',
-	title: i18n.ts._agents.stickerTabTitle,
-	icon: 'ti ti-sticker',
-}, {
-	key: 'pet',
-	title: '桌宠',
-	icon: 'ti ti-paw',
-}, {
-	key: 'vision',
-	title: i18n.ts._agents.adminVisionTitle,
-	icon: 'ti ti-eye',
-}, {
-	key: 'credits',
-	title: '额度',
-	icon: 'ti ti-ticket',
-}, {
-	key: 'migration',
-	title: '迁移',
-	icon: 'ti ti-transfer',
-}, {
-	key: 'checkin',
-	title: '签到',
-	icon: 'ti ti-calendar-check',
-}, {
-	key: 'proactive',
-	title: '主动消息',
-	icon: 'ti ti-message-chatbot',
-}, {
-	key: 'reports',
-	title: '报表',
-	icon: 'ti ti-report-analytics',
-}]);
+const dirtyLeafSet = computed(() => dirtyLeaves(form.modifiedStates as Record<string, boolean>));
+
+const headerTabs = computed(() => settingsGroups.map(g => ({
+	key: g.key,
+	title: g.title,
+	icon: g.icon,
+	indicated: g.leaves.some(l => dirtyLeafSet.value.has(l.key)),
+})));
+
+const subTabs = computed(() => activeGroup.value.leaves.length > 1
+	? activeGroup.value.leaves.map(l => ({ key: l.key, title: l.title, icon: l.icon, indicated: dirtyLeafSet.value.has(l.key) }))
+	: []);
+
+const activeSubTab = computed<LeafKey>({
+	get: () => activeLeaf.value,
+	set: (key) => { activeLeaf.value = resolveLeaf(key); },
+});
+
+/** 保存栏：列出有未保存改动的分区，可点击前往 */
+const dirtySectionList = computed(() => dirtySections(form.modifiedStates as Record<string, boolean>));
 
 const headerActions = computed(() => []);
 
@@ -3246,14 +3217,14 @@ definePage(() => ({
 }));
 
 watch(redeemStatus, () => {
-	if (activeTab.value === 'credits') {
+	if (activeLeaf.value === 'credits') {
 		resetRedeemPager();
 		void loadRedeemListPage(1, true);
 	}
 });
 
 watch(redeemPageSize, () => {
-	if (activeTab.value === 'credits') {
+	if (activeLeaf.value === 'credits') {
 		resetRedeemPager();
 		void loadRedeemListPage(1, true);
 	}
@@ -3264,7 +3235,7 @@ let redeemSearchDebounceTimer: number | null = null;
 watch(redeemQuery, () => {
 	if (redeemSearchDebounceTimer) window.clearTimeout(redeemSearchDebounceTimer);
 	redeemSearchDebounceTimer = window.setTimeout(() => {
-		if (activeTab.value === 'credits') {
+		if (activeLeaf.value === 'credits') {
 			resetRedeemPager();
 			void loadRedeemListPage(1, true);
 		}
@@ -3272,10 +3243,10 @@ watch(redeemQuery, () => {
 });
 
 watch(externalAuditSubTab, sub => {
-	if (activeTab.value === 'externalAudit' && sub === 'failures' && externalAuditFailures.value.length === 0) void loadExternalAuditFailures();
+	if (activeLeaf.value === 'externalAuditStats' && sub === 'failures' && externalAuditFailures.value.length === 0) void loadExternalAuditFailures();
 });
 
-watch(activeTab, tab => {
+watch(activeLeaf, tab => {
 	const url = new URL(router.getCurrentFullPath(), window.location.origin);
 	if (tab === 'overview') url.searchParams.delete('view');
 	else url.searchParams.set('view', tab);
@@ -3284,16 +3255,13 @@ watch(activeTab, tab => {
 });
 
 // immediate: 直接带 ?view 进入（刷新/分享链接）时也触发对应 tab 的懒加载
-watch(activeTab, tab => {
+watch(activeLeaf, tab => {
 	if (tab === 'overview' && reportsData.value == null) void loadReports();
-	if (tab === 'externalAudit' && externalAuditStats.value.length === 0) void loadExternalAuditStats();
-	if (tab === 'externalAudit' && externalAuditSubTab.value === 'failures' && externalAuditFailures.value.length === 0) void loadExternalAuditFailures();
+	if ((tab === 'externalAuditStats' || tab === 'overview') && externalAuditStats.value.length === 0) void loadExternalAuditStats();
+	if (tab === 'externalAuditStats' && externalAuditSubTab.value === 'failures' && externalAuditFailures.value.length === 0) void loadExternalAuditFailures();
 	if (tab === 'credits' && redeemCodes.value.length === 0) void loadRedeemListPage(1, true);
 	if (tab === 'migration' && migrationLogs.value.length === 0) void loadMigrationLogs();
-	if (tab === 'checkin' && roleItems.value.length === 0) void loadRolesForCheckin();
 }, { immediate: true });
-
-initCheckinRoleRows(meta);
 
 onMounted(() => {
 	void loadTokenizerStatus();
@@ -3600,9 +3568,120 @@ onMounted(() => {
 .saveBar {
 	position: sticky;
 	bottom: max(12px, env(safe-area-inset-bottom, 0px));
-	padding: 12px 0 4px;
+	z-index: 5;
 	margin-top: 8px;
-	background: linear-gradient(to top, var(--MI_THEME-bg) 70%, transparent);
+}
+
+.saveBarInner {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 10px 16px;
+	padding: 10px 14px;
+	border-radius: 12px;
+	border: solid 1px color-mix(in srgb, var(--MI_THEME-warn) 45%, var(--MI_THEME-divider));
+	background: var(--MI_THEME-panel);
+	box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18);
+
+	> :last-child {
+		flex: 1;
+		min-width: 260px;
+	}
+}
+
+.saveBarSections {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 6px;
+}
+
+.saveBarLabel {
+	font-size: 0.85em;
+	color: var(--MI_THEME-fgTransparentWeak);
+}
+
+.saveBarChip {
+	padding: 2px 10px;
+	border-radius: 999px;
+	font-size: 0.82em;
+	font-weight: 600;
+	background: color-mix(in srgb, var(--MI_THEME-warn) 16%, transparent);
+	color: var(--MI_THEME-warn);
+
+	&:hover {
+		background: color-mix(in srgb, var(--MI_THEME-warn) 26%, transparent);
+	}
+}
+
+.subTabs {
+	border-radius: 10px;
+	background: var(--MI_THEME-panel);
+}
+
+.listToolbar {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.listSearch {
+	flex: 1;
+	min-width: 0;
+}
+
+.anchorHighlight {
+	outline: 2px solid var(--MI_THEME-error);
+	outline-offset: 3px;
+	border-radius: 10px;
+}
+
+.checkCard {
+	display: grid;
+	gap: 4px;
+	padding: 12px 14px;
+	border-radius: 10px;
+}
+
+.checkHead {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	margin-bottom: 4px;
+}
+
+.checkCount {
+	font-size: 0.85em;
+	color: var(--MI_THEME-fgTransparentWeak);
+}
+
+.checkOk {
+	color: var(--MI_THEME-success, var(--MI_THEME-accent));
+	font-size: 0.92em;
+}
+
+.checkItem {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 8px 10px;
+	border-radius: 8px;
+	text-align: left;
+	font-size: 0.92em;
+
+	&:hover {
+		background: color-mix(in srgb, var(--MI_THEME-fg) 5%, transparent);
+	}
+
+	> span {
+		flex: 1;
+		min-width: 0;
+	}
+}
+
+.checkGo {
+	opacity: 0.5;
 }
 
 .overviewGrid {
@@ -3614,6 +3693,11 @@ onMounted(() => {
 .overviewCard {
 	padding: 14px 16px;
 	border-radius: 8px;
+	text-align: left;
+
+	&:hover {
+		outline: 1px solid var(--MI_THEME-accent);
+	}
 
 	> span {
 		display: block;
