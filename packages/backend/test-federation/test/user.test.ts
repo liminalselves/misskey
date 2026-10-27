@@ -474,16 +474,16 @@ describe('User', () => {
 
 			test('Bob follows Alice, and Alice gets suspended, there is no following relation, and Bob fails to follow again', async () => {
 				await bob.client.request('following/create', { userId: aliceInB.id });
-				await sleep();
-
-				const followers = await alice.client.request('users/followers', { userId: alice.id });
-				strictEqual(followers.length, 1); // followed by Bob
+				await waitForFederation(async () => {
+					const followers = await alice.client.request('users/followers', { userId: alice.id });
+					strictEqual(followers.length, 1); // followed by Bob
+				});
 
 				await aAdmin.client.request('admin/suspend-user', { userId: alice.id, reason: 'test suspension' });
-				await sleep();
-
-				const following = await bob.client.request('users/following', { userId: bob.id });
-				strictEqual(following.length, 0); // no following relation
+				await waitForFederation(async () => {
+					const following = await bob.client.request('users/following', { userId: bob.id });
+					strictEqual(following.length, 0); // no following relation
+				}, 30_000, 500);
 
 				await rejects(
 					async () => await bob.client.request('following/create', { userId: aliceInB.id }),
