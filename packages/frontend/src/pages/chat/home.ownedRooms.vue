@@ -8,8 +8,11 @@ SPDX-License-Identifier: AGPL-3.0-only
 	<div v-if="rooms.length > 0" class="_gaps_s">
 		<XRoom v-for="room in rooms" :key="room.id" :room="room"/>
 	</div>
-	<MkResult v-if="!fetching && rooms.length == 0" type="empty" :text="i18n.ts._chat.noRooms"/>
 	<MkLoading v-if="fetching"/>
+	<MkResult v-else-if="fetchError" type="error">
+		<MkButton primary rounded @click="fetchRooms">{{ i18n.ts.retry }}</MkButton>
+	</MkResult>
+	<MkResult v-else-if="rooms.length == 0" type="empty" :text="i18n.ts._chat.noRooms"/>
 </div>
 </template>
 
@@ -17,21 +20,25 @@ SPDX-License-Identifier: AGPL-3.0-only
 import { onMounted, ref } from 'vue';
 import * as Misskey from 'misskey-js';
 import XRoom from './XRoom.vue';
+import MkButton from '@/components/MkButton.vue';
 import { i18n } from '@/i18n.js';
 import { misskeyApi } from '@/utility/misskey-api.js';
 
 const fetching = ref(true);
+const fetchError = ref(false);
 const rooms = ref<Misskey.entities.ChatRoom[]>([]);
 
 async function fetchRooms() {
 	fetching.value = true;
-
-	const res = await misskeyApi('chat/rooms/owned', {
-	});
-
-	rooms.value = res;
-
-	fetching.value = false;
+	fetchError.value = false;
+	try {
+		rooms.value = await misskeyApi('chat/rooms/owned', {});
+	} catch {
+		// 加载失败必须复位 fetching，否则转圈永不结束；保留已有数据
+		fetchError.value = true;
+	} finally {
+		fetching.value = false;
+	}
 }
 
 onMounted(() => {
