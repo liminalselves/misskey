@@ -348,14 +348,33 @@ watch(sortModeSelect, () => {
 	initialize();
 });
 
+// Rapid folder/sort changes make reloads run concurrently on the same Paginator
+// instances; serialize them with a rerun queue so the last requested folder/sort
+// always gets a final, complete reload.
+let initializeQueued = false;
+let initializeRunning = false;
+
 async function initialize() {
-	fetching.value = true;
-	await fetchDriveStats();
-	await foldersPaginator.reload();
-	filesPaginator.initialDirection = sortModeSelect.value === '-createdAt' ? 'newer' : 'older';
-	filesPaginator.order.value = sortModeSelect.value === '-createdAt' ? 'oldest' : 'newest';
-	await filesPaginator.reload();
-	fetching.value = false;
+	if (initializeRunning) {
+		initializeQueued = true;
+		return;
+	}
+	initializeRunning = true;
+	try {
+		fetching.value = true;
+		await fetchDriveStats();
+		await foldersPaginator.reload();
+		filesPaginator.initialDirection = sortModeSelect.value === '-createdAt' ? 'newer' : 'older';
+		filesPaginator.order.value = sortModeSelect.value === '-createdAt' ? 'oldest' : 'newest';
+		await filesPaginator.reload();
+	} finally {
+		initializeRunning = false;
+		fetching.value = false;
+		if (initializeQueued) {
+			initializeQueued = false;
+			void initialize();
+		}
+	}
 }
 
 function isProtectedAgentImageFolderError(err: unknown): boolean {
@@ -376,17 +395,23 @@ function showProtectedAgentImageFolderError(kind: 'upload' | 'move' = 'move') {
 }
 
 async function fetchDriveStats() {
-	const stats = await misskeyApi('drive/stats' as any, {}) as Partial<NonNullable<typeof driveStats.value>> & { usage: number; capacity: number; usagePercent: number };
-	driveStats.value = {
-		usage: stats.usage,
-		capacity: stats.capacity,
-		usagePercent: stats.usagePercent,
-		agentImageUsage: stats.agentImageUsage ?? 0,
-		agentImageCapacity: stats.agentImageCapacity ?? 0,
-		agentImageUsagePercent: stats.agentImageUsagePercent ?? 0,
-		agentImageCleanupThreshold: stats.agentImageCleanupThreshold ?? 0,
-		agentImageCleanupTarget: stats.agentImageCleanupTarget ?? 0,
-	};
+	try {
+		const stats = await misskeyApi('drive/stats' as any, {}) as Partial<NonNullable<typeof driveStats.value>> & { usage: number; capacity: number; usagePercent: number };
+		driveStats.value = {
+			usage: stats.usage,
+			capacity: stats.capacity,
+			usagePercent: stats.usagePercent,
+			agentImageUsage: stats.agentImageUsage ?? 0,
+			agentImageCapacity: stats.agentImageCapacity ?? 0,
+			agentImageUsagePercent: stats.agentImageUsagePercent ?? 0,
+			agentImageCleanupThreshold: stats.agentImageCleanupThreshold ?? 0,
+			agentImageCleanupTarget: stats.agentImageCleanupTarget ?? 0,
+		};
+	} catch (err) {
+		// Usage stats are auxiliary: never block or break the file listing on
+		// failure (keep the previous values in that case).
+		console.error(err);
+	}
 }
 
 function onStreamDriveFileCreated(file: Misskey.entities.DriveFile) {
@@ -782,6 +807,15 @@ function cd(target?: Misskey.entities.DriveFolder | Misskey.entities.DriveFolder
 		// 切换文件夹后旧文件夹的选中对新文件夹不可见，残留会让批量移动带上幽灵文件
 		if (props.select == null) selectedFiles.value = [];
 		initialize();
+	}).catch(err => {
+		// Leaving fetching true after a failed folder fetch would spin forever.
+		if (requestId !== folderRequestId) return;
+		fetching.value = false;
+		os.alert({
+			type: 'error',
+			text: i18n.ts.somethingHappened,
+		});
+		console.error(err);
 	});
 }
 
