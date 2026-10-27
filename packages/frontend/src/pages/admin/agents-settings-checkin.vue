@@ -12,7 +12,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<template #label>启用每日签到</template>
 			<template #caption>用户每日首次打开站点时自动签到，获得智能体额度</template>
 		</MkSwitch>
-		<FormSplit :minWidth="220" data-settings-anchor="checkin-params">
+		<FormSplit :minWidth="220">
 			<MkInput v-model="state.checkinStreakMaxDays" type="text">
 				<template #label>连续达标天数</template>
 				<template #caption>连续签到多少天达到最大倍率（默认 365）</template>
@@ -73,14 +73,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</MkButton>
 			</div>
 		</MkFolder>
-		<MkFolder>
-			<template #icon><i class="ti ti-alert-triangle"></i></template>
-			<template #label>危险操作</template>
-			<div class="_gaps">
-				<MkInfo warn>撤销当日全站签到并扣回奖励，仅用于测试排障；不可恢复。</MkInfo>
-				<div><MkButton danger rounded @click="emit('revokeToday')"><i class="ti ti-rotate-back"></i> 撤销当日签到</MkButton></div>
-			</div>
-		</MkFolder>
+		<MkButton danger rounded @click="emit('revokeToday')"><i class="ti ti-rotate-back"></i> 撤销当日签到（测试用）</MkButton>
 	</div>
 </MkFolder>
 </template>

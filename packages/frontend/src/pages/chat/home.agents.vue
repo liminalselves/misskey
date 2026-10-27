@@ -37,9 +37,6 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<template #header>{{ i18n.ts._chat.history }}</template>
 
 		<MkLoading v-if="loading"/>
-		<MkResult v-else-if="loadError && sessions.length === 0" type="error">
-			<MkButton primary rounded @click="loadSessions">{{ i18n.ts.retry }}</MkButton>
-		</MkResult>
 		<MkInfo v-else-if="sessions.length === 0">{{ i18n.ts._agents.noSessionsYet }}</MkInfo>
 		<div v-else class="_gaps_s">
 			<MkA
@@ -88,7 +85,6 @@ const fetchSessions = misskeyApi as unknown as (endpoint: 'agents/sessions/list-
 const sessions = ref<SessionRow[]>([]);
 const loading = ref(false);
 const loadingMore = ref(false);
-const loadError = ref(false);
 const hasMoreSessions = ref(false);
 const searchQuery = ref('');
 const searched = ref(false);
@@ -123,15 +119,14 @@ watch(searchQuery, (q) => {
 async function loadSessions() {
 	if (loading.value) return;
 	loading.value = true;
-	loadError.value = false;
 	try {
 		const rows = await fetchSessions('agents/sessions/list-mine', { limit: SESSIONS_PAGE_SIZE + 1 });
 		const page = takeCursorFirstPage(rows, SESSIONS_PAGE_SIZE);
 		hasMoreSessions.value = page.hasMore;
 		sessions.value = page.items;
 	} catch {
-		// 失败保留已有数据；从未加载成功时展示错误态与重试入口
-		loadError.value = true;
+		sessions.value = [];
+		hasMoreSessions.value = false;
 	} finally {
 		loading.value = false;
 	}

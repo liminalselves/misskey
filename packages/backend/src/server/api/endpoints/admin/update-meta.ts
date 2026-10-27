@@ -10,7 +10,7 @@ import { ModerationLogService } from '@/core/ModerationLogService.js';
 import { Endpoint } from '@/server/api/endpoint-base.js';
 import { MetaService } from '@/core/MetaService.js';
 import { ApiError } from '@/server/api/error.js';
-import { createLlmUrlBatchValidator, describeUnsafeLlmUrlReason, hrefForStoredLlmBaseUrl, UnsafeLlmUrlError } from '@/misc/validate-llm-endpoint-url.js';
+import { assertSafeLlmHttpsUrl, describeUnsafeLlmUrlReason, hrefForStoredLlmBaseUrl, UnsafeLlmUrlError } from '@/misc/validate-llm-endpoint-url.js';
 import { getActiveLlmModels, normalizeAgentLlmModelGroupsParam, normalizeAgentLlmModelsParam } from '@/misc/agent-llm-models.js';
 import { AGENT_IMAGE_PROVIDER_IDS } from '@/models/AgentImageProvider.js';
 import { AGENT_EXTERNAL_AUDIT_PROVIDER_IDS, isAgentExternalAuditProvider } from '@/models/AgentExternalAuditProvider.js';
@@ -568,14 +568,6 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 	) {
 		super(meta, paramDef, async (ps, me) => {
 			const set = {} as Partial<MiMeta>;
-			const beforeMeta = await this.metaService.fetch(true);
-			const validateLlmUrl = createLlmUrlBatchValidator([
-				beforeMeta.agentOpenaiCompatibleBaseUrl,
-				...(beforeMeta.agentLlmModels ?? []).map(m => m.baseUrl),
-				...(beforeMeta.agentByokProviders ?? []).map(p => p.baseUrl),
-				...(beforeMeta.agentImageModels ?? []).map(m => m.apiUrl),
-				...(beforeMeta.agentVisionModels ?? []).map(m => m.apiUrl),
-			]);
 
 			if (typeof ps.disableRegistration === 'boolean') {
 				set.disableRegistration = ps.disableRegistration;
@@ -883,7 +875,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				const v = ps.agentOpenaiCompatibleBaseUrl === '' ? null : ps.agentOpenaiCompatibleBaseUrl;
 				if (v) {
 					try {
-						const safe = await validateLlmUrl(v);
+						const safe = await assertSafeLlmHttpsUrl(v);
 						set.agentOpenaiCompatibleBaseUrl = hrefForStoredLlmBaseUrl(safe);
 					} catch (e) {
 						const detail = e instanceof UnsafeLlmUrlError
@@ -930,28 +922,29 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					: serverSettings.agentDefaultModelId;
 
 				if (r.value != null && r.value.length > 0) {
-					const models = await Promise.all(r.value.map(async (m) => {
+					for (let i = 0; i < r.value.length; i++) {
+						const m = r.value[i];
 						try {
-							const safe = await validateLlmUrl(m.baseUrl);
-							return { ...m, baseUrl: hrefForStoredLlmBaseUrl(safe) };
+							const safe = await assertSafeLlmHttpsUrl(m.baseUrl);
+							r.value[i] = { ...m, baseUrl: hrefForStoredLlmBaseUrl(safe) };
 						} catch (e) {
 							const detail = e instanceof UnsafeLlmUrlError
 								? describeUnsafeLlmUrlReason(e.reason)
 								: (e instanceof Error ? e.message : String(e));
 							throw new ApiError({
-								message: `Model "${m.name}" base URL: ${detail}`,
+								message: `Model "${m.id}" base URL: ${detail}`,
 								code: 'INVALID_PARAM',
 								id: 'c2d3e4f5-a6b7-8901-cdef-123456789012',
 							});
 						}
-					}));
-					set.agentLlmModels = models;
+					}
+					set.agentLlmModels = r.value;
 					set.agentOpenaiCompatibleBaseUrl = null;
 					set.agentOpenaiCompatibleApiKey = null;
 					set.agentModelDisplayName = null;
 					set.agentModelDescription = null;
 					set.agentModelApiName = null;
-					const pick = (nextDefaultId ? models.find(x => x.id === nextDefaultId) : null) ?? models[0];
+					const pick = (nextDefaultId ? r.value.find(x => x.id === nextDefaultId) : null) ?? r.value[0];
 					set.agentMaxContextTokens = pick.maxContextTokens;
 					set.agentMaxOutputTokensPerCall = pick.maxOutputTokensPerCall;
 			} else {
@@ -996,10 +989,11 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					});
 				}
 				if (r.value != null && r.value.length > 0) {
-					const verified = await Promise.all(r.value.map(async (p) => {
+					const verified = [];
+					for (const p of r.value) {
 						try {
-							const safe = await validateLlmUrl(p.baseUrl);
-							return { ...p, baseUrl: hrefForStoredLlmBaseUrl(safe) };
+							const safe = await assertSafeLlmHttpsUrl(p.baseUrl);
+							verified.push({ ...p, baseUrl: hrefForStoredLlmBaseUrl(safe) });
 						} catch (e) {
 							const detail = e instanceof UnsafeLlmUrlError
 								? describeUnsafeLlmUrlReason(e.reason)
@@ -1010,7 +1004,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 								id: 'e6f7a8b9-c0d1-42e2-9f3a-4b5c6d7e8f90',
 							});
 						}
-					}));
+					}
 					set.agentByokProviders = verified;
 				} else {
 					set.agentByokProviders = null;
@@ -1171,7 +1165,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 							});
 						}
 							try {
-								apiUrl = hrefForStoredLlmBaseUrl(await validateLlmUrl(m.apiUrl));
+								apiUrl = hrefForStoredLlmBaseUrl(await assertSafeLlmHttpsUrl(m.apiUrl));
 								if (m.provider === 'sensenova' && !new URL(apiUrl).pathname.replace(/\/+$/, '').endsWith('/images/generations')) {
 									throw new Error('SenseNova image endpoint must end with /images/generations.');
 								}
@@ -1180,7 +1174,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 									? describeUnsafeLlmUrlReason(err.reason)
 									: err instanceof Error ? err.message : 'Invalid URL.';
 							throw new ApiError({
-								message: `Image model "${m.name}" URL is invalid: ${reason}`,
+								message: `Image model URL is invalid: ${reason}`,
 								code: 'INVALID_PARAM',
 								id: 'd5c7da16-6e40-4f65-90db-996bba9c4aaf',
 							});
@@ -1217,14 +1211,14 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 							id,
 							name: m.name.trim(),
 							enabled: m.enabled !== false,
-							apiUrl: hrefForStoredLlmBaseUrl(await validateLlmUrl(m.apiUrl)),
+							apiUrl: hrefForStoredLlmBaseUrl(await assertSafeLlmHttpsUrl(m.apiUrl)),
 							apiKey: m.apiKey.trim(),
 							apiModelName: m.apiModelName.trim(),
 							costPerCall: typeof m.costPerCall === 'number' ? Math.max(0, m.costPerCall) : null,
 						};
 					} catch (err) {
 						const reason = err instanceof UnsafeLlmUrlError ? describeUnsafeLlmUrlReason(err.reason) : 'Invalid URL.';
-						throw new ApiError({ message: `Image recognition model "${m.name}" URL is invalid: ${reason}`, code: 'INVALID_PARAM', id: '51c2f9a6-0e1e-4b8c-b886-9148774aec8c' });
+						throw new ApiError({ message: `Image recognition model URL is invalid: ${reason}`, code: 'INVALID_PARAM', id: '51c2f9a6-0e1e-4b8c-b886-9148774aec8c' });
 					}
 				}));
 			}
@@ -1758,13 +1752,14 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				set.showRoleBadgesOfRemoteUsers = ps.showRoleBadgesOfRemoteUsers;
 			}
 
+			const beforeMeta = await this.metaService.fetch(true);
 			const before = metaEntityForModerationLog(beforeMeta);
 			// 保存前快照模型相关字段，保存后对比出实际变更的域（对话/绘图）并广播给所有在线客户端
 			const agentModelSnapshot = Object.fromEntries(
 				Object.keys(agentModelFieldKinds).map(k => [k, JSON.stringify((beforeMeta as unknown as Record<string, unknown>)[k] ?? null)]),
 			);
 
-			const updatedMeta = await this.metaService.update(set, (previous, next, manager) => this.agentModelAnnouncementService.recordChanges(previous, next, manager));
+			await this.metaService.update(set, (previous, next, manager) => this.agentModelAnnouncementService.recordChanges(previous, next, manager));
 
 			const changedKinds = new Set<'chat' | 'image'>();
 			for (const [field, kind] of Object.entries(agentModelFieldKinds)) {
@@ -1773,15 +1768,12 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				if (JSON.stringify(next ?? null) !== agentModelSnapshot[field]) changedKinds.add(kind);
 			}
 
-			// 只记录本次实际变化的字段：整行 meta 快照体积大，且会让审计 diff 淹没在无关字段里
-			const after = metaEntityForModerationLog(updatedMeta);
-			const changedKeys = Object.keys(after).filter(k => JSON.stringify(before[k] ?? null) !== JSON.stringify(after[k] ?? null));
-			if (changedKeys.length > 0) {
-				await this.moderationLogService.log(me, 'updateServerSettings', {
-					before: Object.fromEntries(changedKeys.map(k => [k, before[k] ?? null])),
-					after: Object.fromEntries(changedKeys.map(k => [k, after[k] ?? null])),
-				});
-			}
+			const after = metaEntityForModerationLog(await this.metaService.fetch(true));
+
+			await this.moderationLogService.log(me, 'updateServerSettings', {
+				before,
+				after,
+			});
 
 			for (const kind of changedKinds) {
 				this.globalEventService.publishBroadcastStream('agentModelsChanged', { kind });

@@ -4,7 +4,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
-import { cleanup, fireEvent, render } from '@testing-library/vue';
+import { cleanup, render } from '@testing-library/vue';
 import { nextTick } from 'vue';
 import './init';
 import AgentsIndex from '@/pages/agents/index.vue';
@@ -36,11 +36,7 @@ vi.mock('@/components/global/MkA.vue', () => ({ default: { template: '<a><slot/>
 
 const apiMock = vi.mocked(misskeyApi);
 const global = {
-	stubs: { PageWithHeader: { template: '<div><slot/></div>' } },
-	components: {
-		// Render the default slot so error results expose their retry button.
-		MkResult: { template: '<div data-result><slot/></div>' },
-	},
+	stubs: { PageWithHeader: { template: '<div><slot/></div>' }, MkResult: true },
 	directives: { appear: {}, panel: {} },
 };
 let requests: Map<string, (rows: unknown[]) => void>;
@@ -89,53 +85,5 @@ describe('Agent list initial requests', () => {
 		}]);
 		expect(container.querySelector('[data-loading]')).toBeNull();
 		expect(container.textContent).toContain('Loaded session');
-	});
-});
-
-describe('Agent list load failures keep a retry entry', () => {
-	test('chat agents tab: failed first load shows an error result whose retry reloads', async () => {
-		apiMock.mockReset();
-		apiMock.mockRejectedValueOnce(new Error('offline'));
-		apiMock.mockImplementation((endpoint) => new Promise(resolve => {
-			requests.set(endpoint, resolve);
-		}));
-		const { container } = render(AgentSessions, { global });
-		expect(apiMock).toHaveBeenCalledTimes(1);
-		await nextTick();
-		await nextTick();
-		// 失败不复位 loading 之外的任何 spinner 死锁：错误态出现且带重试按钮
-		expect(container.querySelector('[data-loading]')).toBeNull();
-		const retry = container.querySelector('[data-result] button');
-		expect(retry).not.toBeNull();
-
-		fireEvent.click(retry!);
-		await nextTick();
-		expect(apiMock).toHaveBeenCalledTimes(2);
-		await finishRequest('agents/sessions/list-mine', [{
-			id: 'session1', name: 'Retried session', characterName: 'Character', sessionKind: 'draft_test', lastMessageAt: '2026-10-18T00:00:00Z',
-		}]);
-		expect(container.textContent).toContain('Retried session');
-	});
-
-	test('create characters tab: failed first load shows an error result whose retry reloads', async () => {
-		apiMock.mockReset();
-		apiMock.mockRejectedValueOnce(new Error('offline'));
-		apiMock.mockImplementation((endpoint) => new Promise(resolve => {
-			requests.set(endpoint, resolve);
-		}));
-		const { container } = render(AgentsIndex, { props: { view: 'create', sub: 'characters' }, global });
-		await nextTick();
-		await nextTick();
-		const retry = container.querySelector('[data-result] button');
-		expect(retry).not.toBeNull();
-
-		fireEvent.click(retry!);
-		await nextTick();
-		await finishRequest('agents/characters/list-mine', [{
-			id: 'entry1', name: 'Recovered entry', createdAt: '2026-10-18T00:00:00Z', updatedAt: '2026-10-18T00:00:00Z', user: {},
-		}]);
-		expect(container.textContent).toContain('Recovered entry');
-		// styles 列表请求仍在 pending，收尾避免悬挂 promise
-		await finishRequest('agents/styles/list-mine', []);
 	});
 });

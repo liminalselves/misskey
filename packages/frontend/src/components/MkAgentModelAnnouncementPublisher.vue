@@ -4,11 +4,11 @@ SPDX-License-Identifier: AGPL-3.0-only
 -->
 
 <template>
-<MkFolder :defaultOpen="true">
+<MkFolder>
 	<template #icon><i class="ti ti-speakerphone"></i></template>
 	<template #label>发布模型公告</template>
 	<div class="_gaps_m">
-		<MkInfo>公告会在用户下次进入智能体对话时显示。发布立即生效，与页面底部的设置保存无关。</MkInfo>
+		<MkInfo>公告会在用户下次进入智能体对话时显示。发布公告不会保存尚未提交的模型配置。</MkInfo>
 		<MkSelect v-model="scope" :items="scopeItems">
 			<template #label>公告分类</template>
 		</MkSelect>
@@ -37,8 +37,8 @@ import MkButton from '@/components/MkButton.vue';
 import { misskeyApi, formatApiError } from '@/utility/misskey-api.js';
 import * as os from '@/os.js';
 
-const props = defineProps<{ kind?: 'all' | 'chat' | 'image' }>();
-const scope = ref<'all' | 'chat' | 'image'>(props.kind ?? 'all');
+const props = defineProps<{ kind: 'chat' | 'image' }>();
+const scope = ref<'all' | 'chat' | 'image'>(props.kind);
 const title = ref('');
 const text = ref('');
 const publishing = ref(false);

@@ -27,7 +27,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 						</div>
 					</div>
 					<div :class="$style.summaryGrid">
-						<button v-for="card in summaryCards" :key="card.key" type="button" class="_button" :class="$style.summaryCard" @click="card.go()">
+						<button v-for="card in summaryCards" :key="card.key" type="button" class="_button" :class="$style.summaryCard" @click="card.target ? activeView = card.target : null">
 							<span :class="$style.summaryLabel"><i :class="card.icon"></i> {{ card.label }}</span>
 							<b :class="$style.summaryValue">{{ card.value }}</b>
 						</button>
@@ -481,7 +481,6 @@ import { prefer } from '@/preferences.js';
 import { iAmModerator, $i } from '@/i.js';
 import { useRouter } from '@/router.js';
 import { preferMobileNavigation } from '@/utility/prefer-mobile-navigation.js';
-import { onGovernanceEvent } from '@/utility/agent-governance-events.js';
 
 type ViewKey = 'overview' | 'queue' | 'library' | 'sessions' | 'externalAudit' | 'review' | 'images' | 'modelReports' | 'logs';
 type Kind = 'character' | 'style';
@@ -515,7 +514,7 @@ type ImageRow = { id: string; createdAt: string; updatedAt: string; userId: stri
 type AgentLog = { id: string; createdAt: string; type: string; info: Record<string, unknown>; userId: string; user: any };
 type ModelReportRow = { id: string; createdAt: string; userId: string; user: any | null; modelKind: 'chat' | 'image'; modelId: string; modelName: string; reasonType: 'unavailable' | 'degraded' | 'slow' | 'errors' | 'other'; comment: string | null; resolvedAt: string | null; resolvedByUserId: string | null; resolutionMessage: string | null };
 
-type Summary = { pendingCharacters: number; pendingStyles: number; pendingTotal: number; bannedCharacters: number; bannedSessions: number; blockedExternalAudits: number; blockedImages: number; recentOperations: number; unresolvedModelReports?: number };
+type Summary = { pendingCharacters: number; pendingStyles: number; pendingTotal: number; bannedCharacters: number; bannedSessions: number; blockedExternalAudits: number; blockedImages: number; recentOperations: number };
 
 const api = misskeyApi as unknown as <T>(endpoint: string, data?: Record<string, unknown>) => Promise<T>;
 const props = defineProps<{ view?: string }>();
@@ -720,11 +719,8 @@ async function resolveModelReport(row: ModelReportRow) {
 			message: message || null,
 		});
 		os.toast('已标记处理并通知用户');
-		modelReports.value = modelReportFilters.status === 'unresolved'
-			? modelReports.value.filter(r => r.id !== row.id)
-			: modelReports.value.map(r => r.id === row.id ? { ...r, resolvedAt: new Date().toISOString(), resolutionMessage: message || null } : r);
+		await loadModelReports(true);
 		logsPagination.reset();
-		void loadSummary();
 	} catch (err) {
 		os.alert({ type: 'error', text: formatApiError(err) });
 	}
@@ -852,8 +848,8 @@ async function ignoreReviewUser(card: ReviewUserCard) {
 
 const headerTabs = computed(() => [
 	{ key: 'overview', title: '概览', icon: 'ti ti-dashboard' },
-	{ key: 'queue', title: summary.value?.pendingTotal ? `待处理 ${summary.value.pendingTotal}` : '待处理', icon: 'ti ti-inbox', indicated: (summary.value?.pendingTotal ?? 0) > 0 },
-	{ key: 'modelReports', title: summary.value?.unresolvedModelReports ? `模型上报 ${summary.value.unresolvedModelReports}` : '模型上报', icon: 'ti ti-flag', indicated: (summary.value?.unresolvedModelReports ?? 0) > 0 },
+	{ key: 'queue', title: '待处理', icon: 'ti ti-inbox' },
+	{ key: 'modelReports', title: '模型上报', icon: 'ti ti-flag' },
 	{ key: 'library', title: '内容库', icon: 'ti ti-cards' },
 	{ key: 'sessions', title: '会话治理', icon: 'ti ti-messages' },
 	{ key: 'externalAudit', title: '外审拦截', icon: 'ti ti-shield-check' },
@@ -867,22 +863,13 @@ const headerActions = computed(() => [{
 	handler: refreshCurrentView,
 }]);
 const summaryCards = computed(() => [
-	{ key: 'pending', label: '待处理审核', value: summary.value?.pendingTotal ?? '—', icon: 'ti ti-inbox', go: () => openFiltered('queue', () => { reviewFilters.kind = 'all'; }) },
-	{ key: 'characters', label: '待审角色', value: summary.value?.pendingCharacters ?? '—', icon: 'ti ti-user', go: () => openFiltered('queue', () => { reviewFilters.kind = 'character'; }) },
-	{ key: 'styles', label: '待审风格', value: summary.value?.pendingStyles ?? '—', icon: 'ti ti-palette', go: () => openFiltered('queue', () => { reviewFilters.kind = 'style'; }) },
-	{ key: 'reports', label: '未处理上报', value: summary.value?.unresolvedModelReports ?? '—', icon: 'ti ti-flag', go: () => openFiltered('modelReports', () => { Object.assign(modelReportFilters, { status: 'unresolved', modelKind: '', reasonType: '', userId: '', modelId: '', query: '' }); }) },
-	{ key: 'bannedCharacters', label: '封禁角色', value: summary.value?.bannedCharacters ?? '—', icon: 'ti ti-user-off', go: () => openFiltered('library', () => { Object.assign(reviewFilters, { kind: 'character', status: 'all', query: '', userId: '' }); }) },
-	{ key: 'external', label: '外审拦截', value: summary.value?.blockedExternalAudits ?? '—', icon: 'ti ti-shield-check', go: () => openFiltered('externalAudit', () => { externalFilters.status = 'block'; }) },
-	{ key: 'images', label: '封禁图片', value: summary.value?.blockedImages ?? '—', icon: 'ti ti-photo-shield', go: () => openFiltered('images', () => { imageFilters.blocked = 'true'; }) },
-	{ key: 'sessions', label: '封禁会话', value: summary.value?.bannedSessions ?? '—', icon: 'ti ti-messages', go: () => openFiltered('sessions', () => {}) },
-	{ key: 'logs', label: '治理操作', value: summary.value?.recentOperations ?? '—', icon: 'ti ti-history', go: () => openFiltered('logs', () => { logType.value = 'all'; }) },
+	{ key: 'pending', label: '待处理审核', value: summary.value?.pendingTotal ?? '—', icon: 'ti ti-inbox', target: 'queue' as ViewKey },
+	{ key: 'characters', label: '待审角色', value: summary.value?.pendingCharacters ?? '—', icon: 'ti ti-user', target: 'queue' as ViewKey },
+	{ key: 'styles', label: '待审风格', value: summary.value?.pendingStyles ?? '—', icon: 'ti ti-palette', target: 'queue' as ViewKey },
+	{ key: 'sessions', label: '封禁会话', value: summary.value?.bannedSessions ?? '—', icon: 'ti ti-messages', target: 'sessions' as ViewKey },
+	{ key: 'external', label: '外审拦截', value: summary.value?.blockedExternalAudits ?? '—', icon: 'ti ti-shield-check', target: 'externalAudit' as ViewKey },
+	{ key: 'images', label: '封禁图片', value: summary.value?.blockedImages ?? '—', icon: 'ti ti-photo-shield', target: 'images' as ViewKey },
 ]);
-
-/** 概览卡片跳转：先套用对应筛选，再切 tab；筛选 watcher 会自动刷新目标列表 */
-function openFiltered(view: ViewKey, applyFilter: () => void) {
-	applyFilter();
-	activeView.value = view;
-}
 
 const kindItems = [{ value: 'all', label: '全部' }, { value: 'character', label: '角色' }, { value: 'style', label: '风格提示词' }];
 const reviewStatusItems = [{ value: 'all', label: '全部' }, { value: 'pending', label: '待审' }, { value: 'published', label: '已发布' }, { value: 'rejected', label: '已拒绝' }, { value: 'draft', label: '草稿' }];
@@ -1133,9 +1120,8 @@ async function toggleSessionBan(row: SessionRow) {
 		if (canceled) return;
 		try {
 			await api('admin/agents/governance/sessions/set-banned', { sessionId: row.id, banned: false, reason: result.reason || null });
-			patchSessionBanned([row.id], false);
-			os.toast('已解封');
-			void loadSummary();
+			await loadSummary();
+			await loadSessions(true);
 		} catch (err) {
 			os.alert({ type: 'error', text: formatApiError(err) });
 		}
@@ -1182,18 +1168,12 @@ async function toggleSessionBan(row: SessionRow) {
 		if (res.userSuspended) parts.push(`用户已封禁（${res.suspendDurationHours === 0 ? '永久' : `${res.suspendDurationHours}小时`}）`);
 		if (res.noteAdded) parts.push('管理笔记已记录');
 		os.toast(parts.join('，') || '处理完成');
-		patchSessionBanned(result.sessionIds, true);
-		void loadSummary();
-		if (reviewUserCards.value.length > 0) void loadReviewListItems(true);
+		await loadSummary();
+		await loadSessions(true);
+		if (reviewUserCards.value.length > 0) await loadReviewListItems(true);
 	} catch (err) {
 		os.alert({ type: 'error', text: formatApiError(err) });
 	}
-}
-
-/** 封禁/解封后就地改行状态，保留当前翻页与滚动位置 */
-function patchSessionBanned(ids: string[], banned: boolean) {
-	const set = new Set(ids);
-	sessions.value = sessions.value.map(s => set.has(s.id) ? { ...s, moderationBanned: banned } : s);
 }
 
 async function searchMessages() {
@@ -1247,11 +1227,8 @@ async function toggleImageBlocked(row: ImageRow) {
 		reason = result.result || null;
 	}
 	try {
-		const blocked = !row.isBlocked;
-		await api('admin/agents/governance/images/set-blocked', { id: row.id, blocked, reason });
-		images.value = images.value.map(r => r.id === row.id ? { ...r, isBlocked: blocked, blockedReason: blocked ? reason : null } : r);
-		os.toast(blocked ? '已封禁图片' : '已解封图片');
-		void loadSummary();
+		await api('admin/agents/governance/images/set-blocked', { id: row.id, blocked: !row.isBlocked, reason });
+		await Promise.all([loadSummary(), loadImages(true)]);
 	} catch (err) {
 		os.alert({ type: 'error', text: formatApiError(err) });
 	}
@@ -1287,20 +1264,10 @@ async function openQuickActionForUser(card: ReviewUserCard) {
 			});
 		}
 	}
-	// 补齐该用户的其他会话（拦截记录只覆盖涉事会话），涉事会话保持在前
-	try {
-		const userSessions = await api<SessionRow[]>('admin/agents/governance/sessions/list', { userId: card.userId, limit: 100 });
-		for (const s of userSessions) {
-			if (!sessionMap.has(s.id)) sessionMap.set(s.id, { name: s.name, banned: s.moderationBanned });
-		}
-	} catch {
-		// 拉取失败时只用涉事会话，保证处理可用
-	}
 	if (sessionMap.size === 0) {
 		os.alert({ type: 'info', text: '该用户没有相关会话记录。' });
 		return;
 	}
-	const involvedIds = [...new Set(card.logs.map(l => l.sessionId).filter((id): id is string => id != null))];
 
 	const userName = card.user ? `@${userAcct(card.user)}` : card.userId;
 	const sessions = [...sessionMap.entries()].map(([id, s]) => ({ id, name: s.name, banned: s.banned }));
@@ -1311,7 +1278,6 @@ async function openQuickActionForUser(card: ReviewUserCard) {
 		const { dispose } = os.popup(MkAgentQuickActionDialog, {
 			userName,
 			sessions,
-			defaultSelectedIds: involvedIds,
 			defaultCategory,
 			defaultSuspendHours,
 			moderatorName: $i?.username ?? '',
@@ -1481,21 +1447,6 @@ function logNote(log: AgentLog) {
 	if (log.type === 'resolveAgentModelReport') return logInfoString(log, 'message');
 	return logInfoString(log, 'rejectMessage') ?? logInfoString(log, 'rejectReason') ?? logInfoString(log, 'reason') ?? logInfoString(log, 'internalNote');
 }
-
-// 审查页（常在新标签页）处理完成后，就地更新列表，避免已处理条目滞留在「待处理」
-const stopGovernanceEvents = onGovernanceEvent(event => {
-	if (event.type === 'reviewResolved') {
-		if (activeView.value === 'queue' || event.reviewStatus !== 'pending') {
-			reviewRows.value = activeView.value === 'queue'
-				? reviewRows.value.filter(r => !(r.kind === event.kind && r.id === event.id))
-				: reviewRows.value.map(r => r.kind === event.kind && r.id === event.id ? { ...r, reviewStatus: event.reviewStatus } : r);
-		}
-	} else if (event.type === 'characterBanChanged') {
-		reviewRows.value = reviewRows.value.map(r => r.kind === 'character' && r.id === event.id ? { ...r, moderationBanned: event.banned } : r);
-	}
-	void loadSummary();
-});
-onUnmounted(stopGovernanceEvents);
 
 onMounted(() => {
 	void loadSummary();

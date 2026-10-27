@@ -11,70 +11,6 @@ import { i18n } from '@/i18n.js';
 import { getAgentControlRuntimeToken, notifyAgentControlApiSuccess, notifyAgentControlAuthenticationFailure } from '@/utility/agent-control-embed.js';
 export const pendingApiRequestsCount = ref(0);
 
-// Default per-request timeout. After sleep/wake or a network switch a TCP half-open
-// connection can leave fetch pending for minutes, so pages spin until a manual reload.
-// Rejecting lets each UI surface its error/retry state instead.
-// The default matches the usual reverse-proxy read timeout, past which the response is
-// lost anyway. agents/* run synchronous LLM / image generation (backend LLM budget alone
-// is 120s) and admin/* includes batch generation / remote probes, so they get a larger cap.
-const REQUEST_TIMEOUT_MS = 1000 * 60;
-const LONG_REQUEST_TIMEOUT_MS = 1000 * 300;
-
-function requestTimeoutMs(endpoint: string): number {
-	return endpoint.startsWith('agents/') || endpoint.startsWith('admin/') ? LONG_REQUEST_TIMEOUT_MS : REQUEST_TIMEOUT_MS;
-}
-
-type ApiTimeoutError = {
-	message: string;
-	code: string;
-	id: string;
-	info: { endpoint: string; timeoutMs: number };
-};
-
-function apiTimeoutError(endpoint: string, timeoutMs: number): ApiTimeoutError {
-	return {
-		message: 'Request timed out',
-		code: 'REQUEST_TIMEOUT',
-		id: '96a1c4d4-8bd2-4f0a-9d7e-2b0f6a3c1d55',
-		info: { endpoint, timeoutMs },
-	};
-}
-
-/**
- * Wrap fetch with a per-request abort timer linked to the caller's signal (if any).
- * Returns the fetch promise (rejecting with an API-shaped error on timeout) plus
- * cleanup that must run once the request settles.
- */
-function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: number, signal: AbortSignal | null | undefined, endpoint: string): {
-	promise: Promise<Response>;
-	settle: () => void;
-} {
-	const controller = new AbortController();
-	let timedOut = false;
-	const timer = window.setTimeout(() => {
-		timedOut = true;
-		controller.abort();
-	}, timeoutMs);
-	const onCallerAbort = () => controller.abort();
-	if (signal != null) {
-		if (signal.aborted) controller.abort();
-		else signal.addEventListener('abort', onCallerAbort, { once: true });
-	}
-	const promise = window.fetch(url, { ...init, signal: controller.signal });
-	const settle = () => {
-		window.clearTimeout(timer);
-		if (signal != null) signal.removeEventListener('abort', onCallerAbort);
-	};
-	promise.then(settle, settle);
-	return {
-		promise: promise.catch(err => {
-			if (timedOut) throw apiTimeoutError(endpoint, timeoutMs);
-			throw err;
-		}),
-		settle,
-	};
-}
-
 let handlingSuspendedAccount = false;
 
 async function handleSuspendedAccount(error: { code?: string; info?: unknown }): Promise<void> {
@@ -161,7 +97,7 @@ export function misskeyApi<
 		if (token !== undefined) data.i = token;
 
 		// Send request
-		fetchWithTimeout(`${apiUrl}/${endpoint}`, {
+		window.fetch(`${apiUrl}/${endpoint}`, {
 			method: 'POST',
 			body: JSON.stringify(data),
 			credentials: 'omit',
@@ -169,7 +105,8 @@ export function misskeyApi<
 			headers: {
 				'Content-Type': 'application/json',
 			},
-		}, requestTimeoutMs(endpoint), signal, endpoint).promise.then(async (res) => {
+			signal,
+		}).then(async (res) => {
 			const body = res.status === 204 ? null : await res.json();
 
 			if (res.status === 200) {
@@ -213,11 +150,11 @@ export function misskeyApiGet<
 
 	const promise = new Promise<_ResT>((resolve, reject) => {
 		// Send request
-		fetchWithTimeout(`${apiUrl}/${endpoint}?${query}`, {
+		window.fetch(`${apiUrl}/${endpoint}?${query}`, {
 			method: 'GET',
 			credentials: 'omit',
 			cache: 'default',
-		}, requestTimeoutMs(endpoint), null, endpoint).promise.then(async (res) => {
+		}).then(async (res) => {
 			const body = res.status === 204 ? null : await res.json();
 
 			if (res.status === 200) {

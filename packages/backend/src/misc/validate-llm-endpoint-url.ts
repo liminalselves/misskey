@@ -129,10 +129,11 @@ export function normalizeChatCompletionsUrl(baseRaw: string): string {
 	return `${base}/chat/completions`;
 }
 
-const DNS_LOOKUP_TIMEOUT_MS = 5000;
-
-/** 不访问网络的语法校验部分 */
-function parseLlmHttpsUrl(raw: string): URL {
+/**
+ * 校验 OpenAI 兼容 API Base URL，降低 SSRF 风险（强制 https，禁止常见内网与元数据地址）。
+ * @throws UnsafeLlmUrlError 校验失败时
+ */
+export async function assertSafeLlmHttpsUrl(raw: string): Promise<URL> {
 	const prepared = normalizeLlmHttpsBaseUrlInput(raw);
 	if (!prepared) {
 		throw new UnsafeLlmUrlError('empty');
@@ -157,27 +158,10 @@ function parseLlmHttpsUrl(raw: string): URL {
 	if (u.username || u.password) {
 		throw new UnsafeLlmUrlError('userinfo_not_allowed');
 	}
-	return u;
-}
 
-async function lookupWithTimeout(hostname: string): Promise<{ address: string }[]> {
-	let timer: NodeJS.Timeout | undefined;
-	try {
-		return await Promise.race([
-			dns.lookup(hostname, { all: true }),
-			new Promise<never>((_, reject) => {
-				timer = setTimeout(() => reject(new Error('dns timeout')), DNS_LOOKUP_TIMEOUT_MS);
-			}),
-		]);
-	} finally {
-		if (timer) clearTimeout(timer);
-	}
-}
-
-async function assertPublicLlmHost(hostname: string): Promise<void> {
 	let lookups: { address: string }[];
 	try {
-		lookups = await lookupWithTimeout(hostname);
+		lookups = await dns.lookup(u.hostname, { all: true });
 	} catch {
 		throw new UnsafeLlmUrlError('dns_failed');
 	}
@@ -189,41 +173,5 @@ async function assertPublicLlmHost(hostname: string): Promise<void> {
 			throw new UnsafeLlmUrlError('resolved_private');
 		}
 	}
-}
-
-/**
- * 校验 OpenAI 兼容 API Base URL，降低 SSRF 风险（强制 https，禁止常见内网与元数据地址）。
- * @throws UnsafeLlmUrlError 校验失败时
- */
-export async function assertSafeLlmHttpsUrl(raw: string): Promise<URL> {
-	const u = parseLlmHttpsUrl(raw);
-	await assertPublicLlmHost(u.hostname);
 	return u;
-}
-
-/**
- * 管理端批量保存用：同一次保存内按主机名共享 DNS 校验（并行、每个主机只查一次）；
- * 与已存储配置完全一致的 URL 当初保存时已校验过，只做语法校验、跳过 DNS。
- * 运行时调用上游前仍各自走 assertSafeLlmHttpsUrl，SSRF 防线不依赖这里。
- */
-export function createLlmUrlBatchValidator(trustedHrefs: Iterable<string | null | undefined>): (raw: string) => Promise<URL> {
-	const trusted = new Set<string>();
-	for (const href of trustedHrefs) {
-		if (typeof href === 'string' && href !== '') trusted.add(href);
-	}
-	const hostChecks = new Map<string, Promise<void>>();
-	return async (raw: string) => {
-		const u = parseLlmHttpsUrl(raw);
-		if (trusted.has(hrefForStoredLlmBaseUrl(u))) return u;
-		const host = u.hostname.toLowerCase();
-		let check = hostChecks.get(host);
-		if (check == null) {
-			check = assertPublicLlmHost(u.hostname);
-			// 防止未被 await 的失败分支触发 unhandledRejection
-			check.catch(() => {});
-			hostChecks.set(host, check);
-		}
-		await check;
-		return u;
-	};
 }
