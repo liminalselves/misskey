@@ -111,10 +111,6 @@ export class Paginator<
 	private canFetchDetection: 'safe' | 'limit' | null = null;
 	private aheadQueue: T[] = [];
 	private useShallowRef: SRef;
-	// Bumped on every init()/reload(). Requests started before the latest init must not
-	// apply their late responses: a slow response with old params would otherwise overwrite
-	// the items/flags of a newer reload (e.g. quickly changing list filters or sorting).
-	private initSeq = 0;
 
 	// 配列内の要素をどのような順序で並べるか
 	// newest: 新しいものが先頭 (default)
@@ -199,7 +195,6 @@ export class Paginator<
 	}
 
 	public async init(): Promise<void> {
-		const seq = ++this.initSeq;
 		this.items.value = [];
 		this.aheadQueue = [];
 		this.queuedAheadItemsCount.value = 0;
@@ -225,14 +220,13 @@ export class Paginator<
 			} : {}),
 		};
 
-		const apiRes = (await misskeyApi(this.endpoint, data).catch(_ => null)) as T[] | null;
-
-		// A newer init/reload started while this request was in flight; it owns the flags now.
-		if (seq !== this.initSeq) return;
-
-		if (apiRes == null) {
+		const apiRes = (await misskeyApi(this.endpoint, data).catch(_ => {
 			this.error.value = true;
 			this.fetching.value = false;
+			return null;
+		})) as T[] | null;
+
+		if (apiRes == null) {
 			return;
 		}
 
@@ -263,7 +257,6 @@ export class Paginator<
 	public async fetchOlder(): Promise<void> {
 		if (this.noPaging || !this.canFetchOlder.value || this.fetching.value || this.fetchingOlder.value || this.fetchingNewer.value || this.items.value.length === 0) return;
 		this.fetchingOlder.value = true;
-		const seq = this.initSeq;
 
 		const data: E['req'] = {
 			...(typeof this.params === 'function' ? this.params() : this.params),
@@ -277,16 +270,14 @@ export class Paginator<
 			}),
 		};
 
-		const apiRes = (await misskeyApi<T[]>(this.endpoint, data).catch(_ => null)) as T[] | null;
+		const apiRes = (await misskeyApi<T[]>(this.endpoint, data).catch(_ => {
+			this.fetchError.value = true;
+			return null;
+		})) as T[] | null;
 
 		this.fetchingOlder.value = false;
 
-		// The list was reloaded while this request was in flight; appending a page fetched
-		// for the old state would mix stale items into the fresh list.
-		if (seq !== this.initSeq) return;
-
 		if (apiRes == null) {
-			this.fetchError.value = true;
 			return;
 		}
 
@@ -318,7 +309,6 @@ export class Paginator<
 		// Polling must still discover arrivals after a previously empty page.
 		if (options.pagination && (!this.canFetchNewer.value || this.noPaging || this.items.value.length === 0)) return;
 		this.fetchingNewer.value = true;
-		const seq = this.initSeq;
 
 		const data: E['req'] = {
 			...(typeof this.params === 'function' ? this.params() : this.params),
@@ -332,17 +322,15 @@ export class Paginator<
 			}),
 		};
 
-		const apiRes = (await misskeyApi<T[]>(this.endpoint, data).catch(_ => null)) as T[] | null;
+		const apiRes = (await misskeyApi<T[]>(this.endpoint, data).catch(_ => {
+			if (options.pagination) this.fetchError.value = true;
+			return null;
+		})) as T[] | null;
 
 		this.fetchingNewer.value = false;
 
-		// The list was reloaded while this request was in flight; the fresh init already
-		// covers the newest range, and stale flags/items must not be applied.
-		if (seq !== this.initSeq) return;
-
 		if (apiRes == null) {
-			if (options.pagination) this.fetchError.value = true;
-			else this.canFetchNewer.value = false;
+			if (!options.pagination) this.canFetchNewer.value = false;
 			return;
 		}
 

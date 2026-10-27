@@ -21,10 +21,6 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<div v-if="createSub === 'characters'" class="_gaps">
 			<MkButton primary rounded @click="newCharacter"><i class="ti ti-plus"></i> {{ i18n.ts._agents.newCharacter }}</MkButton>
 			<MkLoading v-if="loadingCh"/>
-			<MkResult v-else-if="chLoadError && characters.length === 0" type="error">
-				<MkButton primary rounded @click="loadCharacters">{{ i18n.ts.retry }}</MkButton>
-			</MkResult>
-			<MkResult v-else-if="characters.length === 0" type="empty" text="还没有创建角色，点击上方按钮创建第一个角色"/>
 			<div v-else :class="$style.grid">
 				<div v-for="c in characters" :key="c.id" v-panel :class="$style.card">
 					<div :class="$style.cardMain">
@@ -87,10 +83,6 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<div v-else class="_gaps">
 			<MkButton primary rounded @click="newStyle"><i class="ti ti-plus"></i> {{ i18n.ts._agents.newStyle }}</MkButton>
 			<MkLoading v-if="loadingSt"/>
-			<MkResult v-else-if="stLoadError && styles.length === 0" type="error">
-				<MkButton primary rounded @click="loadStyles">{{ i18n.ts.retry }}</MkButton>
-			</MkResult>
-			<MkResult v-else-if="styles.length === 0" type="empty" text="还没有创建风格，点击上方按钮创建第一个风格"/>
 			<div v-else :class="$style.grid">
 				<div v-for="s in styles" :key="s.id" v-panel :class="$style.card">
 					<div :class="$style.cardMain">
@@ -215,8 +207,6 @@ const characters = ref<CharacterListMineItem[]>([]);
 const styles = ref<StyleListMineItem[]>([]);
 const loadingCh = ref(false);
 const loadingSt = ref(false);
-const chLoadError = ref(false);
-const stLoadError = ref(false);
 const chHasMore = ref(false);
 const stHasMore = ref(false);
 const loadingMoreCh = ref(false);
@@ -320,15 +310,11 @@ const fetchStylesMine = misskeyApi as unknown as (endpoint: 'agents/styles/list-
 async function loadCharacters() {
 	if (loadingCh.value) return;
 	loadingCh.value = true;
-	chLoadError.value = false;
 	try {
 		const rows = await fetchCharactersMine('agents/characters/list-mine', { limit: MINE_LIST_PAGE_SIZE + 1 });
 		const page = takeCursorFirstPage(rows, MINE_LIST_PAGE_SIZE);
 		chHasMore.value = page.hasMore;
 		characters.value = page.items;
-	} catch {
-		// 失败保留已有数据；从未加载成功时展示错误态与重试入口
-		chLoadError.value = true;
 	} finally {
 		loadingCh.value = false;
 	}
@@ -352,15 +338,11 @@ async function loadMoreCharacters() {
 async function loadStyles() {
 	if (loadingSt.value) return;
 	loadingSt.value = true;
-	stLoadError.value = false;
 	try {
 		const rows = await fetchStylesMine('agents/styles/list-mine', { limit: MINE_LIST_PAGE_SIZE + 1 });
 		const page = takeCursorFirstPage(rows, MINE_LIST_PAGE_SIZE);
 		stHasMore.value = page.hasMore;
 		styles.value = page.items;
-	} catch {
-		// 失败保留已有数据；从未加载成功时展示错误态与重试入口
-		stLoadError.value = true;
 	} finally {
 		loadingSt.value = false;
 	}
@@ -386,13 +368,9 @@ async function newCharacter() {
 		name: { type: 'string', label: i18n.ts._agents.fieldName, minLength: 1 },
 	});
 	if (canceled) return;
-	try {
-		const created = await misskeyApi('agents/characters/create', { name: result.name });
-		loadCharacters();
-		router.push(('/agents/character/' + created.id) as '/agents/character/:characterId');
-	} catch (e) {
-		os.alert({ type: 'error', text: formatApiError(e) });
-	}
+	const created = await misskeyApi('agents/characters/create', { name: result.name });
+	loadCharacters();
+	router.push(('/agents/character/' + created.id) as '/agents/character/:characterId');
 }
 
 async function newStyle() {
@@ -400,13 +378,9 @@ async function newStyle() {
 		name: { type: 'string', label: i18n.ts._agents.fieldStyleName, minLength: 1 },
 	});
 	if (canceled) return;
-	try {
-		const created = await misskeyApi('agents/styles/create', { name: result.name });
-		loadStyles();
-		router.push(('/agents/style/' + created.id) as '/agents/style/:styleId');
-	} catch (e) {
-		os.alert({ type: 'error', text: formatApiError(e) });
-	}
+	const created = await misskeyApi('agents/styles/create', { name: result.name });
+	loadStyles();
+	router.push(('/agents/style/' + created.id) as '/agents/style/:styleId');
 }
 
 async function publishChar(id: string) {
@@ -423,12 +397,8 @@ async function publishChar(id: string) {
 }
 
 async function unpublishChar(id: string) {
-	try {
-		await misskeyApi('agents/characters/unpublish', { characterId: id });
-		loadCharacters();
-	} catch (e) {
-		os.alert({ type: 'error', text: formatApiError(e) });
-	}
+	await misskeyApi('agents/characters/unpublish', { characterId: id });
+	loadCharacters();
 }
 
 async function publishStyle(id: string) {
@@ -445,12 +415,8 @@ async function publishStyle(id: string) {
 }
 
 async function unpublishStyle(id: string) {
-	try {
-		await misskeyApi('agents/styles/unpublish', { styleId: id });
-		loadStyles();
-	} catch (e) {
-		os.alert({ type: 'error', text: formatApiError(e) });
-	}
+	await misskeyApi('agents/styles/unpublish', { styleId: id });
+	loadStyles();
 }
 
 async function testChar(characterId: string) {

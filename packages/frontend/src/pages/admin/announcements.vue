@@ -128,28 +128,14 @@ const announcements = ref<(Omit<Misskey.entities.AdminAnnouncementsListResponse[
 	reads?: Misskey.entities.AdminAnnouncementsListResponse[number]['reads'];
 })[]>([]);
 
-// Request serial: switching the filter quickly must not let a late response of
-// the previous status overwrite the current list.
-let announcementsSerial = 0;
-
-function fetchAnnouncements(status: 'active' | 'archived') {
-	const serial = ++announcementsSerial;
+watch(announcementsStatus, (to) => {
 	loading.value = true;
 	misskeyApi('admin/announcements/list', {
-		status,
+		status: to,
 	}).then(announcementResponse => {
-		if (serial !== announcementsSerial) return;
 		announcements.value = announcementResponse;
 		loading.value = false;
-	}).catch(err => {
-		if (serial !== announcementsSerial) return;
-		loading.value = false;
-		console.error(err);
 	});
-}
-
-watch(announcementsStatus, (to) => {
-	fetchAnnouncements(to);
 }, { immediate: true });
 
 function add() {
@@ -217,25 +203,24 @@ async function save(announcement: (typeof announcements)['value'][number]) {
 }
 
 function more() {
-	if (loadingMore.value) return;
-	const serial = announcementsSerial;
 	loadingMore.value = true;
 	misskeyApi('admin/announcements/list', {
 		status: announcementsStatus.value,
 		untilId: announcements.value.reduce((acc, announcement) => announcement.id != null ? announcement : acc).id!,
 	}).then(announcementResponse => {
-		// A reload happened meanwhile; appending the old page would mix lists.
-		if (serial !== announcementsSerial) return;
 		announcements.value = announcements.value.concat(announcementResponse);
-	}).catch(err => {
-		console.error(err);
-	}).finally(() => {
 		loadingMore.value = false;
 	});
 }
 
 function refresh() {
-	fetchAnnouncements(announcementsStatus.value);
+	loading.value = true;
+	misskeyApi('admin/announcements/list', {
+		status: announcementsStatus.value,
+	}).then(announcementResponse => {
+		announcements.value = announcementResponse;
+		loading.value = false;
+	});
 }
 
 const headerActions = computed(() => [{

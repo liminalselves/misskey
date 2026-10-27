@@ -5,8 +5,8 @@
 
 import ms from 'ms';
 import { Inject, Injectable } from '@nestjs/common';
-import { In, IsNull } from 'typeorm';
-import type { AgentCharactersRepository, AgentDialogueStylesRepository, AgentExternalAuditLogsRepository, AgentImageGenerationsRepository, AgentModelReportsRepository, AgentSessionsRepository, ModerationLogsRepository } from '@/models/_.js';
+import { In } from 'typeorm';
+import type { AgentCharactersRepository, AgentDialogueStylesRepository, AgentExternalAuditLogsRepository, AgentImageGenerationsRepository, AgentSessionsRepository, ModerationLogsRepository } from '@/models/_.js';
 import { Endpoint } from '@/server/api/endpoint-base.js';
 import { DI } from '@/di-symbols.js';
 import { AgentService } from '@/core/AgentService.js';
@@ -53,9 +53,6 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		@Inject(DI.moderationLogsRepository)
 		private moderationLogsRepository: ModerationLogsRepository,
 
-		@Inject(DI.agentModelReportsRepository)
-		private agentModelReportsRepository: AgentModelReportsRepository,
-
 		private agentService: AgentService,
 	) {
 		super(meta, paramDef, async () => {
@@ -68,7 +65,6 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				blockedExternalAudits,
 				blockedImages,
 				recentOperations,
-				unresolvedModelReports,
 			] = await Promise.all([
 				this.agentCharactersRepository.countBy({ reviewStatus: 'pending' }),
 				this.agentDialogueStylesRepository.countBy({ reviewStatus: 'pending' }),
@@ -77,7 +73,6 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				this.agentExternalAuditLogsRepository.countBy({ status: 'block' }),
 				this.agentImageGenerationsRepository.countBy({ isBlocked: true }),
 				this.moderationLogsRepository.countBy({ type: In([...agentGovernanceLogTypes]) }),
-				this.agentModelReportsRepository.countBy({ resolvedAt: IsNull() }),
 			]);
 
 			return {
@@ -89,7 +84,6 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				blockedExternalAudits,
 				blockedImages,
 				recentOperations,
-				unresolvedModelReports,
 			};
 		});
 	}
