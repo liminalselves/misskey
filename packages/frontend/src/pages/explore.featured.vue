@@ -75,10 +75,9 @@ const paginatorForPolls = markRaw(new Paginator('notes/polls/recommendation', {
 	} as any),
 }));
 
-// Hack: 拦截 reload 方法以在重新加载前重置状态，并防止重复请求
+// Hack: 拦截 reload 方法，重新加载前清空已展示 ID（Paginator 自身会作废在途的旧请求）
 const originalReloadNotes = paginatorForNotes.reload;
 paginatorForNotes.reload = async () => {
-	if (paginatorForNotes.fetching.value) return;
 	displayedNoteIds.value = [];
 	return await originalReloadNotes.call(paginatorForNotes);
 };
@@ -86,7 +85,6 @@ paginatorForNotes.reload = async () => {
 // Hack: 拦截 reload 方法 (投票)
 const originalReloadPolls = paginatorForPolls.reload;
 paginatorForPolls.reload = async () => {
-	if (paginatorForPolls.fetching.value) return;
 	displayedPollIds.value = [];
 	return await originalReloadPolls.call(paginatorForPolls);
 };
@@ -115,8 +113,8 @@ watch(tab, (newTab) => {
 });
 
 watch(sortMode, () => {
+	// :key 含 sortMode，MkFeaturedTimeline 会重挂载并自动 init，无需再显式 reload
 	displayedNoteIds.value = [];
-	paginatorForNotes.reload();
 });
 
 function reload() {

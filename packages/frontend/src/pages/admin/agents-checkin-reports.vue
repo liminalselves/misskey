@@ -5,8 +5,15 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <template>
 <div class="_gaps_m">
-	<MkLoading v-if="loading"/>
+	<MkLoading v-if="loading && data == null"/>
 	<template v-else-if="data">
+		<!-- 刷新失败但仍有旧数据：保留内容，横幅提示并提供重试 -->
+		<MkInfo v-if="loadError" warn>
+			<div class="_buttons">
+				<span>加载失败，请稍后重试。</span>
+				<MkButton small rounded @click="load"><i class="ti ti-refresh"></i> 重试</MkButton>
+			</div>
+		</MkInfo>
 		<!-- 总览统计卡片 -->
 		<div :class="$style.summaryGrid">
 			<div v-panel :class="$style.summaryCard">
@@ -34,8 +41,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<template #icon><i class="ti ti-calendar"></i></template>
 			<template #label>日历热力（{{ calYearMonth }}）</template>
 			<template #suffix>
-				<button class="_button" :class="$style.calNavBtn" @click="prevMonth"><i class="ti ti-chevron-left"></i></button>
-				<button class="_button" :class="$style.calNavBtn" @click="nextMonth"><i class="ti ti-chevron-right"></i></button>
+				<MkLoading v-if="loading" :class="$style.calNavLoading" em/>
+				<button class="_button" :class="$style.calNavBtn" :disabled="loading" @click="prevMonth"><i class="ti ti-chevron-left"></i></button>
+				<button class="_button" :class="$style.calNavBtn" :disabled="loading" @click="nextMonth"><i class="ti ti-chevron-right"></i></button>
 			</template>
 			<div :class="$style.calGrid">
 				<div v-for="d in weekDays" :key="d" :class="$style.calWeekday">{{ d }}</div>
@@ -121,10 +129,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<MkInput v-model="filterDateTo" type="date" :class="$style.filterInput">
 						<template #label>结束日期</template>
 					</MkInput>
-					<MkButton small rounded @click="loadRecords"><i class="ti ti-search"></i> 查询</MkButton>
+					<MkButton small rounded @click="applyRecordsFilter"><i class="ti ti-search"></i> 查询</MkButton>
 				</div>
-				<!-- 表格（独立局部loading，不影响页面其他区域） -->
-				<div v-if="recordsLoading" :class="$style.recordsLoading"><MkLoading/></div>
+				<!-- 表格（独立局部loading，不影响页面其他区域；翻页时保留旧内容避免整表闪烁） -->
+				<div v-if="recordsLoading && records.length === 0" :class="$style.recordsLoading"><MkLoading/></div>
 				<template v-else>
 					<div :class="$style.recTable">
 						<div :class="$style.recHeader">
@@ -145,15 +153,19 @@ SPDX-License-Identifier: AGPL-3.0-only
 					</div>
 					<!-- 分页 -->
 					<div v-if="totalPages > 1" :class="$style.pagination">
-						<button class="_button" :class="$style.pageBtn" :disabled="currentPage <= 1" @click="goPage(currentPage - 1)"><i class="ti ti-chevron-left"></i></button>
+						<button class="_button" :class="$style.pageBtn" :disabled="currentPage <= 1 || recordsLoading" @click="goPage(currentPage - 1)"><i class="ti ti-chevron-left"></i></button>
 						<span :class="$style.pageInfo">{{ currentPage }} / {{ totalPages }}</span>
-						<button class="_button" :class="$style.pageBtn" :disabled="currentPage >= totalPages" @click="goPage(currentPage + 1)"><i class="ti ti-chevron-right"></i></button>
+						<button class="_button" :class="$style.pageBtn" :disabled="currentPage >= totalPages || recordsLoading" @click="goPage(currentPage + 1)"><i class="ti ti-chevron-right"></i></button>
 					</div>
 				</template>
 			</div>
 		</MkFolder>
 	</template>
-	<MkInfo v-else-if="!loading">加载失败，请稍后重试。</MkInfo>
+	<!-- 首次加载失败：空内容 + 重试入口 -->
+	<div v-else-if="loadError" :class="$style.loadFailed">
+		<MkInfo warn>加载失败，请稍后重试。</MkInfo>
+		<MkButton small rounded primary @click="load"><i class="ti ti-refresh"></i> 重试</MkButton>
+	</div>
 </div>
 </template>
 
@@ -164,6 +176,7 @@ import MkInfo from '@/components/MkInfo.vue';
 import MkFolder from '@/components/MkFolder.vue';
 import MkInput from '@/components/MkInput.vue';
 import MkButton from '@/components/MkButton.vue';
+import * as os from '@/os.js';
 import { misskeyApi } from '@/utility/misskey-api.js';
 
 type ReportData = {
@@ -176,6 +189,7 @@ type ReportData = {
 };
 
 const loading = ref(false);
+const loadError = ref(false);
 const data = ref<ReportData | null>(null);
 const currentPage = ref(1);
 const pageSize = ref(20);
@@ -328,9 +342,15 @@ function goPage(p: number) {
 	loadRecords();
 }
 
+// Request serials: rapid month nav / paging must not let a late response of an
+// older condition overwrite the newer one (and stall the loading state).
+let loadSerial = 0;
+let recordsSerial = 0;
+
 async function load() {
+	const serial = ++loadSerial;
 	loading.value = true;
-	data.value = null;
+	loadError.value = false;
 	try {
 		const res = await misskeyApi('admin/agents-checkin-reports' as any, {
 			yearMonth: calYearMonth.value,
@@ -340,16 +360,26 @@ async function load() {
 			dateFrom: filterDateFrom.value || undefined,
 			dateTo: filterDateTo.value || undefined,
 		}) as ReportData;
+		if (serial !== loadSerial) return;
 		data.value = res;
 		records.value = res.records;
 		totalCount.value = res.totalCount;
-	} catch { /* handled by template */ } finally {
-		loading.value = false;
+	} catch (err) {
+		if (serial !== loadSerial) return;
+		// Keep the previous dashboard on failure; the error banner offers retry.
+		loadError.value = true;
+		console.error(err);
+	} finally {
+		if (serial === loadSerial) loading.value = false;
 	}
 }
 
 async function loadRecords() {
 	// 局部加载：仅更新明细记录区域，不影响页面其他区域（无全局loading、无布局抖动）
+	const serial = ++recordsSerial;
+	// 筛选/翻页基于上次总数：数据缩减后当前页可能越界，先夹回最后一页
+	const lastPage = Math.max(1, Math.ceil(totalCount.value / pageSize.value));
+	if (currentPage.value > lastPage) currentPage.value = lastPage;
 	recordsLoading.value = true;
 	try {
 		const res = await misskeyApi('admin/agents-checkin-reports' as any, {
@@ -360,11 +390,22 @@ async function loadRecords() {
 			dateFrom: filterDateFrom.value || undefined,
 			dateTo: filterDateTo.value || undefined,
 		}) as ReportData;
+		if (serial !== recordsSerial) return;
 		records.value = res.records;
 		totalCount.value = res.totalCount;
-	} catch { /* */ } finally {
-		recordsLoading.value = false;
+	} catch (err) {
+		if (serial !== recordsSerial) return;
+		os.alert({ type: 'error', text: '加载明细记录失败，请稍后重试。' });
+		console.error(err);
+	} finally {
+		if (serial === recordsSerial) recordsLoading.value = false;
 	}
+}
+
+function applyRecordsFilter() {
+	// New filter conditions form a new result set: always restart from page 1.
+	currentPage.value = 1;
+	loadRecords();
 }
 
 onMounted(() => { load(); });
@@ -412,6 +453,19 @@ onMounted(() => { load(); });
 
 .makeupColor { color: var(--MI_THEME-warn); }
 .rewardColor { color: var(--MI_THEME-success); }
+
+// 月份切换重载时保留旧面板：面包屑旁的 1em 小 spinner 提示刷新中
+.calNavLoading {
+	margin-right: 6px;
+	color: var(--MI_THEME-accent);
+}
+.loadFailed {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 12px;
+	padding: 24px 0;
+}
 
 // Calendar
 .calNavBtn {

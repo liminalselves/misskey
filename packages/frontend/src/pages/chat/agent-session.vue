@@ -3849,19 +3849,19 @@ onMounted(async () => {
 		void captureAgentUnreadSnapshot().then(() => markAgentSessionRead());
 	}
 	try {
-		await fetchInstance(true);
 		if (props.embeddedPanel != null) {
+			await fetchInstance(true);
 			await loadSession();
 			if (!isSessionBannedPage.value) await loadEmbeddedPanelResources(props.embeddedPanel);
 		} else {
-			await loadUsableStyles();
 			void loadModelSuccessRates();
 			void loadModelFreeQuota();
 			void loadAgentCreditBalance();
 			void loadUserModels();
 			void loadDrawArtistPresets();
 			void loadDrawImageModels();
-			await loadVisionModels();
+			// Independent lookups; loadSession needs instance + vision defaults, so it runs after.
+			await Promise.all([fetchInstance(true), loadUsableStyles(), loadVisionModels()]);
 			await loadSession();
 			// 被封禁会话：不加载聊天记录与会话内容，仅展示专用封禁页
 			if (!isSessionBannedPage.value) {

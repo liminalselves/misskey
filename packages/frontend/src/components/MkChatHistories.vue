@@ -116,6 +116,29 @@ const history = ref<ChatHistoryItem[]>([]);
 const initializing = ref(true);
 const fetching = ref(false);
 
+// 概览列表：两侧都显式限定页大小（chat/history 与 agents/sessions/list-mine 均为
+// limit/untilId 页面游标裸数组端点），不依赖端点默认值，也避免深翻页串行全量拉取
+const HISTORY_PAGE_SIZE = 30;
+
+let agentSessionsCache: AgentsSessionsListMineResponse = [];
+let agentSessionsInFlight: Promise<AgentsSessionsListMineResponse> | null = null;
+
+function fetchAgentSessions(signal: AbortSignal): Promise<AgentsSessionsListMineResponse> {
+	if (agentSessionsInFlight != null) return agentSessionsInFlight;
+	// 新参数未进 misskey-js 类型，按惯例组件内强转
+	agentSessionsInFlight = (misskeyApi as unknown as (endpoint: 'agents/sessions/list-mine', data: { limit?: number }, token: string | undefined, signal: AbortSignal) => Promise<AgentsSessionsListMineResponse>)('agents/sessions/list-mine', { limit: HISTORY_PAGE_SIZE }, undefined, signal)
+		.then(rows => {
+			agentSessionsCache = rows;
+			return rows;
+		})
+		// 失败（含 429 限流、超时中止）保留上次成功数据，不让智能体会话从合并列表中消失
+		.catch(() => agentSessionsCache)
+		.finally(() => {
+			agentSessionsInFlight = null;
+		});
+	return agentSessionsInFlight;
+}
+
 async function fetchHistory(updateGlobalStatus = false) {
 	if (fetching.value) return;
 
@@ -127,17 +150,14 @@ async function fetchHistory(updateGlobalStatus = false) {
 	const abortTimer = window.setTimeout(() => abort.abort(), 20000);
 
 	try {
-		// 概览列表：两侧都显式限定页大小（chat/history 与 agents/sessions/list-mine 均为
-		// limit/untilId 页面游标裸数组端点），不依赖端点默认值，也避免深翻页串行全量拉取
-		const HISTORY_PAGE_SIZE = 30;
 		const [userMessages, roomMessages, agentSessions] = await Promise.all([
 			misskeyApi('chat/history', { room: false, limit: HISTORY_PAGE_SIZE }, undefined, abort.signal),
 			props.directOnly
 				? Promise.resolve([] as Misskey.entities.ChatMessage[])
 				: misskeyApi('chat/history', { room: true, limit: HISTORY_PAGE_SIZE }, undefined, abort.signal),
 			props.includeAgentSessions && !props.directOnly
-				// 智能体会话获取失败不影响私信列表刷新；新参数未进 misskey-js 类型，按惯例组件内强转
-				? (misskeyApi as unknown as (endpoint: 'agents/sessions/list-mine', data: { limit?: number }, token: string | undefined, signal: AbortSignal) => Promise<AgentsSessionsListMineResponse>)('agents/sessions/list-mine', { limit: HISTORY_PAGE_SIZE }, undefined, abort.signal).catch(() => [] as AgentsSessionsListMineResponse)
+				// 智能体会话获取失败保留上次数据，不影响私信列表刷新
+				? fetchAgentSessions(abort.signal)
 				: Promise.resolve([] as AgentsSessionsListMineResponse),
 		]);
 
