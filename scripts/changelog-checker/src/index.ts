@@ -6,7 +6,7 @@
 import * as process from 'process';
 import * as fs from 'fs';
 import { parseChangeLog } from './parser.js';
-import { checkNewRelease, checkNewTopic } from './checker.js';
+import { checkNewRelease, checkNewTopic, checkRetractedRelease } from './checker.js';
 
 function abort(message?: string) {
 	if (message) {
@@ -27,7 +27,9 @@ function main() {
 
 	const result = (base.length < head.length)
 		? checkNewRelease(base, head)
-		: checkNewTopic(base, head);
+		: (base.length > head.length)
+			? checkRetractedRelease(base, head)
+			: checkNewTopic(base, head);
 
 	if (!result.success) {
 		abort(result.message);

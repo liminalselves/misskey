@@ -5,7 +5,7 @@
 
 import {expect, suite, test} from "vitest";
 import {Release, ReleaseCategory} from "../src/parser";
-import {checkNewRelease, checkNewTopic} from "../src/checker";
+import {checkNewRelease, checkNewTopic, checkRetractedRelease} from "../src/checker";
 
 suite('checkNewRelease', () => {
 	test.each(['unreleased', 'Unreleased'])('accepts a new release below the retained %s section', (name) => {
@@ -67,6 +67,22 @@ suite('checkNewRelease', () => {
 		console.log(result.message)
 		expect(result.success).toBe(false)
 	})
+})
+
+suite('checkRetractedRelease', () => {
+	test('accepts retracting the newest release', () => {
+		const base = [new Release('unreleased'), new Release('2025.12.2-liminalselves.6'), new Release('2025.12.2-liminalselves.5')];
+		const head = [new Release('unreleased'), new Release('2025.12.2-liminalselves.5')];
+
+		expect(checkRetractedRelease(base, head).success).toBe(true);
+	});
+
+	test('rejects retraction when the remaining release does not match', () => {
+		const base = [new Release('2025.12.2-liminalselves.6'), new Release('2025.12.2-liminalselves.5')];
+		const head = [new Release('2025.12.2-liminalselves.4')];
+
+		expect(checkRetractedRelease(base, head).success).toBe(false);
+	});
 })
 
 suite('checkNewTopic', () => {

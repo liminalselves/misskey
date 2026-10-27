@@ -45,6 +45,10 @@ export function checkNewRelease(base: Release[], head: Release[]): Result {
 	return Result.ofSuccess();
 }
 
+export function checkRetractedRelease(base: Release[], head: Release[]): Result {
+	return checkNewRelease(head, base);
+}
+
 /**
  * topic -> developまたはtopic -> masterを想定したパターン。
  * head側の最新リリース配下に書き加えられているかをチェックする。
