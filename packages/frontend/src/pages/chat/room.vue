@@ -365,13 +365,20 @@ async function initialize() {
 	// 如果有 props.messageId，直接进入上下文加载模式
 	if (props.messageId) {
 		// 先获取 Room/User 信息以便建立连接
-		if (props.userId) {
-			user.value = await misskeyApi('users/show', { userId: props.userId });
-			connection.value = useStream().useChannel('chatUser', { otherId: user.value!.id });
-		} else if (props.roomId) {
-			const r = await misskeyApi('chat/rooms/show', { roomId: props.roomId });
-			room.value = r;
-			connection.value = useStream().useChannel('chatRoom', { roomId: room.value.id });
+		try {
+			if (props.userId) {
+				user.value = await misskeyApi('users/show', { userId: props.userId });
+				connection.value = useStream().useChannel('chatUser', { otherId: user.value!.id });
+			} else if (props.roomId) {
+				const r = await misskeyApi('chat/rooms/show', { roomId: props.roomId });
+				room.value = r;
+				connection.value = useStream().useChannel('chatRoom', { roomId: room.value.id });
+			}
+		} catch (err) {
+			console.error(err);
+			os.alert({ type: 'error', text: i18n.ts.somethingHappened });
+			router.push('/chat');
+			return;
 		}
 
 		if (connection.value) {
@@ -394,120 +401,125 @@ async function initialize() {
 	initialized.value = false;
 	canFetchNewer.value = false;
 
-	if (props.userId) {
-		const [u, m] = await Promise.all([
-			misskeyApi('users/show', { userId: props.userId }),
-			misskeyApi('chat/messages/user-timeline', { userId: props.userId, limit: LIMIT }),
-			// 必须先于 read 信号完成：read 会清除后端的未读标记与计数
-			captureUnreadSnapshot(),
-		]);
+	try {
+		if (props.userId) {
+			const [u, m] = await Promise.all([
+				misskeyApi('users/show', { userId: props.userId }),
+				misskeyApi('chat/messages/user-timeline', { userId: props.userId, limit: LIMIT }),
+				// 必须先于 read 信号完成：read 会清除后端的未读标记与计数
+				captureUnreadSnapshot(),
+			]);
 
-		user.value = u;
-		messages.value = m.map(x => normalizeMessage(x));
+			user.value = u;
+			messages.value = m.map(x => normalizeMessage(x));
 
-		if (messages.value.length === LIMIT) {
-			canFetchMore.value = true;
-		}
-
-		connection.value = useStream().useChannel('chatUser', {
-			otherId: user.value.id,
-		});
-		connection.value.on('message', onMessage);
-		connection.value.on('deleted', onDeleted);
-		connection.value.on('react', onReact);
-		connection.value.on('unreact', onUnreact);
-
-		// 打开对话页面时立即发送 read 信号，标记该对话的消息为已读
-		// 这样后端会更新已读状态并发送 chatRead 事件
-		// 使用类型断言：后端实际上不需要 id 参数
-		(connection.value as any).send('read', {});
-		markAsRead(); // 调用 API 强制标记已读
-	} else if (props.roomId) {
-		let r: Misskey.entities.ChatRoomsShowResponse;
-		try {
-			r = await misskeyApi('chat/rooms/show', { roomId: props.roomId });
-		} catch (err: any) {
-			if (err?.code === 'ACCESS_DENIED') {
-				os.alert({
-					type: 'error',
-					text: i18n.ts.permissionDeniedError as string,
-				});
-			} else if (err?.code === 'NO_SUCH_ROOM') {
-				os.alert({
-					type: 'error',
-					text: i18n.ts.noSuchRoom as string ?? 'No such room',
-				});
-			} else {
-				os.alert({
-					type: 'error',
-					text: i18n.ts.somethingHappened,
-				});
+			if (messages.value.length === LIMIT) {
+				canFetchMore.value = true;
 			}
-			initializing.value = false;
-			router.push('/chat');
-			return;
-		}
 
-		if (r.invitationExists) {
-			const confirm = await os.confirm({
-				type: 'question',
-				title: r.name,
-				text: i18n.ts._chat.youAreNotAMemberOfThisRoomButInvited + '\n' + i18n.ts._chat.doYouAcceptInvitation,
+			connection.value = useStream().useChannel('chatUser', {
+				otherId: user.value.id,
 			});
-			if (confirm.canceled) {
-				initializing.value = false;
+			connection.value.on('message', onMessage);
+			connection.value.on('deleted', onDeleted);
+			connection.value.on('react', onReact);
+			connection.value.on('unreact', onUnreact);
+
+			// 打开对话页面时立即发送 read 信号，标记该对话的消息为已读
+			// 这样后端会更新已读状态并发送 chatRead 事件
+			// 使用类型断言：后端实际上不需要 id 参数
+			(connection.value as any).send('read', {});
+			markAsRead(); // 调用 API 强制标记已读
+		} else if (props.roomId) {
+			let r: Misskey.entities.ChatRoomsShowResponse;
+			try {
+				r = await misskeyApi('chat/rooms/show', { roomId: props.roomId });
+			} catch (err: any) {
+				if (err?.code === 'ACCESS_DENIED') {
+					os.alert({
+						type: 'error',
+						text: i18n.ts.permissionDeniedError as string,
+					});
+				} else if (err?.code === 'NO_SUCH_ROOM') {
+					os.alert({
+						type: 'error',
+						text: i18n.ts.noSuchRoom as string ?? 'No such room',
+					});
+				} else {
+					os.alert({
+						type: 'error',
+						text: i18n.ts.somethingHappened,
+					});
+				}
 				router.push('/chat');
 				return;
-			} else {
-				await os.apiWithDialog('chat/rooms/join', { roomId: r.id });
-				initializing.value = false;
-				initialize();
+			}
+
+			if (r.invitationExists) {
+				const confirm = await os.confirm({
+					type: 'question',
+					title: r.name,
+					text: i18n.ts._chat.youAreNotAMemberOfThisRoomButInvited + '\n' + i18n.ts._chat.doYouAcceptInvitation,
+				});
+				if (confirm.canceled) {
+					router.push('/chat');
+					return;
+				} else {
+					await os.apiWithDialog('chat/rooms/join', { roomId: r.id });
+					// 复位防重入守卫后重新加载（外层 finally 不得在重入完成前复位标志，故 await）
+					initializing.value = false;
+					await initialize();
+					return;
+				}
+			}
+
+			// 非成员（公开群组通过链接访问）：显示加入界面，不加载消息
+			if (!(r as any).isMember) {
+				room.value = r;
+				notMember.value = true;
+				initialized.value = true;
 				return;
 			}
-		}
 
-		// 非成员（公开群组通过链接访问）：显示加入界面，不加载消息
-		if (!(r as any).isMember) {
+			// 已是成员：加载消息时间线（未读快照必须先于 read 信号完成）
+			const [m] = await Promise.all([
+				misskeyApi('chat/messages/room-timeline', { roomId: props.roomId, limit: LIMIT }),
+				captureUnreadSnapshot(),
+			]);
+
 			room.value = r;
-			notMember.value = true;
-			initialized.value = true;
-			initializing.value = false;
-			return;
+			messages.value = m.map(x => normalizeMessage(x));
+
+			if (messages.value.length === LIMIT) {
+				canFetchMore.value = true;
+			}
+
+			connection.value = useStream().useChannel('chatRoom', {
+				roomId: room.value.id,
+			});
+			connection.value.on('message', onMessage);
+			connection.value.on('deleted', onDeleted);
+			connection.value.on('react', onReact);
+			connection.value.on('unreact', onUnreact);
+
+			// 打开对话页面时立即发送 read 信号，标记该对话的消息为已读
+			// 这样后端会更新已读状态并发送 chatRead 事件
+			// 使用类型断言：后端实际上不需要 id 参数
+			(connection.value as any).send('read', {});
+			markAsRead(); // 调用 API 强制标记已读
 		}
 
-		// 已是成员：加载消息时间线（未读快照必须先于 read 信号完成）
-		const [m] = await Promise.all([
-			misskeyApi('chat/messages/room-timeline', { roomId: props.roomId, limit: LIMIT }),
-			captureUnreadSnapshot(),
-		]);
+		window.document.addEventListener('visibilitychange', onVisibilitychange);
 
-		room.value = r;
-		messages.value = m.map(x => normalizeMessage(x));
-
-		if (messages.value.length === LIMIT) {
-			canFetchMore.value = true;
-		}
-
-		connection.value = useStream().useChannel('chatRoom', {
-			roomId: room.value.id,
-		});
-		connection.value.on('message', onMessage);
-		connection.value.on('deleted', onDeleted);
-		connection.value.on('react', onReact);
-		connection.value.on('unreact', onUnreact);
-
-		// 打开对话页面时立即发送 read 信号，标记该对话的消息为已读
-		// 这样后端会更新已读状态并发送 chatRead 事件
-		// 使用类型断言：后端实际上不需要 id 参数
-		(connection.value as any).send('read', {});
-		markAsRead(); // 调用 API 强制标记已读
+		initialized.value = true;
+		void evaluateUnreadJump();
+	} catch (err) {
+		// 任何加载步骤失败都必须复位 initializing：防重入守卫复用它，不复位即整页永久转圈
+		console.error(err);
+		os.alert({ type: 'error', text: i18n.ts.somethingHappened });
+	} finally {
+		initializing.value = false;
 	}
-
-	window.document.addEventListener('visibilitychange', onVisibilitychange);
-
-	initialized.value = true;
-	initializing.value = false;
-	void evaluateUnreadJump();
 }
 
 let isActivated = true;
@@ -531,22 +543,29 @@ onDeactivated(() => {
 async function fetchMore() {
 	const LIMIT = 30;
 
+	if (moreFetching.value) return;
 	moreFetching.value = true;
 
-	const newMessages = props.userId ? await misskeyApi('chat/messages/user-timeline', {
-		userId: user.value!.id,
-		limit: LIMIT,
-		untilId: messages.value[messages.value.length - 1].id,
-	}) : await misskeyApi('chat/messages/room-timeline', {
-		roomId: room.value!.id,
-		limit: LIMIT,
-		untilId: messages.value[messages.value.length - 1].id,
-	});
+	try {
+		const newMessages = props.userId ? await misskeyApi('chat/messages/user-timeline', {
+			userId: user.value!.id,
+			limit: LIMIT,
+			untilId: messages.value[messages.value.length - 1].id,
+		}) : await misskeyApi('chat/messages/room-timeline', {
+			roomId: room.value!.id,
+			limit: LIMIT,
+			untilId: messages.value[messages.value.length - 1].id,
+		});
 
-	messages.value.push(...newMessages.map(x => normalizeMessage(x)));
+		messages.value.push(...newMessages.map(x => normalizeMessage(x)));
 
-	canFetchMore.value = newMessages.length === LIMIT;
-	moreFetching.value = false;
+		canFetchMore.value = newMessages.length === LIMIT;
+	} catch (err) {
+		console.error(err);
+		os.alert({ type: 'error', text: i18n.ts.somethingHappened });
+	} finally {
+		moreFetching.value = false;
+	}
 }
 
 // 加载更新的消息
@@ -564,38 +583,43 @@ async function fetchNewer() {
 
 	let newMessages: Misskey.entities.ChatMessageLite[] = [];
 
-	if (props.userId) {
-		newMessages = await misskeyApi('chat/messages/user-timeline', {
-			userId: user.value!.id,
-			limit: LIMIT,
-			sinceId: sinceId,
-		});
-	} else {
-		newMessages = await misskeyApi('chat/messages/room-timeline', {
-			roomId: room.value!.id,
-			limit: LIMIT,
-			sinceId: sinceId,
-		});
-	}
+	try {
+		if (props.userId) {
+			newMessages = await misskeyApi('chat/messages/user-timeline', {
+				userId: user.value!.id,
+				limit: LIMIT,
+				sinceId: sinceId,
+			});
+		} else {
+			newMessages = await misskeyApi('chat/messages/room-timeline', {
+				roomId: room.value!.id,
+				limit: LIMIT,
+				sinceId: sinceId,
+			});
+		}
 
-	if (newMessages.length > 0) {
-		// NewMessages 是 Newest First.
-		// Messages 列表也是 Newest First.
-		// 所以直接 unshift 进去
-		// NewMessages 是 ASC (旧->新)，我们需要反转为 DESC (新->旧)
-		const reversed = newMessages.map(x => normalizeMessage(x)).reverse();
-		messages.value.unshift(...reversed);
-	}
+		if (newMessages.length > 0) {
+			// NewMessages 是 Newest First.
+			// Messages 列表也是 Newest First.
+			// 所以直接 unshift 进去
+			// NewMessages 是 ASC (旧->新)，我们需要反转为 DESC (新->旧)
+			const reversed = newMessages.map(x => normalizeMessage(x)).reverse();
+			messages.value.unshift(...reversed);
+		}
 
-	// 如果返回数量少于 Limit，说明已经到达最顶端（最新），没有更多 gap 了
-	if (newMessages.length < LIMIT) {
-		canFetchNewer.value = false;
-		showIndicator.value = false;
-	} else {
-		canFetchNewer.value = true;
+		// 如果返回数量少于 Limit，说明已经到达最顶端（最新），没有更多 gap 了
+		if (newMessages.length < LIMIT) {
+			canFetchNewer.value = false;
+			showIndicator.value = false;
+		} else {
+			canFetchNewer.value = true;
+		}
+	} catch (err) {
+		console.error(err);
+		os.alert({ type: 'error', text: i18n.ts.somethingHappened });
+	} finally {
+		fetchingNewer.value = false;
 	}
-
-	fetchingNewer.value = false;
 }
 
 // 滚动到指定消息

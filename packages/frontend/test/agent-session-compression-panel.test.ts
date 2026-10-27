@@ -48,7 +48,7 @@ afterEach(() => {
 describe('Compression injection preview panel', () => {
 	test('exposes the editable limit only in the admin compression tab', () => {
 		const admin = readFileSync(resolve(process.cwd(), 'src/pages/admin/agents-settings.vue'), 'utf8');
-		const compressionTab = admin.match(/<MkFolder v-if="activeTab === 'compression'"[\s\S]*?<\/MkFolder>/)?.[0];
+		const compressionTab = admin.match(/<MkFolder v-if="activeLeaf === 'compression'"[\s\S]*?<\/MkFolder>/)?.[0];
 		expect(compressionTab).toContain('v-model="form.state.agentCompressionInjectMaxChars"');
 		const session = readFileSync(resolve(process.cwd(), 'src/pages/chat/agent-session.vue'), 'utf8');
 		expect(session).not.toContain('agentCompressionInjectMaxChars');

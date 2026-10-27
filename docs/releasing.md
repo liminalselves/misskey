@@ -44,7 +44,7 @@ TCR 镜像复制链路已废弃，develop 镜像发布工作流已删除。其�
 ## 发布顺序
 
 1. 获得当次发布授权，确认上游基线及本次版本号；在 develop 同步修改两处 package.json，将 CHANGELOG 顶部 `unreleased` 定名为本次版本并新开空 `unreleased`。
-2. 按当次 Git 授权提交并推送 develop，经 PR 合入 master，使用 merge commit，不直推 master。
+2. 按当次 Git 授权提交并推送 develop，经 PR 合入 master，使用 merge commit，不直推 master。合并前等待 PR 检查完成；PR 合并后其 `refs/pull/<N>/merge` 会消失，仍在排队的工作流可能因此检出失败。
 3. 本地拉取 master，核对合入结果、两处版本和 CHANGELOG；CI 修改必须已包含在这次提交中。
 4. 在 master 发布 merge commit 上创建附注 tag `release-v<version>`，单独推送这个 tag。推送会启动 ACR 和 GitHub 两条独立构建。
 5. 分别确认两边构建结果、镜像 tag 和来源提交；ACR 构建成功后，生产从 ACR 拉取该完整版本。不得只看 GitHub 构建成功就认为生产镜像已就绪。
@@ -67,6 +67,12 @@ git push origin "release-v$version"
 # 可选：创建发布记录，禁止用不存在的 tag 隐式创建新 tag。
 gh release create "release-v$version" -R liminalselves/misskey --verify-tag --title "$version"
 ```
+
+## 撤回已合并发布
+
+- 用 revert PR 恢复发布前代码树，不改写 master 历史。已推送的发布 tag 和已构建镜像不会因回滚自动撤回，删除或移动 tag 仍需单独授权。
+- 回滚合入 master 后，先把 master 合入 develop，再 revert 回滚提交以恢复发布内容；直接重复合并原 develop 不会可靠地带回被回滚的改动。
+- 重新发布前必须明确版本号和旧 tag 的处置，不得默认复用已推送的同名发布 tag。
 
 ## Hotfix
 
