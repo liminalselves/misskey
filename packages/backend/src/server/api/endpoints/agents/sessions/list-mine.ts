@@ -24,7 +24,8 @@ export const meta = {
 	requireCredential: true,
 	prohibitMoved: true,
 	kind: 'read:chat',
-	limit: { duration: ms('1hour'), max: 120 },
+	// Chat overview polls this every 10s per open tab, plus stream-event refreshes.
+	limit: { duration: ms('1hour'), max: 3600 },
 	res: {
 		type: 'array',
 		optional: false, nullable: false,

@@ -209,15 +209,23 @@ async function fetchCurrentQueue() {
 	queueInfo.value = await misskeyApi('admin/queue/queue-stats', { queue: tab.value });
 }
 
+// Guard with a request serial so a late response from a previous
+// tab/state/search condition never overwrites the current job list.
+let jobsRequestSerial = 0;
+
 async function fetchJobs() {
 	if (tab.value === '-') return;
-	jobsFetching.value = true;
+	const serial = ++jobsRequestSerial;
+	const queue = tab.value;
 	const state = jobState.value;
-	jobs.value = await misskeyApi('admin/queue/jobs', {
-		queue: tab.value,
-		state: state === 'all' ? ['completed', 'failed', 'active', 'delayed', 'wait'] : state === 'latest' ? ['completed', 'failed'] : [state],
-		search: searchQuery.value.trim() === '' ? undefined : searchQuery.value,
-	}).then((res: Misskey.entities.AdminQueueJobsResponse) => {
+	jobsFetching.value = true;
+	try {
+		const res = await misskeyApi('admin/queue/jobs', {
+			queue,
+			state: state === 'all' ? ['completed', 'failed', 'active', 'delayed', 'wait'] : state === 'latest' ? ['completed', 'failed'] : [state],
+			search: searchQuery.value.trim() === '' ? undefined : searchQuery.value,
+		});
+		if (serial !== jobsRequestSerial) return;
 		if (state === 'all') {
 			res.sort((a, b) => (a.processedOn ?? a.timestamp) > (b.processedOn ?? b.timestamp) ? -1 : 1);
 		} else if (state === 'latest') {
@@ -225,9 +233,15 @@ async function fetchJobs() {
 		} else if (state === 'delayed') {
 			res.sort((a, b) => (a.processedOn ?? a.timestamp) > (b.processedOn ?? b.timestamp) ? -1 : 1);
 		}
-		return res;
-	});
-	jobsFetching.value = false;
+		jobs.value = res;
+	} catch (err) {
+		if (serial !== jobsRequestSerial) return;
+		console.error(err);
+	} finally {
+		// Leaving jobsFetching true on failure would spin forever;
+		// superseded requests must not clear the newer request's spinner either.
+		if (serial === jobsRequestSerial) jobsFetching.value = false;
+	}
 }
 
 watch([tab], async () => {
