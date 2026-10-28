@@ -218,3 +218,44 @@ function destroyWorker(target: Worker): void {
 	}
 	target.terminate();
 }
+
+const FILTERED_TEXT_CACHE_LIMIT = 200;
+const filteredTextCache = new Map<string, string>();
+const filteredTextRequests = new Map<string, Promise<string | null>>();
+
+/**
+ * Share completed results and in-flight work across message mounts. Only successful
+ * worker results are cached; failures keep the existing retry/fallback behavior.
+ */
+export function getAgentRegexTextWithCache(
+	rules: AgentRegexFilterRule[],
+	effect: AgentRegexFilterEffect,
+	item: AgentRegexFilterItem,
+	filter: typeof filterAgentRegexTexts = filterAgentRegexTexts,
+): { cached: string | undefined; request: Promise<string | null> } {
+	const key = JSON.stringify([
+		rules.map(rule => [rule.pattern, [...rule.targets].sort(), [...rule.effects].sort()]),
+		effect,
+		item.role,
+		item.text,
+	]);
+	const cached = filteredTextCache.get(key);
+	if (cached != null) return { cached, request: Promise.resolve(cached) };
+
+	let request = filteredTextRequests.get(key);
+	if (request == null) {
+		request = filter(rules, effect, [item]).then(results => {
+			filteredTextRequests.delete(key);
+			if (results == null) return null;
+			const text = results[0] ?? '';
+			if (filteredTextCache.size >= FILTERED_TEXT_CACHE_LIMIT) {
+				const oldest = filteredTextCache.keys().next().value;
+				if (oldest != null) filteredTextCache.delete(oldest);
+			}
+			filteredTextCache.set(key, text);
+			return text;
+		});
+		filteredTextRequests.set(key, request);
+	}
+	return { cached: undefined, request };
+}

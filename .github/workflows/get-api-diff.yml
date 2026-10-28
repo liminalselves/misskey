@@ -46,8 +46,14 @@ jobs:
       run: cp .config/example.yml .config/default.yml
     - name: Build
       run: pnpm build
+    - name: Use current API generation CLI for both revisions
+      env:
+        TOOLING_REF: ${{ github.event.pull_request.head.sha }}
+      run: |
+        git fetch --no-tags --depth=1 origin "$TOOLING_REF"
+        git show "$TOOLING_REF:packages/backend/scripts/generate_api_json.js" > packages/backend/scripts/generate_api_json.js
     - name: Generate API JSON
-      run: pnpm --filter backend generate-api-json
+      run: pnpm --filter backend generate-api-json --no-build
     - name: Copy API.json
       run: cp packages/backend/built/api.json ${{ matrix.api-json-name }}
     - name: Upload Artifact

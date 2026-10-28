@@ -2,9 +2,9 @@
 
 ## 范围与边界
 
-- 起点：fork develop `06180850b4`；目标：官方 master `8f438a8a00`（2026.10.0）；同步分支 `sync/upstream-2026.10.0`。
+- 起点：fork develop `06180850b4`；目标：官方 master `8f438a8a00`（2026.10.0）；同步分支 `sync/upstream-2026.10.0`。之后已合入 develop `a76bcb5be1`，见文末「对齐 develop」。
 - 取舍顺序：保留 fork 功能；选择更合用的实现；同等条件选择较新实现。初始 106 个冲突文件已全部处理。
-- 根与 misskey-js 的版本均保留 `2025.12.2-liminalselves.4`。本次不是发布，不更新 master/develop、不推送、不打 tag、不部署。
+- 根与 misskey-js 的版本沿用 develop 当前的 `2025.12.2-liminalselves.6`，同步本身不 bump。本次不是发布，不更新 master/develop、不推送、不打 tag、不部署。
 - 不连接开发或生产数据库，不执行迁移。441 个已有迁移与 fork 已发布更新日志均逐字保持不变。
 - 合并前前后端类型检查均通过。本地验证使用 Node 22.23.1、pnpm 11.25.0；项目和 Docker 继续要求已修补的 Node 22.23.4。
 
@@ -94,3 +94,11 @@ TypeORM 1 已移除 find options 的数组投影与关联写法，相关 fork �
 通用 `check-shipping --base develop` 返回 FAIL：Windows 的单次命令长度上限阻断了大批量文件 lint，locale 闸口则不区分上游翻译同步与手工改词条。本次按包分批补查 lint；非日语翻译属于已授权的上游同步与 fork 内容保留，不回退这些文件来绕过检查。三语言相对共同祖先新增的 fork 词条均保留：日语 1,170、英语 1,135、简体中文 1,174，缺失为 0。
 
 扩大到所有改动脚本、Storybook、配置和测试的分批 lint 仍有 BASELINE / 检查范围问题：后端根目录 Rolldown/Vitest 配置不在其 typed ESLint 的 TS project 中；上游原样的 Storybook、Vite 插件、构建脚本及部分测试有格式或规则错误。两个合并测试文件的报错行也与上游相同。本次触及的正则测试和前端 setup 的格式问题已修正，未扩展为整批上游代码清理。包内官方 eslint 脚本的 PASS 与这个更大范围的 FAIL 分开报告，不称全仓 lint 全绿。
+
+## 对齐 develop
+
+同步期间 develop 前进 24 个提交（`.5`、`.6` 发布、管理页 UX 重构、前端加载修复、更新日志撤回检查），已 merge `a76bcb5be1` 入同步分支，未新增 migration。
+
+- 冲突 6 个：更新日志保留上游段落与已发布 `.6`/`.5` 原文；更新日志检查器的撤回校验移到 `packages-private/changelog-checker`，工作流改用 pnpm 跑其测试；前端 E2E 保留上游 Playwright；联邦封禁用例采用上游等待助手（已含 30s/500ms 慢联邦超时）。
+- 无冲突但需适配：develop 新增后端单测由 Jest 改为 Vitest 写法；API JSON 生成测试改为替换 `../built/` 导入；前端测试去掉 `./init` 导入（上游改为 setupFiles 自动加载）。
+- 验证：后端类型检查、两项新增单测、更新日志检查器 lint 与 25 项测试、前端类型检查与 42 个文件 313 项单测、misskey-js 类型检查通过；按 CI 流程本地重新生成 api.json 与 SDK 类型，与提交内容一致。云端 CI、数据库、E2E 与联邦测试仍未运行。

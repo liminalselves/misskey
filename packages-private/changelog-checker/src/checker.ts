@@ -28,6 +28,8 @@ export class Result {
  * base側の先頭とhead側で追加された分のリリースより1つ前のバージョンが等価であるかチェックする。
  */
 export function checkNewRelease(base: Release[], head: Release[]): Result {
+	base = base.filter(release => release.releaseName.toLowerCase() !== 'unreleased');
+	head = head.filter(release => release.releaseName.toLowerCase() !== 'unreleased');
 	const releaseCountDiff = head.length - base.length;
 	if (releaseCountDiff <= 0) {
 		return Result.ofFailed('Invalid release count.');
@@ -49,6 +51,10 @@ export function checkNewRelease(base: Release[], head: Release[]): Result {
 	}
 
 	return Result.ofSuccess();
+}
+
+export function checkRetractedRelease(base: Release[], head: Release[]): Result {
+	return checkNewRelease(head, base);
 }
 
 function isSameItems(base: string[], head: string[]) {

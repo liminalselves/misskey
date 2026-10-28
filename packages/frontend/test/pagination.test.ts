@@ -293,3 +293,42 @@ describe('Automatic pagination controls', () => {
 		expect(api).toHaveBeenCalledTimes(3);
 	});
 });
+
+describe('Paginator stale responses', () => {
+	test('a slow init superseded by a reload does not overwrite the newer result or its loading state', async () => {
+		api.mockReset();
+		let resolveSlow!: (value: unknown) => void;
+		api.mockImplementationOnce(() => new Promise(resolve => { resolveSlow = resolve; }));
+		let resolveFast!: (value: unknown) => void;
+		api.mockImplementationOnce(() => new Promise(resolve => { resolveFast = resolve; }));
+		const paginator = new Paginator('users/search', { offsetMode: true });
+
+		const first = paginator.init();
+		const second = paginator.reload();
+		resolveFast(rows(2, 100));
+		await second;
+		expect(paginator.fetching.value).toBe(false);
+		expect(paginator.items.value.map(x => x.id)).toEqual(['0100', '0101']);
+
+		resolveSlow(rows(3));
+		await first;
+		expect(paginator.items.value.map(x => x.id)).toEqual(['0100', '0101']);
+		expect(paginator.fetching.value).toBe(false);
+		expect(paginator.error.value).toBe(false);
+	});
+
+	test('a failed init superseded by a reload does not flag the fresh list as errored', async () => {
+		api.mockReset();
+		let rejectSlow!: (reason: unknown) => void;
+		api.mockImplementationOnce(() => new Promise((_, reject) => { rejectSlow = reject; }));
+		api.mockResolvedValueOnce(rows(1));
+		const paginator = new Paginator('users/search', { offsetMode: true });
+
+		const first = paginator.init();
+		await paginator.reload();
+		rejectSlow(new Error('timeout'));
+		await first;
+		expect(paginator.error.value).toBe(false);
+		expect(paginator.items.value).toHaveLength(1);
+	});
+});

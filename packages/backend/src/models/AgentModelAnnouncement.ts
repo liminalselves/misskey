@@ -34,7 +34,7 @@ export class MiAgentModelAnnouncement {
 	@Column('text')
 	public text: string;
 
-	@Column('jsonb', { default: () => "'[]'::jsonb" })
+	@Column('jsonb', { default: [] })
 	public changes: AgentModelChange[];
 
 	constructor(data: Partial<MiAgentModelAnnouncement>) {

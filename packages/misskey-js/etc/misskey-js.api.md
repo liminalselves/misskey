@@ -131,6 +131,12 @@ type AdminAgentsCheckinReportsResponse = operations['admin___agents-checkin-repo
 type AdminAgentsCheckinRevokeTodayResponse = operations['admin___agents-checkin-revoke-today']['responses']['200']['content']['application/json'];
 
 // @public (undocumented)
+type AdminAgentsCreditsIssueBatchRequest = operations['admin___agents___credits___issue-batch']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AdminAgentsCreditsIssueBatchResponse = operations['admin___agents___credits___issue-batch']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
 type AdminAgentsCreditsIssueRewardRequest = operations['admin___agents___credits___issue-reward']['requestBody']['content']['application/json'];
 
 // @public (undocumented)
@@ -209,6 +215,21 @@ type AdminAgentsGovernanceMessagesListRequest = operations['admin___agents___gov
 type AdminAgentsGovernanceMessagesListResponse = operations['admin___agents___governance___messages___list']['responses']['200']['content']['application/json'];
 
 // @public (undocumented)
+type AdminAgentsGovernanceModelReportsListRequest = operations['admin___agents___governance___model-reports___list']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AdminAgentsGovernanceModelReportsListResponse = operations['admin___agents___governance___model-reports___list']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type AdminAgentsGovernanceModelReportsPendingExistsResponse = operations['admin___agents___governance___model-reports___pending-exists']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type AdminAgentsGovernanceModelReportsResolveRequest = operations['admin___agents___governance___model-reports___resolve']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AdminAgentsGovernanceModelReportsResolveResponse = operations['admin___agents___governance___model-reports___resolve']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
 type AdminAgentsGovernanceQuickActionRequest = operations['admin___agents___governance___quick-action']['requestBody']['content']['application/json'];
 
 // @public (undocumented)
@@ -237,6 +258,102 @@ type AdminAgentsGovernanceReviewSetCharacterBannedRequest = operations['admin___
 
 // @public (undocumented)
 type AdminAgentsGovernanceReviewSetCharacterBannedResponse = operations['admin___agents___governance___review___set-character-banned']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type AdminAgentsGovernanceSessionReviewByokModelsRequest = operations['admin___agents___governance___session-review___byok-models']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AdminAgentsGovernanceSessionReviewByokModelsResponse = operations['admin___agents___governance___session-review___byok-models']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type AdminAgentsGovernanceSessionReviewCharacterRequest = operations['admin___agents___governance___session-review___character']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AdminAgentsGovernanceSessionReviewCharacterResponse = operations['admin___agents___governance___session-review___character']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type AdminAgentsGovernanceSessionReviewCompressionOverviewRequest = operations['admin___agents___governance___session-review___compression-overview']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AdminAgentsGovernanceSessionReviewCompressionOverviewResponse = operations['admin___agents___governance___session-review___compression-overview']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type AdminAgentsGovernanceSessionReviewContextWindowRequest = operations['admin___agents___governance___session-review___context-window']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AdminAgentsGovernanceSessionReviewContextWindowResponse = operations['admin___agents___governance___session-review___context-window']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type AdminAgentsGovernanceSessionReviewExportRequest = operations['admin___agents___governance___session-review___export']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AdminAgentsGovernanceSessionReviewExportResponse = operations['admin___agents___governance___session-review___export']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type AdminAgentsGovernanceSessionReviewImagePlaceholderStatusRequest = operations['admin___agents___governance___session-review___image-placeholder-status']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AdminAgentsGovernanceSessionReviewImagePlaceholderStatusResponse = operations['admin___agents___governance___session-review___image-placeholder-status']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type AdminAgentsGovernanceSessionReviewMemoryRequest = operations['admin___agents___governance___session-review___memory']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AdminAgentsGovernanceSessionReviewMemoryResponse = operations['admin___agents___governance___session-review___memory']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type AdminAgentsGovernanceSessionReviewMessageRequest = operations['admin___agents___governance___session-review___message']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AdminAgentsGovernanceSessionReviewMessageResponse = operations['admin___agents___governance___session-review___message']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type AdminAgentsGovernanceSessionReviewMessagesRequest = operations['admin___agents___governance___session-review___messages']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AdminAgentsGovernanceSessionReviewMessagesResponse = operations['admin___agents___governance___session-review___messages']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type AdminAgentsGovernanceSessionReviewProactiveSchedulesRequest = operations['admin___agents___governance___session-review___proactive-schedules']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AdminAgentsGovernanceSessionReviewProactiveSchedulesResponse = operations['admin___agents___governance___session-review___proactive-schedules']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type AdminAgentsGovernanceSessionReviewRuleListRequest = operations['admin___agents___governance___session-review___rule-list']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AdminAgentsGovernanceSessionReviewRuleListResponse = operations['admin___agents___governance___session-review___rule-list']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type AdminAgentsGovernanceSessionReviewSearchRequest = operations['admin___agents___governance___session-review___search']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AdminAgentsGovernanceSessionReviewSearchResponse = operations['admin___agents___governance___session-review___search']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type AdminAgentsGovernanceSessionReviewSessionRequest = operations['admin___agents___governance___session-review___session']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AdminAgentsGovernanceSessionReviewSessionResponse = operations['admin___agents___governance___session-review___session']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type AdminAgentsGovernanceSessionReviewStylesRequest = operations['admin___agents___governance___session-review___styles']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AdminAgentsGovernanceSessionReviewStylesResponse = operations['admin___agents___governance___session-review___styles']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type AdminAgentsGovernanceSessionReviewWorldbookListRequest = operations['admin___agents___governance___session-review___worldbook-list']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AdminAgentsGovernanceSessionReviewWorldbookListResponse = operations['admin___agents___governance___session-review___worldbook-list']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type AdminAgentsGovernanceSessionReviewWorldbookMatchPreviewRequest = operations['admin___agents___governance___session-review___worldbook-match-preview']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AdminAgentsGovernanceSessionReviewWorldbookMatchPreviewResponse = operations['admin___agents___governance___session-review___worldbook-match-preview']['responses']['200']['content']['application/json'];
 
 // @public (undocumented)
 type AdminAgentsGovernanceSessionsDetailRequest = operations['admin___agents___governance___sessions___detail']['requestBody']['content']['application/json'];
@@ -291,6 +408,9 @@ type AdminAgentsMessagesTimelineRequest = operations['admin___agents___messages_
 
 // @public (undocumented)
 type AdminAgentsMessagesTimelineResponse = operations['admin___agents___messages___timeline']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type AdminAgentsModelAnnouncementsCreateRequest = operations['admin___agents___model-announcements___create']['requestBody']['content']['application/json'];
 
 // @public (undocumented)
 type AdminAgentsRedeemCodesGenerateRequest = operations['admin___agents___redeem-codes___generate']['requestBody']['content']['application/json'];
@@ -758,6 +878,12 @@ type AdminUsersAgentUsageDetailsRequest = operations['admin___users___agent-usag
 type AdminUsersAgentUsageDetailsResponse = operations['admin___users___agent-usage-details']['responses']['200']['content']['application/json'];
 
 // @public (undocumented)
+type AdminUsersAgentUsageLogsRequest = operations['admin___users___agent-usage-logs']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AdminUsersAgentUsageLogsResponse = operations['admin___users___agent-usage-logs']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
 type AdminUsersAgentUsageRequest = operations['admin___users___agent-usage']['requestBody']['content']['application/json'];
 
 // @public (undocumented)
@@ -813,6 +939,9 @@ type AgentsCharactersGenerateStickerDescriptionRequest = operations['agents___ch
 
 // @public (undocumented)
 type AgentsCharactersGenerateStickerDescriptionResponse = operations['agents___characters___generate-sticker-description']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type AgentsCharactersListMineRequest = operations['agents___characters___list-mine']['requestBody']['content']['application/json'];
 
 // @public (undocumented)
 type AgentsCharactersListMineResponse = operations['agents___characters___list-mine']['responses']['200']['content']['application/json'];
@@ -1028,6 +1157,18 @@ type AgentsMessagesUpdateRequest = operations['agents___messages___update']['req
 type AgentsMessagesUpdateResponse = operations['agents___messages___update']['responses']['200']['content']['application/json'];
 
 // @public (undocumented)
+type AgentsModelAnnouncementsReadRequest = operations['agents___model-announcements___read']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AgentsModelAnnouncementsUnreadResponse = operations['agents___model-announcements___unread']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type AgentsModelReportsCreateRequest = operations['agents___model-reports___create']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AgentsModelReportsCreateResponse = operations['agents___model-reports___create']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
 type AgentsModelsFreeQuotaResponse = operations['agents___models___free-quota']['responses']['200']['content']['application/json'];
 
 // @public (undocumented)
@@ -1121,6 +1262,9 @@ type AgentsSessionsExportRequest = operations['agents___sessions___export']['req
 type AgentsSessionsExportResponse = operations['agents___sessions___export']['responses']['200']['content']['application/json'];
 
 // @public (undocumented)
+type AgentsSessionsListMineRequest = operations['agents___sessions___list-mine']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
 type AgentsSessionsListMineResponse = operations['agents___sessions___list-mine']['responses']['200']['content']['application/json'];
 
 // @public (undocumented)
@@ -1143,6 +1287,12 @@ type AgentsSessionsShowRequest = operations['agents___sessions___show']['request
 
 // @public (undocumented)
 type AgentsSessionsShowResponse = operations['agents___sessions___show']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type AgentsSessionsUnreadInfoRequest = operations['agents___sessions___unread-info']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AgentsSessionsUnreadInfoResponse = operations['agents___sessions___unread-info']['responses']['200']['content']['application/json'];
 
 // @public (undocumented)
 type AgentsSessionsUpdateRequest = operations['agents___sessions___update']['requestBody']['content']['application/json'];
@@ -1179,6 +1329,9 @@ type AgentsStylesDiffRequest = operations['agents___styles___diff']['requestBody
 
 // @public (undocumented)
 type AgentsStylesDiffResponse = operations['agents___styles___diff']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type AgentsStylesListMineRequest = operations['agents___styles___list-mine']['requestBody']['content']['application/json'];
 
 // @public (undocumented)
 type AgentsStylesListMineResponse = operations['agents___styles___list-mine']['responses']['200']['content']['application/json'];
@@ -2032,6 +2185,12 @@ type ChatRoomsUpdateRequest = operations['chat___rooms___update']['requestBody']
 type ChatRoomsUpdateResponse = operations['chat___rooms___update']['responses']['200']['content']['application/json'];
 
 // @public (undocumented)
+type ChatUnreadInfoRequest = operations['chat___unread-info']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type ChatUnreadInfoResponse = operations['chat___unread-info']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
 type Clip = components['schemas']['Clip'];
 
 // @public (undocumented)
@@ -2386,6 +2545,8 @@ declare namespace entities {
         AdminAgentsCheckinRevokeTodayResponse,
         AdminAgentsCharactersSetModerationBannedRequest,
         AdminAgentsCharactersSetModerationBannedResponse,
+        AdminAgentsCreditsIssueBatchRequest,
+        AdminAgentsCreditsIssueBatchResponse,
         AdminAgentsCreditsIssueRewardRequest,
         AdminAgentsCreditsIssueRewardResponse,
         AdminAgentsCreditsMigrationGenerateKeyResponse,
@@ -2412,6 +2573,11 @@ declare namespace entities {
         AdminAgentsGovernanceLogsListResponse,
         AdminAgentsGovernanceMessagesListRequest,
         AdminAgentsGovernanceMessagesListResponse,
+        AdminAgentsGovernanceModelReportsListRequest,
+        AdminAgentsGovernanceModelReportsListResponse,
+        AdminAgentsGovernanceModelReportsPendingExistsResponse,
+        AdminAgentsGovernanceModelReportsResolveRequest,
+        AdminAgentsGovernanceModelReportsResolveResponse,
         AdminAgentsGovernanceQuickActionRequest,
         AdminAgentsGovernanceQuickActionResponse,
         AdminAgentsGovernanceReviewDetailRequest,
@@ -2422,6 +2588,38 @@ declare namespace entities {
         AdminAgentsGovernanceReviewResolveResponse,
         AdminAgentsGovernanceReviewSetCharacterBannedRequest,
         AdminAgentsGovernanceReviewSetCharacterBannedResponse,
+        AdminAgentsGovernanceSessionReviewByokModelsRequest,
+        AdminAgentsGovernanceSessionReviewByokModelsResponse,
+        AdminAgentsGovernanceSessionReviewCharacterRequest,
+        AdminAgentsGovernanceSessionReviewCharacterResponse,
+        AdminAgentsGovernanceSessionReviewCompressionOverviewRequest,
+        AdminAgentsGovernanceSessionReviewCompressionOverviewResponse,
+        AdminAgentsGovernanceSessionReviewContextWindowRequest,
+        AdminAgentsGovernanceSessionReviewContextWindowResponse,
+        AdminAgentsGovernanceSessionReviewExportRequest,
+        AdminAgentsGovernanceSessionReviewExportResponse,
+        AdminAgentsGovernanceSessionReviewImagePlaceholderStatusRequest,
+        AdminAgentsGovernanceSessionReviewImagePlaceholderStatusResponse,
+        AdminAgentsGovernanceSessionReviewMemoryRequest,
+        AdminAgentsGovernanceSessionReviewMemoryResponse,
+        AdminAgentsGovernanceSessionReviewMessageRequest,
+        AdminAgentsGovernanceSessionReviewMessageResponse,
+        AdminAgentsGovernanceSessionReviewMessagesRequest,
+        AdminAgentsGovernanceSessionReviewMessagesResponse,
+        AdminAgentsGovernanceSessionReviewProactiveSchedulesRequest,
+        AdminAgentsGovernanceSessionReviewProactiveSchedulesResponse,
+        AdminAgentsGovernanceSessionReviewRuleListRequest,
+        AdminAgentsGovernanceSessionReviewRuleListResponse,
+        AdminAgentsGovernanceSessionReviewSearchRequest,
+        AdminAgentsGovernanceSessionReviewSearchResponse,
+        AdminAgentsGovernanceSessionReviewSessionRequest,
+        AdminAgentsGovernanceSessionReviewSessionResponse,
+        AdminAgentsGovernanceSessionReviewStylesRequest,
+        AdminAgentsGovernanceSessionReviewStylesResponse,
+        AdminAgentsGovernanceSessionReviewWorldbookListRequest,
+        AdminAgentsGovernanceSessionReviewWorldbookListResponse,
+        AdminAgentsGovernanceSessionReviewWorldbookMatchPreviewRequest,
+        AdminAgentsGovernanceSessionReviewWorldbookMatchPreviewResponse,
         AdminAgentsGovernanceSessionsDetailRequest,
         AdminAgentsGovernanceSessionsDetailResponse,
         AdminAgentsGovernanceSessionsListRequest,
@@ -2440,6 +2638,7 @@ declare namespace entities {
         AdminAgentsMessagesListResponse,
         AdminAgentsMessagesTimelineRequest,
         AdminAgentsMessagesTimelineResponse,
+        AdminAgentsModelAnnouncementsCreateRequest,
         AdminAgentsRedeemCodesGenerateRequest,
         AdminAgentsRedeemCodesGenerateResponse,
         AdminAgentsRedeemCodesListRequest,
@@ -2597,6 +2796,8 @@ declare namespace entities {
         AdminUsersAgentUsageResponse,
         AdminUsersAgentUsageDetailsRequest,
         AdminUsersAgentUsageDetailsResponse,
+        AdminUsersAgentUsageLogsRequest,
+        AdminUsersAgentUsageLogsResponse,
         AgentsBillingLogsRequest,
         AgentsBillingLogsResponse,
         AgentsByokModelsCreateRequest,
@@ -2614,6 +2815,7 @@ declare namespace entities {
         AgentsCharactersDiffResponse,
         AgentsCharactersGenerateStickerDescriptionRequest,
         AgentsCharactersGenerateStickerDescriptionResponse,
+        AgentsCharactersListMineRequest,
         AgentsCharactersListMineResponse,
         AgentsCharactersPlazaDetailRequest,
         AgentsCharactersPlazaDetailResponse,
@@ -2685,6 +2887,10 @@ declare namespace entities {
         AgentsMessagesTimelineResponse,
         AgentsMessagesUpdateRequest,
         AgentsMessagesUpdateResponse,
+        AgentsModelAnnouncementsReadRequest,
+        AgentsModelAnnouncementsUnreadResponse,
+        AgentsModelReportsCreateRequest,
+        AgentsModelReportsCreateResponse,
         AgentsModelsFreeQuotaResponse,
         AgentsModelsSuccessRatesRequest,
         AgentsModelsSuccessRatesResponse,
@@ -2716,6 +2922,7 @@ declare namespace entities {
         AgentsSessionsDeleteResponse,
         AgentsSessionsExportRequest,
         AgentsSessionsExportResponse,
+        AgentsSessionsListMineRequest,
         AgentsSessionsListMineResponse,
         AgentsSessionsPreviewModelChangeRequest,
         AgentsSessionsPreviewModelChangeResponse,
@@ -2724,6 +2931,8 @@ declare namespace entities {
         AgentsSessionsRuleListResponse,
         AgentsSessionsShowRequest,
         AgentsSessionsShowResponse,
+        AgentsSessionsUnreadInfoRequest,
+        AgentsSessionsUnreadInfoResponse,
         AgentsSessionsUpdateRequest,
         AgentsSessionsUpdateResponse,
         AgentsSessionsWorldbookListRequest,
@@ -2736,6 +2945,7 @@ declare namespace entities {
         AgentsStylesDeleteResponse,
         AgentsStylesDiffRequest,
         AgentsStylesDiffResponse,
+        AgentsStylesListMineRequest,
         AgentsStylesListMineResponse,
         AgentsStylesListUsableResponse,
         AgentsStylesPlazaDetailRequest,
@@ -2891,6 +3101,8 @@ declare namespace entities {
         ChatRoomsUnsuspendRequest,
         ChatRoomsUpdateRequest,
         ChatRoomsUpdateResponse,
+        ChatUnreadInfoRequest,
+        ChatUnreadInfoResponse,
         ClipsAddNoteRequest,
         ClipsCreateRequest,
         ClipsCreateResponse,

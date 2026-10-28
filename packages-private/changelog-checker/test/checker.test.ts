@@ -5,7 +5,7 @@
 
 import { expect, describe, test } from 'vitest';
 import { Release, ReleaseCategory } from '../src/parser.js';
-import { checkNewRelease, checkNewTopic } from '../src/checker.js';
+import { checkNewRelease, checkNewTopic, checkRetractedRelease } from '../src/checker.js';
 
 describe('checkNewRelease', () => {
 	test('retains the fork unreleased section while importing upstream releases', () => {
@@ -18,6 +18,27 @@ describe('checkNewRelease', () => {
 	test('rejects changed published entries even when new releases are added', () => {
 		const base = [new Release('unreleased'), new Release('fork.4', [new ReleaseCategory('Fixes', ['original'])])];
 		const head = [new Release('unreleased'), new Release('upstream'), new Release('fork.4', [new ReleaseCategory('Fixes', ['changed'])])];
+		expect(checkNewRelease(base, head).success).toBe(false);
+	});
+
+	test.each(['unreleased', 'Unreleased'])('accepts a new release below the retained %s section', (name) => {
+		const base = [new Release(name), new Release('2025.12.2-liminalselves.4')];
+		const head = [new Release(name), new Release('2025.12.2-liminalselves.5'), new Release('2025.12.2-liminalselves.4')];
+
+		expect(checkNewRelease(base, head).success).toBe(true);
+	});
+
+	test('still rejects replacing the previous release below unreleased', () => {
+		const base = [new Release('unreleased'), new Release('2025.12.2-liminalselves.4')];
+		const head = [new Release('unreleased'), new Release('2025.12.2-liminalselves.5'), new Release('2025.12.2-liminalselves.3')];
+
+		expect(checkNewRelease(base, head).success).toBe(false);
+	});
+
+	test('does not count adding only an unreleased heading as a release', () => {
+		const base = [new Release('2025.12.2-liminalselves.4')];
+		const head = [new Release('unreleased'), new Release('2025.12.2-liminalselves.4')];
+
 		expect(checkNewRelease(base, head).success).toBe(false);
 	});
 
@@ -68,6 +89,22 @@ describe('checkNewRelease', () => {
 
 		console.log(result.message);
 		expect(result.success).toBe(false);
+	});
+});
+
+describe('checkRetractedRelease', () => {
+	test('accepts retracting the newest release', () => {
+		const base = [new Release('unreleased'), new Release('2025.12.2-liminalselves.6'), new Release('2025.12.2-liminalselves.5')];
+		const head = [new Release('unreleased'), new Release('2025.12.2-liminalselves.5')];
+
+		expect(checkRetractedRelease(base, head).success).toBe(true);
+	});
+
+	test('rejects retraction when the remaining release does not match', () => {
+		const base = [new Release('2025.12.2-liminalselves.6'), new Release('2025.12.2-liminalselves.5')];
+		const head = [new Release('2025.12.2-liminalselves.4')];
+
+		expect(checkRetractedRelease(base, head).success).toBe(false);
 	});
 });
 
