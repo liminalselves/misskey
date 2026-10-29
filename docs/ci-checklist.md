@@ -6,7 +6,7 @@
 
 - 版本与发布顺序见 [releasing.md](releasing.md)。顶层保留 `## unreleased`；CHANGELOG 检查器比较新增正式版本时排除该占位段，不将空占位段计为发布。
 - 修改检查器后运行 `pnpm --filter changelog-checker test`；检查器位于 `packages-private/changelog-checker`，发布 PR 会运行同一组测试，再比较 base/head 日志。
-- 前端 E2E 使用 `start-server-and-test` 启动服务、等待就绪后运行 Playwright；完整命令与失败工件见 [`test-frontend.yml`](../.github/workflows/test-frontend.yml)。
+- 前端 E2E 使用 `start-server-and-test` 启动服务、等待就绪后运行 Playwright；完整命令与失败工件见 [`test-frontend.yml`](../.github/workflows/test-frontend.yml)。fork 登录后的 `/` 是发现页，发帖显示验证须进入 `/timeline` 并确认提交响应，不应在发现页等待新帖。
 - API JSON 生成是一次性 CLI：写完后必须退出，不能被端点导入时的缓存清理定时器保活。API base/head 各自构建并使用本版本的导出脚本，不跨版本覆盖；旧版 `src-js/` 与新版 Rolldown `built/` 布局不同。生命周期回归测试见 `packages/backend/test/unit/GenerateApiJson.ts`。
 - 推送后按最终提交 SHA 核对全部适用的检查；路径过滤未触发与 fork 主动跳过须单列，不能算作测试通过。仅准备发布时不合 master、不打 tag、不触发镜像发布。
 

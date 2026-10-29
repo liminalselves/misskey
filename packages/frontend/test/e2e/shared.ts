@@ -128,9 +128,17 @@ export async function closeUserSetupDialogIfVisible(page: Page): Promise<void> {
 }
 
 export async function postNote(page: Page, noteText: string, timeout = 15_000): Promise<void> {
+	const timelineResponse = waitApiResponse(page, '/api/notes/timeline');
+	await page.locator('a[href="/timeline"]').first().click();
+	await timelineResponse;
 	await page.getByTestId('open-post-form').waitFor({ state: 'visible' });
 	await page.getByTestId('open-post-form').click();
 	await page.getByTestId('post-form-text').fill(noteText);
+	const createdResponse = page.waitForResponse(response =>
+		new URL(response.url()).pathname === '/api/notes/create' && response.request().method() === 'POST',
+	);
 	await page.getByTestId('post-form-submit').click();
+	const response = await createdResponse;
+	assertOk(response.status(), '/api/notes/create');
 	await page.getByText(noteText).waitFor({ timeout });
 }
