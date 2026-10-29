@@ -104,6 +104,7 @@ jobs:
         workspace:
         - backend
         - frontend
+        - frontend-embed
         - sw
         - misskey-js
     steps:
