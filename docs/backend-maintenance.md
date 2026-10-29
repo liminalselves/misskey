@@ -86,6 +86,6 @@ Redis 在线状态、连接计数、离线推送判断和用户休眠唤醒逻�
 
 ## 验证与部署边界
 
-- 本地不连库验证：`pnpm --filter backend typecheck`；在 `packages/backend` 运行 `node jest.js --config jest.config.unit.cjs --runInBand --runTestsByPath test/unit/AgentSessionCleanupService.ts test/unit/UserService.ts`。
+- 本地不连库验证：`pnpm --filter backend typecheck`；定向 Vitest 命令及数据库边界统一见 [CI 检查清单](ci-checklist.md)，清理与删用户的回归文件为 `test/unit/AgentSessionCleanupService.ts`、`test/unit/UserService.ts`。
 - 迁移必须由部署者执行。生产 Docker 的 `MISSKEY_MIGRATION_CREATE_INDEX_CONCURRENTLY=1` 启用并发建索引；索引构建中断后的 invalid 索引可重跑修复；事务内 revert 不使用 `CONCURRENTLY`。
 - 单测覆盖调用顺序、SQL 生成及 Redis 去重边界，不替代真实 PostgreSQL 并发验收。上线后对照慢查询频次与执行计划确认实际改善，不能用静态检查声称生产耗时已经下降。

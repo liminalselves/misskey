@@ -127,7 +127,7 @@ export class AgentCheckinService {
 			where: { userId },
 			order: { date: 'DESC' },
 			take: 400,
-			select: ['date'],
+			select: { date: true },
 		});
 		const dateSet = new Set(records.map(r => r.date));
 		let streak = 0;

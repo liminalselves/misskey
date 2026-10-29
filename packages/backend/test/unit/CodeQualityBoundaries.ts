@@ -6,30 +6,30 @@
 import 'reflect-metadata';
 import { createHash } from 'node:crypto';
 import { fetchAgentBillingPage } from '@/server/api/endpoints/agents/_billing-logs.js';
-import { jest } from '@jest/globals';
+import { vi, describe, test, expect } from 'vitest';
 import { withWritableAgentSession } from '@/server/api/endpoints/agents/_with-agent-lock.js';
 import { reconcileUnread } from '@/misc/reconcile-unread.js';
 import { readBodyWithLimit } from '@/misc/read-body-with-limit.js';
 
-jest.unstable_mockModule('../../src/core/AgentService.js', () => ({
+vi.doMock('../../src/core/AgentService.js', () => ({
 	AgentService: class {}, escapeAgentXmlText: (text: string) => text,
 	AGENT_LLM_MEMORY_XML_OPEN: '<memory>', AGENT_LLM_MEMORY_XML_CLOSE: '</memory>',
 }));
-jest.unstable_mockModule('../../src/core/QueryService.js', () => ({ QueryService: class {} }));
-jest.unstable_mockModule('../../src/core/RoleService.js', () => ({ RoleService: class {} }));
-jest.unstable_mockModule('../../src/core/MetaService.js', () => ({ MetaService: class {} }));
-jest.unstable_mockModule('../../src/core/S3Service.js', () => ({ S3Service: class {} }));
+vi.doMock('../../src/core/QueryService.js', () => ({ QueryService: class {} }));
+vi.doMock('../../src/core/RoleService.js', () => ({ RoleService: class {} }));
+vi.doMock('../../src/core/MetaService.js', () => ({ MetaService: class {} }));
+vi.doMock('../../src/core/S3Service.js', () => ({ S3Service: class {} }));
 const { default: DownloadUrl } = await import('../../src/server/api/endpoints/drive/files/download-url.js');
 const { default: DeleteCharacter } = await import('../../src/server/api/endpoints/agents/characters/delete.js');
 
-jest.unstable_mockModule('../../src/core/AgentDashscopeMemoryService.js', () => ({ AgentDashscopeMemoryService: class {} }));
-jest.unstable_mockModule('../../src/core/AgentModelUsageService.js', () => ({ AgentModelUsageService: class {} }));
-jest.unstable_mockModule('../../src/core/AgentTokenService.js', () => ({
+vi.doMock('../../src/core/AgentDashscopeMemoryService.js', () => ({ AgentDashscopeMemoryService: class {} }));
+vi.doMock('../../src/core/AgentModelUsageService.js', () => ({ AgentModelUsageService: class {} }));
+vi.doMock('../../src/core/AgentTokenService.js', () => ({
 	AgentTokenService: class {}, AGENT_LLM_APPROX_CHARS_PER_TOKEN: 3,
 	AGENT_OVERVIEW_SCAN_LIMIT: 500, AGENT_SEND_PATH_SCAN_LIMIT: 500,
 }));
-jest.unstable_mockModule('../../src/core/NotificationService.js', () => ({ NotificationService: class {} }));
-jest.unstable_mockModule('../../src/core/UserSuspendService.js', () => ({ UserSuspendService: class {} }));
+vi.doMock('../../src/core/NotificationService.js', () => ({ NotificationService: class {} }));
+vi.doMock('../../src/core/UserSuspendService.js', () => ({ UserSuspendService: class {} }));
 const { AgentCompressionMemoryService } = await import('../../src/core/AgentCompressionMemoryService.js');
 const { default: QuickAction } = await import('../../src/server/api/endpoints/admin/agents/governance/quick-action.js');
 
@@ -37,9 +37,9 @@ const me = { id: 'reader1' };
 
 describe('Agent session mutation boundary', () => {
 	test('rechecks reply occupancy after taking the session lock', async () => {
-		const manager = { findOne: jest.fn(async () => ({ id: 'session1', agentReplyPending: true })) };
+		const manager = { findOne: vi.fn(async () => ({ id: 'session1', agentReplyPending: true })) };
 		const db = { transaction: async (callback: (manager: unknown) => Promise<unknown>) => callback(manager) };
-		const mutate = jest.fn<() => Promise<void>>();
+		const mutate = vi.fn<() => Promise<void>>();
 		await expect(withWritableAgentSession(db as never, 'session1', me.id, mutate)).rejects.toMatchObject({ code: 'AGENT_REPLY_PENDING' });
 		expect(mutate).not.toHaveBeenCalled();
 		expect(manager.findOne.mock.calls[0]).toBeDefined();
@@ -47,7 +47,7 @@ describe('Agent session mutation boundary', () => {
 
 	test('does not invoke a mutation for a missing or foreign session', async () => {
 		const db = { transaction: async (callback: (manager: unknown) => Promise<unknown>) => callback({ findOne: async () => null }) };
-		const mutate = jest.fn<() => Promise<void>>();
+		const mutate = vi.fn<() => Promise<void>>();
 		await expect(withWritableAgentSession(db as never, 'session1', me.id, mutate)).rejects.toMatchObject({ code: 'NO_SUCH_SESSION' });
 		expect(mutate).not.toHaveBeenCalled();
 	});
@@ -56,7 +56,7 @@ describe('Agent session mutation boundary', () => {
 		const manager = {
 			findOne: async () => ({ id: 'character1', userId: me.id }),
 			existsBy: async () => true,
-			delete: jest.fn<() => Promise<void>>(),
+			delete: vi.fn<() => Promise<void>>(),
 		};
 		const db = { transaction: async (callback: (manager: unknown) => Promise<unknown>) => callback(manager) };
 		const endpoint = new DeleteCharacter(db as never, { assertAgentsEnabled: () => {} } as never);
@@ -71,18 +71,18 @@ describe('Unread reconciliation', () => {
 	test('retries from the new range if a notification changes the snapshot', async () => {
 		const snapshots = [['m3', 'm1', '3'], ['m4', 'm1', '4']];
 		const redis = {
-			mget: jest.fn(async () => snapshots.shift()!),
-			eval: jest.fn<(...args: unknown[]) => Promise<number>>().mockResolvedValueOnce(0).mockResolvedValueOnce(1),
+			mget: vi.fn(async () => snapshots.shift()!),
+			eval: vi.fn<(...args: unknown[]) => Promise<number>>().mockResolvedValueOnce(0).mockResolvedValueOnce(1),
 		};
-		const load = jest.fn(async (first: string, last: string) => ({ count: 2, first, last }));
+		const load = vi.fn(async (first: string, last: string) => ({ count: 2, first, last }));
 		await reconcileUnread(redis as never, keys, 'room:r1', load);
 		expect(load.mock.calls).toEqual([['m1', 'm3'], ['m1', 'm4']]);
 		expect(redis.eval.mock.calls[1]!.slice(6)).toEqual(['m4', 'm1', '4', '2', 'm1', 'm4', 'room:r1']);
 	});
 
 	test('retains legacy unknown-count dots instead of inventing a read receipt', async () => {
-		const redis = { mget: async () => ['m3', null, null], eval: jest.fn() };
-		const load = jest.fn<() => Promise<never>>();
+		const redis = { mget: async () => ['m3', null, null], eval: vi.fn() };
+		const load = vi.fn<() => Promise<never>>();
 		await reconcileUnread(redis as never, keys, 'session1', load);
 		expect(load).not.toHaveBeenCalled();
 		expect(redis.eval).not.toHaveBeenCalled();
@@ -132,7 +132,7 @@ describe('Download authorization', () => {
 describe('Compression result commit boundary', () => {
 	test.each(['deleted', 'edited', 'unchanged'])('checks source messages again after generation: %s', async change => {
 		const source = { id: 'm1', role: 'user', content: 'original' };
-		const insert = jest.fn<() => Promise<void>>();
+		const insert = vi.fn<() => Promise<void>>();
 		const builder = { select: () => builder, where: () => builder, getRawOne: async () => ({ m: '0' }) };
 		const manager = {
 			findOne: async () => ({ id: 's1', timeAwarenessEnabled: false }),
@@ -165,7 +165,7 @@ describe('Compression result commit boundary', () => {
 
 describe('Quick-action preflight', () => {
 	test('rejects a moderator suspension before banning any session', async () => {
-		const write = jest.fn();
+		const write = vi.fn();
 		const endpoint = new QuickAction({ findBy: async () => [{ id: 's1', userId: 'u1' }], createQueryBuilder: write } as never,
 			{ findOneBy: async () => ({ id: 'u1', isSuspended: false }) } as never,
 			{} as never, {} as never, { assertAgentsEnabled: () => {} } as never,
@@ -200,7 +200,7 @@ describe('Merged billing query', () => {
 
 describe('Bounded response body', () => {
 	test('cancels an oversized stream', async () => {
-		const cancel = jest.fn<() => void>();
+		const cancel = vi.fn<() => void>();
 		const response = new Response(new ReadableStream({
 			start(controller) { controller.enqueue(new Uint8Array(8)); }, cancel,
 		}));

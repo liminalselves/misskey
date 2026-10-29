@@ -774,7 +774,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 						where: { sessionId: session.id },
 						order: { createdAt: 'DESC', id: 'DESC' },
 						take: AGENT_OVERVIEW_SCAN_LIMIT,
-						select: ['id', 'role', 'content', 'createdAt', 'imageFileId', 'imageRecognitionStatus', 'imageRecognitionDescription', 'proactiveScheduleControlRaw', 'proactiveScheduleControlError', 'timeTrusted'],
+						select: { id: true, role: true, content: true, createdAt: true, imageFileId: true, imageRecognitionStatus: true, imageRecognitionDescription: true, proactiveScheduleControlRaw: true, proactiveScheduleControlError: true, timeTrusted: true },
 					});
 					const compressionSidecar = await this.agentCompressionMemoryService.computeSidecarTokenD({
 						session, character, style, instanceMeta, rows: compressionRows,

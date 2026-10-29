@@ -15,11 +15,16 @@ jobs:
 
     steps:
       - name: Checkout head
-        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
-      - name: Setup Node.js
-        uses: actions/setup-node@395ad3262231945c25e8478fd5baf05154b1d79f # v6.1.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: setup pnpm
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+
+      - name: setup node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: '.node-version'
+          cache: pnpm
 
       - name: Checkout base
         run: |
@@ -30,20 +35,19 @@ jobs:
           git checkout origin/${{ github.base_ref }} CHANGELOG.md
 
       - name: Copy to Checker directory for CHANGELOG-base.md
-        run: cp _base/CHANGELOG.md scripts/changelog-checker/CHANGELOG-base.md
+        run: cp _base/CHANGELOG.md packages-private/changelog-checker/CHANGELOG-base.md
       - name: Copy to Checker directory for CHANGELOG-head.md
-        run: cp CHANGELOG.md scripts/changelog-checker/CHANGELOG-head.md
+        run: cp CHANGELOG.md packages-private/changelog-checker/CHANGELOG-head.md
       - name: diff
         continue-on-error: true
         run: diff -u CHANGELOG-base.md CHANGELOG-head.md
-        working-directory: scripts/changelog-checker
+        working-directory: packages-private/changelog-checker
 
-      - name: Setup Checker
-        run: npm install
-        working-directory: scripts/changelog-checker
+      - name: Install dependencies
+        run: pnpm --filter changelog-checker... install --frozen-lockfile
+
       - name: Test Checker
-        run: npm test
-        working-directory: scripts/changelog-checker
+        run: pnpm --filter changelog-checker test
+
       - name: Run Checker
-        run: npm run run
-        working-directory: scripts/changelog-checker
+        run: pnpm --filter changelog-checker check

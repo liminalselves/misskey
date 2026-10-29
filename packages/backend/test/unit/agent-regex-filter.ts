@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
-import { afterAll } from '@jest/globals';
+import { afterAll, describe, test, expect } from 'vitest';
 import {
 	AgentRegexBatchFilter,
 	AgentRegexFilterTimeoutError,
@@ -15,6 +15,7 @@ const RULE = (pattern: string, targets: Array<'user' | 'assistant'>, effects: Ar
 	({ pattern, targets, effects });
 
 const createdFilters: AgentRegexBatchFilter[] = [];
+
 function makeFilter(timeoutMs?: number): AgentRegexBatchFilter {
 	const filter = new AgentRegexBatchFilter(timeoutMs);
 	createdFilters.push(filter);

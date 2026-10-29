@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
-import { jest } from '@jest/globals';
+import { vi, describe, test, expect, beforeEach, afterEach } from 'vitest';
 import { QueryFailedError } from 'typeorm';
 import { AgentCheckinService } from '@/core/AgentCheckinService.js';
 import { MiAgentCheckinRecord } from '@/models/AgentCheckinRecord.js';
@@ -32,10 +32,10 @@ function createService(opts: TxOptions = {}) {
 	const txInserts: Array<[unknown, Record<string, unknown>]> = [];
 
 	const monthQuery = {
-		where: jest.fn(),
-		andWhere: jest.fn(),
-		orderBy: jest.fn(),
-		getMany: jest.fn(async () => [
+		where: vi.fn(),
+		andWhere: vi.fn(),
+		orderBy: vi.fn(),
+		getMany: vi.fn(async () => [
 			{
 				date: '2026-09-18',
 				reward: 0,
@@ -66,26 +66,26 @@ function createService(opts: TxOptions = {}) {
 	monthQuery.andWhere.mockReturnValue(monthQuery);
 	monthQuery.orderBy.mockReturnValue(monthQuery);
 	const totalQuery = {
-		select: jest.fn(),
-		where: jest.fn(),
-		getRawOne: jest.fn(async () => ({ total: 0 })),
+		select: vi.fn(),
+		where: vi.fn(),
+		getRawOne: vi.fn(async () => ({ total: 0 })),
 	};
 	totalQuery.select.mockReturnValue(totalQuery);
 	totalQuery.where.mockReturnValue(totalQuery);
 	const makeupCountQuery = {
-		where: jest.fn(),
-		andWhere: jest.fn(),
-		getCount: jest.fn(async () => 1),
+		where: vi.fn(),
+		andWhere: vi.fn(),
+		getCount: vi.fn(async () => 1),
 	};
 	makeupCountQuery.where.mockReturnValue(makeupCountQuery);
 	makeupCountQuery.andWhere.mockReturnValue(makeupCountQuery);
 
 	const checkinRecordsRepository = {
-		insertOne: jest.fn(async (row: Record<string, unknown>) => {
+		insertOne: vi.fn(async (row: Record<string, unknown>) => {
 			inserted.push(row);
 		}),
-		findOneBy: jest.fn(async () => null),
-		findOneByOrFail: jest.fn(async () => ({
+		findOneBy: vi.fn(async () => null),
+		findOneByOrFail: vi.fn(async () => ({
 			reward: 2.5,
 			streakAtCheckin: 3,
 			baseValue: 1,
@@ -93,38 +93,38 @@ function createService(opts: TxOptions = {}) {
 			roleMultiplier: 1,
 			dayMultiplier: 1,
 		})),
-		existsBy: jest.fn(async () => false),
-		find: jest.fn(async () => []),
-		createQueryBuilder: jest.fn()
+		existsBy: vi.fn(async () => false),
+		find: vi.fn(async () => []),
+		createQueryBuilder: vi.fn()
 			.mockReturnValueOnce(monthQuery)
 			.mockReturnValueOnce(totalQuery)
 			.mockReturnValueOnce(makeupCountQuery),
 	};
 
 	const txMonthQueryBuilder = {
-		where: jest.fn(),
-		andWhere: jest.fn(),
-		getCount: jest.fn(async () => opts.monthMakeupCount ?? 0),
+		where: vi.fn(),
+		andWhere: vi.fn(),
+		getCount: vi.fn(async () => opts.monthMakeupCount ?? 0),
 	};
 	txMonthQueryBuilder.where.mockReturnValue(txMonthQueryBuilder);
 	txMonthQueryBuilder.andWhere.mockReturnValue(txMonthQueryBuilder);
 
 	const em = {
-		insert: jest.fn(async (target: unknown, values: Record<string, unknown>) => {
+		insert: vi.fn(async (target: unknown, values: Record<string, unknown>) => {
 			txInserts.push([target, values]);
 		}),
-		increment: jest.fn(async () => ({ affected: 1, raw: [], generatedMaps: [] })),
-		decrement: jest.fn(async () => ({ affected: 1, raw: [], generatedMaps: [] })),
-		findOne: jest.fn(async () => (opts.profile === undefined ? { userId: 'user-id', agentCreditBalance: 100 } : opts.profile)),
-		find: jest.fn(async () => []),
-		delete: jest.fn(async () => ({ affected: 0, raw: [] })),
-		getRepository: jest.fn(() => ({
+		increment: vi.fn(async () => ({ affected: 1, raw: [], generatedMaps: [] })),
+		decrement: vi.fn(async () => ({ affected: 1, raw: [], generatedMaps: [] })),
+		findOne: vi.fn(async () => (opts.profile === undefined ? { userId: 'user-id', agentCreditBalance: 100 } : opts.profile)),
+		find: vi.fn(async () => []),
+		delete: vi.fn(async () => ({ affected: 0, raw: [] })),
+		getRepository: vi.fn(() => ({
 			createQueryBuilder: () => txMonthQueryBuilder,
 		})),
 		...opts.emOverrides,
 	};
 	const db = {
-		transaction: jest.fn(async (cb: (em: unknown) => Promise<unknown>) => {
+		transaction: vi.fn(async (cb: (em: unknown) => Promise<unknown>) => {
 			if (opts.txFn) await opts.txFn(em);
 			return await cb(em);
 		}),
@@ -133,10 +133,10 @@ function createService(opts: TxOptions = {}) {
 	let idSeq = 0;
 	const service = new AgentCheckinService(
 		checkinRecordsRepository as never,
-		{ findBy: jest.fn(async () => []) } as never,
-		{ findBy: jest.fn(async () => []) } as never,
+		{ findBy: vi.fn(async () => []) } as never,
+		{ findBy: vi.fn(async () => []) } as never,
 		db as never,
-		{ gen: jest.fn(() => `record-id-${++idSeq}`) } as never,
+		{ gen: vi.fn(() => `record-id-${++idSeq}`) } as never,
 	);
 
 	return { service, inserted, txInserts, em, db, checkinRecordsRepository };
@@ -144,11 +144,11 @@ function createService(opts: TxOptions = {}) {
 
 describe('AgentCheckinService admin makeup', () => {
 	beforeEach(() => {
-		jest.useFakeTimers().setSystemTime(new Date('2026-09-21T04:00:00.000Z'));
+		vi.useFakeTimers().setSystemTime(new Date('2026-09-21T04:00:00.000Z'));
 	});
 
 	afterEach(() => {
-		jest.useRealTimers();
+		vi.useRealTimers();
 	});
 
 	test('creates a free admin makeup record', async () => {
@@ -193,11 +193,11 @@ describe('AgentCheckinService admin makeup', () => {
 
 describe('AgentCheckinService performCheckin transaction', () => {
 	beforeEach(() => {
-		jest.useFakeTimers().setSystemTime(new Date('2026-09-21T04:00:00.000Z'));
+		vi.useFakeTimers().setSystemTime(new Date('2026-09-21T04:00:00.000Z'));
 	});
 
 	afterEach(() => {
-		jest.useRealTimers();
+		vi.useRealTimers();
 	});
 
 	test('writes record, credits balance and income log in one transaction', async () => {
@@ -218,7 +218,7 @@ describe('AgentCheckinService performCheckin transaction', () => {
 	test('rolls back the whole transaction and returns idempotent result on duplicate checkin', async () => {
 		const { service, txInserts, em } = createService({
 			emOverrides: {
-				insert: jest.fn(async () => {
+				insert: vi.fn(async () => {
 					throw makeDuplicateError();
 				}),
 			},
@@ -243,11 +243,11 @@ describe('AgentCheckinService performCheckin transaction', () => {
 
 describe('AgentCheckinService performMakeup transaction', () => {
 	beforeEach(() => {
-		jest.useFakeTimers().setSystemTime(new Date('2026-09-21T04:00:00.000Z'));
+		vi.useFakeTimers().setSystemTime(new Date('2026-09-21T04:00:00.000Z'));
 	});
 
 	afterEach(() => {
-		jest.useRealTimers();
+		vi.useRealTimers();
 	});
 
 	test('serializes via profile row lock, charges and writes log in one transaction', async () => {
@@ -293,7 +293,7 @@ describe('AgentCheckinService performMakeup transaction', () => {
 		const { service, em } = createService({
 			profile: { agentCreditBalance: 100 },
 			emOverrides: {
-				insert: jest.fn(async () => {
+				insert: vi.fn(async () => {
 					throw makeDuplicateError();
 				}),
 			},

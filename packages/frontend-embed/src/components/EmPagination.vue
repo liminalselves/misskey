@@ -177,7 +177,7 @@ watch([backed, rootEl], () => {
 });
 
 // パラメータに何らかの変更があった際、再読込したい（チャンネル等のIDが変わったなど）
-watch(() => [props.pagination.endpoint, props.pagination.params], init, { deep: true });
+watch([() => props.pagination.endpoint, () => props.pagination.params], init, { deep: true });
 
 watch(queue, (a, b) => {
 	if (a.size === 0 && b.size === 0) return;
@@ -244,7 +244,7 @@ const fetchMore = async (): Promise<void> => {
 			if (i === 10) item._shouldInsertAd_ = true;
 		}
 
-		const reverseConcat = _res => {
+		const reverseConcat = (_res: MisskeyEntity[]) => {
 			const oldHeight = scrollableElement.value ? scrollableElement.value.scrollHeight : getBodyScrollHeight();
 			const oldScroll = scrollableElement.value ? scrollableElement.value.scrollTop : window.scrollY;
 

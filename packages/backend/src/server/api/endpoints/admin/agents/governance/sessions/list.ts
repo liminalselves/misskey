@@ -72,7 +72,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			if (rows.length === 0) return [];
 
 			const charIds = [...new Set(rows.map(r => r.characterId))];
-			const chars = await this.agentCharactersRepository.find({ where: { id: In(charIds) }, select: ['id', 'name'] });
+			const chars = await this.agentCharactersRepository.find({ where: { id: In(charIds) }, select: { id: true, name: true } });
 			const charMap = new Map(chars.map(c => [c.id, c.name]));
 			const userIds = [...new Set(rows.map(r => r.userId))];
 			const users = await this.usersRepository.findBy({ id: In(userIds) });

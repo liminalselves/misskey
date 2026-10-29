@@ -59,7 +59,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		>
 			<i class="ti ti-chevron-left ti-fw"></i>
 		</button>
-		<div v-if="!thin_ && narrow && props.displayMyAvatar && $i" class="_button" @click="openAccountMenu">
+		<div v-if="!thin_ && (narrow || deviceKind === 'smartphone') && props.displayMyAvatar && $i" class="_button" @click="openAccountMenu">
 			<MkAvatar :class="$style.avatar" :user="$i"/>
 		</div>
 		<div v-else-if="!thin_ && narrow && !hideTitle" :class="$style.buttons"></div>
@@ -121,6 +121,7 @@ import { onMounted, onUnmounted, ref, inject, useTemplateRef, computed } from 'v
 import { scrollToTop } from '@@/js/scroll.js';
 import XTabs from './MkPageHeader.tabs.vue';
 import { getAccountMenu } from '@/accounts.js';
+import { deviceKind } from '@/utility/device-kind.js';
 import { $i } from '@/i.js';
 import { DI } from '@/di.js';
 import * as os from '@/os.js';
@@ -235,10 +236,12 @@ onUnmounted(() => {
 	align-items: center;
 	height: var(--height);
 
-	.tabs:first-child {
+	.tabs:first-child,
+	&:not(.slim) > :not(.titleContainer) ~ .tabs {
 		margin-left: auto;
 		padding: 0 12px;
 	}
+
 	.tabs {
 		margin-right: auto;
 	}
@@ -292,7 +295,7 @@ onUnmounted(() => {
 	justify-content: center;
 	overflow: hidden;
 
-	:deep(.tabsInner) {
+	> .chatMobileTabs > div {
 		width: auto;
 		margin-left: 0;
 		margin-right: 0;

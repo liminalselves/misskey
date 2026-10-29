@@ -76,7 +76,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				// (updatedAt, id) 复合游标：updatedAt 相同的并列行按 id 决胜，避免翻页丢行/重行
 				const cursor = await this.agentDialogueStylesRepository.findOne({
 					where: { id: ps.untilId, userId: me.id },
-					select: ['id', 'updatedAt'],
+					select: { id: true, updatedAt: true },
 				});
 				if (cursor) {
 					qb.andWhere('(s.updatedAt < :cursorUpdatedAt OR (s.updatedAt = :cursorUpdatedAt AND s.id < :cursorId))', {

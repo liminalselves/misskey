@@ -4,7 +4,7 @@
  */
 
 import { AgentProactiveScheduleService } from '@/core/AgentProactiveScheduleService.js';
-import { jest } from '@jest/globals';
+import { vi, describe, test, expect } from 'vitest';
 
 describe('AgentProactiveScheduleService control extraction', () => {
 	const service = new AgentProactiveScheduleService({} as never, {} as never, {
@@ -114,7 +114,7 @@ describe('AgentProactiveScheduleService control extraction', () => {
 	});
 
 	test('completes an expired one-time schedule instead of throwing when it is resumed', async () => {
-		const save = jest.fn(async (schedule: unknown) => schedule);
+		const save = vi.fn(async (schedule: unknown) => schedule);
 		const scheduled = new AgentProactiveScheduleService({ save } as never, {} as never, {} as never);
 		const schedule = {
 			status: 'paused',

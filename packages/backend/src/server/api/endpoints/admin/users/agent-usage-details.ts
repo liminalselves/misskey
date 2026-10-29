@@ -151,10 +151,10 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			const dialogueStyleIds = dialogueStyleStatsRaw.map(row => row.dialogueStyleId);
 			const [characterRows, dialogueStyleRows] = await Promise.all([
 				characterIds.length > 0
-					? this.agentCharactersRepository.find({ where: { id: In(characterIds) }, select: ['id', 'name'] })
+					? this.agentCharactersRepository.find({ where: { id: In(characterIds) }, select: { id: true, name: true } })
 					: Promise.resolve([]),
 				dialogueStyleIds.length > 0
-					? this.agentDialogueStylesRepository.find({ where: { id: In(dialogueStyleIds) }, select: ['id', 'name'] })
+					? this.agentDialogueStylesRepository.find({ where: { id: In(dialogueStyleIds) }, select: { id: true, name: true } })
 					: Promise.resolve([]),
 			]);
 			const characterNameMap = new Map(characterRows.map(row => [row.id, row.name]));

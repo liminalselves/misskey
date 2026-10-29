@@ -3,11 +3,14 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
-import { jest } from '@jest/globals';
+import { beforeEach, describe, expect, test, vi } from 'vitest';
 
-const lookup = jest.fn<(host: string, opts: unknown) => Promise<{ address: string }[]>>();
-jest.unstable_mockModule('node:dns/promises', () => ({ default: { lookup } }));
-const { createLlmUrlBatchValidator, UnsafeLlmUrlError } = await import('../../src/misc/validate-llm-endpoint-url.js');
+const { lookup } = vi.hoisted(() => ({
+	lookup: vi.fn<(host: string, opts: unknown) => Promise<{ address: string }[]>>(),
+}));
+vi.mock('node:dns/promises', () => ({ default: { lookup } }));
+
+import { createLlmUrlBatchValidator, UnsafeLlmUrlError } from '@/misc/validate-llm-endpoint-url.js';
 
 describe('createLlmUrlBatchValidator', () => {
 	beforeEach(() => {

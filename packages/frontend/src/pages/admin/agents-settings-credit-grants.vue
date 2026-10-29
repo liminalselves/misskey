@@ -322,7 +322,7 @@ async function submit() {
 	}
 }
 
-.gridRow :deep(input) {
+.gridRow :global(input) {
 	min-width: 0;
 }
 

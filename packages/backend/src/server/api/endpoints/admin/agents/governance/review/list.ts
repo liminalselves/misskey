@@ -67,10 +67,10 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			const orderDir = status === 'pending' ? 'ASC' : 'DESC';
 			const cursor = ps.untilId == null ? null : (await this.agentCharactersRepository.findOne({
 				where: { id: ps.untilId },
-				select: ['id', 'updatedAt'],
+				select: { id: true, updatedAt: true },
 			}) ?? await this.agentDialogueStylesRepository.findOne({
 				where: { id: ps.untilId },
-				select: ['id', 'updatedAt'],
+				select: { id: true, updatedAt: true },
 			}));
 
 			const characters = kind === 'style' ? [] : await (async () => {

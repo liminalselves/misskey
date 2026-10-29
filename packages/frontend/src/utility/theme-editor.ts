@@ -3,10 +3,10 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
-import type { Theme } from '@/theme.js';
 import { genId } from '@/utility/id.js';
 
-import { themeProps } from '@/theme.js';
+import type { Theme } from '@@/js/theme.js';
+import { themeProps } from '@@/js/theme.js';
 
 export type Default = null;
 export type Color = string;

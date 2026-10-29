@@ -42,7 +42,7 @@ function observeVisibleButtons() {
 function mountPagination(paginator: Paginator<'users/search'>) {
 	return render(MkPagination, {
 		props: { paginator, autoLoad: false },
-		slots: { default: ({ items }) => h('div', items.map(item => h('div', { 'data-item': item.id }, item.id))) },
+		slots: { default: ({ items }: { items: Array<{ id: string }> }) => h('div', items.map(item => h('div', { 'data-item': item.id }, item.id))) },
 		global: { components: { MkLoading }, stubs: { MkError: true, MkResult: true, MkA: true }, directives: { appear: appearDirective } },
 	});
 }

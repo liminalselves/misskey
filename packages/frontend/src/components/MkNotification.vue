@@ -4,7 +4,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 -->
 
 <template>
-<div :class="$style.root">
+<div :class="[$style.root, { [$style.contentVisibilityAuto]: contentVisibilityAuto }]">
 	<div :class="$style.head">
 		<MkAvatar v-if="['pollEnded', 'note'].includes(notification.type) && 'note' in notification" :class="$style.icon" :user="notification.note.user" link preview/>
 		<img v-else-if="(notification as any).type === 'agentProactiveMessage' && (notification as any).agentAvatarUrl" :class="[$style.icon, $style.agentAvatar]" :src="(notification as any).agentAvatarUrl" alt="">
@@ -187,7 +187,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<div :class="$style.text" style="opacity: 0.6;">{{ i18n.ts.followRequestAccepted }}</div>
 				<div v-if="notification.message" :class="$style.text" style="opacity: 0.6; font-style: oblique;">
 					<i class="ti ti-quote" :class="$style.quote"></i>
-					<span>{{ notification.message }}</span>
+					<Mfm :text="notification.message" :author="notification.user" :plain="true" :nowrap="true"/>
 					<i class="ti ti-quote" :class="$style.quote"></i>
 				</div>
 			</template>
@@ -244,9 +244,11 @@ const props = withDefaults(defineProps<{
 	notification: Misskey.entities.Notification;
 	withTime?: boolean;
 	full?: boolean;
+	contentVisibilityAuto?: boolean;
 }>(), {
 	withTime: false,
 	full: false,
+	contentVisibilityAuto: true,
 });
 
 type ExportCompletedNotification = Misskey.entities.Notification & { type: 'exportCompleted' };
@@ -292,8 +294,11 @@ function getActualReactedUsersCount(notification: Misskey.entities.Notification)
 	overflow-wrap: break-word;
 	display: flex;
 	contain: content;
-	content-visibility: auto;
-	contain-intrinsic-size: 0 100px;
+
+	&.contentVisibilityAuto {
+		content-visibility: auto;
+		contain-intrinsic-size: 0 100px;
+	}
 
 	--eventFollow: #36aed2;
 	--eventRenote: #36d298;
