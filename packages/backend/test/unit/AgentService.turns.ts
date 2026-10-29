@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
+import { describe, test, expect } from 'vitest';
+
 import {
 	AGENT_LLM_MISSING_ASSISTANT_REPLY_MARKER,
 	AGENT_LLM_PROACTIVE_CONTINUATION_MARKER,

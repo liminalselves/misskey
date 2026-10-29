@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
-import { jest } from '@jest/globals';
+import { vi, describe, test, expect } from 'vitest';
 import { MiAgentCharacter } from '@/models/AgentCharacter.js';
 import { MiAgentDialogueStyle } from '@/models/AgentDialogueStyle.js';
 import { MiAgentPublishedVersion } from '@/models/AgentPublishedVersion.js';
@@ -20,21 +20,21 @@ function createReviewHarness(initialRow: ReviewRow, initialHistory: ArchivedRow[
 	const lockOptions: unknown[] = [];
 
 	const db = {
-		transaction: jest.fn(async (callback: (manager: any) => Promise<unknown>) => {
+		transaction: vi.fn(async (callback: (manager: any) => Promise<unknown>) => {
 			const run = queue.then(async () => {
 				let workingRow = structuredClone(committedRow);
 				const workingHistory = structuredClone(committedHistory);
 				const manager = {
-					findOne: jest.fn(async (_entity: unknown, options: unknown) => {
+					findOne: vi.fn(async (_entity: unknown, options: unknown) => {
 						lockOptions.push(options);
 						return workingRow;
 					}),
-					createQueryBuilder: jest.fn(() => {
+					createQueryBuilder: vi.fn(() => {
 						const query = {
-							select: jest.fn(),
-							where: jest.fn(),
-							andWhere: jest.fn(),
-							getRawOne: jest.fn(async () => ({
+							select: vi.fn(),
+							where: vi.fn(),
+							andWhere: vi.fn(),
+							getRawOne: vi.fn(async () => ({
 								max: workingHistory.length === 0 ? null : Math.max(...workingHistory.map(row => row.version)),
 							})),
 						};
@@ -43,7 +43,7 @@ function createReviewHarness(initialRow: ReviewRow, initialHistory: ArchivedRow[
 						query.andWhere.mockReturnValue(query);
 						return query;
 					}),
-					save: jest.fn(async (entity: unknown, row: ReviewRow | ArchivedRow) => {
+					save: vi.fn(async (entity: unknown, row: ReviewRow | ArchivedRow) => {
 						if (entity === MiAgentPublishedVersion) {
 							if (failArchiveSave) throw new Error('archive failed');
 							workingHistory.push(structuredClone(row as ArchivedRow));
@@ -64,16 +64,16 @@ function createReviewHarness(initialRow: ReviewRow, initialHistory: ArchivedRow[
 		}),
 	};
 	const agentService = {
-		buildCharacterSnapshotFromRow: jest.fn(() => ({ name: 'new character', draftRevision: 2 })),
-		buildStyleSnapshotFromRow: jest.fn(() => ({ name: 'new style', body: 'body', summary: null, draftRevision: 2 })),
-		syncCharacterListedFlag: jest.fn((row: MiAgentCharacter) => {
+		buildCharacterSnapshotFromRow: vi.fn(() => ({ name: 'new character', draftRevision: 2 })),
+		buildStyleSnapshotFromRow: vi.fn(() => ({ name: 'new style', body: 'body', summary: null, draftRevision: 2 })),
+		syncCharacterListedFlag: vi.fn((row: MiAgentCharacter) => {
 			row.isPublished = row.publishedVersion != null;
 		}),
-		syncStyleListedFlag: jest.fn((row: MiAgentDialogueStyle) => {
+		syncStyleListedFlag: vi.fn((row: MiAgentDialogueStyle) => {
 			row.isPublished = row.publishedVersion != null;
 		}),
 	};
-	const idService = { gen: jest.fn(() => `archive-${committedHistory.length + 1}`) };
+	const idService = { gen: vi.fn(() => `archive-${committedHistory.length + 1}`) };
 
 	return {
 		db,

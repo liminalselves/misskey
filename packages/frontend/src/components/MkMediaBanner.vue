@@ -9,7 +9,6 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<span style="font-size: 1.6em;"><i class="ti ti-ban"></i></span>
 		<b>图片已封禁</b>
 	</div>
-	<MkMediaAudio v-else-if="media.type.startsWith('audio') && media.type !== 'audio/midi'" :audio="media"/>
 	<div v-else-if="hide" :class="$style.sensitive" @click="reveal">
 		<span style="font-size: 1.6em;"><i class="ti ti-alert-triangle"></i></span>
 		<b>{{ i18n.ts.sensitive }}</b>
@@ -31,7 +30,6 @@ SPDX-License-Identifier: AGPL-3.0-only
 import { ref } from 'vue';
 import * as Misskey from 'misskey-js';
 import { i18n } from '@/i18n.js';
-import MkMediaAudio from '@/components/MkMediaAudio.vue';
 import { shouldHideFileByDefault, canRevealFile } from '@/utility/sensitive-file.js';
 
 const props = defineProps<{
@@ -83,10 +81,5 @@ async function reveal() {
 	background: var(--MI_THEME-bg);
 	color: var(--MI_THEME-error);
 	gap: 8px;
-}
-
-.audio {
-	border-radius: 8px;
-	overflow: clip;
 }
 </style>

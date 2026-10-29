@@ -4,7 +4,7 @@
  */
 
 import dns from 'node:dns/promises';
-import { jest } from '@jest/globals';
+import { vi, describe, test, expect } from 'vitest';
 import { AGENT_EXTERNAL_AUDIT_PROVIDER_IDS, isAgentExternalAuditProvider } from '@/models/AgentExternalAuditProvider.js';
 import { getAgentExternalAuditProviderDefinition } from '@/core/agent-external-audit-providers.js';
 import {
@@ -39,8 +39,8 @@ describe('agent external audit providers and rules', () => {
 	});
 
 	test.each(['allow', rules[0]!.id])('sends JEV object state and parses choice %s', async choice => {
-		const lookup = jest.spyOn(dns, 'lookup').mockResolvedValue([{ address: '8.8.8.8', family: 4 }] as never);
-		const fetchMock = jest.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({
+		const lookup = vi.spyOn(dns, 'lookup').mockResolvedValue([{ address: '8.8.8.8', family: 4 }] as never);
+		const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({
 			answers: { content_safety: { choice, confidence: 0.93, probabilities: { [choice]: 0.93 } } },
 		})));
 		try {

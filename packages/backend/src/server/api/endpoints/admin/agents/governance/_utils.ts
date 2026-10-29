@@ -25,7 +25,7 @@ export async function resolveUserIdFromAcctOrId(usersRepository: UsersRepository
 	const value = input?.trim();
 	if (!value) return null;
 
-	const userById = await usersRepository.findOne({ where: { id: value }, select: ['id'] });
+	const userById = await usersRepository.findOne({ where: { id: value }, select: { id: true } });
 	if (userById) return userById.id;
 
 	const acct = Acct.parse(value);
@@ -36,14 +36,14 @@ export async function resolveUserIdFromAcctOrId(usersRepository: UsersRepository
 			usernameLower: acct.username.toLowerCase(),
 			host: acct.host == null || acct.host === '' ? IsNull() : acct.host.toLowerCase(),
 		},
-		select: ['id'],
+		select: { id: true },
 	});
 
 	return userByAcct?.id ?? value;
 }
 
 export async function getAcctByUserId(usersRepository: UsersRepository, userId: string): Promise<string | null> {
-	const user = await usersRepository.findOne({ where: { id: userId }, select: ['username', 'host'] });
+	const user = await usersRepository.findOne({ where: { id: userId }, select: { username: true, host: true } });
 	if (!user) return null;
 	return `@${Acct.toString({ username: user.username, host: user.host })}`;
 }

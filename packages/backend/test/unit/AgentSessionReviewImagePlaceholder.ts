@@ -4,11 +4,11 @@
  */
 
 import 'reflect-metadata';
-import { jest } from '@jest/globals';
+import { vi, describe, test, expect } from 'vitest';
 import type { MiAgentImageGeneration } from '@/models/AgentImageGeneration.js';
 
-jest.unstable_mockModule('../../src/core/AgentService.js', () => ({ AgentService: class {} }));
-jest.unstable_mockModule('../../src/core/entities/DriveFileEntityService.js', () => ({ DriveFileEntityService: class {} }));
+vi.doMock('../../src/core/AgentService.js', () => ({ AgentService: class {} }));
+vi.doMock('../../src/core/entities/DriveFileEntityService.js', () => ({ DriveFileEntityService: class {} }));
 
 const { default: ReviewImageStatus, meta } = await import('../../src/server/api/endpoints/admin/agents/governance/session-review/image-placeholder-status.js');
 const { default: UserImageStatus } = await import('../../src/server/api/endpoints/agents/images/placeholder-status.js');
@@ -39,19 +39,19 @@ function generation(overrides: Partial<MiAgentImageGeneration> = {}): MiAgentIma
 
 function harness(row: MiAgentImageGeneration | null = generation()) {
 	const sessions = {
-		findOneBy: jest.fn<() => Promise<unknown>>().mockResolvedValue({ id: 'session1', userId: 'owner1', sessionModerationBanned: true }),
+		findOneBy: vi.fn<() => Promise<unknown>>().mockResolvedValue({ id: 'session1', userId: 'owner1', sessionModerationBanned: true }),
 	};
 	const messages = {
-		findOneBy: jest.fn<() => Promise<unknown>>().mockResolvedValue({ id: 'message1', sessionId: 'session1', role: 'assistant' }),
+		findOneBy: vi.fn<() => Promise<unknown>>().mockResolvedValue({ id: 'message1', sessionId: 'session1', role: 'assistant' }),
 	};
 	const generations = {
-		findOne: jest.fn<() => Promise<unknown>>().mockResolvedValue(row),
+		findOne: vi.fn<() => Promise<unknown>>().mockResolvedValue(row),
 	};
 	const files = {
-		findOneBy: jest.fn<() => Promise<unknown>>().mockResolvedValue(file),
+		findOneBy: vi.fn<() => Promise<unknown>>().mockResolvedValue(file),
 	};
-	const agentService = { assertAgentsEnabled: jest.fn() };
-	const fileService = { pack: jest.fn<() => Promise<unknown>>().mockResolvedValue(file) };
+	const agentService = { assertAgentsEnabled: vi.fn() };
+	const fileService = { pack: vi.fn<() => Promise<unknown>>().mockResolvedValue(file) };
 	const review = new ReviewImageStatus(sessions as never, messages as never, generations as never, files as never, agentService as never, fileService as never);
 	const user = new UserImageStatus(sessions as never, messages as never, generations as never, files as never, agentService as never, fileService as never);
 	return { review, user, sessions, messages, generations, files, fileService };

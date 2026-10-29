@@ -118,10 +118,9 @@ function menu(membership: any, ev: MouseEvent) {
 
 async function kick(membership: any) {
 	const userName = membership.user.name || membership.user.username;
-	const chatI18n = i18n.tsx._chat as any;
 	const { canceled } = await os.confirm({
 		type: 'warning',
-		text: chatI18n.kickConfirm({ name: userName }),
+		text: i18n.tsx._chat.kickConfirm({ name: userName }),
 	});
 	if (canceled) return;
 

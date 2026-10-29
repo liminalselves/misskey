@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
-import { jest } from '@jest/globals';
+import { vi, describe, test, expect } from 'vitest';
 import { ModerationLogService } from '@/core/ModerationLogService.js';
 import { MiAgentCharacter } from '@/models/AgentCharacter.js';
 import { MiAgentDialogueStyle } from '@/models/AgentDialogueStyle.js';
@@ -13,11 +13,11 @@ describe('agent publication lifecycle locking', () => {
 	test('locks character and style rows inside their transaction', async () => {
 		const character = { id: 'character-id' } as MiAgentCharacter;
 		const style = { id: 'style-id' } as MiAgentDialogueStyle;
-		const findOne = jest.fn(async (entity: unknown) => entity === MiAgentCharacter ? character : style);
+		const findOne = vi.fn(async (entity: unknown) => entity === MiAgentCharacter ? character : style);
 		const manager = { findOne };
-		const db = { transaction: jest.fn(async (callback: (transactionManager: typeof manager) => Promise<unknown>) => callback(manager)) };
-		const characterCallback = jest.fn(async () => 'character-ok');
-		const styleCallback = jest.fn(async () => 'style-ok');
+		const db = { transaction: vi.fn(async (callback: (transactionManager: typeof manager) => Promise<unknown>) => callback(manager)) };
+		const characterCallback = vi.fn(async () => 'character-ok');
+		const styleCallback = vi.fn(async () => 'style-ok');
 
 		await expect(withLockedAgentCharacter(db as never, 'character-id', characterCallback as never)).resolves.toBe('character-ok');
 		await expect(withLockedAgentStyle(db as never, 'style-id', styleCallback as never)).resolves.toBe('style-ok');
@@ -35,12 +35,12 @@ describe('agent publication lifecycle locking', () => {
 	});
 
 	test('logs moderation failures without changing a committed operation into an error response', async () => {
-		const insert = jest.fn(async () => { throw new Error('database unavailable'); });
-		const logError = jest.fn();
+		const insert = vi.fn(async () => { throw new Error('database unavailable'); });
+		const logError = vi.fn();
 		const service = new ModerationLogService(
 			{ insert } as never,
-			{ gen: jest.fn(() => 'log-id') } as never,
-			{ getLogger: jest.fn(() => ({ error: logError })) } as never,
+			{ gen: vi.fn(() => 'log-id') } as never,
+			{ getLogger: vi.fn(() => ({ error: logError })) } as never,
 		);
 
 		await expect(service.logSafely({ id: 'moderator-id' }, 'resolveAgentReview', {} as never)).resolves.toBeUndefined();

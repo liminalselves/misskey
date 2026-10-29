@@ -3,13 +3,13 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
-import { jest } from '@jest/globals';
+import { vi, describe, test, expect } from 'vitest';
 import { AgentProactiveMessageService } from '@/core/AgentProactiveMessageService.js';
 import { AgentCompressionMemoryService, AGENT_OVERVIEW_SCAN_LIMIT } from '@/core/AgentCompressionMemoryService.js';
 import type { AgentService } from '@/core/AgentService.js';
 import type { MiAgentSessionCompressionSticky } from '@/models/AgentSessionCompressionSticky.js';
 // 依存チェーン上の ESM-only パッケージ（node-fetch / nanoid / chalk 等）は
-// jest.config.unit.cjs の moduleNameMapper で共通スタブに解決される
+// vi.config.unit.cjs の moduleNameMapper で共通スタブに解決される
 
 type ProactivePrivate = {
 	processRandom: (session: Record<string, unknown>) => Promise<void>;
@@ -39,30 +39,30 @@ function createHarness(opts: { reply?: string; imageModelEnabled?: boolean; mode
 		updatedAt: new Date('2026-07-12T00:00:00.000Z'),
 	};
 	const query = {
-		update: jest.fn(),
-		set: jest.fn(),
-		where: jest.fn(),
-		execute: jest.fn(async () => ({ affected: 1 })),
+		update: vi.fn(),
+		set: vi.fn(),
+		where: vi.fn(),
+		execute: vi.fn(async () => ({ affected: 1 })),
 	};
 	query.update.mockReturnValue(query);
 	query.set.mockReturnValue(query);
 	query.where.mockReturnValue(query);
 
 	const sessionsRepository = {
-		createQueryBuilder: jest.fn(() => query),
-		findOneBy: jest.fn(async () => session),
-		save: jest.fn(async (row: unknown) => row),
+		createQueryBuilder: vi.fn(() => query),
+		findOneBy: vi.fn(async () => session),
+		save: vi.fn(async (row: unknown) => row),
 	};
 	const messagesRepository = {
-		insertOne: jest.fn(async (row: Record<string, unknown>) => row),
-		delete: jest.fn(async () => undefined),
+		insertOne: vi.fn(async (row: Record<string, unknown>) => row),
+		delete: vi.fn(async () => undefined),
 	};
 	const usage = {
-		startLog: jest.fn(async (params: Record<string, unknown>) => ({ ...params, requestedAt: new Date() })),
-		finishLog: jest.fn(async () => undefined),
-		hasFreeQuotaRemaining: jest.fn(async () => opts.hasFreeQuota ?? true),
+		startLog: vi.fn(async (params: Record<string, unknown>) => ({ ...params, requestedAt: new Date() })),
+		finishLog: vi.fn(async () => undefined),
+		hasFreeQuotaRemaining: vi.fn(async () => opts.hasFreeQuota ?? true),
 		// 与真实实现同口径：免费额度或余额可覆盖单次成本即放行
-		canAffordModelCall: jest.fn(async () => {
+		canAffordModelCall: vi.fn(async () => {
 			if (opts.hasFreeQuota ?? true) return true;
 			const cost = opts.modelCost ?? 0;
 			if (cost <= 0) return true;
@@ -70,72 +70,72 @@ function createHarness(opts: { reply?: string; imageModelEnabled?: boolean; mode
 		}),
 	};
 	const agentService = {
-		newId: jest.fn(() => 'message-id'),
-		loadCharacterForAgentSessionOrThrow: jest.fn(async () => ({ regexRules: [], avatarFileId: null })),
-		assertAgentUserSessionChatAllowed: jest.fn(),
-		effectiveCharacterForLlm: jest.fn((character: unknown) => character),
-		effectiveStyleForSession: jest.fn((style: unknown) => style),
-		buildSystemPrompt: jest.fn(() => 'system'),
-		loadRecentMessagesForContextWithMeta: jest.fn<AgentService['loadRecentMessagesForContextWithMeta']>(async () => ({ messages: [], truncated: false, oldestIncludedId: null })),
-		normalizeRegexRules: jest.fn(() => []),
+		newId: vi.fn(() => 'message-id'),
+		loadCharacterForAgentSessionOrThrow: vi.fn(async () => ({ regexRules: [], avatarFileId: null })),
+		assertAgentUserSessionChatAllowed: vi.fn(),
+		effectiveCharacterForLlm: vi.fn((character: unknown) => character),
+		effectiveStyleForSession: vi.fn((style: unknown) => style),
+		buildSystemPrompt: vi.fn(() => 'system'),
+		loadRecentMessagesForContextWithMeta: vi.fn<AgentService['loadRecentMessagesForContextWithMeta']>(async () => ({ messages: [], truncated: false, oldestIncludedId: null })),
+		normalizeRegexRules: vi.fn(() => []),
 		// 与真实实现同口径：批量 worker 过滤直接原样返回文本
-		applyRegexRulesBatch: jest.fn(async (_rules: unknown, _effect: unknown, items: Array<{ text: string }>) => items.map(item => item.text)),
-		selectWorldbookEntriesForPrompt: jest.fn(() => []),
-		wrapLatestUserTextWithStyleDirective: jest.fn((text: string) => text),
-		prependCurrentBeijingTime: jest.fn((text: string) => text),
-		resolveModelApiName: jest.fn(() => 'provider-model'),
-		normalizeRules: jest.fn(() => []),
-		resolveActiveRules: jest.fn(() => []),
-		resolveModelApiNameForUser: jest.fn(async () => 'provider-model'),
-		resolveEffectiveModelId: jest.fn(() => 'effective-model-id'),
-		getUserFacingModelCostPerCall: jest.fn(() => opts.modelCost ?? 0),
-		invokeChatCompletions: jest.fn<AgentService['invokeChatCompletions']>(async () => {
+		applyRegexRulesBatch: vi.fn(async (_rules: unknown, _effect: unknown, items: Array<{ text: string }>) => items.map(item => item.text)),
+		selectWorldbookEntriesForPrompt: vi.fn(() => []),
+		wrapLatestUserTextWithStyleDirective: vi.fn((text: string) => text),
+		prependCurrentBeijingTime: vi.fn((text: string) => text),
+		resolveModelApiName: vi.fn(() => 'provider-model'),
+		normalizeRules: vi.fn(() => []),
+		resolveActiveRules: vi.fn(() => []),
+		resolveModelApiNameForUser: vi.fn(async () => 'provider-model'),
+		resolveEffectiveModelId: vi.fn(() => 'effective-model-id'),
+		getUserFacingModelCostPerCall: vi.fn(() => opts.modelCost ?? 0),
+		invokeChatCompletions: vi.fn<AgentService['invokeChatCompletions']>(async () => {
 			if (opts.reply != null) return { text: opts.reply, usage: null };
 			throw new Error('provider unavailable');
 		}),
 	};
 	const schedules = {
 		systemPromptBlock: 'schedule protocol',
-		consumeScheduleRun: jest.fn(async () => undefined),
-		prependScheduleContext: jest.fn(async (text: string) => text),
-		extractControl: jest.fn((raw: string) => ({ visibleContent: raw, controlRaw: null })),
-		applyAssistantControl: jest.fn(async () => undefined),
+		consumeScheduleRun: vi.fn(async () => undefined),
+		prependScheduleContext: vi.fn(async (text: string) => text),
+		extractControl: vi.fn((raw: string) => ({ visibleContent: raw, controlRaw: null })),
+		applyAssistantControl: vi.fn(async () => undefined),
 	};
 
 	const imageService = {
-		resolveImageModel: jest.fn(() => opts.imageModelEnabled ? { id: 'image-model-id' } : null),
-		stripDrawPlaceholders: jest.fn((text: string) => text),
+		resolveImageModel: vi.fn(() => opts.imageModelEnabled ? { id: 'image-model-id' } : null),
+		stripDrawPlaceholders: vi.fn((text: string) => text),
 	};
 	const stickerService = {
-		buildSystemBlocks: jest.fn(async () => ({ block: '', emojiList: [] as { name: string; description: string }[], stickerKeys: [] as string[] })),
-		convertUserTextForLlm: jest.fn((text: string) => text),
-		enforceReplyLimits: jest.fn((text: string) => text),
-		normalizeCharacterStickers: jest.fn(() => []),
+		buildSystemBlocks: vi.fn(async () => ({ block: '', emojiList: [] as { name: string; description: string }[], stickerKeys: [] as string[] })),
+		convertUserTextForLlm: vi.fn((text: string) => text),
+		enforceReplyLimits: vi.fn((text: string) => text),
+		normalizeCharacterStickers: vi.fn(() => []),
 	};
 	const compressionCalculator = Object.create(AgentCompressionMemoryService.prototype) as AgentCompressionMemoryService;
 	const compressionMemory = {
-		resolveEffectiveProvider: jest.fn(() => opts.compression ? 'compression' : 'none'),
-		buildSendPathBudgets: jest.fn(async () => ({ historyBudget: 9000, historyBudgetTokens: 3000, charsPerToken: 3 })),
-		buildCompressionContext: jest.fn<AgentCompressionMemoryService['buildCompressionContext']>(async () => ({ block: '<compression_memory>remember</compression_memory>', injectedStickies: [], boundaries: new Map() })),
-		buildPairsExcludingInjectedCompression: jest.fn<AgentCompressionMemoryService['buildPairsExcludingInjectedCompression']>((...args) => compressionCalculator.buildPairsExcludingInjectedCompression(...args)),
-		afterAssistantForCompression: jest.fn<AgentCompressionMemoryService['afterAssistantForCompression']>(async () => undefined),
+		resolveEffectiveProvider: vi.fn(() => opts.compression ? 'compression' : 'none'),
+		buildSendPathBudgets: vi.fn(async () => ({ historyBudget: 9000, historyBudgetTokens: 3000, charsPerToken: 3 })),
+		buildCompressionContext: vi.fn<AgentCompressionMemoryService['buildCompressionContext']>(async () => ({ block: '<compression_memory>remember</compression_memory>', injectedStickies: [], boundaries: new Map() })),
+		buildPairsExcludingInjectedCompression: vi.fn<AgentCompressionMemoryService['buildPairsExcludingInjectedCompression']>((...args) => compressionCalculator.buildPairsExcludingInjectedCompression(...args)),
+		afterAssistantForCompression: vi.fn<AgentCompressionMemoryService['afterAssistantForCompression']>(async () => undefined),
 	};
-	const tokenService = { resolveTokenConfigForUser: jest.fn(async () => ({ tokenMode: 'estimate' })), makeCounter: jest.fn(() => undefined) };
+	const tokenService = { resolveTokenConfigForUser: vi.fn(async () => ({ tokenMode: 'estimate' })), makeCounter: vi.fn(() => undefined) };
 	const service = new AgentProactiveMessageService(
 		sessionsRepository as never,
 		messagesRepository as never,
 		{} as never,
-		{ findOneBy: jest.fn(async () => ({ id: 'style-id' })) } as never,
-		{ findOneBy: jest.fn(async () => ({ id: 'user-id' })) } as never,
-		{ findOneBy: jest.fn(async () => ({ agentCreditBalance: opts.creditBalance ?? 100 })) } as never,
+		{ findOneBy: vi.fn(async () => ({ id: 'style-id' })) } as never,
+		{ findOneBy: vi.fn(async () => ({ id: 'user-id' })) } as never,
+		{ findOneBy: vi.fn(async () => ({ agentCreditBalance: opts.creditBalance ?? 100 })) } as never,
 		agentService as never,
 		schedules as never,
-		{ auditReply: jest.fn(async () => ({ blocked: false })) } as never,
+		{ auditReply: vi.fn(async () => ({ blocked: false })) } as never,
 		usage as never,
 		imageService as never,
 		stickerService as never,
-		{ fetch: jest.fn(async () => ({ agentGlobalSystemPrompt: null })) } as never,
-		{ notifyAgentMessage: jest.fn(async () => undefined) } as never,
+		{ fetch: vi.fn(async () => ({ agentGlobalSystemPrompt: null })) } as never,
+		{ notifyAgentMessage: vi.fn(async () => undefined) } as never,
 		{} as never,
 		compressionMemory as never,
 		tokenService as never,

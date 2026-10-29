@@ -1,5 +1,6 @@
+import { describe, test, beforeAll, afterAll } from 'vitest';
 import * as Misskey from 'misskey-js';
-import { assertNotificationReceived, createAccount, type LoginUser, resolveRemoteNote, resolveRemoteUser, sleep } from './utils.js';
+import { assertNotificationReceived, createAccount, type LoginUser, resolveRemoteNote, resolveRemoteUser, waitForFollowing, waitForFollowRelation } from './utils.js';
 
 describe('Notification', () => {
 	let alice: LoginUser, bob: LoginUser;
@@ -26,8 +27,12 @@ describe('Notification', () => {
 				true,
 			);
 
+			// NOTE: 次のテストで再度フォローする。a.test が Undo Follow を処理する前に次の Follow が
+			//       届くと「すでにフォロー関係が存在」扱いで Accept だけ返されて follow 通知が発生せず、
+			//       Undo が後勝ちした場合はその Accept すら返らなくなる。
+			//       b.test 側の followings は同期的に消えるので、a.test への反映まで待つ必要がある
 			await bob.client.request('following/delete', { userId: aliceInB.id });
-			await sleep();
+			await waitForFollowRelation(bob, alice, 0);
 		});
 
 		test('Get notification when get followed', async () => {
@@ -40,15 +45,10 @@ describe('Notification', () => {
 		});
 
 		afterAll(async () => {
-			// Accept アクティビティのinbox処理が一時的なユーザー解決失敗でスキップされると
-			// フォローがリクエスト状態のまま残り following/delete は NOT_FOLLOWING になる。
-			// これはクリーンアップなので、その場合だけは失敗しないものとする。
-			try {
-				await bob.client.request('following/delete', { userId: aliceInB.id });
-			} catch (err: unknown) {
-				// misskey-js のAPIエラーは Error ではなく code を持つプレーンオブジェクト
-				if (!(typeof err === 'object' && err !== null && (err as { code?: unknown }).code === 'NOT_FOLLOWING')) throw err;
-			}
+			// NOTE: follow 通知は a.test 側の処理で発生するため、この時点で b.test が Accept を
+			//       受け取っているとは限らない。そのまま解除すると NOT_FOLLOWING になる
+			await waitForFollowing(bob, 1);
+			await bob.client.request('following/delete', { userId: aliceInB.id });
 		});
 	});
 

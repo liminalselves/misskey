@@ -4,6 +4,7 @@
  */
 
 import { ref, readonly, computed } from 'vue';
+import { createVisibilityAwareInterval } from '@@/js/interval.js';
 
 const time = ref(Date.now());
 
@@ -29,7 +30,7 @@ export function useLowresTime() {
 	return computed(() => Math.max(time.value, now));
 }
 
-window.setInterval(() => {
+createVisibilityAwareInterval(() => {
 	time.value = Date.now();
 }, TIME_UPDATE_INTERVAL);
 

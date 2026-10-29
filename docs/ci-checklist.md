@@ -5,9 +5,9 @@
 ## 发布准备
 
 - 版本与发布顺序见 [releasing.md](releasing.md)。顶层保留 `## unreleased`；CHANGELOG 检查器比较新增正式版本时排除该占位段，不将空占位段计为发布。
-- 修改检查器后运行 `npm --prefix scripts/changelog-checker test`；发布 PR 会运行同一组测试，再比较 base/head 日志。
-- 前端 E2E 使用已安装的 `start-server-and-test` 启动服务、等待就绪后运行 Cypress；完整命令与失败工件见 `test-frontend.yml`，不额外依赖 Action 内部的服务启动包装。
-- API JSON 生成是一次性 CLI：写完后必须退出，不能被端点导入时的缓存清理定时器保活。API base/head 对比统一采用候选提交的生成脚本，但各自构建、读取对应版本的端点定义；生命周期回归测试见 `test/unit/GenerateApiJson.ts`。
+- 修改检查器后运行 `pnpm --filter changelog-checker test`；检查器位于 `packages-private/changelog-checker`，发布 PR 会运行同一组测试，再比较 base/head 日志。
+- 前端 E2E 使用 `start-server-and-test` 启动服务、等待就绪后运行 Playwright；完整命令与失败工件见 [`test-frontend.yml`](../.github/workflows/test-frontend.yml)。
+- API JSON 生成是一次性 CLI：写完后必须退出，不能被端点导入时的缓存清理定时器保活。API base/head 各自构建并使用本版本的导出脚本，不跨版本覆盖；旧版 `src-js/` 与新版 Rolldown `built/` 布局不同。生命周期回归测试见 `packages/backend/test/unit/GenerateApiJson.ts`。
 - 推送后按最终提交 SHA 核对全部适用的检查；路径过滤未触发与 fork 主动跳过须单列，不能算作测试通过。仅准备发布时不合 master、不打 tag、不触发镜像发布。
 
 ## 基础检查
@@ -15,19 +15,19 @@
 - 使用 [`.node-version`](../.node-version) 指定的 Node.js；后端运行时改动还要考虑 [最低版本](../.github/min.node-version)。pnpm 版本以 [`package.json`](../package.json) 的 `packageManager` 为准。
 - 依赖或锁文件改动后，安装验收使用 `pnpm install --frozen-lockfile`，不要靠非冻结安装掩盖不一致。安装新依赖仍需单独授权。
 - 所有命令从项目根目录执行。结束时运行 `git diff --check`，检查实际 diff，排除临时文件和无关生成结果。
-- CI 的 lint、typecheck 和 locale 类型步骤不再允许 `continue-on-error`；本地选取实际受影响文件和测试，不能将未匹配的测试名或 SWC 构建当成类型验收。2026-10-10 全量审查的处置与本地验证见 [代码质量修复记录](code-quality-repair.md)。
+- CI 的 lint、typecheck 和 locale 类型步骤不再允许 `continue-on-error`；本地选取实际受影响文件和测试，不能将未匹配的测试名或 Rolldown 构建当成类型验收。2026-10-10 全量审查的处置与本地验证见 [代码质量修复记录](code-quality-repair.md)。
 
 ## 前端改动
 
 ```sh
 pnpm --filter frontend typecheck
 pnpm --filter frontend eslint
-pnpm --filter frontend exec vitest run test/<affected-test>.test.ts
+pnpm --filter frontend test test/<affected-test>.test.ts
 ```
 
-将 `<affected-test>` 换成实际测试名。共享组件、路由、测试初始化或公共依赖改动时，再运行 `pnpm --filter frontend test-and-coverage`。组件挂载测试参照 `test/home.test.ts` 导入 `./init` 初始化语言数据；路由等不挂载组件的纯逻辑测试不要为此引入应用启动和网络请求。
+将路径换成实际测试文件，可位于 `test/` 或 `test/unit/`。`frontend test` 脚本已指定 `--globals --config vitest.config.unit.ts`，自动加载 Happy DOM 和 `test/setup.unit.ts`，不要再导入已删除的 `./init`。共享组件、路由、测试初始化或公共依赖改动时，再运行 `pnpm --filter frontend test-and-coverage`；纯逻辑测试不要引入应用启动或真实网络请求。
 
-构建验证不能代替 `typecheck`。前端构建及浏览器端到端测试以 [`test-frontend.yml`](../.github/workflows/test-frontend.yml) 为准。
+构建验证不能代替 `typecheck`；嵌入页改动还须运行 `pnpm --filter frontend-embed typecheck`，CI 的类型检查矩阵包含该包。先完成依赖构建，再运行类型检查，避免并行重建 SDK 声明时读取不完整产物。前端构建及浏览器端到端测试以 [`test-frontend.yml`](../.github/workflows/test-frontend.yml) 为准。
 
 ## 后端服务与依赖注入
 
@@ -35,12 +35,12 @@ pnpm --filter frontend exec vitest run test/<affected-test>.test.ts
 pnpm --filter backend build
 pnpm --filter backend typecheck
 pnpm --filter backend eslint
-pnpm --filter backend exec node jest.js --config jest.config.unit.cjs --runInBand --runTestsByPath test/unit/<affected-test>.ts
+pnpm --filter backend exec vitest run --config vitest.config.unit.ts test/unit/<affected-test>.ts
 ```
 
-后端构建使用 SWC，不等于 TypeScript 类型检查。最后一条只运行已确认不连接数据库的测试；先读测试的导入、初始化和清理代码。
+后端构建使用 Rolldown，不等于 TypeScript 类型检查。最后一条只运行已确认不连接数据库的测试；先读测试的导入、初始化和清理代码。上游同步和完整验证边界见 [2026.10.0 同步记录](upstream-sync-2026.10.0.md)。
 
-服务构造函数新增依赖时，搜索该服务的所有 `new Service(...)` 和 `Test.createTestingModule`，包括其他服务的间接依赖。同步真实测试模块的 `providers` 或测试桩，不能只改 `CoreModule`，也不能只跑新增功能的测试。后端的 ESLint 脚本不包含 `test/unit`，测试文件主要由 `typecheck` 和实际 Jest 验证。
+服务构造函数新增依赖时，搜索该服务的所有 `new Service(...)` 和 `Test.createTestingModule`，包括其他服务的间接依赖。同步真实测试模块的 `providers` 或测试桩，不能只改 `CoreModule`，也不能只跑新增功能的测试。后端的 ESLint 脚本不包含 `test/unit`，测试文件主要由 `typecheck` 和实际 Vitest 验证。
 
 2026-10-07 的 CI 中，`ModerationLogService` 新增日志依赖，但 `CustomEmojiService` 测试没有注册 `LoggerService`，使同一套测试的 42 个用例连带失败。后续 `undefined` 清理异常是初始化失败的结果，不是另一项业务缺陷。
 

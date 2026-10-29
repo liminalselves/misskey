@@ -17,17 +17,16 @@ const end = isTouchUsing ? 'touchend' : 'mouseleave';
 type TooltipDirectiveState = {
 	text: string | null | undefined;
 	_close: null | (() => void);
-	showTimer: number | null;
-	hideTimer: number | null;
-	checkTimer: number | null;
 	_scrollOrResizeCleanup: (() => void) | null;
 	show: () => void;
 	close: () => void;
+
+	abortController: AbortController;
+	showTimer: number | null;
+	hideTimer: number | null;
 };
 
-interface TooltipDirectiveElement extends HTMLElement {
-	_tooltipDirective_?: TooltipDirectiveState;
-}
+const states = new WeakMap<HTMLElement, TooltipDirectiveState>();
 
 type TooltipDirectiveModifiers = 'left' | 'right' | 'top' | 'bottom' | 'mfm' | 'noDelay';
 type TooltipDirectiveArg = 'dialog';
@@ -36,123 +35,134 @@ export const tooltipDirective = {
 	mounted(el, binding) {
 		const delay = binding.modifiers.noDelay ? 0 : 100;
 
-		const self = el._tooltipDirective_ = {} as TooltipDirectiveState;
+		const state = {
+			text: binding.value,
+			_close: null,
+			abortController: new AbortController(),
+			showTimer: null,
+			hideTimer: null,
+		} as TooltipDirectiveState;
 
-		self.text = binding.value;
-		self._close = null;
-		self.showTimer = null;
-		self.hideTimer = null;
-		self.checkTimer = null;
-		self._scrollOrResizeCleanup = null;
+		state.text = binding.value;
+		state._close = null;
+		state.showTimer = null;
+		state.hideTimer = null;
+		state._scrollOrResizeCleanup = null;
 
-		self.close = () => {
-			if (self._scrollOrResizeCleanup) {
-				self._scrollOrResizeCleanup();
-				self._scrollOrResizeCleanup = null;
+		state.close = () => {
+			if (state._scrollOrResizeCleanup) {
+				state._scrollOrResizeCleanup();
+				state._scrollOrResizeCleanup = null;
 			}
-			if (self._close) {
-				if (self.checkTimer) window.clearInterval(self.checkTimer);
-				self._close();
-				self._close = null;
+			if (state._close) {
+				state._close();
+				state._close = null;
 			}
 		};
 
 		if (binding.arg === 'dialog') {
 			el.addEventListener('click', (ev) => {
-				if (binding.value == null) return;
+				const text = state.text ?? undefined;
+				if (text == null) return;
 				ev.preventDefault();
 				ev.stopPropagation();
 				alert({
 					type: 'info',
-					text: binding.value,
+					text,
 				});
 				return false;
-			});
+			}, { signal: state.abortController.signal });
 		}
 
-		self.show = () => {
+		state.show = () => {
 			if (!window.document.body.contains(el)) return;
-			if (self._close) return;
-			if (self.text == null) return;
+			if (state._close) return;
+			if (state.text == null) return;
 
 			const showing = ref(true);
 
 			const { dispose } = popup(defineAsyncComponent(() => import('@/components/MkTooltip.vue')), {
 				showing,
-				text: self.text,
+				text: state.text,
 				asMfm: binding.modifiers.mfm,
 				direction: binding.modifiers.left ? 'left' : binding.modifiers.right ? 'right' : binding.modifiers.top ? 'top' : binding.modifiers.bottom ? 'bottom' : 'top',
 				anchorElement: el,
 			}, {
 				closed: () => dispose(),
-				requestClose: () => self.close(),
+				requestClose: () => state.close(),
 			});
 
-			self._close = () => {
+			state._close = () => {
 				showing.value = false;
 			};
 
 			const onScrollOrResize = () => {
-				self.close();
+				state.close();
 			};
 			window.addEventListener('scroll', onScrollOrResize, true);
 			window.addEventListener('resize', onScrollOrResize, true);
-			self._scrollOrResizeCleanup = () => {
+			state._scrollOrResizeCleanup = () => {
 				window.removeEventListener('scroll', onScrollOrResize, true);
 				window.removeEventListener('resize', onScrollOrResize, true);
 			};
 		};
 
-		el.addEventListener('selectstart', ev => {
+		el.addEventListener('selectstart', (ev) => {
 			ev.preventDefault();
-		});
+		}, { signal: state.abortController.signal });
 
 		const onPressStart = () => {
-			if (self.showTimer) window.clearTimeout(self.showTimer);
-			if (self.hideTimer) window.clearTimeout(self.hideTimer);
+			if (state.showTimer) window.clearTimeout(state.showTimer);
+			if (state.hideTimer) window.clearTimeout(state.hideTimer);
 			if (delay === 0) {
-				self.show();
+				state.show();
 			} else {
-				self.showTimer = window.setTimeout(self.show, delay);
+				state.showTimer = window.setTimeout(state.show, delay);
 			}
 		};
 
 		const onPressEnd = () => {
-			if (self.showTimer) window.clearTimeout(self.showTimer);
-			if (self.hideTimer) window.clearTimeout(self.hideTimer);
+			if (state.showTimer) window.clearTimeout(state.showTimer);
+			if (state.hideTimer) window.clearTimeout(state.hideTimer);
 			if (delay === 0) {
-				self.close();
+				state.close();
 			} else {
-				self.hideTimer = window.setTimeout(self.close, delay);
+				state.hideTimer = window.setTimeout(state.close, delay);
 			}
 		};
 
-		el.addEventListener(start, onPressStart, { passive: true });
+		el.addEventListener(start, onPressStart, { passive: true, signal: state.abortController.signal });
 
-		el.addEventListener(end, onPressEnd, { passive: true });
+		el.addEventListener(end, onPressEnd, { passive: true, signal: state.abortController.signal });
 
 		// 縦スクロール開始時など、touchend が要素に届かず touchcancel のみになることがある
-		el.addEventListener('touchcancel', onPressEnd, { passive: true });
-		el.addEventListener('pointercancel', onPressEnd, { passive: true });
+		el.addEventListener('touchcancel', onPressEnd, { passive: true, signal: state.abortController.signal });
+		el.addEventListener('pointercancel', onPressEnd, { passive: true, signal: state.abortController.signal });
 
 		el.addEventListener('click', () => {
-			if (self.showTimer) window.clearTimeout(self.showTimer);
-			self.close();
-		});
+			if (state.showTimer) window.clearTimeout(state.showTimer);
+			state.close();
+		}, { passive: true, signal: state.abortController.signal });
+
+		states.set(el, state);
 	},
 
 	updated(el, binding) {
-		const self = el._tooltipDirective_;
-		if (self == null) return;
-		self.text = binding.value as string;
+		const state = states.get(el);
+		if (!state) return;
+		state.text = binding.value;
 	},
 
-	unmounted(el) {
-		const self = el._tooltipDirective_;
-		if (self == null) return;
-		if (self.showTimer) window.clearTimeout(self.showTimer);
-		if (self.hideTimer) window.clearTimeout(self.hideTimer);
-		if (self.checkTimer) window.clearTimeout(self.checkTimer);
-		self.close();
+	beforeUnmount(el) {
+		const state = states.get(el);
+		if (!state) return;
+
+		if (state.showTimer) window.clearTimeout(state.showTimer);
+		if (state.hideTimer) window.clearTimeout(state.hideTimer);
+
+		state.close();
+		state.abortController.abort();
+
+		states.delete(el);
 	},
-} as Directive<TooltipDirectiveElement, string | null | undefined, TooltipDirectiveModifiers, TooltipDirectiveArg>;
+} as Directive<HTMLElement, string | null | undefined, TooltipDirectiveModifiers, TooltipDirectiveArg>;

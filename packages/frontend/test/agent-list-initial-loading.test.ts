@@ -6,7 +6,6 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { cleanup, fireEvent, render } from '@testing-library/vue';
 import { nextTick } from 'vue';
-import './init';
 import AgentsIndex from '@/pages/agents/index.vue';
 import AgentSessions from '@/pages/chat/home.agents.vue';
 import { misskeyApi } from '@/utility/misskey-api.js';
