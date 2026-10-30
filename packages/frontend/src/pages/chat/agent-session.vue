@@ -5259,20 +5259,28 @@ async function onFormSubmit(payload: { text: string; file: DriveFile | null }) {
 			if (e != null && typeof e === 'object' && (e as { code?: string }).code === 'AGENT_DIALOGUE_STYLE_REQUIRED') {
 				os.alert({ type: 'info', text: i18n.ts._agents.needDialogueStyleBeforeSend });
 				tab.value = 'style';
-				} else if (e != null && typeof e === 'object' && (e as { code?: string }).code === 'AGENT_INSUFFICIENT_CREDIT') {
-					os.alert({ type: 'error', text: i18n.ts._agents.insufficientAgentCredit });
-				} else if (e != null && typeof e === 'object' && (e as { code?: string }).code === 'AGENTS_MODEL_UNAVAILABLE') {
-					// 已下架模型不允许静默切默认模型：明确要求用户在模型 tab 重新选择。
-					selectedModelId.value = '';
-					tab.value = 'model';
-					showAgentModelFailureFeedback({
-						...agentModelFailureFromError(e),
-						title: i18n.ts._agents.modelFailureTitleUnavailable,
-						guide: i18n.ts._agents.modelFailureGuideUnavailable,
-						reason: i18n.ts._agents.sessionModelUnavailable,
-					});
-				} else {
-					showAgentModelFailureFeedback(agentModelFailureFromError(e), () => {
+			} else if (e != null && typeof e === 'object' && (e as { code?: string }).code === 'STYLE_NOT_AVAILABLE') {
+				// 会话引用的文风已被作者下架或删除：服务端已清空会话的 dialogueStyleId，
+				// 这里同步本地状态回到「未选择文风」，提示用户重新选择；不走模型失败弹窗。
+				if (session.value) session.value.dialogueStyleId = null;
+				selectedStyleId.value = '';
+				await refreshContextWindow();
+				os.alert({ type: 'info', text: '该会话使用的文风已从广场下架或已被作者删除，请重新选择文风后再发送。' });
+				tab.value = 'style';
+			} else if (e != null && typeof e === 'object' && (e as { code?: string }).code === 'AGENT_INSUFFICIENT_CREDIT') {
+				os.alert({ type: 'error', text: i18n.ts._agents.insufficientAgentCredit });
+			} else if (e != null && typeof e === 'object' && (e as { code?: string }).code === 'AGENTS_MODEL_UNAVAILABLE') {
+				// 已下架模型不允许静默切默认模型：明确要求用户在模型 tab 重新选择。
+				selectedModelId.value = '';
+				tab.value = 'model';
+				showAgentModelFailureFeedback({
+					...agentModelFailureFromError(e),
+					title: i18n.ts._agents.modelFailureTitleUnavailable,
+					guide: i18n.ts._agents.modelFailureGuideUnavailable,
+					reason: i18n.ts._agents.sessionModelUnavailable,
+				});
+			} else {
+				showAgentModelFailureFeedback(agentModelFailureFromError(e), () => {
 					// 重试走表单自身的 submit：与手动再次发送完全一致（含清空草稿、附件一并重发）
 					formRef.value?.setText(trimmed);
 					formRef.value?.setAttachment(payload.file ?? null);
