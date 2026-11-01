@@ -264,6 +264,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		</template>
 		<template v-else-if="log.type === 'ignoreAgentExternalAuditReview'">
 			<div>×{{ log.info.count }}</div>
+			<div v-if="log.info.userId">{{ i18n.ts.user }}: <MkA :to="`/admin/user/${log.info.userId}`" class="_link">{{ log.info.userId }}</MkA> · ≤ {{ log.info.untilId }}</div>
 			<div v-if="log.info.ids.length > 0" class="_text" style="word-break: break-all;">{{ log.info.ids.join(', ') }}</div>
 		</template>
 		<template v-else-if="log.type === 'resolveAgentModelReport'">
