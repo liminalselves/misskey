@@ -9586,6 +9586,11 @@ export interface operations {
             content: {
                 'application/json': {
                     ids: string[];
+                } | {
+                    /** Format: misskey:id */
+                    userId: string;
+                    /** Format: misskey:id */
+                    untilId: string;
                 };
             };
         };
@@ -10324,6 +10329,8 @@ export interface operations {
                     userSuspendReason?: string | null;
                     moderationNote?: string | null;
                     violationCategory: string;
+                    /** Format: misskey:id */
+                    reviewUntilId?: string | null;
                 };
             };
         };

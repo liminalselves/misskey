@@ -73,6 +73,7 @@ function createHarness(opts: { reply?: string; imageModelEnabled?: boolean; mode
 		newId: vi.fn(() => 'message-id'),
 		loadCharacterForAgentSessionOrThrow: vi.fn(async () => ({ regexRules: [], avatarFileId: null })),
 		assertAgentUserSessionChatAllowed: vi.fn(),
+		assertCanUseDialogueStyle: vi.fn(async () => {}),
 		effectiveCharacterForLlm: vi.fn((character: unknown) => character),
 		effectiveStyleForSession: vi.fn((style: unknown) => style),
 		buildSystemPrompt: vi.fn(() => 'system'),
