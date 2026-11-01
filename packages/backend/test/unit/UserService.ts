@@ -3,31 +3,31 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
-import { jest } from '@jest/globals';
+import { vi, describe, test, expect, afterEach } from 'vitest';
 import { UserService } from '@/core/UserService.js';
 import type { MiUser } from '@/models/User.js';
 
 function createHarness() {
 	const claims = new Map<string, { token: string; expiresAt: number }>();
 	const redis = {
-		set: jest.fn(async (key: string, token: string, _expiry: string, ttl: number, _condition: string) => {
+		set: vi.fn(async (key: string, token: string, _expiry: string, ttl: number, _condition: string) => {
 			if ((claims.get(key)?.expiresAt ?? 0) > Date.now()) return null;
 			claims.set(key, { token, expiresAt: Date.now() + ttl });
 			return 'OK';
 		}),
-		eval: jest.fn(async (_script: string, _keys: number, key: string, token: string) => {
+		eval: vi.fn(async (_script: string, _keys: number, key: string, token: string) => {
 			if (claims.get(key)?.token !== token) return 0;
 			claims.delete(key);
 			return 1;
 		}),
 	};
 	const query = {
-		update: jest.fn(), set: jest.fn(), where: jest.fn(), returning: jest.fn(),
-		execute: jest.fn(async () => ({ raw: [{ isHibernated: true }] })),
+		update: vi.fn(), set: vi.fn(), where: vi.fn(), returning: vi.fn(),
+		execute: vi.fn(async () => ({ raw: [{ isHibernated: true }] })),
 	};
 	for (const method of ['update', 'set', 'where', 'returning'] as const) query[method].mockReturnValue(query);
-	const users = { update: jest.fn(async () => undefined), createQueryBuilder: () => query };
-	const followings = { update: jest.fn(async () => undefined) };
+	const users = { update: vi.fn(async () => undefined), createQueryBuilder: () => query };
+	const followings = { update: vi.fn(async () => undefined) };
 	const createService = () => new UserService(users as never, followings as never, {} as never, {} as never, redis as never);
 	return { service: createService(), createService, users, followings, redis, claims, query };
 }
@@ -35,7 +35,7 @@ function createHarness() {
 const user = (id = 'user-id', isHibernated = false) => ({ id, isHibernated }) as MiUser;
 
 describe('UserService activity writes', () => {
-	afterEach(() => jest.useRealTimers());
+	afterEach(() => vi.useRealTimers());
 
 	test('deduplicates concurrent tabs across service instances while keeping users independent', async () => {
 		const { service, createService, users, redis } = createHarness();
@@ -49,13 +49,13 @@ describe('UserService activity writes', () => {
 	});
 
 	test('allows the next write after thirty seconds', async () => {
-		jest.useFakeTimers({ now: new Date('2026-10-04T00:00:00Z') });
+		vi.useFakeTimers({ now: new Date('2026-10-04T00:00:00Z') });
 		const { service, users } = createHarness();
 		await service.updateLastActiveDate(user());
-		jest.setSystemTime(new Date('2026-10-04T00:00:29Z'));
+		vi.setSystemTime(new Date('2026-10-04T00:00:29Z'));
 		await service.updateLastActiveDate(user());
 		expect(users.update).toHaveBeenCalledTimes(1);
-		jest.setSystemTime(new Date('2026-10-04T00:00:30Z'));
+		vi.setSystemTime(new Date('2026-10-04T00:00:30Z'));
 		await service.updateLastActiveDate(user());
 		expect(users.update).toHaveBeenCalledTimes(2);
 	});

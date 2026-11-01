@@ -32,6 +32,8 @@ Redis 在线状态、连接计数、离线推送判断和用户休眠唤醒逻�
 
 角色和文风的 session 外键是 CASCADE；删除资源必须在既有资源锁内检查任何会话引用，存在引用时拒绝删除并提示下架。此限制包括作者自己的会话，不是只保护他人的会话。
 
+会话引用的文风在发送时失效（作者下架使 `publishedVersion` 清空、或行缺失）：`agents/messages/send` 预检查把 `session.dialogueStyleId` 原子清为 null（条件 UPDATE 带当前值做乐观判据，不清广场统计快照 `plazaStatsDialogueStyleId`），随后抛 `STYLE_NOT_AVAILABLE`；前端不再走模型失败弹窗，而是清本地文风状态、提示文风已不可用并跳到文风 tab。主动消息路径走同一 `assertCanUseDialogueStyle` 闸口并做同样清理，防止下架文风继续消耗用户额度；`context-window` 等读路径不写库，失败由前端静默兜底。
+
 角色更新仅对新增的默认生图参考图校验属主、图片类型和每张 ≤5 MiB；在角色行锁内以当前草稿引用作比较，既有引用原样保留或移除均不重验，避免网盘清理后阻断角色其他字段的保存。创建角色仍校验全部参考图；失效图片在生图读取时跳过，不自动删除角色引用。角色编辑页的保存错误须显示弹窗并保留未保存状态。
 
 ## 会话导入配置
@@ -86,6 +88,6 @@ Redis 在线状态、连接计数、离线推送判断和用户休眠唤醒逻�
 
 ## 验证与部署边界
 
-- 本地不连库验证：`pnpm --filter backend typecheck`；在 `packages/backend` 运行 `node jest.js --config jest.config.unit.cjs --runInBand --runTestsByPath test/unit/AgentSessionCleanupService.ts test/unit/UserService.ts`。
+- 本地不连库验证：`pnpm --filter backend typecheck`；定向 Vitest 命令及数据库边界统一见 [CI 检查清单](ci-checklist.md)，清理与删用户的回归文件为 `test/unit/AgentSessionCleanupService.ts`、`test/unit/UserService.ts`。
 - 迁移必须由部署者执行。生产 Docker 的 `MISSKEY_MIGRATION_CREATE_INDEX_CONCURRENTLY=1` 启用并发建索引；索引构建中断后的 invalid 索引可重跑修复；事务内 revert 不使用 `CONCURRENTLY`。
 - 单测覆盖调用顺序、SQL 生成及 Redis 去重边界，不替代真实 PostgreSQL 并发验收。上线后对照慢查询频次与执行计划确认实际改善，不能用静态检查声称生产耗时已经下降。

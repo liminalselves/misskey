@@ -20,7 +20,7 @@ export function useScrollPositionKeeper(scrollContainerRef: Ref<HTMLElement | nu
 	watch(scrollContainerRef, (el, _, onCleanup) => {
 		if (!el) return;
 
-		const captureAnchor = throttle(1000, () => {
+		const captureAnchor = () => {
 			if (!ready || !el.isConnected) return;
 			anchorId = null;
 			if (Math.abs(el.scrollTop) < 100) return;
@@ -30,25 +30,34 @@ export function useScrollPositionKeeper(scrollContainerRef: Ref<HTMLElement | nu
 			const anchors = el.querySelectorAll<HTMLElement>('[data-scroll-anchor]');
 			for (let i = anchors.length - 1; i >= 0; i--) {
 				const rect = anchors[i].getBoundingClientRect();
-				if (rect.top <= viewPosition && rect.bottom >= viewPosition) {
+				if (rect.top <= viewPosition) {
 					anchorId = anchors[i].getAttribute('data-scroll-anchor');
 					anchorOffset = rect.top - containerRect.top;
 					break;
 				}
 			}
-		});
+		};
+		const captureAnchorThrottled = throttle(1000, captureAnchor);
 		const onScroll = () => {
 			if (!ready || !el.isConnected) return;
 			anchorOffset -= el.scrollTop - scrollTop;
 			scrollTop = el.scrollTop;
 			scrollLeft = el.scrollLeft;
 			if (Math.abs(scrollTop) < 100) anchorId = null;
+			captureAnchorThrottled();
+		};
+		const onPointerDown = () => {
+			if (!ready || !el.isConnected) return;
+			scrollTop = el.scrollTop;
+			scrollLeft = el.scrollLeft;
 			captureAnchor();
 		};
 		el.addEventListener('scroll', onScroll, { passive: true });
+		el.addEventListener('pointerdown', onPointerDown, { passive: true });
 		onCleanup(() => {
 			el.removeEventListener('scroll', onScroll);
-			captureAnchor.cancel();
+			el.removeEventListener('pointerdown', onPointerDown);
+			captureAnchorThrottled.cancel();
 		});
 	}, { immediate: true, flush: 'post' });
 

@@ -52,7 +52,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			this.agentService.assertAgentsEnabled();
 			const r = await this.agentExternalAuditLogsRepository.findOne({
 				where: { id: ps.id },
-				relations: ['session', 'character', 'dialogueStyle'],
+				relations: { session: true, character: true, dialogueStyle: true },
 			});
 			if (!r) throw new ApiError(meta.errors.noSuchLog);
 			return {

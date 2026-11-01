@@ -7,6 +7,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { describe, expect, test } from 'vitest';
 
 const source = readFileSync(resolve('scripts/generate_api_json.js'), 'utf8');
 
@@ -15,8 +16,8 @@ function runGenerator(fail: boolean) {
 	mkdirSync(join(directory, 'built'));
 	const script = source
 		.replace("import { execa } from 'execa';", 'const execa = async () => {};')
-		.replace("await import('../src-js/config.js')", '({ loadConfig: () => ({}) })')
-		.replace("await import('../src-js/server/api/openapi/gen-spec.js')", `({ genOpenapiSpec: () => {
+		.replace("await import('../built/config.js')", '({ loadConfig: () => ({}) })')
+		.replace("await import('../built/gen-spec.js')", `({ genOpenapiSpec: () => {
 			setInterval(() => {}, 10_000);
 			${fail ? 'throw new Error("generation failed");' : 'return { openapi: "3.1.0" };'}
 		} })`);

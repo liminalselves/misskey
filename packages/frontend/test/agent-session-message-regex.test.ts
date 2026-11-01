@@ -9,7 +9,7 @@ import type { App } from 'vue';
 import { filterAgentRegexTexts, type AgentRegexFilterRule } from '@/utility/agent-regex-filter.js';
 import AgentSessionMessage from '@/pages/chat/agent-session.message.vue';
 
-vi.mock('@/i.js', () => ({ ensureSignin: () => ({ id: 'user1' }) }));
+vi.mock('@/i.js', () => ({ $i: null, ensureSignin: () => ({ id: 'user1' }) }));
 vi.mock('@/i18n.js', () => ({
 	i18n: {
 		ts: {
@@ -23,6 +23,7 @@ vi.mock('@/custom-emojis.js', () => ({ customEmojisMap: new Map() }));
 vi.mock('@/os.js', () => ({ alert: vi.fn(), toast: vi.fn(), popupMenu: vi.fn(), contextMenu: vi.fn(), confirm: vi.fn() }));
 vi.mock('@/utility/misskey-api.js', () => ({ misskeyApi: vi.fn(), formatApiError: vi.fn() }));
 vi.mock('@/components/global/MkTime.vue', () => ({ default: { render: () => null } }));
+vi.mock('@/components/global/MkA.vue', () => ({ default: { render: () => null } }));
 vi.mock('@/components/global/MkLoading.vue', () => ({ default: { render: () => null } }));
 vi.mock('@/components/global/MkCustomEmoji.vue', () => ({ default: { render: () => null } }));
 vi.mock('@/components/MkDeletedFileMedia.vue', () => ({ default: { render: () => null } }));

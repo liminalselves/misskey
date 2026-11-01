@@ -5,7 +5,7 @@
 
 import 'reflect-metadata';
 import { createHash } from 'node:crypto';
-import { jest } from '@jest/globals';
+import { vi, describe, test, expect } from 'vitest';
 import { AgentCompressionMemoryService, AGENT_OVERVIEW_SCAN_LIMIT, type CompressionScanRow } from '@/core/AgentCompressionMemoryService.js';
 import { AgentService } from '@/core/AgentService.js';
 import { AgentTokenService } from '@/core/AgentTokenService.js';
@@ -34,28 +34,28 @@ function sticky(id: string, from: string, to: string, patch: Partial<MiAgentSess
 
 function harness(rows: CompressionScanRow[], stored: MiAgentSessionCompressionSticky[] = []) {
 	const formatter = Object.create(AgentService.prototype) as AgentService;
-	const insert = jest.fn(async (_entity: unknown, row: MiAgentSessionCompressionSticky) => { stored.push(row); });
+	const insert = vi.fn(async (_entity: unknown, row: MiAgentSessionCompressionSticky) => { stored.push(row); });
 	const builder = {
-		select: jest.fn(), where: jest.fn(), set: jest.fn(), update: jest.fn(),
-		getRawOne: async () => ({ m: '0' }), execute: jest.fn(async () => ({ affected: 1 })),
+		select: vi.fn(), where: vi.fn(), set: vi.fn(), update: vi.fn(),
+		getRawOne: async () => ({ m: '0' }), execute: vi.fn(async () => ({ affected: 1 })),
 	};
 	for (const method of ['select', 'where', 'set', 'update'] as const) builder[method].mockReturnValue(builder);
 	const manager = {
 		findOne: async () => ({ id: 's1', timeAwarenessEnabled: false }),
-		find: jest.fn(async (_entity: unknown, options: { where: { id: { _value: string[] } } }) =>
+		find: vi.fn(async (_entity: unknown, options: { where: { id: { _value: string[] } } }) =>
 			rows.filter(row => options.where.id._value.includes(row.id)).sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())),
 		insert, createQueryBuilder: () => builder,
 	};
 	const repository = {
-		find: jest.fn(async () => stored),
-		findOne: jest.fn(async (options: { where: Partial<MiAgentSessionCompressionSticky> }) =>
+		find: vi.fn(async () => stored),
+		findOne: vi.fn(async (options: { where: Partial<MiAgentSessionCompressionSticky> }) =>
 			stored.find(row => Object.entries(options.where).every(([key, value]) => row[key as keyof MiAgentSessionCompressionSticky] === value)) ?? null),
-		update: jest.fn(async () => ({ affected: 1 })),
-		manager: { transaction: jest.fn(async (callback: (value: typeof manager) => Promise<void>) => callback(manager)) },
+		update: vi.fn(async () => ({ affected: 1 })),
+		manager: { transaction: vi.fn(async (callback: (value: typeof manager) => Promise<void>) => callback(manager)) },
 	};
-	const messages = { find: jest.fn(async () => [...rows].reverse()) };
-	const invoke = jest.fn(async (_params: { userText: string }) => ({ text: 'summary' }));
-	const usage = { canAffordModelCall: async () => true, startLog: async () => ({}), finishLog: jest.fn(async (..._args: unknown[]) => {}) };
+	const messages = { find: vi.fn(async () => [...rows].reverse()) };
+	const invoke = vi.fn(async (_params: { userText: string }) => ({ text: 'summary' }));
+	const usage = { canAffordModelCall: async () => true, startLog: async () => ({}), finishLog: vi.fn(async (..._args: unknown[]) => {}) };
 	const agent = {
 		formatMessageForLlmHistory: formatter.formatMessageForLlmHistory,
 		resolveModelApiNameForUser: async () => 'model', invokeChatCompletions: invoke, newId: () => 'generated',
@@ -95,9 +95,9 @@ describe('Compression context state projection', () => {
 
 	test.each(['user', 'review'])('%s overview projects current states without any database write', async kind => {
 		const h = harness([message('m1', 1), message('m2', 2)], [sticky('old', 'm1', 'm2')]);
-		jest.spyOn(h.service, 'buildSendPathBudgets').mockResolvedValue({ historyBudget: 300, historyBudgetTokens: 100, charsPerToken: 3 } as never);
-		jest.spyOn(h.tokens, 'resolveTokenConfigForUser').mockResolvedValue({ tokenMode: 'estimate', charsPerToken: 3 } as never);
-		jest.spyOn(h.tokens, 'computeMessageWeights').mockResolvedValue({
+		vi.spyOn(h.service, 'buildSendPathBudgets').mockResolvedValue({ historyBudget: 300, historyBudgetTokens: 100, charsPerToken: 3 } as never);
+		vi.spyOn(h.tokens, 'resolveTokenConfigForUser').mockResolvedValue({ tokenMode: 'estimate', charsPerToken: 3 } as never);
+		vi.spyOn(h.tokens, 'computeMessageWeights').mockResolvedValue({
 			dMap: new Map([['m1', 110], ['m2', 90]]), tokensById: new Map(), estimatedById: new Map(), useExactD: false,
 		});
 		const resource = { findOneByOrFail: async () => ({}) };
@@ -153,7 +153,7 @@ describe('Compression source coverage', () => {
 
 	test('loads the post-reply scan, including the assistant, with the full scan limit', async () => {
 		const h = harness([message('m1', 1), message('assistant', 2, { role: 'assistant' })]);
-		const compute = jest.spyOn(h.service, 'computeSidecarTokenD').mockResolvedValue({ ...h.sidecar, dMap: new Map([['m1', 95], ['assistant', 10]]) });
+		const compute = vi.spyOn(h.service, 'computeSidecarTokenD').mockResolvedValue({ ...h.sidecar, dMap: new Map([['m1', 95], ['assistant', 10]]) });
 		await h.service.afterAssistantForCompression(h.session, {} as never, {} as never, h.instance, 'owner');
 		expect(h.messages.find).toHaveBeenCalledWith(expect.objectContaining({ take: AGENT_OVERVIEW_SCAN_LIMIT }));
 		expect(compute).toHaveBeenCalledWith(expect.objectContaining({ rows: expect.arrayContaining([expect.objectContaining({ id: 'assistant' })]) }));
@@ -166,13 +166,13 @@ describe('Message mutation compression boundaries', () => {
 		const session = { id: 's1', userId: 'owner', agentReplyPending: false };
 		const row = message('m1', 1);
 		let deleted = false;
-		const remove = jest.fn(async () => { deleted = true; return { affected: 1 }; });
+		const remove = vi.fn(async () => { deleted = true; return { affected: 1 }; });
 		const query = { delete: () => query, from: () => query, where: () => query, andWhere: () => query, execute: remove };
 		const manager = {
 			findOne: async (entity: unknown) => entity === MiAgentMessage ? null : session,
 			findOneBy: async () => row,
 			find: async (entity: unknown) => entity === MiAgentMessage ? (deleted ? [] : [row]) : [sticky('sticky', 'm1', 'm1')],
-			update: jest.fn(async (..._args: unknown[]) => ({ affected: 1 })),
+			update: vi.fn(async (..._args: unknown[]) => ({ affected: 1 })),
 			delete: remove, createQueryBuilder: () => query,
 		};
 		const db = { transaction: async (callback: (value: typeof manager) => Promise<unknown>) => callback(manager) };
@@ -206,8 +206,8 @@ describe('Source-scoped compression invalidation', () => {
 		const rows = [message('a', 1), message('b', 2), message('c', 3), message('d', 4), message('e', 5)];
 		const stickies = [sticky('old', 'a', 'b'), sticky('affected', 'b', 'd'), sticky('reversed', 'e', 'c'), sticky('independent', 'missing', 'missing')];
 		const manager = {
-			find: jest.fn(async (entity: unknown) => entity === MiAgentMessage ? rows : stickies),
-			update: jest.fn(async (..._args: unknown[]) => ({ affected: 1 })),
+			find: vi.fn(async (entity: unknown) => entity === MiAgentMessage ? rows : stickies),
+			update: vi.fn(async (..._args: unknown[]) => ({ affected: 1 })),
 		};
 		return { rows, manager };
 	}
@@ -231,7 +231,7 @@ describe('Source-scoped compression invalidation', () => {
 	test.each(['b', 'c'])('orders equal-time message boundaries by id: %s', async id => {
 		const manager = {
 			find: async (entity: unknown) => entity === MiAgentMessage ? [message('a', 1), message('b', 1)] : [sticky('same-time', 'a', 'b')],
-			update: jest.fn(async (..._args: unknown[]) => ({ affected: 1 })),
+			update: vi.fn(async (..._args: unknown[]) => ({ affected: 1 })),
 		};
 		await invalidateMessageCompression(manager as never, 's1', message(id, 1));
 		expect(manager.update).toHaveBeenCalledTimes(id === 'b' ? 1 : 0);

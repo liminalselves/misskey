@@ -3,24 +3,24 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
-import { jest } from '@jest/globals';
+import { vi, describe, test, expect } from 'vitest';
 import { UserWebSocketStatusService } from '@/core/UserWebSocketStatusService.js';
 
 function createRedis() {
 	const multi = {
-		incr: jest.fn(() => multi),
-		expire: jest.fn(() => multi),
-		setex: jest.fn(() => multi),
-		del: jest.fn(() => multi),
-		exec: jest.fn(async () => []),
+		incr: vi.fn(() => multi),
+		expire: vi.fn(() => multi),
+		setex: vi.fn(() => multi),
+		del: vi.fn(() => multi),
+		exec: vi.fn(async () => []),
 	};
 	const redis = {
-		eval: jest.fn(async (..._args: unknown[]) => 0),
-		multi: jest.fn(() => multi),
-		get: jest.fn(async () => null),
-		expire: jest.fn(async () => 1),
-		setex: jest.fn(async () => 'OK'),
-		decr: jest.fn(async () => 0),
+		eval: vi.fn(async (..._args: unknown[]) => 0),
+		multi: vi.fn(() => multi),
+		get: vi.fn(async () => null),
+		expire: vi.fn(async () => 1),
+		setex: vi.fn(async () => 'OK'),
+		decr: vi.fn(async () => 0),
 	};
 	return { redis, multi };
 }

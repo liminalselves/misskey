@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
-import { jest } from '@jest/globals';
+import { vi, describe, test, expect } from 'vitest';
 import { RepairAgentPublishedVersions1784100000000 } from '../../migration/1784100000000-RepairAgentPublishedVersions.js';
 
 type QueryCall = { sql: string; params: unknown[] };
@@ -11,7 +11,7 @@ type QueryCall = { sql: string; params: unknown[] };
 function createQueryRunner(characterRows: Record<string, unknown>[], styleRows: Record<string, unknown>[] = []) {
 	const calls: QueryCall[] = [];
 	const queryRunner = {
-		query: jest.fn(async (sql: string, params: unknown[] = []) => {
+		query: vi.fn(async (sql: string, params: unknown[] = []) => {
 			calls.push({ sql, params });
 			if (sql.includes('SELECT "id"') && sql.includes('FROM "agent_character"')) return characterRows.map(row => ({ id: row.id }));
 			if (sql.includes('SELECT "id"') && sql.includes('FROM "agent_dialogue_style"')) return styleRows.map(row => ({ id: row.id }));

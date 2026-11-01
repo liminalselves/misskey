@@ -60,7 +60,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			if (!session) throw new ApiError({ message: 'No such session.', code: 'NO_SUCH_SESSION', id: 'bb721ecf-1376-4c70-9bc6-2a5d18e23362' });
 			const [user, character] = await Promise.all([
 				this.usersRepository.findOneBy({ id: session.userId }),
-				this.agentCharactersRepository.findOne({ where: { id: session.characterId }, select: ['id', 'name'] }),
+				this.agentCharactersRepository.findOne({ where: { id: session.characterId }, select: { id: true, name: true } }),
 			]);
 			const packedUser = user ? await this.userEntityService.pack(user, me, { schema: 'UserLite' }) : null;
 			const limit = ps.limit ?? 80;

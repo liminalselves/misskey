@@ -4,15 +4,15 @@
  */
 
 import 'reflect-metadata';
-import { jest } from '@jest/globals';
+import { vi, describe, test, expect, beforeEach, afterEach } from 'vitest';
 import { Logger } from '@nestjs/common';
 import { MiAgentModelUsageLog } from '@/models/AgentModelUsageLog.js';
 import { MiUserProfile } from '@/models/UserProfile.js';
 import { fetchAgentBillingPage } from '@/server/api/endpoints/agents/_billing-logs.js';
 
-jest.unstable_mockModule('../../src/core/AgentService.js', () => ({ AgentService: class {} }));
-jest.unstable_mockModule('../../src/core/MetaService.js', () => ({ MetaService: class {} }));
-jest.unstable_mockModule('../../src/core/NotificationService.js', () => ({ NotificationService: class {} }));
+vi.doMock('../../src/core/AgentService.js', () => ({ AgentService: class {} }));
+vi.doMock('../../src/core/MetaService.js', () => ({ MetaService: class {} }));
+vi.doMock('../../src/core/NotificationService.js', () => ({ NotificationService: class {} }));
 const { default: IssueBatch, meta } = await import('../../src/server/api/endpoints/admin/agents/credits/issue-batch.js');
 const { default: IssueReward } = await import('../../src/server/api/endpoints/admin/agents/credits/issue-reward.js');
 
@@ -30,17 +30,17 @@ function harness(opts: { insertFailure?: string; readFailure?: string; notificat
 		{ id: 'missingprofile', usernameLower: 'orphan', host: null },
 	];
 	const usersRepository = {
-		findOne: jest.fn(async ({ where }: { where: { id?: string; usernameLower?: string; host?: unknown } }) => {
+		findOne: vi.fn(async ({ where }: { where: { id?: string; usernameLower?: string; host?: unknown } }) => {
 			return users.find(user => where.id != null ? user.id === where.id
 				: user.usernameLower === where.usernameLower && user.host === (typeof where.host === 'string' ? where.host : null)) ?? null;
 		}),
-		findOneBy: jest.fn(async ({ id }: { id: string }) => users.find(user => user.id === id) ?? null),
+		findOneBy: vi.fn(async ({ id }: { id: string }) => users.find(user => user.id === id) ?? null),
 	};
 	const balances = new Map([['user1', 10.25], ['user2', -4], ['remote1', 0]]);
 	const logs: GrantLog[] = [];
 	const events: string[] = [];
 	const db = {
-		transaction: jest.fn(async (cb: (em: unknown) => Promise<number>) => {
+		transaction: vi.fn(async (cb: (em: unknown) => Promise<number>) => {
 			const stagedBalances = new Map(balances);
 			const stagedLogs: GrantLog[] = [];
 			const em = {
@@ -69,12 +69,12 @@ function harness(opts: { insertFailure?: string; readFailure?: string; notificat
 			return result;
 		}),
 	};
-	const agentService = { assertAgentsEnabled: jest.fn(() => {}) };
+	const agentService = { assertAgentsEnabled: vi.fn(() => {}) };
 	let nextId = 0;
 	const idService = { gen: () => `log${++nextId}` };
-	const metaService = { fetch: jest.fn(async (_cache: boolean) => ({ iconUrl: 'https://example.test/icon.png', logoImageUrl: null })) };
+	const metaService = { fetch: vi.fn(async (_cache: boolean) => ({ iconUrl: 'https://example.test/icon.png', logoImageUrl: null })) };
 	const notificationService = {
-		createNotification: jest.fn((_userId: string, _type: string, _data: unknown) => {
+		createNotification: vi.fn((_userId: string, _type: string, _data: unknown) => {
 			events.push('notification');
 			if (opts.notificationFailure) throw new Error('notification unavailable');
 		}),
@@ -87,10 +87,10 @@ function harness(opts: { insertFailure?: string; readFailure?: string; notificat
 }
 
 beforeEach(() => {
-	jest.spyOn(Logger.prototype, 'error').mockImplementation(() => {});
-	jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => {});
+	vi.spyOn(Logger.prototype, 'error').mockImplementation(() => {});
+	vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => {});
 });
-afterEach(() => jest.restoreAllMocks());
+afterEach(() => vi.restoreAllMocks());
 
 describe('Agent credit batch grants', () => {
 	test('credits mixed reward/compensation rows and notifies only after each commit', async () => {

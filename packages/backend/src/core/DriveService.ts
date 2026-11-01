@@ -6,7 +6,8 @@
 import { randomUUID } from 'node:crypto';
 import * as fs from 'node:fs';
 import { Inject, Injectable } from '@nestjs/common';
-import sharp, { type Sharp } from 'sharp';
+import sharp from 'sharp';
+import type { Sharp } from 'sharp';
 import { sharpBmp } from '@misskey-dev/sharp-read-bmp';
 import { In, IsNull } from 'typeorm';
 import { DeleteObjectCommandInput, PutObjectCommandInput, NoSuchKey } from '@aws-sdk/client-s3';

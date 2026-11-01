@@ -1,4 +1,4 @@
-# syntax = docker/dockerfile:1.20
+# syntax = docker/dockerfile:1.23
 
 ARG NODE_VERSION=22.23.4-bookworm
 
@@ -40,9 +40,7 @@ RUN --mount=type=cache,target=/root/.local/share/pnpm/store,sharing=locked \
 
 COPY --link . ./
 
-RUN git submodule update --init
 RUN pnpm build
-RUN rm -rf .git/
 
 # 预下载 Gemini gemma3 分词器词表，供生产环境离线使用（生产服务器无法访问 raw.githubusercontent.com）。
 # 缓存路径与 @google/genai LocalTokenizer 一致：${TMPDIR:-/tmp}/vertexai_tokenizer_model/sha1(modelUrl)。
@@ -109,6 +107,8 @@ FROM --platform=$TARGETPLATFORM node:${NODE_VERSION}-slim AS runner
 ARG UID="991"
 ARG GID="991"
 
+ENV PNPM_CONFIG_VERIFY_DEPS_BEFORE_RUN=false
+
 RUN apt-get update \
 	&& apt-get install -y --no-install-recommends \
 	ffmpeg tini curl libjemalloc-dev libjemalloc2 \
@@ -137,9 +137,7 @@ COPY --chown=misskey:misskey --from=native-builder /misskey/packages/misskey-js/
 COPY --chown=misskey:misskey --from=native-builder /misskey/packages/misskey-reversi/built ./packages/misskey-reversi/built
 COPY --chown=misskey:misskey --from=native-builder /misskey/packages/misskey-bubble-game/built ./packages/misskey-bubble-game/built
 COPY --chown=misskey:misskey --from=native-builder /misskey/packages/backend/built ./packages/backend/built
-COPY --chown=misskey:misskey --from=native-builder /misskey/packages/backend/src-js ./packages/backend/src-js
 COPY --chown=misskey:misskey --from=native-builder /misskey/packages/i18n/built ./packages/i18n/built
-COPY --chown=misskey:misskey --from=native-builder /misskey/fluent-emojis /misskey/fluent-emojis
 # 预下载的 Gemini 分词器词表缓存（让 LocalTokenizer 无需联网即可精确计数）
 COPY --chown=misskey:misskey --from=native-builder /tmp/vertexai_tokenizer_model /tmp/vertexai_tokenizer_model
 # 预置的 GLM/DeepSeek 真分词器词表（让 AgentTokenService 离线精确计数；缺失时运行期回退 cl100k 近似）

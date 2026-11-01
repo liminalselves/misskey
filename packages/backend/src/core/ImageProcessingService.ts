@@ -4,7 +4,8 @@
  */
 
 import { Injectable } from '@nestjs/common';
-import sharp, { type Sharp, type WebpOptions, type AvifOptions } from 'sharp';
+import sharp from 'sharp';
+import type { Sharp, WebpOptions, AvifOptions } from 'sharp';
 
 export type IImage = {
 	data: Buffer;

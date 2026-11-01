@@ -6,6 +6,8 @@
 process.env.NODE_ENV = 'test';
 
 import * as http from 'node:http';
+import { afterAll, beforeAll, beforeEach, describe, test, expect } from 'vitest';
+import { Test } from '@nestjs/testing';
 import {
 	CompleteMultipartUploadCommand,
 	CreateMultipartUploadCommand,

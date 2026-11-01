@@ -197,39 +197,39 @@ definePage(() => ({
 	line-height: 1.45;
 	word-break: break-word;
 
-	&:deep(p) {
+	& :global(p) {
 		margin: 0.3em 0;
 
 		&:first-child { margin-top: 0; }
 		&:last-child { margin-bottom: 0; }
 	}
 
-	&:deep(h1),
-	&:deep(h2),
-	&:deep(h3) {
+	& :global(h1),
+	& :global(h2),
+	& :global(h3) {
 		margin: 0.3em 0 0.2em;
 		font-weight: 700;
 
 		&:first-child { margin-top: 0; }
 	}
 
-	&:deep(h1) { font-size: 1.2em; }
-	&:deep(h2) { font-size: 1.1em; }
+	& :global(h1) { font-size: 1.2em; }
+	& :global(h2) { font-size: 1.1em; }
 
-	&:deep(ul),
-	&:deep(ol) {
+	& :global(ul),
+	& :global(ol) {
 		margin: 0.3em 0;
 		padding-left: 1.3em;
 	}
 
-	&:deep(blockquote) {
+	& :global(blockquote) {
 		margin: 0.3em 0;
 		padding-left: 0.6em;
 		border-left: 3px solid var(--MI_THEME-divider);
 		color: var(--MI_THEME-fgTransparentWeak);
 	}
 
-	&:deep(pre) {
+	& :global(pre) {
 		margin: 0.3em 0;
 		padding: 0.5em 0.6em;
 		overflow-x: auto;
@@ -238,30 +238,30 @@ definePage(() => ({
 		font-size: 0.9em;
 	}
 
-	&:deep(code) {
+	& :global(code) {
 		padding: 0.1em 0.3em;
 		border-radius: 4px;
 		background: color-mix(in srgb, var(--MI_THEME-panel) 88%, var(--MI_THEME-fg));
 		font-size: 0.9em;
 	}
 
-	&:deep(pre code) {
+	& :global(pre code) {
 		padding: 0;
 		background: transparent;
 	}
 
-	&:deep(table) {
+	& :global(table) {
 		border-collapse: collapse;
 		font-size: 0.9em;
 	}
 
-	&:deep(th),
-	&:deep(td) {
+	& :global(th),
+	& :global(td) {
 		border: 1px solid var(--MI_THEME-divider);
 		padding: 0.2em 0.4em;
 	}
 
-	&:deep(a) {
+	& :global(a) {
 		color: var(--MI_THEME-link);
 		text-decoration: underline;
 	}

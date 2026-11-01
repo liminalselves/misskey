@@ -244,7 +244,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 						<MkInput v-model="reviewUserFilter" type="text"><template #label>用户名 / acct</template></MkInput>
 					</MkFilterBand>
 					<MkLoading v-if="reviewListLoading && reviewUserCards.length === 0" :class="$style.listStatus"/>
-					<MkInfo v-else-if="reviewUserCards.length === 0" :class="$style.listStatus">暂无需要复审的用户。配置复审触发条件后，满足条件的用户将自动出现在这里。</MkInfo>
+					<MkResult v-else-if="reviewListError && reviewUserCards.length === 0" type="error" :text="reviewListError" :class="$style.listStatus">
+						<MkButton rounded @click="loadReviewListItems(true)">重试</MkButton>
+					</MkResult>
+					<MkInfo v-else-if="reviewUserCards.length === 0" :class="$style.listStatus">暂无需要复审的用户。未审阅的拦截记录满足任一触发规则后，将保留在这里，直到处理或忽略。</MkInfo>
 					<div v-else :class="$style.reviewUserList">
 						<article v-for="card in reviewUserCards" :key="card.userId" v-panel :class="[$style.reviewUserCard, card.isSuspended ? $style.reviewUserCardSuspended : null]">
 							<!-- 用户头部：核心信息 + 操作入口 -->
@@ -278,7 +281,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 							<!-- 展开的违规记录列表 -->
 							<div v-if="expandedReviewUsers.has(card.userId)" :class="$style.reviewLogList">
-								<div v-for="log in card.logs" :key="log.id" :class="[$style.reviewLogItem, log.sessionModerationBanned ? $style.reviewLogItemBanned : null]">
+								<MkInfo v-if="card.blockCount > card.logs.length">共 {{ card.blockCount }} 条未审阅拦截，仅显示最近 {{ card.logs.length }} 条；忽略或处理用户时按全部记录计算。</MkInfo>
+							<div v-for="log in card.logs" :key="log.id" :class="[$style.reviewLogItem, log.sessionModerationBanned ? $style.reviewLogItemBanned : null]">
 									<div :class="$style.reviewLogHead">
 										<div :class="$style.badges">
 											<code v-if="log.blockCode">{{ log.blockCode }}</code>
@@ -467,7 +471,6 @@ import MkSelect from '@/components/MkSelect.vue';
 import MkFilterBand from '@/components/MkFilterBand.vue';
 import MkUserAcctInline from '@/components/MkUserAcctInline.vue';
 import MkDriveFileThumbnail from '@/components/MkDriveFileThumbnail.vue';
-import MkImgPreviewDialog from '@/components/MkImgPreviewDialog.vue';
 import FormSplit from '@/components/form/split.vue';
 import { misskeyApi, formatApiError } from '@/utility/misskey-api.js';
 import { copyToClipboard } from '@/utility/copy-to-clipboard.js';
@@ -734,6 +737,7 @@ async function resolveModelReport(row: ModelReportRow) {
 // 在途请求期间收到 reset 不丢弃、按世代作废旧响应，避免旧筛选结果落地或 reset 被吞）
 const reviewUserFilter = ref('');
 const reviewListLoading = ref(false);
+const reviewListError = ref<string | null>(null);
 const reviewListHasMore = ref(false);
 const reviewUserCards = ref<ReviewUserCard[]>([]);
 const expandedReviewUsers = reactive(new Set<string>());
@@ -749,6 +753,7 @@ type ReviewUserCard = {
 	moderationNote: string | null;
 	blockCount: number;
 	latestBlockAt: string | null;
+	reviewUntilId: string;
 	triggeredRules: { id: string; timeWindowMinutes: number; blockThreshold: number }[];
 	logs: ReviewLogEntry[];
 };
@@ -777,12 +782,12 @@ async function loadReviewListItems(reset: boolean) {
 	}
 	if (reset) {
 		reviewListEpoch++;
-		reviewUserCards.value = [];
 		reviewOffset.value = 0;
 		reviewListHasMore.value = false;
 		expandedReviewUsers.clear();
 	}
 	reviewListLoading.value = true;
+	reviewListError.value = null;
 	const myEpoch = reviewListEpoch;
 	try {
 		const rows = await api<ReviewUserCard[]>('admin/agents/governance/external-audit/review-list', {
@@ -791,20 +796,21 @@ async function loadReviewListItems(reset: boolean) {
 			offset: reviewOffset.value,
 		});
 		if (myEpoch !== reviewListEpoch) return; // 已被后续 reset 作废的旧响应
-		const existingIds = new Set(reviewUserCards.value.map(card => card.userId));
-		const pageRows = rows.slice(0, PAGE_SIZE).filter(card => {
+		const existingIds = new Set(reset ? [] : reviewUserCards.value.map(card => card.userId));
+		const rawPage = rows.slice(0, PAGE_SIZE);
+		const pageRows = rawPage.filter(card => {
 			if (existingIds.has(card.userId)) return false;
 			existingIds.add(card.userId);
 			return true;
 		});
-		// 整页重复（offset 未推进）时停止翻页防循环；只有出现新条目才允许继续
-		reviewListHasMore.value = rows.length > PAGE_SIZE && pageRows.length > 0;
+		reviewListHasMore.value = rows.length > PAGE_SIZE;
 		reviewUserCards.value = reset ? pageRows : [...reviewUserCards.value, ...pageRows];
-		// offset 按去重后实际落库条数推进，与列表内容保持同步
-		reviewOffset.value += pageRows.length;
+		// The server offset advances over raw rows, including duplicates from changing sort order.
+		reviewOffset.value += rawPage.length;
 	} catch (err) {
 		if (myEpoch !== reviewListEpoch) return;
-		os.alert({ type: 'error', text: formatApiError(err) });
+		reviewListError.value = formatApiError(err);
+		if (reviewUserCards.value.length > 0) os.alert({ type: 'error', text: reviewListError.value });
 	} finally {
 		reviewListLoading.value = false;
 		if (reviewListQueuedReset) {
@@ -836,12 +842,13 @@ async function ignoreReviewUser(card: ReviewUserCard) {
 	const { canceled } = await os.confirm({
 		type: 'question',
 		title: '忽略复审',
-		text: `确定忽略用户 ${userName} 的 ${card.logs.length} 条外审拦截记录？忽略后这批记录将标记为已审阅，该用户后续再次触发复审时仍会出现在列表中。`,
+		text: `确定忽略用户 ${userName} 的 ${card.blockCount} 条外审拦截记录？忽略后这批记录将标记为已审阅，该用户后续再次触发复审时仍会出现在列表中。`,
 	});
 	if (canceled) return;
 	try {
 		await api('admin/agents/governance/external-audit/review-ignore', {
-			ids: card.logs.map(l => l.id),
+			userId: card.userId,
+			untilId: card.reviewUntilId,
 		});
 		os.toast('已忽略');
 		await loadReviewListItems(true);
@@ -1072,7 +1079,7 @@ watch(activeView, view => {
 		void loadSessions(true);
 	} else if (view === 'externalAudit' && externalAudits.value.length === 0) {
 		void loadExternalAudits(true);
-	} else if (view === 'review' && reviewUserCards.value.length === 0) {
+	} else if (view === 'review') {
 		void loadReviewListItems(true);
 	} else if (view === 'images' && images.value.length === 0) {
 		void loadImages(true);
@@ -1332,6 +1339,7 @@ async function openQuickActionForUser(card: ReviewUserCard) {
 			userSuspendReason: result.userSuspendReason,
 			violationCategory: result.violationCategory,
 			moderationNote: result.moderationNote,
+			reviewUntilId: card.reviewUntilId,
 		});
 		const parts: string[] = [];
 		if (res.sessionsBanned) parts.push(`${res.sessionsBanned} 个会话已封禁`);
@@ -1393,9 +1401,25 @@ function canPreviewImage(row: ImageRow): boolean {
 	return row.file != null && !row.file.isDeleted && !isImageBlocked(row) && row.status === 'succeeded';
 }
 
-function openImagePreview(row: ImageRow) {
+// 点击缩略图用上游原生灯箱加载全图（封禁/已清理/无文件已在 canPreviewImage 拦下）
+async function openImagePreview(row: ImageRow) {
 	if (!canPreviewImage(row) || row.file == null) return;
-	os.popup(MkImgPreviewDialog, { file: row.file }, {});
+	const file = row.file;
+	const { dispose } = await os.popupAsyncWithDialog(import('@/components/MkLightbox.vue').then(x => x.default), {
+		defaultIndex: 0,
+		contents: [{
+			id: file.id,
+			type: 'image' as const,
+			url: file.url,
+			thumbnailUrl: file.thumbnailUrl,
+			width: file.properties.width ?? null,
+			height: file.properties.height ?? null,
+			filename: file.name,
+			file,
+		}],
+	}, {
+		closed: () => dispose(),
+	});
 }
 
 function imageSizeLabel(size: string) {

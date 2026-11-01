@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
+import { describe, test, expect } from 'vitest';
+
 import { getEffectiveLlmModels, normalizeAgentLlmApiKeys, normalizeAgentLlmModelsParam } from '@/misc/agent-llm-models.js';
 import type { MiMeta } from '@/models/Meta.js';
 

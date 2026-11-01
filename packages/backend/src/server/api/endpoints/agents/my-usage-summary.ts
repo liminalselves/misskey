@@ -226,13 +226,13 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				characterIds.length > 0
 					? this.agentCharactersRepository.find({
 						where: { id: In(characterIds) },
-						select: ['id', 'name'],
+						select: { id: true, name: true },
 					})
 					: Promise.resolve([]),
 				dialogueStyleIds.length > 0
 					? this.agentDialogueStylesRepository.find({
 						where: { id: In(dialogueStyleIds) },
-						select: ['id', 'name'],
+						select: { id: true, name: true },
 					})
 					: Promise.resolve([]),
 			]);

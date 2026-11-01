@@ -3,11 +3,11 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
-import { jest } from '@jest/globals';
+import { vi, describe, test, expect } from 'vitest';
 import { AgentStickerService } from '@/core/AgentStickerService.js';
 import { normalizeCharacterStickerList, AGENT_STICKER_DESCRIPTION_MAX } from '@/core/agent-sticker-utils.js';
 import type { AgentStickerReplyContext } from '@/core/AgentStickerService.js';
-// 依存チェーン上の ESM-only パッケージ（node-fetch / nanoid 等）は jest.config.unit.cjs の
+// 依存チェーン上の ESM-only パッケージ（node-fetch / nanoid 等）は vi.config.unit.cjs の
 // moduleNameMapper で共通スタブに解決される（本テストは純粋ロジックのみ対象）
 
 describe('AgentStickerService prompt/reply helpers', () => {
@@ -86,9 +86,9 @@ describe('AgentStickerService prompt/reply helpers', () => {
 
 describe('AgentStickerService batch ownership', () => {
 	test('stops before another paid call when the batch loses its lock', async () => {
-		const evalScript = jest.fn<(script: string, keys: number, ...args: (string | number)[]) => Promise<number>>().mockResolvedValueOnce(1).mockResolvedValue(0);
-		const update = jest.fn<() => Promise<null>>().mockResolvedValue(null);
-		const generate = jest.fn<() => Promise<string>>().mockResolvedValue('description');
+		const evalScript = vi.fn<(script: string, keys: number, ...args: (string | number)[]) => Promise<number>>().mockResolvedValueOnce(1).mockResolvedValue(0);
+		const update = vi.fn<() => Promise<null>>().mockResolvedValue(null);
+		const generate = vi.fn<() => Promise<string>>().mockResolvedValue('description');
 		const service = new AgentStickerService(undefined as never, { eval: evalScript } as never, undefined as never, undefined as never, undefined as never, undefined as never, undefined as never, { update } as never, undefined as never, undefined as never);
 		Object.defineProperty(service, 'generateDescriptionForEmoji', { value: generate });
 		const runner = service as unknown as {
@@ -107,8 +107,8 @@ describe('AgentStickerService batch ownership', () => {
 
 	test('does not report old progress as a running successor batch', async () => {
 		const redis = {
-			hgetall: jest.fn<() => Promise<Record<string, string>>>().mockResolvedValue({ token: 'old', running: '1', total: '8', done: '3', failed: '0' }),
-			get: jest.fn<() => Promise<string>>().mockResolvedValue('new'),
+			hgetall: vi.fn<() => Promise<Record<string, string>>>().mockResolvedValue({ token: 'old', running: '1', total: '8', done: '3', failed: '0' }),
+			get: vi.fn<() => Promise<string>>().mockResolvedValue('new'),
 		};
 		const service = new AgentStickerService(undefined as never, redis as never, undefined as never, undefined as never, undefined as never, undefined as never, undefined as never, undefined as never, undefined as never, undefined as never);
 		expect(await service.getBatchFillStatus()).toEqual({ running: false, total: 8, done: 3, failed: 0 });

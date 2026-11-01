@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
+import { describe, test, expect } from 'vitest';
+
 import { agentLlmAttemptErrorFrom, agentsErrors, invokeAgentLlmApiKeys, rotateAgentLlmApiKeys } from '@/core/AgentService.js';
 import { ApiError } from '@/server/api/error.js';
 

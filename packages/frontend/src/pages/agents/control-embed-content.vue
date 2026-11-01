@@ -29,7 +29,7 @@ import defaultDarkTheme from '@@/themes/d-green-lime.json5';
 import XAgentSession from '@/pages/chat/agent-session.vue';
 import XControlLoading from '@/pages/agents/control-embed-loading.vue';
 import { $i } from '@/i.js';
-import { compile } from '@/theme.js';
+import { compile } from '@@/js/theme.js';
 import { useRouter } from '@/router.js';
 import {
 	agentControlSurfaceDefaults,

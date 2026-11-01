@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
-import { jest } from '@jest/globals';
+import { vi, describe, test, expect } from 'vitest';
 import { MoreThan } from 'typeorm';
 import type { MiMeta } from '@/models/Meta.js';
 import { buildAgentModelChanges } from '@/misc/agent-model-changes.js';
@@ -34,12 +34,12 @@ function instance(overrides: Partial<MiMeta> = {}): MiMeta {
 
 function serviceFixture(cursor: string | null = null) {
 	const repository = {
-		existsBy: jest.fn<() => Promise<boolean>>().mockResolvedValue(true),
-		find: jest.fn<(...args: unknown[]) => Promise<unknown[]>>().mockResolvedValue([]),
+		existsBy: vi.fn<() => Promise<boolean>>().mockResolvedValue(true),
+		find: vi.fn<(...args: unknown[]) => Promise<unknown[]>>().mockResolvedValue([]),
 	};
 	const registry = {
-		getItem: jest.fn<() => Promise<{ value: string } | null>>().mockResolvedValue(cursor ? { value: cursor } : null),
-		set: jest.fn<(...args: unknown[]) => Promise<void>>().mockResolvedValue(),
+		getItem: vi.fn<() => Promise<{ value: string } | null>>().mockResolvedValue(cursor ? { value: cursor } : null),
+		set: vi.fn<(...args: unknown[]) => Promise<void>>().mockResolvedValue(),
 	};
 	const service = new AgentModelAnnouncementService(repository as never, { gen: () => 'new-id' } as never, registry as never);
 	return { service, repository, registry };
@@ -109,7 +109,7 @@ describe('agent model announcement diffs', () => {
 describe('agent model announcement persistence', () => {
 	test('writes actual changes using the supplied save transaction, without initial backfill', async () => {
 		const { service } = serviceFixture();
-		const manager = { insert: jest.fn<(...args: unknown[]) => Promise<void>>().mockResolvedValue() };
+		const manager = { insert: vi.fn<(...args: unknown[]) => Promise<void>>().mockResolvedValue() };
 		await service.recordChanges(undefined, instance(), manager as never);
 		await service.recordChanges(instance(), instance(), manager as never);
 		expect(manager.insert).not.toHaveBeenCalled();
@@ -139,13 +139,13 @@ describe('agent model announcement persistence', () => {
 		const before = instance();
 		const after = instance({ agentLlmModels: [{ ...chatModel, dailyFreeQuota: 20 }] });
 		const manager = {
-			find: jest.fn<() => Promise<MiMeta[]>>().mockResolvedValueOnce([before]).mockResolvedValueOnce([after]),
-			update: jest.fn<() => Promise<void>>().mockResolvedValue(),
+			find: vi.fn<() => Promise<MiMeta[]>>().mockResolvedValueOnce([before]).mockResolvedValueOnce([after]),
+			update: vi.fn<() => Promise<void>>().mockResolvedValue(),
 		};
 		const db = { transaction: async (run: (value: typeof manager) => Promise<MiMeta>) => run(manager) };
-		const events = { publishInternalEvent: jest.fn() };
-		const service = new MetaService({ on: jest.fn(), off: jest.fn() } as never, db as never, {} as never, events as never);
-		const onUpdated = jest.fn<(...args: unknown[]) => Promise<void>>().mockRejectedValue(new Error('announcement write failed'));
+		const events = { publishInternalEvent: vi.fn() };
+		const service = new MetaService({ on: vi.fn(), off: vi.fn() } as never, db as never, {} as never, events as never);
+		const onUpdated = vi.fn<(...args: unknown[]) => Promise<void>>().mockRejectedValue(new Error('announcement write failed'));
 		await expect(service.update({ agentLlmModels: after.agentLlmModels }, onUpdated)).rejects.toThrow('announcement write failed');
 		expect(onUpdated).toHaveBeenCalledWith(before, after, manager);
 		expect(events.publishInternalEvent).not.toHaveBeenCalled();

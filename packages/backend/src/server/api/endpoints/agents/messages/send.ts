@@ -253,12 +253,27 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					id: 'a6b7c8d9-e0f1-2345-9012-567890123456',
 				});
 			}
-			const styleRow = await this.agentDialogueStylesRepository.findOneByOrFail({ id: session.dialogueStyleId });
+			const styleRow = await this.agentDialogueStylesRepository.findOneBy({ id: session.dialogueStyleId });
+			if (!styleRow) {
+				await this.reapDeadDialogueStyle(session.id, session.dialogueStyleId);
+				throw new ApiError({
+					message: 'This dialogue style is not available.',
+					code: 'STYLE_NOT_AVAILABLE',
+					id: '05e2bbfe-7d0e-4c10-9f40-b04c1c8a13a0',
+				});
+			}
 
-			await this.agentService.assertCanUseDialogueStyle(me.id, styleRow, {
-				forNewSession: false,
-				sessionDialogueStyleId: session.dialogueStyleId,
-			});
+			try {
+				await this.agentService.assertCanUseDialogueStyle(me.id, styleRow, {
+					forNewSession: false,
+					sessionDialogueStyleId: session.dialogueStyleId,
+				});
+			} catch (e) {
+				if (e instanceof ApiError && e.code === 'STYLE_NOT_AVAILABLE') {
+					await this.reapDeadDialogueStyle(session.id, session.dialogueStyleId);
+				}
+				throw e;
+			}
 
 			try {
 				this.agentService.assertSessionCharacterPolicy({
@@ -774,7 +789,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 						where: { sessionId: session.id },
 						order: { createdAt: 'DESC', id: 'DESC' },
 						take: AGENT_OVERVIEW_SCAN_LIMIT,
-						select: ['id', 'role', 'content', 'createdAt', 'imageFileId', 'imageRecognitionStatus', 'imageRecognitionDescription', 'proactiveScheduleControlRaw', 'proactiveScheduleControlError', 'timeTrusted'],
+						select: { id: true, role: true, content: true, createdAt: true, imageFileId: true, imageRecognitionStatus: true, imageRecognitionDescription: true, proactiveScheduleControlRaw: true, proactiveScheduleControlError: true, timeTrusted: true },
 					});
 					const compressionSidecar = await this.agentCompressionMemoryService.computeSidecarTokenD({
 						session, character, style, instanceMeta, rows: compressionRows,
@@ -872,5 +887,19 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				}
 			}
 		});
+	}
+
+	/**
+	 * 文风已删除（行缺失）或已被作者下架：视为「会话引用了不存在的文风」，
+	 * 清空 dialogueStyleId 使会话回到未选择文风状态，避免每次发送都撞同一错误。
+	 * 只清 dialogueStyleId：plazaStatsDialogueStyleId 是历史统计快照不清；
+	 * where 带上当前值做乐观判据，与并发修改文风互不覆盖。
+	 */
+	private async reapDeadDialogueStyle(sessionId: string, deadStyleId: string): Promise<void> {
+		await this.agentSessionsRepository.createQueryBuilder()
+			.update()
+			.set({ dialogueStyleId: null })
+			.where('id = :id AND "dialogueStyleId" = :deadStyleId', { id: sessionId, deadStyleId })
+			.execute();
 	}
 }

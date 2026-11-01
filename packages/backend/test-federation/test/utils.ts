@@ -1,4 +1,5 @@
 import { deepStrictEqual, strictEqual } from 'assert';
+import { vi } from 'vitest';
 import { readFile } from 'fs/promises';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
@@ -40,25 +41,20 @@ export async function sleep(ms = 250): Promise<void> {
 	return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+type WaitForOptions = NonNullable<Parameters<typeof vi.waitFor>[1]>;
+
+/** 連合の反映を待つ上限。`vi.waitFor()` を使わない待ち合わせ (ストリーミング) にも使う */
+export const FEDERATION_TIMEOUT = 10000;
+
 /**
- * 上流の vi.waitFor(WAIT_FOR_FEDERATION) 相当(jest 版)。
- * 連合の反映は配送キューの処理タイミング次第で固定 sleep では間に合わないことがあるため、
- * 条件が満たされるまでポーリングする。
+ * 連合の反映は非同期なので、固定時間の `sleep()` だけで待つと CI の負荷次第で容易に flaky になる。
+ * 「一定時間待つ」のではなく「条件が満たされるまで待つ」ために `vi.waitFor()` へ渡すオプション。
+ * (`vi.waitFor()` の既定値は timeout 1000ms / interval 50ms で、連合の反映待ちには短すぎる)
  */
-export async function waitForFederation(fn: () => Promise<void>, timeout = 10_000, interval = 250): Promise<void> {
-	const deadline = Date.now() + timeout;
-	let lastError: unknown;
-	while (Date.now() < deadline) {
-		try {
-			await fn();
-			return;
-		} catch (error) {
-			lastError = error;
-			await sleep(interval);
-		}
-	}
-	throw lastError;
-}
+export const WAIT_FOR_FEDERATION: WaitForOptions = { timeout: FEDERATION_TIMEOUT, interval: 250 };
+
+/** アカウント削除・凍結など、明らかに時間のかかる処理を待つ場合の {@link WAIT_FOR_FEDERATION} */
+export const WAIT_FOR_SLOW_FEDERATION: WaitForOptions = { timeout: 30000, interval: 500 };
 
 async function signin(
 	host: Host,
@@ -189,6 +185,37 @@ export async function createRole(
 	});
 }
 
+/**
+ * フォローは Follow → Accept の往復で成立するので、`sleep()` で待つと
+ * 「配送時点のフォロワー」に依存する配送 (Update / Note など) を取りこぼして flaky になる。
+ * followee 側から見たフォロワー数が期待値になるまで待つ。
+ */
+export async function waitForFollowers(followee: LoginUser, count: number, options: WaitForOptions = WAIT_FOR_FEDERATION): Promise<void> {
+	await vi.waitFor(async () => {
+		const followers = await followee.client.request('users/followers', { userId: followee.id });
+		strictEqual(followers.length, count);
+	}, options);
+}
+
+/** {@link waitForFollowers} の follower 側版 (Accept が返ってきたことを確認する) */
+export async function waitForFollowing(follower: LoginUser, count: number, options: WaitForOptions = WAIT_FOR_FEDERATION): Promise<void> {
+	await vi.waitFor(async () => {
+		const following = await follower.client.request('users/following', { userId: follower.id });
+		strictEqual(following.length, count);
+	}, options);
+}
+
+/**
+ * フォロー関係が両方のサーバーで反映されるまで待つ。
+ * 特に理由が無ければこちらを使う。
+ */
+export async function waitForFollowRelation(follower: LoginUser, followee: LoginUser, count: number, options: WaitForOptions = WAIT_FOR_FEDERATION): Promise<void> {
+	await Promise.all([
+		waitForFollowing(follower, count, options),
+		waitForFollowers(followee, count, options),
+	]);
+}
+
 export async function resolveRemoteUser(
 	host: Host,
 	id: string,
@@ -258,6 +285,9 @@ export function deepStrictEqualWithExcludedFields<T>(actual: T, expected: T, exc
 	deepStrictEqual(_actual, _expected);
 }
 
+/** 「発火しない」ことの確認に使う待ち時間 */
+const NOT_FIRED_TIMEOUT = 500;
+
 export async function isFired<C extends keyof Misskey.Channels, T extends keyof Misskey.Channels[C]['events']>(
 	host: Host,
 	user: { i: string },
@@ -267,8 +297,11 @@ export async function isFired<C extends keyof Misskey.Channels, T extends keyof 
 	// @ts-expect-error TODO: why getting error here?
 	cond: (msg: Parameters<Misskey.Channels[C]['events'][T]>[0]) => boolean,
 	params?: Misskey.Channels[C]['params'],
+	timeout = NOT_FIRED_TIMEOUT,
 ): Promise<boolean> {
 	const stream = new Misskey.Stream(`wss://${host}`, { token: user.i }, { WebSocket });
+	// 先にイベントを受け取った場合でもタイマーが残り続けないよう、必ず解除する
+	let timer: ReturnType<typeof setTimeout> | undefined;
 	try {
 		const connection = stream.useChannel(channel, params);
 
@@ -283,9 +316,12 @@ export async function isFired<C extends keyof Misskey.Channels, T extends keyof 
 		await trigger();
 		return await Promise.race([
 			receivePromise,
-			sleep(500).then(() => false),
+			new Promise<boolean>(resolve => {
+				timer = setTimeout(() => resolve(false), timeout);
+			}),
 		]);
 	} finally {
+		clearTimeout(timer);
 		stream.close();
 	}
 };
@@ -296,8 +332,11 @@ export async function isNoteUpdatedEventFired(
 	noteId: string,
 	trigger: () => Promise<unknown>,
 	cond: (msg: Parameters<Misskey.StreamEvents['noteUpdated']>[0]) => boolean,
+	timeout = NOT_FIRED_TIMEOUT,
 ): Promise<boolean> {
 	const stream = new Misskey.Stream(`wss://${host}`, { token: user.i }, { WebSocket });
+	// 先にイベントを受け取った場合でもタイマーが残り続けないよう、必ず解除する
+	let timer: ReturnType<typeof setTimeout> | undefined;
 	try {
 		stream.send('s', { id: noteId });
 
@@ -313,9 +352,12 @@ export async function isNoteUpdatedEventFired(
 
 		return await Promise.race([
 			receivePromise,
-			sleep(500).then(() => false),
+			new Promise<boolean>(resolve => {
+				timer = setTimeout(() => resolve(false), timeout);
+			}),
 		]);
 	} finally {
+		clearTimeout(timer);
 		stream.close();
 	}
 };
@@ -327,11 +369,26 @@ export async function assertNotificationReceived(
 	cond: (notification: Misskey.entities.Notification) => boolean,
 	expect: boolean,
 ) {
-	const streamingFired = await isFired(receiverHost, receiver, 'main', trigger, 'notification', cond);
+	const streamingFired = await isFired(
+		receiverHost,
+		receiver,
+		'main',
+		trigger,
+		'notification',
+		cond,
+		undefined,
+		expect ? FEDERATION_TIMEOUT : undefined,
+	);
 	strictEqual(streamingFired, expect);
 
-	const endpointFired = await receiver.client.request('i/notifications', {})
+	const fetchEndpointFired = async () => await receiver.client.request('i/notifications', {})
 		// eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
 		.then(([notification]) => notification != null ? cond(notification) : false);
-	strictEqual(endpointFired, expect);
+
+	if (expect) {
+		await vi.waitFor(async () => strictEqual(await fetchEndpointFired(), true), WAIT_FOR_FEDERATION);
+	} else {
+		// 届かないことの確認は待っても意味がないので 1 回だけ確認する
+		strictEqual(await fetchEndpointFired(), false);
+	}
 }

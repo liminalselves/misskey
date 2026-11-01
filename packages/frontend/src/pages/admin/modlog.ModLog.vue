@@ -22,6 +22,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				[$style.logYellow]: [
 					'markSensitiveDriveFile',
 					'resetPassword',
+					'unsetMfa',
 					'suspendRemoteInstance',
 				].includes(log.type),
 				[$style.logRed]: [
@@ -70,6 +71,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<span v-else-if="log.type === 'deleteUserAnnouncement'">: @{{ log.info.userUsername }}{{ log.info.userHost ? '@' + log.info.userHost : '' }}</span>
 		<span v-else-if="log.type === 'deleteNote'">: @{{ log.info.noteUserUsername }}{{ log.info.noteUserHost ? '@' + log.info.noteUserHost : '' }}</span>
 		<span v-else-if="log.type === 'deleteDriveFile'">: @{{ log.info.fileUserUsername }}{{ log.info.fileUserHost ? '@' + log.info.fileUserHost : '' }}</span>
+		<span v-else-if="log.type === 'unsetMfa'">: @{{ log.info.userUsername }}{{ log.info.userHost ? '@' + log.info.userHost : '' }}</span>
 		<span v-else-if="log.type === 'createAvatarDecoration'">: {{ log.info.avatarDecoration.name }}</span>
 		<span v-else-if="log.type === 'updateAvatarDecoration'">: {{ log.info.before.name }}</span>
 		<span v-else-if="log.type === 'deleteAvatarDecoration'">: {{ log.info.avatarDecoration.name }}</span>
@@ -119,6 +121,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<i v-else-if="log.type === 'createAd'" class="ti ti-plus"></i>
 		<i v-else-if="log.type === 'updateAd'" class="ti ti-pencil"></i>
 		<i v-else-if="log.type === 'deleteAd'" class="ti ti-trash"></i>
+		<i v-else-if="log.type === 'unsetMfa'" class="ti ti-shield"></i>
 		<i v-else-if="log.type === 'createAvatarDecoration'" class="ti ti-plus"></i>
 		<i v-else-if="log.type === 'updateAvatarDecoration'" class="ti ti-pencil"></i>
 		<i v-else-if="log.type === 'deleteAvatarDecoration'" class="ti ti-trash"></i>
@@ -261,6 +264,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		</template>
 		<template v-else-if="log.type === 'ignoreAgentExternalAuditReview'">
 			<div>×{{ log.info.count }}</div>
+			<div v-if="log.info.userId">{{ i18n.ts.user }}: <MkA :to="`/admin/user/${log.info.userId}`" class="_link">{{ log.info.userId }}</MkA> · ≤ {{ log.info.untilId }}</div>
 			<div v-if="log.info.ids.length > 0" class="_text" style="word-break: break-all;">{{ log.info.ids.join(', ') }}</div>
 		</template>
 		<template v-else-if="log.type === 'resolveAgentModelReport'">

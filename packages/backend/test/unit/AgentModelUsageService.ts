@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
-import { jest } from '@jest/globals';
+import { vi, describe, test, expect, beforeEach, afterEach } from 'vitest';
 import { AgentModelUsageService } from '@/core/AgentModelUsageService.js';
 import { MiAgentModelUsageLog } from '@/models/AgentModelUsageLog.js';
 import { MiUserProfile } from '@/models/UserProfile.js';
@@ -37,31 +37,31 @@ type ServiceOptions = {
 function createService(opts: ServiceOptions = {}) {
 	const updates: Array<[unknown, unknown, Record<string, unknown>]> = [];
 	const em = {
-		update: jest.fn(async (target: unknown, criteria: unknown, patch: Record<string, unknown>) => {
+		update: vi.fn(async (target: unknown, criteria: unknown, patch: Record<string, unknown>) => {
 			updates.push([target, criteria, patch]);
 			return { affected: opts.updateAffected ?? 1, raw: [], generatedMaps: [] };
 		}),
-		decrement: jest.fn(async () => ({ affected: 1, raw: [], generatedMaps: [] })),
+		decrement: vi.fn(async () => ({ affected: 1, raw: [], generatedMaps: [] })),
 	};
 	const db = {
-		transaction: jest.fn(async (cb: (em: unknown) => Promise<unknown>) => {
+		transaction: vi.fn(async (cb: (em: unknown) => Promise<unknown>) => {
 			if (opts.txError) throw opts.txError;
 			return await cb(em);
 		}),
 	};
 	const redis = {
-		eval: jest.fn(async (..._args: unknown[]) => opts.evalResult ?? 1),
-		decr: jest.fn(async () => 0),
-		incr: jest.fn(async () => 1),
-		get: jest.fn(async () => null),
+		eval: vi.fn(async (..._args: unknown[]) => opts.evalResult ?? 1),
+		decr: vi.fn(async () => 0),
+		incr: vi.fn(async () => 1),
+		get: vi.fn(async () => null),
 	};
 	const service = new AgentModelUsageService(
 		{} as never,
 		{} as never,
 		redis as never,
 		db as never,
-		{ gen: jest.fn(() => 'log-id') } as never,
-		{ getUserFacingModelCostPerCall: jest.fn(() => 1) } as never,
+		{ gen: vi.fn(() => 'log-id') } as never,
+		{ getUserFacingModelCostPerCall: vi.fn(() => 1) } as never,
 	);
 	return { service, redis, em, db, updates };
 }
@@ -90,11 +90,11 @@ function createLog(): MiAgentModelUsageLog {
 describe('AgentModelUsageService report exclusions', () => {
 	test('excludes rewards and compensation from model and overall model-call totals', async () => {
 		const qb = {
-			select: jest.fn().mockReturnThis(),
-			addSelect: jest.fn().mockReturnThis(),
-			where: jest.fn().mockReturnThis(),
-			andWhere: jest.fn().mockReturnThis(),
-			groupBy: jest.fn().mockReturnThis(),
+			select: vi.fn().mockReturnThis(),
+			addSelect: vi.fn().mockReturnThis(),
+			where: vi.fn().mockReturnThis(),
+			andWhere: vi.fn().mockReturnThis(),
+			groupBy: vi.fn().mockReturnThis(),
 			getRawMany: async () => [],
 			getRawOne: async () => ({}),
 		};
@@ -114,11 +114,11 @@ describe('AgentModelUsageService report exclusions', () => {
 
 describe('AgentModelUsageService finishLog atomicity', () => {
 	beforeEach(() => {
-		jest.useFakeTimers().setSystemTime(new Date('2026-09-21T04:00:00.000Z'));
+		vi.useFakeTimers().setSystemTime(new Date('2026-09-21T04:00:00.000Z'));
 	});
 
 	afterEach(() => {
-		jest.useRealTimers();
+		vi.useRealTimers();
 	});
 
 	test.each([
@@ -131,7 +131,7 @@ describe('AgentModelUsageService finishLog atomicity', () => {
 		['usage', 'success', 2, false, 2],
 		['usage', 'success', 5, false, 1],
 	] as const)('%s / %s / UTC hour %i / usage %s: charges %s', async (billingMode, status, hour, withUsage, expectedCost) => {
-		jest.setSystemTime(new Date(Date.UTC(2026, 9, 17, hour)));
+		vi.setSystemTime(new Date(Date.UTC(2026, 9, 17, hour)));
 		const pricedInstance = {
 			...instance,
 			agentLlmModels: [{

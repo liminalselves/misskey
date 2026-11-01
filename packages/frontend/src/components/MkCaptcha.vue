@@ -11,8 +11,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<span>{{ i18n.ts.loading }}<MkEllipsis/></span>
 		</div>
 		<template v-else-if="props.provider === 'mcaptcha'">
-			<div id="mcaptcha__widget-container" class="m-captcha-style"></div>
-			<div ref="captchaEl" :class="$style.externalWidget"></div>
+			<iframe v-if="mCaptchaIframeUrl != null" ref="mCaptchaIframe" :src="mCaptchaIframeUrl" :class="$style.mCaptchaIframe" title="mCaptcha"></iframe>
 		</template>
 		<div v-else-if="props.provider === 'testcaptcha'" :class="$style.testCaptcha">
 			<img src="/client-assets/testcaptcha.png" :class="$style.testCaptchaImage" alt=""/>
@@ -24,8 +23,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<template v-else>
 					<label :class="$style.testCaptchaLabel" for="testcaptcha-input">Type "ai-chan-kawaii" to pass captcha</label>
 					<div :class="$style.testCaptchaControls">
-						<input id="testcaptcha-input" v-model="testcaptchaInput" :class="$style.testCaptchaInput" data-cy-testcaptcha-input @keydown.enter.prevent="testcaptchaSubmit"/>
-						<button type="button" :class="$style.testCaptchaSubmit" data-cy-testcaptcha-submit @click="testcaptchaSubmit">
+						<input id="testcaptcha-input" v-model="testcaptchaInput" :class="$style.testCaptchaInput" data-testid="testcaptcha-input" @keydown.enter.prevent="testcaptchaSubmit"/>
+						<button type="button" :class="$style.testCaptchaSubmit" data-testid="testcaptcha-submit" @click="testcaptchaSubmit">
 							<i class="ti ti-arrow-right" aria-hidden="true"></i>
 						</button>
 					</div>
@@ -38,7 +37,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { ref, useTemplateRef, computed, onMounted, onBeforeUnmount, watch, onUnmounted } from 'vue';
+import { ref, useTemplateRef, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue';
+import type Reciever_typeReferenceOnly from '@mcaptcha/core-glue';
 import { store } from '@/store.js';
 import { i18n } from '@/i18n.js';
 
@@ -114,6 +114,19 @@ const aliyunCaptchaInstance = ref<AliyunCaptcha | undefined>(undefined);
 const aliyunTriggerEl = ref<HTMLButtonElement | undefined>(undefined);
 const aliyunTriggerIconEl = ref<HTMLElement | undefined>(undefined);
 const aliyunTriggerLabelEl = ref<HTMLSpanElement | undefined>(undefined);
+
+let mCaptchaReciever: Reciever_typeReferenceOnly | null = null;
+const mCaptchaIframe = useTemplateRef('mCaptchaIframe');
+const mCaptchaRemoveState = ref(false);
+const mCaptchaIframeUrl = computed(() => {
+	if (props.provider === 'mcaptcha' && !mCaptchaRemoveState.value && props.instanceUrl && props.sitekey) {
+		const url = new URL('/widget', props.instanceUrl);
+		url.searchParams.set('sitekey', props.sitekey);
+		return url.toString();
+	}
+	return null;
+});
+
 const testcaptchaInput = ref('');
 const testcaptchaPassed = ref(false);
 
@@ -194,8 +207,14 @@ function reset() {
 			if (_DEV_) console.warn(error);
 		}
 	}
+
 	testcaptchaPassed.value = false;
 	testcaptchaInput.value = '';
+
+	if (mCaptchaReciever != null) {
+		mCaptchaReciever.destroy();
+		mCaptchaReciever = null;
+	}
 }
 
 function remove() {
@@ -207,6 +226,10 @@ function remove() {
 			// ignore
 			if (_DEV_) console.warn(error);
 		}
+	}
+
+	if (props.provider === 'mcaptcha') {
+		mCaptchaRemoveState.value = true;
 	}
 }
 
@@ -303,36 +326,33 @@ async function requestRender() {
 			'error-callback': () => callback(undefined),
 		});
 	} else if (props.provider === 'mcaptcha' && props.instanceUrl && props.sitekey) {
-		const { default: Widget } = await import('@mcaptcha/vanilla-glue');
-		new Widget({
+		const { default: Reciever } = await import('@mcaptcha/core-glue');
+		mCaptchaReciever = new Reciever({
 			siteKey: {
-				instanceUrl: new URL(props.instanceUrl),
 				key: props.sitekey,
+				instanceUrl: new URL(props.instanceUrl),
 			},
+		}, (token: string) => {
+			callback(token);
 		});
+		mCaptchaReciever.listen();
+		mCaptchaRemoveState.value = false;
 	} else {
-		window.setTimeout(requestRender, 1);
+		window.setTimeout(requestRender, 50);
 	}
 }
 
 function clearWidget() {
-	if (props.provider === 'mcaptcha') {
-		const container = window.document.getElementById('mcaptcha__widget-container');
-		if (container) {
-			container.innerHTML = '';
-		}
-	} else {
-		aliyunCaptchaInstance.value = undefined;
-		aliyunTriggerEl.value = undefined;
-		aliyunTriggerIconEl.value = undefined;
-		aliyunTriggerLabelEl.value = undefined;
-		reset();
-		remove();
+	aliyunCaptchaInstance.value = undefined;
+	aliyunTriggerEl.value = undefined;
+	aliyunTriggerIconEl.value = undefined;
+	aliyunTriggerLabelEl.value = undefined;
+	reset();
+	remove();
 
-		if (captchaEl.value) {
-			// レンダリング先のコンテナの中身を掃除し、フォームが増殖するのを抑止
-			captchaEl.value.innerHTML = '';
-		}
+	if (captchaEl.value) {
+		// レンダリング先のコンテナの中身を掃除し、フォームが増殖するのを抑止
+		captchaEl.value.innerHTML = '';
 	}
 }
 
@@ -354,14 +374,6 @@ function updateAliyunTriggerState(verified: boolean) {
 	label.textContent = verified ? i18n.ts.done : i18n.ts._captcha.verify;
 }
 
-function onReceivedMessage(message: MessageEvent) {
-	if (message.data.token) {
-		if (props.instanceUrl && new URL(message.origin).host === new URL(props.instanceUrl).host) {
-			callback(message.data.token);
-		}
-	}
-}
-
 function testcaptchaSubmit() {
 	testcaptchaPassed.value = testcaptchaInput.value === 'ai-chan-kawaii';
 	callback(testcaptchaPassed.value ? 'testcaptcha-passed' : undefined);
@@ -370,15 +382,10 @@ function testcaptchaSubmit() {
 
 onMounted(() => {
 	if (available.value) {
-		window.addEventListener('message', onReceivedMessage);
 		requestRender();
 	} else {
 		watch(available, requestRender);
 	}
-});
-
-onUnmounted(() => {
-	window.removeEventListener('message', onReceivedMessage);
 });
 
 onBeforeUnmount(() => {
@@ -417,6 +424,13 @@ defineExpose({
 		color: var(--MI_THEME-accent);
 		animation: captcha-spin 1s linear infinite;
 	}
+}
+
+.mCaptchaIframe {
+	border: 0;
+	width: 320px;
+	max-width: 100%;
+	height: 80px;
 }
 
 .externalWidget {

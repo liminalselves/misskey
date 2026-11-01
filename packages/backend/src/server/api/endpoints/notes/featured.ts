@@ -99,7 +99,6 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				this.rankingCache = await this.featuredService.getGlobalNotesRankingWithScores(500);
 				this.rankingCacheLastFetchedAt = Date.now();
 			}
-
 			if (this.rankingCache.length === 0) {
 				return [];
 			}
@@ -193,6 +192,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 
 			this.queryService.generateBlockedHostQueryForNote(query);
 			this.queryService.generateSuspendedUserQueryForNote(query);
+			if (me == null) this.queryService.generateUgcVisibilityQueryForVisitor(query);
 
 			const notes = (await query.getMany()).filter(note => {
 				if (me && isUserRelated(note, userIdsWhoBlockingMe)) return false;

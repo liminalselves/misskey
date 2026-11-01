@@ -286,7 +286,7 @@ export class AgentCompressionMemoryService {
 		if (unique.length === 0) return new Map();
 		const rows = await this.agentMessagesRepository.find({
 			where: { sessionId, id: In(unique) },
-			select: ['id', 'createdAt'],
+			select: { id: true, createdAt: true },
 		});
 		const m = new Map<string, { createdAt: Date; id: string }>();
 		for (const r of rows) {
@@ -454,7 +454,7 @@ export class AgentCompressionMemoryService {
 	private async loadScanRows(sessionId: string): Promise<CompressionScanRow[]> {
 		return this.agentMessagesRepository.find({
 			where: { sessionId }, order: { createdAt: 'DESC', id: 'DESC' }, take: AGENT_OVERVIEW_SCAN_LIMIT,
-			select: ['id', 'role', 'content', 'createdAt', 'imageFileId', 'imageRecognitionStatus', 'imageRecognitionDescription', 'proactiveScheduleControlRaw', 'proactiveScheduleControlError', 'timeTrusted'],
+			select: { id: true, role: true, content: true, createdAt: true, imageFileId: true, imageRecognitionStatus: true, imageRecognitionDescription: true, proactiveScheduleControlRaw: true, proactiveScheduleControlError: true, timeTrusted: true },
 		});
 	}
 
@@ -625,7 +625,7 @@ export class AgentCompressionMemoryService {
 			where: { sessionId },
 			order: { createdAt: 'DESC', id: 'DESC' },
 			take: AGENT_OVERVIEW_SCAN_LIMIT,
-			select: ['id', 'role', 'content', 'createdAt', 'imageFileId', 'imageRecognitionStatus', 'imageRecognitionDescription', 'proactiveScheduleControlRaw', 'proactiveScheduleControlError', 'timeTrusted'],
+			select: { id: true, role: true, content: true, createdAt: true, imageFileId: true, imageRecognitionStatus: true, imageRecognitionDescription: true, proactiveScheduleControlRaw: true, proactiveScheduleControlError: true, timeTrusted: true },
 		});
 		const rowsD = filterRowsForChatHistoryD(rows);
 		const formatFn = (m: (typeof rowsD)[number]): string => this.agentService.formatMessageForLlmHistory(m as Parameters<AgentService['formatMessageForLlmHistory']>[0], { timeAwarenessEnabled: timeAwarenessEnabled === true });
@@ -664,7 +664,7 @@ export class AgentCompressionMemoryService {
 			? []
 			: await this.agentMessagesRepository.find({
 				where: { sessionId, id: In(bIds) },
-				select: ['id', 'content', 'createdAt'],
+				select: { id: true, content: true, createdAt: true },
 			});
 		const msgPreviewById = new Map(boundaryRows.map(m => [m.id, formatStickyMsgPreview(m.content)]));
 		const boundaries = new Map<string, { createdAt: Date; id: string }>();

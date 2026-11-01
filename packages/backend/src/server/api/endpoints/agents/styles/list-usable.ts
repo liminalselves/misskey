@@ -92,20 +92,20 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			const mine = await this.agentDialogueStylesRepository.find({
 				where: { userId: me.id },
 				order: { updatedAt: 'DESC' },
-				select: ['id', 'userId', 'name', 'isPublished', 'body', 'summary', 'reviewStatus', 'publishedVersion', 'createdAt', 'updatedAt'],
+				select: { id: true, userId: true, name: true, isPublished: true, body: true, summary: true, reviewStatus: true, publishedVersion: true, createdAt: true, updatedAt: true },
 				take: 200,
 			});
 			// 订阅不设任意上限（原先 take:500 会静默截断第 501 个起的订阅）
 			const subs = await this.agentUserStyleSubscriptionsRepository.find({
 				where: { userId: me.id },
-				select: ['styleId'],
+				select: { styleId: true },
 			});
 			const subIds = subs.map(s => s.styleId).filter(Boolean);
 			let subscribedRows: typeof mine = [];
 			if (subIds.length > 0) {
 				subscribedRows = await this.agentDialogueStylesRepository.find({
 					where: { id: In(subIds), isPublished: true },
-					select: ['id', 'userId', 'name', 'isPublished', 'body', 'summary', 'publishedSnapshot', 'createdAt', 'updatedAt'],
+					select: { id: true, userId: true, name: true, isPublished: true, body: true, summary: true, publishedSnapshot: true, createdAt: true, updatedAt: true },
 				});
 			}
 			const byId = new Map<string, {

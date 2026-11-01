@@ -41,7 +41,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			this.agentService.assertAgentsEnabled();
 			const r = await this.agentExternalAuditLogsRepository.findOne({
 				where: { id: ps.id },
-				relations: ['session', 'character', 'dialogueStyle'],
+				relations: { session: true, character: true, dialogueStyle: true },
 			});
 			if (!r) throw new ApiError({ message: 'No such external audit log.', code: 'NO_SUCH_AGENT_EXTERNAL_AUDIT_LOG', id: '9e4eb0cb-3a0c-4358-bdd8-9cd20e22745a' });
 			return {

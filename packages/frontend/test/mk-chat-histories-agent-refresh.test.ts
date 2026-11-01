@@ -5,7 +5,6 @@
 
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { cleanup, render } from '@testing-library/vue';
-import './init';
 import MkChatHistories from '@/components/MkChatHistories.vue';
 import { misskeyApi } from '@/utility/misskey-api.js';
 

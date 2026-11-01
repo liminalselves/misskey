@@ -14,7 +14,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<strong>图片已封禁</strong>
 				<span>该 AI 生成图片已被审核封禁，无法预览或下载。</span>
 			</div>
-			<MkMediaList v-else :mediaList="[file]"></MkMediaList>
+			<MkMediaList v-else :mediaList="[file]" :user="file.user"></MkMediaList>
 		</div>
 		<div :class="$style.fileQuickActionsRoot">
 			<button class="_button" :class="$style.fileNameEditBtn" @click="rename()">
@@ -88,6 +88,7 @@ import bytes from '@/filters/bytes.js';
 import { i18n } from '@/i18n.js';
 import * as os from '@/os.js';
 import { misskeyApi, formatApiError } from '@/utility/misskey-api.js';
+import { downloadDriveFile } from '@/utility/download-drive-file.js';
 import { useRouter } from '@/router.js';
 import { selectDriveFolder } from '@/utility/drive.js';
 import { globalEvents } from '@/events.js';
@@ -132,26 +133,15 @@ function postThis() {
 
 	os.post({
 		initialFiles: [file.value],
+		instant: true,
 	});
 }
 
 async function downloadFile() {
-	if (file.value == null || file.value.isAgentImageBlocked) return;
+	if (file.value == null) return;
 
 	try {
-		const result = await (misskeyApi as unknown as (
-			endpoint: 'drive/files/download-url',
-			data: { fileId: string },
-		) => Promise<{ url: string }>)('drive/files/download-url', {
-			fileId: file.value.id,
-		});
-		const a = window.document.createElement('a');
-		a.href = result.url;
-		a.download = file.value.name || 'download';
-		a.style.display = 'none';
-		window.document.body.appendChild(a);
-		a.click();
-		a.remove();
+		await downloadDriveFile(file.value);
 	} catch (error) {
 		os.alert({ type: 'error', text: formatApiError(error) });
 	}
@@ -246,7 +236,7 @@ async function deleteFile() {
 
 	globalEvents.emit('driveFilesDeleted', [file.value]);
 
-	router.push('/my/drive');
+	router.replace('/my/drive');
 }
 
 onMounted(async () => {

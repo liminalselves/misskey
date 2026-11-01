@@ -93,7 +93,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				// (lastMessageAt, id) 复合游标：列表按最近消息时间排序，同刻并列按 id 决胜
 				const cursor = await this.agentSessionsRepository.findOne({
 					where: { id: ps.untilId, userId: me.id },
-					select: ['id', 'lastMessageAt'],
+					select: { id: true, lastMessageAt: true },
 				});
 				if (cursor?.lastMessageAt == null) return [];
 				qb.andWhere('(s.lastMessageAt < :cursorAt OR (s.lastMessageAt = :cursorAt AND s.id < :cursorId))', {
@@ -107,7 +107,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			const charIds = [...new Set(rows.map(r => r.characterId))];
 			const chars = await this.agentCharactersRepository.find({
 				where: { id: In(charIds) },
-				select: ['id', 'name', 'summary', 'avatarFileId', 'publishedSnapshot', 'publishedVersion', 'moderationBanned'],
+				select: { id: true, name: true, summary: true, avatarFileId: true, publishedSnapshot: true, publishedVersion: true, moderationBanned: true },
 			});
 			const charMap = new Map(chars.map(c => [c.id, c]));
 

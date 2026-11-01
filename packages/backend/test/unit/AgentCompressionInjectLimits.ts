@@ -4,7 +4,7 @@
  */
 
 import 'reflect-metadata';
-import { jest } from '@jest/globals';
+import { vi, describe, test, expect } from 'vitest';
 import { AgentCompressionMemoryService } from '@/core/AgentCompressionMemoryService.js';
 import { AgentTokenService } from '@/core/AgentTokenService.js';
 import type { MiAgentSession } from '@/models/AgentSession.js';
@@ -31,7 +31,7 @@ function session() {
 
 function memoryService() {
 	const tokens = new AgentTokenService();
-	jest.spyOn(tokens, 'resolveTokenConfigForUser').mockResolvedValue({ tokenMode: 'estimate', charsPerToken: 3 });
+	vi.spyOn(tokens, 'resolveTokenConfigForUser').mockResolvedValue({ tokenMode: 'estimate', charsPerToken: 3 });
 	return new AgentCompressionMemoryService({} as never, {} as never, {} as never, {
 		resolveModelConnectionForUser: async () => ({ maxContextTokens: 32000, maxOutputTokensPerCall: 2048 }),
 		buildSystemPrompt: () => '', buildBudgetWorldbookEntries: () => [], buildLatestUserDirectiveBlock: () => '',
@@ -40,7 +40,7 @@ function memoryService() {
 
 function updateMetaEndpoint() {
 	const instance = instanceMeta();
-	const update = jest.fn(async (patch: Partial<MiMeta>) => { Object.assign(instance, patch); });
+	const update = vi.fn(async (patch: Partial<MiMeta>) => { Object.assign(instance, patch); });
 	const metaService = { fetch: async () => instance, update };
 	const endpoint = new UpdateMeta(instance, metaService as never, { log: async () => {} } as never,
 		memoryService(), {} as never, {} as never);
@@ -99,7 +99,7 @@ describe('Site-wide compression injection limit', () => {
 		expect(updateSessionParams.properties).not.toHaveProperty('agentCompressionInjectMaxChars');
 		const row = session();
 		const instance = instanceMeta();
-		const set = jest.fn<(...args: unknown[]) => unknown>();
+		const set = vi.fn<(...args: unknown[]) => unknown>();
 		const builder = {
 			update: () => builder, set: (...args: unknown[]) => { set(...args); return builder; },
 			where: () => builder, setParameter: () => builder, execute: async () => ({ affected: 1 }),

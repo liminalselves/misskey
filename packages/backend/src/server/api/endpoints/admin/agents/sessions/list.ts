@@ -106,7 +106,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 
 				const ch = await this.agentCharactersRepository.findOne({
 					where: { id: row.characterId },
-					select: ['id', 'name'],
+					select: { id: true, name: true },
 				});
 
 				return [{
@@ -144,7 +144,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			const chars = charIds.length > 0
 				? await this.agentCharactersRepository.find({
 					where: { id: In(charIds) },
-					select: ['id', 'name'],
+					select: { id: true, name: true },
 				})
 				: [];
 			const charMap = new Map(chars.map(c => [c.id, c.name]));

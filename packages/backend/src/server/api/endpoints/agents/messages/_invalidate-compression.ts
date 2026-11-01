@@ -17,12 +17,12 @@ export async function invalidateMessageCompression(
 ): Promise<void> {
 	// Resolve source boundaries before deleting messages; null means rollback through the end.
 	const stickies = await manager.find(MiAgentSessionCompressionSticky, {
-		where: { sessionId, userOverridden: false }, select: ['id', 'fromMessageId', 'toMessageId'],
+		where: { sessionId, userOverridden: false }, select: { id: true, fromMessageId: true, toMessageId: true },
 	});
 	if (stickies.length === 0) return;
 	const boundaryIds = [...new Set(stickies.flatMap(sticky => [sticky.fromMessageId, sticky.toMessageId]))];
 	const messages = await manager.find(MiAgentMessage, {
-		where: { sessionId, id: In(boundaryIds) }, select: ['id', 'createdAt'],
+		where: { sessionId, id: In(boundaryIds) }, select: { id: true, createdAt: true },
 	});
 	const boundaries = new Map(messages.map(message => [message.id, message]));
 	const compare = (a: MessageBoundary, b: MessageBoundary): number => a.createdAt.getTime() - b.createdAt.getTime() || a.id.localeCompare(b.id);

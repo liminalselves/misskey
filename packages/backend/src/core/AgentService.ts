@@ -1117,7 +1117,7 @@ export class AgentService {
 			// Match AgentCompressionMemoryService ordering for same-timestamp rows.
 			order: { createdAt: 'DESC', id: 'DESC' },
 			take: takeLimit,
-			select: ['id', 'role', 'content', 'createdAt', 'imageFileId', 'imageRecognitionStatus', 'imageRecognitionDescription', 'proactiveScheduleControlRaw', 'proactiveScheduleControlError', 'timeTrusted'],
+			select: { id: true, role: true, content: true, createdAt: true, imageFileId: true, imageRecognitionStatus: true, imageRecognitionDescription: true, proactiveScheduleControlRaw: true, proactiveScheduleControlError: true, timeTrusted: true },
 		});
 		type PickedMsg = Pick<MiAgentMessage, 'id' | 'role' | 'content' | 'createdAt' | 'imageFileId' | 'imageRecognitionStatus' | 'imageRecognitionDescription' | 'proactiveScheduleControlRaw' | 'proactiveScheduleControlError' | 'timeTrusted'>;
 		const useTokenMode = options?.tokenBudget != null && options.tokenBudget > 0;

@@ -5,7 +5,7 @@
 
 import 'reflect-metadata';
 import { createHash } from 'node:crypto';
-import { jest } from '@jest/globals';
+import { vi, describe, test, expect } from 'vitest';
 import {
 	AgentCompressionMemoryService,
 	AGENT_COMPRESSION_MEMORY_XML_OPEN,
@@ -122,27 +122,27 @@ describe('Compression injection tail window', () => {
 });
 
 function compressionHarness(rows: CompressionScanRow[], currentRows: CompressionScanRow[] = rows) {
-	const insert = jest.fn<(...args: unknown[]) => Promise<void>>().mockResolvedValue(undefined);
+	const insert = vi.fn<(...args: unknown[]) => Promise<void>>().mockResolvedValue(undefined);
 	const builder = { select: () => builder, where: () => builder, getRawOne: async () => ({ m: '0' }) };
 	const manager = {
 		findOne: async () => ({ id: 's1', timeAwarenessEnabled: true }),
-		find: jest.fn(async () => currentRows),
+		find: vi.fn(async () => currentRows),
 		createQueryBuilder: () => builder,
 		insert,
 	};
 	const repository = {
-		find: jest.fn(async (): Promise<MiAgentSessionCompressionSticky[]> => []), findOne: async () => null,
+		find: vi.fn(async (): Promise<MiAgentSessionCompressionSticky[]> => []), findOne: async () => null,
 		manager: { transaction: async (cb: (m: unknown) => Promise<void>) => cb(manager) },
 	};
-	const invoke = jest.fn(async (_params: { userText: string }) => ({ text: 'summary' }));
-	const format = jest.fn((m: { content: string }) => `[time]${m.content}`);
+	const invoke = vi.fn(async (_params: { userText: string }) => ({ text: 'summary' }));
+	const format = vi.fn((m: { content: string }) => `[time]${m.content}`);
 	const service = new AgentCompressionMemoryService({ find: async () => rows } as never, repository as never, {} as never, {
 		resolveModelApiNameForUser: async () => 'model', invokeChatCompletions: invoke,
 		formatMessageForLlmHistory: format, newId: () => 'sticky1',
 	} as never, {} as never, {
 		canAffordModelCall: async () => true, startLog: async () => ({}), finishLog: async () => {},
 	} as never, {} as never);
-	jest.spyOn(service, 'reconcileStickyStates').mockResolvedValue(undefined);
+	vi.spyOn(service, 'reconcileStickyStates').mockResolvedValue(undefined);
 	const sidecar = { dMap: new Map(rows.map((m, i) => [m.id, 95 - i])), hSend: 100, t1: 80, t2: 90 };
 	const session = { id: 's1', agentLongMemoryProvider: 'compression', timeAwarenessEnabled: true } as MiAgentSession;
 	const run = (maxInput: number) => service.afterAssistantForCompression(session, {} as never, {} as never,
@@ -212,8 +212,8 @@ describe('Compression overview preview mirrors', () => {
 	test.each(['user', 'review'])('%s overview reuses injection calculation without requiring message anchors', async kind => {
 		const service = memoryService();
 		const stickies = [sticky('independent', 'M'.repeat(800))];
-		jest.spyOn(service, 'buildSendPathBudgets').mockResolvedValue({ historyBudget: 1000, charsPerToken: 3, historyBudgetTokens: 333 } as never);
-		jest.spyOn(service, 'getCompressionOverviewData').mockResolvedValue({
+		vi.spyOn(service, 'buildSendPathBudgets').mockResolvedValue({ historyBudget: 1000, charsPerToken: 3, historyBudgetTokens: 333 } as never);
+		vi.spyOn(service, 'getCompressionOverviewData').mockResolvedValue({
 			historyBudgetTokens: 333, t1Tokens: 266, t2Tokens: 299, messages: [],
 			stickies: stickies.map(s => Object.assign(s, { fromMessagePreview: '…', toMessagePreview: '…' })),
 			compressionSidecarFailedAt: null,

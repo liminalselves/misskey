@@ -75,7 +75,7 @@ export async function fetchAgentBillingPage(
 
 	// BYOK（自定义模型）请求不消耗平台额度，不在消费日志中展示；
 	// modelId 为空的行（管理员签发 / 额度迁移等）不属于任何 BYOK 模型，须保留
-	const byokModelIds = (await deps.agentUserModelsRepository.find({ where: { userId }, select: ['id'] })).map(m => m.id);
+	const byokModelIds = (await deps.agentUserModelsRepository.find({ where: { userId }, select: { id: true } })).map(m => m.id);
 
 	// 基础参数（userId / byok / until）为列表与两个计数共用；分页参数仅列表使用
 	const baseParams: unknown[] = [];

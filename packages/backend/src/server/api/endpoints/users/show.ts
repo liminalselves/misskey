@@ -139,6 +139,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					: await this.usersRepository.createQueryBuilder('user')
 						.where('user.id IN (:...ids)', { ids: ps.userIds })
 						.andWhere(sqlUserNotEffectivelySuspended('user'))
+						.andWhere(this.serverSettings.ugcVisibilityForVisitor === 'local' && me == null ? 'user.host IS NULL' : 'TRUE')
 						.setParameter('suspensionNow', new Date())
 						.getMany();
 

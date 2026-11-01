@@ -5,7 +5,7 @@
 
 process.env.NODE_ENV = 'test';
 
-import { describe, expect, test } from '@jest/globals';
+import { describe, expect, test } from 'vitest';
 import { getValidator } from '../../../../../../test/prelude/get-api-validator.js';
 import { paramDef } from './export.js';
 

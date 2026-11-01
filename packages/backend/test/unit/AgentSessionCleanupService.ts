@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
-import { jest } from '@jest/globals';
+import { vi, describe, test, expect } from 'vitest';
 import { DataSource, EntitySchema } from 'typeorm';
 import { AgentSessionCleanupService } from '@/daemons/AgentSessionCleanupService.js';
 import { MiAgentSession } from '@/models/AgentSession.js';
@@ -12,10 +12,10 @@ function createHarness() {
 	const events: string[] = [];
 	const chain = (rows: Array<{ id: string }>) => {
 		const query = {
-			select: jest.fn(), where: jest.fn(), andWhere: jest.fn(),
-			orderBy: jest.fn(), addOrderBy: jest.fn(), limit: jest.fn(),
-			setLock: jest.fn(), setOnLocked: jest.fn(),
-			getMany: jest.fn(async () => rows),
+			select: vi.fn(), where: vi.fn(), andWhere: vi.fn(),
+			orderBy: vi.fn(), addOrderBy: vi.fn(), limit: vi.fn(),
+			setLock: vi.fn(), setOnLocked: vi.fn(),
+			getMany: vi.fn(async () => rows),
 		};
 		for (const method of ['select', 'where', 'andWhere', 'orderBy', 'addOrderBy', 'limit', 'setLock', 'setOnLocked'] as const) {
 			query[method].mockReturnValue(query);
@@ -29,19 +29,19 @@ function createHarness() {
 		return [{ id: 'session-id' }];
 	});
 	const deletion = {
-		delete: jest.fn(), from: jest.fn(), where: jest.fn(), andWhere: jest.fn(),
-		execute: jest.fn(async () => { events.push('delete'); return { affected: 1 }; }),
+		delete: vi.fn(), from: vi.fn(), where: vi.fn(), andWhere: vi.fn(),
+		execute: vi.fn(async () => { events.push('delete'); return { affected: 1 }; }),
 	};
 	for (const method of ['delete', 'from', 'where', 'andWhere'] as const) deletion[method].mockReturnValue(deletion);
 	const manager = {
-		getRepository: jest.fn(() => ({ createQueryBuilder: () => locked })),
-		createQueryBuilder: jest.fn(() => deletion),
+		getRepository: vi.fn(() => ({ createQueryBuilder: () => locked })),
+		createQueryBuilder: vi.fn(() => deletion),
 	};
-	const transaction = jest.fn(async (_isolation: string, callback: (value: typeof manager) => Promise<void>) => callback(manager));
+	const transaction = vi.fn(async (_isolation: string, callback: (value: typeof manager) => Promise<void>) => callback(manager));
 	const service = new AgentSessionCleanupService({
 		createQueryBuilder: () => candidates,
 		manager: { transaction },
-	} as never, { getLogger: () => ({ error: jest.fn() }) } as never);
+	} as never, { getLogger: () => ({ error: vi.fn() }) } as never);
 	return { service, candidates, locked, deletion, transaction, manager, events };
 }
 
@@ -126,17 +126,17 @@ describe('AgentSessionCleanupService', () => {
 	});
 
 	test('allows a later tick after a failure and does not duplicate its timer', async () => {
-		jest.useFakeTimers();
+		vi.useFakeTimers();
 		const { service, candidates } = createHarness();
 		try {
 			candidates.getMany.mockRejectedValueOnce(new Error('database unavailable'));
 			service.start();
 			service.start();
-			await jest.advanceTimersByTimeAsync(15 * 60 * 1000);
+			await vi.advanceTimersByTimeAsync(15 * 60 * 1000);
 			expect(candidates.getMany).toHaveBeenCalledTimes(2);
 		} finally {
 			service.dispose();
-			jest.useRealTimers();
+			vi.useRealTimers();
 		}
 	});
 });

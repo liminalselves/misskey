@@ -9,16 +9,25 @@ import { dirname, resolve } from 'node:path';
 import { type FastifyServerOptions } from 'fastify';
 import type * as Sentry from '@sentry/node';
 import type * as SentryVue from '@sentry/vue';
-import type { RedisOptions } from 'ioredis';
-import type { ManifestChunk } from 'vite';
+import type { RedisOptions as IoRedisRedisOptions } from 'ioredis';
+import type { RedisOptions as BullMqRedisOptions } from 'bullmq';
+import type { AccessLogConfiguration, LogFormat, LogLevelSetting } from './logging/types.js';
 
-type RedisOptionsSource = Partial<RedisOptions> & {
+type RedisOptionsRequiredFields = {
 	host: string;
 	port: number;
 	family?: number;
 	pass: string;
 	db?: number;
 	prefix?: string;
+};
+type RedisOptionsSource = Partial<IoRedisRedisOptions & BullMqRedisOptions> & RedisOptionsRequiredFields;
+type RedisOptionsResolved = IoRedisRedisOptions & BullMqRedisOptions & RedisOptionsRequiredFields;
+
+type SentryBackendConfig = {
+	options: Partial<Sentry.NodeOptions>;
+	enableNodeProfiling: boolean;
+	disabledIntegrations?: string[];
 };
 
 /**
@@ -67,7 +76,7 @@ type Source = {
 		index: string;
 		scope?: 'local' | 'global' | string[];
 	};
-	sentryForBackend?: { options: Partial<Sentry.NodeOptions>; enableNodeProfiling: boolean; };
+	sentryForBackend?: SentryBackendConfig;
 	sentryForFrontend?: {
 		options: Partial<SentryVue.BrowserOptions> & { dsn: string };
 		vueIntegration?: SentryVue.VueIntegrationOptions | null;
@@ -88,6 +97,7 @@ type Source = {
 	maxFileSize?: number;
 
 	clusterLimit?: number;
+	threadPoolSize?: number;
 
 	id: string;
 
@@ -112,6 +122,10 @@ type Source = {
 	pidFile: string;
 
 	logging?: {
+		format?: LogFormat;
+		level?: LogLevelSetting;
+		domains?: Record<string, LogLevelSetting> | null;
+		access?: AccessLogConfiguration;
 		sql?: {
 			disableQueryTruncation?: boolean,
 			enableQueryParamLogging?: boolean,
@@ -162,6 +176,7 @@ export type Config = {
 	allowedPrivateNetworks: string[] | undefined;
 	maxFileSize: number;
 	clusterLimit: number | undefined;
+	threadPoolSize: number;
 	id: string;
 	outgoingAddress: string | undefined;
 	outgoingAddressFamily: 'ipv4' | 'ipv6' | 'dual' | undefined;
@@ -174,6 +189,10 @@ export type Config = {
 	deliverJobMaxAttempts: number | undefined;
 	inboxJobMaxAttempts: number | undefined;
 	logging?: {
+		format?: LogFormat;
+		level?: LogLevelSetting;
+		domains?: Record<string, LogLevelSetting> | null;
+		access?: AccessLogConfiguration;
 		sql?: {
 			disableQueryTruncation?: boolean,
 			enableQueryParamLogging?: boolean,
@@ -192,19 +211,18 @@ export type Config = {
 	authUrl: string;
 	driveUrl: string;
 	userAgent: string;
-	frontendEntry: ManifestChunk;
 	frontendManifestExists: boolean;
-	frontendEmbedEntry: ManifestChunk;
 	frontendEmbedManifestExists: boolean;
+	rootDir: string;
 	mediaProxy: string;
 	externalMediaProxyEnabled: boolean;
 	videoThumbnailGenerator: string | null;
-	redis: RedisOptions & RedisOptionsSource;
-	redisForPubsub: RedisOptions & RedisOptionsSource;
-	redisForJobQueue: RedisOptions & RedisOptionsSource;
-	redisForTimelines: RedisOptions & RedisOptionsSource;
-	redisForReactions: RedisOptions & RedisOptionsSource;
-	sentryForBackend: { options: Partial<Sentry.NodeOptions>; enableNodeProfiling: boolean; } | undefined;
+	redis: RedisOptionsResolved;
+	redisForPubsub: RedisOptionsResolved;
+	redisForJobQueue: RedisOptionsResolved;
+	redisForTimelines: RedisOptionsResolved;
+	redisForReactions: RedisOptionsResolved;
+	sentryForBackend: SentryBackendConfig | undefined;
 	sentryForFrontend: {
 		options: Partial<SentryVue.BrowserOptions> & { dsn: string };
 		vueIntegration?: SentryVue.VueIntegrationOptions | null;
@@ -251,15 +269,8 @@ export function loadConfig(): Config {
 
 	const meta = JSON.parse(fs.readFileSync(resolve(projectBuiltDir, 'meta.json'), 'utf-8'));
 
-	const useViteDevServer = process.env.NODE_ENV === 'development';
-	const frontendManifestExists = !useViteDevServer && fs.existsSync(resolve(projectBuiltDir, '_frontend_vite_/manifest.json'));
-	const frontendEmbedManifestExists = !useViteDevServer && fs.existsSync(resolve(projectBuiltDir, '_frontend_embed_vite_/manifest.json'));
-	const frontendManifest = frontendManifestExists ?
-		JSON.parse(fs.readFileSync(resolve(projectBuiltDir, '_frontend_vite_/manifest.json'), 'utf-8'))
-		: { 'src/_boot_.ts': { file: null } };
-	const frontendEmbedManifest = frontendEmbedManifestExists ?
-		JSON.parse(fs.readFileSync(resolve(projectBuiltDir, '_frontend_embed_vite_/manifest.json'), 'utf-8'))
-		: { 'src/boot.ts': { file: null } };
+	const frontendManifestExists = fs.existsSync(resolve(projectBuiltDir, '_frontend_vite_/manifest.json'));
+	const frontendEmbedManifestExists = fs.existsSync(resolve(projectBuiltDir, '_frontend_embed_vite_/manifest.json'));
 
 	const config = JSON.parse(fs.readFileSync(compiledConfigFilePath, 'utf-8')) as Source;
 
@@ -326,6 +337,7 @@ export function loadConfig(): Config {
 		allowedPrivateNetworks: config.allowedPrivateNetworks,
 		maxFileSize: config.maxFileSize ?? 262144000,
 		clusterLimit: config.clusterLimit,
+		threadPoolSize: config.threadPoolSize ?? 1,
 		outgoingAddress: config.outgoingAddress,
 		outgoingAddressFamily: config.outgoingAddressFamily,
 		deliverJobConcurrency: config.deliverJobConcurrency,
@@ -342,10 +354,9 @@ export function loadConfig(): Config {
 			config.videoThumbnailGenerator.endsWith('/') ? config.videoThumbnailGenerator.substring(0, config.videoThumbnailGenerator.length - 1) : config.videoThumbnailGenerator
 			: null,
 		userAgent: `Misskey/${version} (${config.url})`,
-		frontendEntry: frontendManifest['src/_boot_.ts'],
 		frontendManifestExists: frontendManifestExists,
-		frontendEmbedEntry: frontendEmbedManifest['src/boot.ts'],
 		frontendEmbedManifestExists: frontendEmbedManifestExists,
+		rootDir,
 		perChannelMaxNoteCacheCount: config.perChannelMaxNoteCacheCount ?? 1000,
 		perUserNotificationsMaxCount: config.perUserNotificationsMaxCount ?? 500,
 		deactivateAntennaThreshold: config.deactivateAntennaThreshold ?? (1000 * 60 * 60 * 24 * 7),
@@ -362,7 +373,7 @@ function tryCreateUrl(url: string) {
 	}
 }
 
-function convertRedisOptions(options: RedisOptionsSource, host: string): RedisOptions & RedisOptionsSource {
+function convertRedisOptions(options: RedisOptionsSource, host: string): RedisOptionsResolved {
 	return {
 		...options,
 		password: options.pass,
