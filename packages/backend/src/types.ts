@@ -461,6 +461,9 @@ export type ModerationLogPayloads = {
 	};
 	ignoreAgentExternalAuditReview: {
 		ids: string[];
+		/** Set when a user's evidence was ignored by range instead of explicit ids. */
+		userId?: string;
+		untilId?: string;
 		count: number;
 	};
 };

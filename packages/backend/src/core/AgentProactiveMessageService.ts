@@ -26,6 +26,7 @@ import { AgentStickerService } from '@/core/AgentStickerService.js';
 import { AgentCompressionMemoryService, AGENT_OVERVIEW_SCAN_LIMIT } from '@/core/AgentCompressionMemoryService.js';
 import { AgentTokenService } from '@/core/AgentTokenService.js';
 import { MetaService } from '@/core/MetaService.js';
+import { ApiError } from '@/server/api/error.js';
 import { AgentMessageNotifyService } from '@/core/AgentMessageNotifyService.js';
 import { buildAgentProactiveNotificationText } from '@/core/agent-proactive-notification-text.js';
 import { DriveFileEntityService } from '@/core/entities/DriveFileEntityService.js';
@@ -263,7 +264,23 @@ export class AgentProactiveMessageService {
 			this.agentService.assertAgentUserSessionChatAllowed(characterRow, session);
 			if (!session.dialogueStyleId) throw new Error('No dialogue style.');
 			const styleRow = await this.stylesRepository.findOneBy({ id: session.dialogueStyleId });
-			if (!styleRow) throw new Error('No dialogue style.');
+			if (!styleRow) {
+				// 行缺失=文风已被作者删除：清空引用回到未选择文风状态，终止本次投递
+				await this.reapDeadDialogueStyle(session.id, session.dialogueStyleId);
+				throw new Error('No dialogue style.');
+			}
+			try {
+				// 与发送路径同闸口：社区文风被作者下架后，主动消息不得继续消耗用户额度
+				await this.agentService.assertCanUseDialogueStyle(session.userId, styleRow, {
+					forNewSession: false,
+					sessionDialogueStyleId: session.dialogueStyleId,
+				});
+			} catch (e) {
+				if (e instanceof ApiError && e.code === 'STYLE_NOT_AVAILABLE') {
+					await this.reapDeadDialogueStyle(session.id, session.dialogueStyleId);
+				}
+				throw new Error('No dialogue style.');
+			}
 			const user = await this.usersRepository.findOneBy({ id: session.userId });
 			if (!user) throw new Error('No user.');
 
@@ -541,5 +558,14 @@ export class AgentProactiveMessageService {
 				errorCode: error instanceof ProactiveAttemptError ? error.code : 'PROACTIVE_EXECUTION_FAILED',
 			};
 		}
+	}
+
+	/** 文风已删除/下架：清空会话引用使其回到未选择文风状态；where 带当前值做乐观判据，与并发修改互不覆盖。 */
+	private async reapDeadDialogueStyle(sessionId: string, deadStyleId: string): Promise<void> {
+		await this.sessionsRepository.createQueryBuilder()
+			.update()
+			.set({ dialogueStyleId: null })
+			.where('id = :id AND "dialogueStyleId" = :deadStyleId', { id: sessionId, deadStyleId })
+			.execute();
 	}
 }

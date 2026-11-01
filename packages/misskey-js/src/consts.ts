@@ -591,6 +591,8 @@ export type ModerationLogPayloads = {
 	};
 	ignoreAgentExternalAuditReview: {
 		ids: string[];
+		userId?: string;
+		untilId?: string;
 		count: number;
 	};
 	resolveAgentModelReport: {

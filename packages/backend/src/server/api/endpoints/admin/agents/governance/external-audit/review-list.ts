@@ -24,6 +24,8 @@ export const meta = {
 	res: { type: 'array', optional: false, nullable: false, items: { type: 'object', additionalProperties: true } },
 } as const;
 
+const REVIEW_LOG_LIMIT = 50;
+
 export const paramDef = {
 	type: 'object',
 	properties: {
@@ -56,36 +58,39 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		super(meta, paramDef, async (ps, me) => {
 			this.agentService.assertAgentsEnabled();
 			const metaEntity = await this.metaService.fetch();
-			const rules = (metaEntity.agentReviewTriggerRules ?? []).filter(r => r.enabled);
+			const rules = (metaEntity.agentReviewTriggerRules ?? []).filter(r => r.enabled !== false);
 			if (rules.length === 0) return [];
 
 			const filterUserId = await resolveUserIdFromAcctOrId(this.usersRepository, ps.userId);
-			const maxWindow = Math.max(...rules.map(r => r.timeWindowMinutes));
-			const windowStart = new Date(Date.now() - maxWindow * 60 * 1000);
 
-			// 每条规则按自己的时间窗独立计数（聚合用最大窗口仅用于排序分页，不能套用到小窗口规则上）
-			const ruleCounts = new Map<string, Map<string, number>>();
+			// A review stays pending once any historical window of unreviewed blocks reaches its threshold.
+			const ruleCounts = new Map<typeof rules[number], Map<string, number>>();
 			for (const rule of rules) {
-				const ruleStart = new Date(Date.now() - rule.timeWindowMinutes * 60 * 1000);
-				const qb = this.agentExternalAuditLogsRepository
+				const windows = this.agentExternalAuditLogsRepository
 					.createQueryBuilder('log')
 					.select('log.userId', 'userId')
-					.addSelect('COUNT(*)', 'blockCount')
+					.addSelect(`COUNT(*) OVER (PARTITION BY "log"."userId" ORDER BY "log"."createdAt"
+						RANGE BETWEEN (:timeWindowMinutes * INTERVAL '1 minute') PRECEDING AND CURRENT ROW)`, 'blockCount')
 					.where('log.status = :status', { status: 'block' })
-					.andWhere('log.createdAt > :ruleStart', { ruleStart })
 					.andWhere('log.userId IS NOT NULL')
 					.andWhere('log.reviewIgnoredAt IS NULL')
-					.groupBy('log.userId');
-				if (filterUserId) qb.andWhere('log.userId = :filterUserId', { filterUserId });
-				const rows = await qb.getRawMany<{ userId: string; blockCount: string }>();
-				ruleCounts.set(rule.id, new Map(rows.map(r => [r.userId, parseInt(r.blockCount, 10) || 0])));
+					.setParameter('timeWindowMinutes', rule.timeWindowMinutes);
+				if (filterUserId) windows.andWhere('log.userId = :filterUserId', { filterUserId });
+				const rows = await this.agentExternalAuditLogsRepository.manager.createQueryBuilder()
+					.select('"windows"."userId"', 'userId')
+					.addSelect('MAX("windows"."blockCount")', 'blockCount')
+					.from(`(${windows.getQuery()})`, 'windows')
+					.setParameters(windows.getParameters())
+					.groupBy('"windows"."userId"')
+					.getRawMany<{ userId: string; blockCount: string }>();
+				ruleCounts.set(rule, new Map(rows.map(r => [r.userId, parseInt(r.blockCount, 10) || 0])));
 			}
-			const ruleCountFor = (ruleId: string, userId: string): number => ruleCounts.get(ruleId)?.get(userId) ?? 0;
+			const ruleCountFor = (rule: typeof rules[number], userId: string): number => ruleCounts.get(rule)?.get(userId) ?? 0;
 
 			// 满足任一复审规则阈值即进入候选（先取全量候选集，再做资格过滤与分页，保证分页不因过滤而缩水跳页）
 			const qualifiedUserIds = new Set<string>();
 			for (const rule of rules) {
-				const counts = ruleCounts.get(rule.id);
+				const counts = ruleCounts.get(rule);
 				if (counts == null) continue;
 				for (const [userId, count] of counts) {
 					if (count >= rule.blockThreshold) qualifiedUserIds.add(userId);
@@ -93,29 +98,18 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			}
 			if (qualifiedUserIds.size === 0) return [];
 
-			// 资格条件（未封禁、仍有未处理完的涉事会话）下推到 SQL，再按 blockCount / latestBlockAt / userId 排序分页
+			// Only an explicit review action resolves evidence; bans alone must not hide pending reviews.
 			const pageQb = this.agentExternalAuditLogsRepository
 				.createQueryBuilder('log')
 				.select('log.userId', 'userId')
 				.addSelect('COUNT(*)', 'blockCount')
 				.addSelect('MAX(log.createdAt)', 'latestBlockAt')
+				// Upper bound of the counted evidence; ignore uses it so later arrivals stay pending.
+				.addSelect('MAX(log.id)', 'reviewUntilId')
 				.where('log.status = :status', { status: 'block' })
-				.andWhere('log.createdAt > :windowStart', { windowStart })
 				.andWhere('log.userId IS NOT NULL')
 				.andWhere('log.reviewIgnoredAt IS NULL')
 				.andWhere('log.userId IN (:...qualifiedUserIds)', { qualifiedUserIds: [...qualifiedUserIds] })
-				// 已封禁用户无需再处置
-				.andWhere('NOT EXISTS (SELECT 1 FROM "user" "su" WHERE "su"."id" = "log"."userId" AND "su"."isSuspended" = true)')
-				// 所有涉事会话均已被封禁的用户视为已处理完毕，不再显示
-				.andWhere(`EXISTS (
-					SELECT 1 FROM "agent_external_audit_log" "l2"
-					LEFT JOIN "agent_session" "s2" ON "s2"."id" = "l2"."sessionId"
-					WHERE "l2"."userId" = "log"."userId"
-						AND "l2"."status" = :status
-						AND "l2"."createdAt" > :windowStart
-						AND "l2"."reviewIgnoredAt" IS NULL
-						AND COALESCE("s2"."moderationBanned", false) = false
-				)`)
 				.groupBy('log.userId')
 				.orderBy('"blockCount"', 'DESC')
 				.addOrderBy('"latestBlockAt"', 'DESC')
@@ -123,7 +117,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				.offset(ps.offset ?? 0)
 				.limit(ps.limit ?? 20);
 
-			const userStats = await pageQb.getRawMany<{ userId: string; blockCount: string; latestBlockAt: Date | string }>();
+			const userStats = await pageQb.getRawMany<{ userId: string; blockCount: string; latestBlockAt: Date | string; reviewUntilId: string }>();
 			if (userStats.length === 0) return [];
 
 			// 仅对当前页用户取明细，去掉旧的全局 take(500)（跨用户截断会让靠后的用户被静默丢弃）
@@ -135,19 +129,23 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			const profiles = await this.userProfilesRepository.findBy({ userId: In(pageUserIds) });
 			const profileById = new Map(profiles.map(p => [p.userId, p]));
 
+			// Evidence no longer expires, so cap the text-heavy detail rows per user in one scan; blockCount keeps the total.
 			const allLogs = await this.agentExternalAuditLogsRepository
 				.createQueryBuilder('log')
 				.leftJoinAndSelect('log.session', 'session')
 				.leftJoinAndSelect('log.character', 'character')
-				.where('log.status = :status', { status: 'block' })
-				.andWhere('log.createdAt > :windowStart', { windowStart })
-				.andWhere('log.userId IN (:...pageUserIds)', { pageUserIds })
-				.andWhere('log.reviewIgnoredAt IS NULL')
+				.where(`log.id IN (
+					SELECT "ranked"."id" FROM (
+						SELECT "l"."id", ROW_NUMBER() OVER (PARTITION BY "l"."userId" ORDER BY "l"."createdAt" DESC, "l"."id" DESC) AS "rank"
+						FROM "agent_external_audit_log" "l"
+						WHERE "l"."status" = :status AND "l"."reviewIgnoredAt" IS NULL AND "l"."userId" IN (:...pageUserIds)
+					) "ranked"
+					WHERE "ranked"."rank" <= :reviewLogLimit
+				)`, { status: 'block', pageUserIds, reviewLogLimit: REVIEW_LOG_LIMIT })
 				.orderBy('log.createdAt', 'DESC')
 				.addOrderBy('log.id', 'DESC')
 				.getMany();
 
-			// 按用户分组
 			const logsByUser = new Map<string, typeof allLogs>();
 			for (const log of allLogs) {
 				if (!log.userId) continue;
@@ -168,7 +166,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				const user = users.find(u => u.id === userId);
 				const profile = profileById.get(userId);
 				const userLogs = logsByUser.get(userId) ?? [];
-				const matchedRules = rules.filter(rule => ruleCountFor(rule.id, userId) >= rule.blockThreshold);
+				const matchedRules = rules.filter(rule => ruleCountFor(rule, userId) >= rule.blockThreshold);
 
 				return {
 					userId,
@@ -178,6 +176,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					moderationNote: profile?.moderationNote ?? null,
 					blockCount: parseInt(stat.blockCount, 10),
 					latestBlockAt: (stat.latestBlockAt as Date)?.toISOString?.() ?? null,
+					reviewUntilId: stat.reviewUntilId,
 					triggeredRules: matchedRules.map(r => ({
 						id: r.id,
 						timeWindowMinutes: r.timeWindowMinutes,

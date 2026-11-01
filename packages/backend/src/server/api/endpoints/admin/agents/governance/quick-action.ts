@@ -5,7 +5,7 @@
 
 import ms from 'ms';
 import { Inject, Injectable } from '@nestjs/common';
-import { In, IsNull } from 'typeorm';
+import { In, IsNull, LessThanOrEqual } from 'typeorm';
 import type { AgentExternalAuditLogsRepository, AgentSessionsRepository, UsersRepository, UserProfilesRepository } from '@/models/_.js';
 import { Endpoint } from '@/server/api/endpoint-base.js';
 import { DI } from '@/di-symbols.js';
@@ -47,6 +47,8 @@ export const paramDef = {
 		moderationNote: { type: 'string', maxLength: 4096, nullable: true },
 		/** 违规类别 */
 		violationCategory: { type: 'string', maxLength: 128 },
+		/** 复审列表看到的证据上界；之后新到的拦截保持待复审 */
+		reviewUntilId: { type: 'string', format: 'misskey:id', nullable: true },
 	},
 	required: ['sessionIds', 'violationCategory'],
 } as const;
@@ -97,6 +99,18 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			if (shouldSuspendUser && !user.isSuspended && await this.roleService.isModerator(user)) {
 				throw new ApiError({ message: 'Cannot suspend moderator account.', code: 'CANNOT_SUSPEND_MODERATOR', id: 'a1b2c3d4-5678-4abc-9def-000000000003' });
 			}
+
+			// Fix the evidence upper bound before side effects so blocks arriving during the action stay pending.
+			const evidence = {
+				userId: user.id,
+				status: 'block' as const,
+				reviewIgnoredAt: IsNull(),
+				...(shouldSuspendUser ? {} : { sessionId: In(ps.sessionIds) }),
+			};
+			const latest = ps.reviewUntilId ? null : await this.agentExternalAuditLogsRepository.findOne({
+				where: evidence, select: { id: true }, order: { id: 'DESC' },
+			});
+			const reviewUntilId = ps.reviewUntilId ?? latest?.id ?? null;
 
 			const results: Record<string, unknown> = {
 				sessionsBanned: 0,
@@ -175,11 +189,13 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				}
 			}
 
-			// 4. 标记该用户所有未忽略的外审记录为已审阅（复审列表中消失）
-			await this.agentExternalAuditLogsRepository.update(
-				{ userId: user.id, status: 'block', reviewIgnoredAt: IsNull() },
-				{ reviewIgnoredAt: new Date(), reviewIgnoredById: me.id },
-			);
+			// Resolve only the evidence within this action's scope and bound, not other sessions or new arrivals.
+			if (reviewUntilId != null) {
+				await this.agentExternalAuditLogsRepository.update(
+					{ ...evidence, id: LessThanOrEqual(reviewUntilId) },
+					{ reviewIgnoredAt: new Date(), reviewIgnoredById: me.id },
+				);
+			}
 
 			return results;
 		});

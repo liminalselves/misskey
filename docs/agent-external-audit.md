@@ -15,3 +15,12 @@
 请求禁止重定向；完整响应体读取包含在单模型超时内，上限 2 MiB。失败仍按现有顺序切换模型或放行；`sessions/show` 的回复占位自愈阈值为 5 分钟基础预算加当前有效外审模型的串行超时总额，不能仅凭上一轮 assistant 消息解除本轮占位。
 
 模型类型白名单与端点规则分别维护在 `packages/backend/src/models/AgentExternalAuditProvider.ts` 和 `packages/backend/src/core/agent-external-audit-providers.ts`。新增类型须同步管理端选项、请求格式与解析；配置保存和健康统计使用后端白名单。不涉及新增数据库列，无需迁移。
+
+## 人工复审
+
+- 以用户为单位，仅统计 `status = block` 且 `reviewIgnoredAt IS NULL` 的记录。每条启用规则独立判断：未审阅记录在任一历史时间窗口内达到阈值，即进入复审；不是累计总数达标，也不是查询时只看最近 N 分钟。任意一条规则达标即可，缺省 `enabled` 与设置页一致视为启用。
+- 待复审记录与证据不会随时间流逝自动消失。列表保留该用户全部未审阅拦截记录；封禁用户或会话本身不等于完成复审，仍展示封禁状态供管理员判断。完成状态统一由 `reviewIgnoredAt` 表示，沿用现有字段，无需迁移。
+- 每个用户只返回最近 50 条明细（含文本），`blockCount` 仍是全部未审阅记录数；页面超出时提示“仅显示最近 N 条”。列表同时返回 `reviewUntilId`（该用户被计入证据的最大记录 ID）作为操作上界。
+- 「忽略」按 `userId + untilId` 标记该用户截至上界的全部未审阅拦截，不受明细条数限制；接口仍兼容按 `ids` 标记。「快捷处理」只封禁会话时，仅标记所选会话的记录；同时处置用户时标记该用户的记录。两者都受 `reviewUntilId` 约束，操作期间新到的记录保持待复审。已审阅记录不再参与下次触发。
+- 进入复审 tab 时重新拉取；刷新失败保留原列表，首次失败展示错误与重试，不显示“暂无复审”。分页位置按原始返回条数推进，不能用去重后的条数代替。
+- 离线回归：`packages/backend/test/unit/AgentExternalAuditReview.ts`、`packages/frontend/test/agents-review-list.test.ts`；真实数据库与生产案例的验收需另行执行，离线 SQL 构造测试不代表线上数据已核对。

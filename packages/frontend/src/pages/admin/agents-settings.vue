@@ -522,7 +522,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<template #icon><i class="ti ti-shield-exclamation"></i></template>
 				<template #label>人工复审触发条件</template>
 						<div class="_gaps">
-							<MkInfo>当用户在指定时间窗口内触发外审拦截达到设定次数时，自动将该用户标记为需要人工复审。可配置多条规则。</MkInfo>
+							<MkInfo>未审阅的外审拦截记录只要在任一指定时间窗口内达到设定次数，就会进入人工复审；不会因时间过去而自动消失，处理或忽略后才移除。多条规则满足任意一条即可。</MkInfo>
 							<div v-for="(rule, i) in form.state.agentReviewTriggerRules" :key="rule.id" :data-settings-anchor="`trigger:${rule.id}`" :class="[$style.modelCard, highlightedAnchor === `trigger:${rule.id}` ? $style.anchorHighlight : null]" class="_gaps_s">
 								<div :class="$style.modelCardHead">
 									<b>规则 #{{ i + 1 }}</b>
