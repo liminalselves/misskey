@@ -28,6 +28,15 @@ export const AGENT_OVERVIEW_SCAN_LIMIT = 50_000;
 /** 发信路径（send/peek/afterAssistant）的消息扫描窗口；reconcileStickyStates 的"端点缺失即 active"启发式以此为准 */
 export const AGENT_SEND_PATH_SCAN_LIMIT = 500;
 
+/**
+ * 全站统一的上下文计数分词器。
+ * 预算、滑窗、区带与压缩判定一律按此编码计数，不随模型切换，避免同一会话的上下文窗口漂移。
+ * o200k_base 对中文约 0.9 token/字，介于国产模型（≈0.65）与 cl100k/Claude（≈1.3）之间；
+ * 按量计费仍以接口返回的 usage 为准，与此无关。
+ * 每模型编码（tokenizerEncoding）与 GLM/DeepSeek/Gemini 真分词器实现保留，当前不参与解析。
+ */
+export const AGENT_UNIFIED_TOKENIZER_ENCODING = 'o200k_base';
+
 /** Gemini tokenizer 前缀标识 */
 export const GEMINI_ENCODING_PREFIX = 'gemini:';
 
@@ -231,8 +240,8 @@ export class AgentTokenService {
 	// ── 2. 配置解析 ────────────────────────────────────────
 
 	/**
-	 * 统一解析模型的 token 配置（charsPerToken / encoding / tokenMode），
-	 * 收敛此前散落在各端点的 `getEffectiveLlmModels().find()?.tokenizerEncoding` 逻辑。
+	 * 统一解析模型的 token 配置（charsPerToken / encoding / tokenMode）。
+	 * encoding 恒为 {@link AGENT_UNIFIED_TOKENIZER_ENCODING}，模型自身的 tokenizerEncoding 不参与。
 	 */
 	@bindThis
 	public resolveTokenConfig(instanceMeta: MiMeta, modelId: string | null): TokenConfig {
@@ -243,9 +252,7 @@ export class AgentTokenService {
 		const charsPerToken = pick && Number.isFinite(pick.charsPerToken) && pick.charsPerToken! >= 1
 			? pick.charsPerToken!
 			: AGENT_LLM_APPROX_CHARS_PER_TOKEN;
-		const encoding = pick?.tokenizerEncoding;
-		const tokenMode = this.resolveTokenMode(encoding);
-		return { charsPerToken, encoding, tokenMode };
+		return this.unifiedTokenConfig(charsPerToken);
 	}
 
 	/** 用户自定义模型（BYOK）的 token 配置；非用户模型回退到官方解析 */
@@ -259,11 +266,15 @@ export class AgentTokenService {
 			const charsPerToken = Number.isFinite(conn.charsPerToken) && conn.charsPerToken >= 1
 				? conn.charsPerToken
 				: AGENT_LLM_APPROX_CHARS_PER_TOKEN;
-			const encoding = conn.tokenizerEncoding ?? undefined;
-			const tokenMode = this.resolveTokenMode(encoding);
-			return { charsPerToken, encoding, tokenMode };
+			return this.unifiedTokenConfig(charsPerToken);
 		}
 		return this.resolveTokenConfig(instanceMeta, modelId);
+	}
+
+	/** 统一口径的 token 配置；charsPerToken 仅用于超出精确预算后的回退估算。 */
+	private unifiedTokenConfig(charsPerToken: number): TokenConfig {
+		const encoding = AGENT_UNIFIED_TOKENIZER_ENCODING;
+		return { charsPerToken, encoding, tokenMode: this.resolveTokenMode(encoding) };
 	}
 
 	// ── 3. 计数器工厂 ──────────────────────────────────────

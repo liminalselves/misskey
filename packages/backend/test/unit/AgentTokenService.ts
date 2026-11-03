@@ -5,7 +5,7 @@
 
 import { describe, test, expect } from 'vitest';
 
-import { AgentTokenService } from '@/core/AgentTokenService.js';
+import { AgentTokenService, AGENT_UNIFIED_TOKENIZER_ENCODING } from '@/core/AgentTokenService.js';
 
 describe('AgentTokenService', () => {
 	const svc = new AgentTokenService();
@@ -13,6 +13,19 @@ describe('AgentTokenService', () => {
 	describe('countTokensExact', () => {
 		test('Gemini 空文本直接返回 0，不初始化本地分词器', async () => {
 			await expect(svc.countTokensExact('', 'gemini:gemini-2.0-flash-001')).resolves.toBe(0);
+		});
+	});
+
+	describe('resolveTokenConfig（全站统一分词器）', () => {
+		test('无论模型配置何种编码，上下文计数恒用统一编码', () => {
+			const meta = {
+				agentDefaultModelId: 'm1',
+				agentLlmModels: [{ id: 'm1', name: 'M1', tokenizerEncoding: 'glm:glm-4-plus', charsPerToken: 2 }],
+			} as never;
+			const config = svc.resolveTokenConfig(meta, 'm1');
+			expect(config.encoding).toBe(AGENT_UNIFIED_TOKENIZER_ENCODING);
+			expect(config.tokenMode).toBe('exact');
+			expect(svc.resolveTokenConfig(meta, null).encoding).toBe(AGENT_UNIFIED_TOKENIZER_ENCODING);
 		});
 	});
 
