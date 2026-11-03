@@ -32,6 +32,7 @@ export * as 'admin/agents/governance/external-audit/detail' from './endpoints/ad
 export * as 'admin/agents/governance/external-audit/list' from './endpoints/admin/agents/governance/external-audit/list.js';
 export * as 'admin/agents/governance/external-audit/review-list' from './endpoints/admin/agents/governance/external-audit/review-list.js';
 export * as 'admin/agents/governance/external-audit/review-ignore' from './endpoints/admin/agents/governance/external-audit/review-ignore.js';
+export * as 'admin/agents/governance/external-audit/review-pending-exists' from './endpoints/admin/agents/governance/external-audit/review-pending-exists.js';
 export * as 'admin/agents/governance/quick-action' from './endpoints/admin/agents/governance/quick-action.js';
 export * as 'admin/agents/governance/images/list' from './endpoints/admin/agents/governance/images/list.js';
 export * as 'admin/agents/governance/images/set-blocked' from './endpoints/admin/agents/governance/images/set-blocked.js';
