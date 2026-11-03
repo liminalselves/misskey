@@ -20,6 +20,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		</div>
 		<div :class="$style.toolbarRight">
 			<MkSelect v-model="selectedModelId" :items="modelItems" :class="$style.modelSelect"/>
+			<MkButton rounded :disabled="data == null || data.byModel.length === 0" @click="exportModelCsv"><i class="ti ti-download"></i> 导出 CSV</MkButton>
 			<MkButton rounded :disabled="loading" @click="load"><i class="ti ti-refresh"></i> {{ i18n.ts.reload }}</MkButton>
 		</div>
 	</div>
@@ -71,6 +72,47 @@ SPDX-License-Identifier: AGPL-3.0-only
 			</div>
 		</div>
 
+		<!-- 关键洞察：token 量、耗时分位、人均与单价 -->
+		<div :class="$style.insightGrid">
+			<div v-panel :class="$style.insightCard">
+				<div :class="$style.insightHead"><i class="ti ti-text-size"></i>Token 用量</div>
+				<div :class="$style.insightValue">{{ fmtCompact(data.insights.tokens.prompt + data.insights.tokens.completion) }}</div>
+				<div :class="$style.insightRows">
+					<span>输入 {{ fmtCompact(data.insights.tokens.prompt) }}</span>
+					<span>输出 {{ fmtCompact(data.insights.tokens.completion) }}</span>
+					<span v-if="data.insights.tokens.cacheHit > 0">缓存命中 {{ pct(data.insights.tokens.cacheHit, data.insights.tokens.prompt) }}</span>
+				</div>
+				<div :class="$style.insightBar">
+					<span :class="$style.insightBarPrompt" :style="{ width: ratioWidth(data.insights.tokens.prompt, data.insights.tokens.prompt + data.insights.tokens.completion) }"></span>
+				</div>
+			</div>
+			<div v-panel :class="$style.insightCard">
+				<div :class="$style.insightHead"><i class="ti ti-clock-bolt"></i>成功调用耗时</div>
+				<div :class="$style.insightValue">{{ fmtDuration(data.insights.latency.p50) }}<small :class="$style.muted"> 中位</small></div>
+				<div :class="$style.insightRows">
+					<span>P90 {{ fmtDuration(data.insights.latency.p90) }}</span>
+					<span>P95 {{ fmtDuration(data.insights.latency.p95) }}</span>
+					<span>均值 {{ fmtDuration(data.overall.avgDurationMs) }}</span>
+				</div>
+			</div>
+			<div v-panel :class="$style.insightCard">
+				<div :class="$style.insightHead"><i class="ti ti-users"></i>人均</div>
+				<div :class="$style.insightValue">{{ perUser(data.overall.total) }}<small :class="$style.muted"> 次请求</small></div>
+				<div :class="$style.insightRows">
+					<span>扣费 {{ perUserCredits }}</span>
+					<span>Token {{ data.overall.uniqueUsers > 0 ? fmtCompact((data.insights.tokens.prompt + data.insights.tokens.completion) / data.overall.uniqueUsers) : '—' }}</span>
+				</div>
+			</div>
+			<div v-panel :class="$style.insightCard">
+				<div :class="$style.insightHead"><i class="ti ti-receipt"></i>单次付费均价</div>
+				<div :class="$style.insightValue">{{ data.overall.paidCalls > 0 ? fmtCredits(data.overall.creditsCharged / data.overall.paidCalls) : '—' }}</div>
+				<div :class="$style.insightRows">
+					<span>付费率 {{ pct(data.overall.paidCalls, data.overall.total) }}</span>
+					<span>上期 {{ data.previousOverall.paidCalls > 0 ? fmtCredits(data.previousOverall.creditsCharged / data.previousOverall.paidCalls) : '—' }}</span>
+				</div>
+			</div>
+		</div>
+
 		<!-- 请求量趋势（堆叠柱 + 成功率折线双轴） -->
 		<MkFolder :defaultOpen="true" @opened="renderChartsAfterMount">
 			<template #icon><i class="ti ti-timeline"></i></template>
@@ -110,6 +152,60 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<template #label>{{ i18n.ts._agents.adminReportsLatencyTrend }}</template>
 				<MkInfo v-if="data.buckets.length === 0">{{ i18n.ts._agents.noDataAvailable }}</MkInfo>
 				<div v-else :class="$style.chartBox"><canvas ref="latencyChartEl"></canvas></div>
+			</MkFolder>
+		</div>
+
+		<!-- Token 趋势 -->
+		<MkFolder :defaultOpen="true" @opened="renderChartsAfterMount">
+			<template #icon><i class="ti ti-text-size"></i></template>
+			<template #label>Token 趋势</template>
+			<template #caption>按接口返回的 usage 统计，无 usage 的调用计 0</template>
+			<MkInfo v-if="data.buckets.length === 0">{{ i18n.ts._agents.noDataAvailable }}</MkInfo>
+			<div v-else :class="$style.chartBox"><canvas ref="tokensChartEl"></canvas></div>
+		</MkFolder>
+
+		<!-- 活跃时段热力图 + 失败原因 -->
+		<div :class="$style.compositionRow">
+			<MkFolder :defaultOpen="true" :class="$style.compositionItem">
+				<template #icon><i class="ti ti-calendar-time"></i></template>
+				<template #label>活跃时段</template>
+				<template #caption>北京时间，按星期 × 小时统计请求量</template>
+				<MkInfo v-if="heatmapMax === 0">{{ i18n.ts._agents.noDataAvailable }}</MkInfo>
+				<div v-else :class="$style.heatmapWrap">
+					<div :class="$style.heatmap">
+						<span></span>
+						<span v-for="h in 24" :key="'h' + h" :class="$style.heatmapHour">{{ (h - 1) % 6 === 0 ? h - 1 : '' }}</span>
+						<template v-for="(row, di) in heatmapGrid" :key="'d' + di">
+							<span :class="$style.heatmapDay">{{ weekdayLabels[di] }}</span>
+							<span
+								v-for="(v, hi) in row"
+								:key="di + '-' + hi"
+								:class="$style.heatmapCell"
+								:style="{ background: heatColor(v) }"
+								:title="`${weekdayLabels[di]} ${hi}:00 · ${v} 次`"
+							></span>
+						</template>
+					</div>
+					<div :class="$style.heatmapFoot">
+						<span>高峰：{{ heatmapPeak }}</span>
+						<span :class="$style.heatmapScale">少<i v-for="lv in 5" :key="lv" :style="{ background: heatColor(heatmapMax * lv / 5) }"></i>多</span>
+					</div>
+				</div>
+			</MkFolder>
+			<MkFolder :defaultOpen="true" :class="$style.compositionItem">
+				<template #icon><i class="ti ti-alert-triangle"></i></template>
+				<template #label>失败原因 TOP</template>
+				<template #caption>失败调用按错误码分组</template>
+				<MkInfo v-if="data.insights.errorCodes.length === 0">时间窗内没有失败调用。</MkInfo>
+				<div v-else :class="$style.errorList">
+					<div v-for="e in data.insights.errorCodes" :key="e.errorCode">
+						<div :class="$style.errorRowHead">
+							<code :class="$style.errorCode">{{ e.errorCode }}</code>
+							<span :class="$style.errorCount">{{ e.count }} · {{ pct(e.count, data.overall.failed) }}</span>
+						</div>
+						<div :class="$style.errorBar"><span :style="{ width: ratioWidth(e.count, data.insights.errorCodes[0].count) }"></span></div>
+					</div>
+				</div>
 			</MkFolder>
 		</div>
 
@@ -183,6 +279,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 							<span :class="$style.charged">{{ fmtCredits(m.creditsCharged) }}</span>
 							<span>{{ m.uniqueUsers }}</span>
 							<span>{{ fmtDuration(m.avgDurationMs) }}</span>
+							<span>{{ fmtCompact(m.promptTokens + m.completionTokens) }}</span>
+							<span>{{ pct(m.creditsCharged, data.overall.creditsCharged) }}</span>
 						</div>
 					</div>
 				</template>
@@ -270,6 +368,15 @@ type ModelReportRow = {
 	creditsCharged: number;
 	uniqueUsers: number;
 	avgDurationMs: number | null;
+	promptTokens: number;
+	completionTokens: number;
+};
+
+type ReportInsights = {
+	tokens: { prompt: number; completion: number; cacheHit: number; callsWithUsage: number };
+	latency: { p50: number | null; p90: number | null; p95: number | null };
+	errorCodes: { errorCode: string; count: number }[];
+	heatmap: { dow: number; hour: number; count: number }[];
 };
 
 type ReportsOverview = {
@@ -282,9 +389,11 @@ type ReportsOverview = {
 	buckets: {
 		bucketStart: string; total: number; success: number; failed: number; aborted: number;
 		freeCalls: number; paidCalls: number; creditsCharged: number; avgDurationMs: number | null;
+		promptTokens: number; completionTokens: number;
 	}[];
 	byUsageKind: { usageKind: string; total: number; freeCalls: number; paidCalls: number; creditsCharged: number }[];
 	billing: { free: number; paid: number; failed: number; byok: number; zeroPriced: number; unassigned: number; other: number };
+	insights: ReportInsights;
 };
 
 type TopUserRow = {
@@ -503,7 +612,7 @@ const abortedDeltaState = computed(() => deltaState(abortedDelta.value, 'bad'));
 
 // ---------- 排序（模型表） ----------
 
-type ModelSortKey = 'total' | 'successRate' | 'freeCalls' | 'paidCalls' | 'creditsCharged' | 'uniqueUsers' | 'avgDurationMs';
+type ModelSortKey = 'total' | 'successRate' | 'freeCalls' | 'paidCalls' | 'creditsCharged' | 'uniqueUsers' | 'avgDurationMs' | 'tokens' | 'creditsShare';
 
 const sortKey = ref<ModelSortKey>('total');
 const sortDesc = ref(true);
@@ -516,6 +625,8 @@ const modelSortColumns = computed(() => [
 	{ key: 'creditsCharged' as const, label: i18n.ts._agents.adminReportsCreditsCharged },
 	{ key: 'uniqueUsers' as const, label: i18n.ts._agents.adminReportsUsersColumn },
 	{ key: 'avgDurationMs' as const, label: i18n.ts._agents.adminReportsAvgDuration },
+	{ key: 'tokens' as const, label: 'Token' },
+	{ key: 'creditsShare' as const, label: '扣费占比' },
 ]);
 
 function toggleSort(key: ModelSortKey) {
@@ -539,11 +650,82 @@ const sortedByModel = computed(() => {
 			case 'creditsCharged': return m.creditsCharged;
 			case 'uniqueUsers': return m.uniqueUsers;
 			case 'avgDurationMs': return m.avgDurationMs ?? -1;
+			case 'tokens': return m.promptTokens + m.completionTokens;
+			case 'creditsShare': return m.creditsCharged;
 		}
 	};
 	rows.sort((a, b) => sortDesc.value ? val(b) - val(a) : val(a) - val(b));
 	return rows;
 });
+
+// ---------- 洞察 ----------
+
+const perUserCredits = computed(() => {
+	const o = data.value?.overall;
+	return o != null && o.uniqueUsers > 0 ? fmtCredits(o.creditsCharged / o.uniqueUsers) : '—';
+});
+
+function perUser(n: number): string {
+	const u = data.value?.overall.uniqueUsers ?? 0;
+	return u > 0 ? (n / u).toFixed(1) : '—';
+}
+
+function ratioWidth(part: number, total: number): string {
+	return total > 0 ? `${Math.min(100, (part / total) * 100).toFixed(1)}%` : '0%';
+}
+
+const weekdayLabels = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+
+// ISODOW 1=周一 … 7=周日 → 行下标 0…6
+const heatmapGrid = computed(() => {
+	const grid = Array.from({ length: 7 }, () => new Array<number>(24).fill(0));
+	for (const c of data.value?.insights.heatmap ?? []) {
+		if (c.dow >= 1 && c.dow <= 7 && c.hour >= 0 && c.hour < 24) grid[c.dow - 1][c.hour] = c.count;
+	}
+	return grid;
+});
+
+const heatmapMax = computed(() => Math.max(0, ...heatmapGrid.value.flat()));
+
+const heatmapPeak = computed(() => {
+	let best = { d: 0, h: 0, v: -1 };
+	heatmapGrid.value.forEach((row, d) => row.forEach((v, h) => { if (v > best.v) best = { d, h, v }; }));
+	return best.v > 0 ? `${weekdayLabels[best.d]} ${best.h}:00（${best.v} 次）` : '—';
+});
+
+function heatColor(v: number): string {
+	if (v <= 0 || heatmapMax.value === 0) return 'color-mix(in srgb, var(--MI_THEME-fg) 6%, transparent)';
+	const level = Math.round(18 + (v / heatmapMax.value) * 82);
+	return `color-mix(in srgb, var(--MI_THEME-accent) ${level}%, transparent)`;
+}
+
+function csvCell(v: string | number | null): string {
+	const str = v == null ? '' : String(v);
+	return /[",\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
+}
+
+function exportModelCsv() {
+	const d = data.value;
+	if (d == null) return;
+	const head = ['模型', '请求', '成功', '失败', '中断', '成功率%', '免费', '付费', '扣费', '用户', '平均耗时ms', '输入token', '输出token'];
+	const lines = [head.join(',')];
+	for (const m of sortedByModel.value) {
+		lines.push([
+			modelDisplayName(m), m.total, m.success, m.failed, m.aborted,
+			m.total > 0 ? ((m.success / m.total) * 100).toFixed(2) : '',
+			m.freeCalls, m.paidCalls, m.creditsCharged.toFixed(4), m.uniqueUsers,
+			m.avgDurationMs != null ? Math.round(m.avgDurationMs) : '',
+			m.promptTokens, m.completionTokens,
+		].map(csvCell).join(','));
+	}
+	const blob = new Blob(['\uFEFF' + lines.join('\n')], { type: 'text/csv;charset=utf-8' });
+	const url = URL.createObjectURL(blob);
+	const a = window.document.createElement('a');
+	a.href = url;
+	a.download = `agent-model-report-${activeRange.value}-${new Date().toISOString().slice(0, 10)}.csv`;
+	a.click();
+	URL.revokeObjectURL(url);
+}
 
 // ---------- 计费构成 ----------
 
@@ -577,12 +759,14 @@ const creditsChartEl = useTemplateRef('creditsChartEl');
 const latencyChartEl = useTemplateRef('latencyChartEl');
 const billingChartEl = useTemplateRef('billingChartEl');
 const usageKindChartEl = useTemplateRef('usageKindChartEl');
+const tokensChartEl = useTemplateRef('tokensChartEl');
 
 let requestsChart: Chart | null = null;
 let creditsChart: Chart | null = null;
 let latencyChart: Chart | null = null;
 let billingChart: Chart | null = null;
 let usageKindChart: Chart | null = null;
+let tokensChart: Chart | null = null;
 
 // 计费构成环形图中心文字（总数），由 renderCharts 更新
 const billingCenterText = { total: 0, label: '' };
@@ -651,6 +835,7 @@ function renderCharts() {
 	if (latencyChart != null && !latencyChart.canvas.isConnected) { latencyChart.destroy(); latencyChart = null; }
 	if (billingChart != null && !billingChart.canvas.isConnected) { billingChart.destroy(); billingChart = null; }
 	if (usageKindChart != null && !usageKindChart.canvas.isConnected) { usageKindChart.destroy(); usageKindChart = null; }
+	if (tokensChart != null && !tokensChart.canvas.isConnected) { tokensChart.destroy(); tokensChart = null; }
 
 	const d = data.value;
 
@@ -781,6 +966,37 @@ function renderCharts() {
 		creditsChart.update();
 	}
 
+	// Token 趋势（输入/输出堆叠柱）
+	if (tokensChart == null && tokensChartEl.value != null) {
+		tokensChart = new Chart(tokensChartEl.value, {
+			type: 'bar',
+			data: {
+				labels: [],
+				datasets: [
+					{ label: '输入', backgroundColor: rateColor, data: [], stack: 'tokens', pointStyle: 'rect' },
+					{ label: '输出', backgroundColor: colors.accent, data: [], stack: 'tokens', pointStyle: 'rect' },
+				],
+			},
+			options: {
+				aspectRatio: 3,
+				scales: {
+					x: { stacked: true, grid: { display: false }, ticks: { color: colors.fg, maxTicksLimit: 12, maxRotation: 0 } },
+					y: { stacked: true, beginAtZero: true, ticks: { color: colors.fg, callback: (v) => fmtCompact(Number(v)) }, grid: { color: gridColor } },
+				},
+				plugins: {
+					legend: { position: 'bottom', labels: { color: colors.fg, boxWidth: 12, usePointStyle: true } },
+					tooltip: { callbacks: { label: (ctx) => ` ${ctx.dataset.label}: ${fmtCompact(ctx.parsed.y ?? 0)}` } },
+				},
+			},
+		});
+	}
+	if (tokensChart != null) {
+		tokensChart.data.labels = labels;
+		tokensChart.data.datasets[0].data = d.buckets.map(b => b.promptTokens ?? 0);
+		tokensChart.data.datasets[1].data = d.buckets.map(b => b.completionTokens ?? 0);
+		tokensChart.update();
+	}
+
 	// 平均耗时趋势（折线）
 	if (latencyChart == null && latencyChartEl.value != null) {
 		latencyChart = new Chart(latencyChartEl.value, {
@@ -901,11 +1117,13 @@ function destroyCharts() {
 	latencyChart?.destroy();
 	billingChart?.destroy();
 	usageKindChart?.destroy();
+	tokensChart?.destroy();
 	requestsChart = null;
 	creditsChart = null;
 	latencyChart = null;
 	billingChart = null;
 	usageKindChart = null;
+	tokensChart = null;
 }
 
 // ---------- 格式化 ----------
@@ -916,6 +1134,14 @@ function pct(part: number, total: number): string {
 
 function fmtCredits(n: number): string {
 	return n.toFixed(4);
+}
+
+function fmtCompact(n: number): string {
+	if (!Number.isFinite(n)) return '—';
+	const abs = Math.abs(n);
+	if (abs >= 1e8) return `${(n / 1e8).toFixed(2)}亿`;
+	if (abs >= 1e4) return `${(n / 1e4).toFixed(1)}万`;
+	return Math.round(n).toString();
 }
 
 function fmtDuration(ms: number | null): string {
@@ -1002,11 +1228,11 @@ onBeforeUnmount(() => {
 .summaryCard {
 	display: flex;
 	flex-direction: column;
-	align-items: center;
+	align-items: flex-start;
 	gap: 4px;
-	padding: 16px 12px;
+	padding: 14px 16px;
 	border-radius: var(--MI-radius);
-	text-align: center;
+	box-shadow: inset 3px 0 0 color-mix(in srgb, var(--MI_THEME-accent) 55%, transparent);
 }
 
 .summaryCardLabel {
@@ -1137,7 +1363,7 @@ onBeforeUnmount(() => {
  */
 .modelTable {
 	display: grid;
-	grid-template-columns: minmax(max-content, 2fr) minmax(max-content, 0.7fr) minmax(max-content, 0.8fr) minmax(max-content, 0.6fr) minmax(max-content, 0.6fr) minmax(max-content, 1fr) minmax(max-content, 0.6fr) minmax(max-content, 0.8fr);
+	grid-template-columns: minmax(max-content, 2fr) minmax(max-content, 0.7fr) minmax(max-content, 0.8fr) minmax(max-content, 0.6fr) minmax(max-content, 0.6fr) minmax(max-content, 1fr) minmax(max-content, 0.6fr) minmax(max-content, 0.8fr) minmax(max-content, 0.8fr) minmax(max-content, 0.8fr);
 	border-radius: 10px;
 	overflow-x: auto;
 	border: solid 1px var(--MI_THEME-divider);
@@ -1381,5 +1607,158 @@ onBeforeUnmount(() => {
 .muted {
 	opacity: 0.56;
 	font-weight: 400;
+}
+
+.insightGrid {
+	display: grid;
+	grid-template-columns: repeat(4, minmax(0, 1fr));
+	gap: 12px;
+
+	@media (max-width: 900px) {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+
+	@media (max-width: 480px) {
+		grid-template-columns: 1fr;
+	}
+}
+
+.insightCard {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	padding: 14px 16px;
+	border-radius: var(--MI-radius);
+	min-width: 0;
+}
+
+.insightHead {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	font-size: 0.8em;
+	font-weight: 600;
+	opacity: 0.66;
+}
+
+.insightValue {
+	font-size: 1.35em;
+	font-weight: 700;
+	font-variant-numeric: tabular-nums;
+}
+
+.insightRows {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 2px 12px;
+	font-size: 0.78em;
+	opacity: 0.72;
+	font-variant-numeric: tabular-nums;
+}
+
+.insightBar {
+	height: 6px;
+	border-radius: 999px;
+	overflow: hidden;
+	background: var(--MI_THEME-accent);
+}
+
+.insightBarPrompt {
+	display: block;
+	height: 100%;
+	background: #64b5f6;
+}
+
+.heatmapWrap {
+	overflow-x: auto;
+}
+
+.heatmap {
+	display: grid;
+	grid-template-columns: 2.6em repeat(24, minmax(10px, 1fr));
+	gap: 3px;
+	min-width: 360px;
+	font-size: 0.72em;
+}
+
+.heatmapHour {
+	opacity: 0.5;
+	font-variant-numeric: tabular-nums;
+}
+
+.heatmapDay {
+	display: flex;
+	align-items: center;
+	opacity: 0.66;
+}
+
+.heatmapCell {
+	aspect-ratio: 1;
+	border-radius: 3px;
+}
+
+.heatmapFoot {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	flex-wrap: wrap;
+	gap: 8px;
+	margin-top: 10px;
+	font-size: 0.8em;
+	opacity: 0.8;
+}
+
+.heatmapScale {
+	display: inline-flex;
+	align-items: center;
+	gap: 3px;
+
+	> i {
+		display: inline-block;
+		width: 10px;
+		height: 10px;
+		border-radius: 2px;
+	}
+}
+
+.errorList {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+}
+
+.errorRowHead {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 8px;
+	font-size: 0.85em;
+}
+
+.errorCode {
+	min-width: 0;
+	overflow-wrap: anywhere;
+	font-size: 0.95em;
+}
+
+.errorCount {
+	flex-shrink: 0;
+	opacity: 0.72;
+	font-variant-numeric: tabular-nums;
+}
+
+.errorBar {
+	height: 6px;
+	margin-top: 4px;
+	border-radius: 999px;
+	background: color-mix(in srgb, var(--MI_THEME-fg) 8%, transparent);
+	overflow: hidden;
+
+	> span {
+		display: block;
+		height: 100%;
+		background: var(--MI_THEME-error);
+		border-radius: 999px;
+	}
 }
 </style>
