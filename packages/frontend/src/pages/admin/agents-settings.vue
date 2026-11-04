@@ -564,10 +564,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 								<MkLoading v-if="externalAuditStatsLoading"/>
 								<MkInfo v-else-if="externalAuditStats.length === 0">暂无外审模型统计。</MkInfo>
 								<template v-else>
-									<MkInfo>统计范围为最近 1 小时；API 失败指请求阶段报错（超时/网络/HTTP 错误等），解析失败指模型回复内容缺失或无法解析为审核结论。</MkInfo>
+									<MkInfo>统计范围为最近 1 小时；API 失败指请求阶段报错（超时/网络/HTTP 错误等），解析失败指模型回复内容缺失或无法解析为审核结论。平均耗时含失败调用，成功平均耗时只算得出放行或拦截结论的调用。</MkInfo>
 									<div :class="$style.auditStatsTable">
 										<div :class="$style.auditStatsHead">
-											<span>模型</span><span>状态</span><span>总数</span><span>API 失败</span><span>解析失败</span><span>总失败</span><span>失败率</span>
+											<span>模型</span><span>状态</span><span>总数</span><span>API 失败</span><span>解析失败</span><span>总失败</span><span>失败率</span><span>平均耗时</span><span>成功平均耗时</span>
 										</div>
 										<div v-for="row in externalAuditStats" :key="row.id" :class="$style.auditStatsRow">
 											<span data-label="模型">{{ row.name }}</span>
@@ -577,6 +577,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 											<span data-label="解析失败">{{ row.parseFailed }}</span>
 											<span data-label="总失败">{{ row.failed }}</span>
 											<span data-label="失败率">{{ (row.failureRate * 100).toFixed(1) }}%</span>
+											<span data-label="平均耗时">{{ formatAuditDuration(row.avgDurationMs) }}</span>
+											<span data-label="成功平均耗时">{{ formatAuditDuration(row.avgSuccessDurationMs) }}</span>
 										</div>
 									</div>
 								</template>
@@ -1265,6 +1267,8 @@ type AgentExternalAuditModelStat = {
 	/** 回复解析失败数（回复内容缺失或无法解析为结构化审核结论） */
 	parseFailed: number;
 	failureRate: number;
+	avgDurationMs: number | null;
+	avgSuccessDurationMs: number | null;
 };
 
 type AgentExternalAuditFailureRow = {
@@ -2630,6 +2634,11 @@ async function loadExternalAuditStats() {
 	}
 }
 
+function formatAuditDuration(ms: number | null): string {
+	if (ms == null) return '—';
+	return ms < 1000 ? `${Math.round(ms)}ms` : `${(ms / 1000).toFixed(2)}s`;
+}
+
 function externalAuditStatStatus(row: AgentExternalAuditModelStat) {
 	if (row.autoDisabledAt) return i18n.ts._agents.adminAuditAutoDisabled;
 	if (!row.enabled) return i18n.ts._agents.adminAuditDisabled;
@@ -3846,8 +3855,8 @@ onMounted(() => {
 .auditStatsHead,
 .auditStatsRow {
 	display: grid;
-	min-width: 720px;
-	grid-template-columns: minmax(140px, 1.4fr) minmax(70px, 0.8fr) minmax(56px, 0.5fr) minmax(72px, 0.6fr) minmax(72px, 0.6fr) minmax(56px, 0.5fr) minmax(72px, 0.7fr);
+	min-width: 900px;
+	grid-template-columns: minmax(140px, 1.4fr) minmax(70px, 0.8fr) minmax(56px, 0.5fr) minmax(72px, 0.6fr) minmax(72px, 0.6fr) minmax(56px, 0.5fr) minmax(72px, 0.7fr) minmax(76px, 0.7fr) minmax(96px, 0.8fr);
 	gap: 10px;
 	align-items: center;
 	padding: 10px 12px;
