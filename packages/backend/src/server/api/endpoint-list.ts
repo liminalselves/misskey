@@ -98,6 +98,7 @@ export * as 'admin/delete-all-files-of-a-user' from './endpoints/admin/delete-al
 export * as 'admin/drive/clean-remote-files' from './endpoints/admin/drive/clean-remote-files.js';
 export * as 'admin/drive/cleanup' from './endpoints/admin/drive/cleanup.js';
 export * as 'admin/drive/files' from './endpoints/admin/drive/files.js';
+export * as 'admin/drive/folders' from './endpoints/admin/drive/folders.js';
 export * as 'admin/drive/files/set-blocked' from './endpoints/admin/drive/files/set-blocked.js';
 export * as 'admin/drive/show-file' from './endpoints/admin/drive/show-file.js';
 export * as 'admin/emoji/add' from './endpoints/admin/emoji/add.js';
