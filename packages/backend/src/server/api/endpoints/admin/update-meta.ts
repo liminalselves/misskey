@@ -11,7 +11,7 @@ import { Endpoint } from '@/server/api/endpoint-base.js';
 import { MetaService } from '@/core/MetaService.js';
 import { ApiError } from '@/server/api/error.js';
 import { createLlmUrlBatchValidator, describeUnsafeLlmUrlReason, hrefForStoredLlmBaseUrl, UnsafeLlmUrlError } from '@/misc/validate-llm-endpoint-url.js';
-import { getActiveLlmModels, normalizeAgentLlmModelGroupsParam, normalizeAgentLlmModelsParam } from '@/misc/agent-llm-models.js';
+import { getActiveLlmModels, normalizeAgentLlmApiKeys, normalizeAgentLlmModelGroupsParam, normalizeAgentLlmModelsParam } from '@/misc/agent-llm-models.js';
 import { AGENT_IMAGE_PROVIDER_IDS } from '@/models/AgentImageProvider.js';
 import { AGENT_EXTERNAL_AUDIT_PROVIDER_IDS, isAgentExternalAuditProvider } from '@/models/AgentExternalAuditProvider.js';
 import { getAgentImageProviderDefinition } from '@/core/agent-image-providers.js';
@@ -282,6 +282,8 @@ export const paramDef = {
 					apiModelName: { type: 'string', nullable: true, maxLength: 128 },
 					apiUrl: { type: 'string', nullable: true, maxLength: 2048 },
 					apiKey: { type: 'string', nullable: true, maxLength: 8192 },
+					apiKeys: { type: 'array', nullable: true, maxItems: 64, items: { type: 'string', maxLength: 8192 } },
+					multiKeyEnabled: { type: 'boolean' },
 					supportsReferenceImage: { type: 'boolean' },
 					costPerCall: { type: 'number', nullable: true, minimum: 0, maximum: 1000000 },
 					dailyFreeQuota: { type: 'number', nullable: true, minimum: 0, maximum: 100000 },
@@ -1186,10 +1188,12 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					const provider = getAgentImageProviderDefinition(m.provider);
 					let apiUrl: string | null = null;
 					let apiKey: string | null = null;
+					let apiKeys: string[] | null = null;
 					if (provider.requiresEndpointCredentials) {
+						apiKeys = normalizeAgentLlmApiKeys(m.apiKeys, m.apiKey);
 						if (typeof m.apiModelName !== 'string' || m.apiModelName.trim() === ''
 							|| typeof m.apiUrl !== 'string' || m.apiUrl.trim() === ''
-							|| typeof m.apiKey !== 'string' || m.apiKey.trim() === '') {
+							|| apiKeys == null) {
 							throw new ApiError({
 								message: 'Image model requires apiModelName, apiUrl, and apiKey.',
 								code: 'INVALID_PARAM',
@@ -1211,7 +1215,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 								id: 'd5c7da16-6e40-4f65-90db-996bba9c4aaf',
 							});
 						}
-						apiKey = m.apiKey.trim();
+						apiKey = apiKeys[0]!;
 					}
 					return {
 						id,
@@ -1222,6 +1226,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 						apiModelName: typeof m.apiModelName === 'string' && m.apiModelName.trim() !== '' ? m.apiModelName.trim() : null,
 						apiUrl,
 						apiKey,
+						apiKeys,
+						multiKeyEnabled: provider.requiresEndpointCredentials && m.multiKeyEnabled === true,
 						supportsReferenceImage: provider.capabilities.supportsReferenceImage && m.supportsReferenceImage === true,
 						costPerCall: typeof m.costPerCall === 'number' ? Math.max(0, m.costPerCall) : null,
 						dailyFreeQuota: typeof m.dailyFreeQuota === 'number' && m.dailyFreeQuota > 0 ? Math.trunc(m.dailyFreeQuota) : null,

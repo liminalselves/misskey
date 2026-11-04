@@ -68,7 +68,7 @@ describe('agent image provider registry', () => {
 
 describe('AgentImageService.listAvailableImageModels', () => {
 	const stub = {} as never;
-	const service = new AgentImageService(stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub);
+	const service = new AgentImageService(stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub, stub);
 
 	function buildInstance(models: unknown[]): MiMeta {
 		return { agentImageModels: models } as unknown as MiMeta;
