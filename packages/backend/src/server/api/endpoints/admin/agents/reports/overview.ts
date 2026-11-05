@@ -85,6 +85,8 @@ export const meta = {
 						creditsCharged: { type: 'number' },
 						uniqueUsers: { type: 'integer' },
 						avgDurationMs: { type: 'number', nullable: true },
+						promptTokens: { type: 'integer' },
+						completionTokens: { type: 'integer' },
 					},
 					required: ['modelId', 'total', 'success', 'failed', 'aborted', 'totalCost', 'freeCalls', 'paidCalls', 'creditsCharged', 'uniqueUsers', 'avgDurationMs'],
 				},
@@ -102,6 +104,8 @@ export const meta = {
 						freeCalls: { type: 'integer' },
 						paidCalls: { type: 'integer' },
 						creditsCharged: { type: 'number' },
+						promptTokens: { type: 'integer' },
+						completionTokens: { type: 'integer' },
 						avgDurationMs: { type: 'number', nullable: true },
 					},
 					required: ['bucketStart', 'total', 'success', 'failed', 'aborted', 'freeCalls', 'paidCalls', 'creditsCharged', 'avgDurationMs'],
@@ -134,8 +138,12 @@ export const meta = {
 				},
 				required: ['free', 'paid', 'failed', 'byok', 'zeroPriced', 'unassigned', 'other'],
 			},
+			insights: {
+				type: 'object',
+				additionalProperties: true,
+			},
 		},
-		required: ['bucket', 'since', 'until', 'overall', 'previousOverall', 'byModel', 'buckets', 'byUsageKind', 'billing'],
+		required: ['bucket', 'since', 'until', 'overall', 'previousOverall', 'byModel', 'buckets', 'byUsageKind', 'billing', 'insights'],
 	},
 } as const;
 
@@ -196,7 +204,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			const spanMs = until.getTime() - since.getTime();
 			const prevSince = new Date(since.getTime() - spanMs);
 
-			const [overall, previousOverall, byModel, buckets, byUsageKind, billing, byokStats, unassignedStats] = await Promise.all([
+			const [overall, previousOverall, byModel, buckets, byUsageKind, billing, byokStats, unassignedStats, insights] = await Promise.all([
 				this.agentModelUsageService.overallStats({ since, until, modelCallsOnly: true, ...modelFilter }),
 				this.agentModelUsageService.overallStats({ since: prevSince, until: since, modelCallsOnly: true, ...modelFilter }),
 				this.agentModelUsageService.aggregateByModel({ since, until }),
@@ -207,7 +215,18 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				this.agentModelUsageService.overallStats({ since, until, modelCallsOnly: true, byokOnly: true }),
 				// “未关联模型”合并行同理，单独按 modelId IS NULL 聚合一次
 				this.agentModelUsageService.overallStats({ since, until, modelCallsOnly: true, unassignedOnly: true }),
+				this.agentModelUsageService.reportInsights({ since, until, ...modelFilter }),
 			]);
+
+			// 按模型 token 汇总并入 byModel 行（BYOK / 未关联模型合并口径与下方一致）
+			const tokenByModel = new Map<string | null, { prompt: number; completion: number }>();
+			for (const t of insights.byModelTokens) {
+				const key = t.modelId == null ? UNASSIGNED_MODEL_ID : (t.modelId.startsWith('u') ? BYOK_MERGED_MODEL_ID : t.modelId);
+				const acc = tokenByModel.get(key) ?? { prompt: 0, completion: 0 };
+				acc.prompt += t.prompt;
+				acc.completion += t.completion;
+				tokenByModel.set(key, acc);
+			}
 
 			const byModelRows = byModel.map(r => ({
 				modelId: r.modelId,
@@ -286,6 +305,10 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 
 			// 按请求量降序，便于表格阅读
 			mergedByModel.sort((a, b) => b.total - a.total);
+			const byModelWithTokens = mergedByModel.map(r => {
+				const t = tokenByModel.get(r.modelId ?? UNASSIGNED_MODEL_ID);
+				return { ...r, promptTokens: t?.prompt ?? 0, completionTokens: t?.completion ?? 0 };
+			});
 
 			return {
 				bucket: bucketUnit,
@@ -293,10 +316,16 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				until: until.toISOString(),
 				overall,
 				previousOverall,
-				byModel: mergedByModel,
+				byModel: byModelWithTokens,
 				buckets,
 				byUsageKind,
 				billing,
+				insights: {
+					tokens: insights.tokens,
+					latency: insights.latency,
+					errorCodes: insights.errorCodes,
+					heatmap: insights.heatmap,
+				},
 			};
 		});
 	}

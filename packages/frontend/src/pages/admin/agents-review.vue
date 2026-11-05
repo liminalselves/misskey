@@ -343,24 +343,46 @@ SPDX-License-Identifier: AGPL-3.0-only
 									<i :class="row.file?.isDeleted || row.status === 'auto_cleaned' ? 'ti ti-trash' : isImageBlocked(row) ? 'ti ti-ban' : row.status === 'failed' ? 'ti ti-alert-triangle' : 'ti ti-loader-2'"></i>
 									<span>{{ imageStateLabel(row) }}</span>
 								</div>
+								<span v-if="isImageBlocked(row)" :class="[$style.imageStateChip, $style.imageStateChipDanger]"><i class="ti ti-ban"></i>已封禁</span>
+								<span v-else-if="row.status === 'failed'" :class="[$style.imageStateChip, $style.imageStateChipDanger]"><i class="ti ti-alert-triangle"></i>失败</span>
+								<span v-else-if="row.status === 'generating' || row.status === 'pending'" :class="$style.imageStateChip"><i class="ti ti-loader-2"></i>{{ imageStateLabel(row) }}</span>
 							</div>
 							<div :class="$style.imageBody">
-								<div :class="$style.cardHead">
-									<b>{{ row.imageModelName ?? row.imageModelId }}</b>
-									<time>{{ formatTime(row.createdAt) }}</time>
+								<div :class="$style.imageOwner">
+									<MkUserAcctInline :user="row.user" :fallback="row.userId"/>
 								</div>
-								<p :class="$style.imageTag" :title="row.tag">{{ row.tag }}</p>
-								<div :class="$style.imageMeta">
-									<span :class="$style.metaItem"><i class="ti ti-server-2"></i>{{ row.provider }}</span>
-									<span :class="$style.metaItem"><i class="ti ti-ruler-2"></i>{{ imageSizeLabel(row.size) }}</span>
-									<span :class="$style.metaItem"><i class="ti ti-coin"></i>{{ row.cost }}</span>
-									<span :class="$style.metaItem"><i class="ti ti-user"></i><MkUserAcctInline :user="row.user" :fallback="row.userId"/></span>
+								<div :class="$style.imageSub">
+									<span :class="$style.imageModel" :title="row.imageModelName ?? row.imageModelId">{{ row.imageModelName ?? row.imageModelId }}</span>
+									<time :title="formatTime(row.createdAt)">{{ formatShortTime(row.createdAt) }}</time>
 								</div>
-								<div v-if="row.status === 'failed' && row.errorMessage" :class="$style.imageError">{{ row.errorMessage }}</div>
 								<div v-if="isImageBlocked(row) && row.blockedReason" :class="$style.imageError">封禁原因：{{ row.blockedReason }}</div>
-								<div class="_buttons">
-									<MkButton v-if="iAmModerator && row.status !== 'auto_cleaned' && !row.file?.isDeleted" small rounded :danger="!row.isBlocked" @click="toggleImageBlocked(row)"><i class="ti ti-ban"></i> {{ row.isBlocked ? '解封图片' : '封禁图片' }}</MkButton>
-									<MkButton small rounded @click="jumpSession(row.sessionId)"><i class="ti ti-arrow-right"></i> 查看会话</MkButton>
+								<div v-else-if="row.status === 'failed' && row.errorMessage" :class="$style.imageError">{{ row.errorMessage }}</div>
+								<button type="button" class="_button" :class="$style.imageDetailToggle" :aria-expanded="expandedImages.has(row.id)" @click="toggleImageDetail(row.id)">
+									<i class="ti ti-adjustments-horizontal"></i>
+									<span>提示词与参数</span>
+									<i :class="expandedImages.has(row.id) ? 'ti ti-chevron-up' : 'ti ti-chevron-down'"></i>
+								</button>
+								<div v-if="expandedImages.has(row.id)" :class="$style.imageDetail">
+									<div :class="$style.imagePromptHead">
+										<span>提示词</span>
+										<button v-if="row.tag" type="button" class="_button" :class="$style.imageCopyBtn" title="复制提示词" @click="copyText(row.tag)"><i class="ti ti-copy"></i></button>
+									</div>
+									<p :class="$style.imagePrompt">{{ row.tag || '（空）' }}</p>
+									<dl :class="$style.imageParams">
+										<dt>模型</dt><dd>{{ row.imageModelName ?? row.imageModelId }}</dd>
+										<dt>提供商</dt><dd>{{ row.provider }}</dd>
+										<dt>尺寸</dt><dd>{{ imageSizeLabel(row.size) }}</dd>
+										<dt>费用</dt><dd>{{ row.cost }}</dd>
+										<dt>状态</dt><dd>{{ imageStateLabel(row) }}</dd>
+										<dt>时间</dt><dd>{{ formatTime(row.createdAt) }}</dd>
+										<template v-if="row.errorCode"><dt>错误码</dt><dd>{{ row.errorCode }}</dd></template>
+										<dt>会话</dt><dd><button type="button" class="_button" :class="$style.imageIdBtn" title="复制会话 ID" @click="copyText(row.sessionId)">{{ row.sessionId }}</button></dd>
+										<template v-if="row.messageId"><dt>消息</dt><dd><button type="button" class="_button" :class="$style.imageIdBtn" title="复制消息 ID" @click="copyText(row.messageId)">{{ row.messageId }}</button></dd></template>
+									</dl>
+								</div>
+								<div :class="$style.imageActions">
+									<button type="button" class="_button" :class="$style.imageActionBtn" @click="jumpSession(row.sessionId)"><i class="ti ti-messages"></i><span>会话</span></button>
+									<button v-if="iAmModerator && row.status !== 'auto_cleaned' && !row.file?.isDeleted" type="button" class="_button" :class="[$style.imageActionBtn, row.isBlocked ? null : $style.imageActionBtnDanger]" @click="toggleImageBlocked(row)"><i :class="row.isBlocked ? 'ti ti-lock-open' : 'ti ti-ban'"></i><span>{{ row.isBlocked ? '解封' : '封禁' }}</span></button>
 								</div>
 							</div>
 						</article>
@@ -518,7 +540,7 @@ type ImageRow = { id: string; createdAt: string; updatedAt: string; userId: stri
 type AgentLog = { id: string; createdAt: string; type: string; info: Record<string, unknown>; userId: string; user: any };
 type ModelReportRow = { id: string; createdAt: string; userId: string; user: any | null; modelKind: 'chat' | 'image'; modelId: string; modelName: string; reasonType: 'unavailable' | 'degraded' | 'slow' | 'errors' | 'other'; comment: string | null; resolvedAt: string | null; resolvedByUserId: string | null; resolutionMessage: string | null };
 
-type Summary = { pendingCharacters: number; pendingStyles: number; pendingTotal: number; bannedCharacters: number; bannedSessions: number; blockedExternalAudits: number; blockedImages: number; recentOperations: number; unresolvedModelReports?: number };
+type Summary = { pendingCharacters: number; pendingStyles: number; pendingTotal: number; bannedCharacters: number; bannedSessions: number; blockedExternalAudits: number; blockedImages: number; recentOperations: number; unresolvedModelReports?: number; pendingReviewUsers?: number };
 
 const api = misskeyApi as unknown as <T>(endpoint: string, data?: Record<string, unknown>) => Promise<T>;
 const props = defineProps<{ view?: string }>();
@@ -851,7 +873,7 @@ async function ignoreReviewUser(card: ReviewUserCard) {
 			untilId: card.reviewUntilId,
 		});
 		os.toast('已忽略');
-		await loadReviewListItems(true);
+		await Promise.all([loadSummary(), loadReviewListItems(true)]);
 	} catch (err) {
 		os.alert({ type: 'error', text: formatApiError(err) });
 	}
@@ -864,7 +886,7 @@ const headerTabs = computed(() => [
 	{ key: 'library', title: '内容库', icon: 'ti ti-cards' },
 	{ key: 'sessions', title: '会话治理', icon: 'ti ti-messages' },
 	{ key: 'externalAudit', title: '外审拦截', icon: 'ti ti-shield-check' },
-	{ key: 'review', title: '复审', icon: 'ti ti-shield-exclamation' },
+	{ key: 'review', title: summary.value?.pendingReviewUsers ? `复审 ${summary.value.pendingReviewUsers}` : '复审', icon: 'ti ti-shield-exclamation', indicated: (summary.value?.pendingReviewUsers ?? 0) > 0 },
 	{ key: 'images', title: 'AI 生图', icon: 'ti ti-photo-shield' },
 	{ key: 'logs', title: '操作日志', icon: 'ti ti-history' },
 ]);
@@ -879,6 +901,7 @@ const summaryCards = computed(() => [
 	{ key: 'styles', label: '待审风格', value: summary.value?.pendingStyles ?? '—', icon: 'ti ti-palette', go: () => openFiltered('queue', () => { reviewFilters.kind = 'style'; }) },
 	{ key: 'reports', label: '未处理上报', value: summary.value?.unresolvedModelReports ?? '—', icon: 'ti ti-flag', go: () => openFiltered('modelReports', () => { Object.assign(modelReportFilters, { status: 'unresolved', modelKind: '', reasonType: '', userId: '', modelId: '', query: '' }); }) },
 	{ key: 'bannedCharacters', label: '封禁角色', value: summary.value?.bannedCharacters ?? '—', icon: 'ti ti-user-off', go: () => openFiltered('library', () => { Object.assign(reviewFilters, { kind: 'character', status: 'all', query: '', userId: '' }); }) },
+	{ key: 'review', label: '待复审用户', value: summary.value?.pendingReviewUsers ?? '—', icon: 'ti ti-shield-exclamation', go: () => openFiltered('review', () => { reviewUserFilter.value = ''; }) },
 	{ key: 'external', label: '外审拦截', value: summary.value?.blockedExternalAudits ?? '—', icon: 'ti ti-shield-check', go: () => openFiltered('externalAudit', () => { externalFilters.status = 'block'; }) },
 	{ key: 'images', label: '封禁图片', value: summary.value?.blockedImages ?? '—', icon: 'ti ti-photo-shield', go: () => openFiltered('images', () => { imageFilters.blocked = 'true'; }) },
 	{ key: 'sessions', label: '封禁会话', value: summary.value?.bannedSessions ?? '—', icon: 'ti ti-messages', go: () => openFiltered('sessions', () => {}) },
@@ -1361,6 +1384,21 @@ function copyText(text: string) {
 
 function formatTime(v: string | null | undefined) {
 	return v ? formatDateTimeString(new Date(v), 'yyyy-MM-dd HH:mm') : '—';
+}
+
+// 卡片内紧凑时间：今年省略年份
+function formatShortTime(v: string | null | undefined) {
+	if (!v) return '—';
+	const d = new Date(v);
+	return formatDateTimeString(d, d.getFullYear() === new Date().getFullYear() ? 'MM-dd HH:mm' : 'yyyy-MM-dd');
+}
+
+// 生图卡片的提示词与参数默认折叠
+const expandedImages = reactive(new Set<string>());
+
+function toggleImageDetail(id: string) {
+	if (expandedImages.has(id)) expandedImages.delete(id);
+	else expandedImages.add(id);
 }
 
 function kindLabel(kind: string) {
@@ -2039,28 +2077,29 @@ onMounted(() => {
 }
 .imageGrid {
 	display: grid;
-	grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-	gap: 12px;
+	grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+	align-items: start;
+	gap: 14px;
 	margin-top: 12px;
 }
 .imageCard {
 	overflow: hidden;
-	border-radius: 8px;
+	border-radius: 12px;
 	display: flex;
 	flex-direction: column;
+	min-width: 0;
 	transition: border-color 0.15s, box-shadow 0.15s;
 }
 .imageCard:hover {
 	border-color: var(--MI_THEME-accent);
-	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+	box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
 }
 .imageBox {
 	position: relative;
 	display: grid;
 	place-items: center;
-	aspect-ratio: 1;
+	aspect-ratio: 3 / 4;
 	background: var(--MI_THEME-bg);
-	border-bottom: 1px solid var(--MI_THEME-divider);
 }
 .imageBoxClickable {
 	cursor: zoom-in;
@@ -2083,23 +2122,64 @@ onMounted(() => {
 .imageEmpty i {
 	font-size: 2em;
 }
+.imageStateChip {
+	position: absolute;
+	top: 8px;
+	left: 8px;
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 2px 8px;
+	border-radius: 999px;
+	background: rgba(0, 0, 0, 0.6);
+	color: #fff;
+	font-size: 0.75em;
+	line-height: 1.6;
+	pointer-events: none;
+}
+.imageStateChipDanger {
+	background: var(--MI_THEME-error);
+}
 .imageBody {
 	display: flex;
 	flex-direction: column;
-	gap: 8px;
-	padding: 12px;
-	flex: 1;
+	gap: 6px;
+	padding: 10px 12px 12px;
+	min-width: 0;
 }
-.imageBody .cardHead time {
-	flex-shrink: 0;
-	font-size: 0.82em;
+.imageOwner {
+	min-width: 0;
+	font-weight: bold;
+	font-size: 0.92em;
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+.imageSub {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	min-width: 0;
+	font-size: 0.8em;
 	color: var(--MI_THEME-fgTransparentWeak);
+}
+.imageModel {
+	min-width: 0;
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+.imageSub time {
+	flex-shrink: 0;
 	font-variant-numeric: tabular-nums;
 }
-.imageTag {
-	margin: 0;
-	font-size: 0.88em;
-	color: var(--MI_THEME-fgTransparentWeak);
+.imageError {
+	padding: 6px 8px;
+	border-radius: 6px;
+	background: var(--MI_THEME-errorBg);
+	color: var(--MI_THEME-error);
+	font-size: 0.78em;
 	line-height: 1.45;
 	word-break: break-word;
 	overflow-wrap: anywhere;
@@ -2108,29 +2188,106 @@ onMounted(() => {
 	-webkit-box-orient: vertical;
 	overflow: hidden;
 }
-.imageMeta {
+.imageDetailToggle {
 	display: flex;
-	flex-wrap: wrap;
-	gap: 4px 12px;
-	font-size: 0.85em;
+	align-items: center;
+	gap: 6px;
+	width: 100%;
+	box-sizing: border-box;
+	padding: 4px 0;
+	font-size: 0.8em;
 	color: var(--MI_THEME-fgTransparentWeak);
 }
-.imageError {
+.imageDetailToggle:hover {
+	color: var(--MI_THEME-accent);
+}
+.imageDetailToggle > span {
+	flex: 1;
+	text-align: left;
+}
+.imageDetail {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
 	padding: 8px 10px;
-	border-radius: 6px;
-	background: var(--MI_THEME-errorBg);
-	color: var(--MI_THEME-error);
-	font-size: 0.82em;
-	line-height: 1.45;
+	border-radius: 8px;
+	background: var(--MI_THEME-bg);
+	font-size: 0.8em;
+	min-width: 0;
+}
+.imagePromptHead {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	color: var(--MI_THEME-fgTransparentWeak);
+}
+.imageCopyBtn {
+	padding: 2px 4px;
+	border-radius: 4px;
+	color: var(--MI_THEME-fgTransparentWeak);
+}
+.imageCopyBtn:hover {
+	color: var(--MI_THEME-accent);
+}
+.imagePrompt {
+	margin: 0;
+	max-height: 160px;
+	overflow-y: auto;
+	line-height: 1.5;
+	white-space: pre-wrap;
 	word-break: break-word;
 	overflow-wrap: anywhere;
-	display: -webkit-box;
-	-webkit-line-clamp: 3;
-	-webkit-box-orient: vertical;
-	overflow: hidden;
+	user-select: text;
 }
-.imageBody > :global(._buttons) {
-	margin-top: auto;
+.imageParams {
+	display: grid;
+	grid-template-columns: auto minmax(0, 1fr);
+	gap: 3px 10px;
+	margin: 4px 0 0;
+	padding-top: 6px;
+	border-top: 1px solid var(--MI_THEME-divider);
+}
+.imageParams dt {
+	color: var(--MI_THEME-fgTransparentWeak);
+}
+.imageParams dd {
+	margin: 0;
+	min-width: 0;
+	overflow-wrap: anywhere;
+	font-variant-numeric: tabular-nums;
+}
+.imageIdBtn {
+	max-width: 100%;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-family: monospace;
+	font-size: 0.95em;
+	color: var(--MI_THEME-accent);
+}
+.imageActions {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+	gap: 6px;
+	margin-top: 2px;
+}
+.imageActionBtn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 4px;
+	min-width: 0;
+	height: 30px;
+	border-radius: 8px;
+	background: var(--MI_THEME-buttonBg);
+	font-size: 0.82em;
+	white-space: nowrap;
+}
+.imageActionBtn:hover {
+	background: var(--MI_THEME-buttonHoverBg);
+}
+.imageActionBtnDanger {
+	color: var(--MI_THEME-error);
 }
 @media (max-width: 900px) {
 	.twoCol {
@@ -2156,6 +2313,13 @@ onMounted(() => {
 	}
 	.imageGrid {
 		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 8px;
+	}
+	.imageBody {
+		padding: 8px 8px 10px;
+	}
+	.imageCard {
+		border-radius: 10px;
 	}
 	.sectionHead,
 	.rowMeta {

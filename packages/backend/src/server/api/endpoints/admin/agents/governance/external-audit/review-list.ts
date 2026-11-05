@@ -13,6 +13,7 @@ import { AgentService } from '@/core/AgentService.js';
 import { UserEntityService } from '@/core/entities/UserEntityService.js';
 import { MetaService } from '@/core/MetaService.js';
 import { resolveUserIdFromAcctOrId } from '../_utils.js';
+import { computeReviewRuleCounts, enabledReviewRules, qualifiedReviewUserIds } from './_review-qualification.js';
 
 export const meta = {
 	tags: ['admin', 'agents'],
@@ -58,44 +59,16 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		super(meta, paramDef, async (ps, me) => {
 			this.agentService.assertAgentsEnabled();
 			const metaEntity = await this.metaService.fetch();
-			const rules = (metaEntity.agentReviewTriggerRules ?? []).filter(r => r.enabled !== false);
+			const rules = enabledReviewRules(metaEntity.agentReviewTriggerRules);
 			if (rules.length === 0) return [];
 
 			const filterUserId = await resolveUserIdFromAcctOrId(this.usersRepository, ps.userId);
 
-			// A review stays pending once any historical window of unreviewed blocks reaches its threshold.
-			const ruleCounts = new Map<typeof rules[number], Map<string, number>>();
-			for (const rule of rules) {
-				const windows = this.agentExternalAuditLogsRepository
-					.createQueryBuilder('log')
-					.select('log.userId', 'userId')
-					.addSelect(`COUNT(*) OVER (PARTITION BY "log"."userId" ORDER BY "log"."createdAt"
-						RANGE BETWEEN (:timeWindowMinutes * INTERVAL '1 minute') PRECEDING AND CURRENT ROW)`, 'blockCount')
-					.where('log.status = :status', { status: 'block' })
-					.andWhere('log.userId IS NOT NULL')
-					.andWhere('log.reviewIgnoredAt IS NULL')
-					.setParameter('timeWindowMinutes', rule.timeWindowMinutes);
-				if (filterUserId) windows.andWhere('log.userId = :filterUserId', { filterUserId });
-				const rows = await this.agentExternalAuditLogsRepository.manager.createQueryBuilder()
-					.select('"windows"."userId"', 'userId')
-					.addSelect('MAX("windows"."blockCount")', 'blockCount')
-					.from(`(${windows.getQuery()})`, 'windows')
-					.setParameters(windows.getParameters())
-					.groupBy('"windows"."userId"')
-					.getRawMany<{ userId: string; blockCount: string }>();
-				ruleCounts.set(rule, new Map(rows.map(r => [r.userId, parseInt(r.blockCount, 10) || 0])));
-			}
+			const ruleCounts = await computeReviewRuleCounts(this.agentExternalAuditLogsRepository, rules, filterUserId);
 			const ruleCountFor = (rule: typeof rules[number], userId: string): number => ruleCounts.get(rule)?.get(userId) ?? 0;
 
 			// 满足任一复审规则阈值即进入候选（先取全量候选集，再做资格过滤与分页，保证分页不因过滤而缩水跳页）
-			const qualifiedUserIds = new Set<string>();
-			for (const rule of rules) {
-				const counts = ruleCounts.get(rule);
-				if (counts == null) continue;
-				for (const [userId, count] of counts) {
-					if (count >= rule.blockThreshold) qualifiedUserIds.add(userId);
-				}
-			}
+			const qualifiedUserIds = qualifiedReviewUserIds(rules, ruleCounts);
 			if (qualifiedUserIds.size === 0) return [];
 
 			// Only an explicit review action resolves evidence; bans alone must not hide pending reviews.

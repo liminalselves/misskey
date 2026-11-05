@@ -184,7 +184,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		</div>
 
 		<div v-else-if="tab === 'drive'" class="_gaps">
-			<MkFileListForAdmin :paginator="filesPaginator" viewMode="grid"/>
+			<MkUserDriveForAdmin :userId="props.userId"/>
 		</div>
 
 		<div v-else-if="tab === 'chart'" class="_gaps_m">
@@ -204,6 +204,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 		<div v-else-if="tab === 'agentUsage'">
 			<MkAgentUsageForAdmin :userId="props.userId"/>
+		</div>
+
+		<div v-else-if="tab === 'agentSessions'">
+			<MkAgentSessionsForAdmin :userId="props.userId"/>
 		</div>
 
 		<div v-else-if="tab === 'raw'" class="_gaps_m">
@@ -232,7 +236,8 @@ import MkButton from '@/components/MkButton.vue';
 import MkFolder from '@/components/MkFolder.vue';
 import MkKeyValue from '@/components/MkKeyValue.vue';
 import MkSelect from '@/components/MkSelect.vue';
-import MkFileListForAdmin from '@/components/MkFileListForAdmin.vue';
+import MkUserDriveForAdmin from '@/components/MkUserDriveForAdmin.vue';
+import MkAgentSessionsForAdmin from '@/components/MkAgentSessionsForAdmin.vue';
 import MkAgentUsageForAdmin from '@/components/MkAgentUsageForAdmin.vue';
 import MkInfo from '@/components/MkInfo.vue';
 import * as os from '@/os.js';
@@ -280,12 +285,6 @@ const silenced = ref(info.value.isSilenced);
 const suspended = ref(info.value.isSuspended);
 const isSystem = ref(user.value.host == null && user.value.username.includes('.'));
 const moderationNote = ref(info.value.moderationNote);
-const filesPaginator = markRaw(new Paginator('admin/drive/files', {
-	limit: 10,
-	computedParams: computed(() => ({
-		userId: props.userId,
-	})),
-}));
 
 const {
 	model: announcementsStatus,
@@ -636,6 +635,10 @@ const headerTabs = computed(() => isSystem.value ? [{
 	key: 'agentUsage',
 	title: '模型用量',
 	icon: 'ti ti-coin',
+}, {
+	key: 'agentSessions',
+	title: '智能体会话',
+	icon: 'ti ti-messages',
 }] : []), {
 	key: 'raw',
 	title: 'Raw',

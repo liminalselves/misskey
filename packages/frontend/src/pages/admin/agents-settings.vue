@@ -564,10 +564,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 								<MkLoading v-if="externalAuditStatsLoading"/>
 								<MkInfo v-else-if="externalAuditStats.length === 0">暂无外审模型统计。</MkInfo>
 								<template v-else>
-									<MkInfo>统计范围为最近 1 小时；API 失败指请求阶段报错（超时/网络/HTTP 错误等），解析失败指模型回复内容缺失或无法解析为审核结论。</MkInfo>
+									<MkInfo>统计范围为最近 1 小时；API 失败指请求阶段报错（超时/网络/HTTP 错误等），解析失败指模型回复内容缺失或无法解析为审核结论。平均耗时含失败调用，成功平均耗时只算得出放行或拦截结论的调用。</MkInfo>
 									<div :class="$style.auditStatsTable">
 										<div :class="$style.auditStatsHead">
-											<span>模型</span><span>状态</span><span>总数</span><span>API 失败</span><span>解析失败</span><span>总失败</span><span>失败率</span>
+											<span>模型</span><span>状态</span><span>总数</span><span>API 失败</span><span>解析失败</span><span>总失败</span><span>失败率</span><span>平均耗时</span><span>成功平均耗时</span>
 										</div>
 										<div v-for="row in externalAuditStats" :key="row.id" :class="$style.auditStatsRow">
 											<span data-label="模型">{{ row.name }}</span>
@@ -577,6 +577,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 											<span data-label="解析失败">{{ row.parseFailed }}</span>
 											<span data-label="总失败">{{ row.failed }}</span>
 											<span data-label="失败率">{{ (row.failureRate * 100).toFixed(1) }}%</span>
+											<span data-label="平均耗时">{{ formatAuditDuration(row.avgDurationMs) }}</span>
+											<span data-label="成功平均耗时">{{ formatAuditDuration(row.avgSuccessDurationMs) }}</span>
 										</div>
 									</div>
 								</template>
@@ -701,8 +703,26 @@ SPDX-License-Identifier: AGPL-3.0-only
 											<template #label>{{ i18n.ts._agents.adminQwenImageRequestUrl }}</template>
 											<template #caption>{{ i18n.ts._agents.adminQwenImageRequestUrlCaption }}</template>
 										</MkInput>
-										<MkInput v-model="row.apiKey" type="password" :readonly="!row.enabled"><template #label>{{ i18n.ts._agents.adminQwenImageApiKey }}</template></MkInput>
 									</FormSplit>
+									<MkSwitch v-model="row.multiKeyEnabled" :disabled="!row.enabled">
+										<template #label>{{ i18n.ts._agents.modelMultiKeyEnabled }}</template>
+										<template #caption>{{ i18n.ts._agents.modelMultiKeyEnabledCaption }}</template>
+									</MkSwitch>
+									<MkInput v-if="!row.multiKeyEnabled" v-model="row.apiKeys[0]" type="password" :readonly="!row.enabled">
+										<template #label>{{ i18n.ts._agents.modelApiKey }}</template>
+										<template #caption>{{ i18n.ts._agents.modelSingleKeyCaption }}</template>
+									</MkInput>
+									<div v-else :class="$style.multiKeyList">
+										<div v-for="(_, keyIndex) in row.apiKeys" :key="keyIndex" :class="$style.multiKeyRow">
+											<MkInput v-model="row.apiKeys[keyIndex]" type="password" :readonly="!row.enabled">
+												<template #label>{{ i18n.tsx._agents.modelApiKeyNumber({ n: keyIndex + 1 }) }}</template>
+											</MkInput>
+											<button type="button" class="_button" :class="$style.iconWarn" :disabled="!row.enabled || row.apiKeys.length <= 1" :title="i18n.ts._agents.modelApiKeyRemove" @click="removeImageApiKey(row, keyIndex)">
+												<i class="ti ti-trash"></i>
+											</button>
+										</div>
+										<MkButton small rounded :disabled="!row.enabled" @click="row.apiKeys.push('')"><i class="ti ti-plus"></i> {{ i18n.ts._agents.modelApiKeyAdd }}</MkButton>
+									</div>
 									<FormSplit :minWidth="220">
 										<MkInput v-model="row.apiModelName" :readonly="!row.enabled"><template #label>{{ i18n.ts._agents.adminQwenImageModelName }}</template></MkInput>
 										<MkInput v-model="row.costPerCall" type="text" :readonly="!row.enabled"><template #label>{{ i18n.ts._agents.adminImageModelCost }}</template></MkInput>
@@ -719,8 +739,26 @@ SPDX-License-Identifier: AGPL-3.0-only
 											<template #label>{{ i18n.ts._agents.adminSenseNovaImageRequestUrl }}</template>
 											<template #caption>{{ i18n.ts._agents.adminSenseNovaImageRequestUrlCaption }}</template>
 										</MkInput>
-										<MkInput v-model="row.apiKey" type="password" :readonly="!row.enabled"><template #label>{{ i18n.ts._agents.adminOpenaiImageApiKey }}</template></MkInput>
 									</FormSplit>
+									<MkSwitch v-model="row.multiKeyEnabled" :disabled="!row.enabled">
+										<template #label>{{ i18n.ts._agents.modelMultiKeyEnabled }}</template>
+										<template #caption>{{ i18n.ts._agents.modelMultiKeyEnabledCaption }}</template>
+									</MkSwitch>
+									<MkInput v-if="!row.multiKeyEnabled" v-model="row.apiKeys[0]" type="password" :readonly="!row.enabled">
+										<template #label>{{ i18n.ts._agents.modelApiKey }}</template>
+										<template #caption>{{ i18n.ts._agents.modelSingleKeyCaption }}</template>
+									</MkInput>
+									<div v-else :class="$style.multiKeyList">
+										<div v-for="(_, keyIndex) in row.apiKeys" :key="keyIndex" :class="$style.multiKeyRow">
+											<MkInput v-model="row.apiKeys[keyIndex]" type="password" :readonly="!row.enabled">
+												<template #label>{{ i18n.tsx._agents.modelApiKeyNumber({ n: keyIndex + 1 }) }}</template>
+											</MkInput>
+											<button type="button" class="_button" :class="$style.iconWarn" :disabled="!row.enabled || row.apiKeys.length <= 1" :title="i18n.ts._agents.modelApiKeyRemove" @click="removeImageApiKey(row, keyIndex)">
+												<i class="ti ti-trash"></i>
+											</button>
+										</div>
+										<MkButton small rounded :disabled="!row.enabled" @click="row.apiKeys.push('')"><i class="ti ti-plus"></i> {{ i18n.ts._agents.modelApiKeyAdd }}</MkButton>
+									</div>
 									<FormSplit :minWidth="220">
 										<MkInput v-model="row.apiModelName" :readonly="!row.enabled"><template #label>{{ i18n.ts._agents.adminSenseNovaImageModelName }}</template></MkInput>
 										<MkInput v-model="row.costPerCall" type="text" :readonly="!row.enabled"><template #label>{{ i18n.ts._agents.adminImageModelCost }}</template></MkInput>
@@ -741,8 +779,26 @@ SPDX-License-Identifier: AGPL-3.0-only
 												<template #label>{{ i18n.ts._agents.adminOpenaiImageRequestUrl }}</template>
 												<template #caption>{{ i18n.ts._agents.adminOpenaiImageRequestUrlCaption }}</template>
 											</MkInput>
-											<MkInput v-model="row.apiKey" type="password" :readonly="!row.enabled"><template #label>{{ i18n.ts._agents.adminOpenaiImageApiKey }}</template></MkInput>
 										</FormSplit>
+										<MkSwitch v-model="row.multiKeyEnabled" :disabled="!row.enabled">
+											<template #label>{{ i18n.ts._agents.modelMultiKeyEnabled }}</template>
+											<template #caption>{{ i18n.ts._agents.modelMultiKeyEnabledCaption }}</template>
+										</MkSwitch>
+										<MkInput v-if="!row.multiKeyEnabled" v-model="row.apiKeys[0]" type="password" :readonly="!row.enabled">
+											<template #label>{{ i18n.ts._agents.modelApiKey }}</template>
+											<template #caption>{{ i18n.ts._agents.modelSingleKeyCaption }}</template>
+										</MkInput>
+										<div v-else :class="$style.multiKeyList">
+											<div v-for="(_, keyIndex) in row.apiKeys" :key="keyIndex" :class="$style.multiKeyRow">
+												<MkInput v-model="row.apiKeys[keyIndex]" type="password" :readonly="!row.enabled">
+													<template #label>{{ i18n.tsx._agents.modelApiKeyNumber({ n: keyIndex + 1 }) }}</template>
+												</MkInput>
+												<button type="button" class="_button" :class="$style.iconWarn" :disabled="!row.enabled || row.apiKeys.length <= 1" :title="i18n.ts._agents.modelApiKeyRemove" @click="removeImageApiKey(row, keyIndex)">
+													<i class="ti ti-trash"></i>
+												</button>
+											</div>
+											<MkButton small rounded :disabled="!row.enabled" @click="row.apiKeys.push('')"><i class="ti ti-plus"></i> {{ i18n.ts._agents.modelApiKeyAdd }}</MkButton>
+										</div>
 										<FormSplit :minWidth="220">
 											<MkInput v-model="row.apiModelName" :readonly="!row.enabled"><template #label>{{ i18n.ts._agents.adminOpenaiImageModelName }}</template></MkInput>
 											<MkInput v-model="row.costPerCall" type="text" :readonly="!row.enabled"><template #label>{{ i18n.ts._agents.adminImageModelCost }}</template></MkInput>
@@ -1143,7 +1199,8 @@ type AgentImageModelRow = {
 	enabled: boolean;
 	apiModelName: string;
 	apiUrl: string;
-	apiKey: string;
+	apiKeys: string[];
+	multiKeyEnabled: boolean;
 	supportsReferenceImage: boolean;
 	costPerCall: string;
 	dailyFreeQuota: string;
@@ -1210,6 +1267,8 @@ type AgentExternalAuditModelStat = {
 	/** 回复解析失败数（回复内容缺失或无法解析为结构化审核结论） */
 	parseFailed: number;
 	failureRate: number;
+	avgDurationMs: number | null;
+	avgSuccessDurationMs: number | null;
 };
 
 type AgentExternalAuditFailureRow = {
@@ -1410,6 +1469,12 @@ function initAgentImageTokenRows(): AgentImageTokenRow[] {
 	});
 }
 
+function initImageApiKeys(o: Record<string, unknown>): string[] {
+	const keys = Array.isArray(o.apiKeys) ? o.apiKeys.filter((key): key is string => typeof key === 'string') : [];
+	if (keys.length === 0) keys.push(typeof o.apiKey === 'string' ? o.apiKey : '');
+	return keys;
+}
+
 function initAgentImageModelRows(): AgentImageModelRow[] {
 	const raw = meta.agentImageModels;
 	if (!Array.isArray(raw)) return [];
@@ -1424,7 +1489,8 @@ function initAgentImageModelRows(): AgentImageModelRow[] {
 			enabled: o.enabled !== false,
 			apiModelName: typeof o.apiModelName === 'string' ? o.apiModelName : '',
 			apiUrl: typeof o.apiUrl === 'string' ? o.apiUrl : '',
-			apiKey: typeof o.apiKey === 'string' ? o.apiKey : '',
+			apiKeys: initImageApiKeys(o),
+			multiKeyEnabled: o.multiKeyEnabled === true,
 			supportsReferenceImage: (o.provider === 'openai' || o.provider === 'tiptotip' || o.provider === 'sensenova') && o.supportsReferenceImage === true,
 			costPerCall: typeof o.costPerCall === 'number' ? String(o.costPerCall) : '',
 			dailyFreeQuota: typeof o.dailyFreeQuota === 'number' ? String(o.dailyFreeQuota) : '0',
@@ -1781,7 +1847,8 @@ function buildImagesPayload(state: FormState): Record<string, unknown> {
 		if (!agentImageProviderValues.has(row.provider)) fail('images', `生图模型「${label}」的提供商「${row.provider}」无法识别，请重新选择。`, anchor);
 		const needsEndpoint = endpointImageProviders.has(row.provider);
 		if (!row.apiModelName.trim()) fail('images', `生图模型「${label}」需要填写上游模型名。`, anchor);
-		if (needsEndpoint && (!row.apiUrl.trim() || !row.apiKey.trim())) fail('images', `生图模型「${label}」需要填写请求地址和 API Key。`, anchor);
+		const imageApiKeys = [...new Set(row.apiKeys.map(key => key.trim()).filter(key => key !== ''))];
+		if (needsEndpoint && (!row.apiUrl.trim() || imageApiKeys.length === 0)) fail('images', `生图模型「${label}」需要填写请求地址和 API Key。`, anchor);
 		if (row.provider === 'sensenova' && !/\/images\/generations\/?$/.test(row.apiUrl.trim())) fail('images', i18n.ts._agents.adminSenseNovaImageRequestUrlInvalid, anchor);
 		const cost = row.costPerCall.trim() === '' ? null : numField('images', row.costPerCall, 0, 1_000_000, `${label} · 每张扣费`, anchor);
 		const quotaRaw = row.dailyFreeQuota.trim();
@@ -1794,7 +1861,9 @@ function buildImagesPayload(state: FormState): Record<string, unknown> {
 			enabled: row.enabled,
 			apiModelName: row.apiModelName.trim(),
 			apiUrl: needsEndpoint ? row.apiUrl.trim() : null,
-			apiKey: needsEndpoint ? row.apiKey.trim() : null,
+			apiKey: needsEndpoint ? imageApiKeys[0] : null,
+			apiKeys: needsEndpoint ? imageApiKeys : null,
+			multiKeyEnabled: needsEndpoint && row.multiKeyEnabled,
 			supportsReferenceImage: referenceImageProviders.has(row.provider) && row.supportsReferenceImage,
 			costPerCall: cost,
 			dailyFreeQuota: quota > 0 ? quota : null,
@@ -2565,6 +2634,11 @@ async function loadExternalAuditStats() {
 	}
 }
 
+function formatAuditDuration(ms: number | null): string {
+	if (ms == null) return '—';
+	return ms < 1000 ? `${Math.round(ms)}ms` : `${(ms / 1000).toFixed(2)}s`;
+}
+
 function externalAuditStatStatus(row: AgentExternalAuditModelStat) {
 	if (row.autoDisabledAt) return i18n.ts._agents.adminAuditAutoDisabled;
 	if (!row.enabled) return i18n.ts._agents.adminAuditDisabled;
@@ -2608,6 +2682,11 @@ function addLlmApiKey(row: AgentLlmModelRow) {
 }
 
 function removeLlmApiKey(row: AgentLlmModelRow, index: number) {
+	if (row.apiKeys.length <= 1) return;
+	row.apiKeys.splice(index, 1);
+}
+
+function removeImageApiKey(row: AgentImageModelRow, index: number) {
 	if (row.apiKeys.length <= 1) return;
 	row.apiKeys.splice(index, 1);
 }
@@ -3088,7 +3167,8 @@ function addImageModel(providerPreset?: 'tiptotip' | 'openai' | 'sensenova-lite'
 				: isSenseNova
 					? 'https://token.sensenova.cn/v1/images/generations'
 					: '',
-		apiKey: '',
+		apiKeys: [''],
+		multiKeyEnabled: false,
 		supportsReferenceImage: isSenseNova,
 		costPerCall: form.state.agentImageCostPerCall || '',
 		dailyFreeQuota: '0',
@@ -3110,6 +3190,7 @@ function copyImageModelRow(src: AgentImageModelRow) {
 	if (index < 0) return;
 	const copy: AgentImageModelRow = {
 		...src,
+		apiKeys: [...src.apiKeys],
 		id: genId(),
 		name: `${src.name.trim()}${i18n.ts._agents.adminModelCopySuffix}`,
 		enabled: true,
@@ -3774,8 +3855,8 @@ onMounted(() => {
 .auditStatsHead,
 .auditStatsRow {
 	display: grid;
-	min-width: 720px;
-	grid-template-columns: minmax(140px, 1.4fr) minmax(70px, 0.8fr) minmax(56px, 0.5fr) minmax(72px, 0.6fr) minmax(72px, 0.6fr) minmax(56px, 0.5fr) minmax(72px, 0.7fr);
+	min-width: 900px;
+	grid-template-columns: minmax(140px, 1.4fr) minmax(70px, 0.8fr) minmax(56px, 0.5fr) minmax(72px, 0.6fr) minmax(72px, 0.6fr) minmax(56px, 0.5fr) minmax(72px, 0.7fr) minmax(76px, 0.7fr) minmax(96px, 0.8fr);
 	gap: 10px;
 	align-items: center;
 	padding: 10px 12px;

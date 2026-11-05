@@ -801,6 +801,86 @@ export class AgentModelUsageService {
 	}
 
 	/**
+	 * 管理端报表的补充分析：token 总量、成功调用耗时分位、失败错误码 TOP、
+	 * 北京时间「星期×小时」请求分布与按模型 token 汇总。仅统计模型调用类记录，支持单模型筛选（byModelTokens 除外）。
+	 */
+	@bindThis
+	public async reportInsights(opts: { since: Date; until: Date } & ModelReportFilter): Promise<{
+		tokens: { prompt: number; completion: number; cacheHit: number; callsWithUsage: number };
+		latency: { p50: number | null; p90: number | null; p95: number | null };
+		errorCodes: Array<{ errorCode: string; count: number }>;
+		heatmap: Array<{ dow: number; hour: number; count: number }>;
+		byModelTokens: Array<{ modelId: string | null; prompt: number; completion: number }>;
+	}> {
+		const base = () => {
+			const qb = this.agentModelUsageLogsRepository.createQueryBuilder('log')
+				.where('log.requestedAt >= :since', { since: opts.since })
+				.andWhere('log.requestedAt < :until', { until: opts.until })
+				.andWhere('log.usageKind NOT IN (:...nonModelKinds)', { nonModelKinds: nonModelUsageKinds });
+			return qb;
+		};
+
+		const tokensQb = base()
+			.select('COALESCE(SUM(log.promptTokens), 0)::bigint', 'prompt')
+			.addSelect('COALESCE(SUM(log.completionTokens), 0)::bigint', 'completion')
+			.addSelect('COALESCE(SUM(log.promptCacheHitTokens), 0)::bigint', 'cacheHit')
+			.addSelect('SUM(CASE WHEN log.promptTokens IS NOT NULL OR log.completionTokens IS NOT NULL THEN 1 ELSE 0 END)::int', 'callsWithUsage');
+		applyModelReportFilter(tokensQb, opts);
+
+		const latencyQb = base()
+			.select('percentile_cont(0.5) WITHIN GROUP (ORDER BY log.durationMs)', 'p50')
+			.addSelect('percentile_cont(0.9) WITHIN GROUP (ORDER BY log.durationMs)', 'p90')
+			.addSelect('percentile_cont(0.95) WITHIN GROUP (ORDER BY log.durationMs)', 'p95')
+			.andWhere('log.status = :okStatus', { okStatus: 'success' })
+			.andWhere('log.durationMs IS NOT NULL');
+		applyModelReportFilter(latencyQb, opts);
+
+		const errorQb = base()
+			.select('COALESCE(log.errorCode, \'UNKNOWN\')', 'errorCode')
+			.addSelect('COUNT(*)::int', 'count')
+			.andWhere('log.status = :failedStatus', { failedStatus: 'failed' })
+			.groupBy('COALESCE(log.errorCode, \'UNKNOWN\')')
+			.orderBy('count', 'DESC')
+			.limit(10);
+		applyModelReportFilter(errorQb, opts);
+
+		const heatmapQb = base()
+			.select('EXTRACT(ISODOW FROM (log.requestedAt AT TIME ZONE \'Asia/Shanghai\'))::int', 'dow')
+			.addSelect('EXTRACT(HOUR FROM (log.requestedAt AT TIME ZONE \'Asia/Shanghai\'))::int', 'hour')
+			.addSelect('COUNT(*)::int', 'count')
+			.groupBy('dow')
+			.addGroupBy('hour');
+		applyModelReportFilter(heatmapQb, opts);
+
+		const byModelTokensQb = base()
+			.select('log.modelId', 'modelId')
+			.addSelect('COALESCE(SUM(log.promptTokens), 0)::bigint', 'prompt')
+			.addSelect('COALESCE(SUM(log.completionTokens), 0)::bigint', 'completion')
+			.groupBy('log.modelId');
+
+		const [tokens, latency, errorCodes, heatmap, byModelTokens] = await Promise.all([
+			tokensQb.getRawOne<{ prompt: string | number; completion: string | number; cacheHit: string | number; callsWithUsage: number }>(),
+			latencyQb.getRawOne<{ p50: string | number | null; p90: string | number | null; p95: string | number | null }>(),
+			errorQb.getRawMany<{ errorCode: string; count: number }>(),
+			heatmapQb.getRawMany<{ dow: number; hour: number; count: number }>(),
+			byModelTokensQb.getRawMany<{ modelId: string | null; prompt: string | number; completion: string | number }>(),
+		]);
+		const num = (v: string | number | null | undefined) => (v == null ? null : Number(v));
+		return {
+			tokens: {
+				prompt: Number(tokens?.prompt) || 0,
+				completion: Number(tokens?.completion) || 0,
+				cacheHit: Number(tokens?.cacheHit) || 0,
+				callsWithUsage: Number(tokens?.callsWithUsage) || 0,
+			},
+			latency: { p50: num(latency?.p50), p90: num(latency?.p90), p95: num(latency?.p95) },
+			errorCodes: errorCodes.map(r => ({ errorCode: r.errorCode, count: Number(r.count) || 0 })),
+			heatmap: heatmap.map(r => ({ dow: Number(r.dow), hour: Number(r.hour), count: Number(r.count) || 0 })),
+			byModelTokens: byModelTokens.map(r => ({ modelId: r.modelId, prompt: Number(r.prompt) || 0, completion: Number(r.completion) || 0 })),
+		};
+	}
+
+	/**
 	 * 时间窗内扣减额度最多的用户排行，供管理端定位成本大头。仅统计实际扣费（cost>0）的模型调用。
 	 * 支持单模型/BYOK/未关联模型筛选与 offset/limit 翻页。
 	 */

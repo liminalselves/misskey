@@ -32,6 +32,7 @@ export * as 'admin/agents/governance/external-audit/detail' from './endpoints/ad
 export * as 'admin/agents/governance/external-audit/list' from './endpoints/admin/agents/governance/external-audit/list.js';
 export * as 'admin/agents/governance/external-audit/review-list' from './endpoints/admin/agents/governance/external-audit/review-list.js';
 export * as 'admin/agents/governance/external-audit/review-ignore' from './endpoints/admin/agents/governance/external-audit/review-ignore.js';
+export * as 'admin/agents/governance/external-audit/review-pending-exists' from './endpoints/admin/agents/governance/external-audit/review-pending-exists.js';
 export * as 'admin/agents/governance/quick-action' from './endpoints/admin/agents/governance/quick-action.js';
 export * as 'admin/agents/governance/images/list' from './endpoints/admin/agents/governance/images/list.js';
 export * as 'admin/agents/governance/images/set-blocked' from './endpoints/admin/agents/governance/images/set-blocked.js';
@@ -97,6 +98,7 @@ export * as 'admin/delete-all-files-of-a-user' from './endpoints/admin/delete-al
 export * as 'admin/drive/clean-remote-files' from './endpoints/admin/drive/clean-remote-files.js';
 export * as 'admin/drive/cleanup' from './endpoints/admin/drive/cleanup.js';
 export * as 'admin/drive/files' from './endpoints/admin/drive/files.js';
+export * as 'admin/drive/folders' from './endpoints/admin/drive/folders.js';
 export * as 'admin/drive/files/set-blocked' from './endpoints/admin/drive/files/set-blocked.js';
 export * as 'admin/drive/show-file' from './endpoints/admin/drive/show-file.js';
 export * as 'admin/emoji/add' from './endpoints/admin/emoji/add.js';

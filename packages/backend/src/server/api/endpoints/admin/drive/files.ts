@@ -37,6 +37,8 @@ export const paramDef = {
 		sinceDate: { type: 'integer' },
 		untilDate: { type: 'integer' },
 		userId: { type: 'string', format: 'misskey:id', nullable: true },
+		/** 与 userId 同用时按文件夹浏览：null 为根目录；省略则不按文件夹过滤 */
+		folderId: { type: 'string', format: 'misskey:id', nullable: true },
 		type: { type: 'string', nullable: true, pattern: /^[a-zA-Z0-9\/\-*]+$/.toString().slice(1, -1) },
 		origin: { type: 'string', enum: ['combined', 'local', 'remote'], default: 'local' },
 		hostname: {
@@ -63,6 +65,10 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 
 			if (ps.userId) {
 				query.andWhere('file.userId = :userId', { userId: ps.userId });
+				if (ps.folderId !== undefined) {
+					if (ps.folderId == null) query.andWhere('file.folderId IS NULL');
+					else query.andWhere('file.folderId = :folderId', { folderId: ps.folderId });
+				}
 			} else {
 				if (ps.origin === 'local') {
 					query.andWhere('file.userHost IS NULL');
