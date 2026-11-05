@@ -192,6 +192,15 @@ async function describeImageUpstreamHttpError(res: Response): Promise<string> {
 	return detail.trim() === '' ? `Upstream returned HTTP ${res.status}.` : `Upstream returned HTTP ${res.status}: ${detail}`;
 }
 
+/** 上游已成功响应后才发生的失败：不切换 Key，避免同一张图被重复生成计费。 */
+const noKeyFailoverErrors = new WeakSet<ApiError>();
+
+/** 标记某个上游失败不再换 Key 重试（供测试与调用方复用同一判定）。 */
+export function markAgentImageErrorNoKeyFailover(err: ApiError): ApiError {
+	noKeyFailoverErrors.add(err);
+	return err;
+}
+
 /** 生图模型实际使用的 Key 列表：多 Key 关闭时只取第一项，与对话模型同一口径。 */
 export function resolveAgentImageModelApiKeys(imageModel: Pick<MiAgentImageModel, 'apiKey' | 'apiKeys' | 'multiKeyEnabled'>): string[] {
 	const keys = normalizeAgentLlmApiKeys(imageModel.apiKeys, imageModel.apiKey) ?? [];
@@ -209,7 +218,7 @@ export async function invokeAgentImageApiKeys<T>(apiKeys: readonly string[], inv
 		try {
 			return await invoke(apiKey, index);
 		} catch (err) {
-			if (!(err instanceof ApiError) || err.code !== agentImageErrors.upstreamFailed.code) throw err;
+			if (!(err instanceof ApiError) || err.code !== agentImageErrors.upstreamFailed.code || noKeyFailoverErrors.has(err)) throw err;
 			lastError = err;
 			const diagnostic = typeof err.info?.diagnostic === 'string' ? err.info.diagnostic : 'Unknown upstream error.';
 			diagnostics.push(`[Key ${index + 1}] ${diagnostic}`);
@@ -824,19 +833,25 @@ export class AgentImageService {
 			});
 			if (!res.ok) throw upstreamImageError(await describeImageUpstreamHttpError(res));
 
-			let result: AgentImageResult;
+			// 上游已成功响应（通常已计费）：之后的解析、下载、入库失败换 Key 也无济于事，只会重复生成
 			try {
-				const body = JSON.parse((await readBodyWithLimit(res, OPENAI_IMAGE_JSON_BODY_LIMIT_BYTES)).toString('utf8')) as unknown;
-				result = provider.parseResult(body, requestContext);
-			} catch (err) {
-				if (err instanceof UpstreamBodyTooLargeError) {
-					throw upstreamImageError(`Upstream response exceeded the ${OPENAI_IMAGE_JSON_BODY_LIMIT_BYTES} byte read limit.`);
+				let result: AgentImageResult;
+				try {
+					const body = JSON.parse((await readBodyWithLimit(res, OPENAI_IMAGE_JSON_BODY_LIMIT_BYTES)).toString('utf8')) as unknown;
+					result = provider.parseResult(body, requestContext);
+				} catch (err) {
+					if (err instanceof UpstreamBodyTooLargeError) {
+						throw upstreamImageError(`Upstream response exceeded the ${OPENAI_IMAGE_JSON_BODY_LIMIT_BYTES} byte read limit.`);
+					}
+					const detail = err instanceof Error ? err.message : 'Unknown response parsing error.';
+					throw upstreamImageError(`Upstream response could not be parsed. Expected ${provider.parseExpectation(requestContext)}. ${detail}`);
 				}
-				const detail = err instanceof Error ? err.message : 'Unknown response parsing error.';
-				throw upstreamImageError(`Upstream response could not be parsed. Expected ${provider.parseExpectation(requestContext)}. ${detail}`);
+				return await this.storeGeneratedImageResult(params, result, ac.signal);
+			} catch (err) {
+				const apiError = err instanceof ApiError ? err : upstreamImageError(describeImageRequestFailure(err, ac.signal.aborted));
+				noKeyFailoverErrors.add(apiError);
+				throw apiError;
 			}
-
-			return await this.storeGeneratedImageResult(params, result, ac.signal);
 		} catch (err) {
 			if (err instanceof ApiError) throw err;
 			throw upstreamImageError(describeImageRequestFailure(err, ac.signal.aborted));

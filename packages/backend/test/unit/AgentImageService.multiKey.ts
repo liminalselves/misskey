@@ -4,7 +4,7 @@
  */
 
 import { describe, test, expect, vi } from 'vitest';
-import { agentImageErrors, invokeAgentImageApiKeys, resolveAgentImageModelApiKeys } from '@/core/AgentImageService.js';
+import { agentImageErrors, invokeAgentImageApiKeys, markAgentImageErrorNoKeyFailover, resolveAgentImageModelApiKeys } from '@/core/AgentImageService.js';
 import { getEffectiveImageModels } from '@/misc/agent-image-models.js';
 import { ApiError } from '@/server/api/error.js';
 import type { MiMeta } from '@/models/Meta.js';
@@ -44,6 +44,12 @@ describe('invokeAgentImageApiKeys', () => {
 	test('does not try other keys for non-upstream errors', async () => {
 		const invoke = vi.fn(async () => { throw new ApiError(agentImageErrors.notConfigured); });
 		await expect(invokeAgentImageApiKeys(['a', 'b'], invoke)).rejects.toMatchObject({ code: agentImageErrors.notConfigured.code });
+		expect(invoke).toHaveBeenCalledTimes(1);
+	});
+
+	test('does not retry with another key after the upstream already responded', async () => {
+		const invoke = vi.fn(async () => { throw markAgentImageErrorNoKeyFailover(upstream('Upstream returned an invalid image file.')); });
+		await expect(invokeAgentImageApiKeys(['a', 'b'], invoke)).rejects.toMatchObject({ code: agentImageErrors.upstreamFailed.code });
 		expect(invoke).toHaveBeenCalledTimes(1);
 	});
 

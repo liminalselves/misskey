@@ -28,6 +28,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 			</span>
 		</button>
 	</div>
+	<MkInfo v-if="folders.length >= FOLDER_LIMIT">仅显示按名称排序的前 {{ FOLDER_LIMIT }} 个文件夹。</MkInfo>
 
 	<MkFileListForAdmin :paginator="filesPaginator" viewMode="grid"/>
 </div>
@@ -38,6 +39,7 @@ import { computed, markRaw, ref, watch } from 'vue';
 import type * as Misskey from 'misskey-js';
 import MkFileListForAdmin from '@/components/MkFileListForAdmin.vue';
 import MkButton from '@/components/MkButton.vue';
+import MkInfo from '@/components/MkInfo.vue';
 import MkResult from '@/components/global/MkResult.vue';
 import MkLoading from '@/components/global/MkLoading.vue';
 import { Paginator } from '@/utility/paginator.js';
@@ -50,6 +52,8 @@ const props = defineProps<{
 
 type FolderWithDetail = Misskey.entities.DriveFolder & { parent?: FolderWithDetail | null };
 
+// 与后端 admin/drive/folders 的 limit 上限一致
+const FOLDER_LIMIT = 100;
 const folder = ref<FolderWithDetail | null>(null);
 const folders = ref<FolderWithDetail[]>([]);
 const foldersLoading = ref(false);
@@ -86,7 +90,7 @@ async function loadFolders() {
 	foldersError.value = null;
 	try {
 		const res = await (misskeyApi as unknown as (ep: string, data: Record<string, unknown>) => Promise<{ folder: FolderWithDetail | null; folders: FolderWithDetail[] }>)(
-			'admin/drive/folders', { userId: props.userId, folderId: currentFolderId.value },
+			'admin/drive/folders', { userId: props.userId, folderId: currentFolderId.value, limit: FOLDER_LIMIT },
 		);
 		if (seq !== foldersSeq) return;
 		folder.value = res.folder;
