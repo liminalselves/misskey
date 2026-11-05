@@ -25,3 +25,7 @@ declare module 'search-index:settings' {
 declare module 'search-index:admin' {
 	export const searchIndexes: XGeneratedSearchIndexItem[];
 }
+
+declare module 'virtual:fork-changelog' {
+	export const forkChangelog: import('../../lib/fork-changelog.js').ForkChangelogRelease[];
+}

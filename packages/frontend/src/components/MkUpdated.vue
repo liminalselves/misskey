@@ -9,8 +9,14 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<div :class="$style.title"><MkSparkle>{{ i18n.ts.misskeyUpdated }}</MkSparkle></div>
 		<div :class="$style.version">✨{{ version }}🚀</div>
 		<div v-if="isBeta" :class="$style.beta">{{ i18n.ts.thankYouForTestingBeta }}</div>
+		<ul v-if="highlights.length > 0" :class="$style.highlights">
+			<li v-for="(item, i) in highlights" :key="i"><MkInlineMarkdown :text="item"/></li>
+		</ul>
 		<MkButton full @click="whatIsNew">{{ i18n.ts.whatIsNew }}</MkButton>
 		<MkButton :class="$style.gotIt" primary full @click="modal?.close()">{{ i18n.ts.gotIt }}</MkButton>
+		<a v-if="baseVersion != null" :href="upstreamUrl" target="_blank" rel="noopener noreferrer" class="_link" :class="$style.upstream" @click="modal?.close()">
+			Misskey {{ baseVersion }} 官方更新日志 <i class="ti ti-external-link"></i>
+		</a>
 	</div>
 </MkModal>
 </template>
@@ -18,11 +24,16 @@ SPDX-License-Identifier: AGPL-3.0-only
 <script lang="ts" setup>
 import { onMounted, useTemplateRef } from 'vue';
 import { version } from '@@/js/config.js';
+import { forkChangelog } from 'virtual:fork-changelog';
 import MkModal from '@/components/MkModal.vue';
 import MkButton from '@/components/MkButton.vue';
 import MkSparkle from '@/components/MkSparkle.vue';
+import MkInlineMarkdown from '@/components/MkInlineMarkdown.vue';
 import { i18n } from '@/i18n.js';
 import { confetti } from '@/utility/confetti.js';
+import { mainRouter } from '@/router.js';
+
+const HIGHLIGHT_COUNT = 3;
 
 const modal = useTemplateRef('modal');
 
@@ -31,14 +42,16 @@ const emit = defineEmits<{
 }>();
 
 const isBeta = version.includes('-beta') || version.includes('-alpha') || version.includes('-rc');
+const release = forkChangelog.find(r => r.version === version) ?? null;
+// 本 fork 版本号形如 <上游基线>-liminalselves.<N>
+const baseVersion = release?.baseVersion ?? (/-liminalselves\.\d+$/.test(version) ? version.replace(/-liminalselves\.\d+$/, '') : null);
+const upstreamUrl = baseVersion == null ? '' : `https://misskey-hub.net/docs/releases/#_${baseVersion.replace(/\./g, '')}`;
+// 弹窗只列本次发布的前几条，完整内容在更新日志页
+const highlights = release == null ? [] : release.groups.flatMap(g => g.items.map(i => i.text)).slice(0, HIGHLIGHT_COUNT);
 
 function whatIsNew() {
 	modal.value?.close();
-	if (isBeta) {
-		window.open(`https://github.com/misskey-dev/misskey/releases/tag/${version}`, '_blank');
-	} else {
-		window.open(`https://misskey-hub.net/docs/releases/#_${version.replace(/\./g, '')}`, '_blank');
-	}
+	mainRouter.push('/changelog', { query: { version } });
 }
 
 onMounted(() => {
@@ -67,13 +80,35 @@ onMounted(() => {
 
 .version {
 	margin: 1em 0;
+	overflow-wrap: anywhere;
 }
 
 .beta {
 	margin: 1em 0;
 }
 
+.highlights {
+	margin: 0 0 1.2em;
+	padding: 10px 12px 10px 2em;
+	border-radius: 8px;
+	background: var(--MI_THEME-bg);
+	text-align: left;
+	font-size: 0.88em;
+	line-height: 1.6;
+
+	> li + li {
+		margin-top: 4px;
+	}
+}
+
 .gotIt {
 	margin: 8px 0 0 0;
+}
+
+.upstream {
+	display: inline-block;
+	margin-top: 14px;
+	font-size: 0.82em;
+	opacity: 0.8;
 }
 </style>

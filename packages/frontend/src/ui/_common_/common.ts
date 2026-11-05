@@ -155,6 +155,11 @@ export function openInstanceMenu(ev: PointerEvent) {
 		icon: 'ti ti-bulb',
 		href: 'https://docs.liminalselves.top/',
 		target: '_blank',
+	}, {
+		type: 'link',
+		text: '更新日志',
+		icon: 'ti ti-sparkles',
+		to: '/changelog',
 	});
 
 	if ($i) {

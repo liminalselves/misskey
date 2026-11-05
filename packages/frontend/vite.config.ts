@@ -16,6 +16,7 @@ import pluginJson5 from './lib/vite-plugin-json5.js';
 import type { Options as SearchIndexOptions } from './lib/vite-plugin-create-search-index.js';
 import pluginCreateSearchIndex from './lib/vite-plugin-create-search-index.js';
 import pluginWatchLocales from './lib/vite-plugin-watch-locales.js';
+import pluginForkChangelog from './lib/vite-plugin-fork-changelog.js';
 import { pluginRemoveUnrefI18n } from '../frontend-builder/rollup-plugin-remove-unref-i18n.js';
 import { Features } from 'lightningcss';
 
@@ -168,6 +169,7 @@ export function getConfig(): UserConfig {
 
 		plugins: [
 			pluginWatchLocales(),
+			pluginForkChangelog(),
 			...searchIndexes.map(options => pluginCreateSearchIndex(options)),
 			pluginVue(),
 			pluginRemoveUnrefI18n(),
