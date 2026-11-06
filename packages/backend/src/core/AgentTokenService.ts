@@ -37,6 +37,13 @@ export const AGENT_SEND_PATH_SCAN_LIMIT = 500;
  */
 export const AGENT_UNIFIED_TOKENIZER_ENCODING = 'o200k_base';
 
+/** 精确计数连续占用事件循环的上限（毫秒），超过即让出 */
+const EXACT_COUNT_SLICE_MS = 8;
+/** 短文本计数本身很快，缓存只收较长文本 */
+const UNIFIED_COUNT_CACHE_MIN_CHARS = 64;
+/** 约 2 万条消息；按平均 300 字计约占 10 MB */
+const UNIFIED_COUNT_CACHE_MAX_ENTRIES = 20_000;
+
 /** Gemini tokenizer 前缀标识 */
 export const GEMINI_ENCODING_PREFIX = 'gemini:';
 
@@ -147,13 +154,18 @@ export interface WindowBands {
  * 2. 配置解析：resolveTokenConfig（统一模型编码解析）
  * 3. 计数器工厂：makeCounter
  * 4. 预算求解：resolveHistoryBudgets（字符/token 双视图同源导出）
- * 5. 权重计算：computeMessageWeights（D 累计，分块并发 + 超预算提前终止）
+ * 5. 权重计算：computeMessageWeights（D 累计，时间片让出 + 超预算提前终止）
  * 6. 窗口与区带：computeWindowAndBands（唯一区带判定 + 窗口边界）
  */
 @Injectable()
 export class AgentTokenService {
 	private readonly logger = new Logger(AgentTokenService.name);
 	private encodingCache = new Map<string, Tiktoken>();
+	/**
+	 * 统一分词器计数缓存（文本 → token 数）。消息内容一经发出基本不变，发信、压缩、总览轮询会反复统计同一批历史；
+	 * 只缓存较长文本以控制内存，按插入顺序淘汰最旧项。
+	 */
+	private unifiedCountCache = new Map<string, number>();
 	/** 自定义真分词器记忆化：undefined=尚未解析；null=词表缺失/失败（回退 approx）；Tiktoken=已加载 */
 	private customTokenizerCache = new Map<CustomTokenizerFamily, Tiktoken | null>();
 	private geminiTokenizerCache = new Map<string, { countTokens: (text: string) => Promise<{ totalTokens: number }> }>();
@@ -187,6 +199,7 @@ export class AgentTokenService {
 	@bindThis
 	public async countTokensExact(text: string, encoding?: string | null): Promise<number | null> {
 		if (!encoding) return null;
+		if (encoding === AGENT_UNIFIED_TOKENIZER_ENCODING) return this.countUnifiedTokens(text);
 		if (encoding.startsWith(GEMINI_ENCODING_PREFIX)) {
 			return this.countTokensGemini(text, encoding.slice(GEMINI_ENCODING_PREFIX.length));
 		}
@@ -331,7 +344,7 @@ export class AgentTokenService {
 
 	/**
 	 * 自最新条向旧累加 token 深度 D。
-	 * - 提供 counter 时：分块并发（CHUNK=64）精确计数；**按条**判断窗口边界——某条累计将超出 budgetForExact（即滑出窗口）时，
+	 * - 提供 counter 时：逐条精确计数并按时间片让出事件循环；**按条**判断窗口边界——某条累计将超出 budgetForExact（即滑出窗口）时，
 	 *   该条及其后（更旧）全部改用启发式估算，保证「窗外一律估算」与区带边界严格对齐；
 	 * - 未提供 counter 时：全程估算。
 	 * 整请求统一口径，保证 D 单调一致。
@@ -354,43 +367,35 @@ export class AgentTokenService {
 		if (opts.counter) {
 			const counter = opts.counter;
 			const budget = opts.budgetForExact ?? Number.POSITIVE_INFINITY;
-			const CHUNK = 64;
 			let acc = 0;
 			let pastBudget = false;
-			for (let i = 0; i < rowsNewestFirst.length; i += CHUNK) {
-				const chunk = rowsNewestFirst.slice(i, i + CHUNK);
+			// 本地分词是同步 CPU 计算：累计占用超过一个时间片就让出事件循环，长会话首次计数时不阻塞其他请求
+			let sliceStart = performance.now();
+			for (const m of rowsNewestFirst) {
+				const text = opts.formatFn(m);
 				if (!pastBudget) {
-					const texts = chunk.map(m => opts.formatFn(m));
-					const counts = await Promise.all(texts.map(t => counter(t)));
-					for (let j = 0; j < chunk.length; j++) {
-						const m = chunk[j]!;
-						const exact = counts[j];
-						const tok = exact ?? estimate(texts[j]!);
-						if (!pastBudget && acc + tok <= budget) {
-							// 窗内（累计不超预算）：精确计数
-							tokensById.set(m.id, tok);
-							estimatedById.set(m.id, exact == null);
-							acc += tok;
-							dMap.set(m.id, acc);
-						} else {
-							// 本条将滑出窗口（累计超预算）：自此条起统一改用启发式估算，窗外不再精确计数
-							pastBudget = true;
-							const estTok = estimate(texts[j]!);
-							tokensById.set(m.id, estTok);
-							estimatedById.set(m.id, true);
-							acc += estTok;
-							dMap.set(m.id, acc);
-						}
+					if (performance.now() - sliceStart > EXACT_COUNT_SLICE_MS) {
+						await new Promise<void>(resolve => setImmediate(resolve));
+						sliceStart = performance.now();
 					}
-				} else {
-					for (const m of chunk) {
-						const tok = estimate(opts.formatFn(m));
+					const exact = await counter(text);
+					const tok = exact ?? estimate(text);
+					if (acc + tok <= budget) {
+						// 窗内（累计不超预算）：精确计数
 						tokensById.set(m.id, tok);
-						estimatedById.set(m.id, true);
+						estimatedById.set(m.id, exact == null);
 						acc += tok;
 						dMap.set(m.id, acc);
+						continue;
 					}
+					// 本条将滑出窗口（累计超预算）：自此条起统一改用启发式估算，窗外不再精确计数
+					pastBudget = true;
 				}
+				const estTok = estimate(text);
+				tokensById.set(m.id, estTok);
+				estimatedById.set(m.id, true);
+				acc += estTok;
+				dMap.set(m.id, acc);
 			}
 			return { dMap, tokensById, estimatedById, useExactD: true };
 		}
@@ -585,6 +590,22 @@ export class AgentTokenService {
 			this.geminiInitPromises.delete(modelName);
 		}
 		return this.geminiTokenizerCache.get(modelName)!;
+	}
+
+	private countUnifiedTokens(text: string): number {
+		if (text.length === 0) return 0;
+		const cached = this.unifiedCountCache.get(text);
+		if (cached != null) return cached;
+		// 消息正文可能偶含 <|endoftext|> 等特殊串：按普通文本计数，不抛错回退估算
+		const count = this.getTiktokenEncoding(AGENT_UNIFIED_TOKENIZER_ENCODING).encode(text, [], []).length;
+		if (text.length >= UNIFIED_COUNT_CACHE_MIN_CHARS) {
+			if (this.unifiedCountCache.size >= UNIFIED_COUNT_CACHE_MAX_ENTRIES) {
+				const oldest = this.unifiedCountCache.keys().next().value;
+				if (oldest != null) this.unifiedCountCache.delete(oldest);
+			}
+			this.unifiedCountCache.set(text, count);
+		}
+		return count;
 	}
 
 	private getTiktokenEncoding(name: string): Tiktoken {

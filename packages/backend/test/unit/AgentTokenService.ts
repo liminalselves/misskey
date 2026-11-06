@@ -14,6 +14,30 @@ describe('AgentTokenService', () => {
 		test('Gemini 空文本直接返回 0，不初始化本地分词器', async () => {
 			await expect(svc.countTokensExact('', 'gemini:gemini-2.0-flash-001')).resolves.toBe(0);
 		});
+
+		test('统一分词器把正文里的特殊 token 串当普通文本计数，不回退估算', async () => {
+			const n = await svc.countTokensExact('hi <|endoftext|> there', AGENT_UNIFIED_TOKENIZER_ENCODING);
+			expect(n).not.toBeNull();
+			expect(n!).toBeGreaterThan(3);
+		});
+
+		test('统一分词器对同一长文本重复计数结果一致（缓存命中）', async () => {
+			const text = '她把围巾往上拉了拉，轻声说今晚的风有点冷。'.repeat(8);
+			const first = await svc.countTokensExact(text, AGENT_UNIFIED_TOKENIZER_ENCODING);
+			const second = await svc.countTokensExact(text, AGENT_UNIFIED_TOKENIZER_ENCODING);
+			expect(first).toBeGreaterThan(0);
+			expect(second).toBe(first);
+		});
+	});
+
+	describe('computeMessageWeights（精确计数窗口边界）', () => {
+		test('累计超出预算的那条起改用估算，D 单调递增', async () => {
+			const rows = Array.from({ length: 6 }, (_, i) => ({ id: `m${i}`, text: 'x'.repeat(30) }));
+			const counter = () => 10;
+			const w = await svc.computeMessageWeights(rows, { formatFn: m => m.text, counter, charsPerToken: 3, budgetForExact: 25 });
+			expect([...w.dMap.values()]).toEqual([10, 20, 30, 40, 50, 60]);
+			expect(rows.map(r => w.estimatedById.get(r.id))).toEqual([false, false, true, true, true, true]);
+		});
 	});
 
 	describe('resolveTokenConfig（全站统一分词器）', () => {
