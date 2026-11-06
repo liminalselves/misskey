@@ -40,10 +40,6 @@ SPDX-License-Identifier: AGPL-3.0-only
 			</MkInput>
 		</FormSplit>
 		<FormSplit :minWidth="260">
-			<MkSelect v-model="form.tokenizerEncoding" :items="tokenizerEncodingItems">
-				<template #label>{{ i18n.ts._agents.byokFieldTokenizer }}</template>
-				<template #caption>{{ i18n.ts._agents.byokFieldTokenizerCaption }}</template>
-			</MkSelect>
 			<MkSelect v-model="form.charsPerToken" :items="charsPerTokenItems">
 				<template #label>{{ i18n.ts._agents.byokFieldCharsPerToken }}</template>
 			</MkSelect>
@@ -136,6 +132,8 @@ function closeDialog() {
 	dialogEl.value?.close();
 }
 
+// 全站已统一按 o200k_base 计数（见后端 AGENT_UNIFIED_TOKENIZER_ENCODING），编码器选择暂不展示；保留选项表以便重新启用
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const tokenizerEncodingItems = [
 	{ value: '', label: '不使用（字符估算）' },
 	{ value: 'cl100k_base', label: 'cl100k_base（GPT-4 / GPT-3.5-turbo）' },

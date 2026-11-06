@@ -253,10 +253,6 @@ SPDX-License-Identifier: AGPL-3.0-only
 									<template #caption>设为 0 则无免费额度；每日 0 点（北京时间）重置</template>
 								</MkInput>
 								<FormSplit :minWidth="260">
-									<MkSelect v-model="row.tokenizerEncoding" :items="tokenizerEncodingItems" :readonly="row.unlisted">
-										<template #label>Token 编码器</template>
-										<template #caption>tiktoken/Gemini/GLM/DeepSeek 为精确计数（GLM/DeepSeek 需镜像预置词表，缺失时自动降级近似）；Claude 为兼容近似（≈）；不选则字符估算</template>
-									</MkSelect>
 									<MkSelect v-model="row.charsPerToken" :items="charsPerTokenItems" :readonly="row.unlisted">
 										<template #label>{{ i18n.ts._agents.adminCharsPerToken }}</template>
 										<template #caption>{{ i18n.ts._agents.adminCharsPerTokenCaption }}</template>
@@ -324,9 +320,6 @@ SPDX-License-Identifier: AGPL-3.0-only
 								</MkInput>
 							</FormSplit>
 							<FormSplit :minWidth="260">
-								<MkSelect v-model="row.tokenizerEncoding" :items="tokenizerEncodingItems">
-									<template #label>Token 编码器</template>
-								</MkSelect>
 								<MkSelect v-model="row.charsPerToken" :items="charsPerTokenItems">
 									<template #label>字符/token 估算</template>
 								</MkSelect>
@@ -1317,6 +1310,8 @@ const billingModeItems: MkSelectItem[] = [
 	{ value: 'usage', label: i18n.ts._agents.billingModeUsage },
 ];
 
+// 全站已统一按 o200k_base 计数（见后端 AGENT_UNIFIED_TOKENIZER_ENCODING），编码器选择暂不展示；保留选项表以便重新启用
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const tokenizerEncodingItems: MkSelectItem[] = [
 	{ value: '', label: '不使用（字符估算）' },
 	{ value: 'cl100k_base', label: 'cl100k_base（GPT-4 / GPT-3.5-turbo）' },
@@ -2215,9 +2210,6 @@ const configIssues = computed((): ConfigIssue[] => {
 		if (r.autoDisabledAt) issues.push({ key: `auditAuto:${r.id}`, level: 'warn', text: `外审模型「${r.name || '未命名'}」已被自动禁用。`, leaf: 'externalAudit', anchor: `audit:${r.id}` });
 	}
 	if (s.agentMem0Enabled && s.agentMem0ApiKey.trim() === '') issues.push({ key: 'mem0', level: 'error', text: '长期记忆已开启，但没有填写 API Key。', leaf: 'memory' });
-	for (const t of missingTokenizers.value) {
-		issues.push({ key: `tok:${t.family}`, level: 'warn', text: `${tokenizerFamilyLabel(t.family)} 词表缺失，相关模型的 token 计数将降级为近似值。`, leaf: 'models' });
-	}
 	return issues;
 });
 
@@ -2381,36 +2373,6 @@ const reportTypeTabs = [
 ];
 const reportType = ref<'model' | 'checkin'>('model');
 const reportsData = ref<ReportsOverview | null>(null);
-
-interface TokenizerStatus {
-	family: string;
-	available: boolean;
-	vocabPath?: string;
-	configPath?: string;
-}
-
-const tokenizerStatuses = ref<TokenizerStatus[] | null>(null);
-
-async function loadTokenizerStatus() {
-	try {
-		const res = await misskeyApi('admin/agents/tokenizer-status' as any, {});
-		tokenizerStatuses.value = res.tokenizers;
-	} catch (err) {
-		console.error('Failed to load tokenizer status:', err);
-	}
-}
-
-const missingTokenizers = computed(() => {
-	return (tokenizerStatuses.value ?? []).filter(t => !t.available);
-});
-
-function tokenizerFamilyLabel(family: string): string {
-	const labels: Record<string, string> = {
-		glm: 'GLM（智谱）',
-		deepseek: 'DeepSeek',
-	};
-	return labels[family] ?? family;
-}
 
 const externalAuditStatsLoading = ref(false);
 const externalAuditStats = ref<AgentExternalAuditModelStat[]>([]);
@@ -3345,7 +3307,6 @@ watch(activeLeaf, tab => {
 }, { immediate: true });
 
 onMounted(() => {
-	void loadTokenizerStatus();
 });
 </script>
 
