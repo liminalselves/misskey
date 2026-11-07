@@ -20,10 +20,9 @@ import type { MiAgentCharacter } from '@/models/AgentCharacter.js';
 import { MiAgentSessionCompressionSticky, type AgentCompressionStickyState } from '@/models/AgentSessionCompressionSticky.js';
 import { MiMeta } from '@/models/Meta.js';
 import { ApiError } from '@/server/api/error.js';
-import { AgentService, escapeAgentXmlText, AGENT_LLM_MEMORY_XML_OPEN, AGENT_LLM_MEMORY_XML_CLOSE } from '@/core/AgentService.js';
+import { AgentService, escapeAgentXmlText } from '@/core/AgentService.js';
 import { AgentTokenService, AGENT_MESSAGE_ENVELOPE_TOKENS, AGENT_OVERVIEW_SCAN_LIMIT, AGENT_SEND_PATH_SCAN_LIMIT, type TokenBand } from '@/core/AgentTokenService.js';
 import { agentPreviewText } from '@/core/agent-preview-text.js';
-import { AgentDashscopeMemoryService } from '@/core/AgentDashscopeMemoryService.js';
 import { bindThis } from '@/decorators.js';
 
 export { AGENT_OVERVIEW_SCAN_LIMIT, AGENT_SEND_PATH_SCAN_LIMIT };
@@ -31,7 +30,7 @@ export { AGENT_OVERVIEW_SCAN_LIMIT, AGENT_SEND_PATH_SCAN_LIMIT };
 export const AGENT_COMPRESSION_MEMORY_XML_OPEN = '<compression_memory>\n';
 export const AGENT_COMPRESSION_MEMORY_XML_CLOSE = '\n</compression_memory>';
 
-export const agentLongMemoryProviderIds = ['none', 'aliyun', 'compression'] as const;
+export const agentLongMemoryProviderIds = ['none', 'compression'] as const;
 export type AgentLongMemoryProviderId = typeof agentLongMemoryProviderIds[number];
 
 /** 与 Meta 中未配置时一致；可经管理端覆盖 */
@@ -87,7 +86,6 @@ export class AgentCompressionMemoryService {
 		private userProfilesRepository: UserProfilesRepository,
 
 		private agentService: AgentService,
-		private agentDashscopeMemoryService: AgentDashscopeMemoryService,
 		private agentModelUsageService: AgentModelUsageService,
 		private agentTokenService: AgentTokenService,
 	) {
@@ -123,39 +121,7 @@ export class AgentCompressionMemoryService {
 		meta: MiMeta,
 	): AgentLongMemoryProviderId {
 		const raw = (providerColumn ?? 'none').trim() || 'none';
-		if (raw === 'none') return 'none';
-		if (raw === 'compression') return 'compression';
-		if (raw === 'aliyun') {
-			const cfg = (meta as { agentLongMemoryConfigured?: boolean }).agentLongMemoryConfigured;
-			if (this.agentDashscopeMemoryService.isRunnable(meta) && cfg) return 'aliyun';
-			return 'none';
-		}
-		return 'none';
-	}
-
-	@bindThis
-	public isAliyunPathActive(
-		provider: AgentLongMemoryProviderId,
-		session: Pick<MiAgentSession, 'agentLongMemoryEnabled'>,
-		instanceMeta: MiMeta,
-	): boolean {
-		if (provider !== 'aliyun') return false;
-		if (session.agentLongMemoryEnabled === false) return false;
-		return this.agentDashscopeMemoryService.isRunnable(instanceMeta)
-			&& (instanceMeta as { agentLongMemoryConfigured?: boolean }).agentLongMemoryConfigured === true;
-	}
-
-	/**
-	 * 与 `buildSendPathBudgets` 共用：仅在实际走阿里云语义记忆时预留 `<memory>` 上限，否则 0）	 */
-	@bindThis
-	public computeAliyunMemoryXmlReserveIfActive(
-		provider: AgentLongMemoryProviderId,
-		session: MiAgentSession,
-		instanceMeta: MiMeta,
-	): number {
-		if (!this.isAliyunPathActive(provider, session, instanceMeta)) return 0;
-		const maxMem = Math.max(200, Math.min(50_000, session.agentLongMemoryInjectMaxChars || instanceMeta.agentMem0InjectMaxChars));
-		return AGENT_LLM_MEMORY_XML_OPEN.length + maxMem + AGENT_LLM_MEMORY_XML_CLOSE.length;
+		return raw === 'compression' ? 'compression' : 'none';
 	}
 
 	@bindThis
@@ -180,7 +146,6 @@ export class AgentCompressionMemoryService {
 		maxContextTokens: number;
 		maxOutputTokensPerCall: number;
 		historyBudgetTokens: number;
-		memReserveChars: number;
 		compReserveChars: number;
 	}> {
 		const { instanceMeta, session, character, style, provider } = params;
@@ -198,15 +163,12 @@ export class AgentCompressionMemoryService {
 			+ (session.timeAwarenessEnabled === true ? this.agentService.buildCurrentBeijingTimeBlock().length > 0 ? `\n${this.agentService.buildCurrentBeijingTimeBlock()}` : '' : ''));
 		const knownTexts = [systemBase, ...(params.additionalSystemTexts ?? []), directive];
 		let overheadTokens = knownTexts.reduce((sum, text) => sum + this.agentTokenService.countUnifiedTokens(text), 0);
-		const memReserve = this.computeAliyunMemoryXmlReserveIfActive(provider, session, instanceMeta);
 		const maxComp = this.resolveCompressionInjectMaxChars(instanceMeta);
 		const compReserve = provider === 'compression' ? this.computeCompressionReserveChars(maxComp) : 0;
-		if (memReserve > 0) overheadTokens += this.agentTokenService.resolveReservedTokenLimit(Math.max(200, Math.min(50_000, session.agentLongMemoryInjectMaxChars || instanceMeta.agentMem0InjectMaxChars)));
 		if (compReserve > 0) overheadTokens += this.agentTokenService.resolveReservedTokenLimit(maxComp);
-		if (memReserve > 0) overheadTokens += this.agentTokenService.countUnifiedTokens(AGENT_LLM_MEMORY_XML_OPEN + AGENT_LLM_MEMORY_XML_CLOSE);
 		if (compReserve > 0) overheadTokens += this.agentTokenService.countUnifiedTokens(AGENT_COMPRESSION_MEMORY_XML_OPEN + AGENT_COMPRESSION_MEMORY_XML_CLOSE);
 		const budget = this.agentTokenService.resolveHistoryBudgets({ maxContextTokens, maxOutputTokensPerCall, overheadTokens });
-		return { maxContextTokens, maxOutputTokensPerCall, historyBudgetTokens: budget.historyBudgetTokens, memReserveChars: memReserve, compReserveChars: compReserve };
+		return { maxContextTokens, maxOutputTokensPerCall, historyBudgetTokens: budget.historyBudgetTokens, compReserveChars: compReserve };
 	}
 
 	/** 未配置 meta 时区间 T1、T2 相对 H 的比例；可通过 `resolveCompressionBandRatios` 覆盖。*/

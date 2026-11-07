@@ -232,15 +232,6 @@ export const paramDef = {
 		agentByokMaxUserModels: { type: 'integer', minimum: 1, maximum: 500 },
 		agentMaxContextTokens: { type: 'integer', minimum: 256, maximum: 2000000 },
 		agentMaxOutputTokensPerCall: { type: 'integer', minimum: 1, maximum: 128000 },
-		agentMem0Enabled: { type: 'boolean' },
-		agentMem0ApiKey: { type: 'string', nullable: true },
-		agentMem0ApiBaseUrl: { type: 'string', nullable: true, maxLength: 512 },
-		agentMem0OrgId: { type: 'string', nullable: true, maxLength: 128 },
-		agentMem0ProjectId: { type: 'string', nullable: true, maxLength: 128 },
-		agentMem0TopK: { type: 'integer', minimum: 1, maximum: 100 },
-		agentMem0InjectMaxChars: { type: 'integer', minimum: 200, maximum: 50000 },
-		agentMem0AddMemoryMaxRounds: { type: 'integer', minimum: 1, maximum: 24 },
-		agentMem0AddMemoryEveryNRounds: { type: 'integer', minimum: 1, maximum: 48 },
 		agentCompressionSystemPrompt: { type: 'string', nullable: true, maxLength: 20000 },
 		agentCompressionInjectMaxChars: { type: 'integer', minimum: 200, maximum: 50000 },
 		agentCompressionMaxInputChars: { type: 'integer', minimum: 500, maximum: 200000 },
@@ -1055,34 +1046,6 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 
 			if (ps.agentMaxOutputTokensPerCall !== undefined) {
 				set.agentMaxOutputTokensPerCall = ps.agentMaxOutputTokensPerCall;
-			}
-
-			if (ps.agentMem0Enabled !== undefined) {
-				set.agentMem0Enabled = ps.agentMem0Enabled;
-			}
-			if (ps.agentMem0ApiKey !== undefined) {
-				set.agentMem0ApiKey = ps.agentMem0ApiKey === '' ? null : ps.agentMem0ApiKey;
-			}
-			if (ps.agentMem0ApiBaseUrl !== undefined) {
-				set.agentMem0ApiBaseUrl = ps.agentMem0ApiBaseUrl === '' ? null : ps.agentMem0ApiBaseUrl;
-			}
-			if (ps.agentMem0OrgId !== undefined) {
-				set.agentMem0OrgId = ps.agentMem0OrgId === '' ? null : ps.agentMem0OrgId;
-			}
-			if (ps.agentMem0ProjectId !== undefined) {
-				set.agentMem0ProjectId = ps.agentMem0ProjectId === '' ? null : ps.agentMem0ProjectId;
-			}
-			if (ps.agentMem0TopK !== undefined) {
-				set.agentMem0TopK = ps.agentMem0TopK;
-			}
-			if (ps.agentMem0InjectMaxChars !== undefined) {
-				set.agentMem0InjectMaxChars = ps.agentMem0InjectMaxChars;
-			}
-			if (ps.agentMem0AddMemoryMaxRounds !== undefined) {
-				set.agentMem0AddMemoryMaxRounds = Math.max(1, Math.min(24, ps.agentMem0AddMemoryMaxRounds));
-			}
-			if (ps.agentMem0AddMemoryEveryNRounds !== undefined) {
-				set.agentMem0AddMemoryEveryNRounds = Math.max(1, Math.min(48, ps.agentMem0AddMemoryEveryNRounds));
 			}
 
 			if (ps.agentCompressionSystemPrompt !== undefined) {

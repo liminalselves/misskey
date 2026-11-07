@@ -512,129 +512,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 						</MkButton>
 					</div>
 				</section>
-				<MkInfo v-if="longMemoryConfigured && memProvider === 'aliyun'">
-					<span :class="$style.sessionMemoryHint">{{ i18n.ts._agents.sessionMemoryHint }}</span>
-				</MkInfo>
 				<MkInfo v-if="instance.agentLlmConfigured && memProvider === 'compression' && compressionCreditInsufficient" warn>
 					<span :class="$style.sessionMemoryHint">{{ i18n.tsx._agents.sessionCompressionInsufficientCredit({ cost: String(expectedCompressionCallCost), balance: String(agentCreditBalance ?? 0) }) }}</span>
 				</MkInfo>
 				<MkInfo v-if="moderationLockNoticeVisible" warn>{{ moderationBlockUserMessage }}</MkInfo>
-				<template v-if="longMemoryConfigured && memProvider === 'aliyun'">
-					<section v-panel :class="$style.memSection">
-						<header :class="$style.memSectionHead">
-							<i class="ti ti-adjustments" :class="$style.memSectionIcon"></i>
-							<div :class="$style.memSectionHeadText">
-								<div :class="$style.memSectionTitle">{{ i18n.ts._agents.sessionMemoryParamsTitle }}</div>
-							</div>
-						</header>
-						<MkSwitch v-model="memLongMemoryEnabled" :disabled="memSaving || moderationLocksSessionWrites">
-							<template #label>{{ i18n.ts._agents.sessionMemoryEnable }}</template>
-						</MkSwitch>
-						<div :class="$style.memEnableCaption">{{ i18n.ts._agents.sessionMemoryEnableCaption }}</div>
-						<FormSplit :minWidth="260">
-							<MkInput v-model="memTopK" type="text" :disabled="memSaving || moderationLocksSessionWrites">
-								<template #label>{{ i18n.ts._agents.sessionMemoryTopK }}</template>
-								<template #caption>{{ i18n.ts._agents.sessionMemoryTopKCaption }}</template>
-							</MkInput>
-							<MkInput v-model="memInject" type="text" :disabled="memSaving || moderationLocksSessionWrites">
-								<template #label>{{ i18n.ts._agents.sessionMemoryInjectMaxChars }}</template>
-							</MkInput>
-						</FormSplit>
-						<MkInput v-model="memAddMaxRounds" type="text" :disabled="memSaving || moderationLocksSessionWrites">
-							<template #label>{{ i18n.ts._agents.sessionMemoryAddMaxRounds }}</template>
-							<template #caption>{{ addMemRoundsCaption }}</template>
-						</MkInput>
-						<MkInput v-model="memAddEveryN" type="text" :disabled="memSaving || moderationLocksSessionWrites">
-							<template #label>{{ i18n.ts._agents.sessionMemoryAddEveryNRounds }}</template>
-							<template #caption>{{ addMemEveryNCaption }}</template>
-						</MkInput>
-						<MkInput v-model="memMinScore" type="text" :disabled="memSaving || moderationLocksSessionWrites">
-							<template #label>{{ i18n.ts._agents.sessionMemoryMinScore }}</template>
-							<template #caption>{{ i18n.ts._agents.sessionMemoryMinScoreCaption }}</template>
-						</MkInput>
-						<div>
-							<MkButton primary rounded :disabled="memSaving || moderationLocksSessionWrites" @click="saveMemorySessionSettings">
-								<template v-if="memSaving"><MkLoading :em="true"/></template>
-								<template v-else>{{ i18n.ts._agents.sessionMemorySaveAction }}</template>
-							</MkButton>
-						</div>
-					</section>
-
-					<section v-panel :class="$style.memSection">
-						<header :class="$style.memSectionHead">
-							<i class="ti ti-notes" :class="$style.memSectionIcon"></i>
-							<div :class="$style.memSectionHeadText">
-								<div :class="$style.memSectionTitle">{{ i18n.ts._agents.sessionMemoryNodesTitle }}</div>
-							</div>
-							<button type="button" class="_button" :class="$style.memSectionHeadBtn" :disabled="memoryListLoading" :title="i18n.ts.reload" @click="loadMemoryNodes">
-								<i class="ti ti-refresh"></i>
-							</button>
-						</header>
-						<MkInfo warn>{{ i18n.ts._agents.sessionMemoryNodesHint }}</MkInfo>
-
-							<div v-if="memoryListLoading" class="_gaps">
-								<XControlLoading v-if="isEmbeddedControl" compact/>
-								<MkLoading v-else/>
-							</div>
-						<template v-else>
-							<div class="_gaps">
-								<MkTextarea v-model="newMemoryText" :disabled="memoryMutating || moderationLocksSessionWrites" tall pre>
-									<template #label>{{ i18n.ts._agents.sessionMemoryAddLabel }}</template>
-								</MkTextarea>
-								<MkButton primary rounded :disabled="memoryMutating || moderationLocksSessionWrites || newMemoryText.trim() === ''" @click="submitNewMemory">
-									<template v-if="memoryMutating"><MkLoading :em="true"/></template>
-									<template v-else>{{ i18n.ts._agents.sessionMemoryAddSubmit }}</template>
-								</MkButton>
-							</div>
-
-							<div v-if="memoryNodes.length === 0" class="_note">{{ i18n.ts._agents.sessionMemoryNodesEmpty }}</div>
-							<div v-else :class="['_gaps', $style.memNodesList]">
-								<div
-									v-for="node in memoryNodes"
-									:key="node.memoryNodeId"
-									:class="$style.memCard"
-								>
-									<div v-if="editingMemoryId === node.memoryNodeId" class="_gaps">
-										<MkTextarea v-model="editingMemoryText" :disabled="memoryMutating || moderationLocksSessionWrites" tall pre/>
-										<div :class="$style.memCardActions">
-											<MkButton rounded :disabled="memoryMutating || moderationLocksSessionWrites" @click="cancelEditMemory">{{ i18n.ts.cancel }}</MkButton>
-											<MkButton primary rounded :disabled="memoryMutating || moderationLocksSessionWrites || editingMemoryText.trim() === ''" @click="submitEditMemory(node.memoryNodeId)">
-												<template v-if="memoryMutating"><MkLoading :em="true"/></template>
-												<template v-else>{{ i18n.ts.save }}</template>
-											</MkButton>
-										</div>
-									</div>
-									<template v-else>
-										<div :class="$style.memMeta">
-											<span v-if="node.updatedAt != null" :class="$style.memTimeChip">{{ formatMemTs(node.updatedAt) }}</span>
-											<span v-else-if="node.createdAt != null" :class="$style.memTimeChip">{{ formatMemTs(node.createdAt) }}</span>
-										</div>
-										<div :class="$style.memContent">{{ node.content }}</div>
-										<div :class="$style.memCardActions">
-											<MkButton rounded danger :disabled="memoryMutating || moderationLocksSessionWrites" @click="confirmDeleteMemory(node.memoryNodeId)">
-												{{ i18n.ts.delete }}
-											</MkButton>
-											<MkButton rounded :disabled="memoryMutating || moderationLocksSessionWrites" @click="startEditMemory(node)">
-												{{ i18n.ts.edit }}
-											</MkButton>
-										</div>
-									</template>
-								</div>
-							</div>
-
-							<div v-if="memoryTotalPages > 1" :class="$style.memPager">
-								<MkButton rounded small :disabled="memoryMutating || moderationLocksSessionWrites || memoryPage <= 1" @click="memoryPrevPage">
-									{{ i18n.ts._agents.sessionMemoryPrevPage }}
-								</MkButton>
-								<span>{{ memoryPage }} / {{ memoryTotalPages }}</span>
-								<MkButton rounded small :disabled="memoryMutating || moderationLocksSessionWrites || memoryPage >= memoryTotalPages" @click="memoryNextPage">
-									{{ i18n.ts._agents.sessionMemoryNextPage }}
-								</MkButton>
-							</div>
-						</template>
-					</section>
-				</template>
-
 				<template v-if="memProvider === 'compression' && session.dialogueStyleId">
 					<section v-panel :class="$style.memSection">
 						<header :class="$style.memSectionHead">
@@ -1036,10 +917,6 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<div v-if="!loading && session" v-show="tab === 'chat'" :class="$style.footer">
 			<MkInfo v-if="moderationLockNoticeVisible" warn :class="$style.composeStyleHint">{{ moderationBlockUserMessage }}</MkInfo>
 			<MkInfo v-else-if="chatComposeBlockedNeedStyle" :class="$style.composeStyleHint">{{ i18n.ts._agents.chatComposeNeedStyleHint }}</MkInfo>
-			<div v-if="memoryAddHintVisible" :class="$style.memAddHint" role="status">
-				<i class="ti ti-loader-2" :class="$style.memAddHintIcon"></i>
-				<span>{{ i18n.ts._agents.longTermMemoryAddScheduledHint }}</span>
-			</div>
 			<div v-if="compressionSidecarHintVisible" :class="$style.memAddHint" role="status">
 				<i class="ti ti-loader-2" :class="$style.memAddHintIcon"></i>
 				<span>{{ i18n.ts._agents.compressionSidecarScheduledHint }}</span>
@@ -1302,13 +1179,7 @@ const session = ref<{
 	randomProactiveLastError?: { code: string; occurredAt: string } | null;
 	scheduledProactiveLastError?: { code: string; occurredAt: string } | null;
 	characterId: string;
-	agentLongMemoryEnabled?: boolean;
-	agentLongMemoryTopK?: number;
-	agentLongMemoryMinScore?: number | null;
-	agentLongMemoryInjectMaxChars?: number;
-	agentLongMemoryAddMaxRounds?: number | null;
-	agentLongMemoryAddEveryNRounds?: number | null;
-	agentLongMemoryProvider?: 'none' | 'aliyun' | 'compression';
+	agentLongMemoryProvider?: 'none' | 'compression';
 	agentReplyPending?: boolean;
 		sessionModerationBanned?: boolean;
 		characterModerationBanned?: boolean;
@@ -1604,41 +1475,18 @@ async function endSettingsHydration() {
 }
 
 const memSaving = ref(false);
-const memLongMemoryEnabled = ref(false);
-const memTopK = ref('8');
-const memMinScore = ref('');
-const memInject = ref('4000');
-const memAddMaxRounds = ref('');
-const memAddEveryN = ref('');
-
-const memProvider = ref<'none' | 'aliyun' | 'compression'>('none');
+const memProvider = ref<'none' | 'compression'>('none');
 /** 记忆页为便签摘要选择的会话模型，与会话字段 `agentCompressionModelId` 一致 */
 const memCompressionModelId = ref('');
-const longMemoryProviderItems = computed((): { value: 'none' | 'aliyun' | 'compression'; label: string }[] => {
-	const items: { value: 'none' | 'aliyun' | 'compression'; label: string }[] = [
+const longMemoryProviderItems = computed((): { value: 'none' | 'compression'; label: string }[] => {
+	const items: { value: 'none' | 'compression'; label: string }[] = [
 		{ value: 'none', label: i18n.ts._agents.sessionLongMemoryProviderNone },
 	];
 	if (instance.agentLlmConfigured === true) {
 		items.push({ value: 'compression', label: i18n.ts._agents.sessionLongMemoryProviderCompression });
 	}
-	if (longMemoryConfigured.value) {
-		items.push({ value: 'aliyun', label: i18n.ts._agents.sessionLongMemoryProviderAliyun });
-	}
-	const needAliyunOrphan = !items.some(x => x.value === 'aliyun')
-		&& (memProvider.value === 'aliyun' || session.value?.agentLongMemoryProvider === 'aliyun');
-	if (needAliyunOrphan) {
-		items.push({
-			value: 'aliyun',
-			label: i18n.ts._agents.sessionLongMemoryProviderAliyunSavedButUnavailable,
-		});
-	}
-	const needCompressionOrphan = !items.some(x => x.value === 'compression')
-		&& (memProvider.value === 'compression' || session.value?.agentLongMemoryProvider === 'compression');
-	if (needCompressionOrphan) {
-		items.push({
-			value: 'compression',
-			label: i18n.ts._agents.sessionLongMemoryProviderCompressionSavedButUnavailable,
-		});
+	if (!items.some(x => x.value === 'compression') && memProvider.value === 'compression') {
+		items.push({ value: 'compression', label: i18n.ts._agents.sessionLongMemoryProviderCompressionSavedButUnavailable });
 	}
 	return items;
 });
@@ -1647,14 +1495,13 @@ const memoryProviderSelectionDirty = computed(() => {
 	const s = session.value;
 	if (s == null) return false;
 	const raw = s.agentLongMemoryProvider;
-	const saved: 'none' | 'aliyun' | 'compression' =
-		raw === 'none' || raw === 'aliyun' || raw === 'compression' ? raw : 'none';
+	const saved: 'none' | 'compression' =
+		raw === 'compression' ? 'compression' : 'none';
 	return memProvider.value !== saved;
 });
 
 const memProviderDescription = computed((): string => {
 	if (memProvider.value === 'compression') return i18n.ts._agents.sessionLongMemoryProviderDescCompression;
-	if (memProvider.value === 'aliyun') return i18n.ts._agents.sessionLongMemoryProviderDescAliyun;
 	return i18n.ts._agents.sessionLongMemoryProviderDescNone;
 });
 
@@ -1663,29 +1510,6 @@ import type { CompressionOverviewPayload } from './agent-session.compression.vue
 const compressionRef = useTemplateRef<InstanceType<typeof XCompression>>('compressionRef');
 const bandsRef = useTemplateRef<InstanceType<typeof XMessageBands>>('bandsRef');
 
-const addMemRoundsCaption = computed(() => {
-	const raw = instance.agentMem0AddMemoryMaxRounds;
-	const n = typeof raw === 'number' && Number.isFinite(raw) ? Math.max(1, Math.min(24, Math.trunc(raw))) : 3;
-	return i18n.tsx._agents.sessionMemoryAddMaxRoundsCaption({ n });
-});
-
-const addMemEveryNCaption = computed(() => {
-	const raw = instance.agentMem0AddMemoryEveryNRounds;
-	const n = typeof raw === 'number' && Number.isFinite(raw) ? Math.max(1, Math.min(48, Math.trunc(raw))) : 1;
-	return i18n.tsx._agents.sessionMemoryAddEveryNRoundsCaption({ n });
-});
-
-const MEMORY_PAGE_SIZE = 20;
-const memoryNodes = ref<{ memoryNodeId: string; content: string; createdAt: number | null; updatedAt: number | null }[]>([]);
-const memoryListLoading = ref(false);
-const memoryMutating = ref(false);
-const memoryPage = ref(1);
-const memoryTotal = ref(0);
-const newMemoryText = ref('');
-const editingMemoryId = ref<string | null>(null);
-const editingMemoryText = ref('');
-
-const longMemoryConfigured = computed(() => Boolean((instance as Record<string, unknown>).agentLongMemoryConfigured));
 const showLongMemoryTab = computed(() => true);
 
 const moderationLocksSessionWrites = computed(() => {
@@ -1753,7 +1577,6 @@ const formDisabled = computed(() => {
 	return chatComposeDisabled.value;
 });
 
-const memoryAddHintVisible = ref(false);
 let memoryAddHintTimer: number | null = null;
 const compressionSidecarHintVisible = ref(false);
 let compressionLlmPollGen = 0;
@@ -1991,7 +1814,6 @@ function isAgentReplyPendingError(e: unknown): boolean {
 	return e != null && typeof e === 'object' && (e as { code?: string }).code === 'AGENT_REPLY_PENDING';
 }
 
-const memoryTotalPages = computed(() => Math.max(1, Math.ceil(memoryTotal.value / MEMORY_PAGE_SIZE)));
 const contextImportInputEl = useTemplateRef<HTMLInputElement>('contextImportInputEl');
 const contextExporting = ref(false);
 const contextImporting = ref(false);
@@ -2457,9 +2279,6 @@ function refreshPanelLiveData(panel: AgentControlPanel | 'chat' | 'search', mode
 			void loadAgentCreditBalance();
 			if (mode === 'enter' && session.value != null) {
 				void refreshContextWindow();
-				if (longMemoryConfigured.value) {
-					void loadMemoryNodes();
-				}
 			}
 			break;
 		case 'worldbook':
@@ -2829,13 +2648,10 @@ async function deleteAgentSession() {
 	});
 	if (canceled) return;
 	try {
-		const r = await misskeyApi('agents/sessions/delete' as Parameters<typeof misskeyApi>[0], {
+		await misskeyApi('agents/sessions/delete' as Parameters<typeof misskeyApi>[0], {
 			sessionId,
-		}) as { ok: boolean; aliyunMemoryProviderError: boolean };
+		});
 		os.toast(i18n.ts._agents.deleteSessionDone);
-		if (r.aliyunMemoryProviderError === true) {
-			await os.alert({ type: 'warning', text: i18n.ts._agents.deleteSessionAliyunWarn });
-		}
 		if (isEmbeddedControl.value) {
 			requestAgentControlClose('session-deleted');
 		} else {
@@ -2867,15 +2683,9 @@ async function loadSession() {
 			selectedModelId.value = displayModelIdForSession(session.value.agentModelId);
 			visionModelSelectionId.value = session.value.agentVisionModelId ?? visionModels.value.find(model => model.isDefault)?.id ?? '';
 			selectedStyleId.value = session.value.dialogueStyleId ?? '';
-			memLongMemoryEnabled.value = session.value.agentLongMemoryEnabled ?? false;
-			memTopK.value = String(session.value.agentLongMemoryTopK ?? 8);
-			memMinScore.value = session.value.agentLongMemoryMinScore == null ? '' : String(session.value.agentLongMemoryMinScore);
-			memInject.value = String(session.value.agentLongMemoryInjectMaxChars ?? 4000);
-			memAddMaxRounds.value = session.value.agentLongMemoryAddMaxRounds == null ? '' : String(session.value.agentLongMemoryAddMaxRounds);
-			memAddEveryN.value = session.value.agentLongMemoryAddEveryNRounds == null ? '' : String(session.value.agentLongMemoryAddEveryNRounds);
 			{
 				const p = session.value.agentLongMemoryProvider;
-				if (p === 'none' || p === 'aliyun' || p === 'compression') {
+				if (p === 'compression') {
 					memProvider.value = p;
 				} else {
 					memProvider.value = 'none';
@@ -3824,7 +3634,6 @@ async function loadEmbeddedPanelResources(panel: AgentControlPanel): Promise<voi
 	} else if (panel === 'memory') {
 		await loadAgentCreditBalance();
 		await refreshContextWindow();
-		if (longMemoryConfigured.value) await loadMemoryNodes();
 		if (session.value?.dialogueStyleId) await loadCompressionOverview();
 	}
 }
@@ -3968,111 +3777,6 @@ onBeforeUnmount(() => {
 	compressionSidecarHintVisible.value = false;
 });
 
-function formatMemTs(sec: number) {
-	return formatDateTimeString(new Date(sec * 1000), 'yyyy-MM-dd HH:mm');
-}
-
-async function loadMemoryNodes() {
-	if (!session.value) return;
-	memoryListLoading.value = true;
-	try {
-		const res = await callAgentApi('agents/memory/list', {
-			sessionId,
-			pageNum: memoryPage.value,
-			pageSize: MEMORY_PAGE_SIZE,
-		}) as {
-			memoryNodes: { memoryNodeId: string; content: string; createdAt: number | null; updatedAt: number | null }[];
-			total: number;
-		};
-		memoryNodes.value = res.memoryNodes;
-		memoryTotal.value = res.total;
-		editingMemoryId.value = null;
-	} catch (e) {
-		memoryNodes.value = [];
-		memoryTotal.value = 0;
-		os.alert({ type: 'error', text: formatApiError(e) });
-	} finally {
-		memoryListLoading.value = false;
-	}
-}
-
-function memoryPrevPage() {
-	if (memoryPage.value <= 1) return;
-	memoryPage.value -= 1;
-	void loadMemoryNodes();
-}
-
-function memoryNextPage() {
-	if (memoryPage.value >= memoryTotalPages.value) return;
-	memoryPage.value += 1;
-	void loadMemoryNodes();
-}
-
-function startEditMemory(node: { memoryNodeId: string; content: string }) {
-	editingMemoryId.value = node.memoryNodeId;
-	editingMemoryText.value = node.content;
-}
-
-function cancelEditMemory() {
-	editingMemoryId.value = null;
-	editingMemoryText.value = '';
-}
-
-async function submitNewMemory() {
-	if (!session.value || memoryMutating.value || moderationLocksSessionWrites.value) return;
-	const content = newMemoryText.value.trim();
-	if (!content) return;
-	memoryMutating.value = true;
-	try {
-		await misskeyApi('agents/memory/add', { sessionId, content });
-		newMemoryText.value = '';
-		os.toast(i18n.ts._agents.sessionMemoryAdded);
-		memoryPage.value = 1;
-		await loadMemoryNodes();
-	} catch (e) {
-		os.alert({ type: 'error', text: formatApiError(e) });
-	} finally {
-		memoryMutating.value = false;
-	}
-}
-
-async function submitEditMemory(memoryNodeId: string) {
-	if (!session.value || memoryMutating.value || moderationLocksSessionWrites.value) return;
-	const content = editingMemoryText.value.trim();
-	if (!content) return;
-	memoryMutating.value = true;
-	try {
-		await misskeyApi('agents/memory/update', { sessionId, memoryNodeId, content });
-		cancelEditMemory();
-		os.toast(i18n.ts._agents.sessionMemoryUpdated);
-		await loadMemoryNodes();
-	} catch (e) {
-		os.alert({ type: 'error', text: formatApiError(e) });
-	} finally {
-		memoryMutating.value = false;
-	}
-}
-
-async function confirmDeleteMemory(memoryNodeId: string) {
-	const { canceled } = await os.confirm({
-		type: 'warning',
-		text: i18n.ts._agents.sessionMemoryDeleteConfirm,
-	});
-	if (canceled) return;
-	if (!session.value || memoryMutating.value || moderationLocksSessionWrites.value) return;
-	memoryMutating.value = true;
-	try {
-		await misskeyApi('agents/memory/delete', { sessionId, memoryNodeId });
-		os.toast(i18n.ts._agents.sessionMemoryDeleted);
-		cancelEditMemory();
-		await loadMemoryNodes();
-	} catch (e) {
-		os.alert({ type: 'error', text: formatApiError(e) });
-	} finally {
-		memoryMutating.value = false;
-	}
-}
-
 async function saveSessionLongMemoryMode() {
 	if (!session.value || memSaving.value || moderationLocksSessionWrites.value) return;
 	if (!memoryProviderSelectionDirty.value) return;
@@ -4090,80 +3794,6 @@ async function saveSessionLongMemoryMode() {
 			void loadCompressionOverview();
 		}
 		os.toast(i18n.ts._agents.sessionLongMemoryModeSaved);
-	} catch (e) {
-		os.alert({ type: 'error', text: formatApiError(e) });
-		await loadSession();
-	} finally {
-		memSaving.value = false;
-	}
-}
-
-async function saveMemorySessionSettings() {
-	if (!session.value || memSaving.value || moderationLocksSessionWrites.value) return;
-	const topK = Math.trunc(Number(memTopK.value));
-	const inj = Math.trunc(Number(memInject.value));
-	if (!Number.isFinite(topK) || topK < 1 || topK > 100) {
-		os.alert({ type: 'error', text: i18n.ts._agents.sessionMemoryTopKInvalid });
-		return;
-	}
-	if (!Number.isFinite(inj) || inj < 200 || inj > 50000) {
-		os.alert({ type: 'error', text: i18n.ts._agents.sessionMemoryInjectInvalid });
-		return;
-	}
-	const addRTrim = memAddMaxRounds.value.trim();
-	let agentLongMemoryAddMaxRounds: number | null;
-	if (addRTrim === '') {
-		agentLongMemoryAddMaxRounds = null;
-	} else {
-		const ar = Math.trunc(Number(addRTrim));
-		if (!Number.isFinite(ar) || ar < 1 || ar > 24) {
-			os.alert({ type: 'error', text: i18n.ts._agents.sessionMemoryAddMaxRoundsInvalid });
-			return;
-		}
-		agentLongMemoryAddMaxRounds = ar;
-	}
-	const addEveryTrim = memAddEveryN.value.trim();
-	let agentLongMemoryAddEveryNRounds: number | null;
-	if (addEveryTrim === '') {
-		agentLongMemoryAddEveryNRounds = null;
-	} else {
-		const ev = Math.trunc(Number(addEveryTrim));
-		if (!Number.isFinite(ev) || ev < 1 || ev > 48) {
-			os.alert({ type: 'error', text: i18n.ts._agents.sessionMemoryAddEveryNRoundsInvalid });
-			return;
-		}
-		agentLongMemoryAddEveryNRounds = ev;
-	}
-	let agentLongMemoryMinScore: number | null = null;
-	const ms = memMinScore.value.trim();
-	if (ms !== '') {
-		const n = Number(ms);
-		if (!Number.isFinite(n) || n < 0 || n > 1) {
-			os.alert({ type: 'error', text: i18n.ts._agents.sessionMemoryMinScoreInvalid });
-			return;
-		}
-		agentLongMemoryMinScore = n;
-	}
-	memSaving.value = true;
-	try {
-		await misskeyApi('agents/sessions/update', {
-			sessionId,
-			agentLongMemoryEnabled: memLongMemoryEnabled.value,
-			agentLongMemoryTopK: topK,
-			agentLongMemoryMinScore,
-			agentLongMemoryInjectMaxChars: inj,
-			agentLongMemoryAddMaxRounds,
-			agentLongMemoryAddEveryNRounds,
-			agentLongMemoryProvider: memProvider.value,
-			agentCompressionModelId: memProvider.value === 'compression'
-				? (memCompressionModelId.value.trim() || displayCompressionModelIdForSession(session.value.agentCompressionModelId))
-				: null,
-		});
-		await loadSession();
-		if (session.value?.dialogueStyleId) {
-			void loadCompressionOverview();
-		}
-		os.toast(i18n.ts._agents.sessionMemorySaved);
 	} catch (e) {
 		os.alert({ type: 'error', text: formatApiError(e) });
 		await loadSession();
@@ -4337,13 +3967,7 @@ type SessionExportSettings = {
 	plazaStatsDialogueStyleId?: string | null;
 	agentModelId?: string | null;
 	agentVisionModelId?: string | null;
-	agentLongMemoryEnabled?: boolean;
-	agentLongMemoryTopK?: number;
-	agentLongMemoryMinScore?: number | null;
-	agentLongMemoryInjectMaxChars?: number;
-	agentLongMemoryAddMaxRounds?: number | null;
-	agentLongMemoryAddEveryNRounds?: number | null;
-	agentLongMemoryProvider?: 'none' | 'aliyun' | 'compression';
+	agentLongMemoryProvider?: 'none' | 'compression';
 	agentCompressionModelId?: string | null;
 	agentImageModelId?: string | null;
 	agentImageSettings?: Record<string, unknown>;
@@ -4669,17 +4293,11 @@ function parseImportedSessionSettings(raw: unknown): SessionExportSettings | nul
 	if ('plazaStatsDialogueStyleId' in src) out.plazaStatsDialogueStyleId = validateOptionalString(src.plazaStatsDialogueStyleId, 'plazaStatsDialogueStyleId', 1, 128, true);
 	if ('agentModelId' in src) out.agentModelId = validateOptionalString(src.agentModelId, 'agentModelId', 1, 64, true);
 	if ('agentVisionModelId' in src) out.agentVisionModelId = validateOptionalString(src.agentVisionModelId, 'agentVisionModelId', 1, 128, true);
-	if ('agentLongMemoryEnabled' in src) out.agentLongMemoryEnabled = validateBoolean(src.agentLongMemoryEnabled, 'agentLongMemoryEnabled');
-	if ('agentLongMemoryTopK' in src) out.agentLongMemoryTopK = validateInteger(src.agentLongMemoryTopK, 'agentLongMemoryTopK', 1, 100);
-	if ('agentLongMemoryMinScore' in src) out.agentLongMemoryMinScore = validateNullableNumber(src.agentLongMemoryMinScore, 'agentLongMemoryMinScore', 0, 1);
-	if ('agentLongMemoryInjectMaxChars' in src) out.agentLongMemoryInjectMaxChars = validateInteger(src.agentLongMemoryInjectMaxChars, 'agentLongMemoryInjectMaxChars', 200, 50000);
-	if ('agentLongMemoryAddMaxRounds' in src) out.agentLongMemoryAddMaxRounds = validateNullableInteger(src.agentLongMemoryAddMaxRounds, 'agentLongMemoryAddMaxRounds', 1, 24);
-	if ('agentLongMemoryAddEveryNRounds' in src) out.agentLongMemoryAddEveryNRounds = validateNullableInteger(src.agentLongMemoryAddEveryNRounds, 'agentLongMemoryAddEveryNRounds', 1, 48);
 	if ('agentLongMemoryProvider' in src) {
-		if (src.agentLongMemoryProvider !== 'none' && src.agentLongMemoryProvider !== 'aliyun' && src.agentLongMemoryProvider !== 'compression') {
-			throw new Error('会话配置无效：agentLongMemoryProvider 必须是 none、aliyun 或 compression。');
+		if (src.agentLongMemoryProvider !== 'none' && src.agentLongMemoryProvider !== 'compression') {
+			throw new Error('会话配置无效：agentLongMemoryProvider 必须是 none 或 compression。');
 		}
-		out.agentLongMemoryProvider = src.agentLongMemoryProvider;
+		out.agentLongMemoryProvider = src.agentLongMemoryProvider === 'compression' ? 'compression' : 'none';
 	}
 	if ('agentCompressionModelId' in src) out.agentCompressionModelId = validateOptionalString(src.agentCompressionModelId, 'agentCompressionModelId', 1, 64, true);
 	if ('agentImageModelId' in src) out.agentImageModelId = validateOptionalString(src.agentImageModelId, 'agentImageModelId', 1, 128, true);
@@ -5039,17 +4657,6 @@ function safeMemEveryNForHint(sessionVal: number | null | undefined, metaVal: un
 	return Math.max(1, Math.min(48, t));
 }
 
-function showMemoryAddScheduledHintNow(res: { longTermMemoryAddScheduled?: boolean }, assistantCount: number) {
-	if (res.longTermMemoryAddScheduled === true) return true;
-	if (res.longTermMemoryAddScheduled === false) return false;
-	if (!showLongMemoryTab.value || session.value == null || session.value.agentLongMemoryEnabled === false) return false;
-	const everyN = safeMemEveryNForHint(
-		session.value.agentLongMemoryAddEveryNRounds ?? null,
-		instance.agentMem0AddMemoryEveryNRounds,
-	);
-	return assistantCount > 0 && assistantCount % everyN === 0;
-}
-
 async function previewPendingWorldbookMatches(text: string) {
 	pendingWorldbookMatches.value = [];
 	try {
@@ -5123,8 +4730,6 @@ async function onFormSubmit(payload: { text: string; file: DriveFile | null }) {
 			userImageRecognitionStatus?: 'succeeded' | 'failed' | null;
 			userImageRecognitionDescription?: string | null;
 			assistantText: string;
-			longTermMemorySearchUnavailable?: boolean;
-			longTermMemoryAddScheduled?: boolean;
 			compressionLlmPending?: boolean;
 			compressionStickiesBaselineCount?: number;
 			compressionStickiesBaselineMaxUpdatedAt?: string | null;
@@ -5165,9 +4770,6 @@ async function onFormSubmit(payload: { text: string; file: DriveFile | null }) {
 		// 与私信一致：用户已在本页收到回复，立即清未读标记，避免 3 秒延迟事件误触发声音/徽标；
 		// 若用户在等待回复期间已离开本页（如点击返回，组件被 KeepAlive 缓存仅 deactivate），则没有看到回复，不清未读，让列表正常点亮
 		if (isPageActivated && !isComponentUnmounted) void markAgentSessionRead();
-		if (res.longTermMemorySearchUnavailable) {
-			os.toast(i18n.ts._agents.longTermMemorySearchUnavailable);
-		}
 		const assistantCreatedAt = new Date().toISOString();
 		const withoutOpt = messages.value.filter(m => m.id !== optimisticId);
 		const userMsg: AgentMsg = {
@@ -5195,18 +4797,6 @@ async function onFormSubmit(payload: { text: string; file: DriveFile | null }) {
 			if (!playbackCompleted) return;
 		} else {
 			messages.value = [userMsg, ...withoutOpt];
-		}
-		const assistantCount = messages.value.filter(m => m.role === 'assistant').length;
-		if (showMemoryAddScheduledHintNow(res, assistantCount)) {
-			if (memoryAddHintTimer != null) {
-				window.clearTimeout(memoryAddHintTimer);
-				memoryAddHintTimer = null;
-			}
-			memoryAddHintVisible.value = true;
-			memoryAddHintTimer = window.setTimeout(() => {
-				memoryAddHintVisible.value = false;
-				memoryAddHintTimer = null;
-			}, 4500);
 		}
 		if (res.compressionLlmPending === true) {
 			startCompressionLlmProgressPoll(

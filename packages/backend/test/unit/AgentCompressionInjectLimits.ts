@@ -18,14 +18,13 @@ import ExportSessionReview from '@/server/api/endpoints/admin/agents/governance/
 const owner = { id: 'owner1' };
 
 function instanceMeta() {
-	return { agentMem0InjectMaxChars: 8000, agentLongMemoryConfigured: true, agentCompressionInjectMaxChars: 6000 } as unknown as MiMeta;
+	return { agentCompressionInjectMaxChars: 6000 } as unknown as MiMeta;
 }
 
 function session() {
 	return {
 		id: 'session1', userId: owner.id, createdAt: new Date(), updatedAt: new Date(),
-		agentLongMemoryProvider: 'compression', agentLongMemoryEnabled: true,
-		agentLongMemoryInjectMaxChars: 4000,
+		agentLongMemoryProvider: 'compression',
 	} as unknown as MiAgentSession;
 }
 
@@ -35,7 +34,7 @@ function memoryService() {
 	return new AgentCompressionMemoryService({} as never, {} as never, {} as never, {
 		resolveModelConnectionForUser: async () => ({ maxContextTokens: 32000, maxOutputTokensPerCall: 2048 }),
 		buildSystemPrompt: () => '', buildBudgetWorldbookEntries: () => [], buildLatestUserDirectiveBlock: () => '', normalizeRules: () => [], resolveActiveRules: () => [],
-	} as never, { isRunnable: () => true } as never, {} as never, tokens);
+	} as never, {} as never, tokens);
 }
 
 function updateMetaEndpoint() {
@@ -48,14 +47,13 @@ function updateMetaEndpoint() {
 }
 
 describe('Site-wide compression injection limit', () => {
-	test('compression budgets follow the site setting, not session or Aliyun values', async () => {
+	test('compression budgets follow the site setting, not session values', async () => {
 		const service = memoryService();
 		const instance = instanceMeta();
 		const row = session();
 		const params = { instanceMeta: instance, session: row, character: {} as never, style: {} as never, provider: 'compression' as const };
 		const initial = await service.buildSendPathBudgets(params);
 		expect(initial.compReserveChars).toBe(service.computeCompressionReserveChars(6000));
-		row.agentLongMemoryInjectMaxChars = 20000;
 		Object.assign(row, { agentCompressionInjectMaxChars: 50000 });
 		expect(await service.buildSendPathBudgets(params)).toEqual(initial);
 		instance.agentCompressionInjectMaxChars = 9000;
@@ -64,26 +62,11 @@ describe('Site-wide compression injection limit', () => {
 		expect(initial.historyBudgetTokens - changed.historyBudgetTokens).toBe(3000);
 	});
 
-	test('Aliyun budgets do not change when the site compression limit changes', async () => {
-		const service = memoryService();
-		const instance = instanceMeta();
-		const row = session();
-		const params = { instanceMeta: instance, session: row, character: {} as never, style: {} as never, provider: 'aliyun' as const };
-		const initial = await service.buildSendPathBudgets(params);
-		instance.agentCompressionInjectMaxChars = 30000;
-		expect(await service.buildSendPathBudgets(params)).toEqual(initial);
-		row.agentLongMemoryInjectMaxChars = 10000;
-		const changed = await service.buildSendPathBudgets(params);
-		expect(changed.memReserveChars - initial.memReserveChars).toBe(6000);
-		expect(changed.compReserveChars).toBe(0);
-	});
-
 	test('the administrator endpoint saves and reads the global value independently', async () => {
 		const { endpoint, update, instance, metaService } = updateMetaEndpoint();
 		expect(updateMeta.requireAdmin).toBe(true);
 		await endpoint.exec({ agentCompressionInjectMaxChars: 9000 }, owner as never, null);
 		expect(update).toHaveBeenCalledWith({ agentCompressionInjectMaxChars: 9000 }, expect.any(Function));
-		expect(instance.agentMem0InjectMaxChars).toBe(8000);
 		const read = new AdminMeta({ version: 'test', url: 'https://example.com' } as never, metaService as never, { fetch: async () => ({ id: 'proxy1' }) } as never);
 		const result = await read.exec({}, owner as never, null);
 		expect(result.agentCompressionInjectMaxChars).toBe(9000);
@@ -121,7 +104,7 @@ describe('Site-wide compression injection limit', () => {
 		const review = new ExportSessionReview(sessions as never, empty as never, empty as never, empty as never, agent as never);
 		for (const endpoint of [user, review]) {
 			const result = await endpoint.exec({ sessionId: 'session1' }, owner as never, null);
-			expect(result.settings).toHaveProperty('agentLongMemoryInjectMaxChars', 4000);
+			expect(result.settings).not.toHaveProperty('agentLongMemoryInjectMaxChars');
 			expect(result.settings).not.toHaveProperty('agentCompressionInjectMaxChars');
 		}
 	});

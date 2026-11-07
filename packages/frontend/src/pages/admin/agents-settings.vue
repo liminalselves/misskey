@@ -23,10 +23,6 @@ SPDX-License-Identifier: AGPL-3.0-only
 						<span>默认模型</span>
 						<b>{{ selectedDefaultModelName }}</b>
 					</button>
-					<button v-panel type="button" class="_button" :class="$style.overviewCard" @click="activeLeaf = 'memory'">
-						<span>长期记忆</span>
-						<b>{{ form.state.agentMem0Enabled ? i18n.ts._agents.adminEnabled : i18n.ts._agents.adminNotEnabled }}</b>
-					</button>
 					<button v-panel type="button" class="_button" :class="$style.overviewCard" @click="activeLeaf = 'reports'">
 						<span>24h 请求</span>
 						<b>{{ reportsData?.overall.total ?? '—' }}</b>
@@ -321,45 +317,6 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</MkFolder>
 			</div>
 		</MkFolder>
-
-			<MkFolder v-if="activeLeaf === 'memory'" :defaultOpen="true">
-				<template #icon><i class="ti ti-brain"></i></template>
-				<template #label>{{ i18n.ts._agents.adminSectionLongMemory }}</template>
-				<div class="_gaps">
-					<MkInfo>{{ i18n.ts._agents.adminLongMemoryHint }}</MkInfo>
-					<MkSwitch v-model="form.state.agentMem0Enabled">
-						<template #label>{{ i18n.ts._agents.longMemoryEnabled }}</template>
-					</MkSwitch>
-					<MkInput v-model="form.state.agentMem0ApiKey" type="password">
-						<template #label>{{ i18n.ts._agents.dashscopeApiKey }}</template>
-						<template #caption>{{ i18n.ts._agents.dashscopeApiKeyCaption }}</template>
-					</MkInput>
-					<MkInput v-model="form.state.agentMem0ApiBaseUrl" type="text">
-						<template #label>{{ i18n.ts._agents.dashscopeApiBaseUrl }}</template>
-						<template #caption>{{ i18n.ts._agents.dashscopeApiBaseUrlCaption }}</template>
-					</MkInput>
-					<MkInput v-model="form.state.agentMem0OrgId" type="text">
-						<template #label>{{ i18n.ts._agents.memoryLibraryId }}</template>
-						<template #caption>{{ i18n.ts._agents.memoryLibraryIdCaption }}</template>
-					</MkInput>
-					<FormSplit :minWidth="260" data-settings-anchor="memory-params">
-						<MkInput v-model="form.state.agentMem0TopK" type="text">
-							<template #label>{{ i18n.ts._agents.defaultMemoryTopK }}</template>
-						</MkInput>
-						<MkInput v-model="form.state.agentMem0InjectMaxChars" type="text">
-							<template #label>{{ i18n.ts._agents.defaultMemoryInjectMaxChars }}</template>
-						</MkInput>
-					</FormSplit>
-					<MkInput v-model="form.state.agentMem0AddMemoryMaxRounds" type="text">
-						<template #label>{{ i18n.ts._agents.defaultMemoryAddMaxRounds }}</template>
-						<template #caption>{{ i18n.ts._agents.defaultMemoryAddMaxRoundsCaption }}</template>
-					</MkInput>
-					<MkInput v-model="form.state.agentMem0AddMemoryEveryNRounds" type="text">
-						<template #label>{{ i18n.ts._agents.defaultMemoryAddEveryNRounds }}</template>
-						<template #caption>{{ i18n.ts._agents.defaultMemoryAddEveryNRoundsCaption }}</template>
-					</MkInput>
-				</div>
-			</MkFolder>
 
 			<MkFolder v-if="activeLeaf === 'compression'" :defaultOpen="true">
 				<template #icon><i class="ti ti-file-zip"></i></template>
@@ -1548,14 +1505,6 @@ const initialFormState = {
 	agentByokEnabled: Boolean(meta.agentByokEnabled),
 	agentByokProviderRows: initAgentByokProviderRows(),
 	agentByokMaxUserModels: String(numFromMeta(meta.agentByokMaxUserModels, 20)),
-	agentMem0Enabled: Boolean(meta.agentMem0Enabled),
-	agentMem0ApiKey: typeof meta.agentMem0ApiKey === 'string' ? meta.agentMem0ApiKey : '',
-	agentMem0ApiBaseUrl: typeof meta.agentMem0ApiBaseUrl === 'string' ? meta.agentMem0ApiBaseUrl : '',
-	agentMem0OrgId: typeof meta.agentMem0OrgId === 'string' ? meta.agentMem0OrgId : '',
-	agentMem0TopK: String(numFromMeta(meta.agentMem0TopK, 8)),
-	agentMem0InjectMaxChars: String(numFromMeta(meta.agentMem0InjectMaxChars, 4000)),
-	agentMem0AddMemoryMaxRounds: String(numFromMeta(meta.agentMem0AddMemoryMaxRounds, 3)),
-	agentMem0AddMemoryEveryNRounds: String(numFromMeta(meta.agentMem0AddMemoryEveryNRounds, 1)),
 	agentCompressionSystemPrompt: typeof meta.agentCompressionSystemPrompt === 'string' ? meta.agentCompressionSystemPrompt : '',
 	agentCompressionInjectMaxChars: String(numFromMeta(meta.agentCompressionInjectMaxChars, 4000)),
 	agentCompressionMaxInputChars: String(numFromMeta(meta.agentCompressionMaxInputChars, 12000)),
@@ -1964,19 +1913,6 @@ function buildExternalAuditPayload(state: FormState): Record<string, unknown> {
 	};
 }
 
-function buildMemoryPayload(state: FormState): Record<string, unknown> {
-	return {
-		agentMem0Enabled: state.agentMem0Enabled,
-		agentMem0ApiKey: state.agentMem0ApiKey.trim() === '' ? null : state.agentMem0ApiKey,
-		agentMem0ApiBaseUrl: nullIfBlank(state.agentMem0ApiBaseUrl),
-		agentMem0OrgId: nullIfBlank(state.agentMem0OrgId),
-		agentMem0TopK: intField('memory', state.agentMem0TopK, 1, 100, i18n.ts._agents.defaultMemoryTopK, 'memory-params'),
-		agentMem0InjectMaxChars: intField('memory', state.agentMem0InjectMaxChars, 200, 50000, i18n.ts._agents.defaultMemoryInjectMaxChars, 'memory-params'),
-		agentMem0AddMemoryMaxRounds: intField('memory', state.agentMem0AddMemoryMaxRounds, 1, 24, i18n.ts._agents.defaultMemoryAddMaxRounds, 'memory-params'),
-		agentMem0AddMemoryEveryNRounds: intField('memory', state.agentMem0AddMemoryEveryNRounds, 1, 48, i18n.ts._agents.defaultMemoryAddEveryNRounds, 'memory-params'),
-	};
-}
-
 function buildCompressionPayload(state: FormState): Record<string, unknown> {
 	const t1s = String(state.agentCompressionBandT1Ratio ?? '').trim();
 	const t2s = String(state.agentCompressionBandT2Ratio ?? '').trim();
@@ -2011,7 +1947,6 @@ function buildSectionPayload(section: SaveSection, state: FormState): Record<str
 			agentAliyaWebUrl: nullIfBlank(state.agentAliyaWebUrl),
 		};
 		case 'models': return buildModelsPayload(state);
-		case 'memory': return buildMemoryPayload(state);
 		case 'compression': return buildCompressionPayload(state);
 		case 'externalAudit': return buildExternalAuditPayload(state);
 		case 'images': return buildImagesPayload(state);
@@ -2147,7 +2082,6 @@ const configIssues = computed((): ConfigIssue[] => {
 	for (const r of s.agentExternalAuditModelRows) {
 		if (r.autoDisabledAt) issues.push({ key: `auditAuto:${r.id}`, level: 'warn', text: `外审模型「${r.name || '未命名'}」已被自动禁用。`, leaf: 'externalAudit', anchor: `audit:${r.id}` });
 	}
-	if (s.agentMem0Enabled && s.agentMem0ApiKey.trim() === '') issues.push({ key: 'mem0', level: 'error', text: '长期记忆已开启，但没有填写 API Key。', leaf: 'memory' });
 	return issues;
 });
 

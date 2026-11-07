@@ -29,7 +29,6 @@ const AGENT_DIRS = [
 const AGENT_FILES_EXTRA = [
 	join(SRC, 'core', 'AgentService.ts'),
 	join(SRC, 'core', 'AgentCompressionMemoryService.ts'),
-	join(SRC, 'core', 'AgentDashscopeMemoryService.ts'),
 	join(SRC, 'core', 'AgentModelUsageService.ts'),
 	join(SRC, 'core', 'AgentPlazaReviewService.ts'),
 	join(SRC, 'daemons', 'AgentSessionCleanupService.ts'),

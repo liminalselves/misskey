@@ -28,7 +28,7 @@ function sticky(id: string, summaryText: string, sortIndex = 1, patch: Partial<M
 
 function memoryService() {
 	return new AgentCompressionMemoryService({} as never, {} as never, {} as never,
-		{} as never, {} as never, {} as never, new AgentTokenService());
+		{} as never, {} as never, new AgentTokenService());
 }
 
 function message(id: string, content: string, index: number): CompressionScanRow {
@@ -141,7 +141,7 @@ function compressionHarness(rows: CompressionScanRow[], currentRows: Compression
 	const service = new AgentCompressionMemoryService({ find: async () => rows } as never, repository as never, {} as never, {
 		resolveModelApiNameForUser: async () => 'model', invokeChatCompletions: invoke,
 		formatMessageForLlmHistory: format, newId: () => 'sticky1',
-	} as never, {} as never, {
+	} as never, {
 		canAffordModelCall: async () => true, startLog: async () => ({}), finishLog: async () => {},
 	} as never, {} as never);
 	vi.spyOn(service, 'reconcileStickyStates').mockResolvedValue(undefined);

@@ -16256,7 +16256,7 @@ export interface Locale extends ILocale {
          */
         "deleteSessionConfirmTitle": string;
         /**
-         * このセッションのメッセージと圧縮便箋を削除し、紐づく DashScope の記憶も削除します。モデル利用ログは残ります。元に戻せません。
+         * このセッションのメッセージと圧縮便箋を削除します。モデル利用ログは残ります。元に戻せません。
          */
         "deleteSessionConfirmText": string;
         /**
@@ -16267,86 +16267,6 @@ export interface Locale extends ILocale {
          * セッションを削除しました
          */
         "deleteSessionDone": string;
-        /**
-         * サイト上のセッションは削除済みです。DashScope 側に記憶が残っている場合は百練コンソールで確認してください。
-         */
-        "deleteSessionAliyunWarn": string;
-        /**
-         * 長期記憶（阿里云 DashScope）
-         */
-        "adminSectionLongMemory": string;
-        /**
-         * DashScope の長期記憶 API を利用します。コンソールで記憶ライブラリを作成し、API キーと任意のライブラリ ID を設定してください。各セッションでオンオフと検索パラメータを調整できます。
-         */
-        "adminLongMemoryHint": string;
-        /**
-         * 長期記憶を有効にする（インスタンス全体）
-         */
-        "longMemoryEnabled": string;
-        /**
-         * DashScope API キー
-         */
-        "dashscopeApiKey": string;
-        /**
-         * Model Studio の DASHSCOPE_API_KEY と同じ。サーバー側のみで使用します。
-         */
-        "dashscopeApiKeyCaption": string;
-        /**
-         * API オリジン（任意）
-         */
-        "dashscopeApiBaseUrl": string;
-        /**
-         * 空欄の場合は https://dashscope.aliyuncs.com
-         */
-        "dashscopeApiBaseUrlCaption": string;
-        /**
-         * 記憶ライブラリ ID（任意）
-         */
-        "memoryLibraryId": string;
-        /**
-         * 百練コンソールの記憶ライブラリカードの ID。空欄はデフォルトライブラリ。
-         */
-        "memoryLibraryIdCaption": string;
-        /**
-         * 既定の top_k
-         */
-        "defaultMemoryTopK": string;
-        /**
-         * 既定の注入最大文字数
-         */
-        "defaultMemoryInjectMaxChars": string;
-        /**
-         * 既定の top_k は 1～100 の範囲で指定してください。
-         */
-        "adminLongMemoryInvalidTopK": string;
-        /**
-         * 既定の注入文字数は 200～50000 の範囲で指定してください。
-         */
-        "adminLongMemoryInvalidInject": string;
-        /**
-         * 記憶追加時の会話ラウンド数（インスタンス既定）
-         */
-        "defaultMemoryAddMaxRounds": string;
-        /**
-         * 1 ラウンド = ユーザー 1 件 + アシスタント 1 件。百練の add に直近の完全なラウンドをまとめて送ります。
-         */
-        "defaultMemoryAddMaxRoundsCaption": string;
-        /**
-         * 記憶追加時のラウンド数は 1～24 で指定してください。
-         */
-        "adminLongMemoryInvalidAddRounds": string;
-        /**
-         * 記憶追加を何ラウンドごとに行うか（インスタンス既定）
-         */
-        "defaultMemoryAddEveryNRounds": string;
-        /**
-         * ユーザー+アシスタントが N ラウンド完了するたびに add を 1 回。1 は毎ラウンド。「直近何ラウンド送るか」と併用。
-         */
-        "defaultMemoryAddEveryNRoundsCaption": string;
-        /**
-         * 記憶追加の間隔ラウンド数は 1～48 で指定してください。
-         */
-        "adminLongMemoryInvalidAddEveryN": string;
         /**
          * セッション圧縮（スティッキー）
          */
@@ -16480,14 +16400,6 @@ export interface Locale extends ILocale {
          */
         "sessionLongMemoryProviderNone": string;
         /**
-         * Alibaba Cloud（意味記憶）
-         */
-        "sessionLongMemoryProviderAliyun": string;
-        /**
-         * Alibaba Cloud（サイト未設定。別の方式へ変更するか管理者に依頼）
-         */
-        "sessionLongMemoryProviderAliyunSavedButUnavailable": string;
-        /**
          * 便箋圧縮
          */
         "sessionLongMemoryProviderCompression": string;
@@ -16500,13 +16412,17 @@ export interface Locale extends ILocale {
          */
         "sessionLongMemoryProviderDescCompression": string;
         /**
-         * Alibaba Cloud Bailianサービスで意味記憶を抽出・検索し、長期的な関係維持に適しています。
-         */
-        "sessionLongMemoryProviderDescAliyun": string;
-        /**
          * 会話でコンテキストウィンドウの区切り線を定位し、モデルに送信されるメッセージを確認します。
          */
         "sessionMemoryContextDividerDesc": string;
+        /**
+         * 前のページ
+         */
+        "sessionMemoryPrevPage": string;
+        /**
+         * 次のページ
+         */
+        "sessionMemoryNextPage": string;
         /**
          * 便箋圧縮（会話用モデルが無効です。切り替えするか管理者に依頼）
          */
@@ -16728,11 +16644,6 @@ export interface Locale extends ILocale {
          */
         "compressionModelChangeWipeConfirm": string;
         /**
-         * このセッションのみ：DashScope への記憶の追加・検索の有無と検索の強さ。
-         * 各設定の意味が分からない場合は変更しないでください。
-         */
-        "sessionMemoryHint": string;
-        /**
          * このセッションのみ。各返信のあと便箋要約が走る場合があり、本編と別枠の単価で差し引かれます。
          */
         "sessionCompressionMemoryHint": string;
@@ -16740,126 +16651,6 @@ export interface Locale extends ILocale {
          * 1 回の要約に約 {cost} 、残高 {balance} 。不足の場合はチャージするか安いモデルに。
          */
         "sessionCompressionInsufficientCredit": ParameterizedString<"cost" | "balance">;
-        /**
-         * このセッションで長期記憶を使う
-         */
-        "sessionMemoryEnable": string;
-        /**
-         * オフのときこの長期記憶への追加・参照は行いません。新規セッションは既定でオフです。必要なときにオンにしてください。
-         */
-        "sessionMemoryEnableCaption": string;
-        /**
-         * 検索 top_k
-         */
-        "sessionMemoryTopK": string;
-        /**
-         * メッセージごとに取得する記憶ノードの最大数（1～100）。
-         */
-        "sessionMemoryTopKCaption": string;
-        /**
-         * コンテキスト注入の最大文字数
-         */
-        "sessionMemoryInjectMaxChars": string;
-        /**
-         * 記憶追加時の会話ラウンド数（任意）
-         */
-        "sessionMemoryAddMaxRounds": string;
-        /**
-         * 1 ラウンド = ユーザー 1 件 + アシスタント 1 件。空欄はインスタンス既定（現在 {n} ラウンド）。
-         */
-        "sessionMemoryAddMaxRoundsCaption": ParameterizedString<"n">;
-        /**
-         * ラウンド数は空欄、または 1～24 の整数にしてください。
-         */
-        "sessionMemoryAddMaxRoundsInvalid": string;
-        /**
-         * 記憶追加の間隔（ラウンド、任意）
-         */
-        "sessionMemoryAddEveryNRounds": string;
-        /**
-         * N ラウンド完了ごとに add を 1 回。空欄はインスタンス既定（現在 {n} ラウンド）。1 は毎ラウンド。
-         */
-        "sessionMemoryAddEveryNRoundsCaption": ParameterizedString<"n">;
-        /**
-         * 間隔は空欄、または 1～48 の整数にしてください。
-         */
-        "sessionMemoryAddEveryNRoundsInvalid": string;
-        /**
-         * 最小類似度（任意）
-         */
-        "sessionMemoryMinScore": string;
-        /**
-         * 0～1。空欄はプロバイダ既定。大きいほど厳しい一致のみ。
-         */
-        "sessionMemoryMinScoreCaption": string;
-        /**
-         * 最小類似度は空欄、または 0～1 の数値にしてください。
-         */
-        "sessionMemoryMinScoreInvalid": string;
-        /**
-         * top_k は 1～100 の範囲で指定してください。
-         */
-        "sessionMemoryTopKInvalid": string;
-        /**
-         * 注入の最大文字数は 200～50000 の範囲で指定してください。
-         */
-        "sessionMemoryInjectInvalid": string;
-        /**
-         * 記憶設定を保存
-         */
-        "sessionMemorySaveAction": string;
-        /**
-         * 記憶パラメータ
-         */
-        "sessionMemoryParamsTitle": string;
-        /**
-         * 記憶設定を保存しました
-         */
-        "sessionMemorySaved": string;
-        /**
-         * このセッションの記憶
-         */
-        "sessionMemoryNodesTitle": string;
-        /**
-         * 長期記憶サービスに紐づくこの会話の記憶です。変更すると以降の検索結果に影響します。
-         */
-        "sessionMemoryNodesHint": string;
-        /**
-         * 手動で記憶を追加
-         */
-        "sessionMemoryAddLabel": string;
-        /**
-         * 追加
-         */
-        "sessionMemoryAddSubmit": string;
-        /**
-         * 記憶はまだありません。
-         */
-        "sessionMemoryNodesEmpty": string;
-        /**
-         * 記憶を追加しました
-         */
-        "sessionMemoryAdded": string;
-        /**
-         * 記憶を更新しました
-         */
-        "sessionMemoryUpdated": string;
-        /**
-         * 記憶を削除しました
-         */
-        "sessionMemoryDeleted": string;
-        /**
-         * この記憶を削除しますか？取り消せません。
-         */
-        "sessionMemoryDeleteConfirm": string;
-        /**
-         * 前へ
-         */
-        "sessionMemoryPrevPage": string;
-        /**
-         * 次へ
-         */
-        "sessionMemoryNextPage": string;
         /**
          * コンテキストの入出力
          */
@@ -16900,14 +16691,6 @@ export interface Locale extends ILocale {
          * インポート失敗：メッセージ本文は空にできません。
          */
         "sessionMemoryImportContextEmptyContent": string;
-        /**
-         * 長期記憶の検索に失敗しました。今回の応答には記憶を注入していません
-         */
-        "longTermMemorySearchUnavailable": string;
-        /**
-         * 長期記憶に書き込み中…
-         */
-        "longTermMemoryAddScheduledHint": string;
         /**
          * ここより上の履歴はモデルに送られません
          */

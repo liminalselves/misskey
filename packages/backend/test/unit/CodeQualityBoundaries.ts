@@ -13,7 +13,6 @@ import { readBodyWithLimit } from '@/misc/read-body-with-limit.js';
 
 vi.doMock('../../src/core/AgentService.js', () => ({
 	AgentService: class {}, escapeAgentXmlText: (text: string) => text,
-	AGENT_LLM_MEMORY_XML_OPEN: '<memory>', AGENT_LLM_MEMORY_XML_CLOSE: '</memory>',
 }));
 vi.doMock('../../src/core/QueryService.js', () => ({ QueryService: class {} }));
 vi.doMock('../../src/core/RoleService.js', () => ({ RoleService: class {} }));
@@ -22,11 +21,10 @@ vi.doMock('../../src/core/S3Service.js', () => ({ S3Service: class {} }));
 const { default: DownloadUrl } = await import('../../src/server/api/endpoints/drive/files/download-url.js');
 const { default: DeleteCharacter } = await import('../../src/server/api/endpoints/agents/characters/delete.js');
 
-vi.doMock('../../src/core/AgentDashscopeMemoryService.js', () => ({ AgentDashscopeMemoryService: class {} }));
 vi.doMock('../../src/core/AgentModelUsageService.js', () => ({ AgentModelUsageService: class {} }));
 vi.doMock('../../src/core/AgentTokenService.js', () => ({
 	AgentTokenService: class {}, AGENT_LLM_APPROX_CHARS_PER_TOKEN: 3,
-	AGENT_OVERVIEW_SCAN_LIMIT: 500, AGENT_SEND_PATH_SCAN_LIMIT: 500,
+	AGENT_OVERVIEW_SCAN_LIMIT: 500, AGENT_SEND_PATH_SCAN_LIMIT: 500, AGENT_MESSAGE_ENVELOPE_TOKENS: 4,
 }));
 vi.doMock('../../src/core/NotificationService.js', () => ({ NotificationService: class {} }));
 vi.doMock('../../src/core/UserSuspendService.js', () => ({ UserSuspendService: class {} }));
@@ -147,7 +145,7 @@ describe('Compression result commit boundary', () => {
 			invokeChatCompletions: async () => ({ text: 'summary' }),
 			formatMessageForLlmHistory: (m: { content: string }) => m.content,
 			newId: () => 'sticky1',
-		} as never, {} as never, {
+		} as never, {
 			canAffordModelCall: async () => true, startLog: async () => ({}), finishLog: async () => {},
 		} as never, {} as never);
 		Object.defineProperties(service, {

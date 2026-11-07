@@ -185,17 +185,6 @@ export class MetaEntityService {
 			agentStickerEnabled: instance.agentStickerEnabled === true,
 			agentStickerMaxPerMessage: instance.agentStickerMaxPerMessage,
 			agentImageCostPerCall: instance.agentImageCostPerCall,
-			agentLongMemoryConfigured: instance.agentMem0Enabled === true && (instance.agentMem0ApiKey?.trim().length ?? 0) > 0,
-			agentMem0AddMemoryMaxRounds: (() => {
-				const v = Math.trunc(Number(instance.agentMem0AddMemoryMaxRounds));
-				if (!Number.isFinite(v)) return 3;
-				return Math.max(1, Math.min(24, v));
-			})(),
-			agentMem0AddMemoryEveryNRounds: (() => {
-				const v = Math.trunc(Number(instance.agentMem0AddMemoryEveryNRounds));
-				if (!Number.isFinite(v)) return 1;
-				return Math.max(1, Math.min(48, v));
-			})(),
 			agentProactiveMinSilenceMinutes: (() => {
 				const v = Math.trunc(Number(instance.agentProactiveMinSilenceMinutes));
 				if (!Number.isFinite(v)) return 30;

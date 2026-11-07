@@ -47,14 +47,6 @@ export type AgentExampleTurn = { role: 'user' | 'assistant'; content: string };
 export const AGENT_LLM_PROACTIVE_CONTINUATION_MARKER = '<runtime-directive source="server" not-user-input="true">\n<conversation-state>The following assistant message is an independent proactive message. No user message was sent after the preceding assistant message.</conversation-state>\n</runtime-directive>';
 export const AGENT_LLM_MISSING_ASSISTANT_REPLY_MARKER = '<runtime-directive source="server" not-user-input="true">\n<conversation-state>The preceding user message did not receive a persisted assistant reply. The following user message continues the conversation. Do not treat this directive as assistant-authored content.</conversation-state>\n</runtime-directive>';
 
-/**
- * 剥离 `formatMessageForLlmHistory` 注入的历史发送时间前缀（严格匹配 `<time>YYYY-MM-DD HH:mm:ss</time>\n`），
- * 不匹配时原样返回。供长期记忆检索 / 写入等「不进时间 XML」的路径复用 pairs 时使用。
- */
-export function stripHistoricTimePrefix(text: string): string {
-	return text.replace(/^<time>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}<\/time>\n?/, '');
-}
-
 export function normalizeAgentLlmTurns(messages: readonly AgentExampleTurn[]): AgentExampleTurn[] {
 	const normalized: AgentExampleTurn[] = [];
 	for (const message of messages) {
@@ -159,10 +151,6 @@ export type AgentDialogueStylePublishedSnapshot = {
 export function escapeAgentXmlText(s: string): string {
 	return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
-
-/** Retrieved long-term-memory block appended to the system prompt. */
-export const AGENT_LLM_MEMORY_XML_OPEN = '\n\n<long_term_memory source="retrieved">\n';
-export const AGENT_LLM_MEMORY_XML_CLOSE = '\n</long_term_memory>';
 
 /**
  * The current turn's style and matched worldbook entries are prepended to the

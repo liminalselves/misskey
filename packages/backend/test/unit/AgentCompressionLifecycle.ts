@@ -64,7 +64,7 @@ function harness(rows: CompressionScanRow[], stored: MiAgentSessionCompressionSt
 	};
 	const tokens = new AgentTokenService();
 	const service = new AgentCompressionMemoryService(messages as never, repository as never, {} as never,
-		agent as never, {} as never, usage as never, tokens);
+		agent as never, usage as never, tokens);
 	const session = { id: 's1', userId: 'owner', characterId: 'character', dialogueStyleId: 'style', agentLongMemoryProvider: 'compression', timeAwarenessEnabled: false } as MiAgentSession;
 	const instance = { agentCompressionMaxInputChars: 500, agentCompressionInjectMaxChars: 4000 } as MiMeta;
 	const sidecar = { dMap: new Map(rows.map((row, i) => [row.id, 95 - i * 5])), hSend: 100, t1: 80, t2: 90 };

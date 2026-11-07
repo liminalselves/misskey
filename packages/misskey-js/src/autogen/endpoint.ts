@@ -346,14 +346,6 @@ import type {
 	AgentsImagesPlaceholderStatusRequest,
 	AgentsImagesPlaceholderStatusResponse,
 	AgentsImagesPresetsListResponse,
-	AgentsMemoryAddRequest,
-	AgentsMemoryAddResponse,
-	AgentsMemoryDeleteRequest,
-	AgentsMemoryDeleteResponse,
-	AgentsMemoryListRequest,
-	AgentsMemoryListResponse,
-	AgentsMemoryUpdateRequest,
-	AgentsMemoryUpdateResponse,
 	AgentsMessagesAbortRequest,
 	AgentsMessagesAbortResponse,
 	AgentsMessagesDeleteRequest,
@@ -1211,10 +1203,6 @@ export type Endpoints = {
 	'agents/images/models/list': { req: EmptyRequest; res: AgentsImagesModelsListResponse };
 	'agents/images/placeholder-status': { req: AgentsImagesPlaceholderStatusRequest; res: AgentsImagesPlaceholderStatusResponse };
 	'agents/images/presets/list': { req: EmptyRequest; res: AgentsImagesPresetsListResponse };
-	'agents/memory/add': { req: AgentsMemoryAddRequest; res: AgentsMemoryAddResponse };
-	'agents/memory/delete': { req: AgentsMemoryDeleteRequest; res: AgentsMemoryDeleteResponse };
-	'agents/memory/list': { req: AgentsMemoryListRequest; res: AgentsMemoryListResponse };
-	'agents/memory/update': { req: AgentsMemoryUpdateRequest; res: AgentsMemoryUpdateResponse };
 	'agents/messages/abort': { req: AgentsMessagesAbortRequest; res: AgentsMessagesAbortResponse };
 	'agents/messages/delete': { req: AgentsMessagesDeleteRequest; res: AgentsMessagesDeleteResponse };
 	'agents/messages/import-context': { req: AgentsMessagesImportContextRequest; res: AgentsMessagesImportContextResponse };
