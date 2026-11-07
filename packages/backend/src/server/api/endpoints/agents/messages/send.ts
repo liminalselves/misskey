@@ -423,17 +423,6 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					session.agentLongMemoryProvider,
 					instanceMeta,
 				);
-				const budgets = await this.agentCompressionMemoryService.buildSendPathBudgets({
-					instanceMeta,
-					session,
-					character,
-					style,
-					provider: longMemProvider,
-				});
-				const { maxContextTokens, maxOutputTokensPerCall, historyBudget, historyBudgetTokens, charsPerToken } = budgets;
-				// 统一经 AgentTokenService 解析计数器；发信滑窗按 token 口径截断（exact 或 estimate），与分割线/区带同源
-				const sendTokenConfig = await this.agentTokenService.resolveTokenConfigForUser(instanceMeta, session.agentModelId ?? instanceMeta.agentDefaultModelId, me.id);
-				const sendExactCounter = this.agentTokenService.makeCounter(sendTokenConfig);
 				const selectedWorldbook = this.agentService.selectWorldbookEntriesForPrompt(character, userText);
 				const activeRules = this.agentService.resolveActiveRules(
 					this.agentService.normalizeRules(character.rules),
@@ -451,13 +440,29 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				const stickerBlocks = await this.agentStickerService.buildSystemBlocks(instanceMeta, character);
 				const emojiListForLlm = stickerBlocks.emojiList;
 				const convertUserStickersForLlm = (text: string) => this.agentStickerService.convertUserTextForLlm(text, emojiListForLlm);
+				const activeImageModel = this.agentImageService.resolveImageModel(instanceMeta, session.agentImageModelId);
+				let systemSuffix = stickerBlocks.block;
+				if (session.scheduledProactiveEnabled) systemSuffix += `\n${this.agentProactiveScheduleService.systemPromptBlock}`;
+				if (activeImageModel != null) systemSuffix += `\n\n<agent_image_generation_protocol>\n${AGENT_IMAGE_WORLD_PROMPT}\n</agent_image_generation_protocol>`;
+				if (performance != null) systemSuffix += `\n\n${buildPerformanceSystemBlock(performance, instanceMeta.agentPerformanceSystemPrompt)}`;
+				const scheduledDirective = await this.agentProactiveScheduleService.prependScheduleContext('', session);
+				const directiveText = this.agentService.buildLatestUserDirectiveBlock(style, selectedWorldbook, activeRules)
+					+ scheduledDirective
+					+ (session.timeAwarenessEnabled === true ? this.agentService.buildCurrentBeijingTimeBlock() : '');
+				const budgets = await this.agentCompressionMemoryService.buildSendPathBudgets({
+					instanceMeta, session, character, style, provider: longMemProvider,
+					additionalSystemTexts: [systemSuffix], directiveText,
+				});
+				const { historyBudgetTokens } = budgets;
+				const sendTokenConfig = await this.agentTokenService.resolveTokenConfigForUser(instanceMeta, session.agentModelId ?? instanceMeta.agentDefaultModelId, me.id);
+				const sendExactCounter = this.agentTokenService.makeCounter(sendTokenConfig);
 
 				let longTermMemorySearchUnavailable = false;
 				let longTermMemoryAddScheduled = false;
 				const memActive = this.agentCompressionMemoryService.isAliyunPathActive(longMemProvider, session, instanceMeta);
 				const maxMemChars = Math.max(200, Math.min(50_000, session.agentLongMemoryInjectMaxChars || instanceMeta.agentMem0InjectMaxChars));
 
-				const { messages: history, dMap: historyDMap } = await this.agentService.loadRecentMessagesForContextWithMeta(session.id, historyBudget, AGENT_OVERVIEW_SCAN_LIMIT, { exactTokenCounter: sendExactCounter, tokenBudget: historyBudgetTokens, charsPerToken, timeAwarenessEnabled: session.timeAwarenessEnabled === true });
+				const { messages: history, dMap: historyDMap } = await this.agentService.loadRecentMessagesForContextWithMeta(session.id, historyBudgetTokens, AGENT_OVERVIEW_SCAN_LIMIT, { exactTokenCounter: sendExactCounter, timeAwarenessEnabled: session.timeAwarenessEnabled === true });
 				const historyForApi = history.filter(m => (m.role === 'user' || m.role === 'assistant') && m.id !== userMsg!.id);
 				const regexRules = this.agentService.normalizeRegexRules(character.regexRules);
 				const regexFiltered = await this.agentService.applyRegexRulesBatch(
@@ -521,24 +526,11 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					if (retrieved === null) {
 						longTermMemorySearchUnavailable = true;
 					} else if (retrieved.length > 0) {
-						memoryBlock = retrieved;
+						memoryBlock = this.agentTokenService.truncateTextToTokenLimit(retrieved, this.agentTokenService.resolveReservedTokenLimit(maxMemChars));
 					}
 				}
 
-				let system = systemBase + stickerBlocks.block;
-				if (session.scheduledProactiveEnabled) {
-					system += `\n${this.agentProactiveScheduleService.systemPromptBlock}`;
-				}
-				const activeImageModel = this.agentImageService.resolveImageModel(instanceMeta, session.agentImageModelId);
-				if (activeImageModel != null) {
-					system += '\n\n<agent_image_generation_protocol>\n';
-					system += AGENT_IMAGE_WORLD_PROMPT;
-					system += '\n';
-					system += '</agent_image_generation_protocol>';
-				}
-				if (performance != null) {
-					system += '\n\n' + buildPerformanceSystemBlock(performance, instanceMeta.agentPerformanceSystemPrompt);
-				}
+			let system = systemBase + systemSuffix;
 				if (memoryBlock.length > 0) {
 					system += AGENT_LLM_MEMORY_XML_OPEN + escapeAgentXmlText(memoryBlock) + AGENT_LLM_MEMORY_XML_CLOSE;
 				}

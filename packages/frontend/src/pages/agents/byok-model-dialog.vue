@@ -39,11 +39,6 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<template #label>{{ i18n.ts._agents.byokFieldOutput }}</template>
 			</MkInput>
 		</FormSplit>
-		<FormSplit :minWidth="260">
-			<MkSelect v-model="form.charsPerToken" :items="charsPerTokenItems">
-				<template #label>{{ i18n.ts._agents.byokFieldCharsPerToken }}</template>
-			</MkSelect>
-		</FormSplit>
 		<MkInfo v-if="submitError" warn>{{ submitError }}</MkInfo>
 	</div>
 	<template #footer>
@@ -78,8 +73,6 @@ type Provider = {
 	apiModelName?: string | null;
 	maxContextTokens?: number | null;
 	maxOutputTokensPerCall?: number | null;
-	tokenizerEncoding?: string | null;
-	charsPerToken?: number | null;
 };
 
 type ModelLike = {
@@ -89,8 +82,6 @@ type ModelLike = {
 	apiModelName: string;
 	maxContextTokens: number;
 	maxOutputTokensPerCall: number;
-	tokenizerEncoding: string | null;
-	charsPerToken: number | null;
 	providerId: string | null;
 };
 
@@ -118,10 +109,6 @@ const form = reactive({
 	apiModelName: props.model?.apiModelName ?? provider.value?.apiModelName ?? '',
 	maxContextTokens: String(props.model?.maxContextTokens ?? provider.value?.maxContextTokens ?? 8192),
 	maxOutputTokensPerCall: String(props.model?.maxOutputTokensPerCall ?? provider.value?.maxOutputTokensPerCall ?? 2048),
-	tokenizerEncoding: props.model?.tokenizerEncoding ?? provider.value?.tokenizerEncoding ?? '',
-	charsPerToken: props.model?.charsPerToken != null
-		? String(props.model.charsPerToken)
-		: (provider.value?.charsPerToken != null ? String(provider.value.charsPerToken) : ''),
 });
 
 const submitting = ref(false);
@@ -131,42 +118,6 @@ const dialogEl = useTemplateRef('dialogEl');
 function closeDialog() {
 	dialogEl.value?.close();
 }
-
-// 全站已统一按 o200k_base 计数（见后端 AGENT_UNIFIED_TOKENIZER_ENCODING），编码器选择暂不展示；保留选项表以便重新启用
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-const tokenizerEncodingItems = [
-	{ value: '', label: '不使用（字符估算）' },
-	{ value: 'cl100k_base', label: 'cl100k_base（GPT-4 / GPT-3.5-turbo）' },
-	{ value: 'o200k_base', label: 'o200k_base（GPT-4o / GPT-4o-mini）' },
-	{ value: 'p50k_base', label: 'p50k_base（text-davinci-003）' },
-	{ value: 'r50k_base', label: 'r50k_base（text-davinci-002）' },
-	{ value: 'gpt2', label: 'gpt2（GPT-2）' },
-	{ value: 'gemini:gemini-3-pro-preview', label: 'Gemini 3' },
-	{ value: 'gemini:gemini-2.5-pro', label: 'Gemini 2.5 Pro' },
-	{ value: 'gemini:gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
-	{ value: 'gemini:gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash Lite' },
-	{ value: 'glm:glm-5.5', label: 'GLM-5.5（智谱，真分词器）' },
-	{ value: 'glm:glm-5.2', label: 'GLM-5.2（智谱，真分词器）' },
-	{ value: 'glm:glm-4.7', label: 'GLM-4.7（智谱，真分词器）' },
-	{ value: 'glm:glm-4.5', label: 'GLM-4.5（智谱，真分词器）' },
-	{ value: 'glm:glm-4-plus', label: 'GLM-4 Plus（智谱，真分词器）' },
-	{ value: 'glm:glm-4-flash', label: 'GLM-4 Flash（智谱，真分词器）' },
-	{ value: 'deepseek:deepseek-v4-pro', label: 'DeepSeek-V4 Pro（真分词器）' },
-	{ value: 'deepseek:deepseek-v4-flash', label: 'DeepSeek-V4 Flash（真分词器）' },
-	{ value: 'deepseek:deepseek-v3', label: 'DeepSeek-V3（真分词器）' },
-	{ value: 'deepseek:deepseek-r1', label: 'DeepSeek-R1（真分词器）' },
-	{ value: 'claude:claude-fable-5', label: 'Claude Fable 5（兼容近似）' },
-	{ value: 'claude:claude-opus-4-8', label: 'Claude Opus 4.8（兼容近似）' },
-	{ value: 'claude:claude-sonnet-4-5', label: 'Claude Sonnet 4.5（兼容近似）' },
-];
-
-const charsPerTokenItems = [
-	{ value: '', label: '默认（3 字符/token）' },
-	{ value: '2', label: '2（英文为主）' },
-	{ value: '3', label: '3（中英混合）' },
-	{ value: '4', label: '4（中文为主）' },
-	{ value: '6', label: '6（代码/日文）' },
-];
 
 const nameConflict = computed(() => {
 	const t = form.name.trim();
@@ -196,8 +147,6 @@ async function submit() {
 		apiModelName,
 		maxContextTokens: Math.max(256, Math.min(2_000_000, Math.trunc(Number(form.maxContextTokens) || 8192))),
 		maxOutputTokensPerCall: Math.max(1, Math.min(128_000, Math.trunc(Number(form.maxOutputTokensPerCall) || 2048))),
-		tokenizerEncoding: form.tokenizerEncoding.trim() === '' ? null : form.tokenizerEncoding.trim(),
-		charsPerToken: form.charsPerToken.trim() === '' ? null : Math.max(1, Math.min(10, Math.trunc(Number(form.charsPerToken) || 3))),
 	};
 	submitting.value = true;
 	try {

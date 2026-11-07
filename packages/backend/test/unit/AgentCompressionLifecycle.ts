@@ -62,7 +62,7 @@ function harness(rows: CompressionScanRow[], stored: MiAgentSessionCompressionSt
 		assertAgentsEnabled: () => {}, assertAgentUserSessionChatAllowed: () => {}, assertSessionStylePolicy: () => {},
 		effectiveCharacterForLlm: () => ({}), effectiveStyleForSession: () => ({}),
 	};
-	const tokens = Object.create(AgentTokenService.prototype) as AgentTokenService;
+	const tokens = new AgentTokenService();
 	const service = new AgentCompressionMemoryService(messages as never, repository as never, {} as never,
 		agent as never, {} as never, usage as never, tokens);
 	const session = { id: 's1', userId: 'owner', characterId: 'character', dialogueStyleId: 'style', agentLongMemoryProvider: 'compression', timeAwarenessEnabled: false } as MiAgentSession;
@@ -95,10 +95,10 @@ describe('Compression context state projection', () => {
 
 	test.each(['user', 'review'])('%s overview projects current states without any database write', async kind => {
 		const h = harness([message('m1', 1), message('m2', 2)], [sticky('old', 'm1', 'm2')]);
-		vi.spyOn(h.service, 'buildSendPathBudgets').mockResolvedValue({ historyBudget: 300, historyBudgetTokens: 100, charsPerToken: 3 } as never);
-		vi.spyOn(h.tokens, 'resolveTokenConfigForUser').mockResolvedValue({ tokenMode: 'estimate', charsPerToken: 3 } as never);
+		vi.spyOn(h.service, 'buildSendPathBudgets').mockResolvedValue({ historyBudgetTokens: 100 } as never);
+		vi.spyOn(h.tokens, 'resolveTokenConfigForUser').mockResolvedValue({ encoding: 'o200k_base', tokenMode: 'exact' } as never);
 		vi.spyOn(h.tokens, 'computeMessageWeights').mockResolvedValue({
-			dMap: new Map([['m1', 110], ['m2', 90]]), tokensById: new Map(), estimatedById: new Map(), useExactD: false,
+			dMap: new Map([['m1', 110], ['m2', 90]]), tokensById: new Map(), estimatedById: new Map(), useExactD: false, exactFirstOutIndex: null,
 		});
 		const resource = { findOneByOrFail: async () => ({}) };
 		const Endpoint = kind === 'user' ? UserOverview : ReviewOverview;

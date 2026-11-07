@@ -1,6 +1,6 @@
 # 分词器词表缺失告警功能
 
-> 当前状态：全站上下文计数已统一为 `o200k_base`（`AgentTokenService` 的 `AGENT_UNIFIED_TOKENIZER_ENCODING`），每模型编码不再参与解析。本文所述词表加载与 `tokenizer-status` 端点仍保留，但管理页不再调用该端点、不再显示告警；重新启用每模型编码时一并恢复。
+> 当前状态：全站上下文计数已统一为 `o200k_base`（`AgentTokenService` 的 `AGENT_UNIFIED_TOKENIZER_ENCODING`），每模型编码与字符比率均不再参与预算、窗口或预览。本文所述词表加载与 `tokenizer-status` 端点仍保留，但管理页不再调用该端点、不再显示告警；重新启用每模型编码时一并恢复。
 
 ## 功能概述
 

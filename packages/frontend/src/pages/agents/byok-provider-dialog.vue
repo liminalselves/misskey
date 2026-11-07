@@ -51,8 +51,6 @@ type Provider = {
 	apiModelName?: string | null;
 	maxContextTokens?: number | null;
 	maxOutputTokensPerCall?: number | null;
-	tokenizerEncoding?: string | null;
-	charsPerToken?: number | null;
 };
 
 defineProps<{

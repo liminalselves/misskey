@@ -21,11 +21,9 @@ import { getActiveLlmModels, getEffectiveLlmModels, isAgentLlmRunnable, type Age
 import { AgentRegexBatchFilter, AgentRegexFilterTimeoutError, AGENT_REGEX_FILTER_TIMEOUT_MS } from '@/core/agent-regex-filter.js';
 import { MetaService } from '@/core/MetaService.js';
 import { IdService } from '@/core/IdService.js';
-import { AgentTokenService, AGENT_LLM_APPROX_CHARS_PER_TOKEN } from '@/core/AgentTokenService.js';
+import { AgentTokenService, AGENT_MESSAGE_ENVELOPE_TOKENS, type TokenCounter } from '@/core/AgentTokenService.js';
 import { AgentUserModelService, isAgentUserModelId } from '@/core/AgentUserModelService.js';
 import { ApiError } from '@/server/api/error.js';
-
-export { AGENT_LLM_APPROX_CHARS_PER_TOKEN };
 
 /** Maximum length for a single agent text field. */
 export const AGENT_TEXT_FIELD_MAX = 100_000;
@@ -297,6 +295,13 @@ export const agentsErrors = {
 		kind: 'client' as const,
 		httpStatusCode: 400,
 	},
+	contextBudgetExceeded: {
+		message: 'The system prompt and current input exceed the configured context budget.',
+		code: 'AGENTS_CONTEXT_BUDGET_EXCEEDED',
+		id: '1a3b7e62-6f0f-4d4b-a6f4-f8a3ba2f52b1',
+		kind: 'client' as const,
+		httpStatusCode: 400,
+	},
 	llmRequestFailed: {
 		message: 'Upstream LLM request failed.',
 		code: 'AGENTS_LLM_FAILED',
@@ -523,7 +528,6 @@ export class AgentService {
 		multiKeyEnabled: boolean;
 		maxContextTokens: number;
 		maxOutputTokensPerCall: number;
-		charsPerToken: number;
 	} {
 		this.assertLlmConfigured(instance);
 		const pick = this.pickModelOrThrow(instance, modelId);
@@ -542,7 +546,6 @@ export class AgentService {
 			multiKeyEnabled: pick.multiKeyEnabled === true,
 			maxContextTokens: pick.maxContextTokens,
 			maxOutputTokensPerCall: pick.maxOutputTokensPerCall,
-			charsPerToken: Number.isFinite(pick.charsPerToken) && pick.charsPerToken! >= 1 ? pick.charsPerToken! : AGENT_LLM_APPROX_CHARS_PER_TOKEN,
 		};
 	}
 
@@ -554,22 +557,12 @@ export class AgentService {
 		apiKeyRaw: string;
 		maxContextTokens: number;
 		maxOutputTokensPerCall: number;
-		charsPerToken: number;
-		tokenizerEncoding: string | null;
 	}> {
 		if (modelId && isAgentUserModelId(modelId)) {
 			return this.agentUserModelService.resolveConnection(userId, modelId);
 		}
 		const conn = this.resolveModelConnection(instance, modelId);
-		return {
-			...conn,
-			tokenizerEncoding: (() => {
-				const pick = modelId
-					? getEffectiveLlmModels(instance).find(m => m.id === modelId)
-					: (getEffectiveLlmModels(instance).find(m => m.id === instance.agentDefaultModelId) ?? getEffectiveLlmModels(instance)[0]);
-				return pick?.tokenizerEncoding ?? null;
-			})(),
-		};
+		return conn;
 	}
 
 	@bindThis
@@ -1079,100 +1072,50 @@ export class AgentService {
 		return turns.reduce((sum, m) => sum + m.content.length + overheadPerMessage, 0);
 	}
 
-	/**
-	 * Convert character-budget estimates to approximate tokens for UI display.
-	 * @deprecated 委托至 {@link AgentTokenService.estimateTokens}；保留签名以兼容现有调用方。
-	 */
-	@bindThis
-	public approxLlmTokensFromCharEstimate(chars: number, charsPerToken: number = AGENT_LLM_APPROX_CHARS_PER_TOKEN): number {
-		return this.agentTokenService.estimateTokens(chars, charsPerToken);
-	}
-
 	@bindThis
 	public async loadRecentMessagesForContextWithMeta(
 		sessionId: string,
-		maxContextChars: number,
+		historyBudgetTokens: number,
 		takeLimit = 500,
-		options?: {
-			/** 精确 token 计数器（配置了 tokenizerEncoding 时提供）；与 tokenBudget 同时存在时按精确 token 截断 */
-			exactTokenCounter?: (text: string) => Promise<number | null> | number | null;
-			/** token 口径历史预算；提供时按 token 口径截断（与消息分段区带同源），否则回退字符口径 */
-			tokenBudget?: number;
-			/** 估算回退用的每 token 字符数（默认 AGENT_LLM_APPROX_CHARS_PER_TOKEN） */
-			charsPerToken?: number;
-			/** 开启时，历史 user 消息在格式化时注入其发送时间 `<time>` 块（与发信路径同一口径） */
+		options: {
+			exactTokenCounter: TokenCounter;
 			timeAwarenessEnabled?: boolean;
 		},
 	): Promise<{
-		/** createdAt is used by compression windows; LLM history uses role/content. */
 		messages: Pick<MiAgentMessage, 'id' | 'role' | 'content' | 'createdAt' | 'imageFileId' | 'imageRecognitionStatus' | 'imageRecognitionDescription' | 'proactiveScheduleControlRaw' | 'proactiveScheduleControlError' | 'timeTrusted'>[];
 		truncated: boolean;
 		oldestIncludedId: string | null;
-		/** token 口径下：自新向旧的全量扫描行（仅 user/assistant，原始 content）与累计 D，供压缩侧车复用，避免重复加载/分词 */
 		scannedRows?: Pick<MiAgentMessage, 'id' | 'role' | 'content' | 'createdAt' | 'imageFileId' | 'imageRecognitionStatus' | 'imageRecognitionDescription' | 'proactiveScheduleControlRaw' | 'proactiveScheduleControlError' | 'timeTrusted'>[];
 		dMap?: Map<string, number>;
 	}> {
 		const rows = await this.agentMessagesRepository.find({
 			where: { sessionId },
-			// Match AgentCompressionMemoryService ordering for same-timestamp rows.
 			order: { createdAt: 'DESC', id: 'DESC' },
 			take: takeLimit,
 			select: { id: true, role: true, content: true, createdAt: true, imageFileId: true, imageRecognitionStatus: true, imageRecognitionDescription: true, proactiveScheduleControlRaw: true, proactiveScheduleControlError: true, timeTrusted: true },
 		});
 		type PickedMsg = Pick<MiAgentMessage, 'id' | 'role' | 'content' | 'createdAt' | 'imageFileId' | 'imageRecognitionStatus' | 'imageRecognitionDescription' | 'proactiveScheduleControlRaw' | 'proactiveScheduleControlError' | 'timeTrusted'>;
-		const useTokenMode = options?.tokenBudget != null && options.tokenBudget > 0;
-		const timeAwarenessEnabled = options?.timeAwarenessEnabled === true;
-		// token 口径：经 AgentTokenService 统一 D 累计 + 窗口边界，与消息分段区带结构性一致
-		if (useTokenMode) {
-			const rowsD = this.agentTokenService.filterRowsForChatHistoryD(rows);
-			const formatFn = (m: MiAgentMessage): string => this.formatMessageForLlmHistory(m, { timeAwarenessEnabled });
-			const weights = await this.agentTokenService.computeMessageWeights(rowsD, {
-				formatFn,
-				counter: options!.exactTokenCounter,
-				charsPerToken: options!.charsPerToken ?? AGENT_LLM_APPROX_CHARS_PER_TOKEN,
-				budgetForExact: options!.exactTokenCounter ? options!.tokenBudget : undefined,
-			});
-			// t1=t2=1 收数为 new/out 两态：仅用于滑窗截断（边界仍由 bandBudget 决定）
-			const bands = this.agentTokenService.computeWindowAndBands(rowsD, weights.dMap, {
-				historyBudgetTokens: options!.tokenBudget!,
-				t1Ratio: 1,
-				t2Ratio: 1,
-			});
-			const picked: PickedMsg[] = rowsD
-				.filter(m => bands.bandById.get(m.id) !== 'out')
-				.reverse()
-				.map(m => ({
-					id: m.id,
-					role: m.role,
-					content: formatFn(m),
-					createdAt: m.createdAt,
-					imageFileId: m.imageFileId,
-					imageRecognitionStatus: m.imageRecognitionStatus,
-					imageRecognitionDescription: m.imageRecognitionDescription,
-					proactiveScheduleControlRaw: m.proactiveScheduleControlRaw,
-					proactiveScheduleControlError: m.proactiveScheduleControlError,
-					timeTrusted: m.timeTrusted,
-				}));
-			const truncated = bands.truncated || rows.length >= takeLimit;
-			return { messages: picked, truncated, oldestIncludedId: bands.windowBoundaryId, scannedRows: rowsD, dMap: weights.dMap };
-		}
-		// 字符口径（遗留路径，如主动消息的小预算场景）
-		const picked: PickedMsg[] = [];
-		let used = 0;
-		let truncated = false;
-		for (const m of rows) {
-			if (m.role !== 'user' && m.role !== 'assistant') continue;
-			const content = this.formatMessageForLlmHistory(m, { timeAwarenessEnabled });
-			const len = content.length;
-			if (used + len > maxContextChars) {
-				truncated = true;
-				break;
-			}
-			used += len;
-			picked.unshift({
+		const rowsD = this.agentTokenService.filterRowsForChatHistoryD(rows);
+		const formatFn = (m: MiAgentMessage): string => this.formatMessageForLlmHistory(m, { timeAwarenessEnabled: options.timeAwarenessEnabled === true });
+		const weights = await this.agentTokenService.computeMessageWeights(rowsD, {
+			formatFn,
+			counter: options.exactTokenCounter,
+			budgetForExact: historyBudgetTokens,
+			perMessageTokens: AGENT_MESSAGE_ENVELOPE_TOKENS,
+		});
+		const bands = this.agentTokenService.computeWindowAndBands(rowsD, weights.dMap, {
+			historyBudgetTokens,
+			t1Ratio: 1,
+			t2Ratio: 1,
+			exactFirstOutIndex: weights.exactFirstOutIndex,
+		});
+		const picked: PickedMsg[] = rowsD
+			.filter(m => bands.bandById.get(m.id) !== 'out')
+			.reverse()
+			.map(m => ({
 				id: m.id,
 				role: m.role,
-				content,
+				content: formatFn(m),
 				createdAt: m.createdAt,
 				imageFileId: m.imageFileId,
 				imageRecognitionStatus: m.imageRecognitionStatus,
@@ -1180,22 +1123,10 @@ export class AgentService {
 				proactiveScheduleControlRaw: m.proactiveScheduleControlRaw,
 				proactiveScheduleControlError: m.proactiveScheduleControlError,
 				timeTrusted: m.timeTrusted,
-			});
-		}
-		if (!truncated && rows.length >= takeLimit) {
-			truncated = true;
-		}
-		const oldestIncludedId = picked.length > 0 ? picked[0]!.id : null;
-		return { messages: picked, truncated, oldestIncludedId };
+			}));
+		return { messages: picked, truncated: bands.truncated || rows.length >= takeLimit, oldestIncludedId: bands.windowBoundaryId, scannedRows: rowsD, dMap: weights.dMap };
 	}
 
-	/**
-	 * 将消息格式化为实际进入 LLM history 的文本（含图片识别 XML、主动调度控制块等）。
-	 * 公开供 `AgentCompressionMemoryService` 计算 D 累计时使用，确保与发信滑窗口径一致。
-	 * `opts.timeAwarenessEnabled` 开启且消息为 user、createdAt 可信（timeTrusted !== false）时，
-	 * 前缀注入该消息发送时间的 `<time>` 块（与 `buildCurrentBeijingTimeBlock` 同格式、同时区）。
-	 * 时间 XML 仅存在于返回的 LLM 文本中，绝不写入 DB / 长期记忆；压缩输入（AgentCompressionMemoryService）按本格式携带时间、图片识别等必要数据，与发信滑窗口径一致。
-	 */
 	@bindThis
 	public formatMessageForLlmHistory(message: Pick<MiAgentMessage, 'role' | 'content' | 'imageFileId' | 'imageRecognitionStatus' | 'imageRecognitionDescription' | 'proactiveScheduleControlRaw' | 'proactiveScheduleControlError'> & { createdAt?: Date; timeTrusted?: boolean }, opts?: { timeAwarenessEnabled?: boolean }): string {
 		const timePrefix = opts?.timeAwarenessEnabled === true && message.role === 'user' && message.timeTrusted !== false && message.createdAt
@@ -1235,6 +1166,7 @@ export class AgentService {
 				apiModelName: connection.apiModelName,
 				safeBase: await this.resolveSafeLlmBaseUrl(connection.baseUrlRaw),
 				apiKeyRaw: connection.apiKeyRaw,
+				maxContextTokens: connection.maxContextTokens,
 				maxOutputTokensPerCall: connection.maxOutputTokensPerCall,
 				isByok: true,
 			});
@@ -1252,6 +1184,7 @@ export class AgentService {
 			apiModelName: connection.apiModelName,
 			safeBase,
 			apiKeyRaw,
+			maxContextTokens: connection.maxContextTokens,
 			maxOutputTokensPerCall: connection.maxOutputTokensPerCall,
 			isByok: false,
 		}));
@@ -1271,10 +1204,37 @@ export class AgentService {
 		}
 	}
 
+	/**
+	 * 最终文本经过正则、表情转换和协议包装后，可能仍超出本地预算。
+	 * 在发起上游请求前统一从最旧历史排除；保留最新用户输入，绝不靠估算放宽限制。
+	 */
+	@bindThis
+	public fitAgentPromptToTokenBudget(params: {
+		system: string;
+		messages: { role: 'user' | 'assistant'; content: string }[];
+		userText: string;
+		maxContextTokens: number;
+		maxOutputTokensPerCall: number;
+	}): { role: 'user' | 'assistant'; content: string }[] {
+		let turns = normalizeAgentLlmTurns([...params.messages, { role: 'user', content: params.userText }]);
+		const promptTokens = () => this.agentTokenService.countUnifiedTokens(params.system)
+			+ turns.reduce((sum, m) => sum + this.agentTokenService.countUnifiedTokens(m.content) + AGENT_MESSAGE_ENVELOPE_TOKENS, 0);
+		while (turns.length > 1 && promptTokens() + params.maxOutputTokensPerCall > params.maxContextTokens) {
+			turns = turns.length > 2 && turns[0]!.role === 'user' && turns[1]!.role === 'assistant'
+				? turns.slice(2)
+				: turns.slice(1);
+		}
+		if (promptTokens() + params.maxOutputTokensPerCall > params.maxContextTokens) {
+			throw new ApiError(agentsErrors.contextBudgetExceeded);
+		}
+		return turns;
+	}
+
 	private async invokeChatCompletionsWithKey(params: AgentInvokeChatCompletionsParams, connection: {
 		apiModelName: string;
 		safeBase: URL;
 		apiKeyRaw: string;
+		maxContextTokens: number;
 		maxOutputTokensPerCall: number;
 		isByok: boolean;
 	}): Promise<{ text: string; usage: AgentLlmUsage | null }> {
@@ -1284,11 +1244,13 @@ export class AgentService {
 		if (params.maxTokens != null && Number.isFinite(params.maxTokens)) {
 			maxOut = Math.max(1, Math.min(maxOut, Math.trunc(params.maxTokens)));
 		}
-		const turns = normalizeAgentLlmTurns([
-			...(params.prefixMessages ?? []),
-			...params.messages,
-			{ role: 'user', content: params.userText },
-		]);
+		const turns = this.fitAgentPromptToTokenBudget({
+			system: params.system,
+			messages: [...(params.prefixMessages ?? []), ...params.messages],
+			userText: params.userText,
+			maxContextTokens: connection.maxContextTokens,
+			maxOutputTokensPerCall: maxOut,
+		});
 		const body = {
 			model: apiModelName,
 			messages: [

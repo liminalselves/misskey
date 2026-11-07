@@ -252,12 +252,6 @@ SPDX-License-Identifier: AGPL-3.0-only
 									<template #label>每日免费次数</template>
 									<template #caption>设为 0 则无免费额度；每日 0 点（北京时间）重置</template>
 								</MkInput>
-								<FormSplit :minWidth="260">
-									<MkSelect v-model="row.charsPerToken" :items="charsPerTokenItems" :readonly="row.unlisted">
-										<template #label>{{ i18n.ts._agents.adminCharsPerToken }}</template>
-										<template #caption>{{ i18n.ts._agents.adminCharsPerTokenCaption }}</template>
-									</MkSelect>
-								</FormSplit>
 							</div>
 						</div>
 					</template>
@@ -318,11 +312,6 @@ SPDX-License-Identifier: AGPL-3.0-only
 								<MkInput v-model="row.maxOutputTokensPerCall" type="text">
 									<template #label>输出长度（token）</template>
 								</MkInput>
-							</FormSplit>
-							<FormSplit :minWidth="260">
-								<MkSelect v-model="row.charsPerToken" :items="charsPerTokenItems">
-									<template #label>字符/token 估算</template>
-								</MkSelect>
 							</FormSplit>
 						</div>
 						<div>
@@ -1161,8 +1150,6 @@ type AgentLlmModelRow = {
 	pricePerMillionOutputTokens: string;
 	/** 高峰时段价格倍率（留空/1 不启用） */
 	peakPriceMultiplier: string;
-	charsPerToken: string;
-	tokenizerEncoding: string;
 	dailyFreeQuota: string;
 };
 
@@ -1284,8 +1271,6 @@ type AgentByokProviderRow = {
 	apiModelName: string;
 	maxContextTokens: string;
 	maxOutputTokensPerCall: string;
-	tokenizerEncoding: string;
-	charsPerToken: string;
 };
 
 type AgentReviewTriggerRule = {
@@ -1308,45 +1293,6 @@ const agentImageProviderValues = new Set(agentImageProviderItems.flatMap(item =>
 const billingModeItems: MkSelectItem[] = [
 	{ value: 'per_call', label: i18n.ts._agents.billingModePerCall },
 	{ value: 'usage', label: i18n.ts._agents.billingModeUsage },
-];
-
-// 全站已统一按 o200k_base 计数（见后端 AGENT_UNIFIED_TOKENIZER_ENCODING），编码器选择暂不展示；保留选项表以便重新启用
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-const tokenizerEncodingItems: MkSelectItem[] = [
-	{ value: '', label: '不使用（字符估算）' },
-	{ value: 'cl100k_base', label: 'cl100k_base（GPT-4 / GPT-3.5-turbo）' },
-	{ value: 'o200k_base', label: 'o200k_base（GPT-4o / GPT-4o-mini）' },
-	{ value: 'p50k_base', label: 'p50k_base（text-davinci-003）' },
-	{ value: 'r50k_base', label: 'r50k_base（text-davinci-002）' },
-	{ value: 'gpt2', label: 'gpt2（GPT-2）' },
-	{ value: 'gemini:gemini-3-pro-preview', label: 'Gemini 3' },
-	{ value: 'gemini:gemini-2.5-pro', label: 'Gemini 2.5 Pro' },
-	{ value: 'gemini:gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
-	{ value: 'gemini:gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash Lite' },
-	{ value: 'gemini:gemini-2.0-flash-001', label: 'Gemini 2.0 Flash' },
-	{ value: 'gemini:gemini-2.0-flash-lite-001', label: 'Gemini 2.0 Flash Lite' },
-	{ value: 'glm:glm-5.5', label: 'GLM-5.5（智谱，真分词器）' },
-	{ value: 'glm:glm-5.2', label: 'GLM-5.2（智谱，真分词器）' },
-	{ value: 'glm:glm-4.7', label: 'GLM-4.7（智谱，真分词器）' },
-	{ value: 'glm:glm-4.5', label: 'GLM-4.5（智谱，真分词器）' },
-	{ value: 'glm:glm-4-plus', label: 'GLM-4 Plus（智谱，真分词器）' },
-	{ value: 'glm:glm-4-flash', label: 'GLM-4 Flash（智谱，真分词器）' },
-	{ value: 'deepseek:deepseek-v4-pro', label: 'DeepSeek-V4 Pro（真分词器）' },
-	{ value: 'deepseek:deepseek-v4-flash', label: 'DeepSeek-V4 Flash（真分词器）' },
-	{ value: 'deepseek:deepseek-v3', label: 'DeepSeek-V3（真分词器）' },
-	{ value: 'deepseek:deepseek-r1', label: 'DeepSeek-R1（真分词器）' },
-	{ value: 'claude:claude-fable-5', label: 'Claude Fable 5（兼容近似）' },
-	{ value: 'claude:claude-opus-4-8', label: 'Claude Opus 4.8（兼容近似）' },
-	{ value: 'claude:claude-opus-4-7', label: 'Claude Opus 4.7（兼容近似）' },
-	{ value: 'claude:claude-sonnet-4-5', label: 'Claude Sonnet 4.5（兼容近似）' },
-];
-
-const charsPerTokenItems: MkSelectItem[] = [
-	{ value: '', label: '默认（3 字符/token）' },
-	{ value: '2', label: '2（英文为主）' },
-	{ value: '3', label: '3（中英混合）' },
-	{ value: '4', label: '4（中文为主）' },
-	{ value: '6', label: '6（代码/日文）' },
 ];
 
 function numFromMeta(v: unknown, fallback: number): number {
@@ -1398,8 +1344,6 @@ function initAgentLlmModelRows(): AgentLlmModelRow[] {
 			pricePerMillionInputCacheMissTokens: typeof o.pricePerMillionInputCacheMissTokens === 'number' && Number.isFinite(o.pricePerMillionInputCacheMissTokens) ? String(o.pricePerMillionInputCacheMissTokens) : '',
 			pricePerMillionOutputTokens: typeof o.pricePerMillionOutputTokens === 'number' && Number.isFinite(o.pricePerMillionOutputTokens) ? String(o.pricePerMillionOutputTokens) : '',
 			peakPriceMultiplier: typeof o.peakPriceMultiplier === 'number' && Number.isFinite(o.peakPriceMultiplier) ? String(o.peakPriceMultiplier) : '',
-			charsPerToken: typeof o.charsPerToken === 'number' && Number.isFinite(o.charsPerToken) ? String(o.charsPerToken) : '',
-			tokenizerEncoding: typeof o.tokenizerEncoding === 'string' ? o.tokenizerEncoding : '',
 			dailyFreeQuota: typeof o.dailyFreeQuota === 'number' && Number.isFinite(o.dailyFreeQuota) ? String(o.dailyFreeQuota) : '0',
 		});
 	}
@@ -1439,8 +1383,6 @@ function initAgentByokProviderRows(): AgentByokProviderRow[] {
 			apiModelName: typeof o.apiModelName === 'string' ? o.apiModelName : '',
 			maxContextTokens: String(numFromMeta(o.maxContextTokens, 8192)),
 			maxOutputTokensPerCall: String(numFromMeta(o.maxOutputTokensPerCall, 2048)),
-			tokenizerEncoding: typeof o.tokenizerEncoding === 'string' ? o.tokenizerEncoding : '',
-			charsPerToken: typeof o.charsPerToken === 'number' && Number.isFinite(o.charsPerToken) ? String(o.charsPerToken) : '',
 		};
 	});
 }
@@ -1785,8 +1727,6 @@ function buildModelsPayload(state: FormState): Record<string, unknown> {
 			pricePerMillionInputCacheMissTokens: price(row.pricePerMillionInputCacheMissTokens, i18n.ts._agents.billingInputCacheMiss),
 			pricePerMillionOutputTokens: price(row.pricePerMillionOutputTokens, i18n.ts._agents.billingOutput),
 			peakPriceMultiplier: peak,
-			charsPerToken: row.charsPerToken.trim() !== '' ? Number(row.charsPerToken) : undefined,
-			tokenizerEncoding: row.tokenizerEncoding.trim() !== '' ? row.tokenizerEncoding.trim() : undefined,
 			dailyFreeQuota: quota > 0 ? quota : undefined,
 		});
 	}
@@ -1808,8 +1748,6 @@ function buildModelsPayload(state: FormState): Record<string, unknown> {
 			apiModelName: nullIfBlank(row.apiModelName),
 			maxContextTokens: row.maxContextTokens.trim() === '' ? undefined : intField('models', row.maxContextTokens, 256, 2_000_000, `${row.name} · 上下文长度`, anchor),
 			maxOutputTokensPerCall: row.maxOutputTokensPerCall.trim() === '' ? undefined : intField('models', row.maxOutputTokensPerCall, 1, 128_000, `${row.name} · 输出长度`, anchor),
-			tokenizerEncoding: nullIfBlank(row.tokenizerEncoding),
-			charsPerToken: row.charsPerToken.trim() === '' ? undefined : Number(row.charsPerToken),
 		});
 	}
 
@@ -2673,8 +2611,6 @@ function addRow() {
 		pricePerMillionInputCacheMissTokens: '',
 		pricePerMillionOutputTokens: '',
 		peakPriceMultiplier: '',
-		charsPerToken: '',
-		tokenizerEncoding: '',
 		dailyFreeQuota: '0',
 	});
 	expandedLlmModelIds.value.push(id);
@@ -2689,16 +2625,14 @@ function onAddByokProvider() {
 		apiModelName: '',
 		maxContextTokens: '8192',
 		maxOutputTokensPerCall: '2048',
-		tokenizerEncoding: '',
-		charsPerToken: '',
 	});
 }
 
 /** 官方 DeepSeek 渠道预置：单价取自官方文档（元/百万 tokens），管理员仅需补 API Key */
 function addDeepSeekOfficialRow(variant: 'flash' | 'pro') {
 	const preset = variant === 'flash'
-		? { name: 'DeepSeek-V4-Flash（官方）', apiModelName: 'deepseek-v4-flash', tokenizerEncoding: 'deepseek:deepseek-v4-flash', hit: '0.02', miss: '1', output: '2' }
-		: { name: 'DeepSeek-V4-Pro（官方）', apiModelName: 'deepseek-v4-pro', tokenizerEncoding: 'deepseek:deepseek-v4-pro', hit: '0.025', miss: '3', output: '6' };
+		? { name: 'DeepSeek-V4-Flash（官方）', apiModelName: 'deepseek-v4-flash', hit: '0.02', miss: '1', output: '2' }
+		: { name: 'DeepSeek-V4-Pro（官方）', apiModelName: 'deepseek-v4-pro', hit: '0.025', miss: '3', output: '6' };
 	const id = genId();
 	form.state.agentLlmModelRows.push({
 		id,
@@ -2718,8 +2652,6 @@ function addDeepSeekOfficialRow(variant: 'flash' | 'pro') {
 		pricePerMillionInputCacheMissTokens: preset.miss,
 		pricePerMillionOutputTokens: preset.output,
 		peakPriceMultiplier: '2',
-		charsPerToken: '',
-		tokenizerEncoding: preset.tokenizerEncoding,
 		dailyFreeQuota: '0',
 	});
 	expandedLlmModelIds.value.push(id);

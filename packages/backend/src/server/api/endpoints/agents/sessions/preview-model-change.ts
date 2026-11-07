@@ -88,15 +88,15 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			if (!r.compressionProvider) {
 				return {
 					willInvalidateCompression: false,
-					historyBudgetTokensBefore: this.agentService.approxLlmTokensFromCharEstimate(r.historyBudgetBefore, r.charsPerTokenBefore),
-					historyBudgetTokensAfter: this.agentService.approxLlmTokensFromCharEstimate(r.historyBudgetAfter, r.charsPerTokenAfter),
+					historyBudgetTokensBefore: r.historyBudgetBefore,
+					historyBudgetTokensAfter: r.historyBudgetAfter,
 					stickyCount: r.stickyCount,
 				};
 			}
 			return {
 				willInvalidateCompression: r.willInvalidateCompression,
-				historyBudgetTokensBefore: this.agentService.approxLlmTokensFromCharEstimate(r.historyBudgetBefore, r.charsPerTokenBefore),
-				historyBudgetTokensAfter: this.agentService.approxLlmTokensFromCharEstimate(r.historyBudgetAfter, r.charsPerTokenAfter),
+				historyBudgetTokensBefore: r.historyBudgetBefore,
+				historyBudgetTokensAfter: r.historyBudgetAfter,
 				stickyCount: r.stickyCount,
 			};
 		});

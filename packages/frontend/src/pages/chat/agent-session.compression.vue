@@ -36,7 +36,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<div v-show="stickiesOpen" :class="$style.stickyBody">
 					<p :class="$style.sectionCaption">{{ i18n.ts._agents.compressionStickyFolderCaption }}</p>
 					<p v-if="overview.injectionPreview" :class="$style.sectionCaption">
-						预计注入 {{ overview.injectionPreview.willInjectCount }}/{{ overview.injectionPreview.eligibleCount }} 条 · {{ overview.injectionPreview.willInjectChars }}/{{ overview.injectionPreview.maxChars }} 字符。仅拼接激活便签，超出上限时保留末尾内容，首条可能只保留部分。
+						预计注入 {{ overview.injectionPreview.willInjectCount }}/{{ overview.injectionPreview.eligibleCount }} 条 · {{ overview.injectionPreview.willInjectChars }}/{{ overview.injectionPreview.maxChars }} 字符 · {{ overview.injectionPreview.willInjectTokens }}/{{ overview.injectionPreview.maxTokens }} Token（统一口径）。仅拼接激活便签，超出上限时保留末尾内容，首条可能只保留部分。
 					</p>
 
 					<!-- 空状态引导 -->
@@ -189,6 +189,8 @@ export type CompressionOverviewPayload = {
 		eligibleChars: number;
 		willInjectCount: number;
 		willInjectChars: number;
+		maxTokens: number;
+		willInjectTokens: number;
 	} | null;
 };
 

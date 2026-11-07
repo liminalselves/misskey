@@ -31,10 +31,10 @@ function session() {
 
 function memoryService() {
 	const tokens = new AgentTokenService();
-	vi.spyOn(tokens, 'resolveTokenConfigForUser').mockResolvedValue({ tokenMode: 'estimate', charsPerToken: 3 });
+	vi.spyOn(tokens, 'resolveTokenConfigForUser').mockResolvedValue({ encoding: 'o200k_base', tokenMode: 'exact' });
 	return new AgentCompressionMemoryService({} as never, {} as never, {} as never, {
 		resolveModelConnectionForUser: async () => ({ maxContextTokens: 32000, maxOutputTokensPerCall: 2048 }),
-		buildSystemPrompt: () => '', buildBudgetWorldbookEntries: () => [], buildLatestUserDirectiveBlock: () => '',
+		buildSystemPrompt: () => '', buildBudgetWorldbookEntries: () => [], buildLatestUserDirectiveBlock: () => '', normalizeRules: () => [], resolveActiveRules: () => [],
 	} as never, { isRunnable: () => true } as never, {} as never, tokens);
 }
 
@@ -61,7 +61,7 @@ describe('Site-wide compression injection limit', () => {
 		instance.agentCompressionInjectMaxChars = 9000;
 		const changed = await service.buildSendPathBudgets(params);
 		expect(changed.compReserveChars - initial.compReserveChars).toBe(3000);
-		expect(initial.historyBudget - changed.historyBudget).toBe(3000);
+		expect(initial.historyBudgetTokens - changed.historyBudgetTokens).toBe(3000);
 	});
 
 	test('Aliyun budgets do not change when the site compression limit changes', async () => {

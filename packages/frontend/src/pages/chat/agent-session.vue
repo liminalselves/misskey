@@ -2080,8 +2080,6 @@ async function loadUserModels() {
 			apiModelName: string;
 			maxContextTokens: number;
 			maxOutputTokensPerCall: number;
-			tokenizerEncoding: string | null;
-			charsPerToken: number | null;
 			providerId: string | null;
 			enabled: boolean;
 		}[];

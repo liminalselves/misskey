@@ -328,19 +328,23 @@ export class AgentProactiveMessageService {
 				system += `\n\n<agent_image_generation_protocol>\n${AGENT_IMAGE_WORLD_PROMPT}\n</agent_image_generation_protocol>`;
 			}
 			const compressionOn = this.agentCompressionMemoryService.resolveEffectiveProvider(session.agentLongMemoryProvider, instance) === 'compression';
-			const budgets = compressionOn ? await this.agentCompressionMemoryService.buildSendPathBudgets({
-				session, character, style, instanceMeta: instance, provider: 'compression',
-			}) : null;
-			const tokenConfig = budgets ? await this.agentTokenService.resolveTokenConfigForUser(instance, session.agentModelId ?? null, session.userId) : null;
+			const provider = this.agentCompressionMemoryService.resolveEffectiveProvider(session.agentLongMemoryProvider, instance);
+			const additionalSystemTexts = [stickerBlocks.block];
+			if (session.scheduledProactiveEnabled) additionalSystemTexts.push(this.agentProactiveScheduleService.systemPromptBlock);
+			if (this.agentImageService.resolveImageModel(instance, session.agentImageModelId) != null) {
+				additionalSystemTexts.push(`<agent_image_generation_protocol>\n${AGENT_IMAGE_WORLD_PROMPT}\n</agent_image_generation_protocol>`);
+			}
+			const budgets = await this.agentCompressionMemoryService.buildSendPathBudgets({
+				session, character, style, instanceMeta: instance, provider, additionalSystemTexts,
+			});
+			const tokenConfig = await this.agentTokenService.resolveTokenConfigForUser(instance, session.agentModelId ?? null, session.userId);
 			const { messages, dMap } = await this.agentService.loadRecentMessagesForContextWithMeta(
-				session.id, budgets?.historyBudget ?? 48_000, budgets ? AGENT_OVERVIEW_SCAN_LIMIT : 500, {
+				session.id, budgets.historyBudgetTokens, AGENT_OVERVIEW_SCAN_LIMIT, {
 					timeAwarenessEnabled: true,
-					tokenBudget: budgets?.historyBudgetTokens,
-					charsPerToken: budgets?.charsPerToken,
-					exactTokenCounter: tokenConfig ? this.agentTokenService.makeCounter(tokenConfig) : undefined,
+					exactTokenCounter: this.agentTokenService.makeCounter(tokenConfig),
 				},
 			);
-			const compression = budgets ? await this.agentCompressionMemoryService.buildCompressionContext({
+			const compression = compressionOn ? await this.agentCompressionMemoryService.buildCompressionContext({
 				session, character, style, instanceMeta: instance,
 				sidecar: dMap ? { dMap, hSend: budgets.historyBudgetTokens } : undefined,
 			}) : null;

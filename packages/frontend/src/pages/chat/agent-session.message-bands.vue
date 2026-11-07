@@ -189,7 +189,8 @@ const EDGE_COUNT = 4;
 
 function buildBlock(band: string, list: CompressionOverviewPayload['messages'], tokenMode: CompressionOverviewPayload['tokenMode']): { band: string; title: string; count: string; rows: BandRow[] } {
 	const totalTokens = list.reduce((s, m) => s + (m.messageTokens ?? 0), 0);
-	const approx = tokenMode !== 'exact' ? '≈' : '';
+	// 分组中只要有一条窗外估算，合计同样是近似值，不能只给明细标注。
+	const approx = tokenMode !== 'exact' || list.some(m => m.tokensEstimated === true) ? '≈' : '';
 	const count = `${list.length} · ${approx}${totalTokens}`;
 	const fullMax = EDGE_COUNT * 2;
 	const rows: BandRow[] = [];

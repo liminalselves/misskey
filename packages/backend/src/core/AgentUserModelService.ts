@@ -43,8 +43,6 @@ export type AgentUserModelConnection = {
 	apiKeyRaw: string;
 	maxContextTokens: number;
 	maxOutputTokensPerCall: number;
-	charsPerToken: number;
-	tokenizerEncoding: string | null;
 };
 
 const DEFAULT_CTX = 8192;
@@ -530,8 +528,6 @@ export class AgentUserModelService {
 			apiKeyRaw,
 			maxContextTokens: row.maxContextTokens,
 			maxOutputTokensPerCall: row.maxOutputTokensPerCall,
-			charsPerToken: Number.isFinite(row.charsPerToken) && row.charsPerToken! >= 1 ? row.charsPerToken! : AGENT_LLM_APPROX_CHARS_PER_TOKEN,
-			tokenizerEncoding: row.tokenizerEncoding,
 		};
 	}
 }

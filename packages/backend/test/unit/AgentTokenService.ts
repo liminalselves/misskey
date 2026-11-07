@@ -34,13 +34,46 @@ describe('AgentTokenService', () => {
 		test('累计超出预算的那条起改用估算，D 单调递增', async () => {
 			const rows = Array.from({ length: 6 }, (_, i) => ({ id: `m${i}`, text: 'x'.repeat(30) }));
 			const counter = () => 10;
-			const w = await svc.computeMessageWeights(rows, { formatFn: m => m.text, counter, charsPerToken: 3, budgetForExact: 25 });
+			const w = await svc.computeMessageWeights(rows, { formatFn: m => m.text, counter, budgetForExact: 25 });
 			expect([...w.dMap.values()]).toEqual([10, 20, 30, 40, 50, 60]);
 			expect(rows.map(r => w.estimatedById.get(r.id))).toEqual([false, false, true, true, true, true]);
+		});
+
+		test('精确超窗后估算不能把消息重新放回窗内', async () => {
+			const rows = [{ id: 'newest', text: 'x'.repeat(99) }, { id: 'older', text: 'x'.repeat(99) }];
+			const weights = await svc.computeMessageWeights(rows, { formatFn: m => m.text, counter: () => 100, budgetForExact: 90 });
+			expect(weights.exactFirstOutIndex).toBe(0);
+			expect([...weights.dMap.values()].every(d => d > 90)).toBe(true);
+			const bands = svc.computeWindowAndBands(rows, weights.dMap, { historyBudgetTokens: 90, t1Ratio: 0.8, t2Ratio: 0.9, exactFirstOutIndex: weights.exactFirstOutIndex });
+			expect([...bands.bandById.values()]).toEqual(['out', 'out']);
+			expect(bands.windowBoundaryId).toBeNull();
+		});
+
+		test('零预算不伪造最新一条在窗内', async () => {
+			const rows = [{ id: 'newest', text: 'x'.repeat(99) }];
+			const weights = await svc.computeMessageWeights(rows, { formatFn: m => m.text, counter: () => 100, budgetForExact: 0 });
+			const bands = svc.computeWindowAndBands(rows, weights.dMap, { historyBudgetTokens: 0, t1Ratio: 0.8, t2Ratio: 0.9, exactFirstOutIndex: weights.exactFirstOutIndex });
+			expect(bands.bandBudget).toBe(0);
+			expect(bands.bandById.get('newest')).toBe('out');
 		});
 	});
 
 	describe('resolveTokenConfig（全站统一分词器）', () => {
+		test('BYOK 的旧字符比率字段不再影响计数配置', async () => {
+			const byok = new AgentTokenService({ resolveConnection: async () => ({ charsPerToken: 1, tokenizerEncoding: 'cl100k_base' }) } as never);
+			expect(await byok.resolveTokenConfigForUser({} as never, 'u0123456789', 'owner')).toEqual({ encoding: AGENT_UNIFIED_TOKENIZER_ENCODING, tokenMode: 'exact' });
+		});
+
+		test('Token 裁剪不破坏代理对，保留尾部时仍不超过上限', () => {
+			const text = '😀'.repeat(100);
+			const start = svc.truncateTextToTokenLimit(text, 10);
+			const end = svc.truncateTextToTokenLimit(text, 10, 'end');
+			expect(svc.countUnifiedTokens(start)).toBeLessThanOrEqual(10);
+			expect(svc.countUnifiedTokens(end)).toBeLessThanOrEqual(10);
+			expect(start.endsWith('\uD800')).toBe(false);
+			expect(end.startsWith('\uDC00')).toBe(false);
+		});
+
 		test('无论模型配置何种编码，上下文计数恒用统一编码', () => {
 			const meta = {
 				agentDefaultModelId: 'm1',
@@ -73,61 +106,15 @@ describe('AgentTokenService', () => {
 		});
 	});
 
-	describe('resolveHistoryBudgets（字符/token 双视图由同一 overhead 一致导出）', () => {
-		test('token 预算 = maxContext - ceil(overhead/cpt) - max(1, maxOut)', () => {
-			const b = svc.resolveHistoryBudgets({
-				maxContextTokens: 1000,
-				maxOutputTokensPerCall: 100,
-				charsPerToken: 3,
-				systemChars: 300,
-				directiveChars: 0,
-				prefixChars: 0,
-				tokenMode: 'estimate',
-			});
-			// overheadTokens = ceil(300/3) = 100；reserveReplyTokens = max(1,100) = 100
-			expect(b.historyBudgetTokens).toBe(1000 - 100 - 100);
+	describe('resolveHistoryBudgets（统一 Token 预算）', () => {
+		test('预算 = maxContext - 已知文本与固定槽预留 - 输出预留', () => {
+			const b = svc.resolveHistoryBudgets({ maxContextTokens: 1000, maxOutputTokensPerCall: 100, overheadTokens: 100 });
+			expect(b).toMatchObject({ historyBudgetTokens: 800, tokenMode: 'exact' });
 		});
 
-		test('字符预算 = max(4000, ctx*c) - overhead - max(256, out*c)', () => {
-			const b = svc.resolveHistoryBudgets({
-				maxContextTokens: 1000,
-				maxOutputTokensPerCall: 100,
-				charsPerToken: 3,
-				systemChars: 300,
-				directiveChars: 0,
-				prefixChars: 0,
-				tokenMode: 'estimate',
-			});
-			// maxContextChars = max(4000, 3000) = 4000；reserveReplyChars = max(256, 300) = 300
-			expect(b.historyBudgetChars).toBe(4000 - 300 - 300);
-		});
-
-		test('overhead 为负时按 0 计', () => {
-			const b = svc.resolveHistoryBudgets({
-				maxContextTokens: 1000,
-				maxOutputTokensPerCall: 1,
-				charsPerToken: 3,
-				systemChars: -100,
-				directiveChars: -50,
-				prefixChars: 0,
-				tokenMode: 'exact',
-			});
-			expect(b.historyBudgetTokens).toBe(1000 - 0 - 1);
-			expect(b.tokenMode).toBe('exact');
-		});
-
-		test('预算不为负', () => {
-			const b = svc.resolveHistoryBudgets({
-				maxContextTokens: 10,
-				maxOutputTokensPerCall: 100,
-				charsPerToken: 3,
-				systemChars: 100000,
-				directiveChars: 0,
-				prefixChars: 0,
-				tokenMode: 'estimate',
-			});
-			expect(b.historyBudgetTokens).toBe(0);
-			expect(b.historyBudgetChars).toBe(0);
+		test('非法或负的 overhead 按 0 计，预算不为负', () => {
+			expect(svc.resolveHistoryBudgets({ maxContextTokens: 1000, maxOutputTokensPerCall: 1, overheadTokens: -100 }).historyBudgetTokens).toBe(999);
+			expect(svc.resolveHistoryBudgets({ maxContextTokens: 10, maxOutputTokensPerCall: 100, overheadTokens: 100000 }).historyBudgetTokens).toBe(0);
 		});
 	});
 
@@ -137,7 +124,7 @@ describe('AgentTokenService', () => {
 		test('estimate 模式（字符估算 D）', async () => {
 			// 每条 30 chars → 10 tokens；D 累计 10,20,...,120。H=100 → 第 11 条 out
 			const rows = Array.from({ length: 12 }, (_, i) => ({ id: `m${i}`, content: 'x'.repeat(30) }));
-			const w = await svc.computeMessageWeights(rows, { formatFn: m => m.content, charsPerToken: 3 });
+			const w = await svc.computeMessageWeights(rows, { formatFn: m => m.content });
 			const bands = svc.computeWindowAndBands(rows, w.dMap, ratios);
 			expect(w.useExactD).toBe(false);
 			expect(bands.firstOutId).toBe('m10');
@@ -152,7 +139,7 @@ describe('AgentTokenService', () => {
 			// counter 恒返回 25 token/条；D 累计 25,50,75,100,125。H=100 → 第 5 条 out
 			const rows = Array.from({ length: 5 }, (_, i) => ({ id: `e${i}`, content: `msg${i}` }));
 			const counter = () => 25;
-			const w = await svc.computeMessageWeights(rows, { formatFn: m => m.content, counter, charsPerToken: 3, budgetForExact: 100 });
+			const w = await svc.computeMessageWeights(rows, { formatFn: m => m.content, counter, budgetForExact: 100 });
 			const bands = svc.computeWindowAndBands(rows, w.dMap, ratios);
 			expect(w.useExactD).toBe(true);
 			expect(bands.firstOutId).toBe('e4');
@@ -166,7 +153,7 @@ describe('AgentTokenService', () => {
 			// x0：累计 60 ≤ 100 → 精确；x1：累计将达 120 > 100（滑出窗口）→ 自此条起全部估算。
 			const rows = Array.from({ length: 70 }, (_, i) => ({ id: `x${i}`, content: `c${i}` }));
 			const counter = () => 60;
-			const w = await svc.computeMessageWeights(rows, { formatFn: m => m.content, counter, charsPerToken: 3, budgetForExact: 100 });
+			const w = await svc.computeMessageWeights(rows, { formatFn: m => m.content, counter, budgetForExact: 100 });
 			// 窗内（x0）精确计数：estimatedById 为 false
 			expect(w.estimatedById.get('x0')).toBe(false);
 			// 自滑出窗口的 x1 起（含跨块 x64…x69）全部估算：estimatedById 为 true
@@ -179,7 +166,7 @@ describe('AgentTokenService', () => {
 
 		test('estimate 模式（无 counter）所有消息均为估算', async () => {
 			const rows = Array.from({ length: 3 }, (_, i) => ({ id: `p${i}`, content: 'abc' }));
-			const w = await svc.computeMessageWeights(rows, { formatFn: m => m.content, charsPerToken: 3 });
+			const w = await svc.computeMessageWeights(rows, { formatFn: m => m.content });
 			expect(w.useExactD).toBe(false);
 			for (const r of rows) expect(w.estimatedById.get(r.id)).toBe(true);
 		});
@@ -187,7 +174,7 @@ describe('AgentTokenService', () => {
 		test('exact 模式计数器返回 null 时该条回退估算', async () => {
 			const rows = [{ id: 'q0', content: 'hello' }, { id: 'q1', content: 'world' }];
 			const counter = (t: string) => (t === 'hello' ? 10 : null);
-			const w = await svc.computeMessageWeights(rows, { formatFn: m => m.content, counter, charsPerToken: 3, budgetForExact: 1000 });
+			const w = await svc.computeMessageWeights(rows, { formatFn: m => m.content, counter, budgetForExact: 1000 });
 			expect(w.estimatedById.get('q0')).toBe(false); // 精确
 			expect(w.estimatedById.get('q1')).toBe(true); // null 回退估算
 		});
@@ -197,7 +184,7 @@ describe('AgentTokenService', () => {
 				{ id: 'a', content: 'x'.repeat(150) }, // 50 tokens
 				{ id: 'b', content: 'x'.repeat(150) }, // D=100 == H → 仍窗内（staged）
 			];
-			const w = await svc.computeMessageWeights(rows, { formatFn: m => m.content, charsPerToken: 3 });
+			const w = await svc.computeMessageWeights(rows, { formatFn: m => m.content });
 			const bands = svc.computeWindowAndBands(rows, w.dMap, ratios);
 			expect(bands.truncated).toBe(false);
 			expect(bands.firstOutId).toBeNull();
@@ -211,7 +198,7 @@ describe('AgentTokenService', () => {
 				{ id: 'b', content: 'x'.repeat(150) }, // 100
 				{ id: 'c', content: 'x'.repeat(3) }, // D=101 > H → out
 			];
-			const w = await svc.computeMessageWeights(rows, { formatFn: m => m.content, charsPerToken: 3 });
+			const w = await svc.computeMessageWeights(rows, { formatFn: m => m.content });
 			const bands = svc.computeWindowAndBands(rows, w.dMap, ratios);
 			expect(bands.firstOutId).toBe('c');
 			expect(bands.windowBoundaryId).toBe('b');
@@ -223,7 +210,7 @@ describe('AgentTokenService', () => {
 				{ id: 'n1', content: 'x'.repeat(30) },
 				{ id: 'n2', content: 'x'.repeat(30) },
 			];
-			const w = await svc.computeMessageWeights(rows, { formatFn: m => m.content, charsPerToken: 3 });
+			const w = await svc.computeMessageWeights(rows, { formatFn: m => m.content });
 			const bands = svc.computeWindowAndBands(rows, w.dMap, ratios);
 			expect(bands.truncated).toBe(false);
 			expect(bands.windowBoundaryId).toBe('n2');
@@ -233,7 +220,7 @@ describe('AgentTokenService', () => {
 		test('区带阈值 t1/t2 正确分层', async () => {
 			// H=100, t1=80, t2=90；每条 25 token → D: 25(new),50(new),75(new),100(staged 因 >t2)
 			const rows = Array.from({ length: 4 }, (_, i) => ({ id: `s${i}`, content: `m${i}` }));
-			const w = await svc.computeMessageWeights(rows, { formatFn: m => m.content, counter: () => 25, charsPerToken: 3, budgetForExact: 100 });
+			const w = await svc.computeMessageWeights(rows, { formatFn: m => m.content, counter: () => 25, budgetForExact: 100 });
 			const bands = svc.computeWindowAndBands(rows, w.dMap, ratios);
 			expect(bands.t1Band).toBe(80);
 			expect(bands.t2Band).toBe(90);
