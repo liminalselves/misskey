@@ -580,6 +580,8 @@ export const ROUTE_DEF = [{
 		path: '/object-storage',
 		name: 'object-storage',
 		component: page(() => import('@/pages/admin/object-storage.vue')),
+		query: { view: 'view' },
+		reuseComponent: true,
 	}, {
 		path: '/security',
 		name: 'security',

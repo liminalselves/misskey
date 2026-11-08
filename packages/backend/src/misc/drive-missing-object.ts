@@ -195,9 +195,9 @@ export function extractReportedObjectUrl(raw: string, siteUrl: string): string |
 	return u.toString();
 }
 
-/** 通知文案：只说明结果与原因，不暴露技术细节。 */
-export function buildMissingObjectNotice(mimeType: string): { title: string; text: string } {
-	const noun = mimeType.startsWith('image/') ? '图片' : '文件';
+/** 通知文案：只说明结果与原因，不暴露技术细节。allImages 为 true 时说「图片」，混有其他类型时说「文件」。 */
+export function buildMissingObjectNotice(allImages: boolean): { title: string; text: string } {
+	const noun = allImages ? '图片' : '文件';
 	return {
 		title: '网盘内容已被清理',
 		text: `因相关审查原因，您网盘中的部分${noun}已被删除。`,

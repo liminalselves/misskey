@@ -928,9 +928,10 @@ export class DriveService {
 	 * 对象存储中的原图已确认丢失：写墓碑并删除 drive_file 行，不再向对象存储发删除请求。
 	 * 仅在行仍指向同一个对象（accessKey 未变）且为本地用户的对象存储文件时才删除，
 	 * 返回是否实际删除；调用方必须已完成丢失确认，本方法不做存在性判断。
+	 * 传入 deleter 时写入审计日志；日志失败不影响已提交的删除。
 	 */
 	@bindThis
-	public async deleteFileWithMissingObject(file: MiDriveFile): Promise<boolean> {
+	public async deleteFileWithMissingObject(file: MiDriveFile, deleter?: MiUser): Promise<boolean> {
 		if (file.storedInternal || file.isLink || file.userHost !== null || file.accessKey == null) return false;
 
 		const current = await this.driveFilesRepository.findOneBy({ id: file.id });
@@ -981,6 +982,16 @@ export class DriveService {
 		if (current.userId) {
 			this.globalEventService.publishDriveStream(current.userId, 'fileDeleted', current.id);
 			this.globalEventService.publishInternalEvent('localUserUpdated', { id: current.userId });
+		}
+
+		if (deleter) {
+			const owner = current.userId ? await this.usersRepository.findOneBy({ id: current.userId }).catch(() => null) : null;
+			await this.moderationLogService.logSafely(deleter, 'deleteDriveFile', {
+				fileId: current.id,
+				fileUserId: current.userId,
+				fileUserUsername: owner?.username ?? null,
+				fileUserHost: owner?.host ?? null,
+			});
 		}
 		return true;
 	}

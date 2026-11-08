@@ -129,7 +129,7 @@ export class FileServerService {
 			: typeof request.params?.url === 'string' ? `https://${request.params.url}` : null;
 		if (target == null) return;
 
-		this.driveMissingObjectService.checkByReportedUrl(target).catch(() => {});
+		this.driveMissingObjectService.reportByUrl(target).catch(() => {});
 	}
 
 	@bindThis

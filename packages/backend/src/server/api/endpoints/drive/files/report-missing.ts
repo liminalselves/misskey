@@ -37,8 +37,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		private driveMissingObjectService: DriveMissingObjectService,
 	) {
 		super(meta, paramDef, async (ps) => {
-			// 不等待核查结果，也不向调用方透露判定细节
-			void this.driveMissingObjectService.checkByReportedUrl(ps.url);
+			// 不等待核查结果，也不向调用方透露判定细节；异常已在服务内兜底，这里再兜一层防止未处理拒绝
+			void this.driveMissingObjectService.reportByUrl(ps.url).catch(() => {});
 		});
 	}
 }

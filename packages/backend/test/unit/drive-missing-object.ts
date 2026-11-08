@@ -216,9 +216,9 @@ describe('extractReportedObjectUrl', () => {
 
 describe('buildMissingObjectNotice', () => {
 	test('uses the agreed wording and does not leak technical details', () => {
-		const image = buildMissingObjectNotice('image/png');
+		const image = buildMissingObjectNotice(true);
 		expect(image.text).toBe('因相关审查原因，您网盘中的部分图片已被删除。');
-		expect(buildMissingObjectNotice('video/mp4').text).toBe('因相关审查原因，您网盘中的部分文件已被删除。');
+		expect(buildMissingObjectNotice(false).text).toBe('因相关审查原因，您网盘中的部分文件已被删除。');
 		expect(`${image.title}${image.text}`).not.toMatch(/OSS|对象存储|404|丢失/);
 	});
 });

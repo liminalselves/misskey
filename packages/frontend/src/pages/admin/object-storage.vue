@@ -4,8 +4,11 @@ SPDX-License-Identifier: AGPL-3.0-only
 -->
 
 <template>
-<PageWithHeader :tabs="headerTabs">
-	<div class="_spacer" style="--MI_SPACER-w: 700px; --MI_SPACER-min: 16px; --MI_SPACER-max: 32px;">
+<PageWithHeader v-model:tab="activeView" :tabs="headerTabs">
+	<div v-if="activeView === 'missing'" class="_spacer" style="--MI_SPACER-w: 1100px; --MI_SPACER-min: 16px; --MI_SPACER-max: 32px;">
+		<MkDriveMissingReportsForAdmin/>
+	</div>
+	<div v-else class="_spacer" style="--MI_SPACER-w: 700px; --MI_SPACER-min: 16px; --MI_SPACER-max: 32px;">
 		<SearchMarker path="/admin/object-storage" :label="i18n.ts.objectStorage" :keywords="['objectStorage']" icon="ti ti-cloud">
 			<div class="_gaps_m">
 				<SearchMarker>
@@ -102,7 +105,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 			</div>
 		</SearchMarker>
 	</div>
-	<template #footer>
+	<template v-if="activeView === 'settings'" #footer>
 		<div :class="$style.footer">
 			<div class="_spacer" style="--MI_SPACER-w: 700px; --MI_SPACER-min: 16px; --MI_SPACER-max: 16px;">
 				<MkButton primary rounded @click="save"><i class="ti ti-check"></i> {{ i18n.ts.save }}</MkButton>
@@ -113,7 +116,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { ref, computed } from 'vue';
+import { ref, computed, watch } from 'vue';
 import MkSwitch from '@/components/MkSwitch.vue';
 import MkInput from '@/components/MkInput.vue';
 import FormSplit from '@/components/form/split.vue';
@@ -123,6 +126,33 @@ import { fetchInstance } from '@/instance.js';
 import { i18n } from '@/i18n.js';
 import { definePage } from '@/page.js';
 import MkButton from '@/components/MkButton.vue';
+import MkDriveMissingReportsForAdmin from '@/components/MkDriveMissingReportsForAdmin.vue';
+import { useRouter } from '@/router.js';
+
+const props = defineProps<{ view?: string }>();
+const router = useRouter();
+
+// tab 由路由 ?view 决定；默认「设置」不写入地址
+const viewKeys = ['settings', 'missing'] as const;
+type ViewKey = typeof viewKeys[number];
+
+function resolveView(value: string | undefined): ViewKey {
+	return (viewKeys as readonly string[]).includes(value ?? '') ? value as ViewKey : 'settings';
+}
+
+const activeView = ref<ViewKey>(resolveView(props.view));
+
+watch(() => props.view, v => {
+	activeView.value = resolveView(v);
+});
+
+watch(activeView, view => {
+	const url = new URL(router.getCurrentFullPath(), window.location.origin);
+	if (view === 'settings') url.searchParams.delete('view');
+	else url.searchParams.set('view', view);
+	const path = `${url.pathname}${url.search}${url.hash}`;
+	if (path !== router.getCurrentFullPath()) router.replaceByPath(path);
+});
 
 const meta = await misskeyApi('admin/meta');
 
@@ -162,7 +192,10 @@ function save() {
 	});
 }
 
-const headerTabs = computed(() => []);
+const headerTabs = computed(() => [
+	{ key: 'settings', title: '对象存储设置', icon: 'ti ti-settings' },
+	{ key: 'missing', title: '丢失文件', icon: 'ti ti-file-alert' },
+]);
 
 definePage(() => ({
 	title: i18n.ts.objectStorage,

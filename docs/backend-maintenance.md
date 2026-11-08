@@ -94,21 +94,22 @@ Redis 在线状态、连接计数、离线推送判断和用户休眠唤醒逻�
 
 图片封禁两张数据库表同事务更新，S3 ACL 在事务外改动并在失败时补偿，补偿失败记日志。它不构成跨存储事务，也未串行化所有并发 ACL 操作。
 
-## 网盘对象丢失自动修复
+## 网盘对象丢失：上报 → 待审 → 管理员批量删除
 
-实现：`core/DriveMissingObjectService.ts`，判定用纯函数在 `misc/drive-missing-object.ts`。对象存储里的原图被外部删除（如云厂商审查）而 `drive_file` 行还在时，有人访问就核查，确认丢失后写墓碑并删行，通知属主。**原则：任何无法确认的情况都不动数据。**
+实现：`core/DriveMissingObjectService.ts`，判定用纯函数在 `misc/drive-missing-object.ts`。对象存储里的原图被外部删除（如云厂商审查）而 `drive_file` 行还在时，访问上报只负责"发现并核实"，**不自动删任何数据**；确认缺失的文件进入待审表 `drive_missing_object_report`，由管理员在「控制面板 → 对象存储 → 丢失文件」审查后批量删除。原则：任何无法确认的情况都不动数据，删除永远是人工动作。
 
-- 触发：`/proxy/` 回源得到 404（`FileServerService`），或前端媒体 `error` 事件上报 `drive/files/report-missing`（匿名可调，30 次/分钟/IP；前端每页最多 30 次、间隔 ≥1.5s、同 URL 只报一次）。两条入口都只传 URL，是否修复由服务独立核实，不信任调用方。
-- 范围：本地用户、非内部存储、非链接的文件。缩略图或 webpublic 404 只会触发对**原图**的核查，不会因此删文件。
-- 位置判定 `resolveObjectLocation`：URL 属于当前桶则按当前桶；否则仅在**路径风格访问、主机与端口等于当前端点、`/<桶>/<accessKey>` 与记录的 accessKey 完全一致**时按遗留桶处理（生产有 239 条 `aliya-misskey` 记录）。其余一律不处理。
-- 判定链（任一步不满足即停）：带凭证 `HeadObject` 明确 404/NoSuchKey → 用**当前桶**里另一个确定存在的对象作金丝雀（遗留桶对象不可作金丝雀）→ 首次发现只写 Redis 标记 → 间隔 ≥60s 的第二次核查仍缺失 → 熔断与限额检查 → 修复。403、5xx、超时、NoSuchBucket、鉴权失败一律视为"不确定"。
-- 待确认标记带配置指纹（桶、端点、区域、寻址风格、凭证哈希、对象位置），两次核查之间配置变化则作废重来；标记 15 分钟过期。
-- 熔断：10 分钟内出现 ≥5 个不同的疑似文件视为整桶异常，暂停修复 1 小时（在"疑似"阶段计数，已在等待确认的文件也不会被删）；全站每小时最多修复 20 个，修复抛错时退还额度。单文件核查冷却 30s。
-- 修复：`DriveService.deleteFileWithMissingObject`，重新读取并校验行未变（accessKey、url）后，**墓碑与删行同一事务**；不向对象存储发删除。头像/横幅外键被置空后同步清 `user` 上冗余的 URL 列并发 `localUserUpdated`。
-- 通知：属主收到一条公告，文案固定为"因相关审查原因，您网盘中的部分图片已被删除。"（不暴露技术细节）；同一用户 24 小时内只发一条。通知失败不影响修复。
-- SDK 错误形态（本地假 S3 + 真实 `@aws-sdk/client-s3` 实测）：HEAD 缺失 → `name: NotFound, status 404`；403 与 5xx → `name: Unknown`，状态码分别为 403/500，均判为"不确定"。**HEAD 的 404 没有响应体，SDK 无法区分"桶不存在"与"key 不存在"**：当前桶靠金丝雀兜底（桶不存在时金丝雀同样失败，整体"不确定"）；遗留桶若整体消失，其中对象确实取不到，按丢失处理。
-- 生产现状（2026-11-08 只读核查）：25407 个对象存储本地文件中，当前桶 `yjrg-misskey` 25168 个，遗留桶 `aliya-misskey` 239 个；抽样 30 个遗留文件公网访问全部 404（`NoSuchKey`），抽样当前桶文件全部 200。遗留文件一次被访问到 ≥5 个会触发整桶熔断（见上），因此这批文件不会被自动批量清理；是否整体清理应由人决定。
-- 验证边界：单测用内存 Redis 与桩覆盖各分支，不替代真实 OSS 验收；对真实阿里云 OSS 的签名 HEAD 未验证。首次上线后应在日志里确认出现 `waiting for confirmation` 后再观察 `repaired`。
+- 触发（匿名入口）：`/proxy/` 回源 404（`FileServerService`）或前端媒体 `error` 上报 `drive/files/report-missing`（30 次/分钟/IP；前端每页最多 30 次、间隔 ≥1.5s、同 URL 只报一次）。入口只传 URL，是否写入待审表由服务端独立核实，不信任调用方。
+- 核实（`reportByUrl`）：定位本地文件 → `resolveObjectLocation` 判定位置 → 带凭证 HEAD。明确 404/NoSuchKey 且当前桶金丝雀通过才写入/更新待审行（`reportCount` 累加、刷新时间）；对象存在则删除已有待审行（视为恢复）；403、5xx、超时、NoSuchBucket、鉴权失败一律视为"不确定"，不记录。防滥用：单文件核查冷却 30s，全站每分钟 HEAD 预算 120 次。
+- 位置判定 `resolveObjectLocation`：URL 属于当前桶按当前桶；否则仅在**路径风格访问、主机与端口等于当前端点、`/<桶>/<accessKey>` 与记录 accessKey 完全一致**时按遗留桶处理（生产有 239 条 `aliya-misskey` 记录）。其余一律不处理。
+- 待审表 `drive_missing_object_report`：`fileId` 唯一、外键级联（文件被删则行自动消失），存 bucket/objectKey/scope、reportCount、首次/最后上报时间、最后核实时间。migration `1785000000000`。
+- 管理端点（`admin/drive/missing-reports/`，`requireModerator`）：`list`（页码分页，含属主 UserLite）、`recheck`（重新核实，恢复则移除、仍缺失则刷新核实时间）、`delete`（批量删除）。批量上限 100 条/次。
+- 批量删除 `deleteReported`：整批先过端点健康检查（**对照池排除本批待处理文件**，否则整批缺失会被误判成存储不健康、永远删不掉），不可用则整批中止。每条用当前配置重新解析位置并 HEAD，**必须明确 404 才删**；对象存在则移除待审行；配置变更后无法解析的一律不动。逐条返回 deleted/present/unknown/gone。
+- 修复落点 `DriveService.deleteFileWithMissingObject(file, moderator)`：重新读取并校验行未变（accessKey、url）后，**墓碑与删行同一事务**；不向对象存储发删除。头像/横幅外键被置空后同步清 `user` 上冗余 URL 列并发 `localUserUpdated`；传 moderator 时写 `deleteDriveFile` 审计日志（`logSafely`，失败不影响删除）。
+- 通知：用 Misskey 自带 `app` 类型通知（`appAccessTokenId: null`），标题「网盘内容已被清理」，正文固定为"因相关审查原因，您网盘中的部分图片已被删除。"（本批含非图片时改说"文件"，复用 `buildMissingObjectNotice`），图标取站点图标。**每批每个用户只发一条**，在删除全部提交后发送，失败只记日志不回滚。
+- 前端：`pages/admin/object-storage.vue` 两 tab（`?view` 路由同步），「丢失文件」组件 `components/MkDriveMissingReportsForAdmin.vue`——无省略号横向滚动表格（`display:contents` 行）、页码分页条（10/20/50）、桶筛选、本页全选、「重新核实选中」「删除选中」。删除前确认框写明数量与后果，结果汇总成一条提示并就地移除已处理行，不整表重载。
+- SDK 错误形态（本地假 S3 + 真实 `@aws-sdk/client-s3` 实测）：HEAD 缺失 → `name: NotFound, status 404`；403 与 5xx → `name: Unknown`，状态码分别为 403/500，均判为"不确定"。**HEAD 的 404 没有响应体，SDK 无法区分"桶不存在"与"key 不存在"**：当前桶靠金丝雀兜底（桶不存在时金丝雀同样失败，整体"不确定"）。
+- 生产现状（2026-11-08 只读核查）：25407 个对象存储本地文件中，当前桶 `yjrg-misskey` 25168 个，遗留桶 `aliya-misskey` 239 个；抽样 30 个遗留文件公网访问全部 404（`NoSuchKey`），抽样当前桶文件全部 200。这 239 条会随访问陆续进入待审表，由管理员决定是否批量删除，系统不会自动清理。
+- 验证边界：单测用内存 Redis 与桩覆盖各分支，不替代真实 OSS 验收；对真实阿里云 OSS 的签名 HEAD 未验证。上线验收顺序：先 migrate → 访问一张已丢失的图，确认进入待审列表 → 重新核实、批量删除 → 在被删用户端看到通知与墓碑占位。
 
 ## 验证与部署边界
 

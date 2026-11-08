@@ -3,18 +3,18 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
-import { createHash } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
 import * as Redis from 'ioredis';
 import { Brackets } from 'typeorm';
 import { DI } from '@/di-symbols.js';
 import type { Config } from '@/config.js';
-import type { DriveFilesRepository, MiMeta } from '@/models/_.js';
+import type { DriveFilesRepository, DriveMissingObjectReportsRepository, MiMeta, MiUser } from '@/models/_.js';
 import type { MiDriveFile } from '@/models/DriveFile.js';
 import { bindThis } from '@/decorators.js';
 import { S3Service } from '@/core/S3Service.js';
 import { DriveService } from '@/core/DriveService.js';
-import { AnnouncementService } from '@/core/AnnouncementService.js';
+import { NotificationService } from '@/core/NotificationService.js';
+import { IdService } from '@/core/IdService.js';
 import { LoggerService } from '@/core/LoggerService.js';
 import {
 	buildMissingObjectNotice,
@@ -27,37 +27,41 @@ import {
 } from '@/misc/drive-missing-object.js';
 import type Logger from '@/logger.js';
 
-/** 第一次发现缺失后，需要隔这么久再次确认才会修复（挡住 OSS/CDN 的短暂故障）。 */
-export const MISSING_CONFIRM_DELAY_MS = 60_000;
-/** 同一个文件的核查冷却，避免热点图片被大量访问时反复打 OSS。 */
+/** 同一个文件的核查冷却，避免热点图片被大量访问时反复打对象存储。 */
 const CHECK_COOLDOWN_SECONDS = 30;
-/** 疑似缺失标记的有效期；超过则作废，需要重新从头确认。 */
-const SUSPECT_TTL_SECONDS = 15 * 60;
-/** 全站每小时最多自动修复的文件数。 */
-export const REPAIR_HOURLY_LIMIT = 20;
-/** 10 分钟内出现这么多个不同的缺失文件，就怀疑是整桶异常，暂停修复。 */
-export const MASS_MISSING_THRESHOLD = 5;
-const MASS_MISSING_WINDOW_SECONDS = 10 * 60;
-const BREAKER_PAUSE_SECONDS = 60 * 60;
-/** 同一用户 24 小时内只发一条通知。 */
-const NOTICE_COOLDOWN_SECONDS = 24 * 60 * 60;
+/** 全站每分钟最多触发这么多次由上报引起的 HEAD（金丝雀不计），挡住枚举式滥用。 */
+export const REPORT_PROBE_BUDGET_PER_MINUTE = 120;
+/** 管理员单次批量操作的上限。 */
+export const MISSING_BATCH_MAX = 100;
 
 const KEY = {
 	cooldown: (fileId: string) => `drive:missing:cooldown:${fileId}`,
-	suspect: (fileId: string) => `drive:missing:suspect:${fileId}`,
-	recent: 'drive:missing:recent',
-	breaker: 'drive:missing:breaker',
-	hourly: (hour: number) => `drive:missing:hourly:${hour}`,
-	notice: (userId: string) => `drive:missing:notice:${userId}`,
+	budget: (minute: number) => `drive:missing:budget:${minute}`,
 } as const;
 
-export type MissingObjectCheckResult =
-	| 'ignored' // 不满足前置条件，或不是对象存储里的本地文件
-	| 'skipped' // 冷却中、熔断中或限额已满
-	| 'present' // 对象存在，疑似标记已清除
-	| 'unknown' // 无法确认，数据保持不动
-	| 'suspected' // 首次发现缺失，等待二次确认
-	| 'repaired'; // 已确认缺失并修复
+/** 上报：只有 recorded / cleared 会改动待审列表。 */
+export type MissingReportResult =
+	| 'ignored' // 不是对象存储里的本地文件，或无法判定位置
+	| 'skipped' // 冷却中或预算用尽
+	| 'unknown' // 无法确认（403/5xx/超时/金丝雀失败等），不记录
+	| 'present' // 对象存在，未改动列表
+	| 'cleared' // 对象存在，已有的待审记录被移除
+	| 'recorded'; // 确认缺失，已写入或更新待审记录
+
+export type MissingBatchResult =
+	| 'deleted' // 已确认缺失并删除
+	| 'present' // 对象已恢复，待审记录已移除
+	| 'missing' // 重新核实后仍然缺失（仅 recheck），记录保留
+	| 'unknown' // 无法确认，保持不动
+	| 'gone'; // 记录或文件已不存在
+
+export type MissingBatchItemResult = { id: string; result: MissingBatchResult };
+
+export type MissingBatchSummary = {
+	items: MissingBatchItemResult[];
+	/** 对象存储本身不可用（金丝雀失败）时整批中止，所有条目都是 unknown。 */
+	aborted: boolean;
+};
 
 @Injectable()
 export class DriveMissingObjectService {
@@ -73,156 +77,228 @@ export class DriveMissingObjectService {
 		@Inject(DI.driveFilesRepository)
 		private driveFilesRepository: DriveFilesRepository,
 
+		@Inject(DI.driveMissingObjectReportsRepository)
+		private reportsRepository: DriveMissingObjectReportsRepository,
+
 		@Inject(DI.redis)
 		private redisClient: Redis.Redis,
 
 		private s3Service: S3Service,
 		private driveService: DriveService,
-		private announcementService: AnnouncementService,
+		private notificationService: NotificationService,
+		private idService: IdService,
 		private loggerService: LoggerService,
 	) {
 		this.logger = this.loggerService.getLogger('drive-missing-object');
 	}
 
-	/** 通过上报的 URL 找到本地文件并核查。URL 无法对应到任何文件时静默忽略。 */
+	//#region 上报（匿名入口调用）
+	/** 通过上报的 URL 找到本地文件并核查。永不抛出；URL 对应不到任何文件时静默忽略。 */
 	@bindThis
-	public async checkByReportedUrl(rawUrl: string): Promise<MissingObjectCheckResult> {
+	public async reportByUrl(rawUrl: string): Promise<MissingReportResult> {
 		try {
-			return await this.checkByReportedUrlInternal(rawUrl);
+			const url = extractReportedObjectUrl(rawUrl, this.config.url);
+			if (url == null) return 'ignored';
+			// 粗筛：主机不属于对象存储的外链不查库
+			if (!this.meta.useObjectStorage || !urlMayBelongToObjectStorage(url, this.meta)) return 'ignored';
+
+			// 缩略图/webpublic 上报同样能定位到所属文件
+			const file = await this.driveFilesRepository.createQueryBuilder('file')
+				.where('file.userHost IS NULL')
+				.andWhere('file.storedInternal = false')
+				.andWhere(new Brackets(qb => {
+					qb.where('file.url = :url', { url })
+						.orWhere('file.thumbnailUrl = :url', { url })
+						.orWhere('file.webpublicUrl = :url', { url });
+				}))
+				.getOne();
+			if (file == null) return 'ignored';
+
+			return await this.reportFile(file);
 		} catch (err) {
-			// 入口通常是不等待结果的后台调用，查询阶段的异常也不能变成未处理的 Promise 拒绝
-			this.logger.warn(`check by url failed: ${err instanceof Error ? err.message : String(err)}`);
+			// 入口通常是不等待结果的后台调用，任何异常都不能变成未处理的 Promise 拒绝
+			this.logger.warn(`report failed: ${err instanceof Error ? err.message : String(err)}`);
 			return 'unknown';
 		}
 	}
 
-	private async checkByReportedUrlInternal(rawUrl: string): Promise<MissingObjectCheckResult> {
-		const url = extractReportedObjectUrl(rawUrl, this.config.url);
-		if (url == null) return 'ignored';
-
-		// 粗筛：主机不属于对象存储的外链不查库；精确归属交给 checkFile 的位置判定
-		if (!this.meta.useObjectStorage || !urlMayBelongToObjectStorage(url, this.meta)) return 'ignored';
-
-		// 先用精确 URL 匹配；缩略图/webpublic 上报同样能定位到所属文件
-		const file = await this.driveFilesRepository.createQueryBuilder('file')
-			.where('file.userHost IS NULL')
-			.andWhere('file.storedInternal = false')
-			.andWhere(new Brackets(qb => {
-				qb.where('file.url = :url', { url })
-					.orWhere('file.thumbnailUrl = :url', { url })
-					.orWhere('file.webpublicUrl = :url', { url });
-			}))
-			.getOne();
-		if (file == null) return 'ignored';
-
-		return await this.checkFile(file);
-	}
-
-	@bindThis
-	public async checkByFileId(fileId: string): Promise<MissingObjectCheckResult> {
-		const file = await this.driveFilesRepository.findOneBy({ id: fileId });
-		if (file == null) return 'ignored';
-		return await this.checkFile(file);
-	}
-
-	/**
-	 * 核查一个文件的原图是否真的从对象存储中消失，并在多重确认后修复。
-	 * 此方法永不抛出：任何异常都等价于「无法确认」，数据保持不动。
-	 */
-	@bindThis
-	public async checkFile(file: MiDriveFile): Promise<MissingObjectCheckResult> {
-		try {
-			return await this.checkFileInternal(file);
-		} catch (err) {
-			this.logger.warn(`check failed for ${file.id}: ${err instanceof Error ? err.message : String(err)}`);
-			return 'unknown';
-		}
-	}
-
-	private async checkFileInternal(file: MiDriveFile): Promise<MissingObjectCheckResult> {
-		//#region 前置条件：只处理当前桶里的本地用户文件
-		if (!this.meta.useObjectStorage) return 'ignored';
-		if (file.storedInternal || file.isLink || file.userHost !== null || file.accessKey == null) return 'ignored';
-
-		// 位置判定：属于当前桶，或是同一端点下的遗留桶路径；无法可靠判定（含 accessKey 与 URL 不一致）一律不动
-		const location = resolveObjectLocation(file.url, file.accessKey, this.meta);
+	private async reportFile(file: MiDriveFile): Promise<MissingReportResult> {
+		const location = this.locate(file);
 		if (location == null) return 'ignored';
-		//#endregion
 
-		if (await this.isPaused()) return 'skipped';
-
-		// 冷却：同一文件短时间内只核查一次
 		const cooled = await this.redisClient.set(KEY.cooldown(file.id), '1', 'EX', CHECK_COOLDOWN_SECONDS, 'NX');
 		if (cooled == null) return 'skipped';
+		if (!await this.takeProbeBudget()) return 'skipped';
 
 		const probe = await this.probe(location.bucket, location.key);
 		if (probe === 'unknown') return 'unknown';
+
 		if (probe === 'present') {
-			await this.redisClient.del(KEY.suspect(file.id));
-			return 'present';
+			const removed = await this.reportsRepository.delete({ fileId: file.id });
+			return (removed.affected ?? 0) > 0 ? 'cleared' : 'present';
 		}
 
-		// 原图缺失：先验证端点与凭证是可用的（用当前桶里另一个确定存在的对象对照），排除凭证/网络/端点故障。
-		// 遗留桶同样以当前桶作对照：遗留桶本身可能已整体不存在，不能指望在其中找到「存在的对象」
-		if (!await this.bucketLooksHealthy(file)) {
-			this.logger.warn(`object ${location.bucket}/${location.key} seems missing but the storage health check failed; leaving ${file.id} untouched`);
+		// 对象缺失：先证明端点与凭证可用，排除凭证/网络/端点故障
+		if (!await this.storageLooksHealthy(file)) {
+			this.logger.warn(`object ${location.bucket}/${location.key} seems missing but the storage health check failed; not recording ${file.id}`);
 			return 'unknown';
 		}
 
-		// 熔断在「发现缺失」时就计数，而不是等到删除之后：
-		// 整桶故障时，第 N 个疑似文件一出现就暂停，已处于等待确认中的文件也不会被删
-		if (!await this.recordMissingAndCheckBreaker(file.id)) return 'skipped';
-
-		// 疑似标记带上对象存储配置指纹：两次确认之间管理员换了桶/端点/凭证时，旧标记作废，从头再来
-		const fingerprint = this.storageFingerprint(location);
-		const stored = await this.redisClient.get(KEY.suspect(file.id));
-		const now = Date.now();
-		const separator = stored?.indexOf('|') ?? -1;
-		const suspectedAt = stored != null && separator > 0 && stored.slice(separator + 1) === fingerprint
-			? Number(stored.slice(0, separator))
-			: null;
-		if (suspectedAt == null || !Number.isFinite(suspectedAt)) {
-			await this.redisClient.set(KEY.suspect(file.id), `${now}|${fingerprint}`, 'EX', SUSPECT_TTL_SECONDS);
-			this.logger.warn(`object ${location.bucket}/${location.key} of ${file.id} is missing in object storage (${location.scope} bucket); waiting for confirmation`);
-			return 'suspected';
-		}
-
-		if (now - suspectedAt < MISSING_CONFIRM_DELAY_MS) return 'suspected';
-
-		// 二次确认通过。小时限额放在真正修改数据之前
-		if (!await this.takeHourlyQuota(file.id)) return 'skipped';
-
-		let repaired = false;
-		try {
-			repaired = await this.driveService.deleteFileWithMissingObject(file);
-		} catch (err) {
-			// 修复失败（如数据库暂时不可用）：退还额度，保留待确认标记之外不做任何事，下次访问时再试
-			await this.redisClient.decr(KEY.hourly(Math.floor(now / 3_600_000))).catch(() => {});
-			throw err;
-		}
-		await this.redisClient.del(KEY.suspect(file.id));
-		if (!repaired) return 'ignored';
-
-		this.logger.warn(`repaired drive file ${file.id} (owner ${file.userId}): object ${location.bucket}/${location.key} confirmed missing in object storage (${location.scope} bucket)`);
-		if (file.userId) await this.notifyOwner(file);
-		return 'repaired';
+		await this.upsertReport(file, location);
+		return 'recorded';
 	}
 
-	/** 决定「对象在哪个桶、用哪套凭证访问」的配置摘要；密钥只以哈希片段参与，不以明文进 Redis。 */
-	private storageFingerprint(location: ObjectLocation): string {
-		return [
-			location.bucket,
-			location.key,
-			this.meta.objectStorageBucket ?? '',
-			this.meta.objectStorageEndpoint ?? '',
-			this.meta.objectStorageRegion ?? '',
-			this.meta.objectStorageS3ForcePathStyle ? 'path' : 'virtual',
-			createHash('sha256').update(`${this.meta.objectStorageAccessKey ?? ''}:${this.meta.objectStorageSecretKey ?? ''}`).digest('hex').slice(0, 12),
-		].join('#');
+	private async upsertReport(file: MiDriveFile, location: ObjectLocation): Promise<void> {
+		const now = new Date();
+		const updated = await this.reportsRepository.createQueryBuilder()
+			.update()
+			.set({
+				bucket: location.bucket,
+				objectKey: location.key,
+				scope: location.scope,
+				reportCount: () => '"reportCount" + 1',
+				lastReportedAt: now,
+				verifiedAt: now,
+			})
+			.where('"fileId" = :fileId', { fileId: file.id })
+			.execute();
+		if ((updated.affected ?? 0) > 0) return;
+
+		// 唯一索引兜底并发：两个请求同时首次上报时，输的一方静默忽略
+		await this.reportsRepository.createQueryBuilder()
+			.insert()
+			.values({
+				id: this.idService.gen(),
+				fileId: file.id,
+				bucket: location.bucket,
+				objectKey: location.key,
+				scope: location.scope,
+				reportCount: 1,
+				firstReportedAt: now,
+				lastReportedAt: now,
+				verifiedAt: now,
+			})
+			.orIgnore()
+			.execute();
+	}
+	//#endregion
+
+	//#region 管理员操作
+	/**
+	 * 重新核实选中的记录：对象存在则移除记录，明确缺失则刷新核实时间，其余保持不动。
+	 * 永不抛出。
+	 */
+	@bindThis
+	public async recheck(reportIds: string[]): Promise<MissingBatchSummary> {
+		return await this.processBatch(reportIds, async (report, file, location) => {
+			const probe = await this.probe(location.bucket, location.key);
+			if (probe === 'unknown') return 'unknown';
+			if (probe === 'present') {
+				await this.reportsRepository.delete({ id: report.id });
+				return 'present';
+			}
+			await this.reportsRepository.update({ id: report.id }, { verifiedAt: new Date(), bucket: location.bucket, objectKey: location.key, scope: location.scope });
+			return 'missing';
+		});
 	}
 
-	private async isPaused(): Promise<boolean> {
-		return (await this.redisClient.exists(KEY.breaker)) === 1;
+	/**
+	 * 删除选中的记录对应的网盘文件。每条都用当前配置重新解析位置并 HEAD，
+	 * 必须明确 404 才删除；对象存储本身不可用（金丝雀失败）时整批中止。
+	 * 每个用户收到一条通知。
+	 */
+	@bindThis
+	public async deleteReported(reportIds: string[], moderator: MiUser): Promise<MissingBatchSummary> {
+		// 每个用户本批被删文件的 MIME 列表，用于选择通知文案
+		const deletedByUser = new Map<string, string[]>();
+		const summary = await this.processBatch(reportIds, async (report, file, location) => {
+			const probe = await this.probe(location.bucket, location.key);
+			if (probe === 'unknown') return 'unknown';
+			if (probe === 'present') {
+				await this.reportsRepository.delete({ id: report.id });
+				return 'present';
+			}
+
+			const deleted = await this.driveService.deleteFileWithMissingObject(file, moderator);
+			if (!deleted) return 'unknown';
+			if (file.userId) deletedByUser.set(file.userId, [...(deletedByUser.get(file.userId) ?? []), file.type]);
+			return 'deleted';
+		});
+
+		// 通知放在删除全部提交之后；失败只记日志，不影响已提交的删除
+		for (const [userId, mimes] of deletedByUser) {
+			try {
+				// 全是图片才说「图片」，混有其他类型就说「文件」
+				const notice = buildMissingObjectNotice(mimes.every(m => m.startsWith('image/')));
+				this.notificationService.createNotification(userId, 'app', {
+					appAccessTokenId: null,
+					customBody: notice.text,
+					customHeader: notice.title,
+					customIcon: this.meta.iconUrl,
+				});
+			} catch (err) {
+				this.logger.warn(`failed to notify ${userId}: ${err instanceof Error ? err.message : String(err)}`);
+			}
+		}
+		return summary;
+	}
+
+	private async processBatch(
+		reportIds: string[],
+		handle: (report: { id: string; fileId: string }, file: MiDriveFile, location: ObjectLocation) => Promise<MissingBatchResult>,
+	): Promise<MissingBatchSummary> {
+		const ids = [...new Set(reportIds)].slice(0, MISSING_BATCH_MAX);
+		const items: MissingBatchItemResult[] = [];
+		if (ids.length === 0) return { items, aborted: false };
+
+		const reports = await this.reportsRepository.findBy(ids.map(id => ({ id })));
+		const byId = new Map(reports.map(r => [r.id, r]));
+
+		// 整批先过一次端点健康检查：不可用就一个都不动。
+		// 对照池要排除本批待处理的文件——它们多半正是缺失文件，若算进对照会把「整批都缺失」误判成「存储不健康」，
+		// 导致管理员永远删不掉这批文件
+		const batchFileIds = new Set(reports.map(r => r.fileId));
+		const canary = await this.storageHealthy(batchFileIds);
+		if (!canary) {
+			this.logger.warn('batch aborted: storage health check failed');
+			return { items: ids.map(id => ({ id, result: byId.has(id) ? 'unknown' : 'gone' } satisfies MissingBatchItemResult)), aborted: true };
+		}
+
+		for (const id of ids) {
+			const report = byId.get(id);
+			if (report == null) {
+				items.push({ id, result: 'gone' });
+				continue;
+			}
+			try {
+				const file = await this.driveFilesRepository.findOneBy({ id: report.fileId });
+				if (file == null) {
+					await this.reportsRepository.delete({ id: report.id });
+					items.push({ id, result: 'gone' });
+					continue;
+				}
+				// 位置必须按「当前配置」重新解析：配置变更后无法解析的一律不动
+				const location = this.locate(file);
+				if (location == null) {
+					items.push({ id, result: 'unknown' });
+					continue;
+				}
+				items.push({ id, result: await handle(report, file, location) });
+			} catch (err) {
+				this.logger.warn(`batch item ${id} failed: ${err instanceof Error ? err.message : String(err)}`);
+				items.push({ id, result: 'unknown' });
+			}
+		}
+		return { items, aborted: false };
+	}
+	//#endregion
+
+	//#region 内部
+	/** 文件是否属于「当前配置下可核查的对象存储本地文件」，并给出对象位置。 */
+	private locate(file: MiDriveFile): ObjectLocation | null {
+		if (!this.meta.useObjectStorage) return null;
+		if (file.storedInternal || file.isLink || file.userHost !== null || file.accessKey == null) return null;
+		return resolveObjectLocation(file.url, file.accessKey, this.meta);
 	}
 
 	private async probe(bucket: string, key: string): Promise<ObjectProbe> {
@@ -234,83 +310,38 @@ export class DriveMissingObjectService {
 		}
 	}
 
-	/**
-	 * 金丝雀：在当前桶里找另一个文件 HEAD 一次，必须明确存在才算端点与凭证可用。
-	 * 找不到可对照的文件时按「不健康」处理——宁可不修复。
-	 */
-	private async bucketLooksHealthy(missing: MiDriveFile): Promise<boolean> {
+	private async storageHealthy(excludeFileIds?: ReadonlySet<string>): Promise<boolean> {
 		const bucket = this.meta.objectStorageBucket;
 		if (!bucket) return false;
 
-		const candidates = await this.driveFilesRepository.createQueryBuilder('f')
+		const query = this.driveFilesRepository.createQueryBuilder('f')
 			.where('f.storedInternal = false')
 			.andWhere('f.isLink = false')
 			.andWhere('f.userHost IS NULL')
-			.andWhere('f.accessKey IS NOT NULL')
-			.andWhere('f.id != :id', { id: missing.id })
-			.orderBy('f.id', 'DESC')
-			.limit(10)
-			.getMany();
+			.andWhere('f.accessKey IS NOT NULL');
+		if (excludeFileIds != null && excludeFileIds.size > 0) query.andWhere('f.id NOT IN (:...ids)', { ids: [...excludeFileIds] });
+		const candidates = await query.orderBy('f.id', 'DESC').limit(10).getMany();
 
 		for (const candidate of candidates) {
 			if (candidate.accessKey == null) continue;
-			const candidateLocation = resolveObjectLocation(candidate.url, candidate.accessKey, this.meta);
+			const location = resolveObjectLocation(candidate.url, candidate.accessKey, this.meta);
 			// 对照对象必须在当前桶：遗留桶里的对象本身就可能已丢失，不能用来证明端点健康
-			if (candidateLocation == null || candidateLocation.scope !== 'current') continue;
-			const result = await this.probe(candidateLocation.bucket, candidateLocation.key);
+			if (location == null || location.scope !== 'current') continue;
 			// 只有金丝雀明确存在才算健康；缺失或不确定都继续试下一个，最终仍没有存在者则不健康
-			if (result === 'present') return true;
+			if (await this.probe(location.bucket, location.key) === 'present') return true;
 		}
 		return false;
 	}
 
-	/** 记录一个疑似缺失的文件；窗口内不同文件过多则触发熔断。返回 false 表示已熔断。 */
-	private async recordMissingAndCheckBreaker(fileId: string): Promise<boolean> {
-		const now = Date.now();
-		await this.redisClient.zadd(KEY.recent, now, fileId);
-		await this.redisClient.zremrangebyscore(KEY.recent, 0, now - MASS_MISSING_WINDOW_SECONDS * 1000);
-		await this.redisClient.expire(KEY.recent, MASS_MISSING_WINDOW_SECONDS);
-		const recentCount = await this.redisClient.zcard(KEY.recent);
-		if (recentCount >= MASS_MISSING_THRESHOLD) {
-			await this.redisClient.set(KEY.breaker, '1', 'EX', BREAKER_PAUSE_SECONDS);
-			this.logger.error(`${recentCount} different drive files looked missing within ${MASS_MISSING_WINDOW_SECONDS / 60} minutes; assuming a bucket-level problem and pausing automatic repair for ${BREAKER_PAUSE_SECONDS / 60} minutes`);
-			return false;
-		}
-		return true;
+	private async storageLooksHealthy(missing: MiDriveFile): Promise<boolean> {
+		return await this.storageHealthy(new Set([missing.id]));
 	}
 
-	/** 小时限额；返回 true 表示已占用一个名额。 */
-	private async takeHourlyQuota(fileId: string): Promise<boolean> {
-		const now = Date.now();
-		const hourKey = KEY.hourly(Math.floor(now / 3_600_000));
-		const used = await this.redisClient.incr(hourKey);
-		if (used === 1) await this.redisClient.expire(hourKey, 2 * 3600);
-		if (used > REPAIR_HOURLY_LIMIT) {
-			this.logger.error(`hourly automatic repair limit (${REPAIR_HOURLY_LIMIT}) reached; ${fileId} left untouched`);
-			return false;
-		}
-		return true;
+	private async takeProbeBudget(): Promise<boolean> {
+		const key = KEY.budget(Math.floor(Date.now() / 60_000));
+		const used = await this.redisClient.incr(key);
+		if (used === 1) await this.redisClient.expire(key, 120);
+		return used <= REPORT_PROBE_BUDGET_PER_MINUTE;
 	}
-
-	private async notifyOwner(file: MiDriveFile): Promise<void> {
-		try {
-			// 24 小时内每个用户只提醒一次，避免一次丢多个文件时刷屏
-			const first = await this.redisClient.set(KEY.notice(file.userId!), '1', 'EX', NOTICE_COOLDOWN_SECONDS, 'NX');
-			if (first == null) return;
-
-			const notice = buildMissingObjectNotice(file.type);
-			await this.announcementService.create({
-				title: notice.title,
-				text: notice.text,
-				icon: 'warning',
-				display: 'normal',
-				forExistingUsers: false,
-				silence: false,
-				needConfirmationToRead: false,
-				userId: file.userId,
-			});
-		} catch (err) {
-			this.logger.warn(`failed to notify the owner of ${file.id}: ${err instanceof Error ? err.message : String(err)}`);
-		}
-	}
+	//#endregion
 }
