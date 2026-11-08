@@ -113,7 +113,8 @@ export class FileServerService {
 
 	@bindThis
 	private async errorHandler(request: FastifyRequest<{ Params?: { [x: string]: any }; Querystring?: { [x: string]: any }; }>, reply: FastifyReply, err?: any) {
-		this.logger.error(`${err}`);
+		// 带上请求路径才能反查是哪个文件/远程地址出错（/files/:key 对应 drive_file 访问键，/proxy/ 后即目标 URL）
+		this.logger.error(`${err} (${request.method} ${request.raw.url?.split('?')[0] ?? request.url})`);
 
 		reply.header('Cache-Control', 'max-age=300');
 
