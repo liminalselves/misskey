@@ -27,6 +27,7 @@ class FakeRedis {
 		this.store.set(key, { v: value, exp: exIdx >= 0 ? Date.now() + Number(args[exIdx + 1]) * 1000 : null });
 		return 'OK';
 	}
+	async get(key: string) { return this.live(key)?.v ?? null; }
 	async incr(key: string) {
 		const cur = Number(this.live(key)?.v ?? 0) + 1;
 		const e = this.store.get(key);
@@ -231,6 +232,24 @@ describe('DriveMissingObjectService', () => {
 			// 上报本身绝不删除任何数据
 			expect(h.driveService.deleteFileWithMissingObject).not.toHaveBeenCalled();
 			expect(h.files.has(file.id)).toBe(true);
+		});
+
+		test('the storage health check is cached, so a second report does not repeat the canary probes', async () => {
+			const h = setup();
+			const a = h.add(1);
+			const b = h.add(2);
+			h.add(3); // 当前桶里的金丝雀
+			h.objects.set(a.accessKey, 'missing');
+			h.objects.set(b.accessKey, 'missing');
+
+			await h.service.reportByUrl(a.url);
+			const callsAfterFirst = h.head.mock.calls.length;
+			expect(callsAfterFirst).toBeGreaterThan(1); // 第一次打了目标 + 金丝雀
+
+			vi.advanceTimersByTime(31_000); // 过文件冷却，但在健康缓存 60s 内
+			await h.service.reportByUrl(b.url);
+			// 第二次只多打了目标那一次 HEAD，没有重复金丝雀
+			expect(h.head.mock.calls.length).toBe(callsAfterFirst + 1);
 		});
 
 		test('a repeated report bumps the counter instead of adding a row', async () => {

@@ -33,9 +33,16 @@ const CHECK_COOLDOWN_SECONDS = 30;
 export const REPORT_PROBE_BUDGET_PER_MINUTE = 120;
 /** 管理员单次批量操作的上限。 */
 export const MISSING_BATCH_MAX = 100;
+/**
+ * 上报路径的存储健康状态缓存时长。金丝雀一次最多打 10 个 HEAD 且不计入上面的预算，
+ * 若不缓存，匿名端点能把 OSS 请求量放大十倍以上。缓存后 60 秒内最多打一轮金丝雀。
+ * 批量删除路径不用此缓存（删除必须实时核实）。
+ */
+const HEALTH_CACHE_SECONDS = 60;
 
 const KEY = {
 	cooldown: (fileId: string) => `drive:missing:cooldown:${fileId}`,
+	healthy: 'drive:missing:healthy',
 	budget: (minute: number) => `drive:missing:budget:${minute}`,
 } as const;
 
@@ -334,7 +341,15 @@ export class DriveMissingObjectService {
 	}
 
 	private async storageLooksHealthy(missing: MiDriveFile): Promise<boolean> {
-		return await this.storageHealthy(new Set([missing.id]));
+		// 上报路径用短 TTL 缓存，避免每次上报都重复打一轮金丝雀（成本放大）。
+		// 缓存只影响「是否记入待审表」，删除时仍实时核实，误报可由后续人工+实时核实兜住。
+		const cached = await this.redisClient.get(KEY.healthy);
+		if (cached === '1') return true;
+		if (cached === '0') return false;
+
+		const healthy = await this.storageHealthy(new Set([missing.id]));
+		await this.redisClient.set(KEY.healthy, healthy ? '1' : '0', 'EX', HEALTH_CACHE_SECONDS);
+		return healthy;
 	}
 
 	private async takeProbeBudget(): Promise<boolean> {

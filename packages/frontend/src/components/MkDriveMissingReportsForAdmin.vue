@@ -217,7 +217,8 @@ async function recheckSelected(): Promise<void> {
 	busy.value = true;
 	try {
 		const res = await api<MissingBatchResponse>('admin/drive/missing-reports/recheck', { ids: selectedIds.value });
-		removeRows(resolvedIds(res));
+		// recheck 会更新仍缺失行的核实时间，重新加载当前页以保证显示准确（只刷新当前页，不重置到第一页）
+		await load(page.value);
 		await os.alert({ type: res.aborted ? 'warning' : 'info', text: summarizeBatch(res, 'recheck') });
 	} catch (err) {
 		await os.alert({ type: 'error', text: err instanceof Error ? err.message : '核实失败' });
