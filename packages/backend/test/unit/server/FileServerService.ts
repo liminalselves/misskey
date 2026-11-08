@@ -19,6 +19,7 @@ import { ImageProcessingService } from '@/core/ImageProcessingService.js';
 import { InternalStorageService } from '@/core/InternalStorageService.js';
 import { IdService } from '@/core/IdService.js';
 import { LoggerService } from '@/core/LoggerService.js';
+import type { DriveMissingObjectService } from '@/core/DriveMissingObjectService.js';
 import { VideoProcessingService } from '@/core/VideoProcessingService.js';
 import { loadConfig, type Config } from '@/config.js';
 import { MiDriveFile } from '@/models/DriveFile.js';
@@ -153,6 +154,8 @@ describe('FileServerService', () => {
 		driveFilesRepository = db.getRepository(MiDriveFile);
 
 		const loggerService = new LoggerService();
+		// 本测试不涉及对象存储核查，桩实现即可
+		const driveMissingObjectService = { checkByReportedUrl: async () => 'ignored' } as unknown as DriveMissingObjectService;
 		const sensitiveMediaDetectionService = {
 			detectSensitive: async () => null,
 			detectSensitiveMany: async (sources: Buffer[]) => sources.map(() => null),
@@ -174,6 +177,7 @@ describe('FileServerService', () => {
 			videoProcessingService,
 			internalStorageService,
 			loggerService,
+			driveMissingObjectService,
 		);
 
 		fastify = Fastify();
@@ -198,6 +202,7 @@ describe('FileServerService', () => {
 			videoProcessingService,
 			internalStorageService,
 			loggerService,
+			driveMissingObjectService,
 		);
 		externalFastify = Fastify();
 		await externalFastify.register(fastifyStatic, {

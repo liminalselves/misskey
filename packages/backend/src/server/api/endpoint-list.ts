@@ -350,6 +350,7 @@ export * as 'drive/files/delete' from './endpoints/drive/files/delete.js';
 export * as 'drive/files/download-url' from './endpoints/drive/files/download-url.js';
 export * as 'drive/files/find' from './endpoints/drive/files/find.js';
 export * as 'drive/files/find-by-hash' from './endpoints/drive/files/find-by-hash.js';
+export * as 'drive/files/report-missing' from './endpoints/drive/files/report-missing.js';
 export * as 'drive/files/show' from './endpoints/drive/files/show.js';
 export * as 'drive/files/update' from './endpoints/drive/files/update.js';
 export * as 'drive/files/move-bulk' from './endpoints/drive/files/move-bulk.js';

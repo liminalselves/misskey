@@ -17,6 +17,7 @@ import { FileInfoService } from '@/core/FileInfoService.js';
 import { ImageProcessingService } from '@/core/ImageProcessingService.js';
 import { VideoProcessingService } from '@/core/VideoProcessingService.js';
 import { LoggerService } from '@/core/LoggerService.js';
+import { DriveMissingObjectService } from '@/core/DriveMissingObjectService.js';
 import { bindThis } from '@/decorators.js';
 import { handleRequestRedirectToOmitSearch } from '@/misc/fastify-hook-handlers.js';
 import { FileServerDriveHandler } from './file/FileServerDriveHandler.js';
@@ -46,6 +47,7 @@ export class FileServerService {
 		private videoProcessingService: VideoProcessingService,
 		private internalStorageService: InternalStorageService,
 		private loggerService: LoggerService,
+		private driveMissingObjectService: DriveMissingObjectService,
 	) {
 		this.logger = this.loggerService.getLogger('server', 'gray');
 		this.assets = resolve(this.config.rootDir, 'packages/backend/src/server/file/assets');
@@ -105,10 +107,29 @@ export class FileServerService {
 			Querystring: { url?: string; };
 		}>('/proxy/:url*', async (request, reply) => {
 			return await this.proxyHandler.handle(request, reply)
-				.catch(err => this.errorHandler(request, reply, err));
+				.catch(err => {
+					this.reportMissingObjectIfNotFound(request, err);
+					return this.errorHandler(request, reply, err);
+				});
 		});
 
 		done();
+	}
+
+	/**
+	 * 代理拉取对象存储里的本地文件得到 404 时，交给核查服务确认是否真的丢失。
+	 * 只传目标 URL，是否修复由服务独立验证；任何异常都不影响本次响应。
+	 */
+	@bindThis
+	private reportMissingObjectIfNotFound(request: FastifyRequest<{ Params?: { [x: string]: any }; Querystring?: { [x: string]: any }; }>, err: unknown): void {
+		if (!(err instanceof StatusError) || err.statusCode !== 404) return;
+
+		const target = typeof request.query?.url === 'string'
+			? request.query.url
+			: typeof request.params?.url === 'string' ? `https://${request.params.url}` : null;
+		if (target == null) return;
+
+		this.driveMissingObjectService.checkByReportedUrl(target).catch(() => {});
 	}
 
 	@bindThis

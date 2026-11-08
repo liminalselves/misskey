@@ -32,6 +32,8 @@ import { migrateNavbarMenuAgentsAfterTimeline, migrateNavbarMenuForPinnedExplore
 import { $i } from '@/i.js';
 import { launchPlugins } from '@/plugin.js';
 import { initTelemetry } from '@/telemetry.js';
+import { misskeyApi } from '@/utility/misskey-api.js';
+import { createMissingMediaReporter, getMediaElementUrl, shouldReportMediaUrl } from '@/utility/report-missing-media.js';
 
 export async function common(createVue: () => Promise<App<Element>>) {
 	console.info(`Misskey v${version}`);
@@ -63,6 +65,19 @@ export async function common(createVue: () => Promise<App<Element>>) {
 			*/
 		});
 	}
+
+	//#region 媒体加载失败上报：服务端会向对象存储核实，确认丢失后才会清理网盘记录
+	{
+		const missingMediaReporter = createMissingMediaReporter(url => {
+			(misskeyApi as unknown as (ep: string, data: Record<string, unknown>) => Promise<unknown>)('drive/files/report-missing', { url }).catch(() => {});
+		});
+		// error 事件不冒泡，必须在捕获阶段监听
+		window.addEventListener('error', event => {
+			const url = getMediaElementUrl(event.target);
+			if (shouldReportMediaUrl(url, window.location.origin)) missingMediaReporter.report(url);
+		}, true);
+	}
+	//#endregion
 
 	let isClientUpdated = false;
 
