@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
+import { createHash } from 'node:crypto';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import Redis from 'ioredis';
 import { DI } from '@/di-symbols.js';
@@ -27,6 +28,9 @@ import { ApiError } from '@/server/api/error.js';
 
 /** Maximum length for a single agent text field. */
 export const AGENT_TEXT_FIELD_MAX = 100_000;
+
+/** Key 鉴权失败或额度耗尽后，在此期间把它排到末尾（仍作兜底）；管理员改好 Key 后最迟一个周期自动恢复优先级 */
+const AGENT_LLM_KEY_COOLDOWN_SECONDS = 120;
 
 /** LLM chat/completions 响应体读取上限：128k token 输出约 0.5~1MB，20MiB 已极度宽裕 */
 const AGENT_LLM_RESPONSE_BODY_LIMIT_BYTES = 20 * 1024 * 1024;
@@ -198,7 +202,25 @@ export function agentLlmAttemptErrorFrom(error: ApiError, index: number): AgentL
 	};
 }
 
-export async function invokeAgentLlmApiKeys<T>(apiKeys: readonly string[], invoke: (apiKey: string, index: number) => Promise<T>): Promise<T> {
+/** 判断失败是否说明「这把 Key 本身不可用」（鉴权失败或额度耗尽），而不是网络抖动或普通限流。 */
+export function isAgentLlmKeyUnusableError(error: ApiError): boolean {
+	const { reason, status, detail } = agentLlmAttemptErrorFrom(error, 0);
+	if (reason !== 'UPSTREAM_HTTP_ERROR') return false;
+	if (status === 401 || status === 403) return true;
+	return status === 429 && detail != null && /insufficient_quota/i.test(detail);
+}
+
+/** 冷却中的 Key 稳定地排到末尾：仍保留为兜底，不减少可尝试的 Key 数量。 */
+export function deprioritizeCoolingAgentLlmApiKeys(keys: readonly string[], cooling: ReadonlySet<string>): string[] {
+	if (cooling.size === 0) return [...keys];
+	return [...keys.filter(key => !cooling.has(key)), ...keys.filter(key => cooling.has(key))];
+}
+
+export async function invokeAgentLlmApiKeys<T>(
+	apiKeys: readonly string[],
+	invoke: (apiKey: string, index: number) => Promise<T>,
+	onKeyFailure?: (apiKey: string, error: ApiError) => void,
+): Promise<T> {
 	const attempts: AgentLlmAttemptError[] = [];
 	for (const [index, apiKey] of apiKeys.entries()) {
 		try {
@@ -206,6 +228,7 @@ export async function invokeAgentLlmApiKeys<T>(apiKeys: readonly string[], invok
 		} catch (error) {
 			if (!(error instanceof ApiError)) throw error;
 			if (error.code === agentsErrors.llmAborted.code || error.code === agentsErrors.llmUnsafeUrl.code) throw error;
+			onKeyFailure?.(apiKey, error);
 			attempts.push(agentLlmAttemptErrorFrom(error, index + 1));
 		}
 	}
@@ -1165,7 +1188,10 @@ export class AgentService {
 		let apiKeys = configuredKeys;
 		if (configuredKeys.length > 1) {
 			const counter = await this.redisClient.incr(`agent:llm:key-round-robin:${connection.modelId}`);
-			apiKeys = rotateAgentLlmApiKeys(configuredKeys, counter);
+			apiKeys = deprioritizeCoolingAgentLlmApiKeys(
+				rotateAgentLlmApiKeys(configuredKeys, counter),
+				await this.loadCoolingLlmApiKeys(connection.modelId, configuredKeys),
+			);
 		}
 		const safeBase = await this.resolveSafeLlmBaseUrl(connection.baseUrlRaw);
 		return invokeAgentLlmApiKeys(apiKeys, apiKeyRaw => this.invokeChatCompletionsWithKey(params, {
@@ -1175,7 +1201,32 @@ export class AgentService {
 			maxContextTokens: connection.maxContextTokens,
 			maxOutputTokensPerCall: connection.maxOutputTokensPerCall,
 			isByok: false,
-		}));
+		}), (apiKey, error) => {
+			if (configuredKeys.length > 1 && isAgentLlmKeyUnusableError(error)) {
+				void this.markLlmApiKeyCooling(connection.modelId, apiKey);
+			}
+		});
+	}
+
+	private llmKeyCoolingRedisKey(modelId: string, apiKey: string): string {
+		// 只存密钥哈希，Redis 里不落明文 Key
+		return `agent:llm:key-cooldown:${modelId}:${createHash('sha256').update(apiKey).digest('hex').slice(0, 16)}`;
+	}
+
+	/** 读取冷却中的 Key；Redis 异常时视为无冷却，不影响正常调用。 */
+	private async loadCoolingLlmApiKeys(modelId: string, keys: readonly string[]): Promise<Set<string>> {
+		try {
+			const flags = await this.redisClient.mget(keys.map(key => this.llmKeyCoolingRedisKey(modelId, key)));
+			return new Set(keys.filter((_, i) => flags[i] != null));
+		} catch {
+			return new Set();
+		}
+	}
+
+	private async markLlmApiKeyCooling(modelId: string, apiKey: string): Promise<void> {
+		try {
+			await this.redisClient.set(this.llmKeyCoolingRedisKey(modelId, apiKey), '1', 'EX', AGENT_LLM_KEY_COOLDOWN_SECONDS);
+		} catch { /* Cooldown is an optimisation; failing to record it must not fail the request. */ }
 	}
 
 	private async resolveSafeLlmBaseUrl(baseUrlRaw: string): Promise<URL> {

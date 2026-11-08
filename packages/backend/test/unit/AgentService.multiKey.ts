@@ -5,7 +5,7 @@
 
 import { describe, test, expect } from 'vitest';
 
-import { agentLlmAttemptErrorFrom, agentsErrors, invokeAgentLlmApiKeys, rotateAgentLlmApiKeys } from '@/core/AgentService.js';
+import { agentLlmAttemptErrorFrom, agentsErrors, deprioritizeCoolingAgentLlmApiKeys, invokeAgentLlmApiKeys, isAgentLlmKeyUnusableError, rotateAgentLlmApiKeys } from '@/core/AgentService.js';
 import { ApiError } from '@/server/api/error.js';
 
 describe('AgentService multi-key helpers', () => {
@@ -63,6 +63,37 @@ describe('AgentService multi-key helpers', () => {
 				],
 			},
 		});
+	});
+
+	test('treats auth failure and exhausted quota as unusable keys, but not plain rate limits', () => {
+		const upstream = (status: number, detail?: string) => new ApiError(agentsErrors.llmRequestFailed, { reason: 'UPSTREAM_HTTP_ERROR', status, ...(detail ? { detail } : {}) });
+		expect(isAgentLlmKeyUnusableError(upstream(401))).toBe(true);
+		expect(isAgentLlmKeyUnusableError(upstream(403))).toBe(true);
+		expect(isAgentLlmKeyUnusableError(upstream(429, 'insufficient_quota: inference exceeds tpm/rpm limit'))).toBe(true);
+		expect(isAgentLlmKeyUnusableError(upstream(429, 'inference exceeds tpm/rpm limit'))).toBe(false);
+		expect(isAgentLlmKeyUnusableError(upstream(500))).toBe(false);
+		expect(isAgentLlmKeyUnusableError(new ApiError(agentsErrors.llmRequestFailed, { reason: 'NETWORK_ERROR' }))).toBe(false);
+		expect(isAgentLlmKeyUnusableError(new ApiError(agentsErrors.llmTimeout))).toBe(false);
+	});
+
+	test('moves cooling keys to the end without dropping any', () => {
+		expect(deprioritizeCoolingAgentLlmApiKeys(['a', 'b', 'c'], new Set(['a']))).toEqual(['b', 'c', 'a']);
+		expect(deprioritizeCoolingAgentLlmApiKeys(['a', 'b', 'c'], new Set(['a', 'c']))).toEqual(['b', 'a', 'c']);
+		expect(deprioritizeCoolingAgentLlmApiKeys(['a', 'b'], new Set(['a', 'b']))).toEqual(['a', 'b']);
+		expect(deprioritizeCoolingAgentLlmApiKeys(['a', 'b'], new Set())).toEqual(['a', 'b']);
+	});
+
+	test('reports each failed key to the failure hook', async () => {
+		const failed: string[] = [];
+		const result = await invokeAgentLlmApiKeys(['bad', 'good'], async key => {
+			if (key === 'bad') throw new ApiError(agentsErrors.llmRequestFailed, { reason: 'UPSTREAM_HTTP_ERROR', status: 401 });
+			return 'ok';
+		}, (key, error) => {
+			expect(isAgentLlmKeyUnusableError(error)).toBe(true);
+			failed.push(key);
+		});
+		expect(result).toBe('ok');
+		expect(failed).toEqual(['bad']);
 	});
 
 	test('does not try another key after a client abort', async () => {

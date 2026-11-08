@@ -7,6 +7,8 @@ import { NestFactory } from '@nestjs/core';
 import { init } from 'slacc';
 import { NestLogger } from '@/NestLogger.js';
 import { envOption } from '@/env.js';
+import Logger from '@/logger.js';
+import { startEventLoopLagMonitor } from '@/misc/event-loop-lag-monitor.js';
 import type { Config } from '@/config.js';
 
 let slaccInitialized = false;
@@ -42,6 +44,11 @@ export async function server() {
 		app.get(QueueStatsService).start();
 		app.get(ServerStatsService).start();
 		app.get(AgentSessionCleanupService).start();
+	}
+
+	if (process.env.NODE_ENV !== 'test') {
+		const lagLogger = new Logger('event-loop', 'red');
+		startEventLoopLagMonitor(message => lagLogger.warn(message));
 	}
 
 	return app;
