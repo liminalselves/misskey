@@ -64,7 +64,7 @@ async function harness(triggerRules = rules) {
 			const [sql, parameters] = qb.getQueryAndParameters();
 			queries.push({ sql, parameters });
 			if (sql.includes('MAX("log"."createdAt")')) {
-				return [{ userId: 'owner', blockCount: '3', latestBlockAt: logs[2].createdAt, reviewUntilId: 'log2' }];
+				return [{ userId: 'owner', sessionId: null, blockCount: '3', latestBlockAt: logs[2].createdAt, reviewUntilId: 'log2' }];
 			}
 			const window = qb.getParameters().timeWindowMinutes as number;
 			const rule = triggerRules.find(r => r.timeWindowMinutes === window);
@@ -112,7 +112,7 @@ describe('external audit review eligibility', () => {
 		const h = await harness();
 		await h.endpoint.exec({}, moderator as never, null);
 		expect(h.details).toHaveLength(1);
-		expect(h.queries.at(-1)!.sql).toContain('MAX("log"."id") AS "reviewUntilId"');
+		expect(h.queries.find(q => q.sql.includes('AS "reviewUntilId"'))!.sql).toContain('MAX("log"."id") AS "reviewUntilId"');
 		// Run the emitted ranking subquery itself to prove the cap is per user, not global.
 		const detail = h.details[0];
 		const ranked = detail.sql.match(/IN \(\s*(SELECT "ranked"\."id"[\s\S]*"ranked"\."rank" <= \$\d+)\s*\)/)![1];
@@ -120,8 +120,8 @@ describe('external audit review eligibility', () => {
 		const used = new Set([...ranked.matchAll(/\$\d+/g)].map(m => m[0]));
 		const db = new DatabaseSync(':memory:');
 		try {
-			db.exec('CREATE TABLE agent_external_audit_log (id TEXT, userId TEXT, createdAt INTEGER, status TEXT, reviewIgnoredAt INTEGER)');
-			const insert = db.prepare('INSERT INTO agent_external_audit_log VALUES (?, ?, ?, ?, ?)');
+			db.exec('CREATE TABLE agent_external_audit_log (id TEXT, userId TEXT, createdAt INTEGER, status TEXT, reviewIgnoredAt INTEGER, sessionId TEXT)');
+			const insert = db.prepare('INSERT INTO agent_external_audit_log VALUES (?, ?, ?, ?, ?, NULL)');
 			// The second, newer user would take every slot under a global rank, so this pins PARTITION BY userId.
 			for (let i = 0; i < 80; i++) insert.run(`a${String(i).padStart(3, '0')}`, 'owner', i, 'block', null);
 			for (let i = 0; i < 60; i++) insert.run(`z${String(i).padStart(3, '0')}`, 'peer', 1000 + i, 'block', null);
@@ -143,6 +143,14 @@ describe('external audit review eligibility', () => {
 		} finally {
 			db.close();
 		}
+	});
+
+	test('groups the page query and detail ranking by user and session', async () => {
+		const h = await harness();
+		const rows = await h.endpoint.exec({}, moderator as never, null);
+		expect(h.queries.find(q => q.sql.includes('MAX("log"."createdAt")'))!.sql).toMatch(/GROUP BY "log"\."userId", "log"\."sessionId"/);
+		expect(h.details[0].sql).toContain('PARTITION BY "l"."userId", "l"."sessionId"');
+		expect(rows[0]).toMatchObject({ userId: 'owner', sessionId: null, userReviewUntilId: 'log2' });
 	});
 
 	test('keeps a triggered review and its evidence after every configured window expires', async () => {

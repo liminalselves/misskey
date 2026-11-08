@@ -75,6 +75,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			const pageQb = this.agentExternalAuditLogsRepository
 				.createQueryBuilder('log')
 				.select('log.userId', 'userId')
+				.addSelect('log.sessionId', 'sessionId')
 				.addSelect('COUNT(*)', 'blockCount')
 				.addSelect('MAX(log.createdAt)', 'latestBlockAt')
 				// Upper bound of the counted evidence; ignore uses it so later arrivals stay pending.
@@ -83,18 +84,39 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				.andWhere('log.userId IS NOT NULL')
 				.andWhere('log.reviewIgnoredAt IS NULL')
 				.andWhere('log.userId IN (:...qualifiedUserIds)', { qualifiedUserIds: [...qualifiedUserIds] })
+				// 复审以「用户 + 会话」为一组；资格仍按用户判定，组内只统计该会话的证据
 				.groupBy('log.userId')
+				.addGroupBy('log.sessionId')
 				.orderBy('"blockCount"', 'DESC')
 				.addOrderBy('"latestBlockAt"', 'DESC')
 				.addOrderBy('"userId"', 'ASC')
+				.addOrderBy('"sessionId"', 'ASC', 'NULLS LAST')
 				.offset(ps.offset ?? 0)
 				.limit(ps.limit ?? 20);
 
-			const userStats = await pageQb.getRawMany<{ userId: string; blockCount: string; latestBlockAt: Date | string; reviewUntilId: string }>();
+			const userStats = await pageQb.getRawMany<{ userId: string; sessionId: string | null; blockCount: string; latestBlockAt: Date | string; reviewUntilId: string }>();
 			if (userStats.length === 0) return [];
 
 			// 仅对当前页用户取明细，去掉旧的全局 take(500)（跨用户截断会让靠后的用户被静默丢弃）
-			const pageUserIds = userStats.map(s => s.userId);
+			const pageUserIds = [...new Set(userStats.map(s => s.userId))];
+			const pageSessionIds = [...new Set(userStats.map(s => s.sessionId).filter((id): id is string => id != null))];
+			const hasNullSession = userStats.some(s => s.sessionId == null);
+			const sessionCondition = [
+				...(pageSessionIds.length > 0 ? ['"l"."sessionId" IN (:...pageSessionIds)'] : []),
+				...(hasNullSession ? ['"l"."sessionId" IS NULL'] : []),
+			].join(' OR ');
+			// 同时处置用户时清的是该用户全部会话的证据，需要用户级上界（组级上界只覆盖本会话）
+			const userBounds = await this.agentExternalAuditLogsRepository
+				.createQueryBuilder('log')
+				.select('log.userId', 'userId')
+				.addSelect('MAX(log.id)', 'userReviewUntilId')
+				.where('log.status = :status', { status: 'block' })
+				.andWhere('log.reviewIgnoredAt IS NULL')
+				.andWhere('log.userId IN (:...pageUserIds)', { pageUserIds })
+				.groupBy('log.userId')
+				.getRawMany<{ userId: string; userReviewUntilId: string }>();
+			const userBoundById = new Map(userBounds.map(b => [b.userId, b.userReviewUntilId]));
+
 			const users = await this.usersRepository.findBy({ id: In(pageUserIds) });
 			const packedUsers = await this.userEntityService.packMany(users, me, { schema: 'UserLite' });
 			const userById = new Map(packedUsers.map(u => [u.id, u]));
@@ -102,29 +124,31 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			const profiles = await this.userProfilesRepository.findBy({ userId: In(pageUserIds) });
 			const profileById = new Map(profiles.map(p => [p.userId, p]));
 
-			// Evidence no longer expires, so cap the text-heavy detail rows per user in one scan; blockCount keeps the total.
+			// Evidence no longer expires, so cap the text-heavy detail rows per user+session group in one scan; blockCount keeps the total.
 			const allLogs = await this.agentExternalAuditLogsRepository
 				.createQueryBuilder('log')
 				.leftJoinAndSelect('log.session', 'session')
 				.leftJoinAndSelect('log.character', 'character')
 				.where(`log.id IN (
 					SELECT "ranked"."id" FROM (
-						SELECT "l"."id", ROW_NUMBER() OVER (PARTITION BY "l"."userId" ORDER BY "l"."createdAt" DESC, "l"."id" DESC) AS "rank"
+						SELECT "l"."id", ROW_NUMBER() OVER (PARTITION BY "l"."userId", "l"."sessionId" ORDER BY "l"."createdAt" DESC, "l"."id" DESC) AS "rank"
 						FROM "agent_external_audit_log" "l"
-						WHERE "l"."status" = :status AND "l"."reviewIgnoredAt" IS NULL AND "l"."userId" IN (:...pageUserIds)
+						WHERE "l"."status" = :status AND "l"."reviewIgnoredAt" IS NULL AND "l"."userId" IN (:...pageUserIds) AND (${sessionCondition})
 					) "ranked"
 					WHERE "ranked"."rank" <= :reviewLogLimit
-				)`, { status: 'block', pageUserIds, reviewLogLimit: REVIEW_LOG_LIMIT })
+				)`, { status: 'block', pageUserIds, pageSessionIds, reviewLogLimit: REVIEW_LOG_LIMIT })
 				.orderBy('log.createdAt', 'DESC')
 				.addOrderBy('log.id', 'DESC')
 				.getMany();
 
-			const logsByUser = new Map<string, typeof allLogs>();
+			const groupKey = (userId: string, sessionId: string | null): string => `${userId}:${sessionId ?? ''}`;
+			const logsByGroup = new Map<string, typeof allLogs>();
 			for (const log of allLogs) {
 				if (!log.userId) continue;
-				const existing = logsByUser.get(log.userId) ?? [];
+				const key = groupKey(log.userId, log.sessionId);
+				const existing = logsByGroup.get(key) ?? [];
 				existing.push(log);
-				logsByUser.set(log.userId, existing);
+				logsByGroup.set(key, existing);
 			}
 
 			// 获取涉及的会话的封禁状态
@@ -138,11 +162,15 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				const userId = stat.userId;
 				const user = users.find(u => u.id === userId);
 				const profile = profileById.get(userId);
-				const userLogs = logsByUser.get(userId) ?? [];
+				const userLogs = logsByGroup.get(groupKey(userId, stat.sessionId)) ?? [];
+				const sessionName = userLogs.find(l => l.session?.name)?.session?.name ?? null;
 				const matchedRules = rules.filter(rule => ruleCountFor(rule, userId) >= rule.blockThreshold);
 
 				return {
 					userId,
+					sessionId: stat.sessionId,
+					sessionName,
+					sessionModerationBanned: stat.sessionId ? sessionBanMap.get(stat.sessionId) ?? false : false,
 					user: userById.get(userId) ?? null,
 					isSuspended: user?.isSuspended ?? false,
 					suspendedUntil: user?.suspendedUntil?.toISOString() ?? null,
@@ -150,6 +178,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					blockCount: parseInt(stat.blockCount, 10),
 					latestBlockAt: (stat.latestBlockAt as Date)?.toISOString?.() ?? null,
 					reviewUntilId: stat.reviewUntilId,
+					userReviewUntilId: userBoundById.get(userId) ?? stat.reviewUntilId,
 					triggeredRules: matchedRules.map(r => ({
 						id: r.id,
 						timeWindowMinutes: r.timeWindowMinutes,

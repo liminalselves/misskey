@@ -42,6 +42,8 @@ export const paramDef = {
 				/** 忽略该用户截至 untilId（含）的全部未审阅拦截记录，之后新到的记录保持待复审 */
 				userId: { type: 'string', format: 'misskey:id' },
 				untilId: { type: 'string', format: 'misskey:id' },
+				/** 给出（含 null=无会话）时只忽略该会话组；省略则覆盖该用户全部会话 */
+				sessionId: { type: 'string', format: 'misskey:id', nullable: true },
 			},
 			required: ['userId', 'untilId'],
 		},
@@ -63,14 +65,19 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			// A user range is updated by condition, so long-lived backlogs never hit bind-parameter limits.
 			const target = 'ids' in ps
 				? { id: In(ps.ids) }
-				: { userId: ps.userId, status: 'block' as const, id: LessThanOrEqual(ps.untilId) };
+				: {
+					userId: ps.userId,
+					status: 'block' as const,
+					id: LessThanOrEqual(ps.untilId),
+					...(ps.sessionId === undefined ? {} : { sessionId: ps.sessionId === null ? IsNull() : ps.sessionId }),
+				};
 			const result = await this.agentExternalAuditLogsRepository.update(
 				{ ...target, reviewIgnoredAt: IsNull() },
 				{ reviewIgnoredAt: new Date(), reviewIgnoredById: me.id },
 			);
 
 			await this.moderationLogService.logSafely(me, 'ignoreAgentExternalAuditReview', {
-				...('ids' in ps ? { ids: ps.ids } : { ids: [], userId: ps.userId, untilId: ps.untilId }),
+				...('ids' in ps ? { ids: ps.ids } : { ids: [], userId: ps.userId, untilId: ps.untilId, sessionId: ps.sessionId }),
 				count: result.affected ?? 0,
 			});
 
