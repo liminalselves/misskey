@@ -461,17 +461,13 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<template #icon><i class="ti ti-shield-exclamation"></i></template>
 				<template #label>人工复审触发条件</template>
 						<div class="_gaps">
-							<MkInfo>未审阅的外审拦截记录只要在任一指定时间窗口内达到设定次数，就会进入人工复审；不会因时间过去而自动消失，处理或忽略后才移除。多条规则满足任意一条即可。统计范围可选按会话或按用户；未设置范围的旧规则按会话处理。</MkInfo>
+							<MkInfo>未审阅的外审拦截记录只要在任一指定时间窗口内达到设定次数，就会进入人工复审；不会因时间过去而自动消失，处理或忽略后才移除。多条规则满足任意一条即可。</MkInfo>
 							<div v-for="(rule, i) in form.state.agentReviewTriggerRules" :key="rule.id" :data-settings-anchor="`trigger:${rule.id}`" :class="[$style.modelCard, highlightedAnchor === `trigger:${rule.id}` ? $style.anchorHighlight : null]" class="_gaps_s">
 								<div :class="$style.modelCardHead">
 									<b>规则 #{{ i + 1 }}</b>
 									<button type="button" class="_button" :class="$style.iconWarn" @click="removeReviewTriggerRule(i)"><i class="ti ti-trash"></i></button>
 								</div>
 								<FormSplit :minWidth="200">
-									<MkSelect v-model="rule.scope" :items="reviewTriggerScopeItems">
-										<template #label>统计范围</template>
-										<template #caption>{{ rule.scope === 'session' ? '同一用户在同一会话内的拦截才累计，只有达标的会话进入复审' : '同一用户跨会话合并计数，达标后该用户所有会话都进入复审' }}</template>
-									</MkSelect>
 									<MkInput v-model="rule.timeWindowMinutes" type="text">
 										<template #label>时间窗口（分钟）</template>
 										<template #caption>如 60 表示 1 小时内</template>
@@ -1236,7 +1232,6 @@ type AgentByokProviderRow = {
 
 type AgentReviewTriggerRule = {
 	id: string;
-	scope: 'session' | 'user';
 	timeWindowMinutes: string;
 	blockThreshold: string;
 	enabled: boolean;
@@ -1251,11 +1246,6 @@ const agentImageProviderItems: MkSelectItem[] = [
 ];
 
 const agentImageProviderValues = new Set(agentImageProviderItems.flatMap(item => 'value' in item ? [item.value] : []));
-
-const reviewTriggerScopeItems: MkSelectItem<'session' | 'user'>[] = [
-	{ value: 'session', label: '按会话（默认）' },
-	{ value: 'user', label: '按用户（跨会话合并）' },
-];
 
 const billingModeItems: MkSelectItem[] = [
 	{ value: 'per_call', label: i18n.ts._agents.billingModePerCall },
@@ -1491,7 +1481,6 @@ function initAgentReviewTriggerRules(): AgentReviewTriggerRule[] {
 		const o = (item && typeof item === 'object') ? item as Record<string, unknown> : {};
 		return {
 			id: typeof o.id === 'string' && o.id ? o.id : genId(),
-			scope: o.scope === 'user' ? 'user' : 'session',
 			timeWindowMinutes: String(numFromMeta(o.timeWindowMinutes, 60)),
 			blockThreshold: String(numFromMeta(o.blockThreshold, 5)),
 			enabled: o.enabled !== false,
@@ -1905,7 +1894,6 @@ function buildExternalAuditPayload(state: FormState): Record<string, unknown> {
 
 	const triggerRules = state.agentReviewTriggerRules.map((r, i) => ({
 		id: r.id,
-		scope: r.scope,
 		timeWindowMinutes: intField('externalAudit', r.timeWindowMinutes, 1, 10080, `复审规则 #${i + 1} · 时间窗口`, `trigger:${r.id}`),
 		blockThreshold: intField('externalAudit', r.blockThreshold, 1, 1000, `复审规则 #${i + 1} · 触发次数`, `trigger:${r.id}`),
 		enabled: r.enabled,
@@ -2453,7 +2441,6 @@ function clearExternalAuditAutoDisabled(index: number) {
 function addReviewTriggerRule() {
 	form.state.agentReviewTriggerRules.push({
 		id: genId(),
-		scope: 'session',
 		timeWindowMinutes: '60',
 		blockThreshold: '5',
 		enabled: true,

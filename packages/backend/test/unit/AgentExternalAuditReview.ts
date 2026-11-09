@@ -23,8 +23,8 @@ const { default: QuickAction } = await import('@/server/api/endpoints/admin/agen
 const { default: ReviewIgnore } = await import('@/server/api/endpoints/admin/agents/governance/external-audit/review-ignore.js');
 
 const rules: MiAgentReviewTriggerRule[] = [
-	{ id: 'hour', scope: 'session', timeWindowMinutes: 60, blockThreshold: 3, enabled: true },
-	{ id: 'day', scope: 'user', timeWindowMinutes: 1440, blockThreshold: 5, enabled: true },
+	{ id: 'hour', timeWindowMinutes: 60, blockThreshold: 3, enabled: true },
+	{ id: 'day', timeWindowMinutes: 1440, blockThreshold: 5, enabled: true },
 ];
 const moderator = { id: 'moderator' };
 
@@ -108,41 +108,15 @@ async function queryFor(triggerRules: MiAgentReviewTriggerRule[], filterUserId: 
 
 afterEach(() => vi.useRealTimers());
 
-describe('review trigger scope normalization', () => {
-	test('missing or unknown scope means session, matching the settings page default', async () => {
-		const { reviewRuleScope, normalizeAgentReviewTriggerRules } = await import('@/misc/agent-review-trigger-rules.js');
-		expect(reviewRuleScope({})).toBe('session');
-		expect(reviewRuleScope({ scope: null })).toBe('session');
-		expect(reviewRuleScope({ scope: 'anything' })).toBe('session');
-		expect(reviewRuleScope({ scope: 'user' })).toBe('user');
-		const normalized = normalizeAgentReviewTriggerRules([{ id: 'r', timeWindowMinutes: 60, blockThreshold: 3, enabled: true }]);
-		expect(normalized).toEqual([{ id: 'r', timeWindowMinutes: 60, blockThreshold: 3, enabled: true, scope: 'session' }]);
-		expect(normalizeAgentReviewTriggerRules(null)).toEqual([]);
-	});
-});
-
 describe('external audit review eligibility', () => {
-	test('session-scoped rules partition the window by user and session and match both keys', async () => {
+	test('rules partition the window by user and session and match qualified groups', async () => {
 		const [sql, parameters] = await queryFor([rules[0]]);
 		expect(sql).toMatch(/COUNT\(\*\) OVER \(PARTITION BY "log"\."userId", "log"\."sessionId" ORDER BY "log"\."createdAt"/);
-		expect(sql).toContain('("log"."userId", "log"."sessionId") IN (');
+		expect(sql).toContain('EXISTS (');
+		expect(sql).toContain('"peaks"."sessionId" IS NOT DISTINCT FROM "log"."sessionId"');
 		expect(sql).toContain('GROUP BY "log"."userId", "log"."sessionId"');
 		expect(parameters).toContain(60);
 		expect(parameters).toContain(3);
-	});
-
-	test('user-scoped rules partition by user only and match the whole user', async () => {
-		const [sql] = await queryFor([rules[1]]);
-		expect(sql).toMatch(/COUNT\(\*\) OVER \(PARTITION BY "log"\."userId" ORDER BY "log"\."createdAt"/);
-		expect(sql).not.toContain('("log"."userId", "log"."sessionId") IN (');
-		expect(sql).toContain('"log"."userId" IN (');
-		expect(sql).toContain('DISTINCT');
-	});
-
-	test('a rule without scope behaves like a session-scoped rule', async () => {
-		const { scope: _, ...legacy } = rules[0];
-		const [sql] = await queryFor([legacy as MiAgentReviewTriggerRule]);
-		expect(sql).toMatch(/PARTITION BY "log"\."userId", "log"\."sessionId"/);
 	});
 
 	test('each rule gets its own window and threshold parameters', async () => {
@@ -262,6 +236,37 @@ describe('external audit review eligibility', () => {
 		expect(page.sql).toContain('LIMIT 31 OFFSET 30');
 		expect(page.parameters).toContain('owner');
 		expect(page.parameters.every(p => !(p instanceof Date))).toBe(true);
+	});
+
+	test('executes the full pending-group query: only qualified sessions appear, including no-session groups', async () => {
+		// 在 SQLite 中执行真实生成的查询（仅替换 interval 语法为毫秒），验证口径而不是 SQL 字符串
+		const { pendingReviewGroupsQuery } = await import('@/server/api/endpoints/admin/agents/governance/external-audit/_review-qualification.js');
+		const h = await harness([rules[0]], []);
+		const qb = pendingReviewGroupsQuery(h.repository as never, [rules[0]], null);
+		const [rawSql, parameters] = qb.getQueryAndParameters();
+		const sql = rawSql.replace(/\$\d+ \* INTERVAL '1 minute'/, String(60 * 60000));
+		const used = new Set([...sql.matchAll(/\$\d+/g)].map(m => m[0]));
+		const bound = Object.fromEntries(parameters.map((value, i) => [`$${i + 1}`, value as SQLInputValue]).filter(([k]) => used.has(k as string)));
+		const db = new DatabaseSync(':memory:');
+		try {
+			db.exec('CREATE TABLE agent_external_audit_log (id TEXT, userId TEXT, sessionId TEXT, createdAt INTEGER, status TEXT, reviewIgnoredAt INTEGER)');
+			const insert = db.prepare('INSERT INTO agent_external_audit_log VALUES (?, ?, ?, ?, ?, ?)');
+			let seq = 0;
+			const add = (user: string, session: string | null, minutes: number[], status = 'block', reviewed = false) => {
+				for (const minute of minutes) insert.run(`log${seq++}`, user, session, minute * 60000, status, reviewed ? 1 : null);
+			};
+			add('u', 'a', [12, 24, 26]); // 同会话 3 次达标
+			add('u', 'b', [0]); // 同用户另一会话只有 1 次，不应出现
+			add('spread', 'a', [0]); // 分散在两个会话、合计 3 次，但单会话不达标
+			add('spread', 'b', [1, 2]);
+			add('nosession', null, [12, 24, 26]); // 无会话组同样要进入复审
+			add('spreadtime', 'a', [0, 61, 122]); // 跨窗口，不达标
+			add('reviewed', 'a', [12, 24, 26], 'block', true);
+			const rows = db.prepare(sql).all(bound).map(r => `${r.userId}:${r.sessionId ?? ''}:${r.blockCount}`);
+			expect(rows).toEqual(['nosession::3', 'u:a:3']);
+		} finally {
+			db.close();
+		}
 	});
 
 	test('executes the emitted sliding-window SQL against independent in-memory fixtures', async () => {

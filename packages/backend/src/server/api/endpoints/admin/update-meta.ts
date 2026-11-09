@@ -21,7 +21,6 @@ import { normalizeAgentByokProvidersParam } from '@/core/AgentUserModelService.j
 import { AgentCompressionMemoryService } from '@/core/AgentCompressionMemoryService.js';
 import { GlobalEventService } from '@/core/GlobalEventService.js';
 import { AgentModelAnnouncementService } from '@/core/AgentModelAnnouncementService.js';
-import { AGENT_REVIEW_TRIGGER_SCOPES, normalizeAgentReviewTriggerRules } from '@/misc/agent-review-trigger-rules.js';
 
 function normalizeObjectStorageConfigValue(value: string | null | undefined): string | null {
 	const trimmed = value?.trim();
@@ -391,7 +390,6 @@ export const paramDef = {
 					timeWindowMinutes: { type: 'integer', minimum: 1, maximum: 10080 },
 					blockThreshold: { type: 'integer', minimum: 1, maximum: 1000 },
 					enabled: { type: 'boolean' },
-					scope: { type: 'string', enum: [...AGENT_REVIEW_TRIGGER_SCOPES] },
 				},
 				required: ['id', 'timeWindowMinutes', 'blockThreshold', 'enabled'],
 			},
@@ -1397,7 +1395,12 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					set.agentExternalAuditOtherRule = { reason, criteria };
 				}
 				if (ps.agentReviewTriggerRules !== undefined) {
-				set.agentReviewTriggerRules = normalizeAgentReviewTriggerRules(ps.agentReviewTriggerRules);
+				set.agentReviewTriggerRules = (ps.agentReviewTriggerRules ?? []).map(r => ({
+					id: String(r.id),
+					timeWindowMinutes: Math.max(1, Math.min(10080, Math.trunc(r.timeWindowMinutes))),
+					blockThreshold: Math.max(1, Math.min(1000, Math.trunc(r.blockThreshold))),
+					enabled: r.enabled !== false,
+				}));
 			}
 
 			if (ps.agentCheckinSettings !== undefined) {

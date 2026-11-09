@@ -17491,7 +17491,6 @@ export interface operations {
                             timeWindowMinutes: number;
                             blockThreshold: number;
                             enabled: boolean;
-                            scope?: 'session' | 'user';
                         }[];
                         agentCheckinSettings: {
                             [key: string]: unknown;
@@ -21327,7 +21326,6 @@ export interface operations {
                         timeWindowMinutes: number;
                         blockThreshold: number;
                         enabled: boolean;
-                        scope?: 'session' | 'user';
                     }[];
                     agentCheckinSettings?: {
                         [key: string]: unknown;
