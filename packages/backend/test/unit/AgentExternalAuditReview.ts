@@ -153,6 +153,24 @@ describe('external audit review eligibility', () => {
 		expect(rows[0]).toMatchObject({ userId: 'owner', sessionId: null, userReviewUntilId: 'log2' });
 	});
 
+	test('counts pending groups per user and session, not per user', async () => {
+		const { countPendingReviewSessions } = await import('@/server/api/endpoints/admin/agents/governance/external-audit/_review-qualification.js');
+		const h = await harness();
+		const sqls: string[] = [];
+		const manager = h.auditLogs.manager.createQueryBuilder();
+		const proto = Object.getPrototypeOf(manager);
+		vi.spyOn(proto, 'getRawOne').mockImplementation(async function (this: { getQuery: () => string }) {
+			sqls.push(this.getQuery());
+			return { count: '2' };
+		});
+		const repo = { ...h.auditLogs, target: 'AuditLog', manager: { createQueryBuilder: () => h.auditLogs.manager.createQueryBuilder() } };
+		expect(await countPendingReviewSessions(repo as never, rules)).toBe(2);
+		expect(sqls[0]).toMatch(/COUNT\(\*\) AS "count" FROM \(SELECT "log"\."userId" AS "userId", "log"\."sessionId" AS "sessionId"/);
+		expect(sqls[0]).toMatch(/GROUP BY "log"\."userId", "log"\."sessionId"\) "groups"/);
+		expect(sqls[0]).toContain('"reviewIgnoredAt" IS NULL');
+		vi.restoreAllMocks();
+	});
+
 	test('keeps a triggered review and its evidence after every configured window expires', async () => {
 		vi.useFakeTimers({ now: new Date('2026-10-31T10:00:00+08:00') });
 		const h = await harness();

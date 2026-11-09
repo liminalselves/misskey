@@ -247,7 +247,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<MkResult v-else-if="reviewListError && reviewUserCards.length === 0" type="error" :text="reviewListError" :class="$style.listStatus">
 						<MkButton rounded @click="loadReviewListItems(true)">重试</MkButton>
 					</MkResult>
-					<MkInfo v-else-if="reviewUserCards.length === 0" :class="$style.listStatus">暂无需要复审的用户。未审阅的拦截记录满足任一触发规则后，将保留在这里，直到处理或忽略。</MkInfo>
+					<MkInfo v-else-if="reviewUserCards.length === 0" :class="$style.listStatus">暂无需要复审的会话。未审阅的拦截记录满足任一触发规则后，将保留在这里，直到处理或忽略。</MkInfo>
 					<div v-else :class="$style.reviewUserList">
 						<article v-for="card in reviewUserCards" :key="reviewCardKey(card)" v-panel :class="[$style.reviewUserCard, card.isSuspended ? $style.reviewUserCardSuspended : null]">
 							<!-- 用户头部：核心信息 + 操作入口 -->
@@ -540,7 +540,7 @@ type ImageRow = { id: string; createdAt: string; updatedAt: string; userId: stri
 type AgentLog = { id: string; createdAt: string; type: string; info: Record<string, unknown>; userId: string; user: any };
 type ModelReportRow = { id: string; createdAt: string; userId: string; user: any | null; modelKind: 'chat' | 'image'; modelId: string; modelName: string; reasonType: 'unavailable' | 'degraded' | 'slow' | 'errors' | 'other'; comment: string | null; resolvedAt: string | null; resolvedByUserId: string | null; resolutionMessage: string | null };
 
-type Summary = { pendingCharacters: number; pendingStyles: number; pendingTotal: number; bannedCharacters: number; bannedSessions: number; blockedExternalAudits: number; blockedImages: number; recentOperations: number; unresolvedModelReports?: number; pendingReviewUsers?: number };
+type Summary = { pendingCharacters: number; pendingStyles: number; pendingTotal: number; bannedCharacters: number; bannedSessions: number; blockedExternalAudits: number; blockedImages: number; recentOperations: number; unresolvedModelReports?: number; pendingReviewSessions?: number };
 
 const api = misskeyApi as unknown as <T>(endpoint: string, data?: Record<string, unknown>) => Promise<T>;
 const props = defineProps<{ view?: string }>();
@@ -897,7 +897,7 @@ const headerTabs = computed(() => [
 	{ key: 'library', title: '内容库', icon: 'ti ti-cards' },
 	{ key: 'sessions', title: '会话治理', icon: 'ti ti-messages' },
 	{ key: 'externalAudit', title: '外审拦截', icon: 'ti ti-shield-check' },
-	{ key: 'review', title: summary.value?.pendingReviewUsers ? `复审 ${summary.value.pendingReviewUsers}` : '复审', icon: 'ti ti-shield-exclamation', indicated: (summary.value?.pendingReviewUsers ?? 0) > 0 },
+	{ key: 'review', title: summary.value?.pendingReviewSessions ? `复审 ${summary.value.pendingReviewSessions}` : '复审', icon: 'ti ti-shield-exclamation', indicated: (summary.value?.pendingReviewSessions ?? 0) > 0 },
 	{ key: 'images', title: 'AI 生图', icon: 'ti ti-photo-shield' },
 	{ key: 'logs', title: '操作日志', icon: 'ti ti-history' },
 ]);
@@ -912,7 +912,7 @@ const summaryCards = computed(() => [
 	{ key: 'styles', label: '待审风格', value: summary.value?.pendingStyles ?? '—', icon: 'ti ti-palette', go: () => openFiltered('queue', () => { reviewFilters.kind = 'style'; }) },
 	{ key: 'reports', label: '未处理上报', value: summary.value?.unresolvedModelReports ?? '—', icon: 'ti ti-flag', go: () => openFiltered('modelReports', () => { Object.assign(modelReportFilters, { status: 'unresolved', modelKind: '', reasonType: '', userId: '', modelId: '', query: '' }); }) },
 	{ key: 'bannedCharacters', label: '封禁角色', value: summary.value?.bannedCharacters ?? '—', icon: 'ti ti-user-off', go: () => openFiltered('library', () => { Object.assign(reviewFilters, { kind: 'character', status: 'all', query: '', userId: '' }); }) },
-	{ key: 'review', label: '待复审用户', value: summary.value?.pendingReviewUsers ?? '—', icon: 'ti ti-shield-exclamation', go: () => openFiltered('review', () => { reviewUserFilter.value = ''; }) },
+	{ key: 'review', label: '待复审会话', value: summary.value?.pendingReviewSessions ?? '—', icon: 'ti ti-shield-exclamation', go: () => openFiltered('review', () => { reviewUserFilter.value = ''; }) },
 	{ key: 'external', label: '外审拦截', value: summary.value?.blockedExternalAudits ?? '—', icon: 'ti ti-shield-check', go: () => openFiltered('externalAudit', () => { externalFilters.status = 'block'; }) },
 	{ key: 'images', label: '封禁图片', value: summary.value?.blockedImages ?? '—', icon: 'ti ti-photo-shield', go: () => openFiltered('images', () => { imageFilters.blocked = 'true'; }) },
 	{ key: 'sessions', label: '封禁会话', value: summary.value?.bannedSessions ?? '—', icon: 'ti ti-messages', go: () => openFiltered('sessions', () => {}) },

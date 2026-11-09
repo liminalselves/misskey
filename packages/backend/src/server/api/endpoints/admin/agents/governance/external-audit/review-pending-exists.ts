@@ -10,7 +10,7 @@ import { Endpoint } from '@/server/api/endpoint-base.js';
 import { DI } from '@/di-symbols.js';
 import { AgentService } from '@/core/AgentService.js';
 import { MetaService } from '@/core/MetaService.js';
-import { countPendingReviewUsers } from './_review-qualification.js';
+import { countPendingReviewSessions } from './_review-qualification.js';
 
 export const meta = {
 	tags: ['admin', 'agents'],
@@ -43,7 +43,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		super(meta, paramDef, async () => {
 			this.agentService.assertAgentsEnabled();
 			const metaEntity = await this.metaService.fetch();
-			const count = await countPendingReviewUsers(this.agentExternalAuditLogsRepository, metaEntity.agentReviewTriggerRules);
+			const count = await countPendingReviewSessions(this.agentExternalAuditLogsRepository, metaEntity.agentReviewTriggerRules);
 			return { pending: count > 0, count };
 		});
 	}

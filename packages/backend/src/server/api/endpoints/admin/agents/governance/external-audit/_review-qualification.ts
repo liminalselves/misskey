@@ -58,13 +58,27 @@ export function enabledReviewRules(rules: MiAgentReviewTriggerRule[] | null | un
 	return (rules ?? []).filter(r => r.enabled !== false);
 }
 
-/** Number of users currently awaiting an external-audit review. */
-export async function countPendingReviewUsers(
+/** Number of user+session groups currently awaiting an external-audit review (qualification is per user). */
+export async function countPendingReviewSessions(
 	repository: AgentExternalAuditLogsRepository,
 	rules: MiAgentReviewTriggerRule[] | null | undefined,
 ): Promise<number> {
 	const enabled = enabledReviewRules(rules);
 	if (enabled.length === 0) return 0;
 	const ruleCounts = await computeReviewRuleCounts(repository, enabled, null);
-	return qualifiedReviewUserIds(enabled, ruleCounts).size;
+	const qualified = [...qualifiedReviewUserIds(enabled, ruleCounts)];
+	if (qualified.length === 0) return 0;
+	const row = await repository.manager.createQueryBuilder()
+		.select('COUNT(*)', 'count')
+		.from(qb => qb
+			.select('log.userId', 'userId')
+			.addSelect('log.sessionId', 'sessionId')
+			.from(repository.target, 'log')
+			.where('log.status = :status', { status: 'block' })
+			.andWhere('log.reviewIgnoredAt IS NULL')
+			.andWhere('log.userId IN (:...qualified)', { qualified })
+			.groupBy('log.userId')
+			.addGroupBy('log.sessionId'), 'groups')
+		.getRawOne<{ count: string }>();
+	return parseInt(row?.count ?? '0', 10) || 0;
 }
