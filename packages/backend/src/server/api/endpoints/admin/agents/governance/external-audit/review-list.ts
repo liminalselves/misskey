@@ -13,7 +13,7 @@ import { AgentService } from '@/core/AgentService.js';
 import { UserEntityService } from '@/core/entities/UserEntityService.js';
 import { MetaService } from '@/core/MetaService.js';
 import { resolveUserIdFromAcctOrId } from '../_utils.js';
-import { computeReviewRuleCounts, enabledReviewRules, qualifiedReviewUserIds } from './_review-qualification.js';
+import { enabledReviewRules, pendingReviewGroups } from './_review-qualification.js';
 
 export const meta = {
 	tags: ['admin', 'agents'],
@@ -64,37 +64,9 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 
 			const filterUserId = await resolveUserIdFromAcctOrId(this.usersRepository, ps.userId);
 
-			const ruleCounts = await computeReviewRuleCounts(this.agentExternalAuditLogsRepository, rules, filterUserId);
-			const ruleCountFor = (rule: typeof rules[number], userId: string): number => ruleCounts.get(rule)?.get(userId) ?? 0;
-
-			// 满足任一复审规则阈值即进入候选（先取全量候选集，再做资格过滤与分页，保证分页不因过滤而缩水跳页）
-			const qualifiedUserIds = qualifiedReviewUserIds(rules, ruleCounts);
-			if (qualifiedUserIds.size === 0) return [];
-
+			// 待复审组：按会话的规则只带自身达标的会话组，按用户的规则带该用户全部未审阅会话组
 			// Only an explicit review action resolves evidence; bans alone must not hide pending reviews.
-			const pageQb = this.agentExternalAuditLogsRepository
-				.createQueryBuilder('log')
-				.select('log.userId', 'userId')
-				.addSelect('log.sessionId', 'sessionId')
-				.addSelect('COUNT(*)', 'blockCount')
-				.addSelect('MAX(log.createdAt)', 'latestBlockAt')
-				// Upper bound of the counted evidence; ignore uses it so later arrivals stay pending.
-				.addSelect('MAX(log.id)', 'reviewUntilId')
-				.where('log.status = :status', { status: 'block' })
-				.andWhere('log.userId IS NOT NULL')
-				.andWhere('log.reviewIgnoredAt IS NULL')
-				.andWhere('log.userId IN (:...qualifiedUserIds)', { qualifiedUserIds: [...qualifiedUserIds] })
-				// 复审以「用户 + 会话」为一组；资格仍按用户判定，组内只统计该会话的证据
-				.groupBy('log.userId')
-				.addGroupBy('log.sessionId')
-				.orderBy('"blockCount"', 'DESC')
-				.addOrderBy('"latestBlockAt"', 'DESC')
-				.addOrderBy('"userId"', 'ASC')
-				.addOrderBy('"sessionId"', 'ASC', 'NULLS LAST')
-				.offset(ps.offset ?? 0)
-				.limit(ps.limit ?? 20);
-
-			const userStats = await pageQb.getRawMany<{ userId: string; sessionId: string | null; blockCount: string; latestBlockAt: Date | string; reviewUntilId: string }>();
+			const userStats = await pendingReviewGroups(this.agentExternalAuditLogsRepository, rules, filterUserId, ps.offset ?? 0, ps.limit ?? 20);
 			if (userStats.length === 0) return [];
 
 			// 仅对当前页用户取明细，去掉旧的全局 take(500)（跨用户截断会让靠后的用户被静默丢弃）
@@ -164,7 +136,6 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				const profile = profileById.get(userId);
 				const userLogs = logsByGroup.get(groupKey(userId, stat.sessionId)) ?? [];
 				const sessionName = userLogs.find(l => l.session?.name)?.session?.name ?? null;
-				const matchedRules = rules.filter(rule => ruleCountFor(rule, userId) >= rule.blockThreshold);
 
 				return {
 					userId,
@@ -179,11 +150,6 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					latestBlockAt: (stat.latestBlockAt as Date)?.toISOString?.() ?? null,
 					reviewUntilId: stat.reviewUntilId,
 					userReviewUntilId: userBoundById.get(userId) ?? stat.reviewUntilId,
-					triggeredRules: matchedRules.map(r => ({
-						id: r.id,
-						timeWindowMinutes: r.timeWindowMinutes,
-						blockThreshold: r.blockThreshold,
-					})),
 					logs: userLogs.map(l => ({
 						id: l.id,
 						createdAt: l.createdAt.toISOString(),

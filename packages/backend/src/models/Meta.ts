@@ -120,6 +120,8 @@ export type MiAgentReviewTriggerRule = {
 	blockThreshold: number;
 	/** 是否启用 */
 	enabled: boolean;
+	/** 统计范围：session=同一用户同一会话内累计；user=同一用户跨会话合并。缺省视为 session */
+	scope?: 'session' | 'user';
 };
 
 @Entity('meta')

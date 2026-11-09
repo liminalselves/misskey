@@ -14,6 +14,7 @@ import { resolveAgentImageNegativePrompt } from '@/core/agent-image-defaults.js'
 import { resolveAgentImageArtistPresets } from '@/core/agent-image-presets.js';
 import { DEFAULT_AGENT_EXTERNAL_AUDIT_OTHER_RULE, DEFAULT_AGENT_EXTERNAL_AUDIT_STANDARD, cloneDefaultAgentExternalAuditRules, normalizeAgentExternalAuditOtherRule, normalizeAgentExternalAuditRules } from '@/core/agent-external-audit-rules.js';
 import { normalizeAgentLlmApiKeys } from '@/misc/agent-llm-models.js';
+import { AGENT_REVIEW_TRIGGER_SCOPES, normalizeAgentReviewTriggerRules } from '@/misc/agent-review-trigger-rules.js';
 
 export const meta = {
 	tags: ['meta'],
@@ -664,6 +665,7 @@ export const meta = {
 						timeWindowMinutes: { type: 'integer' },
 						blockThreshold: { type: 'integer' },
 						enabled: { type: 'boolean' },
+						scope: { type: 'string', enum: [...AGENT_REVIEW_TRIGGER_SCOPES] },
 					},
 				},
 			},
@@ -1240,7 +1242,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					agentExternalAuditDefaultRules: cloneDefaultAgentExternalAuditRules(),
 					agentExternalAuditOtherRule: normalizeAgentExternalAuditOtherRule(instance.agentExternalAuditOtherRule),
 					agentExternalAuditDefaultOtherRule: { ...DEFAULT_AGENT_EXTERNAL_AUDIT_OTHER_RULE },
-					agentReviewTriggerRules: instance.agentReviewTriggerRules ?? [],
+					agentReviewTriggerRules: normalizeAgentReviewTriggerRules(instance.agentReviewTriggerRules),
 				agentCheckinSettings: instance.agentCheckinSettings ?? null,
 				agentRedeemPurchaseUrl: instance.agentRedeemPurchaseUrl ?? null,
 				agentAliyaCharacterId: instance.agentAliyaCharacterId ?? null,

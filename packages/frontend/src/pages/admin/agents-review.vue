@@ -780,7 +780,6 @@ type ReviewUserCard = {
 	latestBlockAt: string | null;
 	reviewUntilId: string;
 	userReviewUntilId: string;
-	triggeredRules: { id: string; timeWindowMinutes: number; blockThreshold: number }[];
 	logs: ReviewLogEntry[];
 };
 

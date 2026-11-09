@@ -45,7 +45,7 @@ const global = {
 let requests: { resolve: (rows: unknown[]) => void; reject: (error: Error) => void }[];
 
 function card(userId: string, sessionId: string | null = null) {
-	return { userId, sessionId, sessionName: sessionId, sessionModerationBanned: false, userReviewUntilId: `${userId}-user-last`, user: null, isSuspended: false, suspendedUntil: null, moderationNote: null, blockCount: 3, latestBlockAt: null, reviewUntilId: `${userId}-last`, triggeredRules: [], logs: [] };
+	return { userId, sessionId, sessionName: sessionId, sessionModerationBanned: false, userReviewUntilId: `${userId}-user-last`, user: null, isSuspended: false, suspendedUntil: null, moderationNote: null, blockCount: 3, latestBlockAt: null, reviewUntilId: `${userId}-last`, logs: [] };
 }
 
 async function settle() {
