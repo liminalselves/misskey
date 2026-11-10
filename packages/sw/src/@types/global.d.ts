@@ -11,3 +11,8 @@ declare const _VERSION_: string;
 declare const _ENV_: string;
 declare const _DEV_: boolean;
 declare const _PERF_PREFIX_: string;
+
+declare module '*.webp' {
+	const src: string;
+	export default src;
+}
