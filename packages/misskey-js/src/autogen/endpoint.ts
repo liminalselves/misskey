@@ -50,6 +50,7 @@ import type {
 	AdminAgentsGovernanceExternalAuditReviewIgnoreResponse,
 	AdminAgentsGovernanceExternalAuditReviewListRequest,
 	AdminAgentsGovernanceExternalAuditReviewListResponse,
+	AdminAgentsGovernanceExternalAuditReviewPendingExistsResponse,
 	AdminAgentsGovernanceImagesListRequest,
 	AdminAgentsGovernanceImagesListResponse,
 	AdminAgentsGovernanceImagesSetBlockedRequest,
@@ -85,8 +86,6 @@ import type {
 	AdminAgentsGovernanceSessionReviewExportResponse,
 	AdminAgentsGovernanceSessionReviewImagePlaceholderStatusRequest,
 	AdminAgentsGovernanceSessionReviewImagePlaceholderStatusResponse,
-	AdminAgentsGovernanceSessionReviewMemoryRequest,
-	AdminAgentsGovernanceSessionReviewMemoryResponse,
 	AdminAgentsGovernanceSessionReviewMessageRequest,
 	AdminAgentsGovernanceSessionReviewMessageResponse,
 	AdminAgentsGovernanceSessionReviewMessagesRequest,
@@ -168,6 +167,8 @@ import type {
 	AdminDriveFilesResponse,
 	AdminDriveFilesSetBlockedRequest,
 	AdminDriveFilesSetBlockedResponse,
+	AdminDriveFoldersRequest,
+	AdminDriveFoldersResponse,
 	AdminDriveShowFileRequest,
 	AdminDriveShowFileResponse,
 	AdminEmojiAddRequest,
@@ -1017,6 +1018,7 @@ export type Endpoints = {
 	'admin/agents/governance/external-audit/list': { req: AdminAgentsGovernanceExternalAuditListRequest; res: AdminAgentsGovernanceExternalAuditListResponse };
 	'admin/agents/governance/external-audit/review-ignore': { req: AdminAgentsGovernanceExternalAuditReviewIgnoreRequest; res: AdminAgentsGovernanceExternalAuditReviewIgnoreResponse };
 	'admin/agents/governance/external-audit/review-list': { req: AdminAgentsGovernanceExternalAuditReviewListRequest; res: AdminAgentsGovernanceExternalAuditReviewListResponse };
+	'admin/agents/governance/external-audit/review-pending-exists': { req: EmptyRequest; res: AdminAgentsGovernanceExternalAuditReviewPendingExistsResponse };
 	'admin/agents/governance/images/list': { req: AdminAgentsGovernanceImagesListRequest; res: AdminAgentsGovernanceImagesListResponse };
 	'admin/agents/governance/images/set-blocked': { req: AdminAgentsGovernanceImagesSetBlockedRequest; res: AdminAgentsGovernanceImagesSetBlockedResponse };
 	'admin/agents/governance/logs/list': { req: AdminAgentsGovernanceLogsListRequest; res: AdminAgentsGovernanceLogsListResponse };
@@ -1035,7 +1037,6 @@ export type Endpoints = {
 	'admin/agents/governance/session-review/context-window': { req: AdminAgentsGovernanceSessionReviewContextWindowRequest; res: AdminAgentsGovernanceSessionReviewContextWindowResponse };
 	'admin/agents/governance/session-review/export': { req: AdminAgentsGovernanceSessionReviewExportRequest; res: AdminAgentsGovernanceSessionReviewExportResponse };
 	'admin/agents/governance/session-review/image-placeholder-status': { req: AdminAgentsGovernanceSessionReviewImagePlaceholderStatusRequest; res: AdminAgentsGovernanceSessionReviewImagePlaceholderStatusResponse };
-	'admin/agents/governance/session-review/memory': { req: AdminAgentsGovernanceSessionReviewMemoryRequest; res: AdminAgentsGovernanceSessionReviewMemoryResponse };
 	'admin/agents/governance/session-review/message': { req: AdminAgentsGovernanceSessionReviewMessageRequest; res: AdminAgentsGovernanceSessionReviewMessageResponse };
 	'admin/agents/governance/session-review/messages': { req: AdminAgentsGovernanceSessionReviewMessagesRequest; res: AdminAgentsGovernanceSessionReviewMessagesResponse };
 	'admin/agents/governance/session-review/proactive-schedules': { req: AdminAgentsGovernanceSessionReviewProactiveSchedulesRequest; res: AdminAgentsGovernanceSessionReviewProactiveSchedulesResponse };
@@ -1085,6 +1086,7 @@ export type Endpoints = {
 	'admin/drive/cleanup': { req: EmptyRequest; res: EmptyResponse };
 	'admin/drive/files': { req: AdminDriveFilesRequest; res: AdminDriveFilesResponse };
 	'admin/drive/files/set-blocked': { req: AdminDriveFilesSetBlockedRequest; res: AdminDriveFilesSetBlockedResponse };
+	'admin/drive/folders': { req: AdminDriveFoldersRequest; res: AdminDriveFoldersResponse };
 	'admin/drive/show-file': { req: AdminDriveShowFileRequest; res: AdminDriveShowFileResponse };
 	'admin/emoji/add': { req: AdminEmojiAddRequest; res: AdminEmojiAddResponse };
 	'admin/emoji/add-aliases-bulk': { req: AdminEmojiAddAliasesBulkRequest; res: EmptyResponse };
