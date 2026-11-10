@@ -12,11 +12,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<ul v-if="highlights.length > 0" :class="$style.highlights">
 			<li v-for="(item, i) in highlights" :key="i"><MkInlineMarkdown :text="item"/></li>
 		</ul>
-		<MkButton full @click="whatIsNew">{{ i18n.ts.whatIsNew }}</MkButton>
+		<MkButton full @click="whatIsNew">查看本站更新日志</MkButton>
 		<MkButton :class="$style.gotIt" primary full @click="modal?.close()">{{ i18n.ts.gotIt }}</MkButton>
-		<a v-if="baseVersion != null" :href="upstreamUrl" target="_blank" rel="noopener noreferrer" class="_link" :class="$style.upstream" @click="modal?.close()">
-			Misskey {{ baseVersion }} 官方更新日志 <i class="ti ti-external-link"></i>
-		</a>
 	</div>
 </MkModal>
 </template>
@@ -43,9 +40,6 @@ const emit = defineEmits<{
 
 const isBeta = version.includes('-beta') || version.includes('-alpha') || version.includes('-rc');
 const release = forkChangelog.find(r => r.version === version) ?? null;
-// 本 fork 版本号形如 <上游基线>-liminalselves.<N>
-const baseVersion = release?.baseVersion ?? (/-liminalselves\.\d+$/.test(version) ? version.replace(/-liminalselves\.\d+$/, '') : null);
-const upstreamUrl = baseVersion == null ? '' : `https://misskey-hub.net/docs/releases/#_${baseVersion.replace(/\./g, '')}`;
 // 弹窗只列本次发布的前几条，完整内容在更新日志页
 const highlights = release == null ? [] : release.groups.flatMap(g => g.items.map(i => i.text)).slice(0, HIGHLIGHT_COUNT);
 
@@ -103,12 +97,5 @@ onMounted(() => {
 
 .gotIt {
 	margin: 8px 0 0 0;
-}
-
-.upstream {
-	display: inline-block;
-	margin-top: 14px;
-	font-size: 0.82em;
-	opacity: 0.8;
 }
 </style>
