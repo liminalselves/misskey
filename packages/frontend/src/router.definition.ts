@@ -284,6 +284,10 @@ export const ROUTE_DEF = [{
 	path: '/about-misskey',
 	component: page(() => import('@/pages/about-misskey.vue')),
 }, {
+	path: '/changelog',
+	component: page(() => import('@/pages/changelog.vue')),
+	query: { version: 'version' },
+}, {
 	path: '/app',
 	component: page(() => import('@/pages/app.vue')),
 }, {

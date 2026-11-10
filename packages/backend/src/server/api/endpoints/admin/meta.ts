@@ -463,42 +463,6 @@ export const meta = {
 				type: 'number',
 				optional: false, nullable: false,
 			},
-			agentMem0Enabled: {
-				type: 'boolean',
-				optional: false, nullable: false,
-			},
-			agentMem0ApiKey: {
-				type: 'string',
-				optional: false, nullable: true,
-			},
-			agentMem0ApiBaseUrl: {
-				type: 'string',
-				optional: false, nullable: true,
-			},
-			agentMem0OrgId: {
-				type: 'string',
-				optional: false, nullable: true,
-			},
-			agentMem0ProjectId: {
-				type: 'string',
-				optional: false, nullable: true,
-			},
-			agentMem0TopK: {
-				type: 'number',
-				optional: false, nullable: false,
-			},
-			agentMem0InjectMaxChars: {
-				type: 'number',
-				optional: false, nullable: false,
-			},
-			agentMem0AddMemoryMaxRounds: {
-				type: 'number',
-				optional: false, nullable: false,
-			},
-			agentMem0AddMemoryEveryNRounds: {
-				type: 'number',
-				optional: false, nullable: false,
-			},
 			agentCompressionSystemPrompt: {
 				type: 'string',
 				optional: false, nullable: true,
@@ -1233,15 +1197,6 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				agentCompressionDefaultModelId: instance.agentCompressionDefaultModelId,
 				agentMaxContextTokens: instance.agentMaxContextTokens,
 				agentMaxOutputTokensPerCall: instance.agentMaxOutputTokensPerCall,
-				agentMem0Enabled: instance.agentMem0Enabled,
-				agentMem0ApiKey: instance.agentMem0ApiKey,
-				agentMem0ApiBaseUrl: instance.agentMem0ApiBaseUrl,
-				agentMem0OrgId: instance.agentMem0OrgId,
-				agentMem0ProjectId: instance.agentMem0ProjectId,
-				agentMem0TopK: instance.agentMem0TopK,
-				agentMem0InjectMaxChars: instance.agentMem0InjectMaxChars,
-				agentMem0AddMemoryMaxRounds: instance.agentMem0AddMemoryMaxRounds,
-				agentMem0AddMemoryEveryNRounds: instance.agentMem0AddMemoryEveryNRounds,
 				agentCompressionSystemPrompt: instance.agentCompressionSystemPrompt,
 				agentCompressionInjectMaxChars: instance.agentCompressionInjectMaxChars,
 				agentCompressionMaxInputChars: instance.agentCompressionMaxInputChars,

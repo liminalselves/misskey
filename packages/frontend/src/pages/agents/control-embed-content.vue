@@ -31,12 +31,15 @@ import XControlLoading from '@/pages/agents/control-embed-loading.vue';
 import { $i } from '@/i.js';
 import { compile } from '@@/js/theme.js';
 import { useRouter } from '@/router.js';
+import { themeManager } from '@/theme.js';
 import {
 	agentControlSurfaceDefaults,
 	createAgentControlParentGuard,
+	getAgentControlHostAppearance,
 	isAgentControlPanel,
 	readAgentControlBootstrapAppearance,
 	setAgentControlEmbedActive,
+	setAgentControlHostAppearance,
 	setAgentControlRuntimeToken,
 } from '@/utility/agent-control-embed.js';
 import type {
@@ -61,7 +64,7 @@ const invalidPanel = computed(() => !isAgentControlPanel(props.panel));
 const panel = computed(() => props.panel as AgentControlPanel);
 let resizeObserver: ResizeObserver | null = null;
 let lastHeight = 0;
-let currentAppearance: AgentControlAppearance = readAgentControlBootstrapAppearance();
+let currentAppearance: AgentControlAppearance = getAgentControlHostAppearance() ?? readAgentControlBootstrapAppearance();
 const colorSchemeMedia = window.matchMedia('(prefers-color-scheme: dark)');
 
 const managedCssProperties = new Set<string>();
@@ -98,6 +101,7 @@ function normalizeCssVariableName(name: string): string | null {
 
 function applyAppearance(appearance: AgentControlAppearance = currentAppearance): void {
 	currentAppearance = appearance;
+	setAgentControlHostAppearance(appearance);
 	const root = window.document.documentElement;
 	window.document.getElementById('agent-control-bootstrap-style')?.remove();
 	for (const property of managedCssProperties) root.style.removeProperty(property);
@@ -203,6 +207,12 @@ function onColorSchemeChange(): void {
 	if ((currentAppearance.colorScheme ?? 'auto') === 'auto') applyAppearance(currentAppearance);
 }
 
+// 启动时 themeManager 经 startViewTransition 异步写入 msk 默认主题；iframe 被宿主隐藏或节流时
+// 回调会晚于宿主外观到达，覆盖成默认绿色。每次主题写入后重新叠加宿主外观。
+function onThemeChanging(): void {
+	applyAppearance(currentAppearance);
+}
+
 function reportHeight(): void {
 	const height = Math.ceil(rootEl.value?.scrollHeight ?? window.document.documentElement.scrollHeight);
 	if (height <= 0 || height === lastHeight) return;
@@ -258,6 +268,7 @@ onMounted(() => {
 	window.addEventListener('misskey:agent-control:open-url', onOpenUrlRequested);
 	window.addEventListener('misskey:agent-control:close-requested', onCloseRequested);
 	colorSchemeMedia.addEventListener('change', onColorSchemeChange);
+	themeManager.on('themeChanging', onThemeChanging);
 	resizeObserver = new ResizeObserver(reportHeight);
 	resizeObserver.observe(rootEl.value ?? window.document.body);
 	if (invalidPanel.value) {
@@ -285,10 +296,10 @@ onBeforeUnmount(() => {
 	window.removeEventListener('misskey:agent-control:open-url', onOpenUrlRequested);
 	window.removeEventListener('misskey:agent-control:close-requested', onCloseRequested);
 	colorSchemeMedia.removeEventListener('change', onColorSchemeChange);
+	themeManager.off('themeChanging', onThemeChanging);
 	resizeObserver?.disconnect();
-	// runtime token 与 embedActive 是 iframe 文档级共享状态：KeepAlive 缓存淘汰旧面板时也会走到这里，
-	// 清掉会砸掉当前活跃面板正在使用的 token（宿主只在新实例挂载发 ready 时才重新下发）
-	for (const property of managedCssProperties) window.document.documentElement.style.removeProperty(property);
+	// runtime token、embedActive 与根节点外观变量都是 iframe 文档级共享状态：KeepAlive 缓存淘汰旧面板时也会走到这里，
+	// 清掉会砸掉当前活跃面板正在使用的 token 和配色（淘汰后活跃面板瞬间退回默认主题），因此一律保留
 });
 </script>
 

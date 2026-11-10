@@ -191,6 +191,9 @@ type AdminAgentsGovernanceExternalAuditReviewListRequest = operations['admin___a
 type AdminAgentsGovernanceExternalAuditReviewListResponse = operations['admin___agents___governance___external-audit___review-list']['responses']['200']['content']['application/json'];
 
 // @public (undocumented)
+type AdminAgentsGovernanceExternalAuditReviewPendingExistsResponse = operations['admin___agents___governance___external-audit___review-pending-exists']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
 type AdminAgentsGovernanceImagesListRequest = operations['admin___agents___governance___images___list']['requestBody']['content']['application/json'];
 
 // @public (undocumented)
@@ -294,12 +297,6 @@ type AdminAgentsGovernanceSessionReviewImagePlaceholderStatusRequest = operation
 
 // @public (undocumented)
 type AdminAgentsGovernanceSessionReviewImagePlaceholderStatusResponse = operations['admin___agents___governance___session-review___image-placeholder-status']['responses']['200']['content']['application/json'];
-
-// @public (undocumented)
-type AdminAgentsGovernanceSessionReviewMemoryRequest = operations['admin___agents___governance___session-review___memory']['requestBody']['content']['application/json'];
-
-// @public (undocumented)
-type AdminAgentsGovernanceSessionReviewMemoryResponse = operations['admin___agents___governance___session-review___memory']['responses']['200']['content']['application/json'];
 
 // @public (undocumented)
 type AdminAgentsGovernanceSessionReviewMessageRequest = operations['admin___agents___governance___session-review___message']['requestBody']['content']['application/json'];
@@ -543,6 +540,12 @@ type AdminDriveFilesSetBlockedRequest = operations['admin___drive___files___set-
 
 // @public (undocumented)
 type AdminDriveFilesSetBlockedResponse = operations['admin___drive___files___set-blocked']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type AdminDriveFoldersRequest = operations['admin___drive___folders']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AdminDriveFoldersResponse = operations['admin___drive___folders']['responses']['200']['content']['application/json'];
 
 // @public (undocumented)
 type AdminDriveShowFileRequest = operations['admin___drive___show-file']['requestBody']['content']['application/json'];
@@ -1077,30 +1080,6 @@ type AgentsImagesPlaceholderStatusResponse = operations['agents___images___place
 
 // @public (undocumented)
 type AgentsImagesPresetsListResponse = operations['agents___images___presets___list']['responses']['200']['content']['application/json'];
-
-// @public (undocumented)
-type AgentsMemoryAddRequest = operations['agents___memory___add']['requestBody']['content']['application/json'];
-
-// @public (undocumented)
-type AgentsMemoryAddResponse = operations['agents___memory___add']['responses']['200']['content']['application/json'];
-
-// @public (undocumented)
-type AgentsMemoryDeleteRequest = operations['agents___memory___delete']['requestBody']['content']['application/json'];
-
-// @public (undocumented)
-type AgentsMemoryDeleteResponse = operations['agents___memory___delete']['responses']['200']['content']['application/json'];
-
-// @public (undocumented)
-type AgentsMemoryListRequest = operations['agents___memory___list']['requestBody']['content']['application/json'];
-
-// @public (undocumented)
-type AgentsMemoryListResponse = operations['agents___memory___list']['responses']['200']['content']['application/json'];
-
-// @public (undocumented)
-type AgentsMemoryUpdateRequest = operations['agents___memory___update']['requestBody']['content']['application/json'];
-
-// @public (undocumented)
-type AgentsMemoryUpdateResponse = operations['agents___memory___update']['responses']['200']['content']['application/json'];
 
 // @public (undocumented)
 type AgentsMessagesAbortRequest = operations['agents___messages___abort']['requestBody']['content']['application/json'];
@@ -2565,6 +2544,7 @@ declare namespace entities {
         AdminAgentsGovernanceExternalAuditReviewIgnoreResponse,
         AdminAgentsGovernanceExternalAuditReviewListRequest,
         AdminAgentsGovernanceExternalAuditReviewListResponse,
+        AdminAgentsGovernanceExternalAuditReviewPendingExistsResponse,
         AdminAgentsGovernanceImagesListRequest,
         AdminAgentsGovernanceImagesListResponse,
         AdminAgentsGovernanceImagesSetBlockedRequest,
@@ -2600,8 +2580,6 @@ declare namespace entities {
         AdminAgentsGovernanceSessionReviewExportResponse,
         AdminAgentsGovernanceSessionReviewImagePlaceholderStatusRequest,
         AdminAgentsGovernanceSessionReviewImagePlaceholderStatusResponse,
-        AdminAgentsGovernanceSessionReviewMemoryRequest,
-        AdminAgentsGovernanceSessionReviewMemoryResponse,
         AdminAgentsGovernanceSessionReviewMessageRequest,
         AdminAgentsGovernanceSessionReviewMessageResponse,
         AdminAgentsGovernanceSessionReviewMessagesRequest,
@@ -2683,6 +2661,8 @@ declare namespace entities {
         AdminDriveFilesResponse,
         AdminDriveFilesSetBlockedRequest,
         AdminDriveFilesSetBlockedResponse,
+        AdminDriveFoldersRequest,
+        AdminDriveFoldersResponse,
         AdminDriveShowFileRequest,
         AdminDriveShowFileResponse,
         AdminEmojiAddRequest,
@@ -2861,14 +2841,6 @@ declare namespace entities {
         AgentsImagesPlaceholderStatusRequest,
         AgentsImagesPlaceholderStatusResponse,
         AgentsImagesPresetsListResponse,
-        AgentsMemoryAddRequest,
-        AgentsMemoryAddResponse,
-        AgentsMemoryDeleteRequest,
-        AgentsMemoryDeleteResponse,
-        AgentsMemoryListRequest,
-        AgentsMemoryListResponse,
-        AgentsMemoryUpdateRequest,
-        AgentsMemoryUpdateResponse,
         AgentsMessagesAbortRequest,
         AgentsMessagesAbortResponse,
         AgentsMessagesDeleteRequest,

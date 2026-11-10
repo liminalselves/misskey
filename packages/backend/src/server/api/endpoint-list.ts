@@ -32,6 +32,7 @@ export * as 'admin/agents/governance/external-audit/detail' from './endpoints/ad
 export * as 'admin/agents/governance/external-audit/list' from './endpoints/admin/agents/governance/external-audit/list.js';
 export * as 'admin/agents/governance/external-audit/review-list' from './endpoints/admin/agents/governance/external-audit/review-list.js';
 export * as 'admin/agents/governance/external-audit/review-ignore' from './endpoints/admin/agents/governance/external-audit/review-ignore.js';
+export * as 'admin/agents/governance/external-audit/review-pending-exists' from './endpoints/admin/agents/governance/external-audit/review-pending-exists.js';
 export * as 'admin/agents/governance/quick-action' from './endpoints/admin/agents/governance/quick-action.js';
 export * as 'admin/agents/governance/images/list' from './endpoints/admin/agents/governance/images/list.js';
 export * as 'admin/agents/governance/images/set-blocked' from './endpoints/admin/agents/governance/images/set-blocked.js';
@@ -50,7 +51,6 @@ export * as 'admin/agents/governance/session-review/compression-overview' from '
 export * as 'admin/agents/governance/session-review/context-window' from './endpoints/admin/agents/governance/session-review/context-window.js';
 export * as 'admin/agents/governance/session-review/export' from './endpoints/admin/agents/governance/session-review/export.js';
 export * as 'admin/agents/governance/session-review/image-placeholder-status' from './endpoints/admin/agents/governance/session-review/image-placeholder-status.js';
-export * as 'admin/agents/governance/session-review/memory' from './endpoints/admin/agents/governance/session-review/memory.js';
 export * as 'admin/agents/governance/session-review/message' from './endpoints/admin/agents/governance/session-review/message.js';
 export * as 'admin/agents/governance/session-review/messages' from './endpoints/admin/agents/governance/session-review/messages.js';
 export * as 'admin/agents/governance/session-review/proactive-schedules' from './endpoints/admin/agents/governance/session-review/proactive-schedules.js';
@@ -97,6 +97,7 @@ export * as 'admin/delete-all-files-of-a-user' from './endpoints/admin/delete-al
 export * as 'admin/drive/clean-remote-files' from './endpoints/admin/drive/clean-remote-files.js';
 export * as 'admin/drive/cleanup' from './endpoints/admin/drive/cleanup.js';
 export * as 'admin/drive/files' from './endpoints/admin/drive/files.js';
+export * as 'admin/drive/folders' from './endpoints/admin/drive/folders.js';
 export * as 'admin/drive/files/set-blocked' from './endpoints/admin/drive/files/set-blocked.js';
 export * as 'admin/drive/show-file' from './endpoints/admin/drive/show-file.js';
 export * as 'admin/emoji/add' from './endpoints/admin/emoji/add.js';
@@ -247,10 +248,6 @@ export * as 'agents/images/placeholder-status' from './endpoints/agents/images/p
 export * as 'agents/images/models/list' from './endpoints/agents/images/models/list.js';
 export * as 'agents/vision-models/list' from './endpoints/agents/vision-models/list.js';
 export * as 'agents/images/presets/list' from './endpoints/agents/images/presets/list.js';
-export * as 'agents/memory/add' from './endpoints/agents/memory/add.js';
-export * as 'agents/memory/delete' from './endpoints/agents/memory/delete.js';
-export * as 'agents/memory/list' from './endpoints/agents/memory/list.js';
-export * as 'agents/memory/update' from './endpoints/agents/memory/update.js';
 export * as 'agents/sessions/create' from './endpoints/agents/sessions/create.js';
 export * as 'agents/sessions/list-mine' from './endpoints/agents/sessions/list-mine.js';
 export * as 'agents/sessions/show' from './endpoints/agents/sessions/show.js';

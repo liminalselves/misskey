@@ -76,6 +76,8 @@ export const meta = {
 					eligibleChars: { type: 'number' },
 					willInjectCount: { type: 'number' },
 					willInjectChars: { type: 'number' },
+					maxTokens: { type: 'number' },
+					willInjectTokens: { type: 'number' },
 				},
 			},
 		},
@@ -134,7 +136,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				instanceMeta,
 			);
 			/** 与 `agents/messages/send`、`reconcileStickyStates` 同一 H，避免总览区带与便签态/自动压条错位 */
-			const { historyBudget: historyBudgetChars, charsPerToken, historyBudgetTokens } = await this.agentCompressionMemoryService.buildSendPathBudgets({
+			const { historyBudgetTokens } = await this.agentCompressionMemoryService.buildSendPathBudgets({
 				instanceMeta,
 				session: row,
 				character,
@@ -147,13 +149,11 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			const exactCounter = this.agentTokenService.makeCounter(tokenConfig);
 			const { historyBudgetTokens: hbt, t1Tokens, t2Tokens, messages, stickies, compressionSidecarFailedAt } = await this.agentCompressionMemoryService.getCompressionOverviewData(
 				row.id,
-				historyBudgetChars,
+				historyBudgetTokens,
 				t1Ratio,
 				t2Ratio,
 				longMemProvider === 'compression',
 				exactCounter,
-				charsPerToken,
-				historyBudgetTokens,
 				row.timeAwarenessEnabled === true,
 			);
 			return {

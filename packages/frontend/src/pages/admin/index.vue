@@ -15,6 +15,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<div class="_gaps_s">
 					<MkInfo v-if="thereIsUnresolvedAbuseReport" warn>{{ i18n.ts.thereIsUnresolvedAbuseReportWarning }} <MkA to="/admin/abuses" class="_link">{{ i18n.ts.check }}</MkA></MkInfo>
 					<MkInfo v-if="thereArePendingAgentReviews" warn>{{ i18n.ts._agents.thereArePendingAgentReviewsAdminWarning }} <MkA to="/admin/agents-review" class="_link">{{ i18n.ts.check }}</MkA></MkInfo>
+					<MkInfo v-if="thereArePendingAgentExternalAuditReviews" warn>有待复审的外审拦截用户。 <MkA to="/admin/agents-review?view=review" class="_link">{{ i18n.ts.check }}</MkA></MkInfo>
 					<MkInfo v-if="thereAreUnresolvedAgentModelReports" warn>{{ i18n.ts._agents.thereAreUnresolvedAgentModelReportsAdminWarning }} <MkA to="/admin/agents-review?view=modelReports" class="_link">{{ i18n.ts.check }}</MkA></MkInfo>
 					<MkInfo v-if="noMaintainerInformation" warn>{{ i18n.ts.noMaintainerInformationWarning }} <MkA to="/admin/settings" class="_link">{{ i18n.ts.configure }}</MkA></MkInfo>
 					<MkInfo v-if="noInquiryUrl" warn>{{ i18n.ts.noInquiryUrlWarning }} <MkA to="/admin/settings" class="_link">{{ i18n.ts.configure }}</MkA></MkInfo>
@@ -75,6 +76,7 @@ const noInquiryUrl = computed(() => isEmpty(instance.inquiryUrl));
 const thereIsUnresolvedAbuseReport = ref(false);
 const thereArePendingAgentReviews = ref(false);
 const thereAreUnresolvedAgentModelReports = ref(false);
+const thereArePendingAgentExternalAuditReviews = ref(false);
 const currentPage = computed(() => router.currentRef.value.child);
 
 function refreshAdminPanelAlerts() {
@@ -95,6 +97,12 @@ function refreshAdminPanelAlerts() {
 		thereAreUnresolvedAgentModelReports.value = res.pending;
 	}).catch(() => {
 		thereAreUnresolvedAgentModelReports.value = false;
+	});
+
+	(misskeyApi as unknown as (ep: string, data: Record<string, unknown>) => Promise<{ pending: boolean }>)('admin/agents/governance/external-audit/review-pending-exists', {}).then(res => {
+		thereArePendingAgentExternalAuditReviews.value = res.pending;
+	}).catch(() => {
+		thereArePendingAgentExternalAuditReviews.value = false;
 	});
 }
 

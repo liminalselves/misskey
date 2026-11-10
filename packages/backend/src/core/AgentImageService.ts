@@ -9,6 +9,7 @@ import { tmpdir } from 'node:os';
 import { fileTypeFromBuffer } from 'file-type';
 import sharp from 'sharp';
 import { Inject, Injectable } from '@nestjs/common';
+import Redis from 'ioredis';
 import { DI } from '@/di-symbols.js';
 import { bindThis } from '@/decorators.js';
 import { IdService } from '@/core/IdService.js';
@@ -26,6 +27,8 @@ import { IdentifiableError } from '@/misc/identifiable-error.js';
 import { assertSafeLlmHttpsUrl, describeUnsafeLlmUrlReason, UnsafeLlmUrlError } from '@/misc/validate-llm-endpoint-url.js';
 import { readBodyWithLimit, UpstreamBodyTooLargeError } from '@/misc/read-body-with-limit.js';
 import { getEffectiveImageModels, normalizeImageParams } from '@/misc/agent-image-models.js';
+import { normalizeAgentLlmApiKeys } from '@/misc/agent-llm-models.js';
+import { rotateAgentLlmApiKeys } from '@/core/AgentService.js';
 import { getAgentImagePreset } from './agent-image-presets.js';
 import { resolveAgentImageNegativePrompt } from './agent-image-defaults.js';
 import {
@@ -189,6 +192,43 @@ async function describeImageUpstreamHttpError(res: Response): Promise<string> {
 	return detail.trim() === '' ? `Upstream returned HTTP ${res.status}.` : `Upstream returned HTTP ${res.status}: ${detail}`;
 }
 
+/** 上游已成功响应后才发生的失败：不切换 Key，避免同一张图被重复生成计费。 */
+const noKeyFailoverErrors = new WeakSet<ApiError>();
+
+/** 标记某个上游失败不再换 Key 重试（供测试与调用方复用同一判定）。 */
+export function markAgentImageErrorNoKeyFailover(err: ApiError): ApiError {
+	noKeyFailoverErrors.add(err);
+	return err;
+}
+
+/** 生图模型实际使用的 Key 列表：多 Key 关闭时只取第一项，与对话模型同一口径。 */
+export function resolveAgentImageModelApiKeys(imageModel: Pick<MiAgentImageModel, 'apiKey' | 'apiKeys' | 'multiKeyEnabled'>): string[] {
+	const keys = normalizeAgentLlmApiKeys(imageModel.apiKeys, imageModel.apiKey) ?? [];
+	return imageModel.multiKeyEnabled === true ? keys : keys.slice(0, 1);
+}
+
+/**
+ * 依次用每个 Key 请求，直到成功。只有上游失败（AGENT_IMAGE_UPSTREAM_FAILED）才切换下一个 Key；
+ * 配置错误、额度等其他错误立即抛出。全部失败时合并各 Key 的诊断（已脱敏）。
+ */
+export async function invokeAgentImageApiKeys<T>(apiKeys: readonly string[], invoke: (apiKey: string, index: number) => Promise<T>): Promise<T> {
+	const diagnostics: string[] = [];
+	let lastError: ApiError | null = null;
+	for (const [index, apiKey] of apiKeys.entries()) {
+		try {
+			return await invoke(apiKey, index);
+		} catch (err) {
+			if (!(err instanceof ApiError) || err.code !== agentImageErrors.upstreamFailed.code || noKeyFailoverErrors.has(err)) throw err;
+			lastError = err;
+			const diagnostic = typeof err.info?.diagnostic === 'string' ? err.info.diagnostic : 'Unknown upstream error.';
+			diagnostics.push(`[Key ${index + 1}] ${diagnostic}`);
+		}
+	}
+	if (lastError == null) throw new ApiError(agentImageErrors.notConfigured);
+	if (diagnostics.length === 1) throw lastError;
+	throw upstreamImageError(`All ${diagnostics.length} API keys failed. ${diagnostics.join(' ')}`);
+}
+
 function describeImageRequestFailure(err: unknown, timedOut: boolean): string {
 	if (timedOut) return 'Upstream request timed out after 180 seconds.';
 	const message = err instanceof Error ? err.message : 'Unknown network error.';
@@ -267,6 +307,9 @@ export class AgentImageService {
 		private metaService: MetaService,
 		private roleService: RoleService,
 		private agentModelUsageService: AgentModelUsageService,
+
+		@Inject(DI.redis)
+		private redisClient: Redis.Redis,
 	) {}
 
 	@bindThis
@@ -713,13 +756,21 @@ export class AgentImageService {
 		}
 	}
 
+	/** 本次请求按顺序尝试的 Key：多 Key 启用时按 Redis 计数轮询起点，否则只用第一项。 */
+	private async resolveImageApiKeyOrder(imageModel: MiAgentImageModel): Promise<string[]> {
+		const configured = resolveAgentImageModelApiKeys(imageModel);
+		if (configured.length <= 1) return configured;
+		const counter = await this.redisClient.incr(`agent:image:key-round-robin:${imageModel.id}`);
+		return rotateAgentLlmApiKeys(configured, counter);
+	}
+
 	private async fetchEndpointProviderAndStoreImage(params: FetchImageParams) {
 		const provider = getAgentImageProviderDefinition(params.imageModel.provider);
 		const apiUrl = params.imageModel.apiUrl?.trim();
-		const apiKey = params.imageModel.apiKey?.trim();
 		const apiModelName = params.imageModel.apiModelName?.trim();
+		const apiKeys = await this.resolveImageApiKeyOrder(params.imageModel);
 		if (!provider.requiresEndpointCredentials || !provider.buildRequest || !provider.parseResult || !provider.parseExpectation
-			|| !apiUrl || !apiKey || !apiModelName) {
+			|| !apiUrl || apiKeys.length === 0 || !apiModelName) {
 			throw new ApiError(agentImageErrors.notConfigured);
 		}
 
@@ -738,7 +789,7 @@ export class AgentImageService {
 		const negativePrompt = params.imageModel.provider === 'qwen'
 			? resolveAgentImageNegativePrompt(params.instance.agentImageDefaultNegativePrompt).slice(0, 500)
 			: null;
-		const requestContext = {
+		return await invokeAgentImageApiKeys(apiKeys, apiKey => this.requestEndpointImageWithKey(params, endpoint, {
 			apiUrl: endpoint.toString(),
 			apiKey,
 			model: apiModelName,
@@ -747,8 +798,18 @@ export class AgentImageService {
 			referenceImages: params.referenceImages,
 			negativePrompt,
 			isChatCompletions,
-		};
+		}));
+	}
 
+	private async requestEndpointImageWithKey(
+		params: FetchImageParams,
+		endpoint: URL,
+		requestContext: Parameters<NonNullable<ReturnType<typeof getAgentImageProviderDefinition>['buildRequest']>>[0],
+	) {
+		const provider = getAgentImageProviderDefinition(params.imageModel.provider);
+		if (!provider.buildRequest || !provider.parseResult || !provider.parseExpectation) {
+			throw new ApiError(agentImageErrors.notConfigured);
+		}
 		const ac = new AbortController();
 		const timeout = setTimeout(() => ac.abort(), 180_000);
 		try {
@@ -772,19 +833,25 @@ export class AgentImageService {
 			});
 			if (!res.ok) throw upstreamImageError(await describeImageUpstreamHttpError(res));
 
-			let result: AgentImageResult;
+			// 上游已成功响应（通常已计费）：之后的解析、下载、入库失败换 Key 也无济于事，只会重复生成
 			try {
-				const body = JSON.parse((await readBodyWithLimit(res, OPENAI_IMAGE_JSON_BODY_LIMIT_BYTES)).toString('utf8')) as unknown;
-				result = provider.parseResult(body, requestContext);
-			} catch (err) {
-				if (err instanceof UpstreamBodyTooLargeError) {
-					throw upstreamImageError(`Upstream response exceeded the ${OPENAI_IMAGE_JSON_BODY_LIMIT_BYTES} byte read limit.`);
+				let result: AgentImageResult;
+				try {
+					const body = JSON.parse((await readBodyWithLimit(res, OPENAI_IMAGE_JSON_BODY_LIMIT_BYTES)).toString('utf8')) as unknown;
+					result = provider.parseResult(body, requestContext);
+				} catch (err) {
+					if (err instanceof UpstreamBodyTooLargeError) {
+						throw upstreamImageError(`Upstream response exceeded the ${OPENAI_IMAGE_JSON_BODY_LIMIT_BYTES} byte read limit.`);
+					}
+					const detail = err instanceof Error ? err.message : 'Unknown response parsing error.';
+					throw upstreamImageError(`Upstream response could not be parsed. Expected ${provider.parseExpectation(requestContext)}. ${detail}`);
 				}
-				const detail = err instanceof Error ? err.message : 'Unknown response parsing error.';
-				throw upstreamImageError(`Upstream response could not be parsed. Expected ${provider.parseExpectation(requestContext)}. ${detail}`);
+				return await this.storeGeneratedImageResult(params, result, ac.signal);
+			} catch (err) {
+				const apiError = err instanceof ApiError ? err : upstreamImageError(describeImageRequestFailure(err, ac.signal.aborted));
+				noKeyFailoverErrors.add(apiError);
+				throw apiError;
 			}
-
-			return await this.storeGeneratedImageResult(params, result, ac.signal);
 		} catch (err) {
 			if (err instanceof ApiError) throw err;
 			throw upstreamImageError(describeImageRequestFailure(err, ac.signal.aborted));

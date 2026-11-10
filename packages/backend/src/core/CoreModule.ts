@@ -92,7 +92,6 @@ import { AgentModelUsageService } from './AgentModelUsageService.js';
 import { AgentModelAnnouncementService } from './AgentModelAnnouncementService.js';
 import { AgentUserModelService } from './AgentUserModelService.js';
 import { AgentCheckinService } from './AgentCheckinService.js';
-import { AgentDashscopeMemoryService } from './AgentDashscopeMemoryService.js';
 import { ChatService } from './ChatService.js';
 import { RegistryApiService } from './RegistryApiService.js';
 import { ReversiService } from './ReversiService.js';
@@ -257,7 +256,6 @@ const $AgentModelUsageService: Provider = { provide: 'AgentModelUsageService', u
 const $AgentModelAnnouncementService: Provider = { provide: 'AgentModelAnnouncementService', useExisting: AgentModelAnnouncementService };
 const $AgentUserModelService: Provider = { provide: 'AgentUserModelService', useExisting: AgentUserModelService };
 const $AgentCheckinService: Provider = { provide: 'AgentCheckinService', useExisting: AgentCheckinService };
-const $AgentDashscopeMemoryService: Provider = { provide: 'AgentDashscopeMemoryService', useExisting: AgentDashscopeMemoryService };
 const $AgentMessageNotifyService: Provider = { provide: 'AgentMessageNotifyService', useExisting: AgentMessageNotifyService };
 const $ChatService: Provider = { provide: 'ChatService', useExisting: ChatService };
 const $RegistryApiService: Provider = { provide: 'RegistryApiService', useExisting: RegistryApiService };
@@ -429,7 +427,6 @@ const $ApQuestionService: Provider = { provide: 'ApQuestionService', useExisting
 		AgentModelAnnouncementService,
 		AgentUserModelService,
 		AgentCheckinService,
-		AgentDashscopeMemoryService,
 		ChatService,
 		RegistryApiService,
 		ReversiService,
@@ -593,7 +590,6 @@ const $ApQuestionService: Provider = { provide: 'ApQuestionService', useExisting
 		$AgentModelAnnouncementService,
 		$AgentUserModelService,
 		$AgentCheckinService,
-		$AgentDashscopeMemoryService,
 		$AgentMessageNotifyService,
 		$ChatService,
 		$RegistryApiService,
@@ -763,7 +759,6 @@ const $ApQuestionService: Provider = { provide: 'ApQuestionService', useExisting
 		AgentModelAnnouncementService,
 		AgentUserModelService,
 		AgentCheckinService,
-		AgentDashscopeMemoryService,
 		ChatService,
 		RegistryApiService,
 		ReversiService,
@@ -923,7 +918,6 @@ const $ApQuestionService: Provider = { provide: 'ApQuestionService', useExisting
 		$AgentModelAnnouncementService,
 		$AgentUserModelService,
 		$AgentCheckinService,
-		$AgentDashscopeMemoryService,
 		$AgentMessageNotifyService,
 		$ChatService,
 		$RegistryApiService,

@@ -22,7 +22,6 @@ export const agentSessionReviewEndpointMap: Partial<Record<string, string>> = {
 	'agents/messages/search': 'admin/agents/governance/session-review/search',
 	'agents/images/placeholder-status': 'admin/agents/governance/session-review/image-placeholder-status',
 	'agents/sessions/context-window': 'admin/agents/governance/session-review/context-window',
-	'agents/memory/list': 'admin/agents/governance/session-review/memory',
 	'agents/sessions/compression-overview': 'admin/agents/governance/session-review/compression-overview',
 	'agents/sessions/worldbook-list': 'admin/agents/governance/session-review/worldbook-list',
 	'agents/sessions/rule-list': 'admin/agents/governance/session-review/rule-list',

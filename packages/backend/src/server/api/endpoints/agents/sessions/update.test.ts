@@ -168,7 +168,7 @@ describe('api:agents/sessions/update import settings', () => {
 
 	test('still rejects malformed non-reference settings during imports', async () => {
 		const { run, query } = createHarness();
-		await expect(run({ importSettings: true, agentLongMemoryTopK: -1 })).rejects.toMatchObject({ code: 'INVALID_PARAM' });
+		await expect(run({ importSettings: true, randomProactiveChainLength: 0 })).rejects.toMatchObject({ code: 'INVALID_PARAM' });
 		expect(query.execute).not.toHaveBeenCalled();
 	});
 });

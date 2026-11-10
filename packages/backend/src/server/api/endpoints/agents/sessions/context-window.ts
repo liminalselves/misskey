@@ -68,12 +68,13 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 
 			const characterRow = await this.agentCharactersRepository.findOneByOrFail({ id: session.characterId });
 			if (!session.dialogueStyleId) {
+				const connection = await this.agentService.resolveModelConnectionForUser(await this.metaService.fetch(true), session.agentModelId ?? null, session.userId);
 				return {
-					maxContextTokens: 8192,
-					historyBudgetTokens: this.agentService.approxLlmTokensFromCharEstimate(200_000),
+					maxContextTokens: connection.maxContextTokens,
+					historyBudgetTokens: 0,
 					truncated: false,
 					oldestIncludedMessageId: null,
-					tokenMode: 'estimate' as const,
+					tokenMode: 'exact' as const,
 				};
 			}
 			const styleRow = await this.agentDialogueStylesRepository.findOneByOrFail({ id: session.dialogueStyleId });
@@ -107,7 +108,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				session.agentLongMemoryProvider,
 				instanceMeta,
 			);
-			const { maxContextTokens, historyBudget: historyBudgetChars, charsPerToken, historyBudgetTokens } = await this.agentCompressionMemoryService.buildSendPathBudgets({
+			const { maxContextTokens, historyBudgetTokens } = await this.agentCompressionMemoryService.buildSendPathBudgets({
 				instanceMeta,
 				session,
 				character,
@@ -120,9 +121,9 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			const counter = this.agentTokenService.makeCounter(tokenConfig);
 			const { truncated, oldestIncludedId } = await this.agentService.loadRecentMessagesForContextWithMeta(
 				session.id,
-				historyBudgetChars,
+				historyBudgetTokens,
 				AGENT_OVERVIEW_SCAN_LIMIT,
-				{ exactTokenCounter: counter, tokenBudget: historyBudgetTokens, charsPerToken, timeAwarenessEnabled: session.timeAwarenessEnabled === true },
+				{ exactTokenCounter: counter, timeAwarenessEnabled: session.timeAwarenessEnabled === true },
 			);
 
 			return {

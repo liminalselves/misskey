@@ -12,7 +12,6 @@
 export type SaveSection =
 	| 'basic'
 	| 'models'
-	| 'memory'
 	| 'compression'
 	| 'externalAudit'
 	| 'images'
@@ -33,7 +32,6 @@ export type LeafKey =
 	| 'vision'
 	| 'sticker'
 	| 'pet'
-	| 'memory'
 	| 'compression'
 	| 'proactive'
 	| 'externalAudit'
@@ -69,7 +67,6 @@ export const settingsGroups: GroupDef[] = [
 		{ key: 'pet', title: '桌宠', icon: 'ti ti-paw', sections: ['pet'] },
 	] },
 	{ key: 'conversation', title: '行为', icon: 'ti ti-message-chatbot', leaves: [
-		{ key: 'memory', title: '长期记忆', icon: 'ti ti-brain', sections: ['memory'] },
 		{ key: 'compression', title: '压缩', icon: 'ti ti-file-zip', sections: ['compression'] },
 		{ key: 'proactive', title: '主动消息', icon: 'ti ti-message-chatbot', sections: ['proactive'] },
 	] },
@@ -106,7 +103,6 @@ export function leafDef(leaf: LeafKey): LeafDef {
 export const saveSectionLabels: Record<SaveSection, string> = {
 	basic: '基础',
 	models: '对话模型',
-	memory: '长期记忆',
 	compression: '压缩',
 	externalAudit: '外审',
 	images: '绘图模型',
@@ -122,7 +118,6 @@ export const saveSectionLabels: Record<SaveSection, string> = {
 export const saveSectionHomeLeaf: Record<SaveSection, LeafKey> = {
 	basic: 'basic',
 	models: 'models',
-	memory: 'memory',
 	compression: 'compression',
 	externalAudit: 'externalAudit',
 	images: 'images',
@@ -138,7 +133,6 @@ const sectionPrefixes: [string, SaveSection][] = [
 	['agentLlmModel', 'models'],
 	['agentDefaultModelId', 'models'],
 	['agentByok', 'models'],
-	['agentMem0', 'memory'],
 	['agentCompression', 'compression'],
 	['agentExternalAudit', 'externalAudit'],
 	['agentReviewTriggerRules', 'externalAudit'],

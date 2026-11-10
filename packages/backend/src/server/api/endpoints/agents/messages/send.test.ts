@@ -56,7 +56,6 @@ function createHarness(opts: {
 		{} as never,
 		agentService as never,
 		{} as never,
-		{} as never,
 		chatService as never,
 		{} as never,
 		{} as never,

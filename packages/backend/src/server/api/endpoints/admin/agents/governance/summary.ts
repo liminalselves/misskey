@@ -10,7 +10,9 @@ import type { AgentCharactersRepository, AgentDialogueStylesRepository, AgentExt
 import { Endpoint } from '@/server/api/endpoint-base.js';
 import { DI } from '@/di-symbols.js';
 import { AgentService } from '@/core/AgentService.js';
+import { MetaService } from '@/core/MetaService.js';
 import { agentGovernanceLogTypes } from './_utils.js';
+import { countPendingReviewSessions } from './external-audit/_review-qualification.js';
 
 export const meta = {
 	tags: ['admin', 'agents'],
@@ -57,6 +59,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		private agentModelReportsRepository: AgentModelReportsRepository,
 
 		private agentService: AgentService,
+		private metaService: MetaService,
 	) {
 		super(meta, paramDef, async () => {
 			this.agentService.assertAgentsEnabled();
@@ -69,6 +72,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				blockedImages,
 				recentOperations,
 				unresolvedModelReports,
+				pendingReviewSessions,
 			] = await Promise.all([
 				this.agentCharactersRepository.countBy({ reviewStatus: 'pending' }),
 				this.agentDialogueStylesRepository.countBy({ reviewStatus: 'pending' }),
@@ -78,6 +82,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				this.agentImageGenerationsRepository.countBy({ isBlocked: true }),
 				this.moderationLogsRepository.countBy({ type: In([...agentGovernanceLogTypes]) }),
 				this.agentModelReportsRepository.countBy({ resolvedAt: IsNull() }),
+				this.metaService.fetch().then(m => countPendingReviewSessions(this.agentExternalAuditLogsRepository, m.agentReviewTriggerRules)),
 			]);
 
 			return {
@@ -90,6 +95,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				blockedImages,
 				recentOperations,
 				unresolvedModelReports,
+				pendingReviewSessions,
 			};
 		});
 	}

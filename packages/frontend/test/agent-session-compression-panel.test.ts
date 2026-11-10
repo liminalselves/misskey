@@ -57,7 +57,7 @@ describe('Compression injection preview panel', () => {
 
 	test.each([false, true])('renders and refreshes the server preview with review=%s', async review => {
 		vi.mocked(misskeyApi).mockResolvedValue(overview({
-			maxChars: 4000, eligibleCount: 12, eligibleChars: 15000, willInjectCount: 4, willInjectChars: 3998,
+			maxChars: 4000, eligibleCount: 12, eligibleChars: 15000, willInjectCount: 4, willInjectChars: 3998, maxTokens: 4000, willInjectTokens: 3998,
 		}) as never);
 		host = document.createElement('div');
 		document.body.append(host);

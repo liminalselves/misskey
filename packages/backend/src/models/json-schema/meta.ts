@@ -425,18 +425,6 @@ export const packedMetaLiteSchema = {
 			type: 'number',
 			optional: false, nullable: false,
 		},
-		agentLongMemoryConfigured: {
-			type: 'boolean',
-			optional: false, nullable: false,
-		},
-		agentMem0AddMemoryMaxRounds: {
-			type: 'number',
-			optional: false, nullable: false,
-		},
-		agentMem0AddMemoryEveryNRounds: {
-			type: 'number',
-			optional: false, nullable: false,
-		},
 		agentProactiveMinSilenceMinutes: {
 			type: 'number',
 			optional: false, nullable: false,

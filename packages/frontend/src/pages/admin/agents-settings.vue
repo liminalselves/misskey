@@ -23,10 +23,6 @@ SPDX-License-Identifier: AGPL-3.0-only
 						<span>默认模型</span>
 						<b>{{ selectedDefaultModelName }}</b>
 					</button>
-					<button v-panel type="button" class="_button" :class="$style.overviewCard" @click="activeLeaf = 'memory'">
-						<span>长期记忆</span>
-						<b>{{ form.state.agentMem0Enabled ? i18n.ts._agents.adminEnabled : i18n.ts._agents.adminNotEnabled }}</b>
-					</button>
 					<button v-panel type="button" class="_button" :class="$style.overviewCard" @click="activeLeaf = 'reports'">
 						<span>24h 请求</span>
 						<b>{{ reportsData?.overall.total ?? '—' }}</b>
@@ -252,16 +248,6 @@ SPDX-License-Identifier: AGPL-3.0-only
 									<template #label>每日免费次数</template>
 									<template #caption>设为 0 则无免费额度；每日 0 点（北京时间）重置</template>
 								</MkInput>
-								<FormSplit :minWidth="260">
-									<MkSelect v-model="row.tokenizerEncoding" :items="tokenizerEncodingItems" :readonly="row.unlisted">
-										<template #label>Token 编码器</template>
-										<template #caption>tiktoken/Gemini/GLM/DeepSeek 为精确计数（GLM/DeepSeek 需镜像预置词表，缺失时自动降级近似）；Claude 为兼容近似（≈）；不选则字符估算</template>
-									</MkSelect>
-									<MkSelect v-model="row.charsPerToken" :items="charsPerTokenItems" :readonly="row.unlisted">
-										<template #label>{{ i18n.ts._agents.adminCharsPerToken }}</template>
-										<template #caption>{{ i18n.ts._agents.adminCharsPerTokenCaption }}</template>
-									</MkSelect>
-								</FormSplit>
 							</div>
 						</div>
 					</template>
@@ -323,14 +309,6 @@ SPDX-License-Identifier: AGPL-3.0-only
 									<template #label>输出长度（token）</template>
 								</MkInput>
 							</FormSplit>
-							<FormSplit :minWidth="260">
-								<MkSelect v-model="row.tokenizerEncoding" :items="tokenizerEncodingItems">
-									<template #label>Token 编码器</template>
-								</MkSelect>
-								<MkSelect v-model="row.charsPerToken" :items="charsPerTokenItems">
-									<template #label>字符/token 估算</template>
-								</MkSelect>
-							</FormSplit>
 						</div>
 						<div>
 							<MkButton rounded @click="onAddByokProvider"><i class="ti ti-plus"></i> 添加提供商模板</MkButton>
@@ -339,45 +317,6 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</MkFolder>
 			</div>
 		</MkFolder>
-
-			<MkFolder v-if="activeLeaf === 'memory'" :defaultOpen="true">
-				<template #icon><i class="ti ti-brain"></i></template>
-				<template #label>{{ i18n.ts._agents.adminSectionLongMemory }}</template>
-				<div class="_gaps">
-					<MkInfo>{{ i18n.ts._agents.adminLongMemoryHint }}</MkInfo>
-					<MkSwitch v-model="form.state.agentMem0Enabled">
-						<template #label>{{ i18n.ts._agents.longMemoryEnabled }}</template>
-					</MkSwitch>
-					<MkInput v-model="form.state.agentMem0ApiKey" type="password">
-						<template #label>{{ i18n.ts._agents.dashscopeApiKey }}</template>
-						<template #caption>{{ i18n.ts._agents.dashscopeApiKeyCaption }}</template>
-					</MkInput>
-					<MkInput v-model="form.state.agentMem0ApiBaseUrl" type="text">
-						<template #label>{{ i18n.ts._agents.dashscopeApiBaseUrl }}</template>
-						<template #caption>{{ i18n.ts._agents.dashscopeApiBaseUrlCaption }}</template>
-					</MkInput>
-					<MkInput v-model="form.state.agentMem0OrgId" type="text">
-						<template #label>{{ i18n.ts._agents.memoryLibraryId }}</template>
-						<template #caption>{{ i18n.ts._agents.memoryLibraryIdCaption }}</template>
-					</MkInput>
-					<FormSplit :minWidth="260" data-settings-anchor="memory-params">
-						<MkInput v-model="form.state.agentMem0TopK" type="text">
-							<template #label>{{ i18n.ts._agents.defaultMemoryTopK }}</template>
-						</MkInput>
-						<MkInput v-model="form.state.agentMem0InjectMaxChars" type="text">
-							<template #label>{{ i18n.ts._agents.defaultMemoryInjectMaxChars }}</template>
-						</MkInput>
-					</FormSplit>
-					<MkInput v-model="form.state.agentMem0AddMemoryMaxRounds" type="text">
-						<template #label>{{ i18n.ts._agents.defaultMemoryAddMaxRounds }}</template>
-						<template #caption>{{ i18n.ts._agents.defaultMemoryAddMaxRoundsCaption }}</template>
-					</MkInput>
-					<MkInput v-model="form.state.agentMem0AddMemoryEveryNRounds" type="text">
-						<template #label>{{ i18n.ts._agents.defaultMemoryAddEveryNRounds }}</template>
-						<template #caption>{{ i18n.ts._agents.defaultMemoryAddEveryNRoundsCaption }}</template>
-					</MkInput>
-				</div>
-			</MkFolder>
 
 			<MkFolder v-if="activeLeaf === 'compression'" :defaultOpen="true">
 				<template #icon><i class="ti ti-file-zip"></i></template>
@@ -564,10 +503,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 								<MkLoading v-if="externalAuditStatsLoading"/>
 								<MkInfo v-else-if="externalAuditStats.length === 0">暂无外审模型统计。</MkInfo>
 								<template v-else>
-									<MkInfo>统计范围为最近 1 小时；API 失败指请求阶段报错（超时/网络/HTTP 错误等），解析失败指模型回复内容缺失或无法解析为审核结论。</MkInfo>
+									<MkInfo>统计范围为最近 1 小时；API 失败指请求阶段报错（超时/网络/HTTP 错误等），解析失败指模型回复内容缺失或无法解析为审核结论。平均耗时含失败调用，成功平均耗时只算得出放行或拦截结论的调用。</MkInfo>
 									<div :class="$style.auditStatsTable">
 										<div :class="$style.auditStatsHead">
-											<span>模型</span><span>状态</span><span>总数</span><span>API 失败</span><span>解析失败</span><span>总失败</span><span>失败率</span>
+											<span>模型</span><span>状态</span><span>总数</span><span>API 失败</span><span>解析失败</span><span>总失败</span><span>失败率</span><span>平均耗时</span><span>成功平均耗时</span>
 										</div>
 										<div v-for="row in externalAuditStats" :key="row.id" :class="$style.auditStatsRow">
 											<span data-label="模型">{{ row.name }}</span>
@@ -577,6 +516,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 											<span data-label="解析失败">{{ row.parseFailed }}</span>
 											<span data-label="总失败">{{ row.failed }}</span>
 											<span data-label="失败率">{{ (row.failureRate * 100).toFixed(1) }}%</span>
+											<span data-label="平均耗时">{{ formatAuditDuration(row.avgDurationMs) }}</span>
+											<span data-label="成功平均耗时">{{ formatAuditDuration(row.avgSuccessDurationMs) }}</span>
 										</div>
 									</div>
 								</template>
@@ -701,8 +642,26 @@ SPDX-License-Identifier: AGPL-3.0-only
 											<template #label>{{ i18n.ts._agents.adminQwenImageRequestUrl }}</template>
 											<template #caption>{{ i18n.ts._agents.adminQwenImageRequestUrlCaption }}</template>
 										</MkInput>
-										<MkInput v-model="row.apiKey" type="password" :readonly="!row.enabled"><template #label>{{ i18n.ts._agents.adminQwenImageApiKey }}</template></MkInput>
 									</FormSplit>
+									<MkSwitch v-model="row.multiKeyEnabled" :disabled="!row.enabled">
+										<template #label>{{ i18n.ts._agents.modelMultiKeyEnabled }}</template>
+										<template #caption>{{ i18n.ts._agents.modelMultiKeyEnabledCaption }}</template>
+									</MkSwitch>
+									<MkInput v-if="!row.multiKeyEnabled" v-model="row.apiKeys[0]" type="password" :readonly="!row.enabled">
+										<template #label>{{ i18n.ts._agents.modelApiKey }}</template>
+										<template #caption>{{ i18n.ts._agents.modelSingleKeyCaption }}</template>
+									</MkInput>
+									<div v-else :class="$style.multiKeyList">
+										<div v-for="(_, keyIndex) in row.apiKeys" :key="keyIndex" :class="$style.multiKeyRow">
+											<MkInput v-model="row.apiKeys[keyIndex]" type="password" :readonly="!row.enabled">
+												<template #label>{{ i18n.tsx._agents.modelApiKeyNumber({ n: keyIndex + 1 }) }}</template>
+											</MkInput>
+											<button type="button" class="_button" :class="$style.iconWarn" :disabled="!row.enabled || row.apiKeys.length <= 1" :title="i18n.ts._agents.modelApiKeyRemove" @click="removeImageApiKey(row, keyIndex)">
+												<i class="ti ti-trash"></i>
+											</button>
+										</div>
+										<MkButton small rounded :disabled="!row.enabled" @click="row.apiKeys.push('')"><i class="ti ti-plus"></i> {{ i18n.ts._agents.modelApiKeyAdd }}</MkButton>
+									</div>
 									<FormSplit :minWidth="220">
 										<MkInput v-model="row.apiModelName" :readonly="!row.enabled"><template #label>{{ i18n.ts._agents.adminQwenImageModelName }}</template></MkInput>
 										<MkInput v-model="row.costPerCall" type="text" :readonly="!row.enabled"><template #label>{{ i18n.ts._agents.adminImageModelCost }}</template></MkInput>
@@ -719,8 +678,26 @@ SPDX-License-Identifier: AGPL-3.0-only
 											<template #label>{{ i18n.ts._agents.adminSenseNovaImageRequestUrl }}</template>
 											<template #caption>{{ i18n.ts._agents.adminSenseNovaImageRequestUrlCaption }}</template>
 										</MkInput>
-										<MkInput v-model="row.apiKey" type="password" :readonly="!row.enabled"><template #label>{{ i18n.ts._agents.adminOpenaiImageApiKey }}</template></MkInput>
 									</FormSplit>
+									<MkSwitch v-model="row.multiKeyEnabled" :disabled="!row.enabled">
+										<template #label>{{ i18n.ts._agents.modelMultiKeyEnabled }}</template>
+										<template #caption>{{ i18n.ts._agents.modelMultiKeyEnabledCaption }}</template>
+									</MkSwitch>
+									<MkInput v-if="!row.multiKeyEnabled" v-model="row.apiKeys[0]" type="password" :readonly="!row.enabled">
+										<template #label>{{ i18n.ts._agents.modelApiKey }}</template>
+										<template #caption>{{ i18n.ts._agents.modelSingleKeyCaption }}</template>
+									</MkInput>
+									<div v-else :class="$style.multiKeyList">
+										<div v-for="(_, keyIndex) in row.apiKeys" :key="keyIndex" :class="$style.multiKeyRow">
+											<MkInput v-model="row.apiKeys[keyIndex]" type="password" :readonly="!row.enabled">
+												<template #label>{{ i18n.tsx._agents.modelApiKeyNumber({ n: keyIndex + 1 }) }}</template>
+											</MkInput>
+											<button type="button" class="_button" :class="$style.iconWarn" :disabled="!row.enabled || row.apiKeys.length <= 1" :title="i18n.ts._agents.modelApiKeyRemove" @click="removeImageApiKey(row, keyIndex)">
+												<i class="ti ti-trash"></i>
+											</button>
+										</div>
+										<MkButton small rounded :disabled="!row.enabled" @click="row.apiKeys.push('')"><i class="ti ti-plus"></i> {{ i18n.ts._agents.modelApiKeyAdd }}</MkButton>
+									</div>
 									<FormSplit :minWidth="220">
 										<MkInput v-model="row.apiModelName" :readonly="!row.enabled"><template #label>{{ i18n.ts._agents.adminSenseNovaImageModelName }}</template></MkInput>
 										<MkInput v-model="row.costPerCall" type="text" :readonly="!row.enabled"><template #label>{{ i18n.ts._agents.adminImageModelCost }}</template></MkInput>
@@ -741,8 +718,26 @@ SPDX-License-Identifier: AGPL-3.0-only
 												<template #label>{{ i18n.ts._agents.adminOpenaiImageRequestUrl }}</template>
 												<template #caption>{{ i18n.ts._agents.adminOpenaiImageRequestUrlCaption }}</template>
 											</MkInput>
-											<MkInput v-model="row.apiKey" type="password" :readonly="!row.enabled"><template #label>{{ i18n.ts._agents.adminOpenaiImageApiKey }}</template></MkInput>
 										</FormSplit>
+										<MkSwitch v-model="row.multiKeyEnabled" :disabled="!row.enabled">
+											<template #label>{{ i18n.ts._agents.modelMultiKeyEnabled }}</template>
+											<template #caption>{{ i18n.ts._agents.modelMultiKeyEnabledCaption }}</template>
+										</MkSwitch>
+										<MkInput v-if="!row.multiKeyEnabled" v-model="row.apiKeys[0]" type="password" :readonly="!row.enabled">
+											<template #label>{{ i18n.ts._agents.modelApiKey }}</template>
+											<template #caption>{{ i18n.ts._agents.modelSingleKeyCaption }}</template>
+										</MkInput>
+										<div v-else :class="$style.multiKeyList">
+											<div v-for="(_, keyIndex) in row.apiKeys" :key="keyIndex" :class="$style.multiKeyRow">
+												<MkInput v-model="row.apiKeys[keyIndex]" type="password" :readonly="!row.enabled">
+													<template #label>{{ i18n.tsx._agents.modelApiKeyNumber({ n: keyIndex + 1 }) }}</template>
+												</MkInput>
+												<button type="button" class="_button" :class="$style.iconWarn" :disabled="!row.enabled || row.apiKeys.length <= 1" :title="i18n.ts._agents.modelApiKeyRemove" @click="removeImageApiKey(row, keyIndex)">
+													<i class="ti ti-trash"></i>
+												</button>
+											</div>
+											<MkButton small rounded :disabled="!row.enabled" @click="row.apiKeys.push('')"><i class="ti ti-plus"></i> {{ i18n.ts._agents.modelApiKeyAdd }}</MkButton>
+										</div>
 										<FormSplit :minWidth="220">
 											<MkInput v-model="row.apiModelName" :readonly="!row.enabled"><template #label>{{ i18n.ts._agents.adminOpenaiImageModelName }}</template></MkInput>
 											<MkInput v-model="row.costPerCall" type="text" :readonly="!row.enabled"><template #label>{{ i18n.ts._agents.adminImageModelCost }}</template></MkInput>
@@ -1112,8 +1107,6 @@ type AgentLlmModelRow = {
 	pricePerMillionOutputTokens: string;
 	/** 高峰时段价格倍率（留空/1 不启用） */
 	peakPriceMultiplier: string;
-	charsPerToken: string;
-	tokenizerEncoding: string;
 	dailyFreeQuota: string;
 };
 
@@ -1143,7 +1136,8 @@ type AgentImageModelRow = {
 	enabled: boolean;
 	apiModelName: string;
 	apiUrl: string;
-	apiKey: string;
+	apiKeys: string[];
+	multiKeyEnabled: boolean;
 	supportsReferenceImage: boolean;
 	costPerCall: string;
 	dailyFreeQuota: string;
@@ -1210,6 +1204,8 @@ type AgentExternalAuditModelStat = {
 	/** 回复解析失败数（回复内容缺失或无法解析为结构化审核结论） */
 	parseFailed: number;
 	failureRate: number;
+	avgDurationMs: number | null;
+	avgSuccessDurationMs: number | null;
 };
 
 type AgentExternalAuditFailureRow = {
@@ -1232,8 +1228,6 @@ type AgentByokProviderRow = {
 	apiModelName: string;
 	maxContextTokens: string;
 	maxOutputTokensPerCall: string;
-	tokenizerEncoding: string;
-	charsPerToken: string;
 };
 
 type AgentReviewTriggerRule = {
@@ -1256,43 +1250,6 @@ const agentImageProviderValues = new Set(agentImageProviderItems.flatMap(item =>
 const billingModeItems: MkSelectItem[] = [
 	{ value: 'per_call', label: i18n.ts._agents.billingModePerCall },
 	{ value: 'usage', label: i18n.ts._agents.billingModeUsage },
-];
-
-const tokenizerEncodingItems: MkSelectItem[] = [
-	{ value: '', label: '不使用（字符估算）' },
-	{ value: 'cl100k_base', label: 'cl100k_base（GPT-4 / GPT-3.5-turbo）' },
-	{ value: 'o200k_base', label: 'o200k_base（GPT-4o / GPT-4o-mini）' },
-	{ value: 'p50k_base', label: 'p50k_base（text-davinci-003）' },
-	{ value: 'r50k_base', label: 'r50k_base（text-davinci-002）' },
-	{ value: 'gpt2', label: 'gpt2（GPT-2）' },
-	{ value: 'gemini:gemini-3-pro-preview', label: 'Gemini 3' },
-	{ value: 'gemini:gemini-2.5-pro', label: 'Gemini 2.5 Pro' },
-	{ value: 'gemini:gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
-	{ value: 'gemini:gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash Lite' },
-	{ value: 'gemini:gemini-2.0-flash-001', label: 'Gemini 2.0 Flash' },
-	{ value: 'gemini:gemini-2.0-flash-lite-001', label: 'Gemini 2.0 Flash Lite' },
-	{ value: 'glm:glm-5.5', label: 'GLM-5.5（智谱，真分词器）' },
-	{ value: 'glm:glm-5.2', label: 'GLM-5.2（智谱，真分词器）' },
-	{ value: 'glm:glm-4.7', label: 'GLM-4.7（智谱，真分词器）' },
-	{ value: 'glm:glm-4.5', label: 'GLM-4.5（智谱，真分词器）' },
-	{ value: 'glm:glm-4-plus', label: 'GLM-4 Plus（智谱，真分词器）' },
-	{ value: 'glm:glm-4-flash', label: 'GLM-4 Flash（智谱，真分词器）' },
-	{ value: 'deepseek:deepseek-v4-pro', label: 'DeepSeek-V4 Pro（真分词器）' },
-	{ value: 'deepseek:deepseek-v4-flash', label: 'DeepSeek-V4 Flash（真分词器）' },
-	{ value: 'deepseek:deepseek-v3', label: 'DeepSeek-V3（真分词器）' },
-	{ value: 'deepseek:deepseek-r1', label: 'DeepSeek-R1（真分词器）' },
-	{ value: 'claude:claude-fable-5', label: 'Claude Fable 5（兼容近似）' },
-	{ value: 'claude:claude-opus-4-8', label: 'Claude Opus 4.8（兼容近似）' },
-	{ value: 'claude:claude-opus-4-7', label: 'Claude Opus 4.7（兼容近似）' },
-	{ value: 'claude:claude-sonnet-4-5', label: 'Claude Sonnet 4.5（兼容近似）' },
-];
-
-const charsPerTokenItems: MkSelectItem[] = [
-	{ value: '', label: '默认（3 字符/token）' },
-	{ value: '2', label: '2（英文为主）' },
-	{ value: '3', label: '3（中英混合）' },
-	{ value: '4', label: '4（中文为主）' },
-	{ value: '6', label: '6（代码/日文）' },
 ];
 
 function numFromMeta(v: unknown, fallback: number): number {
@@ -1344,8 +1301,6 @@ function initAgentLlmModelRows(): AgentLlmModelRow[] {
 			pricePerMillionInputCacheMissTokens: typeof o.pricePerMillionInputCacheMissTokens === 'number' && Number.isFinite(o.pricePerMillionInputCacheMissTokens) ? String(o.pricePerMillionInputCacheMissTokens) : '',
 			pricePerMillionOutputTokens: typeof o.pricePerMillionOutputTokens === 'number' && Number.isFinite(o.pricePerMillionOutputTokens) ? String(o.pricePerMillionOutputTokens) : '',
 			peakPriceMultiplier: typeof o.peakPriceMultiplier === 'number' && Number.isFinite(o.peakPriceMultiplier) ? String(o.peakPriceMultiplier) : '',
-			charsPerToken: typeof o.charsPerToken === 'number' && Number.isFinite(o.charsPerToken) ? String(o.charsPerToken) : '',
-			tokenizerEncoding: typeof o.tokenizerEncoding === 'string' ? o.tokenizerEncoding : '',
 			dailyFreeQuota: typeof o.dailyFreeQuota === 'number' && Number.isFinite(o.dailyFreeQuota) ? String(o.dailyFreeQuota) : '0',
 		});
 	}
@@ -1385,8 +1340,6 @@ function initAgentByokProviderRows(): AgentByokProviderRow[] {
 			apiModelName: typeof o.apiModelName === 'string' ? o.apiModelName : '',
 			maxContextTokens: String(numFromMeta(o.maxContextTokens, 8192)),
 			maxOutputTokensPerCall: String(numFromMeta(o.maxOutputTokensPerCall, 2048)),
-			tokenizerEncoding: typeof o.tokenizerEncoding === 'string' ? o.tokenizerEncoding : '',
-			charsPerToken: typeof o.charsPerToken === 'number' && Number.isFinite(o.charsPerToken) ? String(o.charsPerToken) : '',
 		};
 	});
 }
@@ -1410,6 +1363,12 @@ function initAgentImageTokenRows(): AgentImageTokenRow[] {
 	});
 }
 
+function initImageApiKeys(o: Record<string, unknown>): string[] {
+	const keys = Array.isArray(o.apiKeys) ? o.apiKeys.filter((key): key is string => typeof key === 'string') : [];
+	if (keys.length === 0) keys.push(typeof o.apiKey === 'string' ? o.apiKey : '');
+	return keys;
+}
+
 function initAgentImageModelRows(): AgentImageModelRow[] {
 	const raw = meta.agentImageModels;
 	if (!Array.isArray(raw)) return [];
@@ -1424,7 +1383,8 @@ function initAgentImageModelRows(): AgentImageModelRow[] {
 			enabled: o.enabled !== false,
 			apiModelName: typeof o.apiModelName === 'string' ? o.apiModelName : '',
 			apiUrl: typeof o.apiUrl === 'string' ? o.apiUrl : '',
-			apiKey: typeof o.apiKey === 'string' ? o.apiKey : '',
+			apiKeys: initImageApiKeys(o),
+			multiKeyEnabled: o.multiKeyEnabled === true,
 			supportsReferenceImage: (o.provider === 'openai' || o.provider === 'tiptotip' || o.provider === 'sensenova') && o.supportsReferenceImage === true,
 			costPerCall: typeof o.costPerCall === 'number' ? String(o.costPerCall) : '',
 			dailyFreeQuota: typeof o.dailyFreeQuota === 'number' ? String(o.dailyFreeQuota) : '0',
@@ -1545,14 +1505,6 @@ const initialFormState = {
 	agentByokEnabled: Boolean(meta.agentByokEnabled),
 	agentByokProviderRows: initAgentByokProviderRows(),
 	agentByokMaxUserModels: String(numFromMeta(meta.agentByokMaxUserModels, 20)),
-	agentMem0Enabled: Boolean(meta.agentMem0Enabled),
-	agentMem0ApiKey: typeof meta.agentMem0ApiKey === 'string' ? meta.agentMem0ApiKey : '',
-	agentMem0ApiBaseUrl: typeof meta.agentMem0ApiBaseUrl === 'string' ? meta.agentMem0ApiBaseUrl : '',
-	agentMem0OrgId: typeof meta.agentMem0OrgId === 'string' ? meta.agentMem0OrgId : '',
-	agentMem0TopK: String(numFromMeta(meta.agentMem0TopK, 8)),
-	agentMem0InjectMaxChars: String(numFromMeta(meta.agentMem0InjectMaxChars, 4000)),
-	agentMem0AddMemoryMaxRounds: String(numFromMeta(meta.agentMem0AddMemoryMaxRounds, 3)),
-	agentMem0AddMemoryEveryNRounds: String(numFromMeta(meta.agentMem0AddMemoryEveryNRounds, 1)),
 	agentCompressionSystemPrompt: typeof meta.agentCompressionSystemPrompt === 'string' ? meta.agentCompressionSystemPrompt : '',
 	agentCompressionInjectMaxChars: String(numFromMeta(meta.agentCompressionInjectMaxChars, 4000)),
 	agentCompressionMaxInputChars: String(numFromMeta(meta.agentCompressionMaxInputChars, 12000)),
@@ -1724,8 +1676,6 @@ function buildModelsPayload(state: FormState): Record<string, unknown> {
 			pricePerMillionInputCacheMissTokens: price(row.pricePerMillionInputCacheMissTokens, i18n.ts._agents.billingInputCacheMiss),
 			pricePerMillionOutputTokens: price(row.pricePerMillionOutputTokens, i18n.ts._agents.billingOutput),
 			peakPriceMultiplier: peak,
-			charsPerToken: row.charsPerToken.trim() !== '' ? Number(row.charsPerToken) : undefined,
-			tokenizerEncoding: row.tokenizerEncoding.trim() !== '' ? row.tokenizerEncoding.trim() : undefined,
 			dailyFreeQuota: quota > 0 ? quota : undefined,
 		});
 	}
@@ -1747,8 +1697,6 @@ function buildModelsPayload(state: FormState): Record<string, unknown> {
 			apiModelName: nullIfBlank(row.apiModelName),
 			maxContextTokens: row.maxContextTokens.trim() === '' ? undefined : intField('models', row.maxContextTokens, 256, 2_000_000, `${row.name} · 上下文长度`, anchor),
 			maxOutputTokensPerCall: row.maxOutputTokensPerCall.trim() === '' ? undefined : intField('models', row.maxOutputTokensPerCall, 1, 128_000, `${row.name} · 输出长度`, anchor),
-			tokenizerEncoding: nullIfBlank(row.tokenizerEncoding),
-			charsPerToken: row.charsPerToken.trim() === '' ? undefined : Number(row.charsPerToken),
 		});
 	}
 
@@ -1781,7 +1729,8 @@ function buildImagesPayload(state: FormState): Record<string, unknown> {
 		if (!agentImageProviderValues.has(row.provider)) fail('images', `生图模型「${label}」的提供商「${row.provider}」无法识别，请重新选择。`, anchor);
 		const needsEndpoint = endpointImageProviders.has(row.provider);
 		if (!row.apiModelName.trim()) fail('images', `生图模型「${label}」需要填写上游模型名。`, anchor);
-		if (needsEndpoint && (!row.apiUrl.trim() || !row.apiKey.trim())) fail('images', `生图模型「${label}」需要填写请求地址和 API Key。`, anchor);
+		const imageApiKeys = [...new Set(row.apiKeys.map(key => key.trim()).filter(key => key !== ''))];
+		if (needsEndpoint && (!row.apiUrl.trim() || imageApiKeys.length === 0)) fail('images', `生图模型「${label}」需要填写请求地址和 API Key。`, anchor);
 		if (row.provider === 'sensenova' && !/\/images\/generations\/?$/.test(row.apiUrl.trim())) fail('images', i18n.ts._agents.adminSenseNovaImageRequestUrlInvalid, anchor);
 		const cost = row.costPerCall.trim() === '' ? null : numField('images', row.costPerCall, 0, 1_000_000, `${label} · 每张扣费`, anchor);
 		const quotaRaw = row.dailyFreeQuota.trim();
@@ -1794,7 +1743,9 @@ function buildImagesPayload(state: FormState): Record<string, unknown> {
 			enabled: row.enabled,
 			apiModelName: row.apiModelName.trim(),
 			apiUrl: needsEndpoint ? row.apiUrl.trim() : null,
-			apiKey: needsEndpoint ? row.apiKey.trim() : null,
+			apiKey: needsEndpoint ? imageApiKeys[0] : null,
+			apiKeys: needsEndpoint ? imageApiKeys : null,
+			multiKeyEnabled: needsEndpoint && row.multiKeyEnabled,
 			supportsReferenceImage: referenceImageProviders.has(row.provider) && row.supportsReferenceImage,
 			costPerCall: cost,
 			dailyFreeQuota: quota > 0 ? quota : null,
@@ -1962,19 +1913,6 @@ function buildExternalAuditPayload(state: FormState): Record<string, unknown> {
 	};
 }
 
-function buildMemoryPayload(state: FormState): Record<string, unknown> {
-	return {
-		agentMem0Enabled: state.agentMem0Enabled,
-		agentMem0ApiKey: state.agentMem0ApiKey.trim() === '' ? null : state.agentMem0ApiKey,
-		agentMem0ApiBaseUrl: nullIfBlank(state.agentMem0ApiBaseUrl),
-		agentMem0OrgId: nullIfBlank(state.agentMem0OrgId),
-		agentMem0TopK: intField('memory', state.agentMem0TopK, 1, 100, i18n.ts._agents.defaultMemoryTopK, 'memory-params'),
-		agentMem0InjectMaxChars: intField('memory', state.agentMem0InjectMaxChars, 200, 50000, i18n.ts._agents.defaultMemoryInjectMaxChars, 'memory-params'),
-		agentMem0AddMemoryMaxRounds: intField('memory', state.agentMem0AddMemoryMaxRounds, 1, 24, i18n.ts._agents.defaultMemoryAddMaxRounds, 'memory-params'),
-		agentMem0AddMemoryEveryNRounds: intField('memory', state.agentMem0AddMemoryEveryNRounds, 1, 48, i18n.ts._agents.defaultMemoryAddEveryNRounds, 'memory-params'),
-	};
-}
-
 function buildCompressionPayload(state: FormState): Record<string, unknown> {
 	const t1s = String(state.agentCompressionBandT1Ratio ?? '').trim();
 	const t2s = String(state.agentCompressionBandT2Ratio ?? '').trim();
@@ -2009,7 +1947,6 @@ function buildSectionPayload(section: SaveSection, state: FormState): Record<str
 			agentAliyaWebUrl: nullIfBlank(state.agentAliyaWebUrl),
 		};
 		case 'models': return buildModelsPayload(state);
-		case 'memory': return buildMemoryPayload(state);
 		case 'compression': return buildCompressionPayload(state);
 		case 'externalAudit': return buildExternalAuditPayload(state);
 		case 'images': return buildImagesPayload(state);
@@ -2144,10 +2081,6 @@ const configIssues = computed((): ConfigIssue[] => {
 	}
 	for (const r of s.agentExternalAuditModelRows) {
 		if (r.autoDisabledAt) issues.push({ key: `auditAuto:${r.id}`, level: 'warn', text: `外审模型「${r.name || '未命名'}」已被自动禁用。`, leaf: 'externalAudit', anchor: `audit:${r.id}` });
-	}
-	if (s.agentMem0Enabled && s.agentMem0ApiKey.trim() === '') issues.push({ key: 'mem0', level: 'error', text: '长期记忆已开启，但没有填写 API Key。', leaf: 'memory' });
-	for (const t of missingTokenizers.value) {
-		issues.push({ key: `tok:${t.family}`, level: 'warn', text: `${tokenizerFamilyLabel(t.family)} 词表缺失，相关模型的 token 计数将降级为近似值。`, leaf: 'models' });
 	}
 	return issues;
 });
@@ -2312,36 +2245,6 @@ const reportTypeTabs = [
 ];
 const reportType = ref<'model' | 'checkin'>('model');
 const reportsData = ref<ReportsOverview | null>(null);
-
-interface TokenizerStatus {
-	family: string;
-	available: boolean;
-	vocabPath?: string;
-	configPath?: string;
-}
-
-const tokenizerStatuses = ref<TokenizerStatus[] | null>(null);
-
-async function loadTokenizerStatus() {
-	try {
-		const res = await misskeyApi('admin/agents/tokenizer-status' as any, {});
-		tokenizerStatuses.value = res.tokenizers;
-	} catch (err) {
-		console.error('Failed to load tokenizer status:', err);
-	}
-}
-
-const missingTokenizers = computed(() => {
-	return (tokenizerStatuses.value ?? []).filter(t => !t.available);
-});
-
-function tokenizerFamilyLabel(family: string): string {
-	const labels: Record<string, string> = {
-		glm: 'GLM（智谱）',
-		deepseek: 'DeepSeek',
-	};
-	return labels[family] ?? family;
-}
 
 const externalAuditStatsLoading = ref(false);
 const externalAuditStats = ref<AgentExternalAuditModelStat[]>([]);
@@ -2565,6 +2468,11 @@ async function loadExternalAuditStats() {
 	}
 }
 
+function formatAuditDuration(ms: number | null): string {
+	if (ms == null) return '—';
+	return ms < 1000 ? `${Math.round(ms)}ms` : `${(ms / 1000).toFixed(2)}s`;
+}
+
 function externalAuditStatStatus(row: AgentExternalAuditModelStat) {
 	if (row.autoDisabledAt) return i18n.ts._agents.adminAuditAutoDisabled;
 	if (!row.enabled) return i18n.ts._agents.adminAuditDisabled;
@@ -2612,6 +2520,11 @@ function removeLlmApiKey(row: AgentLlmModelRow, index: number) {
 	row.apiKeys.splice(index, 1);
 }
 
+function removeImageApiKey(row: AgentImageModelRow, index: number) {
+	if (row.apiKeys.length <= 1) return;
+	row.apiKeys.splice(index, 1);
+}
+
 function addRow() {
 	const id = genId();
 	form.state.agentLlmModelRows.push({
@@ -2632,8 +2545,6 @@ function addRow() {
 		pricePerMillionInputCacheMissTokens: '',
 		pricePerMillionOutputTokens: '',
 		peakPriceMultiplier: '',
-		charsPerToken: '',
-		tokenizerEncoding: '',
 		dailyFreeQuota: '0',
 	});
 	expandedLlmModelIds.value.push(id);
@@ -2648,16 +2559,14 @@ function onAddByokProvider() {
 		apiModelName: '',
 		maxContextTokens: '8192',
 		maxOutputTokensPerCall: '2048',
-		tokenizerEncoding: '',
-		charsPerToken: '',
 	});
 }
 
 /** 官方 DeepSeek 渠道预置：单价取自官方文档（元/百万 tokens），管理员仅需补 API Key */
 function addDeepSeekOfficialRow(variant: 'flash' | 'pro') {
 	const preset = variant === 'flash'
-		? { name: 'DeepSeek-V4-Flash（官方）', apiModelName: 'deepseek-v4-flash', tokenizerEncoding: 'deepseek:deepseek-v4-flash', hit: '0.02', miss: '1', output: '2' }
-		: { name: 'DeepSeek-V4-Pro（官方）', apiModelName: 'deepseek-v4-pro', tokenizerEncoding: 'deepseek:deepseek-v4-pro', hit: '0.025', miss: '3', output: '6' };
+		? { name: 'DeepSeek-V4-Flash（官方）', apiModelName: 'deepseek-v4-flash', hit: '0.02', miss: '1', output: '2' }
+		: { name: 'DeepSeek-V4-Pro（官方）', apiModelName: 'deepseek-v4-pro', hit: '0.025', miss: '3', output: '6' };
 	const id = genId();
 	form.state.agentLlmModelRows.push({
 		id,
@@ -2677,8 +2586,6 @@ function addDeepSeekOfficialRow(variant: 'flash' | 'pro') {
 		pricePerMillionInputCacheMissTokens: preset.miss,
 		pricePerMillionOutputTokens: preset.output,
 		peakPriceMultiplier: '2',
-		charsPerToken: '',
-		tokenizerEncoding: preset.tokenizerEncoding,
 		dailyFreeQuota: '0',
 	});
 	expandedLlmModelIds.value.push(id);
@@ -3088,7 +2995,8 @@ function addImageModel(providerPreset?: 'tiptotip' | 'openai' | 'sensenova-lite'
 				: isSenseNova
 					? 'https://token.sensenova.cn/v1/images/generations'
 					: '',
-		apiKey: '',
+		apiKeys: [''],
+		multiKeyEnabled: false,
 		supportsReferenceImage: isSenseNova,
 		costPerCall: form.state.agentImageCostPerCall || '',
 		dailyFreeQuota: '0',
@@ -3110,6 +3018,7 @@ function copyImageModelRow(src: AgentImageModelRow) {
 	if (index < 0) return;
 	const copy: AgentImageModelRow = {
 		...src,
+		apiKeys: [...src.apiKeys],
 		id: genId(),
 		name: `${src.name.trim()}${i18n.ts._agents.adminModelCopySuffix}`,
 		enabled: true,
@@ -3264,7 +3173,6 @@ watch(activeLeaf, tab => {
 }, { immediate: true });
 
 onMounted(() => {
-	void loadTokenizerStatus();
 });
 </script>
 
@@ -3774,8 +3682,8 @@ onMounted(() => {
 .auditStatsHead,
 .auditStatsRow {
 	display: grid;
-	min-width: 720px;
-	grid-template-columns: minmax(140px, 1.4fr) minmax(70px, 0.8fr) minmax(56px, 0.5fr) minmax(72px, 0.6fr) minmax(72px, 0.6fr) minmax(56px, 0.5fr) minmax(72px, 0.7fr);
+	min-width: 900px;
+	grid-template-columns: minmax(140px, 1.4fr) minmax(70px, 0.8fr) minmax(56px, 0.5fr) minmax(72px, 0.6fr) minmax(72px, 0.6fr) minmax(56px, 0.5fr) minmax(72px, 0.7fr) minmax(76px, 0.7fr) minmax(96px, 0.8fr);
 	gap: 10px;
 	align-items: center;
 	padding: 10px 12px;

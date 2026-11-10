@@ -63,8 +63,12 @@ export type MiAgentImageModel = {
 	 * - sensenova: /v1/images/generations; reference-image requests are routed to the sibling /v1/images/edits endpoint.
 	 */
 	apiUrl?: string | null;
-	/** Per-model credential for the image endpoint. */
+	/** Per-model credential for the image endpoint; mirrors apiKeys[0] for older readers. */
 	apiKey?: string | null;
+	/** All configured credentials, in configured order. */
+	apiKeys?: string[] | null;
+	/** Round-robin over apiKeys per request; when off only the first key is used. */
+	multiKeyEnabled?: boolean;
 	/** Whether this model accepts the character's default reference image. */
 	supportsReferenceImage?: boolean;
 	costPerCall?: number | null;

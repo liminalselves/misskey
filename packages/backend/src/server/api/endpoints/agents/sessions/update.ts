@@ -59,12 +59,6 @@ export const paramDef = {
 			dialogueStyleId: { type: 'string', format: 'misskey:id', nullable: true },
 			plazaStatsDialogueStyleId: { type: 'string', format: 'misskey:id', nullable: true },
 			agentModelId: { type: 'string', nullable: true, maxLength: 64 },
-		agentLongMemoryEnabled: { type: 'boolean', nullable: true },
-		agentLongMemoryTopK: { type: 'integer', minimum: 1, maximum: 100, nullable: true },
-		agentLongMemoryMinScore: { type: 'number', minimum: 0, maximum: 1, nullable: true },
-		agentLongMemoryInjectMaxChars: { type: 'integer', minimum: 200, maximum: 50000, nullable: true },
-		agentLongMemoryAddMaxRounds: { type: 'integer', minimum: 1, maximum: 24, nullable: true },
-		agentLongMemoryAddEveryNRounds: { type: 'integer', minimum: 1, maximum: 48, nullable: true },
 		agentLongMemoryProvider: { type: 'string', enum: [...agentLongMemoryProviderIds] },
 		agentCompressionModelId: { type: 'string', nullable: true, maxLength: 64 },
 		agentImageModelId: { type: 'string', nullable: true, maxLength: 128 },
@@ -169,36 +163,6 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				row.agentModelId = await resolveReference('对话模型', ps.agentModelId === '' ? null : ps.agentModelId, async id => {
 					await this.agentService.resolveModelApiNameForUser(instanceMeta, id, me.id);
 				}, modelUnavailableCodes);
-			}
-			if (ps.agentLongMemoryEnabled !== undefined && ps.agentLongMemoryEnabled !== null) {
-				row.agentLongMemoryEnabled = ps.agentLongMemoryEnabled;
-			}
-			if (ps.agentLongMemoryTopK !== undefined && ps.agentLongMemoryTopK !== null) {
-				row.agentLongMemoryTopK = Math.max(1, Math.min(100, ps.agentLongMemoryTopK));
-			}
-			if (ps.agentLongMemoryMinScore !== undefined) {
-				if (ps.agentLongMemoryMinScore === null) {
-					row.agentLongMemoryMinScore = null;
-				} else {
-					row.agentLongMemoryMinScore = Math.max(0, Math.min(1, ps.agentLongMemoryMinScore));
-				}
-			}
-			if (ps.agentLongMemoryInjectMaxChars !== undefined && ps.agentLongMemoryInjectMaxChars !== null) {
-				row.agentLongMemoryInjectMaxChars = Math.max(200, Math.min(50000, ps.agentLongMemoryInjectMaxChars));
-			}
-			if (ps.agentLongMemoryAddMaxRounds !== undefined) {
-				if (ps.agentLongMemoryAddMaxRounds === null) {
-					row.agentLongMemoryAddMaxRounds = null;
-				} else {
-					row.agentLongMemoryAddMaxRounds = Math.max(1, Math.min(24, ps.agentLongMemoryAddMaxRounds));
-				}
-			}
-			if (ps.agentLongMemoryAddEveryNRounds !== undefined) {
-				if (ps.agentLongMemoryAddEveryNRounds === null) {
-					row.agentLongMemoryAddEveryNRounds = null;
-				} else {
-					row.agentLongMemoryAddEveryNRounds = Math.max(1, Math.min(48, ps.agentLongMemoryAddEveryNRounds));
-				}
 			}
 			if (ps.agentLongMemoryProvider !== undefined) {
 				row.agentLongMemoryProvider = ps.agentLongMemoryProvider;

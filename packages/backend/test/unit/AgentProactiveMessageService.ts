@@ -116,12 +116,12 @@ function createHarness(opts: { reply?: string; imageModelEnabled?: boolean; mode
 	const compressionCalculator = Object.create(AgentCompressionMemoryService.prototype) as AgentCompressionMemoryService;
 	const compressionMemory = {
 		resolveEffectiveProvider: vi.fn(() => opts.compression ? 'compression' : 'none'),
-		buildSendPathBudgets: vi.fn(async () => ({ historyBudget: 9000, historyBudgetTokens: 3000, charsPerToken: 3 })),
+		buildSendPathBudgets: vi.fn(async () => ({ historyBudgetTokens: 3000 })),
 		buildCompressionContext: vi.fn<AgentCompressionMemoryService['buildCompressionContext']>(async () => ({ block: '<compression_memory>remember</compression_memory>', injectedStickies: [], boundaries: new Map() })),
 		buildPairsExcludingInjectedCompression: vi.fn<AgentCompressionMemoryService['buildPairsExcludingInjectedCompression']>((...args) => compressionCalculator.buildPairsExcludingInjectedCompression(...args)),
 		afterAssistantForCompression: vi.fn<AgentCompressionMemoryService['afterAssistantForCompression']>(async () => undefined),
 	};
-	const tokenService = { resolveTokenConfigForUser: vi.fn(async () => ({ tokenMode: 'estimate' })), makeCounter: vi.fn(() => undefined) };
+	const tokenService = { resolveTokenConfigForUser: vi.fn(async () => ({ encoding: 'o200k_base', tokenMode: 'exact' })), makeCounter: vi.fn(() => (text: string) => text.length) };
 	const service = new AgentProactiveMessageService(
 		sessionsRepository as never,
 		messagesRepository as never,
@@ -165,8 +165,8 @@ describe('Proactive compression memory', () => {
 		} else {
 			await h.service.processScheduled({ id: 'schedule', sessionId: h.session.id, description: 'hello' }, new Date());
 		}
-		expect(h.agentService.loadRecentMessagesForContextWithMeta).toHaveBeenCalledWith(h.session.id, 9000, AGENT_OVERVIEW_SCAN_LIMIT,
-			expect.objectContaining({ tokenBudget: 3000, charsPerToken: 3, timeAwarenessEnabled: true }));
+		expect(h.agentService.loadRecentMessagesForContextWithMeta).toHaveBeenCalledWith(h.session.id, 3000, AGENT_OVERVIEW_SCAN_LIMIT,
+			expect.objectContaining({ exactTokenCounter: expect.any(Function), timeAwarenessEnabled: true }));
 		expect(h.compressionMemory.buildCompressionContext).toHaveBeenCalledWith(expect.objectContaining({ sidecar: { dMap, hSend: 3000 } }));
 		expect(h.agentService.invokeChatCompletions).toHaveBeenCalledWith(expect.objectContaining({
 			system: expect.stringContaining('<compression_memory>remember</compression_memory>'),
@@ -241,7 +241,7 @@ describe('AgentProactiveMessageService failed attempts', () => {
 		expect(usage.startLog).toHaveBeenCalledWith(expect.objectContaining({ usageKind: 'proactive_random' }));
 		expect(usage.finishLog).toHaveBeenCalledWith(expect.anything(), expect.anything(), { status: 'success' });
 		expect(session.randomProactiveLastError).toBeNull();
-		expect(agentService.loadRecentMessagesForContextWithMeta).toHaveBeenCalledWith(session.id, 48_000, 500, expect.objectContaining({ timeAwarenessEnabled: true }));
+		expect(agentService.loadRecentMessagesForContextWithMeta).toHaveBeenCalledWith(session.id, 3000, AGENT_OVERVIEW_SCAN_LIMIT, expect.objectContaining({ timeAwarenessEnabled: true }));
 		expect(compressionMemory.buildCompressionContext).not.toHaveBeenCalled();
 		expect(compressionMemory.afterAssistantForCompression).not.toHaveBeenCalled();
 	});

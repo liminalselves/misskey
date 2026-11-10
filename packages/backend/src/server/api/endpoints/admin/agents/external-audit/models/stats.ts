@@ -56,18 +56,31 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				.addSelect('log.status', 'status')
 				.addSelect('log.failureKind', 'failureKind')
 				.addSelect('COUNT(*)::int', 'count')
+				.addSelect('COUNT(log.durationMs)::int', 'durationCount')
+				.addSelect('COALESCE(SUM(log.durationMs), 0)::bigint', 'durationSum')
 				.where('log.createdAt >= :since', { since })
 				.andWhere('log.modelId IS NOT NULL')
 				.andWhere('log.status IN (:...statuses)', { statuses: ['allow', 'block', 'failed'] })
 				.groupBy('log.modelId')
 				.addGroupBy('log.status')
 				.addGroupBy('log.failureKind')
-				.getRawMany<{ modelId: string; status: AgentExternalAuditStatus; failureKind: AgentExternalAuditFailureKind | null; count: number }>();
-			const byModel = new Map<string, { total: number; allow: number; block: number; failed: number; apiFailed: number; parseFailed: number }>();
+				.getRawMany<{ modelId: string; status: AgentExternalAuditStatus; failureKind: AgentExternalAuditFailureKind | null; count: number; durationCount: number; durationSum: string | number }>();
+			type Bucket = { total: number; allow: number; block: number; failed: number; apiFailed: number; parseFailed: number; durationCount: number; durationSum: number; okDurationCount: number; okDurationSum: number };
+			const emptyBucket = (): Bucket => ({ total: 0, allow: 0, block: 0, failed: 0, apiFailed: 0, parseFailed: 0, durationCount: 0, durationSum: 0, okDurationCount: 0, okDurationSum: 0 });
+			const byModel = new Map<string, Bucket>();
 			for (const row of rows) {
-				const bucket = byModel.get(row.modelId) ?? { total: 0, allow: 0, block: 0, failed: 0, apiFailed: 0, parseFailed: 0 };
+				const bucket = byModel.get(row.modelId) ?? emptyBucket();
 				const count = Number(row.count) || 0;
+				const durationCount = Number(row.durationCount) || 0;
+				const durationSum = Number(row.durationSum) || 0;
 				bucket.total += count;
+				bucket.durationCount += durationCount;
+				bucket.durationSum += durationSum;
+				// 得出审核结论（放行/拦截）的调用单独统计耗时，避免超时失败拉高均值
+				if (row.status === 'allow' || row.status === 'block') {
+					bucket.okDurationCount += durationCount;
+					bucket.okDurationSum += durationSum;
+				}
 				if (row.status === 'allow') bucket.allow += count;
 				if (row.status === 'block') bucket.block += count;
 				if (row.status === 'failed') {
@@ -79,7 +92,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			}
 			return models.map((m, i) => {
 				const id = typeof m.id === 'string' ? m.id : `model-${i + 1}`;
-				const b = byModel.get(id) ?? { total: 0, allow: 0, block: 0, failed: 0, apiFailed: 0, parseFailed: 0 };
+				const b = byModel.get(id) ?? emptyBucket();
 					return {
 						id,
 						name: typeof m.name === 'string' ? m.name : id,
@@ -97,6 +110,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					apiFailed: b.apiFailed,
 					parseFailed: b.parseFailed,
 					failureRate: b.total > 0 ? b.failed / b.total : 0,
+					avgDurationMs: b.durationCount > 0 ? b.durationSum / b.durationCount : null,
+					avgSuccessDurationMs: b.okDurationCount > 0 ? b.okDurationSum / b.okDurationCount : null,
 				};
 			}).sort((a, b) => a.priority - b.priority || a.name.localeCompare(b.name));
 		});

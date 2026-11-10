@@ -8,9 +8,10 @@ import { dirtyLeaves, dirtySections, groupOfLeaf, leafKeys, resolveLeaf, saveSec
 
 describe('agents-settings sections', () => {
 	test('old ?view links still resolve to a sub page', () => {
-		for (const view of ['overview', 'basic', 'models', 'memory', 'compression', 'externalAudit', 'images', 'sticker', 'pet', 'vision', 'credits', 'migration', 'checkin', 'proactive', 'reports']) {
+		for (const view of ['overview', 'basic', 'models', 'compression', 'externalAudit', 'images', 'sticker', 'pet', 'vision', 'credits', 'migration', 'checkin', 'proactive', 'reports']) {
 			expect(resolveLeaf(view)).toBe(view);
 		}
+		expect(resolveLeaf('memory')).toBe('overview');
 		expect(resolveLeaf('unknown')).toBe('overview');
 		expect(resolveLeaf(undefined)).toBe('overview');
 	});
@@ -32,7 +33,7 @@ describe('agents-settings sections', () => {
 	});
 
 	test('dirty state only includes modified sections and their exact sub pages', () => {
-		const modified = { agentByokEnabled: true, agentMem0TopK: false, agentExternalAuditRuleRows: true };
+		const modified = { agentByokEnabled: true, agentCompressionMaxInputChars: false, agentExternalAuditRuleRows: true };
 		expect(dirtySections(modified).sort()).toEqual(['externalAudit', 'models']);
 		expect([...dirtyLeaves(modified)].sort()).toEqual(['byok', 'externalAuditRules']);
 	});

@@ -20,10 +20,9 @@ import type { MiAgentCharacter } from '@/models/AgentCharacter.js';
 import { MiAgentSessionCompressionSticky, type AgentCompressionStickyState } from '@/models/AgentSessionCompressionSticky.js';
 import { MiMeta } from '@/models/Meta.js';
 import { ApiError } from '@/server/api/error.js';
-import { AgentService, escapeAgentXmlText, AGENT_LLM_MEMORY_XML_OPEN, AGENT_LLM_MEMORY_XML_CLOSE } from '@/core/AgentService.js';
-import { AgentTokenService, AGENT_LLM_APPROX_CHARS_PER_TOKEN, AGENT_OVERVIEW_SCAN_LIMIT, AGENT_SEND_PATH_SCAN_LIMIT, type TokenBand } from '@/core/AgentTokenService.js';
+import { AgentService, escapeAgentXmlText } from '@/core/AgentService.js';
+import { AgentTokenService, AGENT_MESSAGE_ENVELOPE_TOKENS, AGENT_OVERVIEW_SCAN_LIMIT, AGENT_SEND_PATH_SCAN_LIMIT, type TokenBand } from '@/core/AgentTokenService.js';
 import { agentPreviewText } from '@/core/agent-preview-text.js';
-import { AgentDashscopeMemoryService } from '@/core/AgentDashscopeMemoryService.js';
 import { bindThis } from '@/decorators.js';
 
 export { AGENT_OVERVIEW_SCAN_LIMIT, AGENT_SEND_PATH_SCAN_LIMIT };
@@ -31,7 +30,7 @@ export { AGENT_OVERVIEW_SCAN_LIMIT, AGENT_SEND_PATH_SCAN_LIMIT };
 export const AGENT_COMPRESSION_MEMORY_XML_OPEN = '<compression_memory>\n';
 export const AGENT_COMPRESSION_MEMORY_XML_CLOSE = '\n</compression_memory>';
 
-export const agentLongMemoryProviderIds = ['none', 'aliyun', 'compression'] as const;
+export const agentLongMemoryProviderIds = ['none', 'compression'] as const;
 export type AgentLongMemoryProviderId = typeof agentLongMemoryProviderIds[number];
 
 /** 与 Meta 中未配置时一致；可经管理端覆盖 */
@@ -87,7 +86,6 @@ export class AgentCompressionMemoryService {
 		private userProfilesRepository: UserProfilesRepository,
 
 		private agentService: AgentService,
-		private agentDashscopeMemoryService: AgentDashscopeMemoryService,
 		private agentModelUsageService: AgentModelUsageService,
 		private agentTokenService: AgentTokenService,
 	) {
@@ -123,39 +121,7 @@ export class AgentCompressionMemoryService {
 		meta: MiMeta,
 	): AgentLongMemoryProviderId {
 		const raw = (providerColumn ?? 'none').trim() || 'none';
-		if (raw === 'none') return 'none';
-		if (raw === 'compression') return 'compression';
-		if (raw === 'aliyun') {
-			const cfg = (meta as { agentLongMemoryConfigured?: boolean }).agentLongMemoryConfigured;
-			if (this.agentDashscopeMemoryService.isRunnable(meta) && cfg) return 'aliyun';
-			return 'none';
-		}
-		return 'none';
-	}
-
-	@bindThis
-	public isAliyunPathActive(
-		provider: AgentLongMemoryProviderId,
-		session: Pick<MiAgentSession, 'agentLongMemoryEnabled'>,
-		instanceMeta: MiMeta,
-	): boolean {
-		if (provider !== 'aliyun') return false;
-		if (session.agentLongMemoryEnabled === false) return false;
-		return this.agentDashscopeMemoryService.isRunnable(instanceMeta)
-			&& (instanceMeta as { agentLongMemoryConfigured?: boolean }).agentLongMemoryConfigured === true;
-	}
-
-	/**
-	 * 与 `buildSendPathBudgets`、`buildContextDividerAlignedBudgets` 共用：仅在实际走阿里云语义记忆时预留 `<memory>` 上限，否则 0）	 */
-	@bindThis
-	public computeAliyunMemoryXmlReserveIfActive(
-		provider: AgentLongMemoryProviderId,
-		session: MiAgentSession,
-		instanceMeta: MiMeta,
-	): number {
-		if (!this.isAliyunPathActive(provider, session, instanceMeta)) return 0;
-		const maxMem = Math.max(200, Math.min(50_000, session.agentLongMemoryInjectMaxChars || instanceMeta.agentMem0InjectMaxChars));
-		return AGENT_LLM_MEMORY_XML_OPEN.length + maxMem + AGENT_LLM_MEMORY_XML_CLOSE.length;
+		return raw === 'compression' ? 'compression' : 'none';
 	}
 
 	@bindThis
@@ -164,8 +130,7 @@ export class AgentCompressionMemoryService {
 		return AGENT_COMPRESSION_MEMORY_XML_OPEN.length + n + AGENT_COMPRESSION_MEMORY_XML_CLOSE.length;
 	}
 
-	/**
-	 * 与 `agents/messages/send` 一致，用于**真实进 LLM** 的 history 上界、`reconcileStickyStates`（区间两端 D 取大者与 H 比较）、压缩总览区带（provider 为 compression 时）。	 * 字符池：`max(4000, maxContextTokens×3)` 减 `systemChars`（含 comp 全段、百科 / `memory` 等）与当期 `maxOut×3` 预留。Token 约数同 `AgentService.approxLlmTokensFromCharEstimate`（即，四舍五入）。	 */
+	/** 普通回复、主动消息、上下文窗口与压缩预览共用的纯 Token 历史预算。 */
 	@bindThis
 	public async buildSendPathBudgets(params: {
 		instanceMeta: MiMeta;
@@ -173,50 +138,37 @@ export class AgentCompressionMemoryService {
 		character: ReturnType<AgentService['effectiveCharacterForLlm']>;
 		style: ReturnType<AgentService['effectiveStyleForLlm']>;
 		provider: AgentLongMemoryProviderId;
+		/** 与实际 system 组装共用的额外协议文本（表情、生图、桌宠、定时任务等）。 */
+		additionalSystemTexts?: readonly string[];
+		/** 已知最新用户指令；省略时按全部启用世界书的保守上界计算。 */
+		directiveText?: string;
 	}): Promise<{
-		historyBudget: number;
 		maxContextTokens: number;
 		maxOutputTokensPerCall: number;
-		memReserveChars: number;
-		compReserveChars: number;
-		charsPerToken: number;
-		/** 精确编码器下的历史 token 预算（无编码器时与 historyBudget/charsPerToken 一致） */
 		historyBudgetTokens: number;
+		compReserveChars: number;
 	}> {
 		const { instanceMeta, session, character, style, provider } = params;
-		const { maxContextTokens, maxOutputTokensPerCall } = await this.agentService.resolveModelConnectionForUser(
-			instanceMeta,
-			session.agentModelId ?? null,
-			session.userId,
-		);
-		const tokenConfig = await this.agentTokenService.resolveTokenConfigForUser(instanceMeta, session.agentModelId ?? null, session.userId);
-		const charsPerToken = tokenConfig.charsPerToken;
+		const { maxContextTokens, maxOutputTokensPerCall } = await this.agentService.resolveModelConnectionForUser(instanceMeta, session.agentModelId ?? null, session.userId);
+		const activeRules = this.agentService.resolveActiveRules(this.agentService.normalizeRules(character.rules), session.ruleOverrides);
 		const systemBase = this.agentService.buildSystemPrompt({
 			globalPrompt: instanceMeta.agentGlobalSystemPrompt,
 			character,
 			style,
 			timeAwarenessEnabled: session.timeAwarenessEnabled === true,
+			activeRules,
 		});
-		const memReserve = this.computeAliyunMemoryXmlReserveIfActive(provider, session, instanceMeta);
+		const budgetWorldbook = this.agentService.buildBudgetWorldbookEntries(character);
+		const directive = params.directiveText ?? (this.agentService.buildLatestUserDirectiveBlock(style, budgetWorldbook, activeRules)
+			+ (session.timeAwarenessEnabled === true ? this.agentService.buildCurrentBeijingTimeBlock().length > 0 ? `\n${this.agentService.buildCurrentBeijingTimeBlock()}` : '' : ''));
+		const knownTexts = [systemBase, ...(params.additionalSystemTexts ?? []), directive];
+		let overheadTokens = knownTexts.reduce((sum, text) => sum + this.agentTokenService.countUnifiedTokens(text), 0);
 		const maxComp = this.resolveCompressionInjectMaxChars(instanceMeta);
 		const compReserve = provider === 'compression' ? this.computeCompressionReserveChars(maxComp) : 0;
-		const systemChars = systemBase.length + memReserve + compReserve;
-		// 与 `send.ts` 注入到最末 user 的 directive 同步预扣，避免历史填到上限后叠加 directive 溢出上下文窗口		// 世界书已从 system 移除、改由 directive 的 <active-worldbook> 交付，这里按「全部已启用条目」保守预扣（上界），
-		// 与世界书曾整段写入 system 时的预留量一致，避免上下文溢出回归。
-		const budgetWorldbook = this.agentService.buildBudgetWorldbookEntries(character);
-		const directiveChars = this.agentService.buildLatestUserDirectiveBlock(style, budgetWorldbook).length
-			+ (session.timeAwarenessEnabled === true ? this.agentService.buildCurrentBeijingTimeBlock().length + 1 : 0);
-		// 预算数学统一委托 AgentTokenService：字符 / token 双视图由同一 overhead 一致导出
-		const budget = this.agentTokenService.resolveHistoryBudgets({
-			maxContextTokens,
-			maxOutputTokensPerCall,
-			charsPerToken,
-			systemChars,
-			directiveChars,
-			prefixChars: 0,
-			tokenMode: tokenConfig.tokenMode,
-		});
-		return { historyBudget: budget.historyBudgetChars, maxContextTokens, maxOutputTokensPerCall, memReserveChars: memReserve, compReserveChars: compReserve, charsPerToken, historyBudgetTokens: budget.historyBudgetTokens };
+		if (compReserve > 0) overheadTokens += this.agentTokenService.resolveReservedTokenLimit(maxComp);
+		if (compReserve > 0) overheadTokens += this.agentTokenService.countUnifiedTokens(AGENT_COMPRESSION_MEMORY_XML_OPEN + AGENT_COMPRESSION_MEMORY_XML_CLOSE);
+		const budget = this.agentTokenService.resolveHistoryBudgets({ maxContextTokens, maxOutputTokensPerCall, overheadTokens });
+		return { maxContextTokens, maxOutputTokensPerCall, historyBudgetTokens: budget.historyBudgetTokens, compReserveChars: compReserve };
 	}
 
 	/** 未配置 meta 时区间 T1、T2 相对 H 的比例；可通过 `resolveCompressionBandRatios` 覆盖。*/
@@ -334,6 +286,7 @@ export class AgentCompressionMemoryService {
 	public computeCompressionInjectText(
 		stickies: Pick<MiAgentSessionCompressionSticky, 'id' | 'state' | 'userOverridden' | 'errorMessage' | 'summaryText' | 'sortIndex'>[],
 		maxInjectChars: number,
+		maxInjectTokens?: number,
 	): {
 		text: string;
 		injectedIds: Set<string>;
@@ -369,7 +322,11 @@ export class AgentCompressionMemoryService {
 		if (start > 0 && joined.charCodeAt(start) >= 0xDC00 && joined.charCodeAt(start) <= 0xDFFF
 			&& joined.charCodeAt(start - 1) >= 0xD800 && joined.charCodeAt(start - 1) <= 0xDBFF) start++;
 		while (start < joined.length && (joined[start] === '\n' || joined[start] === ' ' || joined[start] === '\t')) start++;
-		const text = joined.slice(start);
+		let text = joined.slice(start);
+		if (maxInjectTokens != null) {
+			text = this.agentTokenService.truncateTextToTokenLimit(text, maxInjectTokens, 'end');
+			start = joined.length - text.length;
+		}
 		const injectedIds = new Set<string>();
 		let off = 0;
 		for (const s of segs) {
@@ -389,10 +346,16 @@ export class AgentCompressionMemoryService {
 		eligibleChars: number;
 		willInjectCount: number;
 		willInjectChars: number;
+		maxTokens: number;
+		willInjectTokens: number;
 	} {
-		const r = this.computeCompressionInjectText(stickies, maxInjectChars);
+		const maxChars = Math.max(200, Math.min(50_000, maxInjectChars));
+		const maxTokens = this.agentTokenService.resolveReservedTokenLimit(maxChars);
+		const r = this.computeCompressionInjectText(stickies, maxChars, maxTokens);
 		return {
-			maxChars: Math.max(200, Math.min(50_000, maxInjectChars)),
+			maxChars,
+			maxTokens,
+			willInjectTokens: this.agentTokenService.countUnifiedTokens(r.text),
 			eligibleCount: r.eligibleCount,
 			eligibleChars: r.eligibleChars,
 			willInjectCount: r.injectedIds.size,
@@ -404,8 +367,9 @@ export class AgentCompressionMemoryService {
 	public buildCompressionSystemBlock(
 		stickies: MiAgentSessionCompressionSticky[],
 		maxInjectChars = 50_000,
+		maxInjectTokens?: number,
 	): { block: string; injectedIds: Set<string> } {
-		const r = this.computeCompressionInjectText(stickies, maxInjectChars);
+		const r = this.computeCompressionInjectText(stickies, maxInjectChars, maxInjectTokens);
 		if (r.text.length === 0) return { block: '', injectedIds: r.injectedIds };
 		return {
 			block: AGENT_COMPRESSION_MEMORY_XML_OPEN + r.text + AGENT_COMPRESSION_MEMORY_XML_CLOSE,
@@ -445,7 +409,8 @@ export class AgentCompressionMemoryService {
 		const stickies = (await this.listStickies(params.session.id)).map(sticky => ({
 			...sticky, state: this.currentStickyState(sticky, sidecar.hSend, sidecar.dMap),
 		}));
-		const injection = this.buildCompressionSystemBlock(stickies, this.resolveCompressionInjectMaxChars(params.instanceMeta));
+		const maxInjectChars = this.resolveCompressionInjectMaxChars(params.instanceMeta);
+		const injection = this.buildCompressionSystemBlock(stickies, maxInjectChars, this.agentTokenService.resolveReservedTokenLimit(maxInjectChars));
 		const injectedStickies = stickies.filter(sticky => injection.injectedIds.has(sticky.id));
 		const boundaries = await this.loadBoundaryMap(params.session.id, injectedStickies.flatMap(sticky => [sticky.fromMessageId, sticky.toMessageId]));
 		return { block: injection.block, injectedStickies, boundaries };
@@ -592,13 +557,11 @@ export class AgentCompressionMemoryService {
 	@bindThis
 	public async getCompressionOverviewData(
 		sessionId: string,
-		historyBudget: number,
+		historyBudgetTokens: number,
 		t1Ratio: number,
 		t2Ratio: number,
 		reconcileDormantActive = false,
 		exactTokenCounter?: (text: string) => Promise<number | null> | number | null,
-		charsPerToken?: number,
-		historyBudgetTokens?: number,
 		timeAwarenessEnabled?: boolean,
 	): Promise<{
 		historyBudgetTokens: number;
@@ -629,23 +592,20 @@ export class AgentCompressionMemoryService {
 		});
 		const rowsD = filterRowsForChatHistoryD(rows);
 		const formatFn = (m: (typeof rowsD)[number]): string => this.agentService.formatMessageForLlmHistory(m as Parameters<AgentService['formatMessageForLlmHistory']>[0], { timeAwarenessEnabled: timeAwarenessEnabled === true });
-		const cpt = charsPerToken ?? AGENT_LLM_APPROX_CHARS_PER_TOKEN;
-		const budgetTokens = historyBudgetTokens ?? this.agentTokenService.estimateTokens(historyBudget, cpt);
-		// 统一委托 AgentTokenService：D 累计（token 口径，分块并发 + 超预算提前终止）+ 窗口/区带划分。
-		// 与 context-window 分割线、send 滑窗共享同一计算路径，结构性保证一致。
 		const weights = await this.agentTokenService.computeMessageWeights(rowsD, {
 			formatFn,
 			counter: exactTokenCounter,
-			charsPerToken: cpt,
-			budgetForExact: exactTokenCounter ? budgetTokens : undefined,
+			budgetForExact: historyBudgetTokens,
+			perMessageTokens: AGENT_MESSAGE_ENVELOPE_TOKENS,
 		});
 		const bands = this.agentTokenService.computeWindowAndBands(rowsD, weights.dMap, {
-			historyBudgetTokens: budgetTokens,
+			historyBudgetTokens,
 			t1Ratio,
 			t2Ratio,
+			exactFirstOutIndex: weights.exactFirstOutIndex,
 		});
 		const stickies = (await this.listStickies(sessionId)).map(sticky => reconcileDormantActive
-			? { ...sticky, state: this.currentStickyState(sticky, budgetTokens, weights.dMap) }
+			? { ...sticky, state: this.currentStickyState(sticky, historyBudgetTokens, weights.dMap) }
 			: sticky);
 		/** 便签端点消息在对话中的短预览（供总览页展示，非 ID）——经 agentPreviewText 过滤 MD/MFM/XML 语法 */
 		const formatStickyMsgPreview = (raw: string | null | undefined): string => {
@@ -905,8 +865,6 @@ export class AgentCompressionMemoryService {
 		willInvalidateCompression: boolean;
 		historyBudgetBefore: number;
 		historyBudgetAfter: number;
-		charsPerTokenBefore: number;
-		charsPerTokenAfter: number;
 		stickyCount: number;
 		compressionProvider: boolean;
 	}> {
@@ -924,10 +882,8 @@ export class AgentCompressionMemoryService {
 		const n = await this.stickyRepository.count({ where: { sessionId: session.id } });
 		return {
 			willInvalidateCompression: false,
-			historyBudgetBefore: beforeB.historyBudget,
-			historyBudgetAfter: afterB.historyBudget,
-			charsPerTokenBefore: beforeB.charsPerToken,
-			charsPerTokenAfter: afterB.charsPerToken,
+			historyBudgetBefore: beforeB.historyBudgetTokens,
+			historyBudgetAfter: afterB.historyBudgetTokens,
 			stickyCount: n,
 			compressionProvider: provider,
 		};
@@ -975,8 +931,8 @@ export class AgentCompressionMemoryService {
 		const weights = await this.agentTokenService.computeMessageWeights(rowsD, {
 			formatFn: (m) => this.agentService.formatMessageForLlmHistory(m as unknown as Parameters<AgentService['formatMessageForLlmHistory']>[0], { timeAwarenessEnabled: params.session.timeAwarenessEnabled === true }),
 			counter,
-			charsPerToken: budgets.charsPerToken,
-			budgetForExact: counter ? hSend : undefined,
+			perMessageTokens: AGENT_MESSAGE_ENVELOPE_TOKENS,
+			budgetForExact: hSend,
 		});
 		const { t1Ratio, t2Ratio } = this.resolveCompressionBandRatios(params.instanceMeta);
 		return { dMap: weights.dMap, hSend, t1: t1Ratio * hSend, t2: t2Ratio * hSend };

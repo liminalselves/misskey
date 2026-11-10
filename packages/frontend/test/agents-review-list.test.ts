@@ -44,8 +44,8 @@ const global = {
 };
 let requests: { resolve: (rows: unknown[]) => void; reject: (error: Error) => void }[];
 
-function card(userId: string) {
-	return { userId, user: null, isSuspended: false, suspendedUntil: null, moderationNote: null, blockCount: 3, latestBlockAt: null, reviewUntilId: `${userId}-last`, triggeredRules: [], logs: [] };
+function card(userId: string, sessionId: string | null = null) {
+	return { userId, sessionId, sessionName: sessionId, sessionModerationBanned: false, userReviewUntilId: `${userId}-user-last`, user: null, isSuspended: false, suspendedUntil: null, moderationNote: null, blockCount: 3, latestBlockAt: null, reviewUntilId: `${userId}-last`, logs: [] };
 }
 
 async function settle() {
@@ -130,7 +130,19 @@ describe('External audit review list', () => {
 		await fireEvent.click(ignore);
 		await settle();
 		expect(os.confirm).toHaveBeenCalledWith(expect.objectContaining({ text: expect.stringContaining('80 条') }));
-		expect(api).toHaveBeenCalledWith('admin/agents/governance/external-audit/review-ignore', { userId: 'owner', untilId: 'owner-last' });
+		expect(api).toHaveBeenCalledWith('admin/agents/governance/external-audit/review-ignore', { userId: 'owner', untilId: 'owner-last', sessionId: null });
+	});
+
+	test('shows one card per user and session, with the session link on the group header', async () => {
+		const view = render(AgentsReview, { props: { view: 'review' }, global });
+		const log = { id: 'l1', createdAt: '2026-11-09T00:00:00Z', sessionId: 'a', sessionName: 'a', sessionModerationBanned: false, characterName: 'c', blockCode: null, category: null, reason: null, userText: 'u', assistantText: 'r' };
+		await finish([{ ...card('owner', 'a'), logs: [log] }, { ...card('owner', 'b'), logs: [{ ...log, id: 'l2', sessionId: 'b' }] }]);
+		expect(view.container.querySelectorAll('article')).toHaveLength(2);
+		const sessionLinks = () => [...view.container.querySelectorAll('button')].filter(b => b.textContent?.includes('查看会话'));
+		expect(sessionLinks()).toHaveLength(2);
+		for (const toggle of [...view.container.querySelectorAll('button')].filter(b => b.textContent?.includes('展开'))) await fireEvent.click(toggle);
+		// 展开明细后，层级仍只在组头，不在每条拦截下重复
+		expect(sessionLinks()).toHaveLength(2);
 	});
 
 	test('discards an in-flight response when a newer tab entry requests a reset', async () => {

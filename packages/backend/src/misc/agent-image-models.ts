@@ -6,6 +6,7 @@
 import type { MiAgentImageDefaultParams, MiAgentImageModel, MiMeta } from '@/models/Meta.js';
 import { isAgentImageProvider } from '@/models/AgentImageProvider.js';
 import { getAgentImageProviderDefinition } from '@/core/agent-image-providers.js';
+import { normalizeAgentLlmApiKeys } from '@/misc/agent-llm-models.js';
 
 export function normalizeImageParams(raw: unknown): MiAgentImageDefaultParams {
 	return raw != null && typeof raw === 'object' ? raw as MiAgentImageDefaultParams : {};
@@ -26,6 +27,8 @@ export function getEffectiveImageModels(instance: MiMeta, includeDisabled = fals
 				apiModelName: typeof m.apiModelName === 'string' && m.apiModelName.trim() !== '' ? m.apiModelName.trim() : instance.agentImageDefaultModel,
 				apiUrl: typeof m.apiUrl === 'string' && m.apiUrl.trim() !== '' ? m.apiUrl.trim() : null,
 				apiKey: typeof m.apiKey === 'string' && m.apiKey.trim() !== '' ? m.apiKey.trim() : null,
+				apiKeys: normalizeAgentLlmApiKeys(m.apiKeys, m.apiKey) ?? [],
+				multiKeyEnabled: m.multiKeyEnabled === true,
 				supportsReferenceImage: provider.capabilities.supportsReferenceImage && m.supportsReferenceImage === true,
 				costPerCall: typeof m.costPerCall === 'number' ? m.costPerCall : instance.agentImageCostPerCall,
 				dailyFreeQuota: typeof m.dailyFreeQuota === 'number' && m.dailyFreeQuota > 0 ? Math.trunc(m.dailyFreeQuota) : null,

@@ -28,7 +28,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<div class="_gaps_m">
 			<MkKeyValue :copy="version">
 				<template #key>Misskey</template>
-				<template #value>{{ version }}</template>
+				<template #value>{{ version }} <MkA :to="`/changelog?version=${encodeURIComponent(version)}`" class="_link">更新日志 <i class="ti ti-chevron-right"></i></MkA></template>
 			</MkKeyValue>
 			<div v-html="i18n.tsx.poweredByMisskeyDescription({ name: instance.name ?? host })">
 			</div>

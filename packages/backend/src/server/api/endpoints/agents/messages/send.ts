@@ -19,13 +19,9 @@ import { DI } from '@/di-symbols.js';
 import { ApiError } from '@/server/api/error.js';
 import {
 	AgentService,
-	AGENT_LLM_MEMORY_XML_CLOSE,
-	AGENT_LLM_MEMORY_XML_OPEN,
 	escapeAgentXmlText,
 	normalizeAgentLlmTurns,
-	stripHistoricTimePrefix,
 } from '@/core/AgentService.js';
-import { AgentDashscopeMemoryService } from '@/core/AgentDashscopeMemoryService.js';
 import { AgentModelUsageService } from '@/core/AgentModelUsageService.js';
 import { ChatService } from '@/core/ChatService.js';
 import { MetaService } from '@/core/MetaService.js';
@@ -63,8 +59,6 @@ export const meta = {
 			userImageRecognitionStatus: { type: 'string', nullable: true },
 			userImageRecognitionDescription: { type: 'string', nullable: true },
 			assistantText: { type: 'string' },
-			longTermMemorySearchUnavailable: { type: 'boolean' },
-			longTermMemoryAddScheduled: { type: 'boolean' },
 			compressionLlmPending: { type: 'boolean' },
 			compressionStickiesBaselineCount: { type: 'number' },
 			compressionStickiesBaselineMaxUpdatedAt: { type: 'string', nullable: true },
@@ -128,21 +122,6 @@ export const paramDef = {
 	required: ['sessionId'],
 } as const;
 
-/** 避免 NaN 传入 % 导致永不为 0、从而永远不触发 add 记忆 */
-function safeAgentMemEveryNRounds(sessionVal: number | null | undefined, metaVal: number | null | undefined): number {
-	const raw = sessionVal ?? metaVal ?? 1;
-	const t = Math.trunc(Number(raw));
-	if (!Number.isFinite(t)) return 1;
-	return Math.max(1, Math.min(48, t));
-}
-
-function safeAgentMemAddMaxRounds(sessionVal: number | null | undefined, metaVal: number | null | undefined): number {
-	const raw = sessionVal ?? metaVal ?? 3;
-	const t = Math.trunc(Number(raw));
-	if (!Number.isFinite(t)) return 3;
-	return Math.max(1, Math.min(24, t));
-}
-
 @Injectable()
 export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-disable-line import/no-default-export
 	constructor(
@@ -162,7 +141,6 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		private userProfilesRepository: UserProfilesRepository,
 
 		private agentService: AgentService,
-		private agentDashscopeMemoryService: AgentDashscopeMemoryService,
 		private agentModelUsageService: AgentModelUsageService,
 		private chatService: ChatService,
 	private metaService: MetaService,
@@ -221,8 +199,6 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 							userImageRecognitionStatus: priorUserMessage.imageRecognitionStatus,
 							userImageRecognitionDescription: priorUserMessage.imageRecognitionDescription,
 							assistantText: priorAssistantMessage.content,
-							longTermMemorySearchUnavailable: false,
-							longTermMemoryAddScheduled: false,
 							compressionLlmPending: false,
 							compressionStickiesBaselineCount: 0,
 							compressionStickiesBaselineMaxUpdatedAt: null,
@@ -423,17 +399,6 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					session.agentLongMemoryProvider,
 					instanceMeta,
 				);
-				const budgets = await this.agentCompressionMemoryService.buildSendPathBudgets({
-					instanceMeta,
-					session,
-					character,
-					style,
-					provider: longMemProvider,
-				});
-				const { maxContextTokens, maxOutputTokensPerCall, historyBudget, historyBudgetTokens, charsPerToken } = budgets;
-				// 统一经 AgentTokenService 解析计数器；发信滑窗按 token 口径截断（exact 或 estimate），与分割线/区带同源
-				const sendTokenConfig = await this.agentTokenService.resolveTokenConfigForUser(instanceMeta, session.agentModelId ?? instanceMeta.agentDefaultModelId, me.id);
-				const sendExactCounter = this.agentTokenService.makeCounter(sendTokenConfig);
 				const selectedWorldbook = this.agentService.selectWorldbookEntriesForPrompt(character, userText);
 				const activeRules = this.agentService.resolveActiveRules(
 					this.agentService.normalizeRules(character.rules),
@@ -451,13 +416,24 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				const stickerBlocks = await this.agentStickerService.buildSystemBlocks(instanceMeta, character);
 				const emojiListForLlm = stickerBlocks.emojiList;
 				const convertUserStickersForLlm = (text: string) => this.agentStickerService.convertUserTextForLlm(text, emojiListForLlm);
+				const activeImageModel = this.agentImageService.resolveImageModel(instanceMeta, session.agentImageModelId);
+				let systemSuffix = stickerBlocks.block;
+				if (session.scheduledProactiveEnabled) systemSuffix += `\n${this.agentProactiveScheduleService.systemPromptBlock}`;
+				if (activeImageModel != null) systemSuffix += `\n\n<agent_image_generation_protocol>\n${AGENT_IMAGE_WORLD_PROMPT}\n</agent_image_generation_protocol>`;
+				if (performance != null) systemSuffix += `\n\n${buildPerformanceSystemBlock(performance, instanceMeta.agentPerformanceSystemPrompt)}`;
+				const scheduledDirective = await this.agentProactiveScheduleService.prependScheduleContext('', session);
+				const directiveText = this.agentService.buildLatestUserDirectiveBlock(style, selectedWorldbook, activeRules)
+					+ scheduledDirective
+					+ (session.timeAwarenessEnabled === true ? this.agentService.buildCurrentBeijingTimeBlock() : '');
+				const budgets = await this.agentCompressionMemoryService.buildSendPathBudgets({
+					instanceMeta, session, character, style, provider: longMemProvider,
+					additionalSystemTexts: [systemSuffix], directiveText,
+				});
+				const { historyBudgetTokens } = budgets;
+				const sendTokenConfig = await this.agentTokenService.resolveTokenConfigForUser(instanceMeta, session.agentModelId ?? instanceMeta.agentDefaultModelId, me.id);
+				const sendExactCounter = this.agentTokenService.makeCounter(sendTokenConfig);
 
-				let longTermMemorySearchUnavailable = false;
-				let longTermMemoryAddScheduled = false;
-				const memActive = this.agentCompressionMemoryService.isAliyunPathActive(longMemProvider, session, instanceMeta);
-				const maxMemChars = Math.max(200, Math.min(50_000, session.agentLongMemoryInjectMaxChars || instanceMeta.agentMem0InjectMaxChars));
-
-				const { messages: history, dMap: historyDMap } = await this.agentService.loadRecentMessagesForContextWithMeta(session.id, historyBudget, AGENT_OVERVIEW_SCAN_LIMIT, { exactTokenCounter: sendExactCounter, tokenBudget: historyBudgetTokens, charsPerToken, timeAwarenessEnabled: session.timeAwarenessEnabled === true });
+				const { messages: history, dMap: historyDMap } = await this.agentService.loadRecentMessagesForContextWithMeta(session.id, historyBudgetTokens, AGENT_OVERVIEW_SCAN_LIMIT, { exactTokenCounter: sendExactCounter, timeAwarenessEnabled: session.timeAwarenessEnabled === true });
 				const historyForApi = history.filter(m => (m.role === 'user' || m.role === 'assistant') && m.id !== userMsg!.id);
 				const regexRules = this.agentService.normalizeRegexRules(character.regexRules);
 				const regexFiltered = await this.agentService.applyRegexRulesBatch(
@@ -503,61 +479,20 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				pairs = normalizeAgentLlmTurns(pairs);
 
 				// 记忆检索/写入复用 pairs 但剥离历史发送时间 XML 与表演指令（与现有 runtime-directive「不进记忆」原则一致）
-				const memPairs: { role: 'user' | 'assistant'; content: string }[] = pairs.map(p => ({ role: p.role, content: stripPerformanceCues(stripHistoricTimePrefix(p.content)) }));
-
-				let memoryBlock = '';
-				if (memActive) {
-					const topK = Math.max(1, Math.min(100, session.agentLongMemoryTopK || instanceMeta.agentMem0TopK));
-					const searchMsgs: { role: 'user' | 'assistant'; content: string }[] = [...memPairs, { role: 'user', content: aiUserText }];
-					const bailianUserId = this.agentDashscopeMemoryService.bailianUserId(me.id, session.id);
-					const retrieved = await this.agentDashscopeMemoryService.searchMemory({
-						meta: instanceMeta,
-						bailianUserId,
-						messages: searchMsgs,
-						topK,
-						minScore: session.agentLongMemoryMinScore,
-						maxChars: maxMemChars,
-					});
-					if (retrieved === null) {
-						longTermMemorySearchUnavailable = true;
-					} else if (retrieved.length > 0) {
-						memoryBlock = retrieved;
-					}
-				}
-
-				let system = systemBase + stickerBlocks.block;
-				if (session.scheduledProactiveEnabled) {
-					system += `\n${this.agentProactiveScheduleService.systemPromptBlock}`;
-				}
-				const activeImageModel = this.agentImageService.resolveImageModel(instanceMeta, session.agentImageModelId);
-				if (activeImageModel != null) {
-					system += '\n\n<agent_image_generation_protocol>\n';
-					system += AGENT_IMAGE_WORLD_PROMPT;
-					system += '\n';
-					system += '</agent_image_generation_protocol>';
-				}
-				if (performance != null) {
-					system += '\n\n' + buildPerformanceSystemBlock(performance, instanceMeta.agentPerformanceSystemPrompt);
-				}
-				if (memoryBlock.length > 0) {
-					system += AGENT_LLM_MEMORY_XML_OPEN + escapeAgentXmlText(memoryBlock) + AGENT_LLM_MEMORY_XML_CLOSE;
-				}
+			let system = systemBase + systemSuffix;
 				if (compInject.block.length > 0) {
 					system += compInject.block;
 				}
 
-				// 首轮 `pairs` 用 `buildSendPathBudgets` 的 H（阿里云路径预扣 memory、压缩路径另预扣 comp 占位）。
-				// 《context-window》分割线用 `buildContextDividerAlignedBudgets`（不预扣 comp）；《compression-overview》
-				// 在压缩模式下与发信共用同一 H。勿在检索等之后无约束重载历史。
+				// 上下文窗口、压缩总览与实际发送共用 buildSendPathBudgets 的 Token 历史预算。
 
 				// 风格 directive 仅在「发往 LLM 的最新 user」一处注入：
-				// - DB（上文 userMsg 已落 ps.text）、长期记忆检索（searchMsgs）、长期记忆 add（buildMessagesForAddMemory）、
-				//   压缩侧车（pairs）、UI 时间线均见原始用户文本，不受 directive 污染；
+				// - DB、压缩侧车与 UI 时间线均见原始用户文本，不受 directive 污染；
 				// - directive 长度已通过 `buildSendPathBudgets` 预扣到 historyBudget，对应 system 仅保留
 				//   `<dialogue_style_protocol>` 安全网说明，与 `AgentService.buildLatestUserDirectiveBlock` 一一呼应。
 				// 历史发送时间 `<time>` 块随 formatMessageForLlmHistory 注入到发往 LLM 的 user 消息（仅
 				// timeAwarenessEnabled 且消息时间可信时；导入消息 timeTrusted=false 不注入），长度随滑窗 D 自动计入预算；
-				// 长期记忆检索 / 写入复用 pairs 时经 stripHistoricTimePrefix 剥离时间块，保持「不进记忆」隔离。
+
 				const proactiveUserText = await this.agentProactiveScheduleService.prependScheduleContext(aiUserText, session);
 				const wrappedUserText = this.agentService.wrapLatestUserTextWithStyleDirective(
 					this.agentService.prependCurrentBeijingTime(proactiveUserText, session.timeAwarenessEnabled === true),
@@ -638,8 +573,6 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 						userImageRecognitionStatus: null,
 						userImageRecognitionDescription: null,
 						assistantText: '',
-						longTermMemorySearchUnavailable,
-						longTermMemoryAddScheduled: false,
 						compressionLlmPending: false,
 					compressionStickiesBaselineCount: 0,
 					compressionStickiesBaselineMaxUpdatedAt: null,
@@ -696,40 +629,6 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 						});
 					} catch {
 						// Notification delivery does not change an already persisted message.
-					}
-				}
-
-				if (memActive && hasVisibleAssistantText) {
-					const everyN = safeAgentMemEveryNRounds(
-						session.agentLongMemoryAddEveryNRounds,
-						instanceMeta.agentMem0AddMemoryEveryNRounds,
-					);
-					const assistantRoundCount = Number(
-						await this.agentMessagesRepository.count({
-							where: { sessionId: session.id, role: 'assistant' },
-						}),
-					);
-					const shouldRunAddMemory =
-						Number.isFinite(assistantRoundCount) &&
-						assistantRoundCount > 0 &&
-						assistantRoundCount % everyN === 0;
-					if (shouldRunAddMemory) {
-						const addRounds = safeAgentMemAddMaxRounds(
-							session.agentLongMemoryAddMaxRounds,
-							instanceMeta.agentMem0AddMemoryMaxRounds,
-						);
-						const addMessages = this.agentDashscopeMemoryService.buildMessagesForAddMemory({
-							priorMessages: memPairs,
-						currentUserText: userText,
-							assistantText,
-							maxRounds: addRounds,
-						});
-						this.agentDashscopeMemoryService.scheduleAddMemory({
-							meta: instanceMeta,
-							bailianUserId: this.agentDashscopeMemoryService.bailianUserId(me.id, session.id),
-							messages: addMessages,
-						});
-						longTermMemoryAddScheduled = true;
 					}
 				}
 
@@ -809,8 +708,6 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					userImageRecognitionStatus: userMsg.imageRecognitionStatus,
 					userImageRecognitionDescription: userMsg.imageRecognitionDescription,
 					assistantText,
-					longTermMemorySearchUnavailable,
-					longTermMemoryAddScheduled,
 					compressionLlmPending,
 					compressionStickiesBaselineCount,
 					compressionStickiesBaselineMaxUpdatedAt,
@@ -865,8 +762,6 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 						userImageRecognitionStatus: null,
 						userImageRecognitionDescription: null,
 						assistantText: '',
-						longTermMemorySearchUnavailable: false,
-						longTermMemoryAddScheduled: false,
 						compressionLlmPending: false,
 						compressionStickiesBaselineCount: 0,
 						compressionStickiesBaselineMaxUpdatedAt: null,

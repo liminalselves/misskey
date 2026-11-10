@@ -5,6 +5,7 @@
 
 import 'reflect-metadata';
 import { createHash } from 'node:crypto';
+import { AgentTokenService } from '@/core/AgentTokenService.js';
 import { vi, describe, test, expect } from 'vitest';
 import {
 	AgentCompressionMemoryService,
@@ -27,7 +28,7 @@ function sticky(id: string, summaryText: string, sortIndex = 1, patch: Partial<M
 
 function memoryService() {
 	return new AgentCompressionMemoryService({} as never, {} as never, {} as never,
-		{} as never, {} as never, {} as never, {} as never);
+		{} as never, {} as never, new AgentTokenService());
 }
 
 function message(id: string, content: string, index: number): CompressionScanRow {
@@ -101,6 +102,7 @@ describe('Compression injection tail window', () => {
 		expect(service.computeCompressionInjectionPreview(stickies, cap)).toEqual({
 			maxChars: cap, eligibleCount: 2, eligibleChars: result.eligibleChars,
 			willInjectCount: result.injectedIds.size, willInjectChars: result.text.length,
+			maxTokens: cap, willInjectTokens: service['agentTokenService'].countUnifiedTokens(result.text),
 		});
 		expect(result.text.length).toBeLessThanOrEqual(cap);
 	});
@@ -139,7 +141,7 @@ function compressionHarness(rows: CompressionScanRow[], currentRows: Compression
 	const service = new AgentCompressionMemoryService({ find: async () => rows } as never, repository as never, {} as never, {
 		resolveModelApiNameForUser: async () => 'model', invokeChatCompletions: invoke,
 		formatMessageForLlmHistory: format, newId: () => 'sticky1',
-	} as never, {} as never, {
+	} as never, {
 		canAffordModelCall: async () => true, startLog: async () => ({}), finishLog: async () => {},
 	} as never, {} as never);
 	vi.spyOn(service, 'reconcileStickyStates').mockResolvedValue(undefined);
@@ -232,7 +234,7 @@ describe('Compression overview preview mirrors', () => {
 				resolveTokenConfigForUser: async () => ({ tokenMode: 'estimate' }), makeCounter: () => undefined,
 			} as never);
 		const result = await endpoint.exec({ sessionId: 's1' }, { id: 'owner' } as never, null);
-		expect(result.injectionPreview).toEqual({ maxChars: 400, eligibleCount: 1, eligibleChars: 800, willInjectCount: 1, willInjectChars: 400 });
+		expect(result.injectionPreview).toEqual({ maxChars: 400, eligibleCount: 1, eligibleChars: 800, willInjectCount: 1, willInjectChars: 400, maxTokens: 400, willInjectTokens: 100 });
 		instance.agentCompressionInjectMaxChars = 600;
 		const updated = await endpoint.exec({ sessionId: 's1' }, { id: 'owner' } as never, null);
 		expect(updated.injectionPreview).toMatchObject({ maxChars: 600, willInjectChars: 600 });

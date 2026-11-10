@@ -15,7 +15,7 @@ import { AgentUserModelService, isAgentUserModelId } from '@/core/AgentUserModel
 // 常量（单一出处；其它模块从此 re-export）
 // ─────────────────────────────────────────────────────────────
 
-/** 字符↔token 启发式换算比率（中文为主时偏保守） */
+/** 仅供旧实现与窗外展示估算使用；不得进入上下文预算或窗口成员判定。 */
 export const AGENT_LLM_APPROX_CHARS_PER_TOKEN = 3;
 
 /**
@@ -27,6 +27,25 @@ export const AGENT_OVERVIEW_SCAN_LIMIT = 50_000;
 
 /** 发信路径（send/peek/afterAssistant）的消息扫描窗口；reconcileStickyStates 的"端点缺失即 active"启发式以此为准 */
 export const AGENT_SEND_PATH_SCAN_LIMIT = 500;
+
+/**
+ * 全站统一的上下文计数分词器。
+ * 预算、滑窗、区带与压缩判定一律按此编码计数，不随模型切换，避免同一会话的上下文窗口漂移。
+ * o200k_base 对中文约 0.9 token/字，介于国产模型（≈0.65）与 cl100k/Claude（≈1.3）之间；
+ * 按量计费仍以接口返回的 usage 为准，与此无关。
+ * 每模型编码（tokenizerEncoding）与 GLM/DeepSeek/Gemini 真分词器实现保留，当前不参与解析。
+ */
+export const AGENT_UNIFIED_TOKENIZER_ENCODING = 'o200k_base';
+
+/** 每条聊天消息的本地封装预留；是应用预算规则，不用于供应商计费。 */
+export const AGENT_MESSAGE_ENVELOPE_TOKENS = 4;
+
+/** 精确计数连续占用事件循环的上限（毫秒），超过即让出 */
+const EXACT_COUNT_SLICE_MS = 8;
+/** 短文本计数本身很快，缓存只收较长文本 */
+const UNIFIED_COUNT_CACHE_MIN_CHARS = 64;
+/** 约 2 万条消息；按平均 300 字计约占 10 MB */
+const UNIFIED_COUNT_CACHE_MAX_ENTRIES = 20_000;
 
 /** Gemini tokenizer 前缀标识 */
 export const GEMINI_ENCODING_PREFIX = 'gemini:';
@@ -83,18 +102,13 @@ export type TokenBand = 'new' | 'prep' | 'staged' | 'out';
 export type TokenCounter = (text: string) => Promise<number | null> | number | null;
 
 export interface TokenConfig {
-	charsPerToken: number;
-	encoding?: string;
+	encoding: string;
 	tokenMode: TokenMode;
 }
 
 export interface HistoryBudget {
 	maxContextTokens: number;
 	maxOutputTokensPerCall: number;
-	charsPerToken: number;
-	/** 字符口径历史预算（estimate 模式权威） */
-	historyBudgetChars: number;
-	/** token 口径历史预算（exact 模式权威；与字符预算由同一 overhead 导出） */
 	historyBudgetTokens: number;
 	tokenMode: TokenMode;
 }
@@ -108,6 +122,8 @@ export interface MessageWeights {
 	estimatedById: Map<string, boolean>;
 	/** 是否使用了精确计数（用于展示层标注 ≈ 前缀） */
 	useExactD: boolean;
+	/** 第一条由精确计数确认超窗的行下标；其后的更旧消息一律排除 */
+	exactFirstOutIndex: number | null;
 }
 
 export interface WindowBands {
@@ -137,14 +153,19 @@ export interface WindowBands {
  * 1. 计数层：estimateTokens（O(1) 估算）/ countTokensExact（tiktoken / Gemini LocalTokenizer / GLM・DeepSeek・Claude 兼容近似）
  * 2. 配置解析：resolveTokenConfig（统一模型编码解析）
  * 3. 计数器工厂：makeCounter
- * 4. 预算求解：resolveHistoryBudgets（字符/token 双视图同源导出）
- * 5. 权重计算：computeMessageWeights（D 累计，分块并发 + 超预算提前终止）
+ * 4. 预算求解：resolveHistoryBudgets（纯 Token 视图）
+ * 5. 权重计算：computeMessageWeights（D 累计，时间片让出 + 超预算提前终止）
  * 6. 窗口与区带：computeWindowAndBands（唯一区带判定 + 窗口边界）
  */
 @Injectable()
 export class AgentTokenService {
 	private readonly logger = new Logger(AgentTokenService.name);
 	private encodingCache = new Map<string, Tiktoken>();
+	/**
+	 * 统一分词器计数缓存（文本 → token 数）。消息内容一经发出基本不变，发信、压缩、总览轮询会反复统计同一批历史；
+	 * 只缓存较长文本以控制内存，按插入顺序淘汰最旧项。
+	 */
+	private unifiedCountCache = new Map<string, number>();
 	/** 自定义真分词器记忆化：undefined=尚未解析；null=词表缺失/失败（回退 approx）；Tiktoken=已加载 */
 	private customTokenizerCache = new Map<CustomTokenizerFamily, Tiktoken | null>();
 	private geminiTokenizerCache = new Map<string, { countTokens: (text: string) => Promise<{ totalTokens: number }> }>();
@@ -159,7 +180,7 @@ export class AgentTokenService {
 	// ── 1. 计数层 ──────────────────────────────────────────
 
 	/**
-	 * 快速估算 token 数（热路径用）。唯一估算实现：`Math.round(chars / charsPerToken)`。
+	 * 展示用启发式估算；不得进入上下文预算、窗口成员或便签状态判定。
 	 */
 	@bindThis
 	public estimateTokens(chars: number, charsPerToken: number = AGENT_LLM_APPROX_CHARS_PER_TOKEN): number {
@@ -178,6 +199,7 @@ export class AgentTokenService {
 	@bindThis
 	public async countTokensExact(text: string, encoding?: string | null): Promise<number | null> {
 		if (!encoding) return null;
+		if (encoding === AGENT_UNIFIED_TOKENIZER_ENCODING) return this.countUnifiedTokens(text);
 		if (encoding.startsWith(GEMINI_ENCODING_PREFIX)) {
 			return this.countTokensGemini(text, encoding.slice(GEMINI_ENCODING_PREFIX.length));
 		}
@@ -206,6 +228,54 @@ export class AgentTokenService {
 		}
 	}
 
+	/**
+	 * 未知记忆文本的固定预留槽，不是对实际内容的 Token 估算。
+	 * 容量按站点字符配置等额分配；实际注入必须再经 o200k 上限裁剪，预算不会随检索结果变化。
+	 */
+	@bindThis
+	public resolveReservedTokenLimit(maxChars: number): number {
+		if (!Number.isFinite(maxChars) || maxChars <= 0) return 0;
+		return Math.ceil(maxChars);
+	}
+
+	/** 按 o200k 上限裁剪文本；切割不破坏 UTF-16 代理对或 XML 实体。 */
+	@bindThis
+	public truncateTextToTokenLimit(text: string, maxTokens: number, keep: 'start' | 'end' = 'start'): string {
+		const cap = Math.max(0, Math.trunc(maxTokens));
+		if (text.length === 0 || this.countUnifiedTokens(text) <= cap) return text;
+		if (cap === 0) return '';
+		if (keep === 'start') {
+			let low = 0;
+			let high = text.length;
+			while (low < high) {
+				const mid = Math.ceil((low + high) / 2);
+				if (this.countUnifiedTokens(text.slice(0, mid)) <= cap) low = mid;
+				else high = mid - 1;
+			}
+			let end = low;
+			const code = text.charCodeAt(end - 1);
+			if (code >= 0xD800 && code <= 0xDBFF) end--;
+			return text.slice(0, end);
+		}
+		let low = 0;
+		let high = text.length;
+		while (low < high) {
+			const mid = Math.floor((low + high) / 2);
+			if (this.countUnifiedTokens(text.slice(mid)) <= cap) high = mid;
+			else low = mid + 1;
+		}
+		let start = low;
+		const code = text.charCodeAt(start);
+		if (code >= 0xDC00 && code <= 0xDFFF) start++;
+		const before = text.slice(Math.max(0, start - 6), start);
+		const amp = before.lastIndexOf('&');
+		if (amp !== -1 && before.indexOf(';', amp) === -1) {
+			const semi = text.indexOf(';', start);
+			if (semi !== -1 && semi - start <= 6) start = semi + 1;
+		}
+		return text.slice(start);
+	}
+
 	/** 判断编码是否可用（tiktoken 内置、gemini: 前缀，以及 glm:/deepseek:/claude: 兼容近似前缀）。 */
 	@bindThis
 	public isEncodingAvailable(encoding?: string | null): boolean {
@@ -230,48 +300,27 @@ export class AgentTokenService {
 
 	// ── 2. 配置解析 ────────────────────────────────────────
 
-	/**
-	 * 统一解析模型的 token 配置（charsPerToken / encoding / tokenMode），
-	 * 收敛此前散落在各端点的 `getEffectiveLlmModels().find()?.tokenizerEncoding` 逻辑。
-	 */
+	/** 官方模型与 BYOK 均使用同一计数配置；模型上下文和输出长度仍是独立配置。 */
 	@bindThis
 	public resolveTokenConfig(instanceMeta: MiMeta, modelId: string | null): TokenConfig {
-		const models = getEffectiveLlmModels(instanceMeta);
-		const pick = modelId
-			? models.find(m => m.id === modelId)
-			: (models.find(m => m.id === instanceMeta.agentDefaultModelId) ?? models[0]);
-		const charsPerToken = pick && Number.isFinite(pick.charsPerToken) && pick.charsPerToken! >= 1
-			? pick.charsPerToken!
-			: AGENT_LLM_APPROX_CHARS_PER_TOKEN;
-		const encoding = pick?.tokenizerEncoding;
-		const tokenMode = this.resolveTokenMode(encoding);
-		return { charsPerToken, encoding, tokenMode };
+		return this.unifiedTokenConfig();
 	}
 
-	/** 用户自定义模型（BYOK）的 token 配置；非用户模型回退到官方解析 */
 	@bindThis
 	public async resolveTokenConfigForUser(instanceMeta: MiMeta, modelId: string | null, userId: string): Promise<TokenConfig> {
-		if (modelId && isAgentUserModelId(modelId)) {
-			if (!this.agentUserModelService) {
-				return this.resolveTokenConfig(instanceMeta, null);
-			}
-			const conn = await this.agentUserModelService.resolveConnection(userId, modelId);
-			const charsPerToken = Number.isFinite(conn.charsPerToken) && conn.charsPerToken >= 1
-				? conn.charsPerToken
-				: AGENT_LLM_APPROX_CHARS_PER_TOKEN;
-			const encoding = conn.tokenizerEncoding ?? undefined;
-			const tokenMode = this.resolveTokenMode(encoding);
-			return { charsPerToken, encoding, tokenMode };
-		}
-		return this.resolveTokenConfig(instanceMeta, modelId);
+		return this.unifiedTokenConfig();
+	}
+
+	private unifiedTokenConfig(): TokenConfig {
+		const encoding = AGENT_UNIFIED_TOKENIZER_ENCODING;
+		return { encoding, tokenMode: this.resolveTokenMode(encoding) };
 	}
 
 	// ── 3. 计数器工厂 ──────────────────────────────────────
 
-	/** exact / approx 模式返回计数器（approx 为兼容编码近似）；estimate 模式返回 undefined。 */
+	/** 统一模式下始终提供 o200k 计数器，不再回退到每模型字符估算。 */
 	@bindThis
-	public makeCounter(config: TokenConfig): TokenCounter | undefined {
-		if ((config.tokenMode !== 'exact' && config.tokenMode !== 'approx') || !config.encoding) return undefined;
+	public makeCounter(config: TokenConfig): TokenCounter {
 		const encoding = config.encoding;
 		return (text: string) => this.countTokensExact(text, encoding);
 	}
@@ -279,40 +328,21 @@ export class AgentTokenService {
 	// ── 4. 预算求解 ────────────────────────────────────────
 
 	/**
-	 * 由同一 overhead 一致地导出字符与 token 两个口径的历史预算。
-	 * - estimate 模式以 `historyBudgetChars` 为权威；
-	 * - exact 模式以 `historyBudgetTokens` 为权威。
-	 * 调用方负责组装 systemChars（系统提示 + 记忆预留 + 压缩预留）、directiveChars、prefixChars。
+	 * 历史预算只有 Token 一个视图。overheadTokens 由已知文本的 o200k 计数与固定记忆预留组成；
+	 * 回复预留是尚未生成内容的长度上限，直接采用模型的 maxOutputTokensPerCall 配置。
 	 */
 	@bindThis
 	public resolveHistoryBudgets(params: {
 		maxContextTokens: number;
 		maxOutputTokensPerCall: number;
-		charsPerToken: number;
-		systemChars: number;
-		directiveChars: number;
-		prefixChars: number;
-		tokenMode: TokenMode;
+		overheadTokens: number;
 	}): HistoryBudget {
-		const cpt = Number.isFinite(params.charsPerToken) && params.charsPerToken >= 1
-			? params.charsPerToken
-			: AGENT_LLM_APPROX_CHARS_PER_TOKEN;
-		const overheadChars = Math.max(0, params.systemChars) + Math.max(0, params.directiveChars) + Math.max(0, params.prefixChars);
-		// 字符视图
-		const maxContextChars = Math.max(4000, params.maxContextTokens * cpt);
-		const reserveReplyChars = Math.max(256, Math.min(384_000, params.maxOutputTokensPerCall * cpt));
-		const historyBudgetChars = Math.max(0, maxContextChars - overheadChars - reserveReplyChars);
-		// token 视图（由同一 overhead 导出）
-		const overheadTokens = Math.ceil(overheadChars / cpt);
-		const reserveReplyTokens = Math.max(1, params.maxOutputTokensPerCall);
-		const historyBudgetTokens = Math.max(0, params.maxContextTokens - overheadTokens - reserveReplyTokens);
+		const overhead = Number.isFinite(params.overheadTokens) ? Math.max(0, params.overheadTokens) : 0;
 		return {
 			maxContextTokens: params.maxContextTokens,
 			maxOutputTokensPerCall: params.maxOutputTokensPerCall,
-			charsPerToken: cpt,
-			historyBudgetChars,
-			historyBudgetTokens,
-			tokenMode: params.tokenMode,
+			historyBudgetTokens: Math.max(0, params.maxContextTokens - overhead - Math.max(0, params.maxOutputTokensPerCall)),
+			tokenMode: 'exact',
 		};
 	}
 
@@ -320,7 +350,7 @@ export class AgentTokenService {
 
 	/**
 	 * 自最新条向旧累加 token 深度 D。
-	 * - 提供 counter 时：分块并发（CHUNK=64）精确计数；**按条**判断窗口边界——某条累计将超出 budgetForExact（即滑出窗口）时，
+	 * - 提供 counter 时：逐条精确计数并按时间片让出事件循环；**按条**判断窗口边界——某条累计将超出 budgetForExact（即滑出窗口）时，
 	 *   该条及其后（更旧）全部改用启发式估算，保证「窗外一律估算」与区带边界严格对齐；
 	 * - 未提供 counter 时：全程估算。
 	 * 整请求统一口径，保证 D 单调一致。
@@ -331,57 +361,55 @@ export class AgentTokenService {
 		opts: {
 			formatFn: (m: T) => string;
 			counter?: TokenCounter;
-			charsPerToken: number;
 			budgetForExact?: number;
+			perMessageTokens?: number;
 		},
 	): Promise<MessageWeights> {
 		const dMap = new Map<string, number>();
 		const tokensById = new Map<string, number>();
 		const estimatedById = new Map<string, boolean>();
-		const estimate = (text: string): number => this.estimateTokens(text.length, opts.charsPerToken);
+		const estimate = (text: string): number => this.estimateTokens(text.length);
 
 		if (opts.counter) {
 			const counter = opts.counter;
 			const budget = opts.budgetForExact ?? Number.POSITIVE_INFINITY;
-			const CHUNK = 64;
+			const envelopeTokens = Math.max(0, opts.perMessageTokens ?? 0);
 			let acc = 0;
 			let pastBudget = false;
-			for (let i = 0; i < rowsNewestFirst.length; i += CHUNK) {
-				const chunk = rowsNewestFirst.slice(i, i + CHUNK);
+			let exactFirstOutIndex: number | null = null;
+			// 本地分词是同步 CPU 计算：累计占用超过一个时间片就让出事件循环，长会话首次计数时不阻塞其他请求
+			let sliceStart = performance.now();
+			for (const [index, m] of rowsNewestFirst.entries()) {
+				const text = opts.formatFn(m);
 				if (!pastBudget) {
-					const texts = chunk.map(m => opts.formatFn(m));
-					const counts = await Promise.all(texts.map(t => counter(t)));
-					for (let j = 0; j < chunk.length; j++) {
-						const m = chunk[j]!;
-						const exact = counts[j];
-						const tok = exact ?? estimate(texts[j]!);
-						if (!pastBudget && acc + tok <= budget) {
-							// 窗内（累计不超预算）：精确计数
-							tokensById.set(m.id, tok);
-							estimatedById.set(m.id, exact == null);
-							acc += tok;
-							dMap.set(m.id, acc);
-						} else {
-							// 本条将滑出窗口（累计超预算）：自此条起统一改用启发式估算，窗外不再精确计数
-							pastBudget = true;
-							const estTok = estimate(texts[j]!);
-							tokensById.set(m.id, estTok);
-							estimatedById.set(m.id, true);
-							acc += estTok;
-							dMap.set(m.id, acc);
-						}
+					if (performance.now() - sliceStart > EXACT_COUNT_SLICE_MS) {
+						await new Promise<void>(resolve => setImmediate(resolve));
+						sliceStart = performance.now();
 					}
-				} else {
-					for (const m of chunk) {
-						const tok = estimate(opts.formatFn(m));
-						tokensById.set(m.id, tok);
-						estimatedById.set(m.id, true);
-						acc += tok;
+					const exact = await counter(text);
+					if (exact == null) {
+						// 计数器失败不能靠估算重新决定窗口成员；保守地停止扩展历史
+						pastBudget = true;
+						exactFirstOutIndex = index;
+					} else if (acc + exact + envelopeTokens <= budget) {
+						tokensById.set(m.id, exact + envelopeTokens);
+						estimatedById.set(m.id, false);
+						acc += exact + envelopeTokens;
 						dMap.set(m.id, acc);
+						continue;
+					} else {
+						pastBudget = true;
+						exactFirstOutIndex = index;
 					}
 				}
+				const estTok = estimate(text) + envelopeTokens;
+				tokensById.set(m.id, estTok);
+				estimatedById.set(m.id, true);
+				acc += estTok;
+				// 展示可估算，但窗外深度不得低于预算，避免便签状态被估算重新判回窗内
+				dMap.set(m.id, Number.isFinite(budget) ? Math.max(acc, budget + 1) : acc);
 			}
-			return { dMap, tokensById, estimatedById, useExactD: true };
+			return { dMap, tokensById, estimatedById, useExactD: true, exactFirstOutIndex };
 		}
 
 		let acc = 0;
@@ -392,7 +420,7 @@ export class AgentTokenService {
 			acc += tok;
 			dMap.set(m.id, acc);
 		}
-		return { dMap, tokensById, estimatedById, useExactD: false };
+		return { dMap, tokensById, estimatedById, useExactD: false, exactFirstOutIndex: null };
 	}
 
 	// ── 6. 窗口与区带 ──────────────────────────────────────
@@ -407,13 +435,9 @@ export class AgentTokenService {
 	public computeWindowAndBands(
 		rowsNewestFirst: { id: string }[],
 		dMap: Map<string, number>,
-		opts: { historyBudgetTokens: number; t1Ratio: number; t2Ratio: number },
+		opts: { historyBudgetTokens: number; t1Ratio: number; t2Ratio: number; exactFirstOutIndex?: number | null },
 	): WindowBands {
-		// H<1 保护：与最新条对齐，避免「最新一条」也被判 out
-		const dNewest = rowsNewestFirst.length > 0 ? (dMap.get(rowsNewestFirst[0]!.id) ?? 0) : 0;
-		const bandBudget = opts.historyBudgetTokens >= 1
-			? opts.historyBudgetTokens
-			: Math.max(1, dNewest / opts.t1Ratio);
+		const bandBudget = Math.max(0, opts.historyBudgetTokens);
 		const t1Band = opts.t1Ratio * bandBudget;
 		const t2Band = opts.t2Ratio * bandBudget;
 
@@ -425,7 +449,9 @@ export class AgentTokenService {
 			const id = rowsNewestFirst[i]!.id;
 			const d = dMap.get(id) ?? 0;
 			let band: TokenBand = 'new';
-			if (d > bandBudget) band = 'out';
+			// 精确边界一经确认，估算的 D 只能用于展示，不能改变窗口成员资格
+			if (opts.exactFirstOutIndex != null && i >= opts.exactFirstOutIndex) band = 'out';
+			else if (d > bandBudget) band = 'out';
 			else if (d > t2Band) band = 'staged';
 			else if (d > t1Band) band = 'prep';
 			bandById.set(id, band);
@@ -574,6 +600,22 @@ export class AgentTokenService {
 			this.geminiInitPromises.delete(modelName);
 		}
 		return this.geminiTokenizerCache.get(modelName)!;
+	}
+
+	public countUnifiedTokens(text: string): number {
+		if (text.length === 0) return 0;
+		const cached = this.unifiedCountCache.get(text);
+		if (cached != null) return cached;
+		// 消息正文可能偶含 <|endoftext|> 等特殊串：按普通文本计数，不抛错回退估算
+		const count = this.getTiktokenEncoding(AGENT_UNIFIED_TOKENIZER_ENCODING).encode(text, [], []).length;
+		if (text.length >= UNIFIED_COUNT_CACHE_MIN_CHARS) {
+			if (this.unifiedCountCache.size >= UNIFIED_COUNT_CACHE_MAX_ENTRIES) {
+				const oldest = this.unifiedCountCache.keys().next().value;
+				if (oldest != null) this.unifiedCountCache.delete(oldest);
+			}
+			this.unifiedCountCache.set(text, count);
+		}
+		return count;
 	}
 
 	private getTiktokenEncoding(name: string): Tiktoken {
