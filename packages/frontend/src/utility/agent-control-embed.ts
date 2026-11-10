@@ -96,6 +96,16 @@ const appearancePropertyMap: Record<Exclude<keyof AgentControlAppearance, 'color
 
 let runtimeToken: string | null = null;
 let embedActive = false;
+// 宿主最近一次下发的外观：set-panel 路由跳转后 URL 不再带 appearance 参数，新挂载的面板要沿用它
+let hostAppearance: AgentControlAppearance | null = null;
+
+export function setAgentControlHostAppearance(appearance: AgentControlAppearance): void {
+	hostAppearance = appearance;
+}
+
+export function getAgentControlHostAppearance(): AgentControlAppearance | null {
+	return hostAppearance;
+}
 
 export function isAgentControlPanel(value: string): value is AgentControlPanel {
 	return (agentControlPanels as readonly string[]).includes(value);
