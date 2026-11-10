@@ -31,6 +31,7 @@ const buildOptions = {
 	format: 'esm',
 	loader: {
 		'.ts': 'ts',
+		'.webp': 'dataurl',
 	},
 	minify: process.env.NODE_ENV === 'production',
 	outbase: `${__dirname}/src`,

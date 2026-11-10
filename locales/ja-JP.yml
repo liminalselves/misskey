@@ -3372,6 +3372,9 @@ _reversi:
 _offlineScreen:
   title: "オフライン - サーバーに接続できません"
   header: "サーバーに接続できません"
+  checkNetwork: "まず、お使いのデバイスのネットワーク接続をご確認ください"
+  serverMaintenance: "接続環境に問題がない場合は、サーバーがメンテナンスまたはアップデート中の可能性があります。しばらく待ってから再度お試しください"
+  contact: "長時間アクセスできない場合は、QQグループ {qq} またはメール {mail} までお問い合わせください"
 
 _urlPreviewSetting:
   title: "URLプレビューの設定"

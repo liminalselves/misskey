@@ -12710,6 +12710,18 @@ export interface Locale extends ILocale {
          * サーバーに接続できません
          */
         "header": string;
+        /**
+         * まず、お使いのデバイスのネットワーク接続をご確認ください
+         */
+        "checkNetwork": string;
+        /**
+         * 接続環境に問題がない場合は、サーバーがメンテナンスまたはアップデート中の可能性があります。しばらく待ってから再度お試しください
+         */
+        "serverMaintenance": string;
+        /**
+         * 長時間アクセスできない場合は、QQグループ {qq} またはメール {mail} までお問い合わせください
+         */
+        "contact": ParameterizedString<"qq" | "mail">;
     };
     "_urlPreviewSetting": {
         /**
