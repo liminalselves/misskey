@@ -25,7 +25,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 					</button>
 					<button v-panel type="button" class="_button" :class="$style.overviewCard" @click="activeLeaf = 'reports'">
 						<span>24h 请求</span>
-						<b>{{ reportsData?.overall.total ?? '—' }}</b>
+						<b>{{ reportsData?.current.total ?? '—' }}</b>
 					</button>
 					<button v-panel type="button" class="_button" :class="$style.overviewCard" @click="activeLeaf = 'reports'">
 						<span>24h 成功率</span>
@@ -1034,7 +1034,7 @@ import MkLoading from '@/components/global/MkLoading.vue';
 import FormSplit from '@/components/form/split.vue';
 import MkTabs from '@/components/MkTabs.vue';
 import XCheckinReports from './agents-checkin-reports.vue';
-import XModelReports from './agents-model-reports.vue';
+import XModelReports from './agents-model-reports/ModelReportsPage.vue';
 import XCheckinPanel from './agents-settings-checkin.vue';
 import XCreditsPanel from './agents-settings-credits.vue';
 import XCreditGrants from './agents-settings-credit-grants.vue';
@@ -1081,9 +1081,9 @@ const activeGroupKey = computed<string>({
 
 const meta = await misskeyApi('admin/meta') as Record<string, unknown>;
 
-// 总览页 24h 小卡片仅需整体统计，完整报表见 agents-model-reports.vue
+// 总览页 24h 小卡片仅需整体统计，完整报表见 agents-model-reports/ModelReportsPage.vue
 type ReportsOverview = {
-	overall: { total: number; success: number };
+	current: { total: number; success: number; pending: number };
 };
 
 type AgentLlmModelRow = {
@@ -2253,8 +2253,9 @@ const externalAuditFailuresLoading = ref(false);
 const externalAuditFailures = ref<AgentExternalAuditFailureRow[]>([]);
 const reportSuccessRate = computed(() => {
 	const d = reportsData.value;
-	if (!d || d.overall.total <= 0) return '—';
-	return `${((d.overall.success / d.overall.total) * 100).toFixed(1)}%`;
+	const settled = d == null ? 0 : d.current.total - d.current.pending;
+	if (d == null || settled <= 0) return '—';
+	return `${((d.current.success / settled) * 100).toFixed(1)}%`;
 });
 
 async function generateRedeemCodes() {
@@ -2365,7 +2366,7 @@ async function revokeRedeemCode(row: RedeemCodeRow) {
 // 总览页 24h 小卡片：固定拉取近 24 小时整体统计
 async function loadReports() {
 	try {
-		reportsData.value = await misskeyApi('admin/agents/reports/overview' as any, { hours: 24 }) as ReportsOverview;
+		reportsData.value = await misskeyApi('admin/agents/reports/summary' as any, {}) as ReportsOverview;
 	} catch (err) {
 		os.alert({ type: 'error', text: formatApiError(err) });
 	}

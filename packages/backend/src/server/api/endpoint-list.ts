@@ -220,8 +220,11 @@ export * as 'agents/models/free-quota' from './endpoints/agents/models/free-quot
 export * as 'agents/model-announcements/unread' from './endpoints/agents/model-announcements/unread.js';
 export * as 'agents/model-announcements/read' from './endpoints/agents/model-announcements/read.js';
 export * as 'agents/model-reports/create' from './endpoints/agents/model-reports/create.js';
-export * as 'admin/agents/reports/overview' from './endpoints/admin/agents/reports/overview.js';
-export * as 'admin/agents/reports/top-users' from './endpoints/admin/agents/reports/top-users.js';
+export * as 'admin/agents/reports/summary' from './endpoints/admin/agents/reports/summary.js';
+export * as 'admin/agents/reports/trend' from './endpoints/admin/agents/reports/trend.js';
+export * as 'admin/agents/reports/models' from './endpoints/admin/agents/reports/models.js';
+export * as 'admin/agents/reports/breakdowns' from './endpoints/admin/agents/reports/breakdowns.js';
+export * as 'admin/agents/reports/users' from './endpoints/admin/agents/reports/users.js';
 export * as 'admin/agents-checkin-reports' from './endpoints/admin/agents-checkin-reports.js';
 export * as 'admin/agents-checkin-makeup' from './endpoints/admin/agents-checkin-makeup.js';
 export * as 'admin/agents-checkin-revoke-today' from './endpoints/admin/agents-checkin-revoke-today.js';

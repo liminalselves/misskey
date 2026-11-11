@@ -129,10 +129,6 @@ import type {
 	AdminAgentsRedeemCodesListResponse,
 	AdminAgentsRedeemCodesRevokeRequest,
 	AdminAgentsRedeemCodesRevokeResponse,
-	AdminAgentsReportsOverviewRequest,
-	AdminAgentsReportsOverviewResponse,
-	AdminAgentsReportsTopUsersRequest,
-	AdminAgentsReportsTopUsersResponse,
 	AdminAgentsReviewDiffRequest,
 	AdminAgentsReviewDiffResponse,
 	AdminAgentsReviewListPendingRequest,
@@ -1060,8 +1056,6 @@ export type Endpoints = {
 	'admin/agents/redeem-codes/generate': { req: AdminAgentsRedeemCodesGenerateRequest; res: AdminAgentsRedeemCodesGenerateResponse };
 	'admin/agents/redeem-codes/list': { req: AdminAgentsRedeemCodesListRequest; res: AdminAgentsRedeemCodesListResponse };
 	'admin/agents/redeem-codes/revoke': { req: AdminAgentsRedeemCodesRevokeRequest; res: AdminAgentsRedeemCodesRevokeResponse };
-	'admin/agents/reports/overview': { req: AdminAgentsReportsOverviewRequest; res: AdminAgentsReportsOverviewResponse };
-	'admin/agents/reports/top-users': { req: AdminAgentsReportsTopUsersRequest; res: AdminAgentsReportsTopUsersResponse };
 	'admin/agents/review/diff': { req: AdminAgentsReviewDiffRequest; res: AdminAgentsReviewDiffResponse };
 	'admin/agents/review/list-pending': { req: AdminAgentsReviewListPendingRequest; res: AdminAgentsReviewListPendingResponse };
 	'admin/agents/review/logs': { req: AdminAgentsReviewLogsRequest; res: AdminAgentsReviewLogsResponse };

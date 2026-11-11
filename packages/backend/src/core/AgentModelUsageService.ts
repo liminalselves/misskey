@@ -20,28 +20,11 @@ import { MiUserProfile } from '@/models/UserProfile.js';
 import type { MiMeta } from '@/models/Meta.js';
 import type { MiUser } from '@/models/User.js';
 import { AgentService } from '@/core/AgentService.js';
-import { AGENT_USER_MODEL_ID_PREFIX, isAgentUserModelId } from '@/core/AgentUserModelService.js';
+import { isAgentUserModelId } from '@/core/AgentUserModelService.js';
 import { getEffectiveLlmModels, isAgentLlmPeakTimeBeijing } from '@/misc/agent-llm-models.js';
 
 /** Non-model credits must be excluded from model-call reports and cost totals. */
 export const nonModelUsageKinds: AgentModelUsageKind[] = ['checkin', 'admin_reward', 'admin_compensation', 'credit_migration'];
-
-/** 管理端报表的模型筛选：modelId 精确匹配；byokOnly/unassignedOnly 时按 BYOK 前缀/未关联模型聚合 */
-export type ModelReportFilter = {
-	modelId?: string;
-	byokOnly?: boolean;
-	unassignedOnly?: boolean;
-};
-
-function applyModelReportFilter<QB extends { andWhere: (w: string, p?: Record<string, unknown>) => unknown }>(qb: QB, opts: ModelReportFilter): void {
-	if (opts.modelId != null) {
-		qb.andWhere('log.modelId = :reportModelId', { reportModelId: opts.modelId });
-	} else if (opts.byokOnly === true) {
-		qb.andWhere('log.modelId LIKE :byokPrefix', { byokPrefix: `${AGENT_USER_MODEL_ID_PREFIX}%` });
-	} else if (opts.unassignedOnly === true) {
-		qb.andWhere('log.modelId IS NULL');
-	}
-}
 
 export type StartLogParams = {
 	userId: MiUser['id'];
@@ -410,9 +393,9 @@ export class AgentModelUsageService {
 	}
 
 	/**
-	 * 按模型维度聚合时间窗内请求数；供用户侧图表与管理端报表复用。
+	 * 按模型维度聚合时间窗内请求数；供用户侧图表与管理端用户详情页复用（全站报表见 AgentModelReportService）。
 	 * 未关联模型（modelId 为 NULL，旧版日志未解析默认模型）的记录聚合成一行（modelId=null），
-	 * 由调用方决定展示方式：管理端合并为“未关联模型”行，用户侧/成功率接口自行兜底。
+	 * 由调用方决定展示方式。
 	 */
 	@bindThis
 	public async aggregateByModel(opts: { userId?: MiUser['id']; since: Date; until?: Date }): Promise<Array<{
@@ -571,12 +554,12 @@ export class AgentModelUsageService {
 	}
 
 	/**
-	 * 按时间窗求总体统计，供管理端报表卡片。
+	 * 按时间窗求总体统计。
 	 * modelCallsOnly 时排除签到/管理员奖励/额度迁移等非模型调用记录。
 	 * userId 限定单用户，供管理端用户详情页的模型用量统计。
 	 */
 	@bindThis
-	public async overallStats(opts: { since: Date; until?: Date; userId?: MiUser['id']; modelCallsOnly?: boolean } & ModelReportFilter): Promise<{
+	public async overallStats(opts: { since: Date; until?: Date; userId?: MiUser['id']; modelCallsOnly?: boolean }): Promise<{
 		total: number;
 		success: number;
 		failed: number;
@@ -609,7 +592,6 @@ export class AgentModelUsageService {
 		if (opts.modelCallsOnly === true) {
 			qb.andWhere('log.usageKind NOT IN (:...nonModelKinds)', { nonModelKinds: nonModelUsageKinds });
 		}
-		applyModelReportFilter(qb, opts);
 		const row = await qb.getRawOne<{
 			total: number;
 			success: number;
@@ -637,12 +619,12 @@ export class AgentModelUsageService {
 	}
 
 	/**
-	 * 按小时/天分桶的请求状态与免费/付费/扣费分布，供管理端报表趋势图。
+	 * 按小时/天分桶的请求状态与免费/付费/扣费分布，供用户侧与管理端用户详情趋势图。
 	 * modelCallsOnly 时排除签到/管理员奖励/额度迁移等非模型调用记录。
 	 * userId 限定单用户；token 分桶汇总取自 OpenAI 响应 usage（无 usage 的调用计 0），供 token 趋势图。
 	 */
 	@bindThis
-	public async timeBuckets(opts: { since: Date; until?: Date; userId?: MiUser['id']; unit: 'hour' | 'day'; modelCallsOnly?: boolean } & ModelReportFilter): Promise<Array<{
+	public async timeBuckets(opts: { since: Date; until?: Date; userId?: MiUser['id']; unit: 'hour' | 'day'; modelCallsOnly?: boolean }): Promise<Array<{
 		bucketStart: string;
 		total: number;
 		success: number;
@@ -680,7 +662,6 @@ export class AgentModelUsageService {
 		if (opts.modelCallsOnly === true) {
 			qb.andWhere('log.usageKind NOT IN (:...nonModelKinds)', { nonModelKinds: nonModelUsageKinds });
 		}
-		applyModelReportFilter(qb, opts);
 		const rows = await qb.getRawMany<{
 			bucketstart: Date;
 			total: number;
@@ -710,57 +691,11 @@ export class AgentModelUsageService {
 	}
 
 	/**
-	 * 计费构成：互斥的六类计数（付费/免费/失败/BYOK/零价/未关联模型），其余归入 other（处理中等瞬态）。
-	 * - paid: cost>0（成功/中断实际扣费）
-	 * - free: cost=0 且消耗了每日免费额度
-	 * - failed: 失败未扣费（含 BYOK 的失败调用）
-	 * - byok: BYOK 自定义模型的成功/中断调用（平台零成本）
-	 * - zeroPriced: 官方零定价模型的成功/中断调用（模型本身不收费，区别于每日免费额度）
-	 * - unassigned: 未关联模型的历史成功/中断调用（旧版日志未解析默认模型 id，与零价区分开）
-	 * 供管理端报表计费构成图。仅统计模型调用类记录，支持单模型/BYOK/未关联模型筛选。
-	 */
-	@bindThis
-	public async billingBreakdown(opts: { since: Date; until?: Date } & ModelReportFilter): Promise<{
-		free: number;
-		paid: number;
-		failed: number;
-		byok: number;
-		zeroPriced: number;
-		unassigned: number;
-		other: number;
-	}> {
-		const qb = this.agentModelUsageLogsRepository.createQueryBuilder('log')
-			.select('COUNT(*)::int', 'total')
-			.addSelect('SUM(CASE WHEN log.cost > 0 THEN 1 ELSE 0 END)::int', 'paid')
-			.addSelect('SUM(CASE WHEN log.cost = 0 AND log.usedFreeQuota = TRUE THEN 1 ELSE 0 END)::int', 'free')
-			.addSelect('SUM(CASE WHEN log.cost = 0 AND log.usedFreeQuota IS NOT TRUE AND log.status = \'failed\' THEN 1 ELSE 0 END)::int', 'failed')
-			.addSelect('SUM(CASE WHEN log.cost = 0 AND log.usedFreeQuota IS NOT TRUE AND log.status IN (\'success\', \'aborted\') AND log.modelId LIKE :byokPrefix THEN 1 ELSE 0 END)::int', 'byok')
-			.addSelect('SUM(CASE WHEN log.cost = 0 AND log.usedFreeQuota IS NOT TRUE AND log.status IN (\'success\', \'aborted\') AND log.modelId IS NOT NULL AND log.modelId NOT LIKE :byokPrefix THEN 1 ELSE 0 END)::int', 'zeroPriced')
-			.addSelect('SUM(CASE WHEN log.cost = 0 AND log.usedFreeQuota IS NOT TRUE AND log.status IN (\'success\', \'aborted\') AND log.modelId IS NULL THEN 1 ELSE 0 END)::int', 'unassigned')
-			.where('log.requestedAt >= :since', { since: opts.since })
-			.andWhere('log.usageKind NOT IN (:...nonModelKinds)', { nonModelKinds: nonModelUsageKinds })
-			.setParameter('byokPrefix', `${AGENT_USER_MODEL_ID_PREFIX}%`);
-		if (opts.until != null) {
-			qb.andWhere('log.requestedAt < :until', { until: opts.until });
-		}
-		applyModelReportFilter(qb, opts);
-		const row = await qb.getRawOne<{ total: number; paid: number; free: number; failed: number; byok: number; zeroPriced: number; unassigned: number }>();
-		const total = Number(row?.total) || 0;
-		const paid = Number(row?.paid) || 0;
-		const free = Number(row?.free) || 0;
-		const failed = Number(row?.failed) || 0;
-		const byok = Number(row?.byok) || 0;
-		const zeroPriced = Number(row?.zeroPriced) || 0;
-		const unassigned = Number(row?.unassigned) || 0;
-		return { free, paid, failed, byok, zeroPriced, unassigned, other: Math.max(0, total - paid - free - failed - byok - zeroPriced - unassigned) };
-	}
-
-	/**
 	 * 按用途（聊天/识图/生图/主动消息/压缩）聚合请求量、免费次数与扣费，供管理端用量构成分析。
-	 * 仅统计模型调用类记录。userId 限定单用户，支持单模型/BYOK/未关联模型筛选。
+	 * 仅统计模型调用类记录。userId 限定单用户。
 	 */
 	@bindThis
-	public async aggregateByUsageKind(opts: { since: Date; until?: Date; userId?: MiUser['id'] } & ModelReportFilter): Promise<Array<{
+	public async aggregateByUsageKind(opts: { since: Date; until?: Date; userId?: MiUser['id'] }): Promise<Array<{
 		usageKind: AgentModelUsageKind;
 		total: number;
 		freeCalls: number;
@@ -783,7 +718,6 @@ export class AgentModelUsageService {
 		if (opts.userId != null) {
 			qb.andWhere('log.userId = :uid', { uid: opts.userId });
 		}
-		applyModelReportFilter(qb, opts);
 		const rows = await qb.getRawMany<{
 			usageKind: AgentModelUsageKind;
 			total: number;
@@ -798,159 +732,5 @@ export class AgentModelUsageService {
 			paidCalls: Number(r.paidCalls) || 0,
 			creditsCharged: Number(r.creditsCharged) || 0,
 		}));
-	}
-
-	/**
-	 * 管理端报表的补充分析：token 总量、成功调用耗时分位、失败错误码 TOP、
-	 * 北京时间「星期×小时」请求分布与按模型 token 汇总。仅统计模型调用类记录，支持单模型筛选（byModelTokens 除外）。
-	 */
-	@bindThis
-	public async reportInsights(opts: { since: Date; until: Date } & ModelReportFilter): Promise<{
-		tokens: { prompt: number; completion: number; cacheHit: number; callsWithUsage: number };
-		latency: { p50: number | null; p90: number | null; p95: number | null };
-		errorCodes: Array<{ errorCode: string; count: number }>;
-		heatmap: Array<{ dow: number; hour: number; count: number }>;
-		byModelTokens: Array<{ modelId: string | null; prompt: number; completion: number }>;
-	}> {
-		const base = () => {
-			const qb = this.agentModelUsageLogsRepository.createQueryBuilder('log')
-				.where('log.requestedAt >= :since', { since: opts.since })
-				.andWhere('log.requestedAt < :until', { until: opts.until })
-				.andWhere('log.usageKind NOT IN (:...nonModelKinds)', { nonModelKinds: nonModelUsageKinds });
-			return qb;
-		};
-
-		const tokensQb = base()
-			.select('COALESCE(SUM(log.promptTokens), 0)::bigint', 'prompt')
-			.addSelect('COALESCE(SUM(log.completionTokens), 0)::bigint', 'completion')
-			.addSelect('COALESCE(SUM(log.promptCacheHitTokens), 0)::bigint', 'cacheHit')
-			.addSelect('SUM(CASE WHEN log.promptTokens IS NOT NULL OR log.completionTokens IS NOT NULL THEN 1 ELSE 0 END)::int', 'callsWithUsage');
-		applyModelReportFilter(tokensQb, opts);
-
-		const latencyQb = base()
-			.select('percentile_cont(0.5) WITHIN GROUP (ORDER BY log.durationMs)', 'p50')
-			.addSelect('percentile_cont(0.9) WITHIN GROUP (ORDER BY log.durationMs)', 'p90')
-			.addSelect('percentile_cont(0.95) WITHIN GROUP (ORDER BY log.durationMs)', 'p95')
-			.andWhere('log.status = :okStatus', { okStatus: 'success' })
-			.andWhere('log.durationMs IS NOT NULL');
-		applyModelReportFilter(latencyQb, opts);
-
-		const errorQb = base()
-			.select('COALESCE(log.errorCode, \'UNKNOWN\')', 'errorCode')
-			.addSelect('COUNT(*)::int', 'count')
-			.andWhere('log.status = :failedStatus', { failedStatus: 'failed' })
-			.groupBy('COALESCE(log.errorCode, \'UNKNOWN\')')
-			.orderBy('count', 'DESC')
-			.limit(10);
-		applyModelReportFilter(errorQb, opts);
-
-		const heatmapQb = base()
-			.select('EXTRACT(ISODOW FROM (log.requestedAt AT TIME ZONE \'Asia/Shanghai\'))::int', 'dow')
-			.addSelect('EXTRACT(HOUR FROM (log.requestedAt AT TIME ZONE \'Asia/Shanghai\'))::int', 'hour')
-			.addSelect('COUNT(*)::int', 'count')
-			.groupBy('dow')
-			.addGroupBy('hour');
-		applyModelReportFilter(heatmapQb, opts);
-
-		const byModelTokensQb = base()
-			.select('log.modelId', 'modelId')
-			.addSelect('COALESCE(SUM(log.promptTokens), 0)::bigint', 'prompt')
-			.addSelect('COALESCE(SUM(log.completionTokens), 0)::bigint', 'completion')
-			.groupBy('log.modelId');
-
-		const [tokens, latency, errorCodes, heatmap, byModelTokens] = await Promise.all([
-			tokensQb.getRawOne<{ prompt: string | number; completion: string | number; cacheHit: string | number; callsWithUsage: number }>(),
-			latencyQb.getRawOne<{ p50: string | number | null; p90: string | number | null; p95: string | number | null }>(),
-			errorQb.getRawMany<{ errorCode: string; count: number }>(),
-			heatmapQb.getRawMany<{ dow: number; hour: number; count: number }>(),
-			byModelTokensQb.getRawMany<{ modelId: string | null; prompt: string | number; completion: string | number }>(),
-		]);
-		const num = (v: string | number | null | undefined) => (v == null ? null : Number(v));
-		return {
-			tokens: {
-				prompt: Number(tokens?.prompt) || 0,
-				completion: Number(tokens?.completion) || 0,
-				cacheHit: Number(tokens?.cacheHit) || 0,
-				callsWithUsage: Number(tokens?.callsWithUsage) || 0,
-			},
-			latency: { p50: num(latency?.p50), p90: num(latency?.p90), p95: num(latency?.p95) },
-			errorCodes: errorCodes.map(r => ({ errorCode: r.errorCode, count: Number(r.count) || 0 })),
-			heatmap: heatmap.map(r => ({ dow: Number(r.dow), hour: Number(r.hour), count: Number(r.count) || 0 })),
-			byModelTokens: byModelTokens.map(r => ({ modelId: r.modelId, prompt: Number(r.prompt) || 0, completion: Number(r.completion) || 0 })),
-		};
-	}
-
-	/**
-	 * 时间窗内扣减额度最多的用户排行，供管理端定位成本大头。仅统计实际扣费（cost>0）的模型调用。
-	 * 支持单模型/BYOK/未关联模型筛选与 offset/limit 翻页。
-	 */
-	@bindThis
-	public async topUsersByCharged(opts: { since: Date; until?: Date; limit?: number; offset?: number } & ModelReportFilter): Promise<Array<{
-		userId: MiUser['id'];
-		username: string;
-		name: string | null;
-		total: number;
-		freeCalls: number;
-		paidCalls: number;
-		creditsCharged: number;
-	}>> {
-		const qb = this.agentModelUsageLogsRepository.createQueryBuilder('log')
-			.innerJoin('log.user', 'user')
-			.select('log.userId', 'userId')
-			.addSelect('user.username', 'username')
-			.addSelect('user.name', 'name')
-			.addSelect('COUNT(*)::int', 'total')
-			.addSelect('SUM(CASE WHEN log.usedFreeQuota = TRUE THEN 1 ELSE 0 END)::int', 'freeCalls')
-			.addSelect('SUM(CASE WHEN log.cost > 0 THEN 1 ELSE 0 END)::int', 'paidCalls')
-			.addSelect('COALESCE(SUM(CASE WHEN log.cost > 0 THEN log.cost ELSE 0 END), 0)', 'creditsCharged')
-			.where('log.requestedAt >= :since', { since: opts.since })
-			.andWhere('log.usageKind NOT IN (:...nonModelKinds)', { nonModelKinds: nonModelUsageKinds })
-			.groupBy('log.userId')
-			.addGroupBy('user.username')
-			.addGroupBy('user.name')
-			// 别名带引号以保留大小写，否则 PG 折叠为小写后找不到列
-			.orderBy('"creditsCharged"', 'DESC')
-			.addOrderBy('total', 'DESC')
-			.limit(opts.limit ?? 10)
-			.offset(opts.offset ?? 0);
-		if (opts.until != null) {
-			qb.andWhere('log.requestedAt < :until', { until: opts.until });
-		}
-		applyModelReportFilter(qb, opts);
-		const rows = await qb.getRawMany<{
-			userId: MiUser['id'];
-			username: string;
-			name: string | null;
-			total: number;
-			freeCalls: number;
-			paidCalls: number;
-			creditsCharged: string | number;
-		}>();
-		return rows.map(r => ({
-			userId: r.userId,
-			username: r.username,
-			name: r.name ?? null,
-			total: Number(r.total) || 0,
-			freeCalls: Number(r.freeCalls) || 0,
-			paidCalls: Number(r.paidCalls) || 0,
-			creditsCharged: Number(r.creditsCharged) || 0,
-		}));
-	}
-
-	/**
-	 * 时间窗内有模型调用记录的去重用户数，与 topUsersByCharged 同口径，供翻页计算总页数。
-	 */
-	@bindThis
-	public async countModelUsageUsers(opts: { since: Date; until?: Date } & ModelReportFilter): Promise<number> {
-		const qb = this.agentModelUsageLogsRepository.createQueryBuilder('log')
-			.select('COUNT(DISTINCT log."userId")::int', 'cnt')
-			.where('log.requestedAt >= :since', { since: opts.since })
-			.andWhere('log.usageKind NOT IN (:...nonModelKinds)', { nonModelKinds: nonModelUsageKinds });
-		if (opts.until != null) {
-			qb.andWhere('log.requestedAt < :until', { until: opts.until });
-		}
-		applyModelReportFilter(qb, opts);
-		const row = await qb.getRawOne<{ cnt: number }>();
-		return Number(row?.cnt) || 0;
 	}
 }
