@@ -50,7 +50,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 						<span :class="$style.num">{{ fmtInt(e.count) }}</span>
 					</div>
 					<div :class="$style.errorBar"><span :style="{ width: `${(e.count / data.errorCodes[0].count) * 100}%` }"></span></div>
-					<div :class="$style.errorMeta">{{ e.models }} 个模型 · {{ e.users }} 位用户 · 最近 <MkTime :time="e.lastAt"/></div>
+					<div :class="$style.errorMeta">{{ e.models }} 个模型<template v-if="!singleUser"> · {{ e.users }} 位用户</template> · 最近 <MkTime :time="e.lastAt"/></div>
 				</div>
 			</div>
 		</template>
@@ -114,6 +114,8 @@ const props = defineProps<{
 	modelName: (id: string) => string;
 	/** When a model filter is active, share charts only count the selected models. */
 	selectedModels: string[];
+	/** Per-user pages: hide the "N users" counts. */
+	singleUser?: boolean;
 }>();
 
 const emit = defineEmits<{

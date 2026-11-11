@@ -15,8 +15,7 @@ export type AgentUsageModelResolver = {
 };
 
 /**
- * 用量日志的模型名/来源解析，供 admin/users/agent-usage、admin/users/agent-usage-logs
- * 与 agents/my-usage-summary 共用。
+ * 用量日志的模型名/来源解析，供请求记录（agents/usage/logs、admin/users/agent-usage-logs）使用。
  * 名称映射使用全量模型（含已下架/禁用），避免历史用量记录因模型下架而显示为「—」。
  */
 export function createAgentUsageModelResolver(

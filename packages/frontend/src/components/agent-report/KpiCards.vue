@@ -5,6 +5,11 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <template>
 <div :class="$style.grid">
+	<div v-if="balance != null" v-panel :class="[$style.card, $style.balanceCard]">
+		<div :class="$style.label"><i class="ti ti-wallet"></i>当前余额</div>
+		<div :class="$style.value">{{ fmtCredits(balance) }}</div>
+		<div :class="$style.foot"><span :class="$style.sub">实时余额，不受时间范围影响</span></div>
+	</div>
 	<button
 		v-for="card in cards"
 		:key="card.key"
@@ -34,7 +39,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 <script lang="ts" setup>
 import { computed } from 'vue';
 import {
-	cacheHitRate, deltaOf, deltaText, deltaTone, fmtMetric, fmtMs, fmtPct, metricValue,
+	cacheHitRate, deltaOf, deltaText, deltaTone, fmtCredits, fmtMetric, fmtMs, fmtPct, metricValue,
 } from './report-utils.js';
 import type { MetricKey, ReportMetrics } from './report-utils.js';
 
@@ -43,6 +48,10 @@ const props = defineProps<{
 	previous: ReportMetrics;
 	series: ReportMetrics[];
 	active: MetricKey;
+	/** Metrics to hide (per-user pages drop "active users"). */
+	hide?: MetricKey[];
+	/** Shows a leading credit balance card when set. */
+	balance?: number | null;
 }>();
 
 const emit = defineEmits<{
@@ -75,7 +84,7 @@ const META: { key: MetricKey; label: string; icon: string }[] = [
 const cards = computed(() => {
 	const c = props.current;
 	const p = props.previous;
-	return META.map(meta => {
+	return META.filter(meta => !(props.hide ?? []).includes(meta.key)).map(meta => {
 		const d = deltaOf(meta.key, c, p);
 		let sub = '';
 		switch (meta.key) {
@@ -138,6 +147,19 @@ const cards = computed(() => {
 
 	&:hover {
 		border-color: color-mix(in srgb, var(--MI_THEME-accent) 40%, transparent);
+	}
+}
+
+.balanceCard {
+	cursor: default;
+	padding-bottom: 12px;
+
+	&:hover {
+		border-color: transparent;
+	}
+
+	.value {
+		color: var(--MI_THEME-accent);
 	}
 }
 

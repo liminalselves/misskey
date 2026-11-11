@@ -14,7 +14,7 @@ import {
 	resolveBucket,
 	resolveRange,
 	successRate,
-} from '@/pages/admin/agents-model-reports/report-utils.js';
+} from '@/components/agent-report/report-utils.js';
 
 const HOUR = 3600_000;
 const DAY = 24 * HOUR;

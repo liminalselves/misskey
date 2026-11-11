@@ -153,7 +153,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</div>
 			</div>
 		</div>
-		<div v-else-if="mainTab === 'my-stats'" class="_spacer" style="--MI_SPACER-w: 700px;">
+		<div v-else-if="mainTab === 'my-stats'" class="_spacer" style="--MI_SPACER-w: 1100px;">
 		<XMyStats/>
 	</div>
 	<div v-else-if="mainTab === 'models'" class="_spacer" style="--MI_SPACER-w: 700px;">

@@ -68,8 +68,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 <script lang="ts" setup>
 import { computed } from 'vue';
 import * as Misskey from 'misskey-js';
-import { fmtCompact, fmtCredits, fmtInt, fmtPct, successRate, totalTokens } from './report-utils.js';
-import type { ReportMetrics, UserSort } from './report-utils.js';
+import type { ReportMetrics, UserSort } from '@/components/agent-report/report-utils.js';
+import { fmtCompact, fmtCredits, fmtInt, fmtPct, successRate, totalTokens } from '@/components/agent-report/report-utils.js';
 import { useRouter } from '@/router.js';
 
 const props = defineProps<{

@@ -36,6 +36,8 @@ export type ReportFilter = {
 	modelIds?: string[];
 	/** Subset of reportUsageKinds; empty = all model-call kinds. */
 	usageKinds?: AgentModelUsageKind[];
+	/** Restrict to one user (per-user usage pages); the (userId, requestedAt) index serves it. */
+	userId?: string;
 };
 
 /** One metric set; every report table, card and chart uses exactly these definitions. */
@@ -221,6 +223,7 @@ export class AgentModelReportService {
 		];
 		const kinds = f.usageKinds != null && f.usageKinds.length > 0 ? f.usageKinds : reportUsageKinds;
 		parts.push(`"usageKind" IN (${kinds.map(k => p.add(k)).join(', ')})`);
+		if (f.userId != null) parts.push(`"userId" = ${p.add(f.userId)}`);
 		if (opts.ignoreModels !== true && f.modelIds != null && f.modelIds.length > 0) {
 			const ors: string[] = [];
 			const plain = f.modelIds.filter(id => id !== REPORT_BYOK_MODEL_KEY && id !== REPORT_UNASSIGNED_MODEL_KEY);
@@ -270,6 +273,7 @@ export class AgentModelReportService {
 			u: f.until.toISOString(),
 			m: [...(f.modelIds ?? [])].sort(),
 			k: [...(f.usageKinds ?? [])].sort(),
+			who: f.userId ?? null,
 			...extra,
 		});
 		const key = `agentModelReport:${name}:${createHash('sha1').update(input).digest('hex')}`;
@@ -389,12 +393,17 @@ export class AgentModelReportService {
 		return { buckets: starts.map(t => new Date(t).toISOString()), groups };
 	}
 
-	/** Per-model rows. Model selection is ignored so the table can show every model for comparison. */
+	/**
+	 * Per-model rows. Model selection is ignored so the table can show every model for comparison.
+	 * `splitByok` keeps each BYOK model as its own row (per-user pages, where the user knows them);
+	 * site-wide reports merge them.
+	 */
 	@bindThis
-	public async byModel(f: ReportFilter): Promise<Array<{ modelId: string; m: ReportMetrics }>> {
+	public async byModel(f: ReportFilter, opts: { splitByok?: boolean } = {}): Promise<Array<{ modelId: string; m: ReportMetrics }>> {
 		const p = new SqlParams();
+		const keySql = opts.splitByok === true ? `COALESCE("modelId", '${REPORT_UNASSIGNED_MODEL_KEY}')` : MODEL_KEY_SQL;
 		const rows = await this.query<Array<RawMetrics & { key: string }>>(
-			`SELECT ${MODEL_KEY_SQL} AS "key", ${METRICS_SQL}
+			`SELECT ${keySql} AS "key", ${METRICS_SQL}
 			FROM "agent_model_usage_log" WHERE ${this.where(p, f, { ignoreModels: true })}
 			GROUP BY 1 ORDER BY 2 DESC`, p.values);
 		return rows.map(r => ({ modelId: String(r.key), m: toMetrics(r) }));
@@ -495,11 +504,32 @@ export class AgentModelReportService {
 	}
 
 	/**
+	 * Requests by character or dialogue style (page/pageSize, with the distinct total). Rows
+	 * without the dimension (non-session calls) are excluded.
+	 */
+	@bindThis
+	public async byDimension(f: ReportFilter, dim: 'characterId' | 'dialogueStyleId', offset: number, limit: number): Promise<{
+		total: number;
+		rows: Array<{ id: string; m: ReportMetrics }>;
+	}> {
+		const col = dim === 'characterId' ? '"characterId"' : '"dialogueStyleId"';
+		const p = new SqlParams();
+		const where = `${this.where(p, f)} AND ${col} IS NOT NULL`;
+		const limitP = p.add(limit);
+		const offsetP = p.add(offset);
+		const rows = await this.query<Array<RawMetrics & { key: string; n: number }>>(
+			`SELECT ${col} AS "key", ${metricsSql({ users: false, percentiles: false })}, COUNT(*) OVER ()::int AS "n"
+			FROM "agent_model_usage_log" WHERE ${where}
+			GROUP BY 1 ORDER BY "total" DESC, 1 LIMIT ${limitP} OFFSET ${offsetP}`, p.values);
+		return { total: rows.length > 0 ? Number(rows[0].n) || 0 : 0, rows: rows.map(r => ({ id: String(r.key), m: toMetrics(r) })) };
+	}
+
+	/**
 	 * Model catalog for the picker and table labels: every configured model regardless of
 	 * the time window, the two pseudo groups, and any historical id seen in `seenIds`.
 	 */
 	@bindThis
-	public catalog(instance: MiMeta, seenIds: Iterable<string>): ReportModelCatalogEntry[] {
+	public catalog(instance: MiMeta, seenIds: Iterable<string>, opts: { userModels?: Array<{ id: string; name: string }> } = {}): ReportModelCatalogEntry[] {
 		const out: ReportModelCatalogEntry[] = [];
 		const known = new Set<string>();
 		const push = (e: ReportModelCatalogEntry) => {
@@ -516,10 +546,15 @@ export class AgentModelReportService {
 		for (const m of instance.agentVisionModels) {
 			push({ id: m.id, name: m.name.trim() || m.apiModelName || m.id, category: 'vision', state: m.enabled === false ? 'disabled' : 'active' });
 		}
+		for (const m of opts.userModels ?? []) {
+			push({ id: m.id, name: m.name || m.id, category: 'byok', state: 'active' });
+		}
 		push({ id: REPORT_BYOK_MODEL_KEY, name: '用户自带模型', category: 'byok', state: 'active' });
 		push({ id: REPORT_UNASSIGNED_MODEL_KEY, name: '未关联模型', category: 'unassigned', state: 'active' });
 		for (const id of seenIds) {
-			push({ id, name: id, category: 'deleted', state: 'deleted' });
+			// A deleted BYOK model is still recognisable by its id prefix.
+			if (id.startsWith(AGENT_USER_MODEL_ID_PREFIX)) push({ id, name: '已删除的自带模型', category: 'byok', state: 'deleted' });
+			else push({ id, name: id, category: 'deleted', state: 'deleted' });
 		}
 		return out;
 	}

@@ -10,14 +10,14 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<button type="button" class="_button" :class="[$style.segBtn, grouped ? $style.segBtnOn : null]" @click="grouped = true">按分类分组</button>
 			<button type="button" class="_button" :class="[$style.segBtn, !grouped ? $style.segBtnOn : null]" @click="grouped = false">平铺</button>
 		</div>
-		<span :class="$style.hint"><i class="ti ti-hand-click"></i> 点击行可加入或移出模型筛选；此表不受模型筛选影响</span>
+		<span :class="$style.hint"><i class="ti ti-hand-click"></i> {{ hint ?? '点击行可加入或移出模型筛选；此表不受模型筛选影响' }}</span>
 	</div>
 	<MkResult v-if="rows.length === 0" type="empty" text="该时间范围内没有调用记录"/>
-	<div v-else :class="$style.table">
+	<div v-else :class="$style.table" :style="{ gridTemplateColumns: gridColumns }">
 		<div :class="$style.head">
 			<span>模型</span>
 			<button
-				v-for="c in COLUMNS"
+				v-for="c in columns"
 				:key="c.key"
 				type="button"
 				class="_button"
@@ -31,7 +31,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<template v-for="sec in sections" :key="sec.key">
 			<div v-if="grouped" :class="$style.subtotal">
 				<span>{{ sec.label }}<small :class="$style.muted"> · {{ sec.rows.length }} 个</small></span>
-				<span v-for="c in COLUMNS" :key="c.key">{{ c.fmt(sec.sum, totalCredits) }}</span>
+				<span v-for="c in columns" :key="c.key">{{ c.fmt(sec.sum, totalCredits) }}</span>
 			</div>
 			<div
 				v-for="r in sec.rows"
@@ -53,7 +53,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<span v-else-if="r.entry.state === 'disabled'" :class="$style.state">已停用</span>
 					<span v-else-if="r.entry.state === 'deleted'" :class="$style.state">已删除</span>
 				</span>
-				<span v-for="c in COLUMNS" :key="c.key" :class="c.key === 'failed' && r.m.failed > 0 ? $style.bad : null">{{ c.fmt(r.m, totalCredits) }}</span>
+				<span v-for="c in columns" :key="c.key" :class="c.key === 'failed' && r.m.failed > 0 ? $style.bad : null">{{ c.fmt(r.m, totalCredits) }}</span>
 			</div>
 		</template>
 	</div>
@@ -72,6 +72,9 @@ const props = defineProps<{
 	rows: { modelId: string; m: ReportMetrics }[];
 	catalog: Map<string, CatalogEntry>;
 	selected: string[];
+	/** Columns to omit (per-user pages drop distinct users). */
+	hideColumns?: string[];
+	hint?: string;
 }>();
 
 const emit = defineEmits<{
@@ -106,6 +109,10 @@ const COLUMNS: Col[] = [
 
 const CATEGORY_ORDER: ModelCategory[] = ['llm', 'image', 'vision', 'byok', 'unassigned', 'deleted'];
 
+const columns = computed(() => COLUMNS.filter(c => !(props.hideColumns ?? []).includes(c.key)));
+// Built from the visible columns so hidden ones do not leave empty tracks.
+const gridColumns = computed(() => `minmax(max-content, 2.4fr) repeat(${columns.value.length}, minmax(max-content, 1fr))`);
+
 const grouped = ref(true);
 const sortKey = ref<ColKey>('total');
 const sortDesc = ref(true);
@@ -122,7 +129,7 @@ function toggleSort(key: ColKey) {
 }
 
 const enriched = computed(() => {
-	const col = COLUMNS.find(c => c.key === sortKey.value) ?? COLUMNS[0];
+	const col = columns.value.find(c => c.key === sortKey.value) ?? columns.value[0];
 	const list = props.rows.map(r => ({
 		...r,
 		entry: props.catalog.get(r.modelId) ?? { id: r.modelId, name: r.modelId, category: 'deleted' as const, state: 'deleted' as const },
@@ -210,7 +217,6 @@ const sections = computed(() => {
  */
 .table {
 	display: grid;
-	grid-template-columns: minmax(max-content, 2.4fr) repeat(16, minmax(max-content, 1fr));
 	overflow-x: auto;
 	border: solid 1px var(--MI_THEME-divider);
 	border-radius: 10px;
