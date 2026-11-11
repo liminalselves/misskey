@@ -111,6 +111,7 @@ const cards = computed(() => {
 
 	@container (max-width: 560px) {
 		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 8px;
 	}
 }
 
@@ -123,6 +124,11 @@ const cards = computed(() => {
 	box-sizing: border-box;
 	min-width: 0;
 	padding: 12px 14px 30px;
+
+	@container (max-width: 560px) {
+		padding: 10px 10px 26px;
+	}
+
 	border-radius: var(--MI-radius);
 	border: solid 1px transparent;
 	text-align: left;
@@ -151,6 +157,11 @@ const cards = computed(() => {
 
 .value {
 	font-size: 1.45em;
+
+	@container (max-width: 560px) {
+		font-size: 1.2em;
+	}
+
 	font-weight: 700;
 	font-variant-numeric: tabular-nums;
 	line-height: 1.2;

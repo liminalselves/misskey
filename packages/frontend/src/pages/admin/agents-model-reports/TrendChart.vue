@@ -79,6 +79,7 @@ function render() {
 	// Status / billing groups only make sense for counts; other metrics are per group lines.
 	const stacked = additive && props.breakdown !== 'none';
 	const sameDay = props.bucket === 'hour' && allSameBeijingDay(props.buckets);
+	const narrow = canvasEl.value.clientWidth < 480;
 	const labels = props.buckets.map(b => bucketLabel(b, props.bucket, sameDay));
 
 	const datasets: ChartDataset<'bar' | 'line', (number | null)[]>[] = props.groups.map((g, i) => {
@@ -110,13 +111,13 @@ function render() {
 		maintainAspectRatio: false,
 		interaction: { mode: 'index' as const, intersect: false },
 		scales: {
-			x: { stacked, grid: { display: false }, ticks: { color: fg, maxTicksLimit: 12, maxRotation: 0, autoSkip: true } },
+			x: { stacked, grid: { display: false }, ticks: { color: fg, maxTicksLimit: narrow ? 6 : 12, maxRotation: 0, autoSkip: true } },
 			y: {
 				stacked,
 				beginAtZero: true,
 				max: yMax,
 				grid: { color: grid },
-				ticks: { color: fg, callback: (v: string | number) => fmtMetric(props.metric, Number(v)) },
+				ticks: { color: fg, maxTicksLimit: 6, callback: (v: string | number) => fmtMetric(props.metric, Number(v)) },
 			},
 		},
 		plugins: {

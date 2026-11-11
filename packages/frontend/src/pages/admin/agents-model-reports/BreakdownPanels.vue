@@ -5,27 +5,22 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <template>
 <div :class="$style.grid">
-	<ReportPanel title="计费构成" icon="ti ti-receipt" caption="按调用次数，互斥分类" :loading="loading" :error="error" :hasData="data != null" @retry="emit('retry')">
-		<template v-if="data != null">
-			<MkResult v-if="billingTotal === 0" type="empty" text="暂无数据"/>
-			<template v-else>
-				<div :class="$style.shareBar">
-					<span v-for="b in billingRows" :key="b.category" :style="{ width: `${b.share}%`, background: b.color }" :title="`${b.label} ${b.count}`"></span>
-				</div>
-				<div :class="$style.legend">
-					<div v-for="b in billingRows" :key="b.category" :class="$style.legendRow">
-						<span :class="$style.dot" :style="{ background: b.color }"></span>
-						<span :class="$style.legendLabel">{{ b.label }}</span>
-						<span :class="$style.num">{{ fmtInt(b.count) }}</span>
-						<span :class="[$style.num, $style.muted]">{{ fmtPct(b.share) }}</span>
-						<span :class="[$style.num, $style.muted]">{{ b.credits > 0 ? fmtCredits(b.credits) : '' }}</span>
-					</div>
-				</div>
-			</template>
-		</template>
-	</ReportPanel>
+	<div :class="$style.pies">
+		<ReportPanel title="计费构成" icon="ti ti-receipt" caption="按调用次数" :loading="loading" :error="error" :hasData="data != null" @retry="emit('retry')">
+			<DoughnutChart :segments="billingSegments" :format="fmtInt" centerLabel="次调用"/>
+		</ReportPanel>
+		<ReportPanel title="用途占比" icon="ti ti-chart-pie" caption="按调用次数" :loading="loading" :error="error" :hasData="data != null" @retry="emit('retry')">
+			<DoughnutChart :segments="usageSegments" :format="fmtInt" centerLabel="次调用"/>
+		</ReportPanel>
+		<ReportPanel title="模型请求占比" icon="ti ti-chart-donut" caption="前 7 + 其他" :loading="modelsLoading" :error="modelsError" :hasData="modelRows != null" @retry="emit('retryModels')">
+			<DoughnutChart :segments="modelRequestSegments" :format="fmtInt" centerLabel="次调用"/>
+		</ReportPanel>
+		<ReportPanel title="模型扣费占比" icon="ti ti-chart-donut-3" caption="前 7 + 其他" :loading="modelsLoading" :error="modelsError" :hasData="modelRows != null" @retry="emit('retryModels')">
+			<DoughnutChart :segments="modelCreditSegments" :format="fmtCredits" centerLabel="额度" emptyText="该范围内没有扣费"/>
+		</ReportPanel>
+	</div>
 
-	<ReportPanel title="用途构成" icon="ti ti-category" :loading="loading" :error="error" :hasData="data != null" @retry="emit('retry')">
+	<ReportPanel title="用途明细" icon="ti ti-category" :loading="loading" :error="error" :hasData="data != null" @retry="emit('retry')">
 		<template v-if="data != null">
 			<MkResult v-if="data.usageKinds.length === 0" type="empty" text="暂无数据"/>
 			<div v-else :class="$style.kindTable">
@@ -92,10 +87,13 @@ SPDX-License-Identifier: AGPL-3.0-only
 <script lang="ts" setup>
 import { computed } from 'vue';
 import ReportPanel from './ReportPanel.vue';
+import DoughnutChart from './DoughnutChart.vue';
 import {
 	fmtCompact, fmtCredits, fmtInt, fmtMs, fmtPct, share, successRate, totalTokens,
-	BILLING_LABELS, USAGE_KIND_LABELS,
+	BILLING_LABELS, OTHER_KEY, USAGE_KIND_LABELS,
 } from './report-utils.js';
+import { FIXED_COLORS, PALETTE } from './chart-theme.js';
+import type { DoughnutSegment } from './DoughnutChart.vue';
 import type { ReportMetrics } from './report-utils.js';
 
 export type BreakdownsData = {
@@ -109,31 +107,59 @@ const props = defineProps<{
 	data: BreakdownsData | null;
 	loading: boolean;
 	error: boolean;
+	/** Per-model rows (models endpoint) for the two model share charts. */
+	modelRows: { modelId: string; m: ReportMetrics }[] | null;
+	modelsLoading: boolean;
+	modelsError: boolean;
+	modelName: (id: string) => string;
+	/** When a model filter is active, share charts only count the selected models. */
+	selectedModels: string[];
 }>();
 
 const emit = defineEmits<{
 	(ev: 'retry'): void;
+	(ev: 'retryModels'): void;
 }>();
 
 const WEEKDAYS = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
 const BILLING_ORDER = ['paid', 'free', 'zeroPriced', 'byok', 'unassigned', 'failed', 'pending'];
-const BILLING_COLORS: Record<string, string> = {
-	paid: '#f2a03d', free: '#4caf50', zeroPriced: '#4db6ac', byok: '#64b5f6', unassigned: '#b085cc', failed: '#ec4137', pending: '#9fb3c8',
-};
-
-const billingTotal = computed(() => (props.data?.billing ?? []).reduce((s, b) => s + b.count, 0));
 const usageTotal = computed(() => (props.data?.usageKinds ?? []).reduce((s, k) => s + k.m.total, 0));
 
-const billingRows = computed(() => {
-	const rows = [...(props.data?.billing ?? [])].filter(b => b.count > 0);
+const billingSegments = computed<DoughnutSegment[]>(() => {
+	const rows = [...(props.data?.billing ?? [])];
 	rows.sort((a, b) => BILLING_ORDER.indexOf(a.category) - BILLING_ORDER.indexOf(b.category));
 	return rows.map(b => ({
-		...b,
+		key: b.category,
 		label: BILLING_LABELS[b.category] ?? b.category,
-		color: BILLING_COLORS[b.category] ?? '#9fb3c8',
-		share: billingTotal.value > 0 ? (b.count / billingTotal.value) * 100 : 0,
+		value: b.count,
+		color: FIXED_COLORS[b.category] ?? '#9fb3c8',
 	}));
 });
+
+const usageSegments = computed<DoughnutSegment[]>(() => (props.data?.usageKinds ?? []).map((k, i) => ({
+	key: k.usageKind,
+	label: USAGE_KIND_LABELS[k.usageKind] ?? k.usageKind,
+	value: k.m.total,
+	color: PALETTE[i % PALETTE.length],
+})));
+
+/** Top 7 by the given value, the rest folded into "其他". */
+function topSegments(pick: (m: ReportMetrics) => number): DoughnutSegment[] {
+	const selected = new Set(props.selectedModels);
+	const rows = (props.modelRows ?? [])
+		.filter(r => selected.size === 0 || selected.has(r.modelId))
+		.map(r => ({ id: r.modelId, v: pick(r.m) }))
+		.filter(r => r.v > 0)
+		.sort((a, b) => b.v - a.v);
+	const head = rows.length <= 8 ? rows : rows.slice(0, 7);
+	const out: DoughnutSegment[] = head.map((r, i) => ({ key: r.id, label: props.modelName(r.id), value: r.v, color: PALETTE[i % PALETTE.length] }));
+	const rest = rows.slice(head.length).reduce((s, r) => s + r.v, 0);
+	if (rest > 0) out.push({ key: OTHER_KEY, label: '其他', value: rest, color: FIXED_COLORS[OTHER_KEY] });
+	return out;
+}
+
+const modelRequestSegments = computed(() => topSegments(m => m.total));
+const modelCreditSegments = computed(() => topSegments(m => m.credits));
 
 const heatGrid = computed(() => {
 	const grid = Array.from({ length: 7 }, () => new Array<number>(24).fill(0));
@@ -177,41 +203,19 @@ function heatColor(v: number): string {
 	opacity: 0.6;
 }
 
-.shareBar {
-	display: flex;
-	height: 12px;
-	border-radius: 999px;
-	overflow: hidden;
-	background: color-mix(in srgb, var(--MI_THEME-fg) 8%, transparent);
-
-	> span {
-		display: block;
-		height: 100%;
-		min-width: 2px;
-	}
-}
-
-.legend {
+.pies {
+	grid-column: 1 / -1;
 	display: grid;
-	grid-template-columns: 10px minmax(max-content, 1fr) max-content max-content max-content;
-	gap: 8px 12px;
-	align-items: center;
-	margin-top: 14px;
-	font-size: 0.86em;
-}
+	grid-template-columns: repeat(4, minmax(0, 1fr));
+	gap: 12px;
 
-.legendRow {
-	display: contents;
-}
+	@container (max-width: 1100px) {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
 
-.dot {
-	width: 10px;
-	height: 10px;
-	border-radius: 3px;
-}
-
-.legendLabel {
-	font-weight: 600;
+	@container (max-width: 560px) {
+		grid-template-columns: minmax(0, 1fr);
+	}
 }
 
 /* Same table rules as the model table: one grid, rows display:contents, horizontal scroll. */

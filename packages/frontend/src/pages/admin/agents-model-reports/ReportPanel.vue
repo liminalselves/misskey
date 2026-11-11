@@ -54,6 +54,11 @@ const emit = defineEmits<{
 	min-width: 0;
 	padding: 16px;
 	border-radius: var(--MI-radius);
+
+	@container (max-width: 560px) {
+		gap: 10px;
+		padding: 12px;
+	}
 }
 
 .head {
@@ -87,6 +92,8 @@ const emit = defineEmits<{
 	align-items: center;
 	flex-wrap: wrap;
 	gap: 6px;
+	min-width: 0;
+	max-width: 100%;
 }
 
 .staleBar {

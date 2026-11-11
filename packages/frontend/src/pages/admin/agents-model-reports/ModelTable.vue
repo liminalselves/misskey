@@ -229,6 +229,10 @@ const sections = computed(() => {
 		justify-content: flex-end;
 		padding: 8px 8px;
 		white-space: nowrap;
+
+		@media (pointer: coarse) {
+			padding: 10px 8px;
+		}
 		border-bottom: solid 1px var(--MI_THEME-divider);
 	}
 

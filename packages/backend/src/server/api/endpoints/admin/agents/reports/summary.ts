@@ -46,11 +46,12 @@ export const paramDef = {
 	type: 'object',
 	properties: {
 		...reportFilterProperties,
+		bucket: { type: 'string', enum: ['auto', 'hour', 'day', 'week'], default: 'auto' },
 	},
 	required: [],
 } as const;
 
-/** KPI cards: current vs previous equal-length window, plus a sparkline series. */
+/** KPI cards and metric line charts: current vs previous equal-length window, plus an ungrouped series. */
 @Injectable()
 export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-disable-line import/no-default-export
 	constructor(
@@ -60,7 +61,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		super(meta, paramDef, async (ps) => {
 			this.agentService.assertAgentsEnabled();
 			const f = resolveReportFilter(ps);
-			const bucket = resolveReportBucketUnit(f.since, f.until, 'auto');
+			const bucket = resolveReportBucketUnit(f.since, f.until, ps.bucket);
 			const [current, previous, series] = await Promise.all([
 				this.agentModelReportService.metrics(f),
 				this.agentModelReportService.metrics(previousReportFilter(f)),

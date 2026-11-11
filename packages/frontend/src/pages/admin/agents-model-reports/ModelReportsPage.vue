@@ -5,80 +5,98 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <template>
 <div :class="$style.root">
-	<!-- 筛选栏：吸顶，所有区块共用同一组条件 -->
-	<div :class="$style.filterBar">
-		<div :class="$style.filterRow">
-			<div :class="$style.seg" role="group" aria-label="时间范围">
-				<button
-					v-for="r in RANGE_PRESETS"
-					:key="r.key"
-					type="button"
-					class="_button"
-					:class="[$style.segBtn, filters.range === r.key ? $style.segBtnOn : null]"
-					@click="filters.range = r.key"
-				>
-					{{ r.label }}
-				</button>
+	<!-- 筛选栏：吸顶；折叠后只保留一行摘要，避免滚动时遮挡内容 -->
+	<div :class="[$style.filterBar, filterCollapsed ? $style.filterBarCollapsed : null]">
+		<div :class="$style.barHead">
+			<button type="button" class="_button" :class="$style.collapseBtn" :aria-expanded="!filterCollapsed" @click="filterCollapsed = !filterCollapsed">
+				<i class="ti ti-filter"></i>
+				<span :class="$style.summaryText">{{ filterSummary }}</span>
+				<i :class="filterCollapsed ? 'ti ti-chevron-down' : 'ti ti-chevron-up'"></i>
+			</button>
+			<div :class="$style.filterActions">
+				<button type="button" class="_button" :class="$style.iconBtn" :disabled="activeFilterCount === 0" title="重置筛选" aria-label="重置筛选" @click="resetFilters"><i class="ti ti-filter-off"></i></button>
+				<button type="button" class="_button" :class="$style.iconBtn" title="导出模型明细 CSV" aria-label="导出模型明细 CSV" :disabled="models.data.value == null" @click="exportCsv"><i class="ti ti-download"></i></button>
+				<button type="button" class="_button" :class="$style.iconBtn" title="刷新" aria-label="刷新" :disabled="anyLoading" @click="loadAll"><i class="ti ti-refresh" :class="anyLoading ? $style.spin : null"></i></button>
+			</div>
+		</div>
+
+		<template v-if="!filterCollapsed">
+			<div :class="$style.field">
+				<span :class="$style.fieldLabel">时间</span>
+				<div :class="[$style.seg, $style.scrollRow]" role="group" aria-label="时间范围">
+					<button
+						v-for="r in RANGE_PRESETS"
+						:key="r.key"
+						type="button"
+						class="_button"
+						:class="[$style.segBtn, filters.range === r.key ? $style.segBtnOn : null]"
+						@click="filters.range = r.key"
+					>
+						{{ r.label }}
+					</button>
+				</div>
 			</div>
 			<div v-if="filters.range === 'custom'" :class="$style.customRange">
 				<input v-model="filters.customFrom" type="date" :class="$style.dateInput" :max="todayStr" aria-label="开始日期"/>
 				<span :class="$style.muted">至</span>
 				<input v-model="filters.customTo" type="date" :class="$style.dateInput" :max="todayStr" aria-label="结束日期"/>
 			</div>
-			<div :class="$style.seg" role="group" aria-label="粒度">
-				<button
-					v-for="b in BUCKET_CHOICES"
-					:key="b.key"
-					type="button"
-					class="_button"
-					:class="[$style.segBtn, filters.bucket === b.key ? $style.segBtnOn : null]"
-					:disabled="!bucketAvail[b.key]"
-					:title="!bucketAvail[b.key] ? '当前时间范围不支持该粒度' : ''"
-					@click="filters.bucket = b.key"
-				>
-					{{ b.label }}
-				</button>
-			</div>
-		</div>
-
-		<div :class="$style.filterRow">
-			<button ref="modelBtnEl" type="button" class="_button" :class="[$style.dropBtn, filters.modelIds.length > 0 ? $style.dropBtnOn : null]" @click="openModelPicker">
-				<i class="ti ti-cpu"></i>
-				<span>{{ filters.modelIds.length === 0 ? '全部模型' : `模型 · ${filters.modelIds.length}` }}</span>
-				<i class="ti ti-chevron-down"></i>
-			</button>
-			<div :class="$style.chips" role="group" aria-label="用途">
-				<button
-					v-for="k in USAGE_KINDS"
-					:key="k"
-					type="button"
-					class="_button"
-					:class="[$style.chip, filters.usageKinds.includes(k) ? $style.chipOn : null]"
-					:aria-pressed="filters.usageKinds.includes(k)"
-					@click="toggleUsageKind(k)"
-				>
-					{{ USAGE_KIND_LABELS[k] }}
-				</button>
-			</div>
-			<div :class="$style.filterActions">
+			<div :class="$style.fieldRow">
+				<div :class="$style.field">
+					<span :class="$style.fieldLabel">粒度</span>
+					<div :class="$style.seg" role="group" aria-label="粒度">
+						<button
+							v-for="b in BUCKET_CHOICES"
+							:key="b.key"
+							type="button"
+							class="_button"
+							:class="[$style.segBtn, filters.bucket === b.key ? $style.segBtnOn : null]"
+							:disabled="!bucketAvail[b.key]"
+							:title="!bucketAvail[b.key] ? '当前时间范围不支持该粒度' : ''"
+							@click="filters.bucket = b.key"
+						>
+							{{ b.label }}
+						</button>
+					</div>
+				</div>
+				<div :class="$style.field">
+					<span :class="$style.fieldLabel">模型</span>
+					<button ref="modelBtnEl" type="button" class="_button" :class="[$style.dropBtn, filters.modelIds.length > 0 ? $style.dropBtnOn : null]" @click="openModelPicker">
+						<i class="ti ti-cpu"></i>
+						<span>{{ filters.modelIds.length === 0 ? '全部模型' : `已选 ${filters.modelIds.length} 个` }}</span>
+						<i class="ti ti-chevron-down"></i>
+					</button>
+				</div>
 				<label :class="$style.compare">
 					<input v-model="filters.compare" type="checkbox"/>
 					<span>对比上一周期</span>
 				</label>
-				<button type="button" class="_button" :class="$style.iconBtn" :disabled="activeFilterCount === 0" title="重置筛选" @click="resetFilters"><i class="ti ti-filter-off"></i></button>
-				<button type="button" class="_button" :class="$style.iconBtn" title="导出模型明细 CSV" :disabled="models.data.value == null" @click="exportCsv"><i class="ti ti-download"></i></button>
-				<button type="button" class="_button" :class="$style.iconBtn" title="刷新" :disabled="anyLoading" @click="loadAll"><i class="ti ti-refresh" :class="anyLoading ? $style.spin : null"></i></button>
 			</div>
-		</div>
-
-		<div v-if="filters.modelIds.length > 0" :class="$style.selectedRow">
-			<span v-for="id in filters.modelIds" :key="id" :class="$style.selChip">
-				{{ modelName(id) }}
-				<button type="button" class="_button" :aria-label="`移除 ${modelName(id)}`" @click="toggleModel(id)"><i class="ti ti-x"></i></button>
-			</span>
-			<button type="button" class="_textButton" :class="$style.clearModels" @click="filters.modelIds = []">清除模型筛选</button>
-		</div>
-		<div :class="$style.rangeText">{{ rangeText }}</div>
+			<div :class="$style.field">
+				<span :class="$style.fieldLabel">用途</span>
+				<div :class="[$style.chips, $style.scrollRow]" role="group" aria-label="用途">
+					<button
+						v-for="k in USAGE_KINDS"
+						:key="k"
+						type="button"
+						class="_button"
+						:class="[$style.chip, filters.usageKinds.includes(k) ? $style.chipOn : null]"
+						:aria-pressed="filters.usageKinds.includes(k)"
+						@click="toggleUsageKind(k)"
+					>
+						{{ USAGE_KIND_LABELS[k] }}
+					</button>
+				</div>
+			</div>
+			<div v-if="filters.modelIds.length > 0" :class="$style.selectedRow">
+				<span v-for="id in filters.modelIds" :key="id" :class="$style.selChip">
+					{{ modelName(id) }}
+					<button type="button" class="_button" :aria-label="`移除 ${modelName(id)}`" @click="toggleModel(id)"><i class="ti ti-x"></i></button>
+				</span>
+				<button type="button" class="_textButton" :class="$style.clearModels" @click="filters.modelIds = []">清除模型筛选</button>
+			</div>
+			<div :class="$style.rangeText">{{ rangeText }}</div>
+		</template>
 	</div>
 
 	<!-- KPI -->
@@ -96,10 +114,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 	<!-- 趋势 -->
 	<ReportPanel title="趋势" icon="ti ti-chart-bar" :caption="trendCaption" :loading="trend.loading.value" :error="trend.error.value" :hasData="trend.data.value != null" @retry="trend.load">
 		<template #actions>
-			<div :class="$style.seg" role="group" aria-label="指标">
+			<div :class="[$style.seg, $style.scrollRow]" role="group" aria-label="指标">
 				<button v-for="mk in METRICS" :key="mk.key" type="button" class="_button" :class="[$style.segBtn, metric === mk.key ? $style.segBtnOn : null]" @click="metric = mk.key">{{ mk.label }}</button>
 			</div>
-			<div :class="$style.seg" role="group" aria-label="分组">
+			<div :class="[$style.seg, $style.scrollRow]" role="group" aria-label="分组">
 				<button v-for="bd in BREAKDOWNS" :key="bd.key" type="button" class="_button" :class="[$style.segBtn, filters.breakdown === bd.key ? $style.segBtnOn : null]" @click="filters.breakdown = bd.key">{{ bd.label }}</button>
 			</div>
 		</template>
@@ -115,8 +133,22 @@ SPDX-License-Identifier: AGPL-3.0-only
 		/>
 	</ReportPanel>
 
+	<!-- 分指标折线 -->
+	<MetricLineCharts :series="summary.data.value?.series ?? null" :bucket="summary.data.value?.bucket ?? bucketUnit" :loading="summary.loading.value" :error="summary.error.value" @retry="summary.load"/>
+
 	<!-- 构成 -->
-	<BreakdownPanels :data="breakdowns.data.value" :loading="breakdowns.loading.value" :error="breakdowns.error.value" @retry="breakdowns.load"/>
+	<BreakdownPanels
+		:data="breakdowns.data.value"
+		:loading="breakdowns.loading.value"
+		:error="breakdowns.error.value"
+		:modelRows="models.data.value?.rows ?? null"
+		:modelsLoading="models.loading.value"
+		:modelsError="models.error.value"
+		:modelName="modelName"
+		:selectedModels="filters.modelIds"
+		@retry="breakdowns.load"
+		@retryModels="models.load"
+	/>
 
 	<!-- 模型明细 -->
 	<ReportPanel title="模型明细" icon="ti ti-table" caption="耗时只统计成功调用" :loading="models.loading.value" :error="models.error.value" :hasData="models.data.value != null" @retry="models.load">
@@ -154,6 +186,7 @@ import ReportPanel from './ReportPanel.vue';
 import KpiCards from './KpiCards.vue';
 import TrendChart from './TrendChart.vue';
 import BreakdownPanels from './BreakdownPanels.vue';
+import MetricLineCharts from './MetricLineCharts.vue';
 import ModelTable from './ModelTable.vue';
 import UserTable from './UserTable.vue';
 import ModelPicker from './ModelPicker.vue';
@@ -248,6 +281,24 @@ function restoreFilters(): Filters {
 
 // Restored before any watcher is registered so the first load already uses saved filters.
 const filters = reactive<Filters>(restoreFilters());
+
+const COLLAPSE_KEY = 'adminAgentModelReportFilterCollapsed';
+// Phones start collapsed so the sticky bar is a single line; the choice is remembered afterwards.
+const filterCollapsed = ref(readCollapsed());
+
+function readCollapsed(): boolean {
+	try {
+		const v = window.localStorage.getItem(COLLAPSE_KEY);
+		if (v != null) return v === '1';
+	} catch { /* storage disabled */ }
+	return window.matchMedia('(max-width: 600px)').matches;
+}
+
+watch(filterCollapsed, v => {
+	try {
+		window.localStorage.setItem(COLLAPSE_KEY, v ? '1' : '0');
+	} catch { /* storage disabled */ }
+});
 const metric = ref<MetricKey>('total');
 const userPage = ref(1);
 const todayStr = beijingDateString(Date.now());
@@ -285,7 +336,7 @@ type UsersRes = { items: { userId: string; user: Misskey.entities.UserLite | nul
 // Breakdown used by the response currently displayed (the chart must not relabel old data with a new breakdown).
 const trendBreakdown = ref<Breakdown>(filters.breakdown);
 
-const summary = useReportSection(() => reportApi<SummaryRes>('admin/agents/reports/summary', filterParams()));
+const summary = useReportSection(() => reportApi<SummaryRes>('admin/agents/reports/summary', { ...filterParams(), bucket: bucketUnit.value }));
 const trend = useReportSection(async () => {
 	const breakdown = filters.breakdown;
 	const res = await reportApi<TrendRes>('admin/agents/reports/trend', { ...filterParams(), bucket: bucketUnit.value, breakdown, compare: filters.compare });
@@ -329,6 +380,17 @@ const rangeText = computed(() => {
 	const days = span.value / DAY;
 	const unit = { hour: '小时', day: '天', week: '周' }[bucketUnit.value];
 	return `北京时间 ${fmt(windowRange.value.since)} — ${fmt(windowRange.value.until)} · 共 ${days >= 1 ? `${days.toFixed(days % 1 === 0 ? 0 : 1)} 天` : `${Math.round(span.value / 3600_000)} 小时`} · 按${unit}`;
+});
+
+const filterSummary = computed(() => {
+	const parts: string[] = [];
+	const range = RANGE_PRESETS.find(r => r.key === filters.range)?.label ?? '';
+	parts.push(filters.range === 'custom' ? `${filters.customFrom} 至 ${filters.customTo}` : range);
+	parts.push(`按${{ hour: '小时', day: '天', week: '周' }[bucketUnit.value]}`);
+	parts.push(filters.modelIds.length === 0 ? '全部模型' : (filters.modelIds.length === 1 ? modelName(filters.modelIds[0]) : `${filters.modelIds.length} 个模型`));
+	if (filters.usageKinds.length > 0) parts.push(filters.usageKinds.map(k => USAGE_KIND_LABELS[k]).join('/'));
+	if (filters.compare) parts.push('对比上一周期');
+	return parts.join(' · ');
 });
 
 const trendCaption = computed(() => {
@@ -392,8 +454,15 @@ watch(() => [filters.range, filters.customFrom, filters.customTo, filters.modelI
 	scheduleApply(loadAll);
 });
 
-// Chart-only options reload just the trend.
-watch(() => [filters.bucket, filters.breakdown, filters.compare], () => {
+// Granularity affects every time series; breakdown/compare only the main trend.
+watch(() => filters.bucket, () => {
+	scheduleApply(() => {
+		void summary.load();
+		void trend.load();
+	});
+});
+
+watch(() => [filters.breakdown, filters.compare], () => {
 	scheduleApply(() => void trend.load());
 });
 
@@ -441,7 +510,12 @@ function exportCsv() {
 	display: flex;
 	flex-direction: column;
 	gap: 12px;
+	min-width: 0;
 	container-type: inline-size;
+
+	@container (max-width: 560px) {
+		gap: 10px;
+	}
 }
 
 .filterBar {
@@ -458,18 +532,91 @@ function exportCsv() {
 	backdrop-filter: var(--MI-blur, blur(12px));
 }
 
-.filterRow {
+.filterBarCollapsed {
+	padding-top: 6px;
+	padding-bottom: 6px;
+}
+
+.barHead {
 	display: flex;
 	align-items: center;
-	flex-wrap: wrap;
+	gap: 6px;
+	min-width: 0;
+}
+
+.collapseBtn {
+	display: flex;
+	align-items: center;
 	gap: 8px;
+	flex: 1;
+	min-width: 0;
+	min-height: 32px;
+	padding: 0 4px;
+	border-radius: 6px;
+	text-align: left;
+	font-size: 0.85em;
+	font-weight: 600;
+
+	> i {
+		flex-shrink: 0;
+		opacity: 0.7;
+	}
+
+	&:hover {
+		background: color-mix(in srgb, var(--MI_THEME-fg) 6%, transparent);
+	}
+}
+
+.summaryText {
+	flex: 1;
+	min-width: 0;
+	overflow-wrap: anywhere;
 }
 
 .filterActions {
 	display: flex;
 	align-items: center;
-	gap: 4px;
-	margin-left: auto;
+	flex-shrink: 0;
+	gap: 2px;
+}
+
+.field {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
+}
+
+.fieldLabel {
+	flex-shrink: 0;
+	width: 2.4em;
+	font-size: 0.78em;
+	font-weight: 600;
+	opacity: 0.6;
+}
+
+.fieldRow {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 8px 16px;
+}
+
+/* Long option rows scroll sideways on narrow screens instead of wrapping into a tall block. */
+.scrollRow {
+	min-width: 0;
+	max-width: 100%;
+	flex-wrap: nowrap;
+	overflow-x: auto;
+	scrollbar-width: none;
+
+	&::-webkit-scrollbar {
+		display: none;
+	}
+
+	> * {
+		flex-shrink: 0;
+	}
 }
 
 .seg {
@@ -497,6 +644,25 @@ function exportCsv() {
 	}
 }
 
+@media (pointer: coarse) {
+	.segBtn {
+		padding: 6px 12px;
+	}
+
+	.chip {
+		height: 30px;
+	}
+
+	.iconBtn,
+	.dropBtn {
+		height: 34px;
+	}
+
+	.iconBtn {
+		width: 34px;
+	}
+}
+
 .segBtnOn {
 	background: var(--MI_THEME-panel);
 	opacity: 1;
@@ -506,9 +672,11 @@ function exportCsv() {
 }
 
 .customRange {
-	display: inline-flex;
+	display: flex;
 	align-items: center;
+	flex-wrap: wrap;
 	gap: 6px;
+	padding-left: calc(2.4em * 0.78 + 8px);
 }
 
 .dateInput {
@@ -522,6 +690,11 @@ function exportCsv() {
 	font: inherit;
 	font-size: 0.85em;
 	color-scheme: light dark;
+
+	@media (pointer: coarse) {
+		height: 34px;
+		font-size: 16px;
+	}
 }
 
 .dropBtn {

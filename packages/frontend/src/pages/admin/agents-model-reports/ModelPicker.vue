@@ -8,7 +8,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 	<div class="_popup" :class="[$style.root, type === 'drawer' ? $style.asDrawer : null]">
 		<div :class="$style.search">
 			<i class="ti ti-search"></i>
-			<input v-model="query" :class="$style.searchInput" type="search" placeholder="搜索模型名称或 ID" autofocus/>
+			<input v-model="query" :class="$style.searchInput" type="search" placeholder="搜索模型名称或 ID" :autofocus="!isTouchUsing"/>
 		</div>
 		<div :class="$style.bulk">
 			<span>{{ selected.size === 0 ? '未选择 = 全部模型' : `已选 ${selected.size} 个` }}</span>
@@ -46,6 +46,7 @@ import { computed, ref, useTemplateRef } from 'vue';
 import { CATEGORY_LABELS } from './report-utils.js';
 import type { CatalogEntry, ModelCategory } from './report-utils.js';
 import MkModal from '@/components/MkModal.vue';
+import { isTouchUsing } from '@/utility/touch.js';
 
 const props = defineProps<{
 	catalog: CatalogEntry[];
@@ -143,6 +144,12 @@ function clear() {
 	background: none;
 	color: inherit;
 	font: inherit;
+
+	/* iOS Safari zooms the whole page when focusing an input below 16px. */
+	@media (pointer: coarse) {
+		height: 38px;
+		font-size: 16px;
+	}
 }
 
 .bulk {
@@ -185,6 +192,10 @@ function clear() {
 	padding: 7px 16px;
 	text-align: left;
 	font-size: 0.9em;
+
+	@media (pointer: coarse) {
+		padding: 10px 16px;
+	}
 
 	> i {
 		flex-shrink: 0;
