@@ -76,7 +76,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			const f = resolveReportFilter(ps);
 			const [instance, rows] = await Promise.all([
 				this.metaService.fetch(true),
-				this.agentModelReportService.byModel(f),
+				// byModel ignores the model selection, so it is cached without it.
+				this.agentModelReportService.cached('models', { ...f, modelIds: [] }, {}, () => this.agentModelReportService.byModel(f)),
 			]);
 			// Selected ids are kept in the catalog even when deleted and absent from this window.
 			const catalog = this.agentModelReportService.catalog(instance, [...rows.map(r => r.modelId), ...(f.modelIds ?? [])]);

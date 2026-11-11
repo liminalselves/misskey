@@ -62,12 +62,12 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			this.agentService.assertAgentsEnabled();
 			const f = resolveReportFilter(ps);
 			const bucket = resolveReportBucketUnit(f.since, f.until, ps.bucket);
-			const [current, previous, series] = await Promise.all([
-				this.agentModelReportService.metrics(f),
-				this.agentModelReportService.metrics(previousReportFilter(f)),
-				this.agentModelReportService.series(f, bucket),
+			// Two scans total: current totals+series together, and the previous window (shared with trend's compare line).
+			const [cur, prev] = await Promise.all([
+				this.agentModelReportService.cachedOverview(f, bucket),
+				this.agentModelReportService.cachedOverview(previousReportFilter(f), bucket),
 			]);
-			return { since: f.since.toISOString(), until: f.until.toISOString(), bucket, current, previous, series };
+			return { since: f.since.toISOString(), until: f.until.toISOString(), bucket, current: cur.totals, previous: prev.totals, series: cur.series };
 		});
 	}
 }

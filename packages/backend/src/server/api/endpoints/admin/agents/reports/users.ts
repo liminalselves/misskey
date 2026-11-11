@@ -64,7 +64,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		super(meta, paramDef, async (ps, me) => {
 			this.agentService.assertAgentsEnabled();
 			const f = resolveReportFilter(ps);
-			const { total, rows } = await this.agentModelReportService.users(f, ps.sort, (ps.page - 1) * ps.pageSize, ps.pageSize);
+			const { total, rows } = await this.agentModelReportService.cached('users', f, { sort: ps.sort, page: ps.page, pageSize: ps.pageSize },
+				() => this.agentModelReportService.users(f, ps.sort, (ps.page - 1) * ps.pageSize, ps.pageSize));
 			const packed = rows.length > 0 ? await this.userEntityService.packMany(rows.map(r => r.userId), me, { schema: 'UserLite' }) : [];
 			const byId = new Map(packed.map(u => [u.id, u]));
 			return {

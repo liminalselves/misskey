@@ -136,19 +136,21 @@ SPDX-License-Identifier: AGPL-3.0-only
 	<!-- 分指标折线 -->
 	<MetricLineCharts :series="summary.data.value?.series ?? null" :bucket="summary.data.value?.bucket ?? bucketUnit" :loading="summary.loading.value" :error="summary.error.value" @retry="summary.load"/>
 
-	<!-- 构成 -->
-	<BreakdownPanels
-		:data="breakdowns.data.value"
-		:loading="breakdowns.loading.value"
-		:error="breakdowns.error.value"
-		:modelRows="models.data.value?.rows ?? null"
-		:modelsLoading="models.loading.value"
-		:modelsError="models.error.value"
-		:modelName="modelName"
-		:selectedModels="filters.modelIds"
-		@retry="breakdowns.load"
-		@retryModels="models.load"
-	/>
+	<!-- 构成（进入视口才加载） -->
+	<div v-appear="breakdownsSeen ? null : onBreakdownsAppear" :class="$style.lazySlot">
+		<BreakdownPanels
+			:data="breakdowns.data.value"
+			:loading="breakdowns.loading.value"
+			:error="breakdowns.error.value"
+			:modelRows="models.data.value?.rows ?? null"
+			:modelsLoading="models.loading.value"
+			:modelsError="models.error.value"
+			:modelName="modelName"
+			:selectedModels="filters.modelIds"
+			@retry="breakdowns.load"
+			@retryModels="models.load"
+		/>
+	</div>
 
 	<!-- 模型明细 -->
 	<ReportPanel title="模型明细" icon="ti ti-table" caption="耗时只统计成功调用" :loading="models.loading.value" :error="models.error.value" :hasData="models.data.value != null" @retry="models.load">
@@ -161,21 +163,23 @@ SPDX-License-Identifier: AGPL-3.0-only
 		/>
 	</ReportPanel>
 
-	<!-- 用户排行 -->
-	<ReportPanel title="用户排行" icon="ti ti-podium" caption="点击行查看该用户的模型用量" :loading="users.loading.value" :error="users.error.value" :hasData="users.data.value != null" @retry="users.load">
-		<UserTable
-			v-if="users.data.value != null"
-			:items="users.data.value.items"
-			:total="users.data.value.total"
-			:page="userPage"
-			:pageSize="filters.userPageSize"
-			:sort="filters.userSort"
-			:loading="users.loading.value"
-			@update:page="setUserPage"
-			@update:pageSize="filters.userPageSize = $event"
-			@update:sort="filters.userSort = $event"
-		/>
-	</ReportPanel>
+	<!-- 用户排行（进入视口才加载） -->
+	<div v-appear="usersSeen ? null : onUsersAppear" :class="$style.lazySlot">
+		<ReportPanel title="用户排行" icon="ti ti-podium" caption="点击行查看该用户的模型用量" :loading="users.loading.value" :error="users.error.value" :hasData="users.data.value != null" @retry="users.load">
+			<UserTable
+				v-if="users.data.value != null"
+				:items="users.data.value.items"
+				:total="users.data.value.total"
+				:page="userPage"
+				:pageSize="filters.userPageSize"
+				:sort="filters.userSort"
+				:loading="users.loading.value"
+				@update:page="setUserPage"
+				@update:pageSize="filters.userPageSize = $event"
+				@update:sort="filters.userSort = $event"
+			/>
+		</ReportPanel>
+	</div>
 </div>
 </template>
 
@@ -304,7 +308,12 @@ const userPage = ref(1);
 const todayStr = beijingDateString(Date.now());
 
 // The window is resolved once per apply, so all sections query the same [since, until).
-const windowRange = ref(resolveRange(filters.range, Date.now(), filters.customFrom, filters.customTo));
+// "Now" is floored to the minute so reloads within a minute share the server-side cache.
+function currentWindow() {
+	return resolveRange(filters.range, Math.floor(Date.now() / 60_000) * 60_000, filters.customFrom, filters.customTo);
+}
+
+const windowRange = ref(currentWindow());
 
 const span = computed(() => windowRange.value.until - windowRange.value.since);
 const bucketAvail = computed(() => bucketAvailability(span.value));
@@ -337,10 +346,21 @@ type UsersRes = { items: { userId: string; user: Misskey.entities.UserLite | nul
 const trendBreakdown = ref<Breakdown>(filters.breakdown);
 
 const summary = useReportSection(() => reportApi<SummaryRes>('admin/agents/reports/summary', { ...filterParams(), bucket: bucketUnit.value }));
+
+// Grouped trends compute distinct users / percentiles only for the metric that shows them.
+function trendColumns(m: MetricKey): string {
+	return m === 'users' ? 'users' : m === 'latency' ? 'latency' : 'base';
+}
+
+let trendLoadedColumns = trendColumns(metric.value);
 const trend = useReportSection(async () => {
 	const breakdown = filters.breakdown;
-	const res = await reportApi<TrendRes>('admin/agents/reports/trend', { ...filterParams(), bucket: bucketUnit.value, breakdown, compare: filters.compare });
+	const cols = trendColumns(metric.value);
+	const res = await reportApi<TrendRes>('admin/agents/reports/trend', {
+		...filterParams(), bucket: bucketUnit.value, breakdown, compare: filters.compare, metric: metric.value,
+	});
 	trendBreakdown.value = breakdown;
+	trendLoadedColumns = cols;
 	return res;
 });
 const breakdowns = useReportSection(() => reportApi<BreakdownsData>('admin/agents/reports/breakdowns', filterParams()));
@@ -351,13 +371,30 @@ const users = useReportSection(() => reportApi<UsersRes>('admin/agents/reports/u
 
 const anyLoading = computed(() => summary.loading.value || trend.loading.value || breakdowns.loading.value || models.loading.value || users.loading.value);
 
+// Sections below the fold load on first scroll into view; after that they follow filter changes.
+const breakdownsSeen = ref(false);
+const usersSeen = ref(false);
+
 function loadAll() {
-	windowRange.value = resolveRange(filters.range, Date.now(), filters.customFrom, filters.customTo);
+	windowRange.value = currentWindow();
 	userPage.value = 1;
 	void summary.load();
 	void trend.load();
-	void breakdowns.load();
+	// The model catalog feeds the picker and labels, so models always load.
 	void models.load();
+	if (breakdownsSeen.value) void breakdowns.load();
+	if (usersSeen.value) void users.load();
+}
+
+function onBreakdownsAppear() {
+	if (breakdownsSeen.value) return;
+	breakdownsSeen.value = true;
+	void breakdowns.load();
+}
+
+function onUsersAppear() {
+	if (usersSeen.value) return;
+	usersSeen.value = true;
 	void users.load();
 }
 
@@ -466,9 +503,13 @@ watch(() => [filters.breakdown, filters.compare], () => {
 	scheduleApply(() => void trend.load());
 });
 
+watch(metric, m => {
+	if (filters.breakdown !== 'none' && trendColumns(m) !== trendLoadedColumns) void trend.load();
+});
+
 watch(() => [filters.userSort, filters.userPageSize], () => {
 	userPage.value = 1;
-	void users.load();
+	if (usersSeen.value) void users.load();
 });
 
 // If the range no longer allows the chosen granularity, fall back to auto.
@@ -824,5 +865,10 @@ function exportCsv() {
 
 .muted {
 	opacity: 0.56;
+}
+
+/* Placeholder height so the lazy sections can be observed before they load. */
+.lazySlot {
+	min-height: 120px;
 }
 </style>

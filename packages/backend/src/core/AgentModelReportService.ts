@@ -3,8 +3,10 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
+import { createHash } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
 import { DataSource } from 'typeorm';
+import * as Redis from 'ioredis';
 import { bindThis } from '@/decorators.js';
 import { DI } from '@/di-symbols.js';
 import type { MiMeta } from '@/models/Meta.js';
@@ -72,7 +74,18 @@ const DAY_MS = 24 * HOUR_MS;
 /** Hourly buckets are only allowed for short windows (a week plus slack for custom ranges). */
 export const REPORT_MAX_HOURLY_SPAN_MS = 8 * DAY_MS;
 
-const METRICS_SQL = `
+/** Report results are cached briefly; the client minute-aligns windows so repeated loads share keys. */
+const CACHE_TTL_SEC = 60;
+/** Windows that ended more than a minute ago no longer change; cache them longer. */
+const CLOSED_WINDOW_CACHE_TTL_SEC = 600;
+/** Report statements allowed at once per process, so a report load never takes over the DB pool. */
+const MAX_CONCURRENT_QUERIES = 2;
+
+/** Monday 00:00 Beijing time. date_bin from this origin equals date_trunc in Asia/Shanghai for hour/day/week. */
+const BUCKET_ORIGIN = '2000-01-03T00:00:00+08:00';
+
+/** Cheap additive columns. avgMs is still success-only, like the percentiles. */
+const BASE_METRICS_SQL = `
 	COUNT(*)::int AS "total",
 	COUNT(*) FILTER (WHERE "status" = 'success')::int AS "success",
 	COUNT(*) FILTER (WHERE "status" = 'failed')::int AS "failed",
@@ -81,13 +94,33 @@ const METRICS_SQL = `
 	COUNT(*) FILTER (WHERE "usedFreeQuota" = TRUE)::int AS "freeCalls",
 	COUNT(*) FILTER (WHERE "cost" > 0)::int AS "paidCalls",
 	COALESCE(SUM("cost") FILTER (WHERE "cost" > 0), 0)::float8 AS "credits",
-	COUNT(DISTINCT "userId")::int AS "users",
 	COALESCE(SUM("promptTokens"), 0)::float8 AS "promptTokens",
 	COALESCE(SUM("completionTokens"), 0)::float8 AS "completionTokens",
 	COALESCE(SUM("promptCacheHitTokens"), 0)::float8 AS "cacheHitTokens",
-	(AVG("durationMs") FILTER (WHERE "status" = 'success'))::float8 AS "avgMs",
+	(AVG("durationMs") FILTER (WHERE "status" = 'success'))::float8 AS "avgMs"`;
+
+/** Percentiles sort every success row per group; the most expensive column after distinct users. */
+const PERCENTILE_SQL = `
 	(percentile_cont(0.5) WITHIN GROUP (ORDER BY "durationMs") FILTER (WHERE "status" = 'success' AND "durationMs" IS NOT NULL))::float8 AS "p50Ms",
 	(percentile_cont(0.95) WITHIN GROUP (ORDER BY "durationMs") FILTER (WHERE "status" = 'success' AND "durationMs" IS NOT NULL))::float8 AS "p95Ms"`;
+
+/**
+ * Column set per query. Distinct users and percentiles roughly double/triple a scan's cost
+ * (measured on 3M rows), so panels that never show them skip them; skipped users read as 0
+ * and skipped percentiles as null.
+ */
+function metricsSql(opts: ReportExtraColumns): string {
+	return [
+		BASE_METRICS_SQL,
+		opts.users ? 'COUNT(DISTINCT "userId")::int AS "users"' : '0::int AS "users"',
+		opts.percentiles ? PERCENTILE_SQL : 'NULL::float8 AS "p50Ms", NULL::float8 AS "p95Ms"',
+	].join(',\n');
+}
+
+/** Which of the two expensive columns a query computes. */
+export type ReportExtraColumns = { users: boolean; percentiles: boolean };
+const ALL_COLUMNS: ReportExtraColumns = { users: true, percentiles: true };
+const METRICS_SQL = metricsSql(ALL_COLUMNS);
 
 const MODEL_KEY_SQL = `CASE WHEN "modelId" IS NULL THEN '${REPORT_UNASSIGNED_MODEL_KEY}' WHEN "modelId" LIKE '${AGENT_USER_MODEL_ID_PREFIX}%' THEN '${REPORT_BYOK_MODEL_KEY}' ELSE "modelId" END`;
 
@@ -169,9 +202,16 @@ class SqlParams {
  */
 @Injectable()
 export class AgentModelReportService {
+	private running = 0;
+	private readonly waiting: Array<() => void> = [];
+	private readonly inflight = new Map<string, Promise<unknown>>();
+
 	constructor(
 		@Inject(DI.db)
 		private db: DataSource,
+
+		@Inject(DI.redis)
+		private redisClient: Redis.Redis,
 	) {}
 
 	private where(p: SqlParams, f: ReportFilter, opts: { ignoreModels?: boolean } = {}): string {
@@ -192,33 +232,103 @@ export class AgentModelReportService {
 		return parts.join(' AND ');
 	}
 
-	/** Truncate in Beijing time explicitly; date_trunc on timestamptz would use the session time zone. */
-	private bucketSql(unit: ReportBucketUnit): string {
-		return `(date_trunc('${unit}', "requestedAt" AT TIME ZONE 'Asia/Shanghai') AT TIME ZONE 'Asia/Shanghai')`;
+	/**
+	 * Beijing-time bucket start. date_bin from a Monday-midnight +08 origin gives the same buckets
+	 * as date_trunc(... AT TIME ZONE 'Asia/Shanghai') (no DST there) and is about 3x cheaper per row.
+	 */
+	private bucketSql(p: SqlParams, unit: ReportBucketUnit): string {
+		const step = unit === 'hour' ? '1 hour' : unit === 'day' ? '1 day' : '7 days';
+		return `date_bin(${p.add(step)}::interval, "requestedAt", ${p.add(BUCKET_ORIGIN)}::timestamptz)`;
 	}
 
+	/** Every report statement goes through the per-process concurrency gate. */
+	private async query<T>(sql: string, params: unknown[]): Promise<T> {
+		if (this.running >= MAX_CONCURRENT_QUERIES) {
+			await new Promise<void>(resolve => this.waiting.push(resolve));
+		} else {
+			this.running++;
+		}
+		try {
+			return await this.db.query<T>(sql, params);
+		} finally {
+			// Hand the slot straight to the next waiter; only free it when nobody waits.
+			const next = this.waiting.shift();
+			if (next != null) next();
+			else this.running--;
+		}
+	}
+
+	/**
+	 * Cache a result in Redis keyed by the filter and extra inputs. Identical requests that arrive
+	 * while one is running share it (the page asks summary and trend for the same overview at once).
+	 * Windows that ended more than a minute ago live longer because their rows no longer change.
+	 */
 	@bindThis
-	public async metrics(f: ReportFilter): Promise<ReportMetrics> {
+	public async cached<T>(name: string, f: ReportFilter, extra: Record<string, unknown>, fn: () => Promise<T>): Promise<T> {
+		const input = JSON.stringify({
+			s: f.since.toISOString(),
+			u: f.until.toISOString(),
+			m: [...(f.modelIds ?? [])].sort(),
+			k: [...(f.usageKinds ?? [])].sort(),
+			...extra,
+		});
+		const key = `agentModelReport:${name}:${createHash('sha1').update(input).digest('hex')}`;
+		const running = this.inflight.get(key);
+		if (running != null) return running as Promise<T>;
+		const task = (async () => {
+			const hit = await this.redisClient.get(key);
+			if (hit != null) return JSON.parse(hit) as T;
+			const value = await fn();
+			const ttl = f.until.getTime() < Date.now() - 60_000 ? CLOSED_WINDOW_CACHE_TTL_SEC : CACHE_TTL_SEC;
+			await this.redisClient.set(key, JSON.stringify(value), 'EX', ttl);
+			return value;
+		})();
+		this.inflight.set(key, task);
+		try {
+			return await task;
+		} finally {
+			this.inflight.delete(key);
+		}
+	}
+
+	/**
+	 * Window totals and the zero-filled ungrouped series in one scan (GROUPING SETS). Grouping
+	 * also keeps the planner on the time index: an ungrouped aggregate with COUNT(DISTINCT
+	 * "userId") tends to pick the (userId, requestedAt) index and runs about 10x slower.
+	 */
+	@bindThis
+	public async overview(f: ReportFilter, unit: ReportBucketUnit): Promise<{ totals: ReportMetrics; series: Array<{ t: string; m: ReportMetrics }> }> {
 		const p = new SqlParams();
-		const rows = await this.db.query<RawMetrics[]>(`SELECT ${METRICS_SQL} FROM "agent_model_usage_log" WHERE ${this.where(p, f)}`, p.values);
-		return toMetrics(rows[0]);
+		const where = this.where(p, f);
+		const bucket = this.bucketSql(p, unit);
+		const rows = await this.query<Array<RawMetrics & { bucket: Date | null }>>(
+			`SELECT ${bucket} AS "bucket", ${METRICS_SQL}
+			FROM "agent_model_usage_log" WHERE ${where}
+			GROUP BY GROUPING SETS ((), (1))`, p.values);
+		let totals = emptyReportMetrics();
+		const byT = new Map<number, ReportMetrics>();
+		for (const r of rows) {
+			if (r.bucket == null) totals = toMetrics(r);
+			else byT.set(new Date(r.bucket).getTime(), toMetrics(r));
+		}
+		const series = listReportBuckets(f.since, f.until, unit).map(t => ({ t: new Date(t).toISOString(), m: byT.get(t) ?? emptyReportMetrics() }));
+		return { totals, series };
 	}
 
-	/** Zero-filled time series for one group (breakdown none). */
+	/** Cached overview; summary and trend (compare line) request the same windows and share it. */
 	@bindThis
-	public async series(f: ReportFilter, unit: ReportBucketUnit): Promise<Array<{ t: string; m: ReportMetrics }>> {
-		const grouped = await this.groupedSeries(f, unit, '\'all\'');
-		const byT = grouped.get('all') ?? new Map<number, ReportMetrics>();
-		return listReportBuckets(f.since, f.until, unit).map(t => ({ t: new Date(t).toISOString(), m: byT.get(t) ?? emptyReportMetrics() }));
+	public cachedOverview(f: ReportFilter, unit: ReportBucketUnit): Promise<{ totals: ReportMetrics; series: Array<{ t: string; m: ReportMetrics }> }> {
+		return this.cached('overview', f, { unit }, () => this.overview(f, unit));
 	}
 
 	/** `buildKey` may bind its own parameters; it runs after the WHERE clause has bound its own. */
-	private async groupedSeries(f: ReportFilter, unit: ReportBucketUnit, staticKeySql: string, buildKey?: (p: SqlParams) => string): Promise<Map<string, Map<number, ReportMetrics>>> {
+	private async groupedSeries(f: ReportFilter, unit: ReportBucketUnit, cols: ReportExtraColumns, staticKeySql: string, buildKey?: (p: SqlParams) => string): Promise<Map<string, Map<number, ReportMetrics>>> {
 		const p = new SqlParams();
 		const where = this.where(p, f);
 		const keySql = buildKey != null ? buildKey(p) : staticKeySql;
-		const rows = await this.db.query<Array<RawMetrics & { bucket: Date; key: string }>>(
-			`SELECT ${this.bucketSql(unit)} AS "bucket", ${keySql} AS "key", ${METRICS_SQL}
+		const bucket = this.bucketSql(p, unit);
+		const rows = await this.query<Array<RawMetrics & { bucket: Date; key: string }>>(
+			`SELECT ${bucket} AS "bucket", ${keySql} AS "key", ${metricsSql(cols)}
 			FROM "agent_model_usage_log" WHERE ${where}
 			GROUP BY 1, 2`, p.values);
 		const out = new Map<string, Map<number, ReportMetrics>>();
@@ -234,36 +344,37 @@ export class AgentModelReportService {
 	/**
 	 * Trend grouped by a dimension. Model breakdown keeps the top 8 model keys by request
 	 * count and folds the rest into one "__other__" group computed in SQL (so distinct users
-	 * and percentiles stay exact instead of being summed).
+	 * and percentiles stay exact instead of being summed). `cols` lets the caller skip the two
+	 * expensive columns when the chart's metric does not need them.
 	 */
 	@bindThis
-	public async trend(f: ReportFilter, unit: ReportBucketUnit, breakdown: ReportBreakdown): Promise<{
+	public async trend(f: ReportFilter, unit: ReportBucketUnit, breakdown: ReportBreakdown, cols: ReportExtraColumns = ALL_COLUMNS): Promise<{
 		buckets: string[];
 		groups: Array<{ key: string; total: number; points: ReportMetrics[] }>;
 	}> {
 		let grouped: Map<string, Map<number, ReportMetrics>>;
 		switch (breakdown) {
 			case 'none':
-				grouped = await this.groupedSeries(f, unit, '\'all\'');
+				grouped = await this.groupedSeries(f, unit, cols, '\'all\'');
 				break;
 			case 'status':
-				grouped = await this.groupedSeries(f, unit, '"status"');
+				grouped = await this.groupedSeries(f, unit, cols, '"status"');
 				break;
 			case 'usageKind':
-				grouped = await this.groupedSeries(f, unit, '"usageKind"');
+				grouped = await this.groupedSeries(f, unit, cols, '"usageKind"');
 				break;
 			case 'billing':
-				grouped = await this.groupedSeries(f, unit, BILLING_KEY_SQL);
+				grouped = await this.groupedSeries(f, unit, cols, BILLING_KEY_SQL);
 				break;
 			case 'model': {
 				const p = new SqlParams();
-				const top = await this.db.query<Array<{ key: string }>>(
+				const top = await this.query<Array<{ key: string }>>(
 					`SELECT ${MODEL_KEY_SQL} AS "key" FROM "agent_model_usage_log" WHERE ${this.where(p, f)}
 					GROUP BY 1 ORDER BY COUNT(*) DESC LIMIT 10`, p.values);
 				const keys = top.map(r => String(r.key));
 				// Up to 9 models are shown as-is; beyond that the top 8 plus "other".
 				const shown = keys.length <= 9 ? keys : keys.slice(0, 8);
-				grouped = await this.groupedSeries(f, unit, '', q => {
+				grouped = await this.groupedSeries(f, unit, cols, '', q => {
 					const list = shown.length > 0 ? shown.map(k => q.add(k)).join(', ') : 'NULL';
 					return `CASE WHEN (${MODEL_KEY_SQL}) IN (${list}) THEN (${MODEL_KEY_SQL}) ELSE '${REPORT_OTHER_GROUP_KEY}' END`;
 				});
@@ -282,7 +393,7 @@ export class AgentModelReportService {
 	@bindThis
 	public async byModel(f: ReportFilter): Promise<Array<{ modelId: string; m: ReportMetrics }>> {
 		const p = new SqlParams();
-		const rows = await this.db.query<Array<RawMetrics & { key: string }>>(
+		const rows = await this.query<Array<RawMetrics & { key: string }>>(
 			`SELECT ${MODEL_KEY_SQL} AS "key", ${METRICS_SQL}
 			FROM "agent_model_usage_log" WHERE ${this.where(p, f, { ignoreModels: true })}
 			GROUP BY 1 ORDER BY 2 DESC`, p.values);
@@ -292,8 +403,8 @@ export class AgentModelReportService {
 	@bindThis
 	public async byUsageKind(f: ReportFilter): Promise<Array<{ usageKind: string; m: ReportMetrics }>> {
 		const p = new SqlParams();
-		const rows = await this.db.query<Array<RawMetrics & { key: string }>>(
-			`SELECT "usageKind" AS "key", ${METRICS_SQL}
+		const rows = await this.query<Array<RawMetrics & { key: string }>>(
+			`SELECT "usageKind" AS "key", ${metricsSql({ users: false, percentiles: true })}
 			FROM "agent_model_usage_log" WHERE ${this.where(p, f)}
 			GROUP BY 1`, p.values);
 		return rows.map(r => ({ usageKind: String(r.key), m: toMetrics(r) })).sort((a, b) => b.m.total - a.m.total);
@@ -302,7 +413,7 @@ export class AgentModelReportService {
 	@bindThis
 	public async billing(f: ReportFilter): Promise<Array<{ category: string; count: number; credits: number }>> {
 		const p = new SqlParams();
-		const rows = await this.db.query<Array<{ key: string; count: number; credits: number | string }>>(
+		const rows = await this.query<Array<{ key: string; count: number; credits: number | string }>>(
 			`SELECT ${BILLING_KEY_SQL} AS "key", COUNT(*)::int AS "count", COALESCE(SUM("cost"), 0)::float8 AS "credits"
 			FROM "agent_model_usage_log" WHERE ${this.where(p, f)}
 			GROUP BY 1`, p.values);
@@ -313,7 +424,7 @@ export class AgentModelReportService {
 	@bindThis
 	public async errorCodes(f: ReportFilter, limit = 10): Promise<Array<{ errorCode: string; count: number; models: number; users: number; lastAt: string }>> {
 		const p = new SqlParams();
-		const rows = await this.db.query<Array<{ code: string; count: number; models: number; users: number; lastAt: Date }>>(
+		const rows = await this.query<Array<{ code: string; count: number; models: number; users: number; lastAt: Date }>>(
 			`SELECT COALESCE("errorCode", 'UNKNOWN') AS "code", COUNT(*)::int AS "count",
 				COUNT(DISTINCT ${MODEL_KEY_SQL})::int AS "models", COUNT(DISTINCT "userId")::int AS "users",
 				MAX("requestedAt") AS "lastAt"
@@ -328,17 +439,26 @@ export class AgentModelReportService {
 		}));
 	}
 
-	/** Requests by Beijing-time ISO weekday (1=Mon) × hour. */
+	/**
+	 * Requests by Beijing-time ISO weekday (1=Mon) × hour. SQL only groups by hour bucket
+	 * (EXTRACT ... AT TIME ZONE per row is about 2.5x slower); the 7×24 fold happens here.
+	 */
 	@bindThis
 	public async heatmap(f: ReportFilter): Promise<Array<{ dow: number; hour: number; count: number }>> {
 		const p = new SqlParams();
-		const rows = await this.db.query<Array<{ dow: number; hour: number; count: number }>>(
-			`SELECT EXTRACT(ISODOW FROM ("requestedAt" AT TIME ZONE 'Asia/Shanghai'))::int AS "dow",
-				EXTRACT(HOUR FROM ("requestedAt" AT TIME ZONE 'Asia/Shanghai'))::int AS "hour",
-				COUNT(*)::int AS "count"
-			FROM "agent_model_usage_log" WHERE ${this.where(p, f)}
-			GROUP BY 1, 2`, p.values);
-		return rows.map(r => ({ dow: Number(r.dow), hour: Number(r.hour), count: Number(r.count) || 0 }));
+		const where = this.where(p, f);
+		const bucket = this.bucketSql(p, 'hour');
+		const rows = await this.query<Array<{ bucket: Date; count: number }>>(
+			`SELECT ${bucket} AS "bucket", COUNT(*)::int AS "count"
+			FROM "agent_model_usage_log" WHERE ${where}
+			GROUP BY 1`, p.values);
+		const cells = new Map<number, number>();
+		for (const r of rows) {
+			const local = new Date(new Date(r.bucket).getTime() + BEIJING_OFFSET_MS);
+			const key = (((local.getUTCDay() + 6) % 7) + 1) * 100 + local.getUTCHours();
+			cells.set(key, (cells.get(key) ?? 0) + (Number(r.count) || 0));
+		}
+		return [...cells.entries()].map(([k, count]) => ({ dow: Math.floor(k / 100), hour: k % 100, count }));
 	}
 
 	@bindThis
@@ -359,15 +479,19 @@ export class AgentModelReportService {
 		const countParams = [...p.values];
 		const limitP = p.add(limit);
 		const offsetP = p.add(offset);
-		const [rows, count] = await Promise.all([
-			this.db.query<Array<RawMetrics & { userId: string }>>(
-				`SELECT "userId", ${METRICS_SQL}
-				FROM "agent_model_usage_log" WHERE ${where}
-				GROUP BY "userId" ORDER BY ${order}, "userId" LIMIT ${limitP} OFFSET ${offsetP}`, p.values),
-			this.db.query<Array<{ cnt: number }>>(
-				`SELECT COUNT(DISTINCT "userId")::int AS "cnt" FROM "agent_model_usage_log" WHERE ${where}`, countParams),
-		]);
-		return { total: Number(count[0]?.cnt) || 0, rows: rows.map(r => ({ userId: r.userId, m: toMetrics(r) })) };
+		// COUNT(*) OVER () counts the grouped rows (= distinct users) in the same scan.
+		const rows = await this.query<Array<RawMetrics & { userId: string; userCount: number }>>(
+			`SELECT "userId", ${metricsSql({ users: false, percentiles: false })}, COUNT(*) OVER ()::int AS "userCount"
+			FROM "agent_model_usage_log" WHERE ${where}
+			GROUP BY "userId" ORDER BY ${order}, "userId" LIMIT ${limitP} OFFSET ${offsetP}`, p.values);
+		let total = rows.length > 0 ? Number(rows[0].userCount) || 0 : 0;
+		// Past the last page there is no row to carry the window count; count separately.
+		if (rows.length === 0 && offset > 0) {
+			const count = await this.query<Array<{ cnt: number }>>(
+				`SELECT COUNT(*)::int AS "cnt" FROM (SELECT DISTINCT "userId" FROM "agent_model_usage_log" WHERE ${where}) d`, countParams);
+			total = Number(count[0]?.cnt) || 0;
+		}
+		return { total, rows: rows.map(r => ({ userId: r.userId, m: toMetrics(r) })) };
 	}
 
 	/**

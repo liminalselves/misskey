@@ -96,13 +96,15 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		super(meta, paramDef, async (ps) => {
 			this.agentService.assertAgentsEnabled();
 			const f = resolveReportFilter(ps);
-			const [usageKinds, billing, errorCodes, heatmap] = await Promise.all([
-				this.agentModelReportService.byUsageKind(f),
-				this.agentModelReportService.billing(f),
-				this.agentModelReportService.errorCodes(f, 10),
-				this.agentModelReportService.heatmap(f),
-			]);
-			return { usageKinds, billing, errorCodes, heatmap };
+			return await this.agentModelReportService.cached('breakdowns', f, {}, async () => {
+				const [usageKinds, billing, errorCodes, heatmap] = await Promise.all([
+					this.agentModelReportService.byUsageKind(f),
+					this.agentModelReportService.billing(f),
+					this.agentModelReportService.errorCodes(f, 10),
+					this.agentModelReportService.heatmap(f),
+				]);
+				return { usageKinds, billing, errorCodes, heatmap };
+			});
 		});
 	}
 }

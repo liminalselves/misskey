@@ -49,6 +49,8 @@ export const paramDef = {
 		bucket: { type: 'string', enum: ['auto', 'hour', 'day', 'week'], default: 'auto' },
 		breakdown: { type: 'string', enum: ['none', 'status', 'model', 'usageKind', 'billing'], default: 'none' },
 		compare: { type: 'boolean', default: false },
+		// Grouped trends only compute distinct users / percentiles when the shown metric needs them.
+		metric: { type: 'string', enum: ['total', 'successRate', 'credits', 'users', 'tokens', 'latency'], default: 'total' },
 	},
 	required: [],
 } as const;
@@ -65,11 +67,21 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			const f = resolveReportFilter(ps);
 			const bucket = resolveReportBucketUnit(f.since, f.until, ps.bucket);
 			const [trend, previous] = await Promise.all([
-				this.agentModelReportService.trend(f, bucket, ps.breakdown),
-				ps.compare ? this.agentModelReportService.series(previousReportFilter(f), bucket) : Promise.resolve(null),
+				// Ungrouped trend is exactly the overview series; reuse it instead of another scan.
+				ps.breakdown === 'none'
+					? this.agentModelReportService.cachedOverview(f, bucket).then(o => ({
+						buckets: o.series.map(s => s.t),
+						groups: [{ key: 'all', total: o.totals.total, points: o.series.map(s => s.m) }],
+					}))
+					: (() => {
+						const cols = { users: ps.metric === 'users', percentiles: ps.metric === 'latency' };
+						return this.agentModelReportService.cached('trend', f, { bucket, breakdown: ps.breakdown, ...cols },
+							() => this.agentModelReportService.trend(f, bucket, ps.breakdown, cols));
+					})(),
+				ps.compare ? this.agentModelReportService.cachedOverview(previousReportFilter(f), bucket) : Promise.resolve(null),
 			]);
 			// The previous window can align to one bucket more or fewer; match it to the current length by index.
-			const prev = previous?.map(p => p.m) ?? null;
+			const prev = previous?.series.map(p => p.m) ?? null;
 			const aligned = prev == null ? null : trend.buckets.map((_, i) => prev[prev.length - trend.buckets.length + i] ?? emptyReportMetrics());
 			return { bucket, ...trend, previous: aligned };
 		});
