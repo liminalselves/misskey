@@ -129,10 +129,6 @@ import type {
 	AdminAgentsRedeemCodesListResponse,
 	AdminAgentsRedeemCodesRevokeRequest,
 	AdminAgentsRedeemCodesRevokeResponse,
-	AdminAgentsReportsOverviewRequest,
-	AdminAgentsReportsOverviewResponse,
-	AdminAgentsReportsTopUsersRequest,
-	AdminAgentsReportsTopUsersResponse,
 	AdminAgentsReviewDiffRequest,
 	AdminAgentsReviewDiffResponse,
 	AdminAgentsReviewListPendingRequest,
@@ -278,10 +274,6 @@ import type {
 	AdminUsersAgentBillingLogsResponse,
 	AdminUsersAgentSuccessRateRequest,
 	AdminUsersAgentSuccessRateResponse,
-	AdminUsersAgentUsageRequest,
-	AdminUsersAgentUsageResponse,
-	AdminUsersAgentUsageDetailsRequest,
-	AdminUsersAgentUsageDetailsResponse,
 	AdminUsersAgentUsageLogsRequest,
 	AdminUsersAgentUsageLogsResponse,
 	AgentsBillingLogsRequest,
@@ -372,8 +364,6 @@ import type {
 	AgentsModelsFreeQuotaResponse,
 	AgentsModelsSuccessRatesRequest,
 	AgentsModelsSuccessRatesResponse,
-	AgentsMyUsageSummaryRequest,
-	AgentsMyUsageSummaryResponse,
 	AgentsPlazaReviewsCreateRequest,
 	AgentsPlazaReviewsCreateResponse,
 	AgentsPlazaReviewsListRequest,
@@ -1060,8 +1050,6 @@ export type Endpoints = {
 	'admin/agents/redeem-codes/generate': { req: AdminAgentsRedeemCodesGenerateRequest; res: AdminAgentsRedeemCodesGenerateResponse };
 	'admin/agents/redeem-codes/list': { req: AdminAgentsRedeemCodesListRequest; res: AdminAgentsRedeemCodesListResponse };
 	'admin/agents/redeem-codes/revoke': { req: AdminAgentsRedeemCodesRevokeRequest; res: AdminAgentsRedeemCodesRevokeResponse };
-	'admin/agents/reports/overview': { req: AdminAgentsReportsOverviewRequest; res: AdminAgentsReportsOverviewResponse };
-	'admin/agents/reports/top-users': { req: AdminAgentsReportsTopUsersRequest; res: AdminAgentsReportsTopUsersResponse };
 	'admin/agents/review/diff': { req: AdminAgentsReviewDiffRequest; res: AdminAgentsReviewDiffResponse };
 	'admin/agents/review/list-pending': { req: AdminAgentsReviewListPendingRequest; res: AdminAgentsReviewListPendingResponse };
 	'admin/agents/review/logs': { req: AdminAgentsReviewLogsRequest; res: AdminAgentsReviewLogsResponse };
@@ -1168,8 +1156,6 @@ export type Endpoints = {
 	'admin/update-user-note': { req: AdminUpdateUserNoteRequest; res: EmptyResponse };
 	'admin/users/agent-billing-logs': { req: AdminUsersAgentBillingLogsRequest; res: AdminUsersAgentBillingLogsResponse };
 	'admin/users/agent-success-rate': { req: AdminUsersAgentSuccessRateRequest; res: AdminUsersAgentSuccessRateResponse };
-	'admin/users/agent-usage': { req: AdminUsersAgentUsageRequest; res: AdminUsersAgentUsageResponse };
-	'admin/users/agent-usage-details': { req: AdminUsersAgentUsageDetailsRequest; res: AdminUsersAgentUsageDetailsResponse };
 	'admin/users/agent-usage-logs': { req: AdminUsersAgentUsageLogsRequest; res: AdminUsersAgentUsageLogsResponse };
 	'agents/billing-logs': { req: AgentsBillingLogsRequest; res: AgentsBillingLogsResponse };
 	'agents/byok/models/create': { req: AgentsByokModelsCreateRequest; res: AgentsByokModelsCreateResponse };
@@ -1219,7 +1205,6 @@ export type Endpoints = {
 	'agents/model-reports/create': { req: AgentsModelReportsCreateRequest; res: AgentsModelReportsCreateResponse };
 	'agents/models/free-quota': { req: EmptyRequest; res: AgentsModelsFreeQuotaResponse };
 	'agents/models/success-rates': { req: AgentsModelsSuccessRatesRequest; res: AgentsModelsSuccessRatesResponse };
-	'agents/my-usage-summary': { req: AgentsMyUsageSummaryRequest; res: AgentsMyUsageSummaryResponse };
 	'agents/plaza-reviews/create': { req: AgentsPlazaReviewsCreateRequest; res: AgentsPlazaReviewsCreateResponse };
 	'agents/plaza-reviews/list': { req: AgentsPlazaReviewsListRequest; res: AgentsPlazaReviewsListResponse };
 	'agents/plaza-search': { req: AgentsPlazaSearchRequest; res: AgentsPlazaSearchResponse };
