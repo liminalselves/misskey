@@ -86,6 +86,16 @@ export interface MainEventTypes {
 		messageText: string;
 		agentAvatarUrl: string | null;
 	};
+	// 智能体会话消息变化（即时、无未读/推送语义）：供同账号其他打开中的客户端同步时间线
+	agentSessionMessagesChanged: {
+		sessionId: string;
+		/** created=有新消息落库；changed=消息被删除/回滚/修改/导入 */
+		reason: 'created' | 'changed';
+		/** created 时为新落库的可见助手消息 id（仅控制指令的内部回复为 null） */
+		messageId: string | null;
+		/** 触发该变化的 send 请求（主动消息为 null）；发起方据此忽略自身回声 */
+		clientRequestId: string | null;
+	};
 	// 智能体消息已读事件
 	agentRead: {
 		hasUnreadAgentMessages: boolean;

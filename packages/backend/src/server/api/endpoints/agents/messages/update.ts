@@ -18,6 +18,7 @@ import { ChatService } from '@/core/ChatService.js';
 import { MetaService } from '@/core/MetaService.js';
 import { AgentExternalAuditService } from '@/core/AgentExternalAuditService.js';
 import { AgentProactiveScheduleService } from '@/core/AgentProactiveScheduleService.js';
+import { AgentMessageNotifyService } from '@/core/AgentMessageNotifyService.js';
 
 export const meta = {
 	tags: ['agents'],
@@ -67,6 +68,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		private metaService: MetaService,
 		private agentExternalAuditService: AgentExternalAuditService,
 		private agentProactiveScheduleService: AgentProactiveScheduleService,
+		private agentMessageNotifyService: AgentMessageNotifyService,
 	) {
 		super(meta, paramDef, async (ps, me) => {
 			this.agentService.assertAgentsEnabled();
@@ -145,6 +147,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					if (updated.affected !== 1) throw new ApiError({ message: 'No such message.', code: 'NO_SUCH_MESSAGE', id: 'e3f4a5b6-c7d8-9012-e345-f67890123456' });
 					if (contentChanged) await invalidateMessageCompression(manager, locked.id, row);
 				});
+			if (contentChanged) this.agentMessageNotifyService.publishSessionMessagesChanged(me.id, ps.sessionId, 'changed');
 
 			return {
 				id: row.id,
