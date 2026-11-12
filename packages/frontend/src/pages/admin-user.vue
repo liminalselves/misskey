@@ -5,7 +5,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <template>
 <PageWithHeader v-model:tab="tab" :actions="headerActions" :tabs="headerTabs">
-	<div class="_spacer" style="--MI_SPACER-w: 600px; --MI_SPACER-min: 16px; --MI_SPACER-max: 32px;">
+	<div class="_spacer" :style="{ '--MI_SPACER-w': tab === 'agentUsage' ? '1100px' : '600px', '--MI_SPACER-min': '16px', '--MI_SPACER-max': '32px' }">
 		<div v-if="tab === 'overview'" class="_gaps_m">
 			<div class="aeakzknw">
 				<MkAvatar class="avatar" :user="user" indicator link preview/>
@@ -203,7 +203,14 @@ SPDX-License-Identifier: AGPL-3.0-only
 		</div>
 
 		<div v-else-if="tab === 'agentUsage'">
-			<MkAgentUsageForAdmin :userId="props.userId"/>
+			<UserUsageReport
+				:key="props.userId"
+				reportEndpoint="admin/users/agent-usage-report"
+				billingEndpoint="admin/users/agent-billing-logs"
+				logsEndpoint="admin/users/agent-usage-logs"
+				:baseParams="{ userId: props.userId }"
+				storageKey="adminUserAgentUsage"
+			/>
 		</div>
 
 		<div v-else-if="tab === 'agentSessions'">
@@ -238,7 +245,7 @@ import MkKeyValue from '@/components/MkKeyValue.vue';
 import MkSelect from '@/components/MkSelect.vue';
 import MkUserDriveForAdmin from '@/components/MkUserDriveForAdmin.vue';
 import MkAgentSessionsForAdmin from '@/components/MkAgentSessionsForAdmin.vue';
-import MkAgentUsageForAdmin from '@/components/MkAgentUsageForAdmin.vue';
+import UserUsageReport from '@/components/agent-report/UserUsageReport.vue';
 import MkInfo from '@/components/MkInfo.vue';
 import * as os from '@/os.js';
 import { misskeyApi } from '@/utility/misskey-api.js';

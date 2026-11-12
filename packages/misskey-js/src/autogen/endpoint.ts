@@ -129,10 +129,16 @@ import type {
 	AdminAgentsRedeemCodesListResponse,
 	AdminAgentsRedeemCodesRevokeRequest,
 	AdminAgentsRedeemCodesRevokeResponse,
-	AdminAgentsReportsOverviewRequest,
-	AdminAgentsReportsOverviewResponse,
-	AdminAgentsReportsTopUsersRequest,
-	AdminAgentsReportsTopUsersResponse,
+	AdminAgentsReportsBreakdownsRequest,
+	AdminAgentsReportsBreakdownsResponse,
+	AdminAgentsReportsModelsRequest,
+	AdminAgentsReportsModelsResponse,
+	AdminAgentsReportsSummaryRequest,
+	AdminAgentsReportsSummaryResponse,
+	AdminAgentsReportsTrendRequest,
+	AdminAgentsReportsTrendResponse,
+	AdminAgentsReportsUsersRequest,
+	AdminAgentsReportsUsersResponse,
 	AdminAgentsReviewDiffRequest,
 	AdminAgentsReviewDiffResponse,
 	AdminAgentsReviewListPendingRequest,
@@ -278,12 +284,10 @@ import type {
 	AdminUsersAgentBillingLogsResponse,
 	AdminUsersAgentSuccessRateRequest,
 	AdminUsersAgentSuccessRateResponse,
-	AdminUsersAgentUsageRequest,
-	AdminUsersAgentUsageResponse,
-	AdminUsersAgentUsageDetailsRequest,
-	AdminUsersAgentUsageDetailsResponse,
 	AdminUsersAgentUsageLogsRequest,
 	AdminUsersAgentUsageLogsResponse,
+	AdminUsersAgentUsageReportRequest,
+	AdminUsersAgentUsageReportResponse,
 	AgentsBillingLogsRequest,
 	AgentsBillingLogsResponse,
 	AgentsByokModelsCreateRequest,
@@ -353,6 +357,8 @@ import type {
 	AgentsMessagesDeleteResponse,
 	AgentsMessagesImportContextRequest,
 	AgentsMessagesImportContextResponse,
+	AgentsMessagesRequestStatusRequest,
+	AgentsMessagesRequestStatusResponse,
 	AgentsMessagesRollbackRequest,
 	AgentsMessagesRollbackResponse,
 	AgentsMessagesSearchRequest,
@@ -372,8 +378,6 @@ import type {
 	AgentsModelsFreeQuotaResponse,
 	AgentsModelsSuccessRatesRequest,
 	AgentsModelsSuccessRatesResponse,
-	AgentsMyUsageSummaryRequest,
-	AgentsMyUsageSummaryResponse,
 	AgentsPlazaReviewsCreateRequest,
 	AgentsPlazaReviewsCreateResponse,
 	AgentsPlazaReviewsListRequest,
@@ -446,6 +450,10 @@ import type {
 	AgentsStylesUpdateResponse,
 	AgentsStylesVersionsRequest,
 	AgentsStylesVersionsResponse,
+	AgentsUsageLogsRequest,
+	AgentsUsageLogsResponse,
+	AgentsUsageReportRequest,
+	AgentsUsageReportResponse,
 	AgentsVisionModelsListResponse,
 	AnnouncementsRequest,
 	AnnouncementsResponse,
@@ -1060,8 +1068,11 @@ export type Endpoints = {
 	'admin/agents/redeem-codes/generate': { req: AdminAgentsRedeemCodesGenerateRequest; res: AdminAgentsRedeemCodesGenerateResponse };
 	'admin/agents/redeem-codes/list': { req: AdminAgentsRedeemCodesListRequest; res: AdminAgentsRedeemCodesListResponse };
 	'admin/agents/redeem-codes/revoke': { req: AdminAgentsRedeemCodesRevokeRequest; res: AdminAgentsRedeemCodesRevokeResponse };
-	'admin/agents/reports/overview': { req: AdminAgentsReportsOverviewRequest; res: AdminAgentsReportsOverviewResponse };
-	'admin/agents/reports/top-users': { req: AdminAgentsReportsTopUsersRequest; res: AdminAgentsReportsTopUsersResponse };
+	'admin/agents/reports/breakdowns': { req: AdminAgentsReportsBreakdownsRequest; res: AdminAgentsReportsBreakdownsResponse };
+	'admin/agents/reports/models': { req: AdminAgentsReportsModelsRequest; res: AdminAgentsReportsModelsResponse };
+	'admin/agents/reports/summary': { req: AdminAgentsReportsSummaryRequest; res: AdminAgentsReportsSummaryResponse };
+	'admin/agents/reports/trend': { req: AdminAgentsReportsTrendRequest; res: AdminAgentsReportsTrendResponse };
+	'admin/agents/reports/users': { req: AdminAgentsReportsUsersRequest; res: AdminAgentsReportsUsersResponse };
 	'admin/agents/review/diff': { req: AdminAgentsReviewDiffRequest; res: AdminAgentsReviewDiffResponse };
 	'admin/agents/review/list-pending': { req: AdminAgentsReviewListPendingRequest; res: AdminAgentsReviewListPendingResponse };
 	'admin/agents/review/logs': { req: AdminAgentsReviewLogsRequest; res: AdminAgentsReviewLogsResponse };
@@ -1168,9 +1179,8 @@ export type Endpoints = {
 	'admin/update-user-note': { req: AdminUpdateUserNoteRequest; res: EmptyResponse };
 	'admin/users/agent-billing-logs': { req: AdminUsersAgentBillingLogsRequest; res: AdminUsersAgentBillingLogsResponse };
 	'admin/users/agent-success-rate': { req: AdminUsersAgentSuccessRateRequest; res: AdminUsersAgentSuccessRateResponse };
-	'admin/users/agent-usage': { req: AdminUsersAgentUsageRequest; res: AdminUsersAgentUsageResponse };
-	'admin/users/agent-usage-details': { req: AdminUsersAgentUsageDetailsRequest; res: AdminUsersAgentUsageDetailsResponse };
 	'admin/users/agent-usage-logs': { req: AdminUsersAgentUsageLogsRequest; res: AdminUsersAgentUsageLogsResponse };
+	'admin/users/agent-usage-report': { req: AdminUsersAgentUsageReportRequest; res: AdminUsersAgentUsageReportResponse };
 	'agents/billing-logs': { req: AgentsBillingLogsRequest; res: AgentsBillingLogsResponse };
 	'agents/byok/models/create': { req: AgentsByokModelsCreateRequest; res: AgentsByokModelsCreateResponse };
 	'agents/byok/models/delete': { req: AgentsByokModelsDeleteRequest; res: AgentsByokModelsDeleteResponse };
@@ -1208,6 +1218,7 @@ export type Endpoints = {
 	'agents/messages/abort': { req: AgentsMessagesAbortRequest; res: AgentsMessagesAbortResponse };
 	'agents/messages/delete': { req: AgentsMessagesDeleteRequest; res: AgentsMessagesDeleteResponse };
 	'agents/messages/import-context': { req: AgentsMessagesImportContextRequest; res: AgentsMessagesImportContextResponse };
+	'agents/messages/request-status': { req: AgentsMessagesRequestStatusRequest; res: AgentsMessagesRequestStatusResponse };
 	'agents/messages/rollback': { req: AgentsMessagesRollbackRequest; res: AgentsMessagesRollbackResponse };
 	'agents/messages/search': { req: AgentsMessagesSearchRequest; res: AgentsMessagesSearchResponse };
 	'agents/messages/send': { req: AgentsMessagesSendRequest; res: AgentsMessagesSendResponse };
@@ -1219,7 +1230,6 @@ export type Endpoints = {
 	'agents/model-reports/create': { req: AgentsModelReportsCreateRequest; res: AgentsModelReportsCreateResponse };
 	'agents/models/free-quota': { req: EmptyRequest; res: AgentsModelsFreeQuotaResponse };
 	'agents/models/success-rates': { req: AgentsModelsSuccessRatesRequest; res: AgentsModelsSuccessRatesResponse };
-	'agents/my-usage-summary': { req: AgentsMyUsageSummaryRequest; res: AgentsMyUsageSummaryResponse };
 	'agents/plaza-reviews/create': { req: AgentsPlazaReviewsCreateRequest; res: AgentsPlazaReviewsCreateResponse };
 	'agents/plaza-reviews/list': { req: AgentsPlazaReviewsListRequest; res: AgentsPlazaReviewsListResponse };
 	'agents/plaza-search': { req: AgentsPlazaSearchRequest; res: AgentsPlazaSearchResponse };
@@ -1258,6 +1268,8 @@ export type Endpoints = {
 	'agents/styles/unsubscribe': { req: AgentsStylesUnsubscribeRequest; res: AgentsStylesUnsubscribeResponse };
 	'agents/styles/update': { req: AgentsStylesUpdateRequest; res: AgentsStylesUpdateResponse };
 	'agents/styles/versions': { req: AgentsStylesVersionsRequest; res: AgentsStylesVersionsResponse };
+	'agents/usage/logs': { req: AgentsUsageLogsRequest; res: AgentsUsageLogsResponse };
+	'agents/usage/report': { req: AgentsUsageReportRequest; res: AgentsUsageReportResponse };
 	'agents/vision-models/list': { req: EmptyRequest; res: AgentsVisionModelsListResponse };
 	'announcements': { req: AnnouncementsRequest; res: AnnouncementsResponse };
 	'announcements/show': { req: AnnouncementsShowRequest; res: AnnouncementsShowResponse };

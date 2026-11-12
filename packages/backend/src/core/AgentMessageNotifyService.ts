@@ -56,6 +56,20 @@ export class AgentMessageNotifyService {
 		}, 3000);
 	}
 
+	/**
+	 * 即时广播会话消息变化，供同账号其他客户端（官方 App、第三方客户端）同步时间线。
+	 * 与 notifyAgentMessage 不同：不写未读标记、不推送、不延迟，任何写消息路径都应调用。
+	 */
+	@bindThis
+	public publishSessionMessagesChanged(userId: string, sessionId: string, reason: 'created' | 'changed', opts: { messageId?: string; clientRequestId?: string } = {}): void {
+		this.globalEventService.publishMainStream(userId, 'agentSessionMessagesChanged', {
+			sessionId,
+			reason,
+			messageId: opts.messageId ?? null,
+			clientRequestId: opts.clientRequestId ?? null,
+		});
+	}
+
 	@bindThis
 	public async readAgentMessages(userId: string, sessionId?: string): Promise<void> {
 		const redisPipeline = this.redisClient.multi();

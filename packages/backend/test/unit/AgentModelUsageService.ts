@@ -88,7 +88,7 @@ function createLog(): MiAgentModelUsageLog {
 }
 
 describe('AgentModelUsageService report exclusions', () => {
-	test('excludes rewards and compensation from model and overall model-call totals', async () => {
+	test('excludes rewards and compensation from model call totals', async () => {
 		const qb = {
 			select: vi.fn().mockReturnThis(),
 			addSelect: vi.fn().mockReturnThis(),
@@ -102,8 +102,7 @@ describe('AgentModelUsageService report exclusions', () => {
 			{} as never, {} as never, {} as never, {} as never, {} as never);
 		const since = new Date('2026-10-01');
 		await service.aggregateByModel({ since });
-		await service.overallStats({ since, modelCallsOnly: true });
-		expect(qb.andWhere).toHaveBeenCalledTimes(2);
+		expect(qb.andWhere).toHaveBeenCalledTimes(1);
 		for (const call of qb.andWhere.mock.calls) {
 			expect(call).toEqual(['log.usageKind NOT IN (:...nonModelKinds)', {
 				nonModelKinds: expect.arrayContaining(['checkin', 'admin_reward', 'admin_compensation', 'credit_migration']),

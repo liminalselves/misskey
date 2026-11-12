@@ -48,7 +48,8 @@ TCR 镜像复制链路已废弃，develop 镜像发布工作流已删除。其�
 3. 本地拉取 master，核对合入结果、两处版本和 CHANGELOG；CI 修改必须已包含在这次提交中。
 4. 在 master 发布 merge commit 上创建附注 tag `release-v<version>`，单独推送这个 tag。推送会启动 ACR 和 GitHub 两条独立构建。
 5. 分别确认两边构建结果、镜像 tag 和来源提交；ACR 构建成功后，生产从 ACR 拉取该完整版本。不得只看 GitHub 构建成功就认为生产镜像已就绪。
-6. GitHub Release 可选，用同一个发布 tag 创建，仅作版本记录。**注意：** 创建 Release 会触发继承自上游的 [`on-release-created.yml`](../.github/workflows/on-release-created.yml)，尝试把 misskey-js 发布到 npm。本 fork 不拥有该 npm 包，也没有配置 `NODE_AUTH_TOKEN`，这一运行注定失败，不能当作发布失败。2026-11-01 发布 `2026.10.0-liminalselves.1` 时它被触发，已在发布步骤完成前手动取消；npm 上没有 fork 版本。创建 Release 后应立即取消这一运行，或在工作流中加 fork 守卫（另行决定）。
+6. GitHub Release 可选，用同一个发布 tag 创建，仅作版本记录。本 fork 已删除上游的 `on-release-created.yml`（它会把 misskey-js 发布到 npm，而 fork 不拥有该包），创建 Release 不会触发任何工作流。
+7. 发布完成后把 master 合回 develop 并推送（back-merge），使 develop 包含发布 merge commit；Hotfix 的 back-merge 见下节。
 
 以下命令仅示范一次已获授权的发布，`2025.12.2-liminalselves.4` 必须替换为当次确认的版本：
 
@@ -66,6 +67,9 @@ git push origin "release-v$version"
 
 # 可选：创建发布记录，禁止用不存在的 tag 隐式创建新 tag。
 gh release create "release-v$version" -R liminalselves/misskey --verify-tag --title "$version"
+
+# 发布后回并 master 到 develop
+git switch develop && git pull && git merge --no-ff master && git push origin develop
 ```
 
 ## 撤回已合并发布

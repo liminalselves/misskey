@@ -206,7 +206,8 @@ export * as 'agents/compression-sticky/reorder' from './endpoints/agents/compres
 export * as 'agents/compression-sticky/import' from './endpoints/agents/compression-sticky/import.js';
 export * as 'agents/credit-balance' from './endpoints/agents/credit-balance.js';
 export * as 'agents/credits/migrate' from './endpoints/agents/credits/migrate.js';
-export * as 'agents/my-usage-summary' from './endpoints/agents/my-usage-summary.js';
+export * as 'agents/usage/report' from './endpoints/agents/usage/report.js';
+export * as 'agents/usage/logs' from './endpoints/agents/usage/logs.js';
 export * as 'agents/checkin' from './endpoints/agents/checkin.js';
 export * as 'agents/checkin-status' from './endpoints/agents/checkin-status.js';
 export * as 'agents/checkin-makeup' from './endpoints/agents/checkin-makeup.js';
@@ -220,8 +221,11 @@ export * as 'agents/models/free-quota' from './endpoints/agents/models/free-quot
 export * as 'agents/model-announcements/unread' from './endpoints/agents/model-announcements/unread.js';
 export * as 'agents/model-announcements/read' from './endpoints/agents/model-announcements/read.js';
 export * as 'agents/model-reports/create' from './endpoints/agents/model-reports/create.js';
-export * as 'admin/agents/reports/overview' from './endpoints/admin/agents/reports/overview.js';
-export * as 'admin/agents/reports/top-users' from './endpoints/admin/agents/reports/top-users.js';
+export * as 'admin/agents/reports/summary' from './endpoints/admin/agents/reports/summary.js';
+export * as 'admin/agents/reports/trend' from './endpoints/admin/agents/reports/trend.js';
+export * as 'admin/agents/reports/models' from './endpoints/admin/agents/reports/models.js';
+export * as 'admin/agents/reports/breakdowns' from './endpoints/admin/agents/reports/breakdowns.js';
+export * as 'admin/agents/reports/users' from './endpoints/admin/agents/reports/users.js';
 export * as 'admin/agents-checkin-reports' from './endpoints/admin/agents-checkin-reports.js';
 export * as 'admin/agents-checkin-makeup' from './endpoints/admin/agents-checkin-makeup.js';
 export * as 'admin/agents-checkin-revoke-today' from './endpoints/admin/agents-checkin-revoke-today.js';
@@ -230,11 +234,11 @@ export * as 'admin/agents/redeem-codes/list' from './endpoints/admin/agents/rede
 export * as 'admin/agents/redeem-codes/revoke' from './endpoints/admin/agents/redeem-codes/revoke.js';
 export * as 'admin/users/agent-success-rate' from './endpoints/admin/users/agent-success-rate.js';
 export * as 'admin/users/agent-billing-logs' from './endpoints/admin/users/agent-billing-logs.js';
-export * as 'admin/users/agent-usage-details' from './endpoints/admin/users/agent-usage-details.js';
 export * as 'admin/users/agent-usage-logs' from './endpoints/admin/users/agent-usage-logs.js';
-export * as 'admin/users/agent-usage' from './endpoints/admin/users/agent-usage.js';
+export * as 'admin/users/agent-usage-report' from './endpoints/admin/users/agent-usage-report.js';
 export * as 'agents/messages/send' from './endpoints/agents/messages/send.js';
 export * as 'agents/messages/abort' from './endpoints/agents/messages/abort.js';
+export * as 'agents/messages/request-status' from './endpoints/agents/messages/request-status.js';
 export * as 'agents/messages/delete' from './endpoints/agents/messages/delete.js';
 export * as 'agents/messages/search' from './endpoints/agents/messages/search.js';
 export * as 'agents/messages/show' from './endpoints/agents/messages/show.js';

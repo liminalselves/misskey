@@ -428,16 +428,34 @@ type AdminAgentsRedeemCodesRevokeRequest = operations['admin___agents___redeem-c
 type AdminAgentsRedeemCodesRevokeResponse = operations['admin___agents___redeem-codes___revoke']['responses']['200']['content']['application/json'];
 
 // @public (undocumented)
-type AdminAgentsReportsOverviewRequest = operations['admin___agents___reports___overview']['requestBody']['content']['application/json'];
+type AdminAgentsReportsBreakdownsRequest = operations['admin___agents___reports___breakdowns']['requestBody']['content']['application/json'];
 
 // @public (undocumented)
-type AdminAgentsReportsOverviewResponse = operations['admin___agents___reports___overview']['responses']['200']['content']['application/json'];
+type AdminAgentsReportsBreakdownsResponse = operations['admin___agents___reports___breakdowns']['responses']['200']['content']['application/json'];
 
 // @public (undocumented)
-type AdminAgentsReportsTopUsersRequest = operations['admin___agents___reports___top-users']['requestBody']['content']['application/json'];
+type AdminAgentsReportsModelsRequest = operations['admin___agents___reports___models']['requestBody']['content']['application/json'];
 
 // @public (undocumented)
-type AdminAgentsReportsTopUsersResponse = operations['admin___agents___reports___top-users']['responses']['200']['content']['application/json'];
+type AdminAgentsReportsModelsResponse = operations['admin___agents___reports___models']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type AdminAgentsReportsSummaryRequest = operations['admin___agents___reports___summary']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AdminAgentsReportsSummaryResponse = operations['admin___agents___reports___summary']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type AdminAgentsReportsTrendRequest = operations['admin___agents___reports___trend']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AdminAgentsReportsTrendResponse = operations['admin___agents___reports___trend']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type AdminAgentsReportsUsersRequest = operations['admin___agents___reports___users']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AdminAgentsReportsUsersResponse = operations['admin___agents___reports___users']['responses']['200']['content']['application/json'];
 
 // @public (undocumented)
 type AdminAgentsReviewDiffRequest = operations['admin___agents___review___diff']['requestBody']['content']['application/json'];
@@ -875,22 +893,16 @@ type AdminUsersAgentSuccessRateRequest = operations['admin___users___agent-succe
 type AdminUsersAgentSuccessRateResponse = operations['admin___users___agent-success-rate']['responses']['200']['content']['application/json'];
 
 // @public (undocumented)
-type AdminUsersAgentUsageDetailsRequest = operations['admin___users___agent-usage-details']['requestBody']['content']['application/json'];
-
-// @public (undocumented)
-type AdminUsersAgentUsageDetailsResponse = operations['admin___users___agent-usage-details']['responses']['200']['content']['application/json'];
-
-// @public (undocumented)
 type AdminUsersAgentUsageLogsRequest = operations['admin___users___agent-usage-logs']['requestBody']['content']['application/json'];
 
 // @public (undocumented)
 type AdminUsersAgentUsageLogsResponse = operations['admin___users___agent-usage-logs']['responses']['200']['content']['application/json'];
 
 // @public (undocumented)
-type AdminUsersAgentUsageRequest = operations['admin___users___agent-usage']['requestBody']['content']['application/json'];
+type AdminUsersAgentUsageReportRequest = operations['admin___users___agent-usage-report']['requestBody']['content']['application/json'];
 
 // @public (undocumented)
-type AdminUsersAgentUsageResponse = operations['admin___users___agent-usage']['responses']['200']['content']['application/json'];
+type AdminUsersAgentUsageReportResponse = operations['admin___users___agent-usage-report']['responses']['200']['content']['application/json'];
 
 // @public (undocumented)
 type AgentsBillingLogsRequest = operations['agents___billing-logs']['requestBody']['content']['application/json'];
@@ -1100,6 +1112,12 @@ type AgentsMessagesImportContextRequest = operations['agents___messages___import
 type AgentsMessagesImportContextResponse = operations['agents___messages___import-context']['responses']['200']['content']['application/json'];
 
 // @public (undocumented)
+type AgentsMessagesRequestStatusRequest = operations['agents___messages___request-status']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AgentsMessagesRequestStatusResponse = operations['agents___messages___request-status']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
 type AgentsMessagesRollbackRequest = operations['agents___messages___rollback']['requestBody']['content']['application/json'];
 
 // @public (undocumented)
@@ -1155,12 +1173,6 @@ type AgentsModelsSuccessRatesRequest = operations['agents___models___success-rat
 
 // @public (undocumented)
 type AgentsModelsSuccessRatesResponse = operations['agents___models___success-rates']['responses']['200']['content']['application/json'];
-
-// @public (undocumented)
-type AgentsMyUsageSummaryRequest = operations['agents___my-usage-summary']['requestBody']['content']['application/json'];
-
-// @public (undocumented)
-type AgentsMyUsageSummaryResponse = operations['agents___my-usage-summary']['responses']['200']['content']['application/json'];
 
 // @public (undocumented)
 type AgentsPlazaReviewsCreateRequest = operations['agents___plaza-reviews___create']['requestBody']['content']['application/json'];
@@ -1377,6 +1389,18 @@ type AgentsStylesVersionsRequest = operations['agents___styles___versions']['req
 
 // @public (undocumented)
 type AgentsStylesVersionsResponse = operations['agents___styles___versions']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type AgentsUsageLogsRequest = operations['agents___usage___logs']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AgentsUsageLogsResponse = operations['agents___usage___logs']['responses']['200']['content']['application/json'];
+
+// @public (undocumented)
+type AgentsUsageReportRequest = operations['agents___usage___report']['requestBody']['content']['application/json'];
+
+// @public (undocumented)
+type AgentsUsageReportResponse = operations['agents___usage___report']['responses']['200']['content']['application/json'];
 
 // @public (undocumented)
 type AgentsVisionModelsListResponse = operations['agents___vision-models___list']['responses']['200']['content']['application/json'];
@@ -1600,6 +1624,7 @@ export type Channels = {
             unreadAntenna: (payload: Antenna) => void;
             newChatMessage: (payload: ChatMessage) => void;
             newAgentMessage: (payload: AgentMessageNotification) => void;
+            agentSessionMessagesChanged: (payload: AgentSessionMessagesChanged) => void;
             agentRead: (payload: {
                 hasUnreadAgentMessages: boolean;
             }) => void;
@@ -2623,10 +2648,16 @@ declare namespace entities {
         AdminAgentsRedeemCodesListResponse,
         AdminAgentsRedeemCodesRevokeRequest,
         AdminAgentsRedeemCodesRevokeResponse,
-        AdminAgentsReportsOverviewRequest,
-        AdminAgentsReportsOverviewResponse,
-        AdminAgentsReportsTopUsersRequest,
-        AdminAgentsReportsTopUsersResponse,
+        AdminAgentsReportsBreakdownsRequest,
+        AdminAgentsReportsBreakdownsResponse,
+        AdminAgentsReportsModelsRequest,
+        AdminAgentsReportsModelsResponse,
+        AdminAgentsReportsSummaryRequest,
+        AdminAgentsReportsSummaryResponse,
+        AdminAgentsReportsTrendRequest,
+        AdminAgentsReportsTrendResponse,
+        AdminAgentsReportsUsersRequest,
+        AdminAgentsReportsUsersResponse,
         AdminAgentsReviewDiffRequest,
         AdminAgentsReviewDiffResponse,
         AdminAgentsReviewListPendingRequest,
@@ -2772,12 +2803,10 @@ declare namespace entities {
         AdminUsersAgentBillingLogsResponse,
         AdminUsersAgentSuccessRateRequest,
         AdminUsersAgentSuccessRateResponse,
-        AdminUsersAgentUsageRequest,
-        AdminUsersAgentUsageResponse,
-        AdminUsersAgentUsageDetailsRequest,
-        AdminUsersAgentUsageDetailsResponse,
         AdminUsersAgentUsageLogsRequest,
         AdminUsersAgentUsageLogsResponse,
+        AdminUsersAgentUsageReportRequest,
+        AdminUsersAgentUsageReportResponse,
         AgentsBillingLogsRequest,
         AgentsBillingLogsResponse,
         AgentsByokModelsCreateRequest,
@@ -2847,6 +2876,8 @@ declare namespace entities {
         AgentsMessagesDeleteResponse,
         AgentsMessagesImportContextRequest,
         AgentsMessagesImportContextResponse,
+        AgentsMessagesRequestStatusRequest,
+        AgentsMessagesRequestStatusResponse,
         AgentsMessagesRollbackRequest,
         AgentsMessagesRollbackResponse,
         AgentsMessagesSearchRequest,
@@ -2866,8 +2897,6 @@ declare namespace entities {
         AgentsModelsFreeQuotaResponse,
         AgentsModelsSuccessRatesRequest,
         AgentsModelsSuccessRatesResponse,
-        AgentsMyUsageSummaryRequest,
-        AgentsMyUsageSummaryResponse,
         AgentsPlazaReviewsCreateRequest,
         AgentsPlazaReviewsCreateResponse,
         AgentsPlazaReviewsListRequest,
@@ -2940,6 +2969,10 @@ declare namespace entities {
         AgentsStylesUpdateResponse,
         AgentsStylesVersionsRequest,
         AgentsStylesVersionsResponse,
+        AgentsUsageLogsRequest,
+        AgentsUsageLogsResponse,
+        AgentsUsageReportRequest,
+        AgentsUsageReportResponse,
         AgentsVisionModelsListResponse,
         AnnouncementsRequest,
         AnnouncementsResponse,
@@ -5065,9 +5098,10 @@ type VerifyEmailRequest = operations['verify-email']['requestBody']['content']['
 // Warnings were encountered during analysis:
 //
 // src/streaming.ts:57:3 - (ae-forgotten-export) The symbol "ReconnectingWebSocket" needs to be exported by the entry point index.d.ts
-// src/streaming.types.ts:63:4 - (ae-forgotten-export) The symbol "AgentMessageNotification" needs to be exported by the entry point index.d.ts
-// src/streaming.types.ts:237:4 - (ae-forgotten-export) The symbol "ReversiUpdateKey" needs to be exported by the entry point index.d.ts
-// src/streaming.types.ts:252:4 - (ae-forgotten-export) The symbol "ReversiUpdateSettings" needs to be exported by the entry point index.d.ts
+// src/streaming.types.ts:71:4 - (ae-forgotten-export) The symbol "AgentMessageNotification" needs to be exported by the entry point index.d.ts
+// src/streaming.types.ts:72:4 - (ae-forgotten-export) The symbol "AgentSessionMessagesChanged" needs to be exported by the entry point index.d.ts
+// src/streaming.types.ts:246:4 - (ae-forgotten-export) The symbol "ReversiUpdateKey" needs to be exported by the entry point index.d.ts
+// src/streaming.types.ts:261:4 - (ae-forgotten-export) The symbol "ReversiUpdateSettings" needs to be exported by the entry point index.d.ts
 
 // (No @packageDocumentation comment for this package)
 

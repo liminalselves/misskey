@@ -694,25 +694,55 @@ export type paths = {
          */
         post: operations['admin___agents___redeem-codes___revoke'];
     };
-    '/admin/agents/reports/overview': {
+    '/admin/agents/reports/breakdowns': {
         /**
-         * admin/agents/reports/overview
+         * admin/agents/reports/breakdowns
          * @description No description provided.
          *
          *     **Internal Endpoint**: This endpoint is an API for the misskey mainframe and is not intended for use by third parties.
          *     **Credential required**: *Yes* / **Permission**: *read:admin*
          */
-        post: operations['admin___agents___reports___overview'];
+        post: operations['admin___agents___reports___breakdowns'];
     };
-    '/admin/agents/reports/top-users': {
+    '/admin/agents/reports/models': {
         /**
-         * admin/agents/reports/top-users
+         * admin/agents/reports/models
          * @description No description provided.
          *
          *     **Internal Endpoint**: This endpoint is an API for the misskey mainframe and is not intended for use by third parties.
          *     **Credential required**: *Yes* / **Permission**: *read:admin*
          */
-        post: operations['admin___agents___reports___top-users'];
+        post: operations['admin___agents___reports___models'];
+    };
+    '/admin/agents/reports/summary': {
+        /**
+         * admin/agents/reports/summary
+         * @description No description provided.
+         *
+         *     **Internal Endpoint**: This endpoint is an API for the misskey mainframe and is not intended for use by third parties.
+         *     **Credential required**: *Yes* / **Permission**: *read:admin*
+         */
+        post: operations['admin___agents___reports___summary'];
+    };
+    '/admin/agents/reports/trend': {
+        /**
+         * admin/agents/reports/trend
+         * @description No description provided.
+         *
+         *     **Internal Endpoint**: This endpoint is an API for the misskey mainframe and is not intended for use by third parties.
+         *     **Credential required**: *Yes* / **Permission**: *read:admin*
+         */
+        post: operations['admin___agents___reports___trend'];
+    };
+    '/admin/agents/reports/users': {
+        /**
+         * admin/agents/reports/users
+         * @description No description provided.
+         *
+         *     **Internal Endpoint**: This endpoint is an API for the misskey mainframe and is not intended for use by third parties.
+         *     **Credential required**: *Yes* / **Permission**: *read:admin*
+         */
+        post: operations['admin___agents___reports___users'];
     };
     '/admin/agents/review/diff': {
         /**
@@ -1687,26 +1717,6 @@ export type paths = {
          */
         post: operations['admin___users___agent-success-rate'];
     };
-    '/admin/users/agent-usage': {
-        /**
-         * admin/users/agent-usage
-         * @description No description provided.
-         *
-         *     **Internal Endpoint**: This endpoint is an API for the misskey mainframe and is not intended for use by third parties.
-         *     **Credential required**: *Yes* / **Permission**: *read:admin*
-         */
-        post: operations['admin___users___agent-usage'];
-    };
-    '/admin/users/agent-usage-details': {
-        /**
-         * admin/users/agent-usage-details
-         * @description No description provided.
-         *
-         *     **Internal Endpoint**: This endpoint is an API for the misskey mainframe and is not intended for use by third parties.
-         *     **Credential required**: *Yes* / **Permission**: *read:admin*
-         */
-        post: operations['admin___users___agent-usage-details'];
-    };
     '/admin/users/agent-usage-logs': {
         /**
          * admin/users/agent-usage-logs
@@ -1716,6 +1726,16 @@ export type paths = {
          *     **Credential required**: *Yes* / **Permission**: *read:admin*
          */
         post: operations['admin___users___agent-usage-logs'];
+    };
+    '/admin/users/agent-usage-report': {
+        /**
+         * admin/users/agent-usage-report
+         * @description No description provided.
+         *
+         *     **Internal Endpoint**: This endpoint is an API for the misskey mainframe and is not intended for use by third parties.
+         *     **Credential required**: *Yes* / **Permission**: *read:admin*
+         */
+        post: operations['admin___users___agent-usage-report'];
     };
     '/agents/billing-logs': {
         /**
@@ -2050,6 +2070,15 @@ export type paths = {
          */
         post: operations['agents___messages___import-context'];
     };
+    '/agents/messages/request-status': {
+        /**
+         * agents/messages/request-status
+         * @description No description provided.
+         *
+         *     **Credential required**: *Yes* / **Permission**: *read:chat*
+         */
+        post: operations['agents___messages___request-status'];
+    };
     '/agents/messages/rollback': {
         /**
          * agents/messages/rollback
@@ -2148,15 +2177,6 @@ export type paths = {
          *     **Credential required**: *Yes* / **Permission**: *read:account*
          */
         post: operations['agents___models___success-rates'];
-    };
-    '/agents/my-usage-summary': {
-        /**
-         * agents/my-usage-summary
-         * @description No description provided.
-         *
-         *     **Credential required**: *Yes* / **Permission**: *read:account*
-         */
-        post: operations['agents___my-usage-summary'];
     };
     '/agents/plaza-reviews/create': {
         /**
@@ -2500,6 +2520,24 @@ export type paths = {
          *     **Credential required**: *Yes* / **Permission**: *read:chat*
          */
         post: operations['agents___styles___versions'];
+    };
+    '/agents/usage/logs': {
+        /**
+         * agents/usage/logs
+         * @description No description provided.
+         *
+         *     **Credential required**: *Yes* / **Permission**: *read:account*
+         */
+        post: operations['agents___usage___logs'];
+    };
+    '/agents/usage/report': {
+        /**
+         * agents/usage/report
+         * @description No description provided.
+         *
+         *     **Credential required**: *Yes* / **Permission**: *read:account*
+         */
+        post: operations['agents___usage___report'];
     };
     '/agents/vision-models/list': {
         /**
@@ -13263,16 +13301,14 @@ export interface operations {
             };
         };
     };
-    admin___agents___reports___overview: {
+    admin___agents___reports___breakdowns: {
         requestBody: {
             content: {
                 'application/json': {
-                    hours?: number;
-                    /** @enum {string} */
-                    bucket?: 'hour' | 'day';
                     since?: string;
                     until?: string;
-                    modelId?: string;
+                    modelIds?: string[];
+                    usageKinds?: ('chat' | 'compression' | 'image_generation' | 'vision' | 'sticker_description' | 'proactive_random' | 'proactive_scheduled')[];
                 };
             };
         };
@@ -13284,86 +13320,43 @@ export interface operations {
                 };
                 content: {
                     'application/json': {
-                        /** @enum {string} */
-                        bucket: 'hour' | 'day';
-                        /** Format: date-time */
-                        since: string;
-                        /** Format: date-time */
-                        until: string;
-                        overall: {
-                            total: number;
-                            success: number;
-                            failed: number;
-                            aborted: number;
-                            totalCost: number;
-                            uniqueUsers: number;
-                            freeCalls: number;
-                            paidCalls: number;
-                            creditsCharged: number;
-                            avgDurationMs: number | null;
-                        };
-                        previousOverall: {
-                            total: number;
-                            success: number;
-                            failed: number;
-                            aborted: number;
-                            totalCost: number;
-                            uniqueUsers: number;
-                            freeCalls: number;
-                            paidCalls: number;
-                            creditsCharged: number;
-                            avgDurationMs: number | null;
-                        };
-                        byModel: {
-                            modelId: string | null;
-                            modelName: string | null;
-                            total: number;
-                            success: number;
-                            failed: number;
-                            aborted: number;
-                            totalCost: number;
-                            unlisted: boolean;
-                            freeCalls: number;
-                            paidCalls: number;
-                            creditsCharged: number;
-                            uniqueUsers: number;
-                            avgDurationMs: number | null;
-                            promptTokens: number;
-                            completionTokens: number;
-                        }[];
-                        buckets: {
-                            /** Format: date-time */
-                            bucketStart: string;
-                            total: number;
-                            success: number;
-                            failed: number;
-                            aborted: number;
-                            freeCalls: number;
-                            paidCalls: number;
-                            creditsCharged: number;
-                            promptTokens: number;
-                            completionTokens: number;
-                            avgDurationMs: number | null;
-                        }[];
-                        byUsageKind: {
+                        usageKinds: {
                             usageKind: string;
-                            total: number;
-                            freeCalls: number;
-                            paidCalls: number;
-                            creditsCharged: number;
+                            m: {
+                                total: number;
+                                success: number;
+                                failed: number;
+                                aborted: number;
+                                pending: number;
+                                freeCalls: number;
+                                paidCalls: number;
+                                credits: number;
+                                users: number;
+                                promptTokens: number;
+                                completionTokens: number;
+                                cacheHitTokens: number;
+                                avgMs: number | null;
+                                p50Ms: number | null;
+                                p95Ms: number | null;
+                            };
                         }[];
                         billing: {
-                            free: number;
-                            paid: number;
-                            failed: number;
-                            byok: number;
-                            zeroPriced: number;
-                            unassigned: number;
-                            other: number;
-                        };
-                        insights: {
-                            [key: string]: unknown;
-                        };
+                            category: string;
+                            count: number;
+                            credits: number;
+                        }[];
+                        errorCodes: {
+                            errorCode: string;
+                            count: number;
+                            models: number;
+                            users: number;
+                            lastAt: string;
+                        }[];
+                        heatmap: {
+                            dow: number;
+                            hour: number;
+                            count: number;
+                        }[];
                     };
                 };
             };
@@ -13423,16 +13416,14 @@ export interface operations {
             };
         };
     };
-    'admin___agents___reports___top-users': {
+    admin___agents___reports___models: {
         requestBody: {
             content: {
                 'application/json': {
-                    hours?: number;
                     since?: string;
                     until?: string;
-                    modelId?: string;
-                    page?: number;
-                    limit?: number;
+                    modelIds?: string[];
+                    usageKinds?: ('chat' | 'compression' | 'image_generation' | 'vision' | 'sticker_description' | 'proactive_random' | 'proactive_scheduled')[];
                 };
             };
         };
@@ -13444,16 +13435,422 @@ export interface operations {
                 };
                 content: {
                     'application/json': {
-                        total: number;
-                        users: {
-                            userId: string;
-                            username: string;
-                            name: string | null;
+                        catalog: {
+                            id: string;
+                            name: string;
+                            /** @enum {string} */
+                            category: 'llm' | 'image' | 'vision' | 'byok' | 'unassigned' | 'deleted';
+                            /** @enum {string} */
+                            state: 'active' | 'unlisted' | 'disabled' | 'deleted';
+                        }[];
+                        rows: {
+                            modelId: string;
+                            m: {
+                                total: number;
+                                success: number;
+                                failed: number;
+                                aborted: number;
+                                pending: number;
+                                freeCalls: number;
+                                paidCalls: number;
+                                credits: number;
+                                users: number;
+                                promptTokens: number;
+                                completionTokens: number;
+                                cacheHitTokens: number;
+                                avgMs: number | null;
+                                p50Ms: number | null;
+                                p95Ms: number | null;
+                            };
+                        }[];
+                    };
+                };
+            };
+            /** @description Client error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Authentication error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Forbidden error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description I'm Ai */
+            418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+        };
+    };
+    admin___agents___reports___summary: {
+        requestBody: {
+            content: {
+                'application/json': {
+                    since?: string;
+                    until?: string;
+                    modelIds?: string[];
+                    usageKinds?: ('chat' | 'compression' | 'image_generation' | 'vision' | 'sticker_description' | 'proactive_random' | 'proactive_scheduled')[];
+                    /**
+                     * @default auto
+                     * @enum {string}
+                     */
+                    bucket?: 'auto' | 'hour' | 'day' | 'week';
+                };
+            };
+        };
+        responses: {
+            /** @description OK (with results) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': {
+                        since: string;
+                        until: string;
+                        /** @enum {string} */
+                        bucket: 'hour' | 'day' | 'week';
+                        current: {
                             total: number;
+                            success: number;
+                            failed: number;
+                            aborted: number;
+                            pending: number;
                             freeCalls: number;
                             paidCalls: number;
-                            creditsCharged: number;
+                            credits: number;
+                            users: number;
+                            promptTokens: number;
+                            completionTokens: number;
+                            cacheHitTokens: number;
+                            avgMs: number | null;
+                            p50Ms: number | null;
+                            p95Ms: number | null;
+                        };
+                        previous: {
+                            total: number;
+                            success: number;
+                            failed: number;
+                            aborted: number;
+                            pending: number;
+                            freeCalls: number;
+                            paidCalls: number;
+                            credits: number;
+                            users: number;
+                            promptTokens: number;
+                            completionTokens: number;
+                            cacheHitTokens: number;
+                            avgMs: number | null;
+                            p50Ms: number | null;
+                            p95Ms: number | null;
+                        };
+                        series: {
+                            t: string;
+                            m: {
+                                total: number;
+                                success: number;
+                                failed: number;
+                                aborted: number;
+                                pending: number;
+                                freeCalls: number;
+                                paidCalls: number;
+                                credits: number;
+                                users: number;
+                                promptTokens: number;
+                                completionTokens: number;
+                                cacheHitTokens: number;
+                                avgMs: number | null;
+                                p50Ms: number | null;
+                                p95Ms: number | null;
+                            };
                         }[];
+                    };
+                };
+            };
+            /** @description Client error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Authentication error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Forbidden error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description I'm Ai */
+            418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+        };
+    };
+    admin___agents___reports___trend: {
+        requestBody: {
+            content: {
+                'application/json': {
+                    since?: string;
+                    until?: string;
+                    modelIds?: string[];
+                    usageKinds?: ('chat' | 'compression' | 'image_generation' | 'vision' | 'sticker_description' | 'proactive_random' | 'proactive_scheduled')[];
+                    /**
+                     * @default auto
+                     * @enum {string}
+                     */
+                    bucket?: 'auto' | 'hour' | 'day' | 'week';
+                    /**
+                     * @default none
+                     * @enum {string}
+                     */
+                    breakdown?: 'none' | 'status' | 'model' | 'usageKind' | 'billing';
+                    /** @default false */
+                    compare?: boolean;
+                    /**
+                     * @default total
+                     * @enum {string}
+                     */
+                    metric?: 'total' | 'successRate' | 'credits' | 'users' | 'tokens' | 'latency';
+                };
+            };
+        };
+        responses: {
+            /** @description OK (with results) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': {
+                        /** @enum {string} */
+                        bucket: 'hour' | 'day' | 'week';
+                        buckets: string[];
+                        groups: {
+                            key: string;
+                            total: number;
+                            points: {
+                                total: number;
+                                success: number;
+                                failed: number;
+                                aborted: number;
+                                pending: number;
+                                freeCalls: number;
+                                paidCalls: number;
+                                credits: number;
+                                users: number;
+                                promptTokens: number;
+                                completionTokens: number;
+                                cacheHitTokens: number;
+                                avgMs: number | null;
+                                p50Ms: number | null;
+                                p95Ms: number | null;
+                            }[];
+                        }[];
+                        previous: {
+                            total: number;
+                            success: number;
+                            failed: number;
+                            aborted: number;
+                            pending: number;
+                            freeCalls: number;
+                            paidCalls: number;
+                            credits: number;
+                            users: number;
+                            promptTokens: number;
+                            completionTokens: number;
+                            cacheHitTokens: number;
+                            avgMs: number | null;
+                            p50Ms: number | null;
+                            p95Ms: number | null;
+                        }[] | null;
+                    };
+                };
+            };
+            /** @description Client error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Authentication error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Forbidden error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description I'm Ai */
+            418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+        };
+    };
+    admin___agents___reports___users: {
+        requestBody: {
+            content: {
+                'application/json': {
+                    since?: string;
+                    until?: string;
+                    modelIds?: string[];
+                    usageKinds?: ('chat' | 'compression' | 'image_generation' | 'vision' | 'sticker_description' | 'proactive_random' | 'proactive_scheduled')[];
+                    /**
+                     * @default credits
+                     * @enum {string}
+                     */
+                    sort?: 'credits' | 'total' | 'tokens' | 'failed';
+                    /** @default 1 */
+                    page?: number;
+                    /** @default 10 */
+                    pageSize?: number;
+                };
+            };
+        };
+        responses: {
+            /** @description OK (with results) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': {
+                        items: {
+                            userId: string;
+                            user: components['schemas']['UserLite'] | null;
+                            m: {
+                                total: number;
+                                success: number;
+                                failed: number;
+                                aborted: number;
+                                pending: number;
+                                freeCalls: number;
+                                paidCalls: number;
+                                credits: number;
+                                users: number;
+                                promptTokens: number;
+                                completionTokens: number;
+                                cacheHitTokens: number;
+                                avgMs: number | null;
+                                p50Ms: number | null;
+                                p95Ms: number | null;
+                            };
+                        }[];
+                        total: number;
+                        page: number;
+                        pageSize: number;
                     };
                 };
             };
@@ -21880,246 +22277,6 @@ export interface operations {
             };
         };
     };
-    'admin___users___agent-usage': {
-        requestBody: {
-            content: {
-                'application/json': {
-                    /** Format: misskey:id */
-                    userId: string;
-                    hours?: number;
-                };
-            };
-        };
-        responses: {
-            /** @description OK (with results) */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    'application/json': {
-                        creditBalance: number;
-                        since: string;
-                        hours: number;
-                        overall: {
-                            total: number;
-                            success: number;
-                            failed: number;
-                            aborted: number;
-                            totalCost: number;
-                            freeCalls: number;
-                            paidCalls: number;
-                            creditsCharged: number;
-                            avgDurationMs: number | null;
-                        };
-                        byModel: {
-                            modelId: string | null;
-                            modelName: string | null;
-                            /** @enum {string|null} */
-                            modelSource: 'official' | 'user' | null;
-                            total: number;
-                            success: number;
-                            failed: number;
-                            aborted: number;
-                            totalCost: number;
-                            freeCalls: number;
-                            paidCalls: number;
-                            creditsCharged: number;
-                            avgDurationMs: number | null;
-                        }[];
-                        recentLogsTotal: number;
-                        /** @enum {string} */
-                        bucket: 'hour' | 'day';
-                        buckets: {
-                            bucketStart: string;
-                            total: number;
-                            success: number;
-                            failed: number;
-                            aborted: number;
-                            freeCalls: number;
-                            paidCalls: number;
-                            creditsCharged: number;
-                            promptTokens: number;
-                            completionTokens: number;
-                            avgDurationMs: number | null;
-                        }[];
-                        byUsageKind: {
-                            usageKind: string;
-                            total: number;
-                            freeCalls: number;
-                            paidCalls: number;
-                            creditsCharged: number;
-                        }[];
-                    };
-                };
-            };
-            /** @description Client error */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    'application/json': components['schemas']['Error'];
-                };
-            };
-            /** @description Authentication error */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    'application/json': components['schemas']['Error'];
-                };
-            };
-            /** @description Forbidden error */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    'application/json': components['schemas']['Error'];
-                };
-            };
-            /** @description I'm Ai */
-            418: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    'application/json': components['schemas']['Error'];
-                };
-            };
-            /** @description Too many requests */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    'application/json': components['schemas']['Error'];
-                };
-            };
-            /** @description Internal server error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    'application/json': components['schemas']['Error'];
-                };
-            };
-        };
-    };
-    'admin___users___agent-usage-details': {
-        requestBody: {
-            content: {
-                'application/json': {
-                    /** Format: misskey:id */
-                    userId: string;
-                    /** @default 720 */
-                    hours?: number;
-                    /** @default 0 */
-                    characterStatsOffset?: number;
-                    /** @default 10 */
-                    characterStatsLimit?: number;
-                    /** @default 0 */
-                    dialogueStyleStatsOffset?: number;
-                    /** @default 10 */
-                    dialogueStyleStatsLimit?: number;
-                };
-            };
-        };
-        responses: {
-            /** @description OK (with results) */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    'application/json': {
-                        modelStats: {
-                            modelId: string | null;
-                            modelName: string | null;
-                            /** @enum {string|null} */
-                            modelSource: 'official' | 'user' | null;
-                            total: number;
-                            success: number;
-                            failed: number;
-                            aborted: number;
-                            totalCost: number;
-                            freeQuotaUsed: number;
-                            freeQuotaTotal: number;
-                        }[];
-                        characterStats: {
-                            characterId: string;
-                            characterName: string | null;
-                            total: number;
-                        }[];
-                        characterStatsTotal: number;
-                        dialogueStyleStats: {
-                            dialogueStyleId: string;
-                            dialogueStyleName: string | null;
-                            total: number;
-                        }[];
-                        dialogueStyleStatsTotal: number;
-                    };
-                };
-            };
-            /** @description Client error */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    'application/json': components['schemas']['Error'];
-                };
-            };
-            /** @description Authentication error */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    'application/json': components['schemas']['Error'];
-                };
-            };
-            /** @description Forbidden error */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    'application/json': components['schemas']['Error'];
-                };
-            };
-            /** @description I'm Ai */
-            418: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    'application/json': components['schemas']['Error'];
-                };
-            };
-            /** @description Too many requests */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    'application/json': components['schemas']['Error'];
-                };
-            };
-            /** @description Internal server error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    'application/json': components['schemas']['Error'];
-                };
-            };
-        };
-    };
     'admin___users___agent-usage-logs': {
         requestBody: {
             content: {
@@ -22164,6 +22321,319 @@ export interface operations {
                         total: number;
                         page: number;
                         pageSize: number;
+                    };
+                };
+            };
+            /** @description Client error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Authentication error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Forbidden error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description I'm Ai */
+            418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+        };
+    };
+    'admin___users___agent-usage-report': {
+        requestBody: {
+            content: {
+                'application/json': {
+                    /** Format: misskey:id */
+                    userId: string;
+                    since?: string;
+                    until?: string;
+                    modelIds?: string[];
+                    usageKinds?: ('chat' | 'compression' | 'image_generation' | 'vision' | 'sticker_description' | 'proactive_random' | 'proactive_scheduled')[];
+                    /**
+                     * @default auto
+                     * @enum {string}
+                     */
+                    bucket?: 'auto' | 'hour' | 'day' | 'week';
+                    /**
+                     * @default none
+                     * @enum {string}
+                     */
+                    breakdown?: 'none' | 'status' | 'model' | 'usageKind' | 'billing';
+                    /** @default false */
+                    compare?: boolean;
+                    /** @default 1 */
+                    characterPage?: number;
+                    /** @default 1 */
+                    stylePage?: number;
+                    /** @default 10 */
+                    dimensionPageSize?: number;
+                };
+            };
+        };
+        responses: {
+            /** @description OK (with results) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': {
+                        creditBalance: number;
+                        since: string;
+                        until: string;
+                        /** @enum {string} */
+                        bucket: 'hour' | 'day' | 'week';
+                        current: {
+                            total: number;
+                            success: number;
+                            failed: number;
+                            aborted: number;
+                            pending: number;
+                            freeCalls: number;
+                            paidCalls: number;
+                            credits: number;
+                            users: number;
+                            promptTokens: number;
+                            completionTokens: number;
+                            cacheHitTokens: number;
+                            avgMs: number | null;
+                            p50Ms: number | null;
+                            p95Ms: number | null;
+                        };
+                        previous: {
+                            total: number;
+                            success: number;
+                            failed: number;
+                            aborted: number;
+                            pending: number;
+                            freeCalls: number;
+                            paidCalls: number;
+                            credits: number;
+                            users: number;
+                            promptTokens: number;
+                            completionTokens: number;
+                            cacheHitTokens: number;
+                            avgMs: number | null;
+                            p50Ms: number | null;
+                            p95Ms: number | null;
+                        };
+                        series: {
+                            t: string;
+                            m: {
+                                total: number;
+                                success: number;
+                                failed: number;
+                                aborted: number;
+                                pending: number;
+                                freeCalls: number;
+                                paidCalls: number;
+                                credits: number;
+                                users: number;
+                                promptTokens: number;
+                                completionTokens: number;
+                                cacheHitTokens: number;
+                                avgMs: number | null;
+                                p50Ms: number | null;
+                                p95Ms: number | null;
+                            };
+                        }[];
+                        trend: {
+                            buckets: string[];
+                            groups: {
+                                key: string;
+                                total: number;
+                                points: {
+                                    total: number;
+                                    success: number;
+                                    failed: number;
+                                    aborted: number;
+                                    pending: number;
+                                    freeCalls: number;
+                                    paidCalls: number;
+                                    credits: number;
+                                    users: number;
+                                    promptTokens: number;
+                                    completionTokens: number;
+                                    cacheHitTokens: number;
+                                    avgMs: number | null;
+                                    p50Ms: number | null;
+                                    p95Ms: number | null;
+                                }[];
+                            }[];
+                            previous: {
+                                total: number;
+                                success: number;
+                                failed: number;
+                                aborted: number;
+                                pending: number;
+                                freeCalls: number;
+                                paidCalls: number;
+                                credits: number;
+                                users: number;
+                                promptTokens: number;
+                                completionTokens: number;
+                                cacheHitTokens: number;
+                                avgMs: number | null;
+                                p50Ms: number | null;
+                                p95Ms: number | null;
+                            }[] | null;
+                        };
+                        catalog: {
+                            id: string;
+                            name: string;
+                            category: string;
+                            state: string;
+                        }[];
+                        models: {
+                            modelId: string;
+                            m: {
+                                total: number;
+                                success: number;
+                                failed: number;
+                                aborted: number;
+                                pending: number;
+                                freeCalls: number;
+                                paidCalls: number;
+                                credits: number;
+                                users: number;
+                                promptTokens: number;
+                                completionTokens: number;
+                                cacheHitTokens: number;
+                                avgMs: number | null;
+                                p50Ms: number | null;
+                                p95Ms: number | null;
+                            };
+                        }[];
+                        usageKinds: {
+                            usageKind: string;
+                            m: {
+                                total: number;
+                                success: number;
+                                failed: number;
+                                aborted: number;
+                                pending: number;
+                                freeCalls: number;
+                                paidCalls: number;
+                                credits: number;
+                                users: number;
+                                promptTokens: number;
+                                completionTokens: number;
+                                cacheHitTokens: number;
+                                avgMs: number | null;
+                                p50Ms: number | null;
+                                p95Ms: number | null;
+                            };
+                        }[];
+                        billing: {
+                            category: string;
+                            count: number;
+                            credits: number;
+                        }[];
+                        errorCodes: {
+                            errorCode: string;
+                            count: number;
+                            models: number;
+                            users: number;
+                            lastAt: string;
+                        }[];
+                        heatmap: {
+                            dow: number;
+                            hour: number;
+                            count: number;
+                        }[];
+                        characters: {
+                            items: {
+                                id: string;
+                                name: string | null;
+                                m: {
+                                    total: number;
+                                    success: number;
+                                    failed: number;
+                                    aborted: number;
+                                    pending: number;
+                                    freeCalls: number;
+                                    paidCalls: number;
+                                    credits: number;
+                                    users: number;
+                                    promptTokens: number;
+                                    completionTokens: number;
+                                    cacheHitTokens: number;
+                                    avgMs: number | null;
+                                    p50Ms: number | null;
+                                    p95Ms: number | null;
+                                };
+                            }[];
+                            total: number;
+                            page: number;
+                            pageSize: number;
+                        };
+                        styles: {
+                            items: {
+                                id: string;
+                                name: string | null;
+                                m: {
+                                    total: number;
+                                    success: number;
+                                    failed: number;
+                                    aborted: number;
+                                    pending: number;
+                                    freeCalls: number;
+                                    paidCalls: number;
+                                    credits: number;
+                                    users: number;
+                                    promptTokens: number;
+                                    completionTokens: number;
+                                    cacheHitTokens: number;
+                                    avgMs: number | null;
+                                    p50Ms: number | null;
+                                    p95Ms: number | null;
+                                };
+                            }[];
+                            total: number;
+                            page: number;
+                            pageSize: number;
+                        };
                     };
                 };
             };
@@ -25533,6 +26003,89 @@ export interface operations {
             };
         };
     };
+    'agents___messages___request-status': {
+        requestBody: {
+            content: {
+                'application/json': {
+                    /** Format: misskey:id */
+                    sessionId: string;
+                    clientRequestId: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK (with results) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': {
+                        /** @enum {string} */
+                        state: 'pending' | 'completed' | 'none';
+                        /** Format: misskey:id */
+                        userMessageId: string | null;
+                        /** Format: misskey:id */
+                        assistantMessageId: string | null;
+                    };
+                };
+            };
+            /** @description Client error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Authentication error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Forbidden error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description I'm Ai */
+            418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+        };
+    };
     agents___messages___rollback: {
         requestBody: {
             content: {
@@ -26398,166 +26951,6 @@ export interface operations {
                             success: number;
                             failed: number;
                             aborted: number;
-                        }[];
-                    };
-                };
-            };
-            /** @description Client error */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    'application/json': components['schemas']['Error'];
-                };
-            };
-            /** @description Authentication error */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    'application/json': components['schemas']['Error'];
-                };
-            };
-            /** @description Forbidden error */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    'application/json': components['schemas']['Error'];
-                };
-            };
-            /** @description I'm Ai */
-            418: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    'application/json': components['schemas']['Error'];
-                };
-            };
-            /** @description Too many requests */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    'application/json': components['schemas']['Error'];
-                };
-            };
-            /** @description Internal server error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    'application/json': components['schemas']['Error'];
-                };
-            };
-        };
-    };
-    'agents___my-usage-summary': {
-        requestBody: {
-            content: {
-                'application/json': {
-                    untilDate?: number;
-                    limit?: number;
-                    /** @default 1 */
-                    recentLogsPage?: number;
-                    /** @default 30 */
-                    recentLogsPageSize?: number;
-                    /** @default 0 */
-                    characterStatsOffset?: number;
-                    /** @default 10 */
-                    characterStatsLimit?: number;
-                    /** @default 0 */
-                    dialogueStyleStatsOffset?: number;
-                    /** @default 10 */
-                    dialogueStyleStatsLimit?: number;
-                };
-            };
-        };
-        responses: {
-            /** @description OK (with results) */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    'application/json': {
-                        creditBalance: number;
-                        recentLogs: {
-                            id: string;
-                            requestedAt: string;
-                            completedAt: string | null;
-                            durationMs: number | null;
-                            modelId: string | null;
-                            modelName: string | null;
-                            /** @enum {string|null} */
-                            modelSource: 'official' | 'user' | null;
-                            modelApiName: string | null;
-                            /** @enum {string} */
-                            usageKind: 'chat' | 'compression' | 'image_generation' | 'vision' | 'sticker_description' | 'proactive_random' | 'proactive_scheduled' | 'checkin' | 'admin_reward' | 'admin_compensation' | 'credit_migration';
-                            status: string;
-                            cost: number;
-                            promptTokens: number | null;
-                            completionTokens: number | null;
-                            promptCacheHitTokens: number | null;
-                            promptCacheMissTokens: number | null;
-                            usedFreeQuota: boolean | null;
-                            freeQuotaUsedAtCall: number | null;
-                            freeQuotaTotalAtCall: number | null;
-                        }[];
-                        recentLogsHasMore: boolean;
-                        recentLogsTotal: number;
-                        recentLogsPage: number;
-                        recentLogsPageSize: number;
-                        modelStats: {
-                            modelId: string | null;
-                            modelName: string | null;
-                            /** @enum {string|null} */
-                            modelSource: 'official' | 'user' | null;
-                            total: number;
-                            success: number;
-                            failed: number;
-                            aborted: number;
-                            totalCost: number;
-                            freeQuotaUsed: number;
-                            freeQuotaTotal: number;
-                        }[];
-                        characterStats: {
-                            characterId: string;
-                            characterName: string | null;
-                            total: number;
-                        }[];
-                        characterStatsTotal: number;
-                        dialogueStyleStats: {
-                            dialogueStyleId: string;
-                            dialogueStyleName: string | null;
-                            total: number;
-                        }[];
-                        dialogueStyleStatsTotal: number;
-                        buckets: {
-                            bucketStart: string;
-                            total: number;
-                            success: number;
-                            failed: number;
-                            aborted: number;
-                            freeCalls: number;
-                            paidCalls: number;
-                            creditsCharged: number;
-                            promptTokens: number;
-                            completionTokens: number;
-                            avgDurationMs: number | null;
-                        }[];
-                        byUsageKind: {
-                            usageKind: string;
-                            total: number;
-                            freeCalls: number;
-                            paidCalls: number;
-                            creditsCharged: number;
                         }[];
                     };
                 };
@@ -29916,6 +30309,418 @@ export interface operations {
                         isCurrentPublished: boolean;
                         isHistorical: boolean;
                     }[];
+                };
+            };
+            /** @description Client error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Authentication error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Forbidden error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description I'm Ai */
+            418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+        };
+    };
+    agents___usage___logs: {
+        requestBody: {
+            content: {
+                'application/json': {
+                    /** @default 1 */
+                    page?: number;
+                    /** @default 20 */
+                    pageSize?: number;
+                };
+            };
+        };
+        responses: {
+            /** @description OK (with results) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': {
+                        items: {
+                            id: string;
+                            requestedAt: string;
+                            completedAt: string | null;
+                            durationMs: number | null;
+                            modelId: string | null;
+                            modelName: string | null;
+                            /** @enum {string|null} */
+                            modelSource: 'official' | 'user' | null;
+                            modelApiName: string | null;
+                            /** @enum {string} */
+                            usageKind: 'chat' | 'compression' | 'image_generation' | 'vision' | 'sticker_description' | 'proactive_random' | 'proactive_scheduled' | 'checkin' | 'admin_reward' | 'admin_compensation' | 'credit_migration';
+                            status: string;
+                            cost: number;
+                            promptTokens: number | null;
+                            completionTokens: number | null;
+                            usedFreeQuota: boolean | null;
+                            freeQuotaUsedAtCall: number | null;
+                            freeQuotaTotalAtCall: number | null;
+                        }[];
+                        total: number;
+                        page: number;
+                        pageSize: number;
+                    };
+                };
+            };
+            /** @description Client error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Authentication error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Forbidden error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description I'm Ai */
+            418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+        };
+    };
+    agents___usage___report: {
+        requestBody: {
+            content: {
+                'application/json': {
+                    since?: string;
+                    until?: string;
+                    modelIds?: string[];
+                    usageKinds?: ('chat' | 'compression' | 'image_generation' | 'vision' | 'sticker_description' | 'proactive_random' | 'proactive_scheduled')[];
+                    /**
+                     * @default auto
+                     * @enum {string}
+                     */
+                    bucket?: 'auto' | 'hour' | 'day' | 'week';
+                    /**
+                     * @default none
+                     * @enum {string}
+                     */
+                    breakdown?: 'none' | 'status' | 'model' | 'usageKind' | 'billing';
+                    /** @default false */
+                    compare?: boolean;
+                    /** @default 1 */
+                    characterPage?: number;
+                    /** @default 1 */
+                    stylePage?: number;
+                    /** @default 10 */
+                    dimensionPageSize?: number;
+                };
+            };
+        };
+        responses: {
+            /** @description OK (with results) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': {
+                        creditBalance: number;
+                        since: string;
+                        until: string;
+                        /** @enum {string} */
+                        bucket: 'hour' | 'day' | 'week';
+                        current: {
+                            total: number;
+                            success: number;
+                            failed: number;
+                            aborted: number;
+                            pending: number;
+                            freeCalls: number;
+                            paidCalls: number;
+                            credits: number;
+                            users: number;
+                            promptTokens: number;
+                            completionTokens: number;
+                            cacheHitTokens: number;
+                            avgMs: number | null;
+                            p50Ms: number | null;
+                            p95Ms: number | null;
+                        };
+                        previous: {
+                            total: number;
+                            success: number;
+                            failed: number;
+                            aborted: number;
+                            pending: number;
+                            freeCalls: number;
+                            paidCalls: number;
+                            credits: number;
+                            users: number;
+                            promptTokens: number;
+                            completionTokens: number;
+                            cacheHitTokens: number;
+                            avgMs: number | null;
+                            p50Ms: number | null;
+                            p95Ms: number | null;
+                        };
+                        series: {
+                            t: string;
+                            m: {
+                                total: number;
+                                success: number;
+                                failed: number;
+                                aborted: number;
+                                pending: number;
+                                freeCalls: number;
+                                paidCalls: number;
+                                credits: number;
+                                users: number;
+                                promptTokens: number;
+                                completionTokens: number;
+                                cacheHitTokens: number;
+                                avgMs: number | null;
+                                p50Ms: number | null;
+                                p95Ms: number | null;
+                            };
+                        }[];
+                        trend: {
+                            buckets: string[];
+                            groups: {
+                                key: string;
+                                total: number;
+                                points: {
+                                    total: number;
+                                    success: number;
+                                    failed: number;
+                                    aborted: number;
+                                    pending: number;
+                                    freeCalls: number;
+                                    paidCalls: number;
+                                    credits: number;
+                                    users: number;
+                                    promptTokens: number;
+                                    completionTokens: number;
+                                    cacheHitTokens: number;
+                                    avgMs: number | null;
+                                    p50Ms: number | null;
+                                    p95Ms: number | null;
+                                }[];
+                            }[];
+                            previous: {
+                                total: number;
+                                success: number;
+                                failed: number;
+                                aborted: number;
+                                pending: number;
+                                freeCalls: number;
+                                paidCalls: number;
+                                credits: number;
+                                users: number;
+                                promptTokens: number;
+                                completionTokens: number;
+                                cacheHitTokens: number;
+                                avgMs: number | null;
+                                p50Ms: number | null;
+                                p95Ms: number | null;
+                            }[] | null;
+                        };
+                        catalog: {
+                            id: string;
+                            name: string;
+                            category: string;
+                            state: string;
+                        }[];
+                        models: {
+                            modelId: string;
+                            m: {
+                                total: number;
+                                success: number;
+                                failed: number;
+                                aborted: number;
+                                pending: number;
+                                freeCalls: number;
+                                paidCalls: number;
+                                credits: number;
+                                users: number;
+                                promptTokens: number;
+                                completionTokens: number;
+                                cacheHitTokens: number;
+                                avgMs: number | null;
+                                p50Ms: number | null;
+                                p95Ms: number | null;
+                            };
+                        }[];
+                        usageKinds: {
+                            usageKind: string;
+                            m: {
+                                total: number;
+                                success: number;
+                                failed: number;
+                                aborted: number;
+                                pending: number;
+                                freeCalls: number;
+                                paidCalls: number;
+                                credits: number;
+                                users: number;
+                                promptTokens: number;
+                                completionTokens: number;
+                                cacheHitTokens: number;
+                                avgMs: number | null;
+                                p50Ms: number | null;
+                                p95Ms: number | null;
+                            };
+                        }[];
+                        billing: {
+                            category: string;
+                            count: number;
+                            credits: number;
+                        }[];
+                        errorCodes: {
+                            errorCode: string;
+                            count: number;
+                            models: number;
+                            users: number;
+                            lastAt: string;
+                        }[];
+                        heatmap: {
+                            dow: number;
+                            hour: number;
+                            count: number;
+                        }[];
+                        characters: {
+                            items: {
+                                id: string;
+                                name: string | null;
+                                m: {
+                                    total: number;
+                                    success: number;
+                                    failed: number;
+                                    aborted: number;
+                                    pending: number;
+                                    freeCalls: number;
+                                    paidCalls: number;
+                                    credits: number;
+                                    users: number;
+                                    promptTokens: number;
+                                    completionTokens: number;
+                                    cacheHitTokens: number;
+                                    avgMs: number | null;
+                                    p50Ms: number | null;
+                                    p95Ms: number | null;
+                                };
+                            }[];
+                            total: number;
+                            page: number;
+                            pageSize: number;
+                        };
+                        styles: {
+                            items: {
+                                id: string;
+                                name: string | null;
+                                m: {
+                                    total: number;
+                                    success: number;
+                                    failed: number;
+                                    aborted: number;
+                                    pending: number;
+                                    freeCalls: number;
+                                    paidCalls: number;
+                                    credits: number;
+                                    users: number;
+                                    promptTokens: number;
+                                    completionTokens: number;
+                                    cacheHitTokens: number;
+                                    avgMs: number | null;
+                                    p50Ms: number | null;
+                                    p95Ms: number | null;
+                                };
+                            }[];
+                            total: number;
+                            page: number;
+                            pageSize: number;
+                        };
+                    };
                 };
             };
             /** @description Client error */

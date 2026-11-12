@@ -610,6 +610,10 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				});
 				assistantPersisted = true;
 				await this.agentProactiveScheduleService.applyAssistantControl(session, assistantMsg, proactiveControl);
+				this.agentMessageNotifyService.publishSessionMessagesChanged(me.id, session.id, 'created', {
+					messageId: hasVisibleAssistantText ? assistantMsg.id : undefined,
+					clientRequestId,
+				});
 
 				if (hasVisibleAssistantText) {
 					// 与私信一致：不落 notification 通知表，走 newAgentMessage 消息渠道（Redis 未读标记 + 延迟事件）。

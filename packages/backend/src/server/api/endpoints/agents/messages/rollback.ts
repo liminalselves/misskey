@@ -104,6 +104,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				return { deletedCount: deleted.affected ?? 0, content: anchor.content };
 				});
 				await this.agentMessageNotifyService.reconcileUnreadMessages(me.id, ps.sessionId);
+				this.agentMessageNotifyService.publishSessionMessagesChanged(me.id, ps.sessionId, 'changed');
 				return result;
 		});
 	}

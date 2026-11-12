@@ -18,11 +18,9 @@
 - 管理菜单切换用 v-show 保持 NestedRouterView 的缓存容器存活。管理/设置父页忽略离开 DOM 或零宽的 ResizeObserver 回调，重定向前确认当前仍属自身路由。
 - `useScrollPositionKeeper` 记录真实 scrollTop/scrollLeft（包括反向聊天的负值）。有可见锚点时保留相对偏移，无锚点或锚点消失时使用坐标。首次激活不覆盖深链定位；停用时取消恢复定时器，卸载/换节点时移除监听。
 
-## App 只读结论
+## App 行为依据
 
-2026-10-01 检查桌面 `liminalselves` 项目。Android `NativeWebViewActivity.kt` 的 onCreateWindow 将站内 window.open 交给 handleWindowOpenUrl，最终调用当前 WebView.loadUrl；原生返回键以 WebView.canGoBack/goBack 处理。因此强制新窗口会变成整页加载，而不是保留前端状态的路由跳转。
-
-本次通过网页端避免该路径，没有修改 App，也没有改变桥协议。无需为本次导航修复重新发布 App。App 真机行为尚未验收；原生手势/弹窗返回及其他未检查流程不能据此宣称已修复。
+Android `NativeWebViewActivity.kt` 的 onCreateWindow 将站内 `window.open` 交给 handleWindowOpenUrl，最终调用当前 WebView.loadUrl；原生返回键以 WebView.canGoBack/goBack 处理。因此强制新窗口会变成整页加载，而不是保留前端状态的路由跳转，导航一律走站内路由。App 真机行为（原生手势、弹窗返回）尚未验收。
 
 ## 网盘文件夹导航
 
@@ -32,13 +30,12 @@
 
 ## 变更边界
 
-导航修复只改网页端，不改 App、后端、数据库或依赖；验证不得操作开发库/生产库，测试接口使用模拟数据。新增缓存或修改公共路由历史需单独核对停用、订阅与状态恢复行为。
+导航契约只涉及网页端，不改 App 桥协议、后端、数据库或依赖。新增缓存或修改公共路由历史需核对停用、订阅与状态恢复行为。
 
 ## 嵌入播放器全屏
 
 - `MkUrlPreview` 的播放器 iframe 固定声明 `allowfullscreen`，不依赖预览服务是否在 `player.allow` 中返回 `fullscreen`；仍按原白名单筛选其他 iframe 权限，不放宽 sandbox。它与窗口播放器使用相同的全屏声明。
-- Android 的全屏显示与返回键退出由 App 现有 `WebChromeClient` 回调负责，职责合同见兄弟仓库 `liminalselves/scripts/misskey-embedded-ux-contract.md`；本次只修改网页，不改变桥协议或 App。
-- 2026-10-06：预览回归测试覆盖缺失全屏权限的元数据；Chrome 实测该场景修复前拒绝全屏、补齐后可进入，并验证截图视频 `BV1C8Hx6PELX` 的全屏进入与退出。该视频仅凭现代 `allow` 在 Chrome 中也能全屏，因此这些结果不能确认用户手机的具体失败原因；旧 WebView 与 App 真机尚未验收。
+- Android 的全屏显示与返回键退出由 App 的 `WebChromeClient` 回调负责，网页端不改变桥协议。旧 WebView 与 App 真机尚未验收。
 
 ## 滚动分页
 
@@ -47,15 +44,12 @@
 - 分页加载保留已显示条目和加载控件高度，不用大号 `MkLoading` 替换整段列表或按钮。用户分页调用 `fetchNewer({ pagination: true })`，结束后不再请求；时间线轮询不带该选项，仍可发现新消息，且不会清除历史分页失败态触发自动重试。
 - 智能体广场的角色/风格追加加载保留卡片，末尾预留 64px 状态区；搜索时不加载被隐藏的广场列表。治理消息检索只在初次空列表加载时显示整块加载指示。
 - 智能体聊天的 `agent-opt:` 临时消息仅供本地显示，不作两向分页游标；没有正式消息时暂不分页。发送、分段播放或通知同步期间到达的同会话通知合并为待同步通知，发送状态复位或当前同步结束后补拉，不依赖下一条通知；延后的通知不提前清未读，后台同步仍不清未读，卸载后不补拉。发送失败仍沿用原有时间线重载与草稿恢复。回归：`pnpm --filter frontend exec vitest run test/agent-session-message-sync.test.ts`。
-- 2026-10-06：`pnpm --filter frontend test pagination.test.ts drive-navigation.test.ts scroll.test.ts` 共 23 项通过，frontend typecheck 通过，改动源码 ESLint 无错误（存量警告保留）。Chrome 393×852 移动视口使用实际搜索页/用户列表、时间线、通知、反向分页和广场组件，配合模拟 API 验证失败不自动重试、按钮与页面高度/scrollY 不变、手动重试后末页停止、重复页停止及广场加载时卡片不消失。无数据库操作；未替代 Android WebView 真机验收。
 
 ## 验证
 
-自动化：`pnpm --filter frontend test drive-navigation.test.ts navigation-state.test.ts scroll.test.ts`、frontend typecheck、改动 src 文件 ESLint、git diff --check。回归覆盖站内历史/独立窗口、移动判定、父容器复用、子页缓存隔离、标签更新、管理菜单往返、无锚点/反向滚动、锚点偏移、离开时取消恢复及首次深链位置；网盘另覆盖目录逐级返回/前进、文件详情返回、目录直达、面包屑、迟到响应、删除目录 replace 和两类选择器隔离。
+`pnpm --filter frontend test drive-navigation.test.ts navigation-state.test.ts scroll.test.ts pagination.test.ts`，再加 frontend typecheck 与改动文件的 ESLint。回归覆盖站内历史/独立窗口、移动判定、父容器复用、子页缓存隔离、标签更新、管理菜单往返、无锚点/反向滚动、锚点偏移、离开时取消恢复及首次深链位置；网盘另覆盖目录逐级返回/前进、文件详情返回、目录直达、面包屑、迟到响应、删除目录 replace 和两类选择器隔离。测试用模拟接口，不操作开发库或生产库。
 
-2026-10-04：Chrome 真实浏览器、393×852 移动视口验证网盘目录进入/逐级返回/前进、文件详情返回、目录地址刷新与根目录面包屑，均通过。使用工作区实际页面/组件/路由与模拟网盘接口，无数据库操作；此结果不替代 App 原生返回键验收。
-
-真机验收（未执行）：
+真机验收清单（未执行）：
 
 1. 在治理会话列表设置筛选、加载更多并滚动；打开会话后分别用顶栏返回、横幅返回、手机返回键，确认原标签、筛选、已加载行和位置保留。
 2. 从消息检索、外审、复审、图片列表打开会话，确认 messageId 定位和返回来源。
@@ -64,4 +58,4 @@
 5. 用户聊天深链定位及负 scrollTop 的聊天列表往返；用户设置子页返回。
 6. 网盘从根目录进入文件夹后按 App 返回键，应回根目录；进入多级目录则逐级返回。打开文件详情后返回应恢复原目录；文件选择弹窗内浏览不应改变宿主页面地址。
 
-缓存上限、整页刷新与 App 进程回收会丢失内存列表；本次不将完整管理结果持久化到 localStorage，也不承诺修复所有移动端交互。
+缓存上限、整页刷新与 App 进程回收会丢失内存列表；管理结果不持久化到 localStorage。

@@ -136,7 +136,7 @@ function createHarness(opts: { reply?: string; imageModelEnabled?: boolean; mode
 		imageService as never,
 		stickerService as never,
 		{ fetch: vi.fn(async () => ({ agentGlobalSystemPrompt: null })) } as never,
-		{ notifyAgentMessage: vi.fn(async () => undefined) } as never,
+		{ notifyAgentMessage: vi.fn(async () => undefined), publishSessionMessagesChanged: vi.fn() } as never,
 		{} as never,
 		compressionMemory as never,
 		tokenService as never,

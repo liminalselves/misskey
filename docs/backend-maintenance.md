@@ -45,7 +45,7 @@ Redis 在线状态、连接计数、离线推送判断和用户休眠唤醒逻�
 ## Token 计数与上下文预算
 
 - 计费、用量报表和导出只采用上游响应 `usage`，不使用本地分词结果。上下文预算统一使用 `o200k_base`；它是本站的内部计算单位，不代表各供应商的真实 Token 数。
-- 官方模型与 BYOK 不再读取每模型 `tokenizerEncoding` / `charsPerToken`。旧分词器实现和历史存储字段保留，但不参与运行；管理端和 BYOK 表单不再提交这些配置。
+- 官方模型与 BYOK 不再读取每模型 `tokenizerEncoding` / `charsPerToken`。旧分词器实现和历史存储字段保留，但不参与运行；管理端和 BYOK 表单不再提交这些配置。词表加载（`misc/agent-custom-tokenizers.ts`）、管理端点 `admin/agents/tokenizer-status`、Dockerfile 的 GLM/DeepSeek 词表预置参数和 `scripts/convert-hf-tokenizer-to-tiktoken.mjs` 同样保留；管理页不再调用该端点，也不显示词表缺失告警，重新启用每模型编码时一并恢复。
 - 已知文本（系统提示、规则、协议、历史正文、指令）按 o200k 计数。尚未生成的回复使用 `maxOutputTokensPerCall` 预留；记忆内容采用固定预留槽，实际注入再按 o200k 裁剪到槽内。便签和记忆检索的字符上限仍是内容限制，不用于推导每模型 Token 比率。
 - 普通回复、主动消息、上下文窗口和压缩预览共用 `buildSendPathBudgets`。最终发送前 `fitAgentPromptToTokenBudget` 再按包装后的实际文本排除最旧历史；必需内容本身超限时返回 `AGENTS_CONTEXT_BUDGET_EXCEEDED`，不截断当前用户输入。
 - 精确超窗后，该条及更旧消息永久确定为窗外；展示用的字符估算不得改变窗口成员、区带或便签状态。零预算不伪造最新一条在窗内。
