@@ -208,6 +208,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					});
 				});
 				await this.agentMessageNotifyService.reconcileUnreadMessages(me.id, session.id);
+				this.agentMessageNotifyService.publishSessionMessagesChanged(me.id, session.id, 'changed');
 
 			return { importedCount: rows.length, skippedImageCount, messageIdMap };
 		});

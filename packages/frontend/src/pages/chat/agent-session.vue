@@ -170,7 +170,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 					</template>
 				</TransitionGroup>
 				<div v-if="canFetchNewer">
-					<MkButton :class="$style.more" :wait="fetchingNewer" primary rounded @click="fetchNewerMessages">{{ i18n.ts.loadMore }}</MkButton>
+					<MkButton :class="$style.more" :wait="fetchingNewer" primary rounded @click="fetchNewerMessages()">{{ i18n.ts.loadMore }}</MkButton>
 				</div>
 			</div>
 		</div>
@@ -1060,6 +1060,8 @@ type AgentModelFailureFeedback = {
 	detail?: string | null;
 	attempts?: AgentModelFailureAttempt[];
 	retryable?: boolean;
+	/** 本次调用的模型显示名（发送时捕获），截图报障时供运维定位 */
+	modelName?: string | null;
 };
 
 /** 模型调用失败反馈（与外审拦截弹窗同一设计语言）；onRetry 存在且错误可重试时展示「重试发送」 */
@@ -1071,6 +1073,14 @@ function showAgentModelFailureFeedback(feedback: AgentModelFailureFeedback, onRe
 		retry: () => onRetry?.(),
 		closed: () => dispose(),
 	});
+}
+
+/** 失败弹窗展示的模型名：会话保存的模型（未保存时为站点默认）；已下架时只剩 id，原样给出供运维对照 */
+function sessionModelNameForFailure(): string | null {
+	const stored = session.value?.agentModelId?.trim() ?? '';
+	const id = stored !== '' ? stored : resolvedInstanceDefaultModelId.value;
+	if (id === '') return null;
+	return agentModels.value.find(m => m.id === id)?.name ?? id;
 }
 
 function agentModelFailureFromError(err: unknown): Omit<AgentModelFailureFeedback, 'title' | 'guide'> {
@@ -1724,6 +1734,7 @@ async function saveEditingMessage(text: string) {
 		showAgentModelFailureFeedback({
 			...agentModelFailureFromError(e),
 			guide: i18n.ts._agents.modelFailureGuideEdit,
+			modelName: sessionModelNameForFailure(),
 		}, () => {
 			void saveEditingMessage(content);
 		});
@@ -2318,6 +2329,8 @@ function onDocumentVisibilityForPanelRefresh() {
 	}
 	// 回到页面立即刷新当前面板的易变数据，不必等下一个轮询周期
 	refreshPanelLiveData(tab.value, 'live');
+	// 后台期间可能错过新消息（流被断开或其他客户端写入）：补拉并核对卡住的发送
+	if (!isEmbeddedControl.value && !isReviewMode.value) resyncSessionAfterResume();
 }
 
 watch(
@@ -3015,6 +3028,19 @@ async function loadInitialTimeline(): Promise<AgentMsg[]> {
 	return list;
 }
 
+/**
+ * 消息被删除/回滚/修改/导入后的同步：按当前已加载条数重取最新一段并原地替换，不滚动。
+ * 本页自己的编辑/删除也会收到该事件，原地替换保证不打断阅读位置。
+ */
+async function reloadLoadedTimelineInPlace(): Promise<void> {
+	if (canFetchNewer.value) return;
+	const limit = Math.max(PAGE_LIMIT, Math.min(100, messages.value.length));
+	const list = normalizeAgentMessages(await callAgentApi('agents/messages/timeline', { sessionId, limit }));
+	messages.value = list;
+	canFetchMore.value = list.length === limit;
+	await refreshContextWindow();
+}
+
 async function loadContextAround(targetId: string, limit = PAGE_LIMIT) {
 	chatInitializing.value = true;
 	messages.value = [];
@@ -3063,7 +3089,7 @@ async function fetchOlderMessages() {
 	await refreshContextWindow();
 }
 
-async function fetchNewerMessages() {
+async function fetchNewerMessages(opts: { silent?: boolean } = {}) {
 	if (fetchingNewer.value || messages.value.length === 0) return;
 	const headId = messages.value.find(message => !message.id.startsWith(OPTIMISTIC_MESSAGE_ID_PREFIX))?.id;
 	if (headId == null) return;
@@ -3080,7 +3106,8 @@ async function fetchNewerMessages() {
 		}
 		canFetchNewer.value = list.length === PAGE_LIMIT;
 	} catch (e) {
-		os.alert({ type: 'error', text: formatApiError(e) });
+		// 后台同步（重连/回到前台/跨端事件）失败不打扰用户，下次同步会补齐
+		if (!opts.silent) os.alert({ type: 'error', text: formatApiError(e) });
 	} finally {
 		fetchingNewer.value = false;
 	}
@@ -3089,7 +3116,7 @@ async function fetchNewerMessages() {
 
 let proactiveNotificationConnection: { dispose: () => void } | null = null;
 /** 根流引用：仅用于卸载时解绑 agentModelsChanged 广播监听（根流本身是全局单例，不 dispose） */
-let agentModelsNotificationStream: { off: (type: 'agentModelsChanged', handler: (payload: { kind: 'chat' | 'image' }) => void) => void } | null = null;
+let agentModelsNotificationStream: Misskey.IStream | null = null;
 let proactiveMessageSyncing = false;
 
 // 清除本会话的智能体消息未读标记（与私信 chat/read 对齐），后端会广播 agentRead 更新全局徽标
@@ -3229,7 +3256,10 @@ function flushPendingAgentMessageNotification(): void {
 }
 
 watch(sending, value => {
-	if (!value) flushPendingAgentMessageNotification();
+	if (!value) {
+		flushPendingAgentMessageNotification();
+		flushPendingTimelineReload();
+	}
 });
 
 async function onNewAgentMessage(payload: unknown): Promise<void> {
@@ -3253,7 +3283,7 @@ async function onNewAgentMessage(payload: unknown): Promise<void> {
 		if (messages.value.length === 0) {
 			await loadInitialTimeline();
 		} else {
-			await fetchNewerMessages();
+			await fetchNewerMessages({ silent: true });
 		}
 		const incoming = typeof data.messageId === 'string'
 			? messages.value.find(message => message.id === data.messageId)
@@ -3268,7 +3298,58 @@ async function onNewAgentMessage(payload: unknown): Promise<void> {
 	} finally {
 		proactiveMessageSyncing = false;
 		flushPendingAgentMessageNotification();
+		flushPendingTimelineReload();
 	}
+}
+
+/**
+ * 同账号其他客户端（第三方客户端、另一台设备）写入/修改本会话消息时的即时同步。
+ * 本页自己发出的 send 由 onFormSubmit 处理，忽略其回声。
+ */
+let pendingTimelineReload = false;
+
+function onAgentSessionMessagesChanged(payload: { sessionId: string; reason: 'created' | 'changed'; messageId: string | null; clientRequestId: string | null }): void {
+	if (payload.sessionId !== sessionId) return;
+	if (payload.clientRequestId != null && localClientRequestIds.has(payload.clientRequestId)) return;
+	if (payload.reason === 'created') {
+		// 与 newAgentMessage 同一套增量同步：拉新消息、逐段播放、可见时清未读（随后的延迟通知因此不再触发）
+		void onNewAgentMessage({ sessionId: payload.sessionId, messageId: payload.messageId });
+		return;
+	}
+	pendingTimelineReload = true;
+	flushPendingTimelineReload();
+}
+
+/** 删除/回滚/修改/导入无法增量合并：整段重载最新时间线；发送或同步进行中时延后到其结束 */
+function flushPendingTimelineReload(): void {
+	if (!pendingTimelineReload || sending.value || proactiveMessageSyncing || isComponentUnmounted) return;
+	pendingTimelineReload = false;
+	proactiveMessageSyncing = true;
+	void reloadLoadedTimelineInPlace().catch(() => {}).finally(() => {
+		proactiveMessageSyncing = false;
+		flushPendingAgentMessageNotification();
+		flushPendingTimelineReload();
+	});
+}
+
+/**
+ * 回到前台 / 流重连：后台期间 WebSocket 常被系统断开，错过的事件不会补发，主动补拉。
+ * 发送仍未返回时同时核对其服务端结果（见 checkStalledSendOnResume）。
+ */
+function resyncSessionAfterResume(): void {
+	// loading：首次连接的 _connected_ 与首屏加载同时发生，不重复拉取
+	if (loading.value || isComponentUnmounted || !isPageActivated || window.document.hidden || isSessionBannedPage.value) return;
+	if (sending.value) {
+		void checkStalledSendOnResume();
+		return;
+	}
+	// 用户正在浏览历史定位窗口（上方还有更新消息未加载）时不打断阅读位置
+	if (canFetchNewer.value) return;
+	void onNewAgentMessage({ sessionId, messageId: null });
+}
+
+function onStreamReconnected(): void {
+	resyncSessionAfterResume();
 }
 
 function onAgentMessageDeleted(messageId: string) {
@@ -3648,8 +3729,11 @@ onMounted(async () => {
 		const stream = useStream();
 		const connection = stream.useChannel('main');
 		connection.on('newAgentMessage', onNewAgentMessage);
+		connection.on('agentSessionMessagesChanged', onAgentSessionMessagesChanged);
 		proactiveNotificationConnection = connection;
 		agentModelsNotificationStream = stream;
+		// 断线期间错过的事件不会补发：重连后补拉一次
+		stream.on('_connected_', onStreamReconnected);
 		// 模型配置广播（管理员下架/调价等）挂在根流上，离开页面时解绑
 		stream.on('agentModelsChanged', onAgentModelsChanged);
 		// 进入会话页即清未读（与私信房间行为一致）；清未读前先抓未读快照供定位按钮/分割线使用
@@ -3727,6 +3811,8 @@ onActivated(() => {
 	}
 	// 返回本页时若回复仍在生成则恢复轮询（onDeactivated 已将其停止）
 	if (session.value?.agentReplyPending) startReplyPendingPoll();
+	// 离开期间（含在其他客户端）产生的新消息：缓存页不会重新加载，补拉一次
+	else if (!isReviewMode.value && messages.value.length > 0) resyncSessionAfterResume();
 });
 
 onDeactivated(() => {
@@ -3746,7 +3832,8 @@ onBeforeUnmount(() => {
 	unbindAgentUnreadScrollListener();
 	proactiveNotificationConnection?.dispose();
 	proactiveNotificationConnection = null;
-	agentModelsNotificationStream?.off('agentModelsChanged', onAgentModelsChanged);
+		agentModelsNotificationStream?.off('agentModelsChanged', onAgentModelsChanged);
+	agentModelsNotificationStream?.off('_connected_', onStreamReconnected);
 	agentModelsNotificationStream = null;
 	stopReplyPendingPoll();
 	stopPanelLiveDataRefresh();
@@ -4538,6 +4625,101 @@ const abortedRequestIds = new Set<string>();
  * 中断时主动 abort 此连接，浏览器立即断开、promise 立即 reject，转圈随之停止。
  */
 let sendAbortController: AbortController | null = null;
+/** 本页发出过的 clientRequestId：agentSessionMessagesChanged 回声由 send 自身流程处理，不再重复同步 */
+const localClientRequestIds = new Set<string>();
+/** 回到前台时经对账确认服务端已完成的请求（id → 助手消息 id）：主动断开卡住的 HTTP 后按成功收尾 */
+const recoveredSendRequests = new Map<string, string | null>();
+
+/** 连接层失败（无 API 错误码：fetch 断开、网关返回非 JSON）或本地超时：服务端结果未知，须对账 */
+function isSendOutcomeUnknownError(e: unknown): boolean {
+	if (e == null || typeof e !== 'object') return true;
+	const code = (e as { code?: unknown }).code;
+	return typeof code !== 'string' || code === 'REQUEST_TIMEOUT';
+}
+
+type SendRequestStatus = { state: 'pending' | 'completed' | 'none'; assistantMessageId: string | null };
+
+function fetchSendRequestStatus(clientRequestId: string): Promise<SendRequestStatus> {
+	return (misskeyApi as unknown as (endpoint: string, data: Record<string, string>) => Promise<SendRequestStatus>)(
+		'agents/messages/request-status',
+		{ sessionId, clientRequestId },
+	);
+}
+
+function waitUntilDocumentVisible(): Promise<void> {
+	if (!window.document.hidden) return Promise.resolve();
+	return new Promise(resolve => {
+		const onChange = () => {
+			if (window.document.hidden) return;
+			window.document.removeEventListener('visibilitychange', onChange);
+			resolve();
+		};
+		window.document.addEventListener('visibilitychange', onChange);
+	});
+}
+
+const SEND_RECONCILE_POLL_MS = 2500;
+/** 服务端单次 LLM 预算 120s × 多 Key 回退，留足余量 */
+const SEND_RECONCILE_DEADLINE_MS = 6 * 60 * 1000;
+const SEND_RECONCILE_MAX_STATUS_FAILURES = 6;
+
+/**
+ * 按 clientRequestId 向服务端核对一次 send 的真实结果。
+ * 页面在后台时先等回到前台（后台网络常被系统挂起）；仍在生成则轮询至结束；
+ * 用户期间点了中断返回 aborted；连状态都查不到时返回 unknown，交由原失败流程处理。
+ */
+async function reconcileSendOutcome(clientRequestId: string): Promise<{ state: 'completed'; assistantMessageId: string | null } | { state: 'none' | 'unknown' | 'aborted' }> {
+	const deadline = Date.now() + SEND_RECONCILE_DEADLINE_MS;
+	let statusFailures = 0;
+	while (!isComponentUnmounted && Date.now() < deadline) {
+		await waitUntilDocumentVisible();
+		if (abortedRequestIds.has(clientRequestId)) return { state: 'aborted' };
+		try {
+			const res = await fetchSendRequestStatus(clientRequestId);
+			if (res.state === 'completed') return { state: 'completed', assistantMessageId: res.assistantMessageId };
+			if (res.state === 'none') return { state: 'none' };
+			statusFailures = 0;
+		} catch {
+			if (++statusFailures >= SEND_RECONCILE_MAX_STATUS_FAILURES) return { state: 'unknown' };
+		}
+		await new Promise(r => window.setTimeout(r, SEND_RECONCILE_POLL_MS));
+	}
+	return { state: 'unknown' };
+}
+
+/** 对账确认服务端已完成：与正常成功路径一致地同步时间线、播放回复与刷新会话状态 */
+async function applyRecoveredSendReply(assistantMessageId: string | null): Promise<void> {
+	if (isComponentUnmounted) return;
+	if (isPageActivated && !window.document.hidden) void markAgentSessionRead();
+	try {
+		const list = await loadInitialTimeline();
+		const assistant = assistantMessageId != null ? list.find(m => m.id === assistantMessageId) : null;
+		if (assistant != null) {
+			liveArrivedMessageIds.add(assistant.id);
+			await playSegmentedReply(assistant);
+		}
+	} catch {
+		// 时间线拉取失败时保持现状，下次同步（重连/回到前台）会补齐
+	}
+	await loadSession();
+	void loadAgentCreditBalance();
+	if (session.value?.dialogueStyleId) scheduleCompressionOverviewAfterSidecar();
+}
+
+/** 回到前台时发送仍未返回：HTTP 可能已被系统挂起成半开连接，核对到服务端已完成就主动收尾 */
+async function checkStalledSendOnResume(): Promise<void> {
+	const reqId = currentClientRequestId;
+	if (!sending.value || reqId == null || sendAbortController == null || recoveredSendRequests.has(reqId)) return;
+	try {
+		const res = await fetchSendRequestStatus(reqId);
+		if (res.state !== 'completed' || currentClientRequestId !== reqId || sendAbortController == null) return;
+		recoveredSendRequests.set(reqId, res.assistantMessageId);
+		sendAbortController.abort();
+	} catch {
+		// 网络尚未恢复：交给原请求自身的成功/失败流程
+	}
+}
+
 const segmentPlayback = ref<{
 	token: number;
 	messageId: string;
@@ -4703,6 +4885,9 @@ async function onFormSubmit(payload: { text: string; file: DriveFile | null }) {
 	let leaveSendingSpinner = false;
 	const clientRequestId = crypto.randomUUID();
 	currentClientRequestId = clientRequestId;
+	localClientRequestIds.add(clientRequestId);
+	// 发送时捕获：等待回复期间用户可能切换模型，失败弹窗须展示实际调用的那个
+	const failureModelName = sessionModelNameForFailure();
 	// 持久化在途 ID（刷新后中断依赖）；若本请求因 AGENT_REPLY_PENDING 被拒，
 	// 真正在途的是更早的请求，catch 里要用旧值恢复
 	const previousPendingRequestId = getStoredPendingRequestId(sessionId);
@@ -4820,10 +5005,34 @@ async function onFormSubmit(payload: { text: string; file: DriveFile | null }) {
 			messages.value = messages.value.filter(m => m.id !== optimisticId);
 			return;
 		}
+		// 回到前台对账确认已完成、由本页主动断开的卡住连接：按成功收尾
+		if (recoveredSendRequests.has(clientRequestId)) {
+			const assistantMessageId = recoveredSendRequests.get(clientRequestId) ?? null;
+			messages.value = messages.value.filter(m => m.id !== optimisticId);
+			await applyRecoveredSendReply(assistantMessageId);
+			return;
+		}
 		// 用户主动中断导致 fetch 被 abort 时抛 AbortError：静默处理，
 		// 不弹错、不回填草稿（中断是用户明确的意图）。
 		if (e instanceof DOMException && e.name === 'AbortError') {
 			return;
+		}
+		// 连接层失败（App 切后台被系统断网、网关超时等）不代表服务端失败：先按 clientRequestId 对账，
+		// 服务端已生成回复时按成功处理，避免「报错但刷新后其实已回复」
+		if (isSendOutcomeUnknownError(e)) {
+			const outcome = await reconcileSendOutcome(clientRequestId);
+			// 对账期间已离开本页：结果由会话列表未读与下次进入时的时间线体现，不在已卸载页面弹窗
+			if (isComponentUnmounted) return;
+			if (outcome.state === 'aborted') {
+				abortedRequestIds.delete(clientRequestId);
+				messages.value = messages.value.filter(m => m.id !== optimisticId);
+				return;
+			}
+			if (outcome.state === 'completed') {
+				messages.value = messages.value.filter(m => m.id !== optimisticId);
+				await applyRecoveredSendReply(outcome.assistantMessageId);
+				return;
+			}
 		}
 		const isAborted = e != null && typeof e === 'object' && (e as { code?: string }).code === 'AGENTS_LLM_ABORTED';
 		// 中断或失败时均移除乐观气泡
@@ -4866,9 +5075,10 @@ async function onFormSubmit(payload: { text: string; file: DriveFile | null }) {
 					title: i18n.ts._agents.modelFailureTitleUnavailable,
 					guide: i18n.ts._agents.modelFailureGuideUnavailable,
 					reason: i18n.ts._agents.sessionModelUnavailable,
+					modelName: failureModelName,
 				});
 			} else {
-				showAgentModelFailureFeedback(agentModelFailureFromError(e), () => {
+				showAgentModelFailureFeedback({ ...agentModelFailureFromError(e), modelName: failureModelName }, () => {
 					// 重试走表单自身的 submit：与手动再次发送完全一致（含清空草稿、附件一并重发）
 					formRef.value?.setText(trimmed);
 					formRef.value?.setAttachment(payload.file ?? null);
@@ -4892,6 +5102,7 @@ async function onFormSubmit(payload: { text: string; file: DriveFile | null }) {
 		if (sendAbortController?.signal === sendSignal) {
 			sendAbortController = null;
 		}
+		recoveredSendRequests.delete(clientRequestId);
 		pendingWorldbookMatches.value = [];
 	}
 }

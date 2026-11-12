@@ -238,6 +238,7 @@ export * as 'admin/users/agent-usage-logs' from './endpoints/admin/users/agent-u
 export * as 'admin/users/agent-usage-report' from './endpoints/admin/users/agent-usage-report.js';
 export * as 'agents/messages/send' from './endpoints/agents/messages/send.js';
 export * as 'agents/messages/abort' from './endpoints/agents/messages/abort.js';
+export * as 'agents/messages/request-status' from './endpoints/agents/messages/request-status.js';
 export * as 'agents/messages/delete' from './endpoints/agents/messages/delete.js';
 export * as 'agents/messages/search' from './endpoints/agents/messages/search.js';
 export * as 'agents/messages/show' from './endpoints/agents/messages/show.js';

@@ -82,6 +82,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				await manager.update(MiAgentSession, { id: locked.id }, { updatedAt: new Date(), lastMessageAt: latest?.createdAt ?? null });
 				});
 				await this.agentMessageNotifyService.reconcileUnreadMessages(me.id, ps.sessionId);
+				this.agentMessageNotifyService.publishSessionMessagesChanged(me.id, ps.sessionId, 'changed');
 				return {};
 		});
 	}

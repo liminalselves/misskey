@@ -41,6 +41,14 @@ export type AgentMessageNotification = {
 	agentAvatarUrl: string | null;
 };
 
+// 智能体会话消息变化（即时同步，无未读/推送语义）；clientRequestId 供发起方忽略自身回声
+export type AgentSessionMessagesChanged = {
+	sessionId: string;
+	reason: 'created' | 'changed';
+	messageId: string | null;
+	clientRequestId: string | null;
+};
+
 export type Channels = {
 	main: {
 		params: null;
@@ -61,6 +69,7 @@ export type Channels = {
 			unreadAntenna: (payload: Antenna) => void;
 			newChatMessage: (payload: ChatMessage) => void;
 			newAgentMessage: (payload: AgentMessageNotification) => void;
+			agentSessionMessagesChanged: (payload: AgentSessionMessagesChanged) => void;
 			agentRead: (payload: { hasUnreadAgentMessages: boolean }) => void;
 			readAllAnnouncements: () => void;
 			myTokenRegenerated: () => void;

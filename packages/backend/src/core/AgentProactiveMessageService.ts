@@ -513,6 +513,7 @@ export class AgentProactiveMessageService {
 				.where('id = :id', { id: session.id });
 			if (drawAfterAt != null) releaseQuery.setParameter('drawAfterAt', drawAfterAt);
 			await releaseQuery.execute();
+			this.agentMessageNotifyService.publishSessionMessagesChanged(session.userId, session.id, 'created', { messageId: assistant.id });
 			if (compressionOn) {
 				void this.agentCompressionMemoryService.afterAssistantForCompression(session, character, style, instance, session.userId)
 					.catch(() => { /* Compression cannot undo a delivered proactive reply. */ });
