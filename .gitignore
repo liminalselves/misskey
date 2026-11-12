@@ -65,7 +65,6 @@ temp
 /packages/frontend/src/**/*.stories.ts
 tsdoc-metadata.json
 misskey-assets
-review_diff.txt
 
 # Vite temporary files
 vite.config.js.timestamp-*
