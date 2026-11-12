@@ -179,7 +179,7 @@ describe('Message mutation compression boundaries', () => {
 		const sessions = { findOneBy: async () => session };
 		const agent = { assertAgentsEnabled: () => {}, loadCharacterForAgentSessionOrThrow: async () => ({}), assertAgentUserSessionChatAllowed: () => {} };
 		const chat = { checkChatAvailability: async () => {} };
-		const notifications = { reconcileUnreadMessages: async () => {} };
+		const notifications = { reconcileUnreadMessages: async () => {}, publishSessionMessagesChanged: () => {} };
 		return { row, manager, remove, db, sessions, agent, chat, notifications };
 	}
 
@@ -195,7 +195,7 @@ describe('Message mutation compression boundaries', () => {
 	test.each([false, true])('only invalidates when the saved message content changed: %s', async changed => {
 		const h = mutationHarness();
 		const endpoint = new UpdateMessage(h.db as never, h.sessions as never, { findOneBy: async () => h.row } as never,
-			h.agent as never, h.chat as never, {} as never, {} as never, {} as never);
+			h.agent as never, h.chat as never, {} as never, {} as never, {} as never, h.notifications as never);
 		await endpoint.exec({ sessionId: 's1', messageId: 'm1', content: changed ? 'edited' : h.row.content }, { id: 'owner' } as never, null);
 		expect(h.manager.update.mock.calls.filter(([entity]) => entity === MiAgentSessionCompressionSticky)).toHaveLength(changed ? 1 : 0);
 	});

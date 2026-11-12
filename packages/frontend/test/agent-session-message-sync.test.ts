@@ -13,10 +13,11 @@ const source = readFileSync(resolve(process.cwd(), 'src/pages/chat/agent-session
 const pagination = source.slice(source.indexOf('async function fetchOlderMessages()'), source.indexOf('\nlet proactiveNotificationConnection'));
 const notificationStart = source.includes('let pendingAgentMessageNotification') ? 'let pendingAgentMessageNotification' : 'async function onNewAgentMessage(';
 const notification = source.slice(source.indexOf(notificationStart), source.indexOf('\nfunction onAgentMessageDeleted('));
+const reconcile = source.slice(source.indexOf('function isSendOutcomeUnknownError('), source.indexOf('\nasync function checkStalledSendOnResume('));
 const send = source.slice(source.indexOf('async function onFormSubmit('), source.indexOf('\nfunction nullableNumberInput('));
 const abort = source.slice(source.indexOf('async function onAbortRequest('), source.indexOf('\n</script>'));
 const poll = source.slice(source.indexOf('function startReplyPendingPoll()'), source.indexOf('\nfunction isAgentReplyPendingError('));
-const script = transpileModule(`${pagination}\n${notification}\n${send}\n${abort}\n${poll}\nreturn { fetchOlderMessages, fetchNewerMessages, onNewAgentMessage, onFormSubmit, onAbortRequest, startReplyPendingPoll, setUnmounted: () => { isComponentUnmounted = true; } };`, {}).outputText;
+const script = transpileModule(`${pagination}\n${notification}\n${reconcile}\n${send}\n${abort}\n${poll}\nreturn { fetchOlderMessages, fetchNewerMessages, onNewAgentMessage, onFormSubmit, onAbortRequest, startReplyPendingPoll, setUnmounted: () => { isComponentUnmounted = true; } };`, {}).outputText;
 const optimisticId = 'agent-opt:12345678-1234-1234-1234-123456789012';
 const scopes: ReturnType<typeof effectScope>[] = [];
 
@@ -78,6 +79,9 @@ function setup(ids: string[], sending = false) {
 		replyPollTimer: null,
 		pollSessionReplyState: vi.fn(async () => {}),
 		abortedRequestIds: new Set<string>(),
+		sessionModelNameForFailure: () => null,
+		localClientRequestIds: new Set<string>(),
+		recoveredSendRequests: new Map<string, string | null>(),
 		formRef: { value: { restoreDraft: vi.fn() } },
 		i18n: { ts: { _agents: {} } },
 		playableSegmentsFor: () => [],
@@ -177,7 +181,8 @@ describe('Agent message synchronization', () => {
 		await vi.waitFor(() => expect(state.misskeyApi).toHaveBeenCalled());
 		await state.onNewAgentMessage({ sessionId: 'session1', messageId: 'reply2' });
 		state.callAgentApi.mockResolvedValueOnce([{ id: 'reply2' }]);
-		response.reject(new Error('Send failed'));
+		// 带错误码 = 服务端明确拒绝/失败；无错误码属连接层失败，会先向服务端对账（另有用例覆盖）
+		response.reject(Object.assign(new Error('Send failed'), { code: 'AGENTS_LLM_FAILED' }));
 		await request;
 		await vi.waitFor(() => expect(state.messages.value.map(message => message.id)).toEqual(['reply2', 'message1']));
 		expect(state.formRef.value.restoreDraft).toHaveBeenCalledWith('Hello', null);
