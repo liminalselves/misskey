@@ -5,13 +5,13 @@
 ## 管理员配置（推荐）
 
 1. 部署或升级后执行数据库迁移（见下文「数据库」）。
-2. 使用**管理员账号**登录 Web，打开 **控制面板 → 设置**（路径：`/admin/settings`）。
+2. 使用**管理员账号**登录 Web，打开 **控制面板 → 应用**（路径：`/admin/app-settings`）。
 3. 在 **「阿里云移动推送（原生 App）」** 折叠区块中填写：
    - **AccessKey ID / AccessKey Secret**：在阿里云 RAM 创建**子用户**，授予调用移动推送 OpenAPI 所需权限后，使用该子用户的密钥（勿长期暴露主账号密钥）。
-   - **EMAS AppKey**：与移动应用侧 **EMAS / 移动推送控制台** 中该应用的 **AppKey** 一致；须与 Android 工程 `android/app/src/main/assets/aliyun-emas-services.json` 内 **`emas.appKey`**（或控制台展示的同一字段）相同。
+   - **EMAS AppKey**：与移动应用侧 **EMAS / 移动推送控制台** 中该应用的 **AppKey** 一致；须与 Android 工程内 `aliyun-emas-services.json` 的 **`emas.appKey`**（或控制台展示的同一字段）相同。
 4. 保存后，运行中的 `MiMeta` 会通过内部 `metaUpdated` 事件更新，一般**无需重启**进程即可用于后续推送。
 
-> **说明**：上述三项均保存在数据库表 **`meta`** 中，**不再**从服务器 `default.yml` 读取（历史示例已从 `.config/example.yml` 删除）。
+> **说明**：上述三项均保存在数据库表 **`meta`** 中，不从服务器 `default.yml` 读取。
 
 ## 数据库
 
@@ -44,15 +44,4 @@ pnpm migrate
 
 ## 客户端仓库
 
-Flutter / Android 侧放置 `aliyun-emas-services.json`、Gradle 与 MethodChannel 等说明，见独立客户端仓库（如 **liminalselves**）内的 `README.md` 与 `android/app/src/main/assets/README.txt`。
-
-## i18n 开发备忘
-
-新增 `locales/*.yml` 键后，在仓库根目录执行：
-
-```bash
-pnpm --filter i18n generate
-pnpm --filter i18n build
-```
-
-Windows 下已修复 `generateLocaleInterface.ts` 的入口检测，详见 `CHANGELOG.md`（2026.1.0 → General）。
+`aliyun-emas-services.json`、Gradle 与 MethodChannel 等 Android 侧说明见独立客户端仓库（liminalselves）。
