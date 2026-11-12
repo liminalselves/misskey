@@ -428,18 +428,6 @@ type AdminAgentsRedeemCodesRevokeRequest = operations['admin___agents___redeem-c
 type AdminAgentsRedeemCodesRevokeResponse = operations['admin___agents___redeem-codes___revoke']['responses']['200']['content']['application/json'];
 
 // @public (undocumented)
-type AdminAgentsReportsOverviewRequest = operations['admin___agents___reports___overview']['requestBody']['content']['application/json'];
-
-// @public (undocumented)
-type AdminAgentsReportsOverviewResponse = operations['admin___agents___reports___overview']['responses']['200']['content']['application/json'];
-
-// @public (undocumented)
-type AdminAgentsReportsTopUsersRequest = operations['admin___agents___reports___top-users']['requestBody']['content']['application/json'];
-
-// @public (undocumented)
-type AdminAgentsReportsTopUsersResponse = operations['admin___agents___reports___top-users']['responses']['200']['content']['application/json'];
-
-// @public (undocumented)
 type AdminAgentsReviewDiffRequest = operations['admin___agents___review___diff']['requestBody']['content']['application/json'];
 
 // @public (undocumented)
@@ -875,22 +863,10 @@ type AdminUsersAgentSuccessRateRequest = operations['admin___users___agent-succe
 type AdminUsersAgentSuccessRateResponse = operations['admin___users___agent-success-rate']['responses']['200']['content']['application/json'];
 
 // @public (undocumented)
-type AdminUsersAgentUsageDetailsRequest = operations['admin___users___agent-usage-details']['requestBody']['content']['application/json'];
-
-// @public (undocumented)
-type AdminUsersAgentUsageDetailsResponse = operations['admin___users___agent-usage-details']['responses']['200']['content']['application/json'];
-
-// @public (undocumented)
 type AdminUsersAgentUsageLogsRequest = operations['admin___users___agent-usage-logs']['requestBody']['content']['application/json'];
 
 // @public (undocumented)
 type AdminUsersAgentUsageLogsResponse = operations['admin___users___agent-usage-logs']['responses']['200']['content']['application/json'];
-
-// @public (undocumented)
-type AdminUsersAgentUsageRequest = operations['admin___users___agent-usage']['requestBody']['content']['application/json'];
-
-// @public (undocumented)
-type AdminUsersAgentUsageResponse = operations['admin___users___agent-usage']['responses']['200']['content']['application/json'];
 
 // @public (undocumented)
 type AgentsBillingLogsRequest = operations['agents___billing-logs']['requestBody']['content']['application/json'];
@@ -1155,12 +1131,6 @@ type AgentsModelsSuccessRatesRequest = operations['agents___models___success-rat
 
 // @public (undocumented)
 type AgentsModelsSuccessRatesResponse = operations['agents___models___success-rates']['responses']['200']['content']['application/json'];
-
-// @public (undocumented)
-type AgentsMyUsageSummaryRequest = operations['agents___my-usage-summary']['requestBody']['content']['application/json'];
-
-// @public (undocumented)
-type AgentsMyUsageSummaryResponse = operations['agents___my-usage-summary']['responses']['200']['content']['application/json'];
 
 // @public (undocumented)
 type AgentsPlazaReviewsCreateRequest = operations['agents___plaza-reviews___create']['requestBody']['content']['application/json'];
@@ -1600,6 +1570,7 @@ export type Channels = {
             unreadAntenna: (payload: Antenna) => void;
             newChatMessage: (payload: ChatMessage) => void;
             newAgentMessage: (payload: AgentMessageNotification) => void;
+            agentSessionMessagesChanged: (payload: AgentSessionMessagesChanged) => void;
             agentRead: (payload: {
                 hasUnreadAgentMessages: boolean;
             }) => void;
@@ -2623,10 +2594,6 @@ declare namespace entities {
         AdminAgentsRedeemCodesListResponse,
         AdminAgentsRedeemCodesRevokeRequest,
         AdminAgentsRedeemCodesRevokeResponse,
-        AdminAgentsReportsOverviewRequest,
-        AdminAgentsReportsOverviewResponse,
-        AdminAgentsReportsTopUsersRequest,
-        AdminAgentsReportsTopUsersResponse,
         AdminAgentsReviewDiffRequest,
         AdminAgentsReviewDiffResponse,
         AdminAgentsReviewListPendingRequest,
@@ -2772,10 +2739,6 @@ declare namespace entities {
         AdminUsersAgentBillingLogsResponse,
         AdminUsersAgentSuccessRateRequest,
         AdminUsersAgentSuccessRateResponse,
-        AdminUsersAgentUsageRequest,
-        AdminUsersAgentUsageResponse,
-        AdminUsersAgentUsageDetailsRequest,
-        AdminUsersAgentUsageDetailsResponse,
         AdminUsersAgentUsageLogsRequest,
         AdminUsersAgentUsageLogsResponse,
         AgentsBillingLogsRequest,
@@ -2866,8 +2829,6 @@ declare namespace entities {
         AgentsModelsFreeQuotaResponse,
         AgentsModelsSuccessRatesRequest,
         AgentsModelsSuccessRatesResponse,
-        AgentsMyUsageSummaryRequest,
-        AgentsMyUsageSummaryResponse,
         AgentsPlazaReviewsCreateRequest,
         AgentsPlazaReviewsCreateResponse,
         AgentsPlazaReviewsListRequest,
@@ -5065,9 +5026,10 @@ type VerifyEmailRequest = operations['verify-email']['requestBody']['content']['
 // Warnings were encountered during analysis:
 //
 // src/streaming.ts:57:3 - (ae-forgotten-export) The symbol "ReconnectingWebSocket" needs to be exported by the entry point index.d.ts
-// src/streaming.types.ts:63:4 - (ae-forgotten-export) The symbol "AgentMessageNotification" needs to be exported by the entry point index.d.ts
-// src/streaming.types.ts:237:4 - (ae-forgotten-export) The symbol "ReversiUpdateKey" needs to be exported by the entry point index.d.ts
-// src/streaming.types.ts:252:4 - (ae-forgotten-export) The symbol "ReversiUpdateSettings" needs to be exported by the entry point index.d.ts
+// src/streaming.types.ts:71:4 - (ae-forgotten-export) The symbol "AgentMessageNotification" needs to be exported by the entry point index.d.ts
+// src/streaming.types.ts:72:4 - (ae-forgotten-export) The symbol "AgentSessionMessagesChanged" needs to be exported by the entry point index.d.ts
+// src/streaming.types.ts:246:4 - (ae-forgotten-export) The symbol "ReversiUpdateKey" needs to be exported by the entry point index.d.ts
+// src/streaming.types.ts:261:4 - (ae-forgotten-export) The symbol "ReversiUpdateSettings" needs to be exported by the entry point index.d.ts
 
 // (No @packageDocumentation comment for this package)
 
