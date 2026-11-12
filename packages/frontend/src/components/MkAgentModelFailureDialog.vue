@@ -21,6 +21,12 @@ SPDX-License-Identifier: AGPL-3.0-only
 			</div>
 		</div>
 
+		<div v-if="modelName" :class="$style.model">
+			<i class="ti ti-cpu" :class="$style.modelIcon"></i>
+			<span :class="$style.modelLabel">调用模型</span>
+			<span :class="$style.modelName">{{ modelName }}</span>
+		</div>
+
 		<dl :class="$style.details">
 			<dt>{{ i18n.ts._agents.modelFailureKind }}</dt>
 			<dd><i :class="['ti ti-circle-filled', $style.kindDot]"></i> {{ kindLabel }}</dd>
@@ -85,6 +91,8 @@ const props = withDefaults(defineProps<{
 	}>;
 	/** 关闭按钮旁是否提供「重试」 */
 	retryable?: boolean;
+	/** 本次调用的模型显示名，便于用户截图报障时运维定位 */
+	modelName?: string | null;
 }>(), {
 	title: () => i18n.ts._agents.modelFailureTitleDefault,
 	guide: () => i18n.ts._agents.modelFailureGuideDefault,
@@ -94,6 +102,7 @@ const props = withDefaults(defineProps<{
 	detail: null,
 	attempts: () => [],
 	retryable: true,
+	modelName: null,
 });
 
 const emit = defineEmits<{
@@ -176,6 +185,36 @@ function retry() {
 	margin: 0.3em 0 0;
 	color: var(--MI_THEME-fgTransparentWeak);
 	line-height: 1.5;
+}
+
+.model {
+	display: flex;
+	align-items: center;
+	gap: 0.5em;
+	min-width: 0;
+	padding: 0.6em 0.9em;
+	border-radius: var(--MI-radius);
+	background: color-mix(in srgb, var(--MI_THEME-accent) 9%, transparent);
+}
+
+.modelIcon {
+	flex-shrink: 0;
+	color: var(--MI_THEME-accent);
+}
+
+.modelLabel {
+	flex-shrink: 0;
+	font-size: 0.9em;
+	font-weight: 700;
+	color: var(--MI_THEME-fgTransparentWeak);
+}
+
+.modelName {
+	min-width: 0;
+	margin-left: auto;
+	font-weight: 700;
+	text-align: right;
+	overflow-wrap: anywhere;
 }
 
 .details {
