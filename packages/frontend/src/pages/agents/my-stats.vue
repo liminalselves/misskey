@@ -5,14 +5,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <template>
 <div :class="$style.page">
-	<UserUsageReport
-		ref="reportEl"
-		reportEndpoint="agents/usage/report"
-		billingEndpoint="agents/billing-logs"
-		logsEndpoint="agents/usage/logs"
-		:baseParams="{}"
-		storageKey="agentsMyUsage"
-	>
+	<MyUsageReport ref="reportEl">
 		<template #afterOverview>
 			<!-- 兑换卡密 -->
 			<div :class="$style.redeemSection">
@@ -30,7 +23,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</div>
 			</div>
 		</template>
-	</UserUsageReport>
+	</MyUsageReport>
 </div>
 </template>
 
@@ -38,7 +31,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 import { computed, ref, useTemplateRef } from 'vue';
 import MkButton from '@/components/MkButton.vue';
 import MkInput from '@/components/MkInput.vue';
-import UserUsageReport from '@/components/agent-report/UserUsageReport.vue';
+import MyUsageReport from '@/components/agent-report/mine/MyUsageReport.vue';
 import { misskeyApi, formatApiError } from '@/utility/misskey-api.js';
 import { instance } from '@/instance.js';
 import { i18n } from '@/i18n.js';

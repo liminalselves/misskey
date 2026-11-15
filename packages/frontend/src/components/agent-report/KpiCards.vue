@@ -4,7 +4,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 -->
 
 <template>
-<div :class="$style.grid">
+<div :class="[$style.grid, only != null ? $style.gridFew : null]">
 	<div v-if="balance != null" v-panel :class="[$style.card, $style.balanceCard]">
 		<div :class="$style.label"><i class="ti ti-wallet"></i>当前余额</div>
 		<div :class="$style.value">{{ fmtCredits(balance) }}</div>
@@ -50,6 +50,8 @@ const props = defineProps<{
 	active: MetricKey;
 	/** Metrics to hide (per-user pages drop "active users"). */
 	hide?: MetricKey[];
+	/** Show only these metrics (simple mode); all when omitted. */
+	only?: MetricKey[];
 	/** Shows a leading credit balance card when set. */
 	balance?: number | null;
 }>();
@@ -84,7 +86,7 @@ const META: { key: MetricKey; label: string; icon: string }[] = [
 const cards = computed(() => {
 	const c = props.current;
 	const p = props.previous;
-	return META.filter(meta => !(props.hide ?? []).includes(meta.key)).map(meta => {
+	return META.filter(meta => !(props.hide ?? []).includes(meta.key) && (props.only == null || props.only.includes(meta.key))).map(meta => {
 		const d = deltaOf(meta.key, c, p);
 		let sub = '';
 		switch (meta.key) {
@@ -121,6 +123,15 @@ const cards = computed(() => {
 	@container (max-width: 560px) {
 		grid-template-columns: repeat(2, minmax(0, 1fr));
 		gap: 8px;
+	}
+}
+
+/* Simple mode shows four cards: one row on wide containers, 2x2 on narrow ones. */
+.gridFew {
+	grid-template-columns: repeat(4, minmax(0, 1fr));
+
+	@container (max-width: 720px) {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
 	}
 }
 
