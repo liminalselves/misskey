@@ -45,7 +45,7 @@ export async function offlineLogoSrc(): Promise<string> {
 	return await caches.match(OFFLINE_LOGO_PATH) != null ? OFFLINE_LOGO_PATH : brandImage;
 }
 
-// locale YAML 只可改 ja-JP（其他语言由 Crowdin 管）；本站主体用户使用中文，离线页新增文案对 zh 兜底为中文。
+// locale YAML 只可改 ja-JP（其他语言由 Crowdin 管）；语言包会用日文补齐缺失 key，中文新增指引须优先使用本地常量。
 const ZH_CN = {
 	checkNetwork: '请先检查您的网络连接，然后重新加载',
 	serverMaintenance: '若网络连接正常，服务器可能正在维护或更新，请稍后再试',
@@ -67,9 +67,9 @@ export function offlinePageHTML(i18n: Partial<I18n<Locale>>, lang: string, versi
 		title: escapeHtml(offline?.title ?? 'Offline - Could not connect to server'),
 		header: escapeHtml(offline?.header ?? 'Could not connect to server'),
 		reload: escapeHtml(i18n.ts?.reload ?? 'Reload'),
-		checkNetwork: escapeHtml(offline?.checkNetwork ?? (zh ? ZH_CN.checkNetwork : 'Please check your network connection, then reload and try again.')),
-		serverMaintenance: escapeHtml(offline?.serverMaintenance ?? (zh ? ZH_CN.serverMaintenance : 'If your network is fine, the server may be down for maintenance or an update. Please try again later.')),
-		contact: escapeHtml(offline?.contact ?? (zh ? ZH_CN.contact : 'If it remains unreachable for a long time, ask in the QQ group {qq} or email {mail}.'))
+		checkNetwork: escapeHtml(zh ? ZH_CN.checkNetwork : offline?.checkNetwork ?? 'Please check your network connection, then reload and try again.'),
+		serverMaintenance: escapeHtml(zh ? ZH_CN.serverMaintenance : offline?.serverMaintenance ?? 'If your network is fine, the server may be down for maintenance or an update. Please try again later.'),
+		contact: escapeHtml(zh ? ZH_CN.contact : offline?.contact ?? 'If it remains unreachable for a long time, ask in the QQ group {qq} or email {mail}.')
 			.replaceAll('{qq}', QQ_GROUP)
 			.replaceAll('{mail}', `<a class="mail" href="mailto:${SUPPORT_EMAIL}">${SUPPORT_EMAIL}</a>`),
 	};
