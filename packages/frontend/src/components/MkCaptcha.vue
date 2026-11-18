@@ -115,6 +115,10 @@ const aliyunTriggerEl = ref<HTMLButtonElement | undefined>(undefined);
 const aliyunTriggerIconEl = ref<HTMLElement | undefined>(undefined);
 const aliyunTriggerLabelEl = ref<HTMLSpanElement | undefined>(undefined);
 
+// Bumped whenever the widget is torn down, so stale render polling/retries stop instead of
+// drawing a second widget or running forever after unmount.
+let renderGeneration = 0;
+
 let mCaptchaReciever: Reciever_typeReferenceOnly | null = null;
 const mCaptchaIframe = useTemplateRef('mCaptchaIframe');
 const mCaptchaRemoveState = ref(false);
@@ -193,7 +197,25 @@ if (loaded || props.provider === 'mcaptcha' || props.provider === 'testcaptcha')
 		.addEventListener('load', () => available.value = true);
 }
 
+// Called by forms after the server consumed the response (wrong password, failed signup...).
 function reset() {
+	if (props.provider === 'aliyuncaptcha') {
+		// The server consumes the verified param (signin/signup/reset all verify it once), but clearing
+		// our own state alone leaves the SDK popup in its old "passed" state. Rebuild the widget so a
+		// new init starts a fresh challenge and the SDK state matches ours.
+		if (available.value) {
+			clearWidget();
+			void requestRender();
+		} else {
+			callback(undefined);
+		}
+		return;
+	}
+
+	resetWidget();
+}
+
+function resetWidget() {
 	if (props.provider === 'aliyuncaptcha') {
 		callback(undefined);
 		return;
@@ -233,7 +255,9 @@ function remove() {
 	}
 }
 
-async function requestRender() {
+async function requestRender(generation = renderGeneration) {
+	if (generation !== renderGeneration) return;
+
 	if (props.provider === 'aliyuncaptcha') {
 		if (captchaEl.value instanceof Element && props.sitekey && props.sceneId && (window as AliyunCaptchaWindow).initAliyunCaptcha) {
 			const root = window.document.createElement('div');
@@ -267,14 +291,19 @@ async function requestRender() {
 				// SDK 要求 id 选择器字符串，传 DOM 元素会报 "传入参数类型不合法"
 				element: `#${root.id}`,
 				button: `#${trigger.id}`,
-				success: (captchaVerifyParam: string) => callback(captchaVerifyParam),
+				// The SDK keeps one global config (last init wins), so a callback from a widget that
+				// was already torn down by reset()/unmount must not touch the current state.
+				success: (captchaVerifyParam: string) => {
+					if (generation === renderGeneration) callback(captchaVerifyParam);
+				},
 				fail: (result: unknown) => {
+					if (generation !== renderGeneration) return;
 					callback(undefined);
 					if (_DEV_) console.warn('aliyun captcha failed', result);
 				},
 				getInstance: (instance: AliyunCaptcha) => {
 					gotInstance = true;
-					aliyunCaptchaInstance.value = instance;
+					if (generation === renderGeneration) aliyunCaptchaInstance.value = instance;
 				},
 			};
 
@@ -289,7 +318,7 @@ async function requestRender() {
 			let retryCount = 0;
 			const ensureWidgetRendered = () => {
 				window.setTimeout(() => {
-					if (!root.isConnected || root.childElementCount > 0 || gotInstance) return;
+					if (generation !== renderGeneration || !root.isConnected || root.childElementCount > 0 || gotInstance) return;
 					if (retryCount++ >= 8) return;
 					try {
 						(window as AliyunCaptchaWindow).initAliyunCaptcha?.(initOptions);
@@ -308,7 +337,7 @@ async function requestRender() {
 			});
 			return;
 		}
-		window.setTimeout(requestRender, 50);
+		window.setTimeout(() => requestRender(generation), 50);
 		return;
 	}
 
@@ -327,6 +356,7 @@ async function requestRender() {
 		});
 	} else if (props.provider === 'mcaptcha' && props.instanceUrl && props.sitekey) {
 		const { default: Reciever } = await import('@mcaptcha/core-glue');
+		if (generation !== renderGeneration) return;
 		mCaptchaReciever = new Reciever({
 			siteKey: {
 				key: props.sitekey,
@@ -338,16 +368,17 @@ async function requestRender() {
 		mCaptchaReciever.listen();
 		mCaptchaRemoveState.value = false;
 	} else {
-		window.setTimeout(requestRender, 50);
+		window.setTimeout(() => requestRender(generation), 50);
 	}
 }
 
 function clearWidget() {
+	renderGeneration++;
 	aliyunCaptchaInstance.value = undefined;
 	aliyunTriggerEl.value = undefined;
 	aliyunTriggerIconEl.value = undefined;
 	aliyunTriggerLabelEl.value = undefined;
-	reset();
+	resetWidget();
 	remove();
 
 	if (captchaEl.value) {
@@ -382,9 +413,9 @@ function testcaptchaSubmit() {
 
 onMounted(() => {
 	if (available.value) {
-		requestRender();
+		void requestRender();
 	} else {
-		watch(available, requestRender);
+		watch(available, () => void requestRender());
 	}
 });
 

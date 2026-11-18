@@ -265,7 +265,11 @@ async function tryLogin(req: Partial<Misskey.entities.SigninFlowRequest>): Promi
 				page.value = 'input';
 				password.value = '';
 			}
-			passwordPageEl.value?.resetCaptcha();
+			// The password page is replaced when moving on to totp/passkey, so rebuilding its captcha
+			// there would only start a widget nobody uses.
+			if (res.next === 'password' || res.next === 'captcha') {
+				passwordPageEl.value?.resetCaptcha();
+			}
 			nextTick(() => {
 				waiting.value = false;
 			});
