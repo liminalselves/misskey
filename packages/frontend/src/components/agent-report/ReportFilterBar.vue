@@ -41,7 +41,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<input v-model="f.customTo" type="date" :class="$style.dateInput" :max="todayStr" aria-label="结束日期"/>
 		</div>
 		<div :class="$style.fieldRow">
-			<div :class="$style.field">
+			<div v-if="!simple" :class="$style.field">
 				<span :class="$style.fieldLabel">粒度</span>
 				<div :class="$style.seg" role="group" aria-label="粒度">
 					<button
@@ -66,12 +66,12 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<i class="ti ti-chevron-down"></i>
 				</button>
 			</div>
-			<label :class="$style.compare">
+			<label v-if="!simple" :class="$style.compare">
 				<input v-model="f.compare" type="checkbox"/>
 				<span>对比上一周期</span>
 			</label>
 		</div>
-		<div :class="$style.field">
+		<div v-if="!simple" :class="$style.field">
 			<span :class="$style.fieldLabel">用途</span>
 			<div :class="[$style.chips, $style.scrollRow]" role="group" aria-label="用途">
 				<button
@@ -114,6 +114,8 @@ const props = defineProps<{
 	modelName: (id: string) => string;
 	loading: boolean;
 	exportable?: boolean;
+	/** Simple mode hides granularity, usage kinds and compare. */
+	simple?: boolean;
 }>();
 
 const emit = defineEmits<{

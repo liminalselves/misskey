@@ -959,12 +959,7 @@ onMounted(loadAll);
 	font-size: 0.82em;
 	line-height: 1.4;
 	opacity: 0.78;
-	display: -webkit-box;
-	-webkit-line-clamp: 2;
-	line-clamp: 2;
-	-webkit-box-orient: vertical;
-	overflow: hidden;
-	word-break: break-word;
+	overflow-wrap: anywhere;
 	white-space: pre-line;
 }
 

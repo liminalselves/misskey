@@ -80,7 +80,18 @@ function restore(key: string, base: ReportFilters): ReportFilters {
  * loads within a minute hit the server cache. Restore runs synchronously in setup, before callers
  * register their watchers.
  */
-export function useReportFilters(opts: { storageKey: string; collapseKey: string; defaultRange: RangePreset; modelName: (id: string) => string }) {
+export function useReportFilters(opts: {
+	storageKey: string;
+	collapseKey: string;
+	defaultRange: RangePreset;
+	modelName: (id: string) => string;
+	/**
+	 * Simple mode: granularity, usage kinds and compare are not offered and are ignored (stored values
+	 * stay, so they come back in detailed mode), so a hidden filter never changes what simple mode shows.
+	 */
+	simple?: { readonly value: boolean };
+}) {
+	const isSimple = () => opts.simple?.value === true;
 	const filters = reactive<ReportFilters>(restore(opts.storageKey, defaults(opts.defaultRange)));
 
 	watch(() => JSON.stringify(filters), () => {
@@ -115,7 +126,7 @@ export function useReportFilters(opts: { storageKey: string; collapseKey: string
 
 	const span = computed(() => windowRange.value.until - windowRange.value.since);
 	const bucketAvail = computed(() => bucketAvailability(span.value));
-	const bucketUnit = computed<BucketUnit>(() => resolveBucket(span.value, filters.bucket));
+	const bucketUnit = computed<BucketUnit>(() => resolveBucket(span.value, isSimple() ? 'auto' : filters.bucket));
 
 	// If the range no longer allows the chosen granularity, fall back to auto.
 	watch(bucketAvail, a => {
@@ -124,15 +135,21 @@ export function useReportFilters(opts: { storageKey: string; collapseKey: string
 
 	const activeCount = computed(() => {
 		const d = defaults(opts.defaultRange);
+		const simple = isSimple();
 		return (filters.range !== d.range ? 1 : 0)
-			+ (filters.bucket !== d.bucket ? 1 : 0)
+			+ (!simple && filters.bucket !== d.bucket ? 1 : 0)
 			+ (filters.modelIds.length > 0 ? 1 : 0)
-			+ (filters.usageKinds.length > 0 ? 1 : 0)
-			+ (filters.compare ? 1 : 0);
+			+ (!simple && filters.usageKinds.length > 0 ? 1 : 0)
+			+ (!simple && filters.compare ? 1 : 0);
 	});
 
 	function reset() {
 		const d = defaults(opts.defaultRange);
+		// Simple mode leaves the filters it hides alone; they are still stored for detailed mode.
+		if (isSimple()) {
+			Object.assign(filters, { range: d.range, customFrom: d.customFrom, customTo: d.customTo, modelIds: [] });
+			return;
+		}
 		Object.assign(filters, { ...d, breakdown: filters.breakdown });
 	}
 
@@ -141,7 +158,7 @@ export function useReportFilters(opts: { storageKey: string; collapseKey: string
 			since: new Date(windowRange.value.since).toISOString(),
 			until: new Date(windowRange.value.until).toISOString(),
 			modelIds: filters.modelIds,
-			usageKinds: filters.usageKinds,
+			usageKinds: isSimple() ? [] : filters.usageKinds,
 		};
 	}
 
@@ -149,10 +166,10 @@ export function useReportFilters(opts: { storageKey: string; collapseKey: string
 		const parts: string[] = [];
 		const range = RANGE_PRESETS.find(r => r.key === filters.range)?.label ?? '';
 		parts.push(filters.range === 'custom' ? `${filters.customFrom} 至 ${filters.customTo}` : range);
-		parts.push(`按${BUCKET_UNIT_LABELS[bucketUnit.value]}`);
+		if (!isSimple()) parts.push(`按${BUCKET_UNIT_LABELS[bucketUnit.value]}`);
 		parts.push(filters.modelIds.length === 0 ? '全部模型' : (filters.modelIds.length === 1 ? opts.modelName(filters.modelIds[0]) : `${filters.modelIds.length} 个模型`));
-		if (filters.usageKinds.length > 0) parts.push(filters.usageKinds.map(k => USAGE_KIND_LABELS[k]).join('/'));
-		if (filters.compare) parts.push('对比上一周期');
+		if (!isSimple() && filters.usageKinds.length > 0) parts.push(filters.usageKinds.map(k => USAGE_KIND_LABELS[k]).join('/'));
+		if (!isSimple() && filters.compare) parts.push('对比上一周期');
 		return parts.join(' · ');
 	});
 
@@ -175,7 +192,7 @@ export function useReportFilters(opts: { storageKey: string; collapseKey: string
 	}
 
 	/** Watch sources that change the data window (range, models, usage kinds). */
-	const windowKey = () => [filters.range, filters.customFrom, filters.customTo, filters.modelIds.join(','), filters.usageKinds.join(',')];
+	const windowKey = () => [filters.range, filters.customFrom, filters.customTo, filters.modelIds.join(','), isSimple() ? '' : filters.usageKinds.join(',')];
 
 	return {
 		filters, collapsed, windowRange, refreshWindow, bucketAvail, bucketUnit, activeCount, reset, params,

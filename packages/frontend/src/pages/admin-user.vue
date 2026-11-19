@@ -203,14 +203,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		</div>
 
 		<div v-else-if="tab === 'agentUsage'">
-			<UserUsageReport
-				:key="props.userId"
-				reportEndpoint="admin/users/agent-usage-report"
-				billingEndpoint="admin/users/agent-billing-logs"
-				logsEndpoint="admin/users/agent-usage-logs"
-				:baseParams="{ userId: props.userId }"
-				storageKey="adminUserAgentUsage"
-			/>
+			<AdminUserUsageReport :key="props.userId" :userId="props.userId"/>
 		</div>
 
 		<div v-else-if="tab === 'agentSessions'">
@@ -245,7 +238,7 @@ import MkKeyValue from '@/components/MkKeyValue.vue';
 import MkSelect from '@/components/MkSelect.vue';
 import MkUserDriveForAdmin from '@/components/MkUserDriveForAdmin.vue';
 import MkAgentSessionsForAdmin from '@/components/MkAgentSessionsForAdmin.vue';
-import UserUsageReport from '@/components/agent-report/UserUsageReport.vue';
+import AdminUserUsageReport from '@/components/agent-report/admin-user/AdminUserUsageReport.vue';
 import MkInfo from '@/components/MkInfo.vue';
 import * as os from '@/os.js';
 import { misskeyApi } from '@/utility/misskey-api.js';

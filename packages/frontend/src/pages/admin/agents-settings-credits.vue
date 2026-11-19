@@ -72,6 +72,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<span :class="$style.colCode">{{ i18n.ts._agents.redeemCodesColCode }}</span>
 					<span :class="$style.colAmount">{{ i18n.ts._agents.redeemCodesAmount }}</span>
 					<span :class="$style.colStatus">{{ i18n.ts._agents.redeemCodesColStatus }}</span>
+					<span :class="$style.colEventAt">兑换 / 过期时间</span>
 					<span :class="$style.colNote">{{ i18n.ts._agents.redeemCodesNote }}</span>
 					<span :class="$style.colUser">{{ i18n.ts._agents.redeemCodesColUser }}</span>
 					<span :class="$style.colActions"></span>
@@ -81,6 +82,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<code :class="$style.colCode">{{ row.code }}</code>
 					<span :class="$style.colAmount">{{ row.creditAmount }}</span>
 					<span :class="$style.colStatus" :style="{ color: redeemStatusColor(row.status) }">{{ redeemStatusLabel(row.status) }}</span>
+					<span :class="$style.colEventAt" data-testid="redeem-event-at">{{ redeemEventText(row) }}</span>
 					<span :class="$style.colNote" :title="row.note">{{ row.note || '—' }}</span>
 					<span :class="$style.colUser">
 						<template v-if="row.redeemedBy">
@@ -272,6 +274,17 @@ function formatBjt(iso: string): string {
 	});
 }
 
+/**
+ * The one time that explains the row's state. Revoked rows have no recorded revoke time
+ * (the API only stores a flag), so they show nothing rather than a misleading old expiry.
+ */
+function redeemEventText(row: RedeemCodeRow): string {
+	if (row.status === 'redeemed') return row.redeemedAt ? formatBjt(row.redeemedAt) : '—';
+	if (row.status === 'expired') return row.expiresAt ? formatBjt(row.expiresAt) : '—';
+	if (row.status === 'available' && row.expiresAt) return `有效期至 ${formatBjt(row.expiresAt)}`;
+	return '—';
+}
+
 function redeemStatusLabel(codeStatus: RedeemCodeRow['status']) {
 	if (codeStatus === 'available') return i18n.ts._agents.adminRedeemAvailable;
 	if (codeStatus === 'redeemed') return i18n.ts._agents.adminRedeemRedeemed;
@@ -311,7 +324,7 @@ function redeemStatusColor(codeStatus: RedeemCodeRow['status']) {
  */
 .redeemTable {
 	display: grid;
-	grid-template-columns: max-content minmax(max-content, 1fr) max-content max-content minmax(max-content, 0.7fr) minmax(max-content, 0.9fr) max-content;
+	grid-template-columns: max-content minmax(max-content, 1fr) max-content max-content max-content minmax(max-content, 0.7fr) minmax(max-content, 0.9fr) max-content;
 	border-radius: var(--MI-radius);
 	border: solid 1px var(--MI_THEME-divider);
 	overflow-x: auto;
@@ -371,6 +384,11 @@ function redeemStatusColor(codeStatus: RedeemCodeRow['status']) {
 	justify-content: center;
 	font-weight: 600;
 	font-size: 0.85em;
+}
+.colEventAt {
+	font-variant-numeric: tabular-nums;
+	color: var(--MI_THEME-fgTransparentWeak);
+	font-size: 0.86em;
 }
 .colNote {
 	justify-content: center;

@@ -62,7 +62,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<div v-else :class="$style.heatWrap">
 				<div :class="$style.heat">
 					<span></span>
-					<span v-for="h in 24" :key="'h' + h" :class="$style.heatHour">{{ (h - 1) % 3 === 0 ? h - 1 : '' }}</span>
+					<span v-for="h in HOUR_LABELS" :key="'h' + h" :class="$style.heatHour">{{ h }}</span>
 					<template v-for="(row, di) in heatGrid" :key="'d' + di">
 						<span :class="$style.heatDay">{{ WEEKDAYS[di] }}</span>
 						<span
@@ -124,6 +124,8 @@ const emit = defineEmits<{
 }>();
 
 const WEEKDAYS = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+// One label per 3 hours, each spanning 3 columns so two-digit hours never wrap in the narrow cells.
+const HOUR_LABELS = [0, 3, 6, 9, 12, 15, 18, 21];
 const BILLING_ORDER = ['paid', 'free', 'zeroPriced', 'byok', 'unassigned', 'failed', 'pending'];
 const usageTotal = computed(() => (props.data?.usageKinds ?? []).reduce((s, k) => s + k.m.total, 0));
 
@@ -316,6 +318,8 @@ function heatColor(v: number): string {
 }
 
 .heatHour {
+	grid-column: span 3;
+	white-space: nowrap;
 	opacity: 0.5;
 	font-variant-numeric: tabular-nums;
 }
