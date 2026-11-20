@@ -5,7 +5,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <template>
 <div :class="$style.root">
-	<ReportFilterBar :state="filterState" :catalog="catalog" :modelName="modelName" :loading="anyLoading" exportable @refresh="loadAll" @export="exportCsv"/>
+	<ReportModeSwitch v-model="mode"/>
+
+	<ReportFilterBar :state="filterState" :catalog="catalog" :modelName="modelName" :loading="anyLoading" :simple="simple" exportable @refresh="loadAll" @export="exportCsv"/>
 
 	<!-- KPI -->
 	<ReportPanel title="概览" icon="ti ti-layout-dashboard" caption="点击卡片切换下方趋势图指标" :loading="summary.loading.value" :error="summary.error.value" :hasData="summary.data.value != null" @retry="summary.load">
@@ -15,98 +17,109 @@ SPDX-License-Identifier: AGPL-3.0-only
 			:previous="summary.data.value.previous"
 			:series="summary.data.value.series.map(s => s.m)"
 			:active="metric"
+			:only="simple ? SIMPLE_METRIC_KEYS : undefined"
 			@select="metric = $event"
 		/>
 	</ReportPanel>
 
 	<!-- 趋势 -->
-	<ReportPanel title="趋势" icon="ti ti-chart-bar" :caption="trendCaption" :loading="trend.loading.value" :error="trend.error.value" :hasData="trend.data.value != null" @retry="trend.load">
-		<template #actions>
-			<div :class="[$style.seg, $style.scrollRow]" role="group" aria-label="指标">
-				<button v-for="mk in METRICS" :key="mk.key" type="button" class="_button" :class="[$style.segBtn, metric === mk.key ? $style.segBtnOn : null]" @click="metric = mk.key">{{ mk.label }}</button>
-			</div>
-			<div :class="[$style.seg, $style.scrollRow]" role="group" aria-label="分组">
-				<button v-for="bd in BREAKDOWNS" :key="bd.key" type="button" class="_button" :class="[$style.segBtn, filters.breakdown === bd.key ? $style.segBtnOn : null]" @click="filters.breakdown = bd.key">{{ bd.label }}</button>
-			</div>
-		</template>
-		<TrendChart
-			v-if="trend.data.value != null"
-			:buckets="trend.data.value.buckets"
-			:bucket="trend.data.value.bucket"
-			:groups="trend.data.value.groups"
-			:previous="trend.data.value.previous"
-			:breakdown="trendBreakdown"
-			:metric="metric"
-			:modelName="modelName"
-		/>
+	<TrendPanel
+		v-model:metric="metric"
+		:breakdown="filters.breakdown"
+		:data="trend.data.value"
+		:loading="trend.loading.value"
+		:error="trend.error.value"
+		:metrics="simple ? SIMPLE_METRICS : METRICS"
+		:loadedBreakdown="trendBreakdown"
+		:showBreakdown="!simple"
+		:compare="!simple && filters.compare"
+		:modelName="modelName"
+		@update:breakdown="filters.breakdown = $event"
+		@retry="trend.load"
+	/>
+
+	<!-- 简洁模式：模型排行 -->
+	<ReportPanel v-if="simple" title="模型排行" icon="ti ti-podium" caption="按请求数" :loading="models.loading.value" :error="models.error.value" :hasData="models.data.value != null" @retry="models.load">
+		<SimpleModelList v-if="models.data.value != null" :rows="models.data.value.rows" :catalog="catalogMap"/>
 	</ReportPanel>
 
-	<!-- 分指标折线 -->
-	<MetricLineCharts :series="summary.data.value?.series ?? null" :bucket="summary.data.value?.bucket ?? bucketUnit" :loading="summary.loading.value" :error="summary.error.value" @retry="summary.load"/>
+	<!-- 详细模式 -->
+	<template v-else>
+		<!-- 分指标折线 -->
+		<MetricLineCharts :series="summary.data.value?.series ?? null" :bucket="summary.data.value?.bucket ?? bucketUnit" :loading="summary.loading.value" :error="summary.error.value" @retry="summary.load"/>
 
-	<!-- 构成（进入视口才加载） -->
-	<div v-appear="breakdownsSeen ? null : onBreakdownsAppear" :class="$style.lazySlot">
-		<BreakdownPanels
-			:data="breakdowns.data.value"
-			:loading="breakdowns.loading.value"
-			:error="breakdowns.error.value"
-			:modelRows="models.data.value?.rows ?? null"
-			:modelsLoading="models.loading.value"
-			:modelsError="models.error.value"
-			:modelName="modelName"
-			:selectedModels="filters.modelIds"
-			@retry="breakdowns.load"
-			@retryModels="models.load"
-		/>
-	</div>
+		<!-- 构成（进入视口才加载） -->
+		<div v-appear="breakdownsSeen ? null : onBreakdownsAppear" :class="$style.lazySlot">
+			<BreakdownPanels
+				:data="breakdowns.data.value"
+				:loading="breakdowns.loading.value"
+				:error="breakdowns.error.value"
+				:modelRows="models.data.value?.rows ?? null"
+				:modelsLoading="models.loading.value"
+				:modelsError="models.error.value"
+				:modelName="modelName"
+				:selectedModels="filters.modelIds"
+				@retry="breakdowns.load"
+				@retryModels="models.load"
+			/>
+		</div>
 
-	<!-- 模型明细 -->
-	<ReportPanel title="模型明细" icon="ti ti-table" caption="耗时只统计成功调用" :loading="models.loading.value" :error="models.error.value" :hasData="models.data.value != null" @retry="models.load">
-		<ModelTable
-			v-if="models.data.value != null"
-			:rows="models.data.value.rows"
-			:catalog="catalogMap"
-			:selected="filters.modelIds"
-			@toggleModel="toggleModel"
-		/>
-	</ReportPanel>
-
-	<!-- 用户排行（进入视口才加载） -->
-	<div v-appear="usersSeen ? null : onUsersAppear" :class="$style.lazySlot">
-		<ReportPanel title="用户排行" icon="ti ti-podium" caption="点击行查看该用户的模型用量" :loading="users.loading.value" :error="users.error.value" :hasData="users.data.value != null" @retry="users.load">
-			<UserTable
-				v-if="users.data.value != null"
-				:items="users.data.value.items"
-				:total="users.data.value.total"
-				:page="userPage"
-				:pageSize="userPrefs.pageSize"
-				:sort="userPrefs.sort"
-				:loading="users.loading.value"
-				@update:page="setUserPage"
-				@update:pageSize="userPrefs.pageSize = $event"
-				@update:sort="userPrefs.sort = $event"
+		<!-- 模型明细 -->
+		<ReportPanel title="模型明细" icon="ti ti-table" caption="耗时只统计成功调用" :loading="models.loading.value" :error="models.error.value" :hasData="models.data.value != null" @retry="models.load">
+			<ModelTable
+				v-if="models.data.value != null"
+				:rows="models.data.value.rows"
+				:catalog="catalogMap"
+				:selected="filters.modelIds"
+				@toggleModel="toggleModel"
 			/>
 		</ReportPanel>
-	</div>
+
+		<!-- 用户排行（进入视口才加载） -->
+		<div v-appear="usersSeen ? null : onUsersAppear" :class="$style.lazySlot">
+			<ReportPanel title="用户排行" icon="ti ti-podium" caption="点击行查看该用户的模型用量" :loading="users.loading.value" :error="users.error.value" :hasData="users.data.value != null" @retry="users.load">
+				<UserTable
+					v-if="users.data.value != null"
+					:items="users.data.value.items"
+					:total="users.data.value.total"
+					:page="userPage"
+					:pageSize="userPrefs.pageSize"
+					:sort="userPrefs.sort"
+					:loading="users.loading.value"
+					@update:page="setUserPage"
+					@update:pageSize="userPrefs.pageSize = $event"
+					@update:sort="userPrefs.sort = $event"
+				/>
+			</ReportPanel>
+		</div>
+	</template>
 </div>
 </template>
 
 <script lang="ts" setup>
+/**
+ * Site-wide model report (控制面板 → 智能体管理 → 报表 → 模型). Owns its endpoints, filters storage keys
+ * and layout; shares only the generic building blocks in `components/agent-report/`.
+ */
 import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue';
 import * as Misskey from 'misskey-js';
+import ReportPanel from '../ReportPanel.vue';
+import KpiCards from '../KpiCards.vue';
+import TrendPanel from '../TrendPanel.vue';
+import BreakdownPanels from '../BreakdownPanels.vue';
+import MetricLineCharts from '../MetricLineCharts.vue';
+import ModelTable from '../ModelTable.vue';
+import SimpleModelList from '../SimpleModelList.vue';
+import ReportFilterBar from '../ReportFilterBar.vue';
+import ReportModeSwitch from '../ReportModeSwitch.vue';
+import { reportApi, useReportSection } from '../use-report-section.js';
+import { useDebouncedApply, useReportFilters } from '../use-report-filters.js';
+import { useReportMode } from '../use-report-mode.js';
+import { beijingDateString, cacheHitRate, downloadText, successRate, toCsv, CATEGORY_LABELS } from '../report-utils.js';
 import UserTable from './UserTable.vue';
-import type { Breakdown, BucketUnit, CatalogEntry, MetricKey, ReportMetrics, UserSort } from '@/components/agent-report/report-utils.js';
-import type { BreakdownsData } from '@/components/agent-report/BreakdownPanels.vue';
-import ReportPanel from '@/components/agent-report/ReportPanel.vue';
-import KpiCards from '@/components/agent-report/KpiCards.vue';
-import TrendChart from '@/components/agent-report/TrendChart.vue';
-import BreakdownPanels from '@/components/agent-report/BreakdownPanels.vue';
-import MetricLineCharts from '@/components/agent-report/MetricLineCharts.vue';
-import ModelTable from '@/components/agent-report/ModelTable.vue';
-import ReportFilterBar from '@/components/agent-report/ReportFilterBar.vue';
-import { reportApi, useReportSection } from '@/components/agent-report/use-report-section.js';
-import { BREAKDOWNS, useDebouncedApply, useReportFilters } from '@/components/agent-report/use-report-filters.js';
-import { beijingDateString, cacheHitRate, downloadText, successRate, toCsv, CATEGORY_LABELS } from '@/components/agent-report/report-utils.js';
+import type { TrendData } from '../TrendPanel.vue';
+import type { BreakdownsData } from '../BreakdownPanels.vue';
+import type { Breakdown, BucketUnit, CatalogEntry, MetricKey, ReportMetrics, UserSort } from '../report-utils.js';
 
 const METRICS: { key: MetricKey; label: string }[] = [
 	{ key: 'total', label: '请求' },
@@ -116,6 +129,12 @@ const METRICS: { key: MetricKey; label: string }[] = [
 	{ key: 'tokens', label: 'Token' },
 	{ key: 'latency', label: '耗时' },
 ];
+
+// Simple mode: the four numbers an operator checks first.
+const SIMPLE_METRICS = METRICS.filter(m => ['total', 'successRate', 'credits', 'users'].includes(m.key));
+const SIMPLE_METRIC_KEYS = SIMPLE_METRICS.map(m => m.key);
+
+const { mode, simple } = useReportMode('adminAgentModelReportMode');
 
 // Catalog keeps the last known value so the picker and chips stay labeled while reloading.
 const catalog = ref<CatalogEntry[]>([]);
@@ -131,6 +150,7 @@ const filterState = useReportFilters({
 	collapseKey: 'adminAgentModelReportFilterCollapsed',
 	defaultRange: '7d',
 	modelName,
+	simple,
 });
 const filters = filterState.filters;
 const bucketUnit = filterState.bucketUnit;
@@ -159,7 +179,6 @@ const userPage = ref(1);
 const filterParams = filterState.params;
 
 type SummaryRes = { since: string; until: string; bucket: BucketUnit; current: ReportMetrics; previous: ReportMetrics; series: { t: string; m: ReportMetrics }[] };
-type TrendRes = { bucket: BucketUnit; buckets: string[]; groups: { key: string; total: number; points: ReportMetrics[] }[]; previous: ReportMetrics[] | null };
 type ModelsRes = { catalog: CatalogEntry[]; rows: { modelId: string; m: ReportMetrics }[] };
 type UsersRes = { items: { userId: string; user: Misskey.entities.UserLite | null; m: ReportMetrics }[]; total: number; page: number; pageSize: number };
 
@@ -173,12 +192,15 @@ function trendColumns(m: MetricKey): string {
 	return m === 'users' ? 'users' : m === 'latency' ? 'latency' : 'base';
 }
 
+// Simple mode never groups or compares, whatever detailed mode left in the stored filters.
+const effectiveBreakdown = () => (simple.value ? 'none' : filters.breakdown);
+
 let trendLoadedColumns = trendColumns(metric.value);
 const trend = useReportSection(async () => {
-	const breakdown = filters.breakdown;
+	const breakdown = effectiveBreakdown();
 	const cols = trendColumns(metric.value);
-	const res = await reportApi<TrendRes>('admin/agents/reports/trend', {
-		...filterParams(), bucket: bucketUnit.value, breakdown, compare: filters.compare, metric: metric.value,
+	const res = await reportApi<TrendData>('admin/agents/reports/trend', {
+		...filterParams(), bucket: bucketUnit.value, breakdown, compare: !simple.value && filters.compare, metric: metric.value,
 	});
 	trendBreakdown.value = breakdown;
 	trendLoadedColumns = cols;
@@ -190,9 +212,10 @@ const users = useReportSection(() => reportApi<UsersRes>('admin/agents/reports/u
 	...filterParams(), sort: userPrefs.sort, page: userPage.value, pageSize: userPrefs.pageSize,
 }));
 
-const anyLoading = computed(() => summary.loading.value || trend.loading.value || breakdowns.loading.value || models.loading.value || users.loading.value);
+const anyLoading = computed(() => summary.loading.value || trend.loading.value || models.loading.value || (!simple.value && (breakdowns.loading.value || users.loading.value)));
 
 // Sections below the fold load on first scroll into view; after that they follow filter changes.
+// They only exist in detailed mode, so leaving it resets the flags and re-entering reloads them fresh.
 const breakdownsSeen = ref(false);
 const usersSeen = ref(false);
 
@@ -221,11 +244,6 @@ function onUsersAppear() {
 
 watch(() => models.data.value, d => {
 	if (d != null) catalog.value = d.catalog;
-});
-
-const trendCaption = computed(() => {
-	const bd = BREAKDOWNS.find(b => b.key === trendBreakdown.value)?.label ?? '';
-	return `${METRICS.find(m => m.key === metric.value)?.label ?? ''}${trendBreakdown.value !== 'none' ? ` · 按${bd}` : ''}${filters.compare ? ' · 虚线为上一周期' : ''}`;
 });
 
 const toggleModel = filterState.toggleModel;
@@ -257,12 +275,20 @@ watch(() => [filters.breakdown, filters.compare], () => {
 });
 
 watch(metric, m => {
-	if (filters.breakdown !== 'none' && trendColumns(m) !== trendLoadedColumns) void trend.load();
+	if (effectiveBreakdown() !== 'none' && trendColumns(m) !== trendLoadedColumns) void trend.load();
 });
 
 watch(() => [userPrefs.sort, userPrefs.pageSize], () => {
 	userPage.value = 1;
 	if (usersSeen.value) void users.load();
+});
+
+// Mode switch: granularity / grouping / compare / usage kinds change meaning, so reload the shared data.
+watch(simple, s => {
+	breakdownsSeen.value = false;
+	usersSeen.value = false;
+	if (s && !SIMPLE_METRIC_KEYS.includes(metric.value)) metric.value = 'total';
+	apply.schedule(loadAll);
 });
 
 loadAll();
@@ -310,53 +336,5 @@ function exportCsv() {
 /* Placeholder height so the lazy sections can be observed before they load. */
 .lazySlot {
 	min-height: 120px;
-}
-
-/* Trend toolbar segments (metric / breakdown). */
-.seg {
-	display: inline-flex;
-	padding: 2px;
-	border-radius: 8px;
-	background: color-mix(in srgb, var(--MI_THEME-fg) 7%, transparent);
-}
-
-.scrollRow {
-	min-width: 0;
-	max-width: 100%;
-	flex-wrap: nowrap;
-	overflow-x: auto;
-	scrollbar-width: none;
-
-	&::-webkit-scrollbar {
-		display: none;
-	}
-
-	> * {
-		flex-shrink: 0;
-	}
-}
-
-.segBtn {
-	padding: 4px 10px;
-	border-radius: 6px;
-	font-size: 0.82em;
-	white-space: nowrap;
-	opacity: 0.72;
-
-	&:hover {
-		opacity: 1;
-	}
-
-	@media (pointer: coarse) {
-		padding: 6px 12px;
-	}
-}
-
-.segBtnOn {
-	background: var(--MI_THEME-panel);
-	opacity: 1;
-	font-weight: 600;
-	color: var(--MI_THEME-accent);
-	box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
 }
 </style>

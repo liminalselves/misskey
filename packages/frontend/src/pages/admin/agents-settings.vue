@@ -1034,7 +1034,7 @@ import MkLoading from '@/components/global/MkLoading.vue';
 import FormSplit from '@/components/form/split.vue';
 import MkTabs from '@/components/MkTabs.vue';
 import XCheckinReports from './agents-checkin-reports.vue';
-import XModelReports from './agents-model-reports/ModelReportsPage.vue';
+import XModelReports from '@/components/agent-report/site/SiteModelReport.vue';
 import XCheckinPanel from './agents-settings-checkin.vue';
 import XCreditsPanel from './agents-settings-credits.vue';
 import XCreditGrants from './agents-settings-credit-grants.vue';
@@ -1081,7 +1081,7 @@ const activeGroupKey = computed<string>({
 
 const meta = await misskeyApi('admin/meta') as Record<string, unknown>;
 
-// 总览页 24h 小卡片仅需整体统计，完整报表见 agents-model-reports/ModelReportsPage.vue
+// 总览页 24h 小卡片仅需整体统计，完整报表见 components/agent-report/site/SiteModelReport.vue
 type ReportsOverview = {
 	current: { total: number; success: number; pending: number };
 };

@@ -10,6 +10,20 @@ const ignoreElements = [
 	'style',
 ];
 
+// Aliyun captcha renders its popup window, mask and error tips directly under <body>
+// instead of inside the configured element, so they are siblings of the app root rather than
+// descendants of the modal that opened them. They must never be made inert: the login dialog
+// stays trapped underneath them, and once inert they look normal but cannot be clicked
+// (e.g. the retry after a wrong password, which closes an error dialog first).
+function isAliyunCaptchaElement(el: HTMLElement): boolean {
+	return el.parentElement === window.document.body && (
+		el.id === 'aliyunCaptcha-window-popup' ||
+		el.id === 'aliyunCaptcha-mask' ||
+		el.id === 'aliyunCaptcha-common-errorTip' ||
+		el.id === 'aliyunCaptcha-errorTip'
+	);
+}
+
 function containsFocusTrappedElements(el: HTMLElement): boolean {
 	return Array.from(focusTrapElements).some((focusTrapElement) => {
 		return el.contains(focusTrapElement);
@@ -59,7 +73,8 @@ function releaseFocusTrap(el: HTMLElement): void {
 				(
 					highestZIndexElement == null ||
 					siblingEl === highestZIndexElement.el ||
-					siblingEl.contains(highestZIndexElement.el)
+					siblingEl.contains(highestZIndexElement.el) ||
+					isAliyunCaptchaElement(siblingEl)
 				)
 			) {
 				siblingEl.inert = false;
@@ -67,7 +82,8 @@ function releaseFocusTrap(el: HTMLElement): void {
 				highestZIndexElement != null &&
 				siblingEl !== highestZIndexElement.el &&
 				!siblingEl.contains(highestZIndexElement.el) &&
-				!ignoreElements.includes(siblingEl.tagName.toLowerCase())
+				!ignoreElements.includes(siblingEl.tagName.toLowerCase()) &&
+				!isAliyunCaptchaElement(siblingEl)
 			) {
 				siblingEl.inert = true;
 			} else {
@@ -114,7 +130,8 @@ export function focusTrap(el: HTMLElement, hasInteractionWithOtherFocusTrappedEl
 					hasInteractionWithOtherFocusTrappedEls === false ||
 					(!focusTrapElements.has(siblingEl) && !containsFocusTrappedElements(siblingEl))
 				) &&
-				!ignoreElements.includes(siblingEl.tagName.toLowerCase())
+				!ignoreElements.includes(siblingEl.tagName.toLowerCase()) &&
+				!isAliyunCaptchaElement(siblingEl)
 			) {
 				siblingEl.inert = true;
 			}

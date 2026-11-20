@@ -34,7 +34,8 @@ class SwLang {
 	private async _fetch(): Promise<I18n<Locale>> {
 		// Service Workerは何度も起動しそのたびにlocaleを読み込むので、CacheStorageを使う
 		const localeUrl = `/assets/locales/${await this.lang}.${_VERSION_}.json`;
-		let localeRes = await caches.match(localeUrl);
+		const cachedRes = await caches.match(localeUrl);
+		let localeRes = cachedRes;
 
 		// _DEV_がtrueの場合は常に最新化
 		if (!localeRes || _DEV_) {
@@ -50,6 +51,10 @@ class SwLang {
 				if (!clone.clone().ok) throw new Error('locale fetching error');
 
 				caches.open(this.cacheName).then(cache => cache.put(localeUrl, clone));
+			} catch (err) {
+				// If refreshing fails (e.g. offline), keep using the cached locale for the offline page
+				if (!cachedRes) throw err;
+				localeRes = cachedRes;
 			} finally {
 				globalThis.clearTimeout(timeout);
 			}
