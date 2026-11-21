@@ -409,7 +409,7 @@ export async function mainBoot() {
 
 			// 监听聊天已读事件（全局处理）
 			// 这确保无论 MkChatHistories 组件是否被渲染，全局未读状态都能正确更新
-			(main as any).on('chatRead', (data: { hasUnreadChatMessages: boolean }) => {
+			main.on('chatRead', data => {
 				updateCurrentAccountPartial({ hasUnreadChatMessages: data.hasUnreadChatMessages });
 			});
 

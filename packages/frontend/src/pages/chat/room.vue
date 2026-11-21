@@ -197,7 +197,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 			:room="room"
 			@inviteUser="inviteUser"
 			@mention="handleMention"
-			@roomUpdated="onRoomUpdated"
+			@roomUpdated="onLocalRoomUpdated"
 		/>
 	</div>
 
@@ -253,9 +253,80 @@ SPDX-License-Identifier: AGPL-3.0-only
 </PageWithHeader>
 </template>
 
+<script lang="ts">
+import * as Misskey from 'misskey-js';
+
+export type NormalizedChatMessage = Omit<Misskey.entities.ChatMessageLite, 'fromUser' | 'reactions'> & {
+	fromUser: Misskey.entities.UserLite;
+	reactions: (Misskey.entities.ChatMessageLite['reactions'][number] & {
+		user: Misskey.entities.UserLite;
+	})[];
+};
+
+const SHARED_ROOM_METADATA_KEYS = [
+	'name',
+	'description',
+	'iconUrl',
+	'isPublic',
+	'isArchived',
+	'allowMemberInvite',
+	'announcement',
+	'pinnedMessageId',
+	'pinnedMessage',
+	'ownerId',
+	'owner',
+	'memberCount',
+] as const;
+
+/**
+ * 仅合并群聊共享元信息，绝不覆盖 per-user 字段（isMember / isMuted / invitationExists / myRole / isBanned / banReason / unreadCount）
+ */
+export function mergeSharedRoomMetadata(
+	current: Misskey.entities.ChatRoom,
+	payload: Partial<Misskey.entities.ChatRoom>,
+): Misskey.entities.ChatRoom {
+	const next: Misskey.entities.ChatRoom = { ...current };
+	for (const key of SHARED_ROOM_METADATA_KEYS) {
+		if (payload[key] !== undefined) {
+			(next as Record<string, unknown>)[key] = payload[key];
+		}
+	}
+	return next;
+}
+
+export function applyOwnerTransferred(
+	current: Misskey.entities.ChatRoom,
+	payload: {
+		oldOwnerId?: string;
+		newOwnerId?: string;
+		ownerId?: string;
+		newOwner?: Misskey.entities.UserLite;
+		owner?: Misskey.entities.UserLite;
+	},
+	myUserId: string,
+): Misskey.entities.ChatRoom {
+	const nextOwnerId = payload.newOwnerId ?? payload.ownerId;
+	const nextOwner = payload.newOwner ?? payload.owner;
+	if (!nextOwnerId) return current;
+
+	let nextRole = current.myRole;
+	if (myUserId === nextOwnerId) {
+		nextRole = 'owner';
+	} else if (myUserId === payload.oldOwnerId || current.ownerId === myUserId) {
+		nextRole = 'member';
+	}
+
+	return {
+		...current,
+		ownerId: nextOwnerId,
+		owner: nextOwner ?? current.owner,
+		myRole: nextRole,
+	};
+}
+</script>
+
 <script lang="ts" setup>
 import { computed, nextTick, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, useTemplateRef, watch } from 'vue';
-import * as Misskey from 'misskey-js';
 import { getScrollContainer } from '@@/js/scroll.js';
 import XMessage from './XMessage.vue';
 import XForm from './room.form.vue';
@@ -286,13 +357,6 @@ const props = defineProps<{
 	roomId?: string;
 	messageId?: string; // 用于定位到特定消息
 }>();
-
-export type NormalizedChatMessage = Omit<Misskey.entities.ChatMessageLite, 'fromUser' | 'reactions'> & {
-	fromUser: Misskey.entities.UserLite;
-	reactions: (Misskey.entities.ChatMessageLite['reactions'][number] & {
-		user: Misskey.entities.UserLite;
-	})[];
-};
 
 const tab = ref('chat');
 const initializing = ref(false);
@@ -620,15 +684,27 @@ function applyEditedMessage(payload: Misskey.entities.ChatMessageLite | Misskey.
 	}
 }
 
-function onRoomUpdated(updated: Misskey.entities.ChatRoom) {
+function onRoomUpdated(payload: Partial<Misskey.entities.ChatRoom>) {
+	if (!room.value) return;
+	room.value = mergeSharedRoomMetadata(room.value, payload);
+}
+
+function onLocalRoomUpdated(updated: Misskey.entities.ChatRoom) {
 	if (!room.value) {
 		room.value = updated;
 		return;
 	}
 	room.value = {
-		...room.value,
-		...updated,
+		...mergeSharedRoomMetadata(room.value, updated),
+		...(updated.myRole !== undefined ? { myRole: updated.myRole } : {}),
 	};
+}
+
+function onOwnerTransferred(payload: Parameters<Misskey.Channels['chatRoom']['events']['ownerTransferred']>[0]) {
+	if (room.value) {
+		room.value = applyOwnerTransferred(room.value, payload, $i.id);
+	}
+	void membersComponentRef.value?.refresh();
 }
 
 async function loadRoomMembersForFeatures(roomId: string) {
@@ -688,141 +764,118 @@ async function loadContext(targetId: string, limit = 20): Promise<boolean> {
 	}
 }
 
-function bindChannelEvents(conn: Misskey.IChannelConnection<Misskey.Channels['chatUser']> | Misskey.IChannelConnection<Misskey.Channels['chatRoom']>) {
+function bindChatUserEvents(conn: Misskey.IChannelConnection<Misskey.Channels['chatUser']>) {
 	conn.on('message', onMessage);
 	conn.on('deleted', onDeleted);
 	conn.on('react', onReact);
 	conn.on('unreact', onUnreact);
+	conn.on('edited', applyEditedMessage);
+}
 
-	const anyConn = conn as unknown as { on: (ev: string, cb: (payload: any) => void) => void };
-	anyConn.on('edited', (payload: Misskey.entities.ChatMessageLite) => {
-		applyEditedMessage(payload);
-	});
-
-	if (props.roomId) {
-		anyConn.on('roomUpdated', (payload: Partial<Misskey.entities.ChatRoom>) => {
-			if (!room.value) return;
-			room.value = {
-				...room.value,
-				...payload,
-			};
+function bindChatRoomEvents(conn: Misskey.IChannelConnection<Misskey.Channels['chatRoom']>) {
+	conn.on('message', onMessage);
+	conn.on('deleted', onDeleted);
+	conn.on('react', onReact);
+	conn.on('unreact', onUnreact);
+	conn.on('edited', applyEditedMessage);
+	conn.on('roomUpdated', onRoomUpdated);
+	conn.on('roomDeleted', () => {
+		connection.value?.dispose();
+		connection.value = null;
+		void os.alert({ type: 'info', text: i18n.ts._chat.roomDeletedNotice }).then(() => {
+			router.push('/chat');
 		});
-		anyConn.on('roomDeleted', () => {
+	});
+	conn.on('memberJoined', (payload) => {
+		if (room.value && room.value.memberCount != null) {
+			room.value = { ...room.value, memberCount: room.value.memberCount + 1 };
+		}
+		if (payload.user && !roomMembers.value.some(u => u.id === payload.user.id)) {
+			roomMembers.value.push(payload.user);
+		}
+		void membersComponentRef.value?.refresh();
+	});
+	conn.on('memberLeft', (payload) => {
+		if (payload.userId === $i.id) {
 			connection.value?.dispose();
 			connection.value = null;
-			void os.alert({ type: 'info', text: i18n.ts._chat.roomDeletedNotice }).then(() => {
-				router.push('/chat');
-			});
-		});
-		anyConn.on('memberJoined', (payload: { userId?: string; user?: Misskey.entities.UserLite }) => {
-			if (room.value && room.value.memberCount != null) {
-				room.value = { ...room.value, memberCount: room.value.memberCount + 1 };
+			router.push('/chat');
+			return;
+		}
+		if (room.value && room.value.memberCount != null && room.value.memberCount > 0) {
+			room.value = { ...room.value, memberCount: room.value.memberCount - 1 };
+		}
+		roomMembers.value = roomMembers.value.filter(u => u.id !== payload.userId);
+		void membersComponentRef.value?.refresh();
+	});
+	conn.on('memberKicked', (payload) => {
+		if (payload.userId === $i.id) {
+			connection.value?.dispose();
+			connection.value = null;
+			notMember.value = true;
+			if (room.value) {
+				room.value = { ...room.value, isMember: false, myRole: null };
 			}
-			if (payload?.user && !roomMembers.value.some(u => u.id === payload.user!.id)) {
-				roomMembers.value.push(payload.user);
-			}
-			void membersComponentRef.value?.refresh();
-		});
-		anyConn.on('memberLeft', (payload: { userId: string }) => {
-			if (payload.userId === $i.id) {
-				connection.value?.dispose();
-				connection.value = null;
-				router.push('/chat');
-				return;
-			}
-			if (room.value && room.value.memberCount != null && room.value.memberCount > 0) {
-				room.value = { ...room.value, memberCount: room.value.memberCount - 1 };
-			}
-			roomMembers.value = roomMembers.value.filter(u => u.id !== payload.userId);
-			void membersComponentRef.value?.refresh();
-		});
-		anyConn.on('memberKicked', (payload: { userId: string }) => {
-			if (payload.userId === $i.id) {
-				connection.value?.dispose();
-				connection.value = null;
-				notMember.value = true;
-				if (room.value) {
-					room.value = { ...room.value, isMember: false, myRole: null };
-				}
-				void os.alert({ type: 'warning', text: i18n.ts._chat.kickedNotice });
-				return;
-			}
-			if (room.value && room.value.memberCount != null && room.value.memberCount > 0) {
-				room.value = { ...room.value, memberCount: room.value.memberCount - 1 };
-			}
-			roomMembers.value = roomMembers.value.filter(u => u.id !== payload.userId);
-			void membersComponentRef.value?.refresh();
-		});
-		anyConn.on('memberBanned', (payload: { userId: string; reason?: string | null }) => {
-			if (payload.userId === $i.id) {
-				connection.value?.dispose();
-				connection.value = null;
-				notMember.value = true;
-				if (room.value) {
-					room.value = {
-						...room.value,
-						isMember: false,
-						myRole: null,
-						isBanned: true,
-						banReason: payload.reason ?? null,
-					};
-				}
-				void os.alert({ type: 'error', text: i18n.ts._chat.kickedNotice });
-				return;
-			}
-			if (room.value && room.value.memberCount != null && room.value.memberCount > 0) {
-				room.value = { ...room.value, memberCount: room.value.memberCount - 1 };
-			}
-			roomMembers.value = roomMembers.value.filter(u => u.id !== payload.userId);
-			void membersComponentRef.value?.refresh();
-		});
-		anyConn.on('memberRoleChanged', (payload: { userId: string; role: 'member' | 'admin' }) => {
-			if (payload.userId === $i.id && room.value) {
-				room.value = { ...room.value, myRole: payload.role };
-			}
-			void membersComponentRef.value?.refresh();
-		});
-		anyConn.on('memberSuspended', (payload: { userId: string; suspendedUntil?: string | null }) => {
-			if (payload.userId === $i.id) {
-				mySuspendedUntil.value = payload.suspendedUntil ?? new Date(9999, 0, 1).toISOString();
-				nowMs.value = Date.now();
-			}
-			void membersComponentRef.value?.refresh();
-		});
-		anyConn.on('memberUnsuspended', (payload: { userId: string }) => {
-			if (payload.userId === $i.id) {
-				mySuspendedUntil.value = null;
-			}
-			void membersComponentRef.value?.refresh();
-		});
-		anyConn.on('ownerTransferred', (payload: { newOwnerId?: string; ownerId?: string; newOwner?: Misskey.entities.UserLite; owner?: Misskey.entities.UserLite }) => {
-			const nextOwnerId = payload.newOwnerId ?? payload.ownerId;
-			const nextOwner = payload.newOwner ?? payload.owner;
-			if (room.value && nextOwnerId) {
-				let nextRole = room.value.myRole;
-				if ($i.id === nextOwnerId) {
-					nextRole = 'owner';
-				} else if (room.value.ownerId === $i.id) {
-					nextRole = 'member';
-				}
+			void os.alert({ type: 'warning', text: i18n.ts._chat.kickedNotice });
+			return;
+		}
+		if (room.value && room.value.memberCount != null && room.value.memberCount > 0) {
+			room.value = { ...room.value, memberCount: room.value.memberCount - 1 };
+		}
+		roomMembers.value = roomMembers.value.filter(u => u.id !== payload.userId);
+		void membersComponentRef.value?.refresh();
+	});
+	conn.on('memberBanned', (payload) => {
+		if (payload.userId === $i.id) {
+			connection.value?.dispose();
+			connection.value = null;
+			notMember.value = true;
+			if (room.value) {
 				room.value = {
 					...room.value,
-					ownerId: nextOwnerId,
-					owner: nextOwner ?? room.value.owner,
-					myRole: nextRole,
+					isMember: false,
+					myRole: null,
+					isBanned: true,
+					banReason: payload.reason ?? null,
 				};
 			}
-			void membersComponentRef.value?.refresh();
-		});
-		anyConn.on('pinnedMessageUpdated', (payload: { pinnedMessageId: string | null; pinnedMessage?: Misskey.entities.ChatMessage | null }) => {
-			if (!room.value) return;
-			room.value = {
-				...room.value,
-				pinnedMessageId: payload.pinnedMessageId,
-				pinnedMessage: payload.pinnedMessage ?? null,
-			};
-		});
-	}
+			void os.alert({ type: 'error', text: i18n.ts._chat.kickedNotice });
+			return;
+		}
+		if (room.value && room.value.memberCount != null && room.value.memberCount > 0) {
+			room.value = { ...room.value, memberCount: room.value.memberCount - 1 };
+		}
+		roomMembers.value = roomMembers.value.filter(u => u.id !== payload.userId);
+		void membersComponentRef.value?.refresh();
+	});
+	conn.on('memberRoleChanged', (payload) => {
+		if (payload.userId === $i.id && room.value) {
+			room.value = { ...room.value, myRole: payload.role };
+		}
+		void membersComponentRef.value?.refresh();
+	});
+	conn.on('memberSuspended', (payload) => {
+		if (payload.userId === $i.id) {
+			mySuspendedUntil.value = payload.suspendedUntil ?? new Date(9999, 0, 1).toISOString();
+			nowMs.value = Date.now();
+		}
+		void membersComponentRef.value?.refresh();
+	});
+	conn.on('memberUnsuspended', (payload) => {
+		if (payload.userId === $i.id) {
+			mySuspendedUntil.value = null;
+		}
+		void membersComponentRef.value?.refresh();
+	});
+	conn.on('ownerTransferred', onOwnerTransferred);
+	conn.on('pinnedMessageUpdated', (payload) => {
+		if (!room.value) return;
+		room.value = {
+			...room.value,
+			pinnedMessageId: payload.pinnedMessageId,
+			pinnedMessage: payload.pinnedMessage ?? null,
+		};
+	});
 }
 
 async function initialize() {
@@ -845,10 +898,11 @@ async function initialize() {
 			user.value = u;
 
 			connection.value?.dispose();
-			connection.value = useStream().useChannel('chatUser', {
+			const userConn = useStream().useChannel('chatUser', {
 				otherId: user.value.id,
 			});
-			bindChannelEvents(connection.value);
+			connection.value = userConn;
+			bindChatUserEvents(userConn);
 
 			window.document.removeEventListener('visibilitychange', onVisibilitychange);
 			window.document.addEventListener('visibilitychange', onVisibilitychange);
@@ -936,10 +990,11 @@ async function initialize() {
 			}
 
 			connection.value?.dispose();
-			connection.value = useStream().useChannel('chatRoom', {
+			const roomConn = useStream().useChannel('chatRoom', {
 				roomId: room.value.id,
 			});
-			bindChannelEvents(connection.value);
+			connection.value = roomConn;
+			bindChatRoomEvents(roomConn);
 
 			window.document.removeEventListener('visibilitychange', onVisibilitychange);
 			window.document.addEventListener('visibilitychange', onVisibilitychange);

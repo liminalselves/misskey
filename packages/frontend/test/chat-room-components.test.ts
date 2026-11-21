@@ -9,6 +9,7 @@ import type * as Misskey from 'misskey-js';
 import { groupMessageReactions } from '@/pages/chat/XMessage.vue';
 import { extractMentionQuery, filterRoomMentionCandidates } from '@/pages/chat/room.form.vue';
 import { splitHighlightParts } from '@/pages/chat/room.search.vue';
+import { applyOwnerTransferred, mergeSharedRoomMetadata } from '@/pages/chat/room.vue';
 import XRoom from '@/pages/chat/XRoom.vue';
 import XMessage from '@/pages/chat/XMessage.vue';
 import ChatMessagePage from '@/pages/chat/message.vue';
@@ -193,6 +194,116 @@ describe('Chat room helpers', () => {
 			{ text: '!', match: false },
 		]);
 		expect(splitHighlightParts('plain text', '')).toEqual([{ text: 'plain text', match: false }]);
+	});
+
+	test('mergeSharedRoomMetadata updates shared room fields without overwriting per-user state', () => {
+		const owner = makeUser('owner1', 'owner', 'Owner');
+		const nextOwner = makeUser('u2', 'alice', 'Alice');
+		const current: Misskey.entities.ChatRoom = {
+			id: 'room1',
+			createdAt: '2026-11-21T00:00:00Z',
+			ownerId: 'owner1',
+			owner,
+			name: 'Old Name',
+			description: 'Old Desc',
+			iconUrl: null,
+			isPublic: false,
+			isMember: true,
+			isMuted: true,
+			invitationExists: false,
+			allowMemberInvite: false,
+			announcement: null,
+			pinnedMessageId: null,
+			pinnedMessage: null,
+			isArchived: false,
+			myRole: 'admin',
+			isBanned: false,
+			banReason: null,
+			memberCount: 5,
+			unreadCount: 3,
+		};
+
+		// Neutral broadcast payload packed without `me`
+		const neutralBroadcast: Misskey.entities.ChatRoom = {
+			id: 'room1',
+			createdAt: '2026-11-21T00:00:00Z',
+			ownerId: 'u2',
+			owner: nextOwner,
+			name: 'New Name',
+			description: 'New Desc',
+			iconUrl: 'https://example.com/new.png',
+			isPublic: true,
+			isMember: false,
+			isMuted: false,
+			invitationExists: true,
+			allowMemberInvite: true,
+			announcement: 'Hello',
+			pinnedMessageId: 'm1',
+			pinnedMessage: null,
+			isArchived: true,
+			myRole: null,
+			isBanned: true,
+			banReason: 'neutral',
+			memberCount: 6,
+			unreadCount: 0,
+		};
+
+		const merged = mergeSharedRoomMetadata(current, neutralBroadcast);
+		expect(merged).toMatchObject({
+			name: 'New Name',
+			description: 'New Desc',
+			iconUrl: 'https://example.com/new.png',
+			isPublic: true,
+			isArchived: true,
+			allowMemberInvite: true,
+			announcement: 'Hello',
+			pinnedMessageId: 'm1',
+			ownerId: 'u2',
+			owner: nextOwner,
+			memberCount: 6,
+			// Per-user fields preserved:
+			isMember: true,
+			isMuted: true,
+			invitationExists: false,
+			myRole: 'admin',
+			isBanned: false,
+			banReason: null,
+			unreadCount: 3,
+		});
+	});
+
+	test('applyOwnerTransferred updates ownerId, owner, and myRole for new and old owners even if ownerId already changed', () => {
+		const oldOwner = makeUser('owner1', 'owner', 'Owner');
+		const newOwner = makeUser('u2', 'alice', 'Alice');
+		const baseRoom: Misskey.entities.ChatRoom = {
+			id: 'room1',
+			createdAt: '2026-11-21T00:00:00Z',
+			ownerId: 'u2', // simulate roomUpdated arriving before ownerTransferred
+			owner: oldOwner,
+			name: 'Room',
+			description: '',
+			isPublic: true,
+			isMember: true,
+			myRole: 'owner',
+		};
+
+		const forOldOwner = applyOwnerTransferred(baseRoom, {
+			oldOwnerId: 'owner1',
+			newOwnerId: 'u2',
+			newOwner,
+		}, 'owner1');
+		expect(forOldOwner.ownerId).toBe('u2');
+		expect(forOldOwner.owner).toEqual(newOwner);
+		expect(forOldOwner.myRole).toBe('member');
+
+		const forNewOwner = applyOwnerTransferred({ ...baseRoom, myRole: 'admin' }, {
+			oldOwnerId: 'owner1',
+			newOwnerId: 'u2',
+			newOwner,
+		}, 'u2');
+		expect(forNewOwner.ownerId).toBe('u2');
+		expect(forNewOwner.owner).toEqual(newOwner);
+		expect(forNewOwner.myRole).toBe('owner');
 	});
 });
 

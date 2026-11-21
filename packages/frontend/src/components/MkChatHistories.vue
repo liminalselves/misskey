@@ -470,8 +470,7 @@ onMounted(() => {
 
 	// 监听聊天已读事件
 	// 当用户在其他页面阅读消息后，后端发送此事件通知刷新列表
-	// 使用 as any 因为 chatRead 是新增的事件，前端类型定义还没有更新
-	(channel as any).on('chatRead', (data: { hasUnreadChatMessages: boolean }) => {
+	channel.on('chatRead', data => {
 		// 首先立即更新全局未读状态（来自后端，绝对可靠）
 		updateCurrentAccountPartial({ hasUnreadChatMessages: data.hasUnreadChatMessages });
 		// 延迟刷新列表，确保后端 Redis 操作完成后 API 能返回最新数据

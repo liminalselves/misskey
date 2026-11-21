@@ -2,6 +2,8 @@ import {
 	Antenna,
 	ChatMessage,
 	ChatMessageLite,
+	ChatRoom,
+	ChatRoomMembership,
 	DriveFile,
 	DriveFolder,
 	Note,
@@ -68,6 +70,7 @@ export type Channels = {
 			notificationFlushed: () => void;
 			unreadAntenna: (payload: Antenna) => void;
 			newChatMessage: (payload: ChatMessage) => void;
+			chatRead: (payload: { hasUnreadChatMessages: boolean }) => void;
 			newAgentMessage: (payload: AgentMessageNotification) => void;
 			agentSessionMessagesChanged: (payload: AgentSessionMessagesChanged) => void;
 			agentRead: (payload: { hasUnreadAgentMessages: boolean }) => void;
@@ -268,6 +271,7 @@ export type Channels = {
 		};
 		events: {
 			message: (payload: ChatMessageLite) => void;
+			edited: (payload: ChatMessageLite) => void;
 			deleted: (payload: ChatMessageLite['id']) => void;
 			react: (payload: {
 				reaction: string;
@@ -292,6 +296,7 @@ export type Channels = {
 		};
 		events: {
 			message: (payload: ChatMessageLite) => void;
+			edited: (payload: ChatMessageLite) => void;
 			deleted: (payload: ChatMessageLite['id']) => void;
 			react: (payload: {
 				reaction: string;
@@ -302,6 +307,57 @@ export type Channels = {
 				reaction: string;
 				user?: UserLite;
 				messageId: ChatMessageLite['id'];
+			}) => void;
+			// Emitted via packRoom(room) without `me`, so per-user fields (isMember, isMuted,
+			// invitationExists, myRole, isBanned, banReason, unreadCount) are neutral defaults;
+			// listeners must only merge shared room metadata.
+			roomUpdated: (payload: ChatRoom) => void;
+			roomDeleted: (payload: {
+				roomId: ChatRoom['id'];
+			}) => void;
+			memberJoined: (payload: {
+				roomId: ChatRoom['id'];
+				userId: User['id'];
+				user: UserLite;
+				membership?: ChatRoomMembership;
+			}) => void;
+			memberLeft: (payload: {
+				roomId: ChatRoom['id'];
+				userId: User['id'];
+			}) => void;
+			memberKicked: (payload: {
+				roomId: ChatRoom['id'];
+				userId: User['id'];
+			}) => void;
+			memberBanned: (payload: {
+				roomId: ChatRoom['id'];
+				userId: User['id'];
+				reason: string | null;
+			}) => void;
+			memberRoleChanged: (payload: {
+				roomId: ChatRoom['id'];
+				userId: User['id'];
+				role: 'member' | 'admin';
+			}) => void;
+			memberSuspended: (payload: {
+				roomId: ChatRoom['id'];
+				userId: User['id'];
+				suspendedUntil: string;
+			}) => void;
+			memberUnsuspended: (payload: {
+				roomId: ChatRoom['id'];
+				userId: User['id'];
+			}) => void;
+			ownerTransferred: (payload: {
+				roomId: ChatRoom['id'];
+				oldOwnerId: User['id'];
+				newOwnerId: User['id'];
+				newOwner: UserLite;
+			}) => void;
+			pinnedMessageUpdated: (payload: {
+				roomId: ChatRoom['id'];
+				pinnedMessageId: ChatMessage['id'] | null;
+				pinnedMessage: ChatMessage | null;
 			}) => void;
 		};
 		receives: {

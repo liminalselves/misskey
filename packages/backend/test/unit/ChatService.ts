@@ -54,6 +54,8 @@ function createChatServiceHarness(overrides?: {
 	msgUpdateAffected?: number;
 	historyRaw?: any[];
 	timelineMessages?: any[];
+	mutings?: any[];
+	queryMessagesImpl?: (sql: string, params: any[]) => any[];
 }) {
 	const rooms = overrides?.rooms ?? [];
 	const memberships = overrides?.memberships ?? [];
@@ -199,6 +201,7 @@ function createChatServiceHarness(overrides?: {
 			getRawManyResult: overrides?.historyRaw ?? [],
 			executeResult: { affected: overrides?.msgUpdateAffected ?? 1 },
 		})),
+		query: vi.fn(async (sql: string, params: any[]) => overrides?.queryMessagesImpl?.(sql, params) ?? []),
 	};
 
 	const usersRepository: any = {
@@ -275,7 +278,7 @@ function createChatServiceHarness(overrides?: {
 		chatRoomBansRepository,
 		chatRoomInvitationsRepository,
 		chatRoomMembershipsRepository,
-		{ find: vi.fn(async () => []) } as any,
+		{ find: vi.fn(async () => overrides?.mutings ?? []) } as any,
 		userEntityService as any,
 		chatEntityService as any,
 		idService as any,
@@ -528,5 +531,75 @@ describe('ChatService owner mute, unread events, reactions & moderation', () => 
 			toRoomId: 'r_empty',
 			text: null,
 		});
+	});
+
+	test('userHistory paginates deterministically with untilId (and mutedIds)', async () => {
+		const queries: { sql: string; params: any[] }[] = [];
+		const allConversations = [
+			{ otherId: 'u4', messageId: 'm40' },
+			{ otherId: 'u3', messageId: 'm30' },
+			{ otherId: 'u2', messageId: 'm20' },
+			{ otherId: 'u1', messageId: 'm10' },
+		];
+		const { service } = createChatServiceHarness({
+			mutings: [{ muteeId: 'muted1' }],
+			timelineMessages: [
+				{ id: 'm10', text: '1' },
+				{ id: 'm20', text: '2' },
+				{ id: 'm30', text: '3' },
+				{ id: 'm40', text: '4' },
+			],
+			queryMessagesImpl: (sql, params) => {
+				queries.push({ sql, params });
+				// params: [meId, mutedIds, (untilId?), limit]
+				const untilId = params.length === 4 ? params[2] : null;
+				const limit = params.at(-1);
+				return allConversations
+					.filter(c => !untilId || c.messageId < untilId)
+					.slice(0, limit);
+			},
+		});
+
+		const page1 = await service.userHistory('me1', 2);
+		expect(page1.map(m => m.id)).toEqual(['m40', 'm30']);
+		expect(queries[0].sql).not.toContain('HAVING MAX("messageId") <');
+		expect(queries[0].params).toEqual(['me1', ['muted1'], 2]);
+
+		const page2 = await service.userHistory('me1', 2, page1.at(-1)!.id);
+		expect(page2.map(m => m.id)).toEqual(['m20', 'm10']);
+		expect(queries[1].sql).toContain('GROUP BY "otherId" HAVING MAX("messageId") < $3 ORDER BY "messageId" DESC LIMIT $4');
+		expect(queries[1].params).toEqual(['me1', ['muted1'], 'm30', 2]);
+
+		const page3 = await service.userHistory('me1', 2, page2.at(-1)!.id);
+		expect(page3).toEqual([]);
+	});
+
+	test('roomHistory paginates across non-empty and 0-message rooms with untilId without misclassifying earlier non-empty rooms', async () => {
+		const { service } = createChatServiceHarness({
+			rooms: [
+				{ id: 'r1', name: 'R1', ownerId: 'me1', owner: { id: 'me1' } },
+				{ id: 'm20', name: 'EmptyMid', ownerId: 'me1', owner: { id: 'me1' } },
+				{ id: 'r2', name: 'R2', ownerId: 'me1', owner: { id: 'me1' } },
+				{ id: 'm05', name: 'EmptyOld', ownerId: 'me1', owner: { id: 'me1' } },
+			],
+			historyRaw: [
+				{ roomId: 'r1', messageId: 'm30' },
+				{ roomId: 'r2', messageId: 'm10' },
+			],
+			timelineMessages: [
+				{ id: 'm30', toRoomId: 'r1', text: 'latest r1' },
+				{ id: 'm10', toRoomId: 'r2', text: 'latest r2' },
+			],
+		});
+
+		const page1 = await service.roomHistory('me1', 2);
+		expect(page1.map(m => m.id)).toEqual(['m30', 'm20']);
+
+		const page2 = await service.roomHistory('me1', 2, page1.at(-1)!.id);
+		expect(page2.map(m => m.id)).toEqual(['m10', 'm05']);
+		expect(page2.some(m => m.toRoomId === 'r1')).toBe(false);
+
+		const page3 = await service.roomHistory('me1', 2, page2.at(-1)!.id);
+		expect(page3).toEqual([]);
 	});
 });

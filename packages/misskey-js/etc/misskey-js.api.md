@@ -1623,6 +1623,9 @@ export type Channels = {
             notificationFlushed: () => void;
             unreadAntenna: (payload: Antenna) => void;
             newChatMessage: (payload: ChatMessage) => void;
+            chatRead: (payload: {
+                hasUnreadChatMessages: boolean;
+            }) => void;
             newAgentMessage: (payload: AgentMessageNotification) => void;
             agentSessionMessagesChanged: (payload: AgentSessionMessagesChanged) => void;
             agentRead: (payload: {
@@ -1844,6 +1847,7 @@ export type Channels = {
         };
         events: {
             message: (payload: ChatMessageLite) => void;
+            edited: (payload: ChatMessageLite) => void;
             deleted: (payload: ChatMessageLite['id']) => void;
             react: (payload: {
                 reaction: string;
@@ -1868,6 +1872,7 @@ export type Channels = {
         };
         events: {
             message: (payload: ChatMessageLite) => void;
+            edited: (payload: ChatMessageLite) => void;
             deleted: (payload: ChatMessageLite['id']) => void;
             react: (payload: {
                 reaction: string;
@@ -1878,6 +1883,54 @@ export type Channels = {
                 reaction: string;
                 user?: UserLite;
                 messageId: ChatMessageLite['id'];
+            }) => void;
+            roomUpdated: (payload: ChatRoom) => void;
+            roomDeleted: (payload: {
+                roomId: ChatRoom['id'];
+            }) => void;
+            memberJoined: (payload: {
+                roomId: ChatRoom['id'];
+                userId: User['id'];
+                user: UserLite;
+                membership?: ChatRoomMembership;
+            }) => void;
+            memberLeft: (payload: {
+                roomId: ChatRoom['id'];
+                userId: User['id'];
+            }) => void;
+            memberKicked: (payload: {
+                roomId: ChatRoom['id'];
+                userId: User['id'];
+            }) => void;
+            memberBanned: (payload: {
+                roomId: ChatRoom['id'];
+                userId: User['id'];
+                reason: string | null;
+            }) => void;
+            memberRoleChanged: (payload: {
+                roomId: ChatRoom['id'];
+                userId: User['id'];
+                role: 'member' | 'admin';
+            }) => void;
+            memberSuspended: (payload: {
+                roomId: ChatRoom['id'];
+                userId: User['id'];
+                suspendedUntil: string;
+            }) => void;
+            memberUnsuspended: (payload: {
+                roomId: ChatRoom['id'];
+                userId: User['id'];
+            }) => void;
+            ownerTransferred: (payload: {
+                roomId: ChatRoom['id'];
+                oldOwnerId: User['id'];
+                newOwnerId: User['id'];
+                newOwner: UserLite;
+            }) => void;
+            pinnedMessageUpdated: (payload: {
+                roomId: ChatRoom['id'];
+                pinnedMessageId: ChatMessage['id'] | null;
+                pinnedMessage: ChatMessage | null;
             }) => void;
         };
         receives: {
@@ -5102,10 +5155,10 @@ type VerifyEmailRequest = operations['verify-email']['requestBody']['content']['
 // Warnings were encountered during analysis:
 //
 // src/streaming.ts:57:3 - (ae-forgotten-export) The symbol "ReconnectingWebSocket" needs to be exported by the entry point index.d.ts
-// src/streaming.types.ts:71:4 - (ae-forgotten-export) The symbol "AgentMessageNotification" needs to be exported by the entry point index.d.ts
-// src/streaming.types.ts:72:4 - (ae-forgotten-export) The symbol "AgentSessionMessagesChanged" needs to be exported by the entry point index.d.ts
-// src/streaming.types.ts:246:4 - (ae-forgotten-export) The symbol "ReversiUpdateKey" needs to be exported by the entry point index.d.ts
-// src/streaming.types.ts:261:4 - (ae-forgotten-export) The symbol "ReversiUpdateSettings" needs to be exported by the entry point index.d.ts
+// src/streaming.types.ts:74:4 - (ae-forgotten-export) The symbol "AgentMessageNotification" needs to be exported by the entry point index.d.ts
+// src/streaming.types.ts:75:4 - (ae-forgotten-export) The symbol "AgentSessionMessagesChanged" needs to be exported by the entry point index.d.ts
+// src/streaming.types.ts:249:4 - (ae-forgotten-export) The symbol "ReversiUpdateKey" needs to be exported by the entry point index.d.ts
+// src/streaming.types.ts:264:4 - (ae-forgotten-export) The symbol "ReversiUpdateSettings" needs to be exported by the entry point index.d.ts
 
 // (No @packageDocumentation comment for this package)
 

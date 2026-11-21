@@ -828,7 +828,7 @@ export class ChatService {
 	}
 
 	@bindThis
-	public async userHistory(meId: MiUser['id'], limit: number): Promise<MiChatMessage[]> {
+	public async userHistory(meId: MiUser['id'], limit: number, untilId?: MiChatMessage['id'] | null): Promise<MiChatMessage[]> {
 		// Optimization: pre-load muted user IDs once to avoid repeated correlated subqueries.
 		const mutedIds = await this.mutingsRepository.find({
 			where: { muterId: meId },
@@ -840,11 +840,24 @@ export class ChatService {
 		// (fromUserId|toUserId, otherId, id DESC) WHERE toRoomId IS NULL.
 		// Each branch scans only one side (sent / received) index-only, GROUP BY needs no heap fetch.
 		const hasMuting = mutedIds.length > 0;
-		// When muting exists: $1=meId, $2=mutedIds(varchar[]), $3=limit
-		// Otherwise:          $1=meId, $2=limit
-		const limitParam = hasMuting ? '$3' : '$2';
-		const muteClauseSent = hasMuting ? ' AND "toUserId" <> ALL($2::varchar[])' : '';
-		const muteClauseRecv = hasMuting ? ' AND "fromUserId" <> ALL($2::varchar[])' : '';
+		const params: unknown[] = [meId];
+		let muteClauseSent = '';
+		let muteClauseRecv = '';
+		if (hasMuting) {
+			params.push(mutedIds);
+			const muteParam = `$${params.length}`;
+			muteClauseSent = ` AND "toUserId" <> ALL(${muteParam}::varchar[])`;
+			muteClauseRecv = ` AND "fromUserId" <> ALL(${muteParam}::varchar[])`;
+		}
+
+		let havingClause = '';
+		if (untilId) {
+			params.push(untilId);
+			havingClause = ` HAVING MAX("messageId") < $${params.length}`;
+		}
+
+		params.push(limit);
+		const limitParam = `$${params.length}`;
 
 		// Branch 1: messages I sent → conversation partner is toUserId
 		const sentSql = `SELECT "toUserId" AS "otherId", MAX("id") AS "messageId"`
@@ -858,18 +871,18 @@ export class ChatService {
 			+ ` WHERE "toUserId" = $1 AND "toRoomId" IS NULL${muteClauseRecv}`
 			+ ` GROUP BY "fromUserId"`;
 
+		// 游标过滤必须放在按会话聚合之后的 HAVING，避免内层过滤后让较早消息重新代表该会话
 		const sql = `SELECT "otherId", MAX("messageId") AS "messageId"`
 			+ ` FROM (${sentSql} UNION ALL ${recvSql}) AS combined`
-			+ ` GROUP BY "otherId" ORDER BY "messageId" DESC LIMIT ${limitParam}`;
+			+ ` GROUP BY "otherId"${havingClause} ORDER BY "messageId" DESC LIMIT ${limitParam}`;
 
-		const params = hasMuting ? [meId, mutedIds, limit] : [meId, limit];
 		const rows = await this.chatMessagesRepository.query(sql, params) as { otherId: string; messageId: string }[];
 
 		return this.findMessagesPreservingOrder(rows.map(row => row.messageId));
 	}
 
 	@bindThis
-	public async roomHistory(meId: MiUser['id'], limit: number): Promise<MiChatMessage[]> {
+	public async roomHistory(meId: MiUser['id'], limit: number, untilId?: MiChatMessage['id'] | null): Promise<MiChatMessage[]> {
 		const [memberRoomIds, ownedRooms] = await Promise.all([
 			this.chatRoomMembershipsRepository.findBy({
 				userId: meId,
@@ -887,31 +900,57 @@ export class ChatService {
 			return [];
 		}
 
+		// 先获取所有有消息群聊的真实最新消息 ID（不加 LIMIT/HAVING），避免把翻页前页已出现过的有消息群误判成 0 消息群
 		const rows = await this.chatMessagesRepository.createQueryBuilder('message')
 			.select('message.toRoomId', 'roomId')
 			.addSelect('MAX("message"."id")', 'messageId')
 			.where('message.toRoomId IN (:...roomIds)', { roomIds })
 			.groupBy('message.toRoomId')
-			.orderBy('"messageId"', 'DESC')
-			.limit(limit)
 			.getRawMany<{ roomId: MiChatRoom['id']; messageId: MiChatMessage['id'] }>();
 
 		const roomsWithMessages = new Set(rows.map(r => r.roomId));
 		const emptyRoomIds = roomIds.filter(id => !roomsWithMessages.has(id));
 
+		const candidates: { id: string; kind: 'message' | 'emptyRoom'; roomId: MiChatRoom['id'] }[] = [];
+		for (const row of rows) {
+			if (!untilId || row.messageId < untilId) {
+				candidates.push({ id: row.messageId, kind: 'message', roomId: row.roomId });
+			}
+		}
+		for (const roomId of emptyRoomIds) {
+			if (!untilId || roomId < untilId) {
+				candidates.push({ id: roomId, kind: 'emptyRoom', roomId });
+			}
+		}
+
+		candidates.sort((a, b) => (
+			a.id > b.id ? -1 : a.id < b.id ? 1
+			: a.roomId > b.roomId ? -1 : a.roomId < b.roomId ? 1 : 0
+		));
+
+		const selected = candidates.slice(0, limit);
+		if (selected.length === 0) {
+			return [];
+		}
+
+		const selectedMessageIds = selected.filter(x => x.kind === 'message').map(x => x.id);
+		const selectedEmptyRoomIds = selected.filter(x => x.kind === 'emptyRoom').map(x => x.roomId);
+		const missingEmptyRoomIds = selectedEmptyRoomIds.filter(id => !ownedById.has(id));
+
 		const [messages, missingEmptyRooms] = await Promise.all([
-			this.findMessagesPreservingOrder(rows.map(row => row.messageId)),
-			emptyRoomIds.filter(id => !ownedById.has(id)).length > 0
+			this.findMessagesPreservingOrder(selectedMessageIds),
+			missingEmptyRoomIds.length > 0
 				? this.chatRoomsRepository.createQueryBuilder('room')
 					.leftJoinAndSelect('room.owner', 'owner')
-					.where('room.id IN (:...ids)', { ids: emptyRoomIds.filter(id => !ownedById.has(id)) })
+					.where('room.id IN (:...ids)', { ids: missingEmptyRoomIds })
 					.getMany()
 				: Promise.resolve([] as MiChatRoom[]),
 		]);
 
 		const emptyRoomMap = new Map<string, MiChatRoom>();
-		for (const r of ownedRooms) {
-			if (!roomsWithMessages.has(r.id)) emptyRoomMap.set(r.id, r);
+		for (const roomId of selectedEmptyRoomIds) {
+			const owned = ownedById.get(roomId);
+			if (owned) emptyRoomMap.set(roomId, owned);
 		}
 		for (const r of missingEmptyRooms) {
 			emptyRoomMap.set(r.id, r);
@@ -941,7 +980,10 @@ export class ChatService {
 		}
 
 		return [...messages, ...syntheticEntries]
-			.sort((a, b) => (a.id > b.id ? -1 : a.id < b.id ? 1 : 0))
+			.sort((a, b) => (
+				a.id > b.id ? -1 : a.id < b.id ? 1
+				: (a.toRoomId ?? '') > (b.toRoomId ?? '') ? -1 : (a.toRoomId ?? '') < (b.toRoomId ?? '') ? 1 : 0
+			))
 			.slice(0, limit);
 	}
 

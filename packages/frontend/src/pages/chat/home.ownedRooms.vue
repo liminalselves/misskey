@@ -107,7 +107,7 @@ onMounted(() => {
 			void refreshRoomsTop();
 		}
 	});
-	(channel as any).on('chatRead', () => {
+	channel.on('chatRead', () => {
 		void refreshRoomsTop();
 	});
 });
