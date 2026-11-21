@@ -9,7 +9,7 @@ import type * as Misskey from 'misskey-js';
 import { groupMessageReactions } from '@/pages/chat/XMessage.vue';
 import { extractMentionQuery, filterRoomMentionCandidates } from '@/pages/chat/room.form.vue';
 import { splitHighlightParts } from '@/pages/chat/room.search.vue';
-import { applyOwnerTransferred, mergeSharedRoomMetadata } from '@/pages/chat/room.vue';
+import { applyOwnerTransferred, mergeLocalRoomUpdate, mergeSharedRoomMetadata } from '@/pages/chat/room.vue';
 import XRoom from '@/pages/chat/XRoom.vue';
 import XMessage from '@/pages/chat/XMessage.vue';
 import ChatMessagePage from '@/pages/chat/message.vue';
@@ -270,6 +270,63 @@ describe('Chat room helpers', () => {
 			banReason: null,
 			unreadCount: 3,
 		});
+	});
+
+	test('mergeLocalRoomUpdate applies shared metadata along with local isMuted and myRole updates', () => {
+		const owner = makeUser('owner1', 'owner', 'Owner');
+		const current: Misskey.entities.ChatRoom = {
+			id: 'room1',
+			createdAt: '2026-11-21T00:00:00Z',
+			ownerId: 'owner1',
+			owner,
+			name: 'Old Name',
+			description: 'Old Desc',
+			iconUrl: null,
+			isPublic: false,
+			isMember: true,
+			isMuted: false,
+			invitationExists: false,
+			allowMemberInvite: false,
+			announcement: null,
+			pinnedMessageId: null,
+			pinnedMessage: null,
+			isArchived: false,
+			myRole: 'member',
+			isBanned: false,
+			banReason: null,
+			memberCount: 5,
+			unreadCount: 2,
+		};
+
+		const mutedUpdate = mergeLocalRoomUpdate(current, {
+			...current,
+			name: 'Renamed',
+			isMuted: true,
+			myRole: 'admin',
+			isMember: false,
+			unreadCount: 0,
+		});
+		expect(mutedUpdate).toMatchObject({
+			name: 'Renamed',
+			isMuted: true,
+			myRole: 'admin',
+			isMember: true,
+			unreadCount: 2,
+		});
+
+		const omittedFields = mergeLocalRoomUpdate(mutedUpdate, {
+			id: 'room1',
+			createdAt: '2026-11-21T00:00:00Z',
+			ownerId: 'owner1',
+			owner,
+			name: 'Renamed Again',
+			description: 'Old Desc',
+			isPublic: false,
+			isMember: false,
+		});
+		expect(omittedFields.name).toBe('Renamed Again');
+		expect(omittedFields.isMuted).toBe(true);
+		expect(omittedFields.myRole).toBe('admin');
 	});
 
 	test('applyOwnerTransferred updates ownerId, owner, and myRole for new and old owners even if ownerId already changed', () => {

@@ -202,7 +202,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 	</div>
 
 	<div v-else-if="tab === 'info'" class="_spacer" style="--MI_SPACER-w: 700px;">
-		<XInfo v-if="room != null" :room="room" @updated="onRoomUpdated"/>
+		<XInfo v-if="room != null" :room="room" @updated="onLocalRoomUpdated"/>
 	</div>
 
 	<template #footer>
@@ -292,6 +292,20 @@ export function mergeSharedRoomMetadata(
 		}
 	}
 	return next;
+}
+
+/**
+ * 合并本地用户操作返回或发出的群聊更新（含共享元信息与本地确认的 myRole / isMuted）
+ */
+export function mergeLocalRoomUpdate(
+	current: Misskey.entities.ChatRoom,
+	updated: Misskey.entities.ChatRoom,
+): Misskey.entities.ChatRoom {
+	return {
+		...mergeSharedRoomMetadata(current, updated),
+		...(updated.myRole !== undefined ? { myRole: updated.myRole } : {}),
+		...(updated.isMuted !== undefined ? { isMuted: updated.isMuted } : {}),
+	};
 }
 
 export function applyOwnerTransferred(
@@ -694,10 +708,7 @@ function onLocalRoomUpdated(updated: Misskey.entities.ChatRoom) {
 		room.value = updated;
 		return;
 	}
-	room.value = {
-		...mergeSharedRoomMetadata(room.value, updated),
-		...(updated.myRole !== undefined ? { myRole: updated.myRole } : {}),
-	};
+	room.value = mergeLocalRoomUpdate(room.value, updated);
 }
 
 function onOwnerTransferred(payload: Parameters<Misskey.Channels['chatRoom']['events']['ownerTransferred']>[0]) {
