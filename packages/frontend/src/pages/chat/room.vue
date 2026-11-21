@@ -1540,46 +1540,11 @@ const headerTabs = computed(() => notMember.value ? [] : room.value ? [{
 
 const headerActions = computed<PageHeaderItem[]>(() => {
 	if (notMember.value || room.value == null) return [];
-	const actions: PageHeaderItem[] = [{
-		text: i18n.ts.search,
-		icon: 'ti ti-search',
-		highlighted: tab.value === 'search',
-		handler: () => {
-			tab.value = tab.value === 'search' ? 'chat' : 'search';
-		},
-	}, {
-		text: i18n.ts._chat.members,
-		icon: 'ti ti-users',
-		highlighted: tab.value === 'members',
-		handler: () => {
-			tab.value = tab.value === 'members' ? 'chat' : 'members';
-		},
-	}, {
-		text: i18n.ts._chat.roomSettings,
-		icon: 'ti ti-settings',
-		highlighted: tab.value === 'info',
-		handler: () => {
-			tab.value = tab.value === 'info' ? 'chat' : 'info';
-		},
-	}];
-
-	if (canInvite.value && !room.value.isArchived) {
-		actions.push({
-			text: i18n.ts._chat.inviteUser,
-			icon: 'ti ti-user-plus',
-			handler: () => {
-				void inviteUser();
-			},
-		});
-	}
-
-	actions.push({
+	return [{
 		text: i18n.ts.menu,
 		icon: 'ti ti-dots',
 		handler: showMenu,
-	});
-
-	return actions;
+	}];
 });
 
 definePage(computed(() => {
