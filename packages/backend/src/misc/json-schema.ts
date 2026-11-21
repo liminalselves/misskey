@@ -71,6 +71,7 @@ import { packedSystemWebhookSchema } from '@/models/json-schema/system-webhook.j
 import { packedAbuseReportNotificationRecipientSchema } from '@/models/json-schema/abuse-report-notification-recipient.js';
 import { packedChatMessageSchema, packedChatMessageLiteSchema, packedChatMessageLiteForRoomSchema, packedChatMessageLiteFor1on1Schema } from '@/models/json-schema/chat-message.js';
 import { packedChatRoomSchema } from '@/models/json-schema/chat-room.js';
+import { packedChatRoomBanSchema } from '@/models/json-schema/chat-room-ban.js';
 import { packedChatRoomInvitationSchema } from '@/models/json-schema/chat-room-invitation.js';
 import { packedChatRoomMembershipSchema } from '@/models/json-schema/chat-room-membership.js';
 import { packedAchievementNameSchema, packedAchievementSchema } from '@/models/json-schema/achievement.js';
@@ -145,6 +146,7 @@ export const refs = {
 	ChatMessageLiteFor1on1: packedChatMessageLiteFor1on1Schema,
 	ChatMessageLiteForRoom: packedChatMessageLiteForRoomSchema,
 	ChatRoom: packedChatRoomSchema,
+	ChatRoomBan: packedChatRoomBanSchema,
 	ChatRoomInvitation: packedChatRoomInvitationSchema,
 	ChatRoomMembership: packedChatRoomMembershipSchema,
 };

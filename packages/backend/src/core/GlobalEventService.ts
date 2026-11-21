@@ -190,6 +190,7 @@ export interface AdminEventTypes {
 
 export interface ChatEventTypes {
 	message: Packed<'ChatMessageLite'>;
+	edited: Packed<'ChatMessageLite'>;
 	deleted: Packed<'ChatMessageLite'>['id'];
 	react: {
 		reaction: string;
@@ -200,6 +201,57 @@ export interface ChatEventTypes {
 		reaction: string;
 		user?: Packed<'UserLite'>;
 		messageId: MiChatMessage['id'];
+	};
+}
+
+export interface ChatRoomEventTypes extends ChatEventTypes {
+	roomUpdated: Packed<'ChatRoom'>;
+	roomDeleted: {
+		roomId: MiChatRoom['id'];
+	};
+	memberJoined: {
+		roomId: MiChatRoom['id'];
+		userId: MiUser['id'];
+		user: Packed<'UserLite'>;
+		membership?: Packed<'ChatRoomMembership'>;
+	};
+	memberLeft: {
+		roomId: MiChatRoom['id'];
+		userId: MiUser['id'];
+	};
+	memberKicked: {
+		roomId: MiChatRoom['id'];
+		userId: MiUser['id'];
+	};
+	memberBanned: {
+		roomId: MiChatRoom['id'];
+		userId: MiUser['id'];
+		reason: string | null;
+	};
+	memberRoleChanged: {
+		roomId: MiChatRoom['id'];
+		userId: MiUser['id'];
+		role: 'member' | 'admin';
+	};
+	memberSuspended: {
+		roomId: MiChatRoom['id'];
+		userId: MiUser['id'];
+		suspendedUntil: string;
+	};
+	memberUnsuspended: {
+		roomId: MiChatRoom['id'];
+		userId: MiUser['id'];
+	};
+	ownerTransferred: {
+		roomId: MiChatRoom['id'];
+		oldOwnerId: MiUser['id'];
+		newOwnerId: MiUser['id'];
+		newOwner: Packed<'UserLite'>;
+	};
+	pinnedMessageUpdated: {
+		roomId: MiChatRoom['id'];
+		pinnedMessageId: MiChatMessage['id'] | null;
+		pinnedMessage: Packed<'ChatMessage'> | null;
 	};
 }
 
@@ -343,7 +395,7 @@ export type GlobalEvents = {
 	};
 	chatRoom: {
 		name: `chatRoomStream:${MiChatRoom['id']}`;
-		payload: EventTypesToEventPayload<ChatEventTypes>;
+		payload: EventTypesToEventPayload<ChatRoomEventTypes>;
 	};
 	reversi: {
 		name: `reversiStream:${MiUser['id']}`;
@@ -452,7 +504,7 @@ export class GlobalEventService {
 	}
 
 	@bindThis
-	public publishChatRoomStream<K extends keyof ChatEventTypes>(toRoomId: MiChatRoom['id'], type: K, value?: ChatEventTypes[K]): void {
+	public publishChatRoomStream<K extends keyof ChatRoomEventTypes>(toRoomId: MiChatRoom['id'], type: K, value?: ChatRoomEventTypes[K]): void {
 		this.publish(`chatRoomStream:${toRoomId}`, type, typeof value === 'undefined' ? null : value);
 	}
 

@@ -50,7 +50,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 
 			const rooms = await this.chatService.searchRooms(ps.query, ps.limit, ps.sinceId, ps.untilId);
 
-			return await Promise.all(rooms.map(room => this.chatEntityService.packRoom(room, me)));
+			return await this.chatEntityService.packRooms(rooms, me);
 		});
 	}
 }

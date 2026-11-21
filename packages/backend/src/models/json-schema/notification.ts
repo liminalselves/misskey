@@ -438,6 +438,41 @@ export const packedNotificationSchema = {
 			type: {
 				type: 'string',
 				optional: false, nullable: false,
+				enum: ['chatRoomMention'],
+			},
+			user: {
+				type: 'object',
+				ref: 'UserLite',
+				optional: false, nullable: false,
+			},
+			userId: {
+				type: 'string',
+				optional: false, nullable: false,
+				format: 'id',
+			},
+			chatRoomId: {
+				type: 'string',
+				optional: false, nullable: false,
+				format: 'id',
+			},
+			chatRoom: {
+				type: 'object',
+				ref: 'ChatRoom',
+				optional: false, nullable: false,
+			},
+			messageId: {
+				type: 'string',
+				optional: false, nullable: false,
+				format: 'id',
+			},
+		},
+	}, {
+		type: 'object',
+		properties: {
+			...baseSchema.properties,
+			type: {
+				type: 'string',
+				optional: false, nullable: false,
 				enum: ['achievementEarned'],
 			},
 			achievement: {

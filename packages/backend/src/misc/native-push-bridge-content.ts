@@ -29,6 +29,11 @@ const MSGS: Record<Lang, Record<string, string>> = {
 		roleAssigned: 'ロールが付与されました',
 		achievementEarned: '実績を獲得しました',
 		chatRoomInvitationReceived: 'グループチャットに招待されました',
+		chatRoomMemberJoined: '{user} が参加しました',
+		chatRoomKicked: 'グループチャットから退室させられました',
+		chatRoomSuspended: 'グループチャットで発言が制限されました',
+		chatRoomUnsuspended: 'グループチャットでの発言制限が解除されました',
+		chatRoomMention: '{user} さんがあなたにメンションしました',
 		exportOfXCompleted: '{x} のエクスポートが完了しました',
 		login: '新しいログインがあります',
 		createToken: 'アクセストークンが作成されました',
@@ -54,6 +59,11 @@ const MSGS: Record<Lang, Record<string, string>> = {
 		roleAssigned: '授予的角色',
 		achievementEarned: '获得成就',
 		chatRoomInvitationReceived: '您已被邀请加入群聊',
+		chatRoomMemberJoined: '{user} 加入了群聊',
+		chatRoomKicked: '您已被移出群聊',
+		chatRoomSuspended: '您在该群聊中已被禁言',
+		chatRoomUnsuspended: '您在该群聊中的禁言已解除',
+		chatRoomMention: '{user} 在群聊中提到了你',
 		exportOfXCompleted: '已完成 {x} 的导出',
 		login: '有新的登录',
 		createToken: '访问令牌已创建',
@@ -79,6 +89,11 @@ const MSGS: Record<Lang, Record<string, string>> = {
 		roleAssigned: 'Role assigned',
 		achievementEarned: 'Achievement unlocked',
 		chatRoomInvitationReceived: 'You were invited to a group chat',
+		chatRoomMemberJoined: '{user} joined the room',
+		chatRoomKicked: 'You were removed from the room',
+		chatRoomSuspended: 'You have been muted in this room',
+		chatRoomUnsuspended: 'Your mute in this room has been lifted',
+		chatRoomMention: '{user} mentioned you',
 		exportOfXCompleted: 'Export of {x} completed',
 		login: 'New login',
 		createToken: 'Access token created',
@@ -209,15 +224,48 @@ export function buildNativePushFromNotification(
 				openPath: openPathForChatRoom(room),
 			};
 		}
-		case 'chatRoomMemberJoined':
-		case 'chatRoomKicked':
-		case 'chatRoomSuspended':
+		case 'chatRoomMemberJoined': {
+			const room = raw.chatRoom as { id?: string; name?: string } | undefined;
+			const roomLabel = room?.name ?? userName;
+			return {
+				title: roomLabel,
+				body: tpl(lang, 'chatRoomMemberJoined', { user: userName }),
+				openPath: openPathForChatRoom(room),
+			};
+		}
+		case 'chatRoomKicked': {
+			const room = raw.chatRoom as { id?: string; name?: string } | undefined;
+			const roomLabel = room?.name ?? userName;
+			return {
+				title: roomLabel,
+				body: t(lang, 'chatRoomKicked'),
+				openPath: '/chat',
+			};
+		}
+		case 'chatRoomSuspended': {
+			const room = raw.chatRoom as { id?: string; name?: string } | undefined;
+			const roomLabel = room?.name ?? userName;
+			return {
+				title: roomLabel,
+				body: t(lang, 'chatRoomSuspended'),
+				openPath: openPathForChatRoom(room),
+			};
+		}
 		case 'chatRoomUnsuspended': {
 			const room = raw.chatRoom as { id?: string; name?: string } | undefined;
 			const roomLabel = room?.name ?? userName;
 			return {
 				title: roomLabel,
-				body: getNoteSummary(raw.note) || roomLabel,
+				body: t(lang, 'chatRoomUnsuspended'),
+				openPath: openPathForChatRoom(room),
+			};
+		}
+		case 'chatRoomMention': {
+			const room = raw.chatRoom as { id?: string; name?: string } | undefined;
+			const roomLabel = room?.name ?? userName;
+			return {
+				title: roomLabel,
+				body: tpl(lang, 'chatRoomMention', { user: userName }),
 				openPath: openPathForChatRoom(room),
 			};
 		}
@@ -254,8 +302,8 @@ export function buildNativePushFromChatMessage(
 	const sender = raw.fromUser?.name ?? raw.fromUser?.username ?? t(lang, 'newMessage');
 	const body = String(raw.text ?? '');
 	const openPath =
-		raw.fromUserId ? `/chat/user/${raw.fromUserId}` :
-			raw.toRoomId ? `/chat/room/${raw.toRoomId}` :
+		raw.toRoomId ? `/chat/room/${raw.toRoomId}` :
+			raw.fromUserId ? `/chat/user/${raw.fromUserId}` :
 			'/chat';
 	return { title: sender, body, openPath };
 }

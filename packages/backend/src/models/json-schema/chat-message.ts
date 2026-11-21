@@ -15,6 +15,11 @@ export const packedChatMessageSchema = {
 			format: 'date-time',
 			optional: false, nullable: false,
 		},
+		editedAt: {
+			type: 'string',
+			format: 'date-time',
+			optional: true, nullable: true,
+		},
 		fromUserId: {
 			type: 'string',
 			optional: false, nullable: false,
@@ -64,6 +69,37 @@ export const packedChatMessageSchema = {
 			type: 'number',
 			optional: true, nullable: true,
 		},
+		replyId: {
+			type: 'string',
+			optional: true, nullable: true,
+		},
+		reply: {
+			type: 'object',
+			optional: true, nullable: true,
+			properties: {
+				id: {
+					type: 'string',
+					optional: false, nullable: false,
+				},
+				text: {
+					type: 'string',
+					optional: false, nullable: true,
+				},
+				fileId: {
+					type: 'string',
+					optional: true, nullable: true,
+				},
+				fromUserId: {
+					type: 'string',
+					optional: false, nullable: false,
+				},
+				fromUser: {
+					type: 'object',
+					optional: true, nullable: false,
+					ref: 'UserLite',
+				},
+			},
+		},
 		reactions: {
 			type: 'array',
 			optional: false, nullable: false,
@@ -98,6 +134,11 @@ export const packedChatMessageLiteSchema = {
 			format: 'date-time',
 			optional: false, nullable: false,
 		},
+		editedAt: {
+			type: 'string',
+			format: 'date-time',
+			optional: true, nullable: true,
+		},
 		fromUserId: {
 			type: 'string',
 			optional: false, nullable: false,
@@ -127,6 +168,37 @@ export const packedChatMessageLiteSchema = {
 			type: 'object',
 			optional: true, nullable: true,
 			ref: 'DriveFile',
+		},
+		replyId: {
+			type: 'string',
+			optional: true, nullable: true,
+		},
+		reply: {
+			type: 'object',
+			optional: true, nullable: true,
+			properties: {
+				id: {
+					type: 'string',
+					optional: false, nullable: false,
+				},
+				text: {
+					type: 'string',
+					optional: true, nullable: true,
+				},
+				fileId: {
+					type: 'string',
+					optional: true, nullable: true,
+				},
+				fromUserId: {
+					type: 'string',
+					optional: false, nullable: false,
+				},
+				fromUser: {
+					type: 'object',
+					optional: true, nullable: false,
+					ref: 'UserLite',
+				},
+			},
 		},
 		reactions: {
 			type: 'array',
@@ -161,6 +233,11 @@ export const packedChatMessageLiteFor1on1Schema = {
 			type: 'string',
 			format: 'date-time',
 			optional: false, nullable: false,
+		},
+		editedAt: {
+			type: 'string',
+			format: 'date-time',
+			optional: true, nullable: true,
 		},
 		fromUserId: {
 			type: 'string',
@@ -213,6 +290,10 @@ export const packedChatMessageLiteFor1on1Schema = {
 					type: 'string',
 					optional: true, nullable: true,
 				},
+				fileId: {
+					type: 'string',
+					optional: true, nullable: true,
+				},
 				fromUserId: {
 					type: 'string',
 					optional: false, nullable: false,
@@ -238,6 +319,11 @@ export const packedChatMessageLiteForRoomSchema = {
 			type: 'string',
 			format: 'date-time',
 			optional: false, nullable: false,
+		},
+		editedAt: {
+			type: 'string',
+			format: 'date-time',
+			optional: true, nullable: true,
 		},
 		fromUserId: {
 			type: 'string',
@@ -297,6 +383,10 @@ export const packedChatMessageLiteForRoomSchema = {
 					optional: false, nullable: false,
 				},
 				text: {
+					type: 'string',
+					optional: true, nullable: true,
+				},
+				fileId: {
 					type: 'string',
 					optional: true, nullable: true,
 				},

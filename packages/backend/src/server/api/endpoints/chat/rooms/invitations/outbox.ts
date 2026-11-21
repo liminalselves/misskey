@@ -64,8 +64,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 
 			await this.chatService.checkChatAvailability(me.id, 'read');
 
-			const room = await this.chatService.findMyRoomById(me.id, ps.roomId);
-			if (room == null) {
+			const room = await this.chatService.findRoomById(ps.roomId);
+			if (room == null || !(await this.chatService.canManageRoom(me.id, room))) {
 				throw new ApiError(meta.errors.noSuchRoom);
 			}
 

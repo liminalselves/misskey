@@ -35,6 +35,7 @@ export class ChatUserChannel extends Channel {
 		if (typeof params.otherId !== 'string') return false;
 		if (!this.user) return false;
 		if (params.otherId === this.user.id) return false;
+		if (!(await this.chatService.getChatAvailability(this.user.id)).read) return false;
 
 		this.otherId = params.otherId;
 
@@ -54,12 +55,6 @@ export class ChatUserChannel extends Channel {
 			case 'read':
 				if (this.otherId) {
 					await this.chatService.readUserChatMessage(this.user!.id, this.otherId);
-					// 发送 chatRead 事件通知前端刷新未读状态
-					// 这样 MkChatHistories 会重新获取数据并更新 isRead 状态
-					const hasUnread = await this.chatService.hasUnreadMessages(this.user!.id);
-					this.globalEventService.publishMainStream(this.user!.id, 'chatRead', {
-						hasUnreadChatMessages: hasUnread,
-					});
 				}
 				break;
 		}

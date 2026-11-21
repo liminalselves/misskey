@@ -10,13 +10,14 @@ import { ChatService } from '@/core/ChatService.js';
 import { ApiError } from '@/server/api/error.js';
 import { ChatEntityService } from '@/core/entities/ChatEntityService.js';
 import { IdService } from '@/core/IdService.js';
+import { RoleService } from '@/core/RoleService.js';
 
 export const meta = {
 	tags: ['chat'],
 
 	requireCredential: true,
 
-	kind: 'write:chat',
+	kind: 'read:chat',
 
 	res: {
 		type: 'array',
@@ -46,6 +47,7 @@ export const paramDef = {
 		untilId: { type: 'string', format: 'misskey:id' },
 		sinceDate: { type: 'integer' },
 		untilDate: { type: 'integer' },
+		query: { type: 'string', maxLength: 100 },
 	},
 	required: ['roomId'],
 } as const;
@@ -56,6 +58,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		private chatService: ChatService,
 		private chatEntityService: ChatEntityService,
 		private idService: IdService,
+		private roleService: RoleService,
 	) {
 		super(meta, paramDef, async (ps, me) => {
 			const untilId = ps.untilId ?? (ps.untilDate ? this.idService.gen(ps.untilDate!) : null);
@@ -68,11 +71,11 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				throw new ApiError(meta.errors.noSuchRoom);
 			}
 
-			if (!(await this.chatService.isRoomMember(room, me.id))) {
+			if (!(await this.chatService.isRoomMember(room, me.id)) && !(await this.roleService.isModerator(me))) {
 				throw new ApiError(meta.errors.noSuchRoom);
 			}
 
-			const memberships = await this.chatService.getRoomMembershipsWithPagination(room.id, ps.limit, sinceId, untilId);
+			const memberships = await this.chatService.getRoomMembershipsWithPagination(room, ps.limit, sinceId, untilId, ps.query);
 
 			return this.chatEntityService.packRoomMemberships(memberships, me, {
 				populateUser: true,

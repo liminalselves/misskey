@@ -8,6 +8,7 @@ import { Endpoint } from '@/server/api/endpoint-base.js';
 import { DI } from '@/di-symbols.js';
 import { ChatService } from '@/core/ChatService.js';
 import { ChatEntityService } from '@/core/entities/ChatEntityService.js';
+import { RoleService } from '@/core/RoleService.js';
 import { ApiError } from '@/server/api/error.js';
 
 export const meta = {
@@ -41,8 +42,11 @@ export const paramDef = {
 	properties: {
 		query: { type: 'string', minLength: 1, maxLength: 256 },
 		limit: { type: 'integer', minimum: 1, maximum: 100, default: 10 },
+		sinceId: { type: 'string', format: 'misskey:id' },
+		untilId: { type: 'string', format: 'misskey:id' },
 		userId: { type: 'string', format: 'misskey:id', nullable: true },
 		roomId: { type: 'string', format: 'misskey:id', nullable: true },
+		fromUserId: { type: 'string', format: 'misskey:id', nullable: true },
 	},
 	required: ['query'],
 } as const;
@@ -52,6 +56,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 	constructor(
 		private chatEntityService: ChatEntityService,
 		private chatService: ChatService,
+		private roleService: RoleService,
 	) {
 		super(meta, paramDef, async (ps, me) => {
 			await this.chatService.checkChatAvailability(me.id, 'read');
@@ -62,7 +67,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					throw new ApiError(meta.errors.noSuchRoom);
 				}
 
-				if (!(await this.chatService.isRoomMember(room, me.id))) {
+				if (!(await this.chatService.isRoomMember(room, me.id)) && !(await this.roleService.isModerator(me))) {
 					throw new ApiError(meta.errors.noSuchRoom);
 				}
 			}
@@ -70,6 +75,9 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			const messages = await this.chatService.searchMessages(me.id, ps.query, ps.limit, {
 				userId: ps.userId,
 				roomId: ps.roomId,
+				fromUserId: ps.fromUserId,
+				sinceId: ps.sinceId,
+				untilId: ps.untilId,
 			});
 
 			return await this.chatEntityService.packMessagesDetailed(messages, me);

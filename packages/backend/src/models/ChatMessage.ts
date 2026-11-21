@@ -104,4 +104,10 @@ export class MiChatMessage {
 	})
 	@JoinColumn()
 	public reply: MiChatMessage | null;
+
+	@Column('timestamp with time zone', {
+		nullable: true,
+		comment: 'The date and time when the message was last edited.',
+	})
+	public editedAt: Date | null;
 }
