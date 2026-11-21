@@ -10,6 +10,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<img v-else-if="(notification as any).type === 'agentProactiveMessage' && (notification as any).agentAvatarUrl" :class="[$style.icon, $style.agentAvatar]" :src="(notification as any).agentAvatarUrl" alt="">
 		<div v-else-if="(notification as any).type === 'agentProactiveMessage'" :class="[$style.icon, $style.agentAvatarFallback]"><i class="ti ti-robot"></i></div>
 		<MkAvatar v-else-if="['roleAssigned', 'achievementEarned', 'exportCompleted', 'login', 'createToken', 'scheduledNotePosted', 'scheduledNotePostFailed', 'agentReviewApproved', 'agentReviewRejected', 'agentModelReportResolved', 'agentCharacterBanned', 'agentSessionBanned'].includes((notification as any).type)" :class="$style.icon" :user="$i" link preview/>
+		<img v-else-if="notification.type === 'chatRoomInvitationReceived' && notification.invitation.room.iconUrl" :class="[$style.icon, $style.agentAvatar]" :src="notification.invitation.room.iconUrl" alt="">
+		<MkAvatar v-else-if="notification.type === 'chatRoomInvitationReceived'" :class="$style.icon" :user="notification.invitation.room.owner" link preview/>
 		<div v-else-if="notification.type === 'reaction:grouped' && notification.note.reactionAcceptance === 'likeOnly'" :class="[$style.icon, $style.icon_reactionGroupHeart]"><i class="ti ti-heart" style="line-height: 1;"></i></div>
 		<div v-else-if="notification.type === 'reaction:grouped'" :class="[$style.icon, $style.icon_reactionGroup]"><i class="ti ti-plus" style="line-height: 1;"></i></div>
 		<div v-else-if="notification.type === 'renote:grouped'" :class="[$style.icon, $style.icon_renoteGroup]"><i class="ti ti-repeat" style="line-height: 1;"></i></div>
@@ -33,10 +35,11 @@ SPDX-License-Identifier: AGPL-3.0-only
 				[$style.t_login]: notification.type === 'login',
 				[$style.t_createToken]: notification.type === 'createToken',
 				[$style.t_chatRoomInvitationReceived]: notification.type === 'chatRoomInvitationReceived',
-				[$style.t_chatRoomMemberJoined]: (notification as any).type === 'chatRoomMemberJoined',
-				[$style.t_chatRoomKicked]: (notification as any).type === 'chatRoomKicked',
-				[$style.t_chatRoomSuspended]: (notification as any).type === 'chatRoomSuspended',
-				[$style.t_chatRoomUnsuspended]: (notification as any).type === 'chatRoomUnsuspended',
+				[$style.t_chatRoomMemberJoined]: notification.type === 'chatRoomMemberJoined',
+				[$style.t_chatRoomKicked]: notification.type === 'chatRoomKicked',
+				[$style.t_chatRoomSuspended]: notification.type === 'chatRoomSuspended',
+				[$style.t_chatRoomUnsuspended]: notification.type === 'chatRoomUnsuspended',
+				[$style.t_chatRoomMention]: notification.type === 'chatRoomMention',
 				[$style.t_agentReviewApproved]: (notification as any).type === 'agentReviewApproved',
 					[$style.t_agentReviewRejected]: (notification as any).type === 'agentReviewRejected',
 					[$style.t_agentModelReportResolved]: (notification as any).type === 'agentModelReportResolved',
@@ -61,10 +64,11 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<i v-else-if="notification.type === 'login'" class="ti ti-login-2"></i>
 			<i v-else-if="notification.type === 'createToken'" class="ti ti-key"></i>
 			<i v-else-if="notification.type === 'chatRoomInvitationReceived'" class="ti ti-messages"></i>
-			<i v-else-if="(notification as any).type === 'chatRoomMemberJoined'" class="ti ti-user-plus"></i>
-			<i v-else-if="(notification as any).type === 'chatRoomKicked'" class="ti ti-door-exit"></i>
-			<i v-else-if="(notification as any).type === 'chatRoomSuspended'" class="ti ti-ban"></i>
-			<i v-else-if="(notification as any).type === 'chatRoomUnsuspended'" class="ti ti-circle-check"></i>
+			<i v-else-if="notification.type === 'chatRoomMemberJoined'" class="ti ti-user-plus"></i>
+			<i v-else-if="notification.type === 'chatRoomKicked'" class="ti ti-door-exit"></i>
+			<i v-else-if="notification.type === 'chatRoomSuspended'" class="ti ti-ban"></i>
+			<i v-else-if="notification.type === 'chatRoomUnsuspended'" class="ti ti-circle-check"></i>
+			<i v-else-if="notification.type === 'chatRoomMention'" class="ti ti-at"></i>
 			<i v-else-if="(notification as any).type === 'agentReviewApproved'" class="ti ti-circle-check"></i>
 			<i v-else-if="(notification as any).type === 'agentReviewRejected'" class="ti ti-circle-x"></i>
 			<i v-else-if="(notification as any).type === 'agentModelReportResolved'" class="ti ti-tool"></i>
@@ -92,10 +96,17 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<span v-else-if="notification.type === 'note'">{{ i18n.ts._notification.newNote }}: <MkUserName :user="notification.note.user"/></span>
 			<span v-else-if="notification.type === 'roleAssigned'">{{ i18n.ts._notification.roleAssigned }}</span>
 			<span v-else-if="notification.type === 'chatRoomInvitationReceived'">{{ i18n.ts._notification.chatRoomInvitationReceived }}</span>
-			<span v-else-if="(notification as any).type === 'chatRoomMemberJoined'">有新成员加入群组</span>
-			<span v-else-if="(notification as any).type === 'chatRoomKicked'">您已被踢出群组</span>
-			<span v-else-if="(notification as any).type === 'chatRoomSuspended'">您已被禁言</span>
-			<span v-else-if="(notification as any).type === 'chatRoomUnsuspended'">您的禁言已解除</span>
+			<span v-else-if="notification.type === 'chatRoomMemberJoined'" :class="$style.headerGroup">
+				<MkA v-user-preview="notification.user.id" :class="$style.headerName" :to="userPage(notification.user)"><MkUserName :user="notification.user"/></MkA>
+				<span>{{ i18n.ts._notification._types.chatRoomMemberJoined }}</span>
+			</span>
+			<span v-else-if="notification.type === 'chatRoomKicked'">{{ i18n.ts._notification._types.chatRoomKicked }}</span>
+			<span v-else-if="notification.type === 'chatRoomSuspended'">{{ i18n.ts._notification._types.chatRoomSuspended }}</span>
+			<span v-else-if="notification.type === 'chatRoomUnsuspended'">{{ i18n.ts._notification._types.chatRoomUnsuspended }}</span>
+			<span v-else-if="notification.type === 'chatRoomMention'" :class="$style.headerGroup">
+				<MkA v-user-preview="notification.user.id" :class="$style.headerName" :to="userPage(notification.user)"><MkUserName :user="notification.user"/></MkA>
+				<span>{{ i18n.ts._notification._types.chatRoomMention }}</span>
+			</span>
 			<span v-else-if="notification.type === 'achievementEarned'">{{ i18n.ts._notification.achievementEarned }}</span>
 			<span v-else-if="notification.type === 'login'">{{ i18n.ts._notification.login }}</span>
 			<span v-else-if="notification.type === 'createToken'">{{ i18n.ts._notification.createToken }}</span>
@@ -150,20 +161,29 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<div v-else-if="notification.type === 'roleAssigned'" :class="$style.text">
 				{{ notification.role.name }}
 			</div>
-			<div v-else-if="notification.type === 'chatRoomInvitationReceived'" :class="$style.text">
-				{{ notification.invitation.room.name }}
-			</div>
-			<MkA v-else-if="(notification as any).type === 'chatRoomMemberJoined'" :class="$style.text" :to="`/chat/room/${(notification as any).chatRoom.id}`">
-				{{ (notification as any).chatRoom.name }}
+			<template v-else-if="notification.type === 'chatRoomInvitationReceived'">
+				<MkA :class="$style.text" to="/chat?view=invitations">
+					{{ notification.invitation.room.name }}
+				</MkA>
+				<div v-if="!invitationDone && !notification.invitation.room.isMember" :class="$style.followRequestCommands">
+					<MkButton v-if="$i.policies.chatAvailability === 'available'" :class="$style.followRequestCommandButton" rounded primary :disabled="invitationProcessing" @click="acceptRoomInvitation()"><i class="ti ti-check"></i> {{ i18n.ts._chat.join }}</MkButton>
+					<MkButton :class="$style.followRequestCommandButton" rounded danger :disabled="invitationProcessing" @click="ignoreRoomInvitation()"><i class="ti ti-x"></i> {{ i18n.ts._chat.ignore }}</MkButton>
+				</div>
+			</template>
+			<MkA v-else-if="notification.type === 'chatRoomMemberJoined'" :class="$style.text" :to="`/chat/room/${notification.chatRoom.id}`">
+				{{ notification.chatRoom.name }}
 			</MkA>
-			<MkA v-else-if="(notification as any).type === 'chatRoomKicked'" :class="$style.text" to="/chat">
-				{{ (notification as any).chatRoom.name }}
+			<MkA v-else-if="notification.type === 'chatRoomKicked'" :class="$style.text" to="/chat">
+				{{ notification.chatRoom.name }}
 			</MkA>
-			<MkA v-else-if="(notification as any).type === 'chatRoomSuspended'" :class="$style.text" :to="`/chat/room/${(notification as any).chatRoom.id}`">
-				{{ (notification as any).chatRoom.name }}
+			<MkA v-else-if="notification.type === 'chatRoomSuspended'" :class="$style.text" :to="`/chat/room/${notification.chatRoom.id}`">
+				{{ notification.chatRoom.name }}
 			</MkA>
-			<MkA v-else-if="(notification as any).type === 'chatRoomUnsuspended'" :class="$style.text" :to="`/chat/room/${(notification as any).chatRoom.id}`">
-				{{ (notification as any).chatRoom.name }}
+			<MkA v-else-if="notification.type === 'chatRoomUnsuspended'" :class="$style.text" :to="`/chat/room/${notification.chatRoom.id}`">
+				{{ notification.chatRoom.name }}
+			</MkA>
+			<MkA v-else-if="notification.type === 'chatRoomMention'" :class="$style.text" :to="`/chat/room/${notification.chatRoom.id}?messageId=${notification.messageId}`">
+				{{ notification.chatRoom.name }}
 			</MkA>
 			<MkA v-else-if="notification.type === 'achievementEarned'" :class="$style.text" to="/my/achievements">
 				{{ i18n.ts._achievements._types[`_${notification.achievement}`].title }}
@@ -235,10 +255,13 @@ import { getNoteSummary } from '@/utility/get-note-summary.js';
 import { notePage } from '@/filters/note.js';
 import { userPage } from '@/filters/user.js';
 import { i18n } from '@/i18n.js';
-import { misskeyApi } from '@/utility/misskey-api.js';
+import { formatApiError, misskeyApi } from '@/utility/misskey-api.js';
 import { ensureSignin } from '@/i.js';
+import { useRouter } from '@/router.js';
+import * as os from '@/os.js';
 
 const $i = ensureSignin();
+const router = useRouter();
 
 const props = withDefaults(defineProps<{
 	notification: Misskey.entities.Notification;
@@ -266,6 +289,8 @@ const exportEntityName = {
 } as const satisfies Record<ExportCompletedNotification['exportedEntity'], string>;
 
 const followRequestDone = ref(false);
+const invitationDone = ref(false);
+const invitationProcessing = ref(false);
 
 const acceptFollowRequest = () => {
 	if (!('user' in props.notification)) return;
@@ -278,6 +303,35 @@ const rejectFollowRequest = () => {
 	followRequestDone.value = true;
 	misskeyApi('following/requests/reject', { userId: props.notification.user.id });
 };
+
+async function acceptRoomInvitation() {
+	if (props.notification.type !== 'chatRoomInvitationReceived' || invitationProcessing.value) return;
+	const roomId = props.notification.invitation.room.id;
+	invitationProcessing.value = true;
+	try {
+		await misskeyApi('chat/rooms/join', { roomId });
+		invitationDone.value = true;
+		router.push('/chat/room/:roomId', { params: { roomId } });
+	} catch (err) {
+		os.alert({ type: 'error', text: formatApiError(err) });
+	} finally {
+		invitationProcessing.value = false;
+	}
+}
+
+async function ignoreRoomInvitation() {
+	if (props.notification.type !== 'chatRoomInvitationReceived' || invitationProcessing.value) return;
+	const roomId = props.notification.invitation.room.id;
+	invitationProcessing.value = true;
+	try {
+		await misskeyApi('chat/rooms/invitations/ignore', { roomId });
+		invitationDone.value = true;
+	} catch (err) {
+		os.alert({ type: 'error', text: formatApiError(err) });
+	} finally {
+		invitationProcessing.value = false;
+	}
+}
 
 function getActualReactedUsersCount(notification: Misskey.entities.Notification) {
 	if (notification.type !== 'reaction:grouped') return 0;
@@ -477,6 +531,19 @@ function getActualReactedUsersCount(notification: Misskey.entities.Notification)
 .t_chatRoomUnsuspended {
 	background: var(--eventFollow);
 	pointer-events: none;
+}
+
+.t_chatRoomMention {
+	background: var(--eventReply);
+	pointer-events: none;
+}
+
+.headerGroup {
+	display: inline-flex;
+	align-items: baseline;
+	gap: 0.4em;
+	min-width: 0;
+	overflow: hidden;
 }
 
 .t_agentReviewApproved {

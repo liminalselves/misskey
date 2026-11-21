@@ -75,9 +75,20 @@ export function chatRoom(id = 'somechatroomid', name = 'Some Chat Room'): entiti
 		owner,
 		name,
 		description: 'A chat room for testing',
+		iconUrl: null,
 		isMuted: false,
 		isPublic: false,
 		isMember: true,
+		invitationExists: false,
+		allowMemberInvite: false,
+		announcement: null,
+		pinnedMessageId: null,
+		pinnedMessage: null,
+		isArchived: false,
+		myRole: 'owner',
+		isBanned: false,
+		banReason: null,
+		memberCount: 1,
 	};
 }
 

@@ -56,6 +56,7 @@ import { widgets as widgetDefs, federationWidgets } from '@/widgets/index.js';
 import * as os from '@/os.js';
 import { i18n } from '@/i18n.js';
 import { instance } from '@/instance.js';
+import { $i } from '@/i.js';
 import { useMkSelect } from '@/composables/use-mkselect.js';
 
 const props = defineProps<{
@@ -64,11 +65,11 @@ const props = defineProps<{
 }>();
 
 const _widgetDefs = computed(() => {
-	if (instance.federation === 'none') {
-		return widgetDefs.filter(x => !federationWidgets.includes(x as any));
-	} else {
-		return widgetDefs;
-	}
+	return widgetDefs.filter(x => {
+		if (instance.federation === 'none' && federationWidgets.includes(x as any)) return false;
+		if (x === 'chat' && ($i == null || $i.policies.chatAvailability === 'unavailable')) return false;
+		return true;
+	});
 });
 
 const _widgets = computed(() => props.widgets.filter(x => _widgetDefs.value.includes(x.name as any)));

@@ -165,6 +165,7 @@ import FormSection from '@/components/form/section.vue';
 import { prefer } from '@/preferences.js';
 import MkRolePreview from '@/components/MkRolePreview.vue';
 import { signout } from '@/signout.js';
+import { updateCurrentAccountPartial } from '@/accounts.js';
 import { hideAllTips as _hideAllTips, resetAllTips as _resetAllTips } from '@/tips.js';
 import { suggestReload } from '@/utility/reload-suggest.js';
 import { cloudBackup } from '@/preferences/utility.js';
@@ -219,8 +220,13 @@ function hideAllTips() {
 	os.success();
 }
 
-function readAllChatMessages() {
-	os.apiWithDialog('chat/read-all', {});
+async function readAllChatMessages() {
+	try {
+		await os.apiWithDialog('chat/read-all', {});
+		updateCurrentAccountPartial({ hasUnreadChatMessages: false });
+	} catch {
+		// 错误弹窗已由 apiWithDialog 处理
+	}
 }
 
 async function forceCloudBackup() {
