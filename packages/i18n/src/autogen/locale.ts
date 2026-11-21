@@ -6668,17 +6668,49 @@ export interface Locale extends ILocale {
          */
         "unpinMessage": string;
         /**
-         * 編集
+         * 取り消す
          */
-        "editMessage": string;
+        "recall": string;
         /**
-         * 編集済み
+         * グループ取り消し
          */
-        "edited": string;
+        "groupRecall": string;
         /**
-         * 編集をキャンセル
+         * このメッセージを取り消しますか？
          */
-        "cancelEdit": string;
+        "recallConfirm": string;
+        /**
+         * このメッセージをグループ取り消ししますか？
+         */
+        "groupRecallConfirm": string;
+        /**
+         * メッセージを取り消しました
+         */
+        "recalled": string;
+        /**
+         * {user} がメッセージを取り消しました
+         */
+        "recalledMessageNotice": ParameterizedString<"user">;
+        /**
+         * {actor} が {target} のメッセージを取り消しました
+         */
+        "groupRecalledMessageNotice": ParameterizedString<"actor" | "target">;
+        /**
+         * (元のメッセージは取り消されました)
+         */
+        "recalledMessagePlaceholder": string;
+        /**
+         * 2分以上経過したメッセージは取り消せません
+         */
+        "recallTimeExpired": string;
+        /**
+         * メンバー・通知あり
+         */
+        "mentionRoomMember": string;
+        /**
+         * 外部・参照のみ
+         */
+        "mentionExternalUser": string;
         /**
          * テキストをコピー
          */

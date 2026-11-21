@@ -50,6 +50,7 @@ import { reconcileUnread } from '@/misc/reconcile-unread.js';
 
 export class ChatMessageAccessError extends Error {}
 
+export const CHAT_MESSAGE_RECALL_WINDOW_MS = 2 * 60 * 1000;
 const MAX_ROOM_MEMBERS = 50;
 const MAX_REACTIONS_PER_MESSAGE = 100;
 const isCustomEmojiRegexp = /^:([\w+-]+)(?:@\.)?:$/;
@@ -279,6 +280,7 @@ export class ChatService {
 		if (params.replyId != null) {
 			const replyTarget = await this.chatMessagesRepository.findOneBy({ id: params.replyId });
 			const sameConversation = replyTarget != null
+				&& replyTarget.recalledAt == null
 				&& replyTarget.toRoomId == null
 				&& (
 					(replyTarget.fromUserId === fromUser.id && replyTarget.toUserId === toUser.id) ||
@@ -439,7 +441,7 @@ export class ChatService {
 
 		if (params.replyId != null) {
 			const replyTarget = await this.chatMessagesRepository.findOneBy({ id: params.replyId });
-			if (!replyTarget || replyTarget.toRoomId !== toRoom.id) {
+			if (!replyTarget || replyTarget.recalledAt != null || replyTarget.toRoomId !== toRoom.id) {
 				throw new Error('invalid replyId');
 			}
 		}
@@ -658,99 +660,126 @@ export class ChatService {
 	}
 
 	@bindThis
-	public async editMessage(userId: MiUser['id'], messageId: MiChatMessage['id'], rawText: string): Promise<MiChatMessage> {
-		const text = rawText.trim();
-		if (!text) {
-			throw new Error('content required');
-		}
-
+	public async recallMessage(actorId: MiUser['id'], messageId: MiChatMessage['id']): Promise<MiChatMessage> {
 		const message = await this.chatMessagesRepository.findOneBy({ id: messageId });
-		if (!message || message.fromUserId !== userId) {
-			throw new Error('no such message');
+		if (!message) {
+			throw new ChatMessageAccessError('no such message');
+		}
+		if (message.recalledAt != null) {
+			throw new ChatMessageAccessError('already recalled');
 		}
 
-		if (message.toRoomId) {
-			const room = await this.chatRoomsRepository.findOneBy({ id: message.toRoomId });
-			if (!room) {
-				throw new Error('no such room');
-			}
-			if (room.isArchived) {
-				throw new Error('room is archived');
-			}
-			if (room.ownerId !== userId) {
-				const membership = await this.chatRoomMembershipsRepository.findOneBy({ roomId: room.id, userId });
-				if (!membership) {
-					throw new Error('you are not a member of the room');
-				}
-				if (isMembershipSuspended(membership)) {
-					throw buildSuspendedError(membership.suspendedUntil!);
-				}
-			}
-		}
+		const createdAtMs = this.idService.parse(message.id).date.getTime();
+		const isWithinWindow = (Date.now() - createdAtMs) <= CHAT_MESSAGE_RECALL_WINDOW_MS;
 
-		const editedAt = new Date();
-		await this.chatMessagesRepository.update(message.id, { text, editedAt });
-		const updated = await this.chatMessagesRepository.findOne({
-			where: { id: message.id },
-			relations: { fromUser: true, toUser: true, toRoom: true, file: true },
-		}) ?? { ...message, text, editedAt };
-
-		if (message.toRoomId) {
-			const packedLite = await this.chatEntityService.packMessageLiteForRoom(updated);
-			this.globalEventService.publishChatRoomStream(message.toRoomId, 'edited', packedLite);
-		} else if (message.toUserId) {
-			const [fromUser, toUser] = await Promise.all([
-				this.usersRepository.findOneBy({ id: message.fromUserId }),
-				this.usersRepository.findOneBy({ id: message.toUserId }),
-			]);
-			const packedLite = await this.chatEntityService.packMessageLiteFor1on1(updated);
-			if (fromUser && this.userEntityService.isLocalUser(fromUser)) {
-				this.globalEventService.publishChatUserStream(message.fromUserId, message.toUserId, 'edited', packedLite);
-			}
-			if (toUser && this.userEntityService.isLocalUser(toUser)) {
-				this.globalEventService.publishChatUserStream(message.toUserId, message.fromUserId, 'edited', packedLite);
-			}
-		}
-
-		return updated;
-	}
-
-	@bindThis
-	public async deleteMessage(message: MiChatMessage) {
+		let room: MiChatRoom | null = null;
 		let wasPinned = false;
-		if (message.toRoomId) {
-			const roomBefore = await this.chatRoomsRepository.findOneBy({ id: message.toRoomId });
-			wasPinned = roomBefore?.pinnedMessageId === message.id;
+
+		if (message.toRoomId == null) {
+			// 私聊仅允许发送者在 2 分钟内撤回
+			if (message.fromUserId !== actorId) {
+				throw new ChatMessageAccessError('no such message');
+			}
+			if (!isWithinWindow) {
+				throw new ChatMessageAccessError('recall time expired');
+			}
+		} else {
+			room = await this.chatRoomsRepository.findOneBy({ id: message.toRoomId });
+			if (!room) {
+				throw new ChatMessageAccessError('no such message');
+			}
+
+			const isSiteModerator = await this.roleService.isModerator({ id: actorId });
+			if (room.isArchived && !isSiteModerator) {
+				throw new ChatMessageAccessError('room is archived');
+			}
+
+			const isOwner = room.ownerId === actorId;
+			const actorMembership = isOwner ? null : await this.chatRoomMembershipsRepository.findOneBy({ roomId: room.id, userId: actorId });
+			const isActiveAdmin = !isOwner && actorMembership?.role === 'admin' && !isMembershipSuspended(actorMembership);
+
+			if (message.fromUserId === actorId) {
+				if (!isOwner && !isSiteModerator && !actorMembership) {
+					throw new ChatMessageAccessError('no such message');
+				}
+				if (!isOwner && !isSiteModerator && isMembershipSuspended(actorMembership)) {
+					throw buildSuspendedError(actorMembership!.suspendedUntil!);
+				}
+				// 普通成员仅限 2 分钟内撤回；群主/管理员/全站版主任意时间可撤回自己消息（超过 2 分钟走群撤回）
+				if (!isWithinWindow && !isOwner && !isActiveAdmin && !isSiteModerator) {
+					throw new ChatMessageAccessError('recall time expired');
+				}
+			} else {
+				// 群撤回：群主、群管理员或全站版主可任意时间撤回成员消息
+				if (!isOwner && !isSiteModerator && !isActiveAdmin) {
+					throw new ChatMessageAccessError('no such message');
+				}
+				if (isActiveAdmin && !isOwner && !isSiteModerator) {
+					if (message.fromUserId === room.ownerId) {
+						throw new ChatMessageAccessError('no such message');
+					}
+					const senderMembership = await this.chatRoomMembershipsRepository.findOneBy({ roomId: room.id, userId: message.fromUserId });
+					if (senderMembership?.role === 'admin') {
+						throw new ChatMessageAccessError('no such message');
+					}
+				}
+			}
+
+			wasPinned = room.pinnedMessageId === message.id;
+			if (wasPinned) {
+				await this.chatRoomsRepository.update(room.id, { pinnedMessageId: null });
+			}
 		}
 
-		await this.chatMessagesRepository.delete(message.id);
+		const recalledAt = new Date();
+		await this.chatMessagesRepository.update(message.id, {
+			text: null,
+			fileId: null,
+			reactions: [],
+			replyId: null,
+			recalledAt,
+			recalledById: actorId,
+		});
+
+		const recalledRow = await this.chatMessagesRepository.findOne({
+			where: { id: message.id },
+			relations: { fromUser: true, toUser: true, toRoom: true, recalledBy: true },
+		}) ?? {
+			...message,
+			text: null,
+			fileId: null,
+			file: null,
+			reactions: [],
+			replyId: null,
+			reply: null,
+			recalledAt,
+			recalledById: actorId,
+		};
 
 		if (message.toUserId) {
-			const [fromUser, toUser] = await Promise.all([
+			const [fromUser, toUser, packedLite] = await Promise.all([
 				this.usersRepository.findOneByOrFail({ id: message.fromUserId }),
 				this.usersRepository.findOneByOrFail({ id: message.toUserId }),
+				this.chatEntityService.packMessageLiteFor1on1(recalledRow),
 			]);
 
-			if (this.userEntityService.isLocalUser(fromUser)) this.globalEventService.publishChatUserStream(message.fromUserId, message.toUserId, 'deleted', message.id);
+			if (this.userEntityService.isLocalUser(fromUser)) {
+				this.globalEventService.publishChatUserStream(message.fromUserId, message.toUserId, 'recalled', packedLite);
+			}
 			if (this.userEntityService.isLocalUser(toUser)) {
 				await this.reconcileUnreadMessages(message.toUserId, 'user', message.fromUserId);
-				this.globalEventService.publishChatUserStream(message.toUserId, message.fromUserId, 'deleted', message.id);
-			}
-
-			if (this.userEntityService.isLocalUser(fromUser) && this.userEntityService.isRemoteUser(toUser)) {
-				//const activity = this.apRendererService.addContext(this.apRendererService.renderDelete(this.apRendererService.renderTombstone(`${this.config.url}/notes/${message.id}`), fromUser));
-				//this.queueService.deliver(fromUser, activity, toUser.inbox);
+				this.globalEventService.publishChatUserStream(message.toUserId, message.fromUserId, 'recalled', packedLite);
 			}
 		} else if (message.toRoomId) {
-			const [room, memberships] = await Promise.all([
-				this.chatRoomsRepository.findOneBy({ id: message.toRoomId }),
+			const [memberships, packedLite] = await Promise.all([
 				this.chatRoomMembershipsRepository.findBy({ roomId: message.toRoomId }),
+				this.chatEntityService.packMessageLiteForRoom(recalledRow),
 			]);
 			const readers = new Set(memberships.map(m => m.userId));
 			if (room) readers.add(room.ownerId);
 			await Promise.all([...readers].map(readerId => this.reconcileUnreadMessages(readerId, 'room', message.toRoomId!)));
-			this.globalEventService.publishChatRoomStream(message.toRoomId, 'deleted', message.id);
-			if (wasPinned && room) {
+			this.globalEventService.publishChatRoomStream(message.toRoomId, 'recalled', packedLite);
+			if (wasPinned) {
 				this.globalEventService.publishChatRoomStream(message.toRoomId, 'pinnedMessageUpdated', {
 					roomId: message.toRoomId,
 					pinnedMessageId: null,
@@ -758,6 +787,8 @@ export class ChatService {
 				});
 			}
 		}
+
+		return recalledRow;
 	}
 
 	private async reconcileUnreadMessages(readerId: string, kind: 'user' | 'room', conversationId: string): Promise<void> {
@@ -770,7 +801,8 @@ export class ChatService {
 		], `${kind}:${conversationId}`, async (first, last) => {
 			const query = this.chatMessagesRepository.createQueryBuilder('message')
 				.select('COUNT(*)', 'count').addSelect('MIN(message.id)', 'first').addSelect('MAX(message.id)', 'last')
-				.where('message.id >= :first AND message.id <= :last', { first, last });
+				.where('message.id >= :first AND message.id <= :last', { first, last })
+				.andWhere('message.recalledAt IS NULL');
 			if (kind === 'user') {
 				query.andWhere('message.toUserId = :readerId AND message.fromUserId = :conversationId', { readerId, conversationId });
 			} else {
@@ -975,7 +1007,9 @@ export class ChatService {
 				reactions: [],
 				replyId: null,
 				reply: null,
-				editedAt: null,
+				recalledAt: null,
+				recalledById: null,
+				recalledBy: null,
 			});
 		}
 
@@ -1834,7 +1868,7 @@ export class ChatService {
 				where: { id: messageId },
 				relations: { fromUser: true, file: true },
 			});
-			if (!targetMessage || targetMessage.toRoomId !== roomId) {
+			if (!targetMessage || targetMessage.recalledAt != null || targetMessage.toRoomId !== roomId) {
 				throw new Error('no such message');
 			}
 		}
@@ -2105,6 +2139,7 @@ export class ChatService {
 			}
 		}
 
+		q.andWhere('message.recalledAt IS NULL');
 		q.andWhere('LOWER(message.text) LIKE :q', { q: `%${sqlLikeEscape(query.toLowerCase())}%` });
 
 		q.leftJoinAndSelect('message.file', 'file');
@@ -2142,7 +2177,7 @@ export class ChatService {
 		}
 
 		const message = await this.chatMessagesRepository.findOneBy({ id: messageId });
-		if (message == null) throw new ChatMessageAccessError('no such message');
+		if (message == null || message.recalledAt != null) throw new ChatMessageAccessError('no such message');
 
 		if (message.fromUserId === userId) {
 			throw new ChatMessageAccessError('cannot react to own message');
@@ -2227,7 +2262,7 @@ export class ChatService {
 		}
 
 		const message = await this.chatMessagesRepository.findOneBy({ id: messageId });
-		if (message == null) throw new ChatMessageAccessError('no such message');
+		if (message == null || message.recalledAt != null) throw new ChatMessageAccessError('no such message');
 
 		const room = message.toRoomId ? await this.chatRoomsRepository.findOneBy({ id: message.toRoomId }) : null;
 		if (message.toRoomId && room == null) {

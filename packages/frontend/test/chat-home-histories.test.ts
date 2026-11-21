@@ -42,6 +42,12 @@ vi.mock('@/i18n.js', () => ({
 				archivedBadge: 'Archived',
 			},
 		},
+		tsx: {
+			_chat: {
+				recalledMessageNotice: ({ user }: { user: string }) => `${user} recalled a message`,
+				groupRecalledMessageNotice: ({ actor, target }: { actor: string; target: string }) => `${actor} recalled ${target}'s message`,
+			},
+		},
 	},
 }));
 

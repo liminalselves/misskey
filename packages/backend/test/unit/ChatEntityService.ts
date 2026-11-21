@@ -177,15 +177,16 @@ describe('ChatEntityService', () => {
 			chatMessages: [replyInSameRoom, replyInOtherRoom],
 		});
 
-		const editedAt = new Date('2026-11-21T01:00:00.000Z');
+		const recalledAt = new Date('2026-11-21T01:00:00.000Z');
 		const packed = await service.packMessagesLiteForRoom([
-			{ id: 'm1', fromUserId: 'u1', toRoomId: 'room1', toUserId: null, text: 'hello', fileId: null, reactions: [], replyId: 'r1', editedAt },
-			{ id: 'm2', fromUserId: 'u1', toRoomId: 'room1', toUserId: null, text: 'cross', fileId: null, reactions: [], replyId: 'r2', editedAt: null },
+			{ id: 'm1', fromUserId: 'u1', toRoomId: 'room1', toUserId: null, text: 'hello', fileId: null, reactions: [], replyId: 'r1', recalledAt: null, recalledById: null },
+			{ id: 'm2', fromUserId: 'u1', toRoomId: 'room1', toUserId: null, text: 'cross', fileId: null, reactions: [], replyId: 'r2', recalledAt: null, recalledById: null },
+			{ id: 'm3', fromUserId: 'u1', toRoomId: 'room1', toUserId: null, text: 'leaked', fileId: 'f1', reactions: ['u2/👍'], replyId: 'r1', recalledAt, recalledById: 'u2' },
 		] as any);
 
 		expect(chatMessagesFind).toHaveBeenCalledTimes(1);
 		expect(chatMessagesFindOne).not.toHaveBeenCalled();
-		expect(packed[0].editedAt).toBe('2026-11-21T01:00:00.000Z');
+		expect(packed[0].recalledAt).toBeNull();
 		expect(packed[0].reply).toMatchObject({
 			id: 'r1',
 			text: 'valid reply',
@@ -193,6 +194,17 @@ describe('ChatEntityService', () => {
 			fromUserId: 'u2',
 		});
 		expect(packed[1].reply).toBeNull();
+		expect(packed[2]).toMatchObject({
+			id: 'm3',
+			text: null,
+			fileId: null,
+			file: null,
+			reactions: [],
+			replyId: null,
+			reply: null,
+			recalledAt: '2026-11-21T01:00:00.000Z',
+			recalledById: 'u2',
+		});
 	});
 
 	test('packRoomInvitations batches users and rooms without N+1', async () => {

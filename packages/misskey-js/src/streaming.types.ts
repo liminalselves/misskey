@@ -271,7 +271,7 @@ export type Channels = {
 		};
 		events: {
 			message: (payload: ChatMessageLite) => void;
-			edited: (payload: ChatMessageLite) => void;
+			recalled: (payload: ChatMessageLite) => void;
 			deleted: (payload: ChatMessageLite['id']) => void;
 			react: (payload: {
 				reaction: string;
@@ -296,7 +296,7 @@ export type Channels = {
 		};
 		events: {
 			message: (payload: ChatMessageLite) => void;
-			edited: (payload: ChatMessageLite) => void;
+			recalled: (payload: ChatMessageLite) => void;
 			deleted: (payload: ChatMessageLite['id']) => void;
 			react: (payload: {
 				reaction: string;

@@ -153,12 +153,13 @@ SPDX-License-Identifier: AGPL-3.0-only
 							:highlighted="highlightedMessageId === item.data.id"
 							:roomOwnerId="room?.ownerId"
 							:myRole="room?.myRole"
+							:adminUserIds="roomAdminUserIds"
 							:isRoomArchived="Boolean(room?.isArchived)"
 							:isRoomSuspended="isCurrentlySuspended"
 							:pinnedMessageId="room?.pinnedMessageId"
 							:data-message-id="item.data.id"
 							@reply="handleReply"
-							@edit="handleEdit"
+							@recalled="onRecalled"
 							@pin="handlePin"
 							@mention="handleMention"
 							@scrollToMessage="handleScrollToMessage"
@@ -238,14 +239,11 @@ SPDX-License-Identifier: AGPL-3.0-only
 					:user="user"
 					:room="room"
 					:replyTo="replyingTo"
-					:editingMessage="editingMessage"
 					:roomMembers="roomMembers"
 					:isSuspended="isCurrentlySuspended"
 					:class="$style.form"
 					@cancelReply="cancelReply"
-					@cancelEdit="cancelEdit"
 					@sent="onMessageSent"
-					@edited="onMessageEdited"
 				/>
 			</div>
 		</div>
@@ -385,6 +383,7 @@ const canFetchNewer = ref(false);
 const user = ref<Misskey.entities.UserDetailed | null>(null);
 const room = ref<Misskey.entities.ChatRoom | null>(null);
 const roomMembers = ref<Misskey.entities.UserLite[]>([]);
+const roomAdminUserIds = ref<string[]>([]);
 const mySuspendedUntil = ref<string | null>(null);
 const nowMs = ref(Date.now());
 const bannerExpanded = ref(true);
@@ -400,7 +399,6 @@ let highlightTimeoutId: number | null = null;
 let suspensionTimerId: number | null = null;
 let scrollFabListenerEl: HTMLElement | null = null;
 const replyingTo = ref<{ id: string; text?: string | null } | null>(null);
-const editingMessage = ref<{ id: string; text?: string | null } | null>(null);
 
 const isOwner = computed(() => room.value != null && (room.value.ownerId === $i.id || room.value.myRole === 'owner'));
 const isAdmin = computed(() => room.value?.myRole === 'admin');
@@ -599,9 +597,17 @@ useMutationObserver(timelineEl, {
 });
 
 function normalizeMessage(message: Misskey.entities.ChatMessageLite | Misskey.entities.ChatMessage): NormalizedChatMessage {
+	const recalledById = 'recalledById' in message ? message.recalledById ?? null : null;
+	const existingRecalledBy = 'recalledBy' in message ? message.recalledBy ?? null : null;
+	const resolvedRecalledBy = existingRecalledBy ?? (
+		recalledById == null
+			? null
+			: (recalledById === $i.id ? $i : (recalledById === user.value?.id ? user.value : null))
+	);
 	return {
 		...message,
 		fromUser: message.fromUser ?? (message.fromUserId === $i.id ? $i : user.value!),
+		...(recalledById != null || existingRecalledBy != null ? { recalledBy: resolvedRecalledBy } : {}),
 		reactions: message.reactions.map(record => ({
 			...record,
 			user: record.user ?? (message.fromUserId === $i.id ? user.value! : $i),
@@ -610,7 +616,6 @@ function normalizeMessage(message: Misskey.entities.ChatMessageLite | Misskey.en
 }
 
 function handleReply(message: NormalizedChatMessage | Misskey.entities.ChatMessage) {
-	editingMessage.value = null;
 	replyingTo.value = {
 		id: message.id,
 		text: message.text,
@@ -620,18 +625,6 @@ function handleReply(message: NormalizedChatMessage | Misskey.entities.ChatMessa
 
 function cancelReply() {
 	replyingTo.value = null;
-}
-
-function handleEdit(message: NormalizedChatMessage | Misskey.entities.ChatMessage) {
-	replyingTo.value = null;
-	editingMessage.value = {
-		id: message.id,
-		text: message.text,
-	};
-}
-
-function cancelEdit() {
-	editingMessage.value = null;
 }
 
 function handleMention(targetUser: Misskey.entities.UserLite) {
@@ -672,32 +665,6 @@ function onMessageSent() {
 	replyingTo.value = null;
 }
 
-function onMessageEdited(editedMsg: Misskey.entities.ChatMessage) {
-	editingMessage.value = null;
-	applyEditedMessage(editedMsg);
-}
-
-function applyEditedMessage(payload: Misskey.entities.ChatMessageLite | Misskey.entities.ChatMessage) {
-	const idx = messages.value.findIndex(m => m.id === payload.id);
-	if (idx !== -1) {
-		messages.value[idx] = {
-			...messages.value[idx],
-			text: payload.text,
-			editedAt: payload.editedAt ?? new Date().toISOString(),
-		};
-	}
-	if (room.value?.pinnedMessage && room.value.pinnedMessage.id === payload.id) {
-		room.value = {
-			...room.value,
-			pinnedMessage: {
-				...room.value.pinnedMessage,
-				text: payload.text,
-				editedAt: payload.editedAt ?? room.value.pinnedMessage.editedAt,
-			},
-		};
-	}
-}
-
 function onRoomUpdated(payload: Partial<Misskey.entities.ChatRoom>) {
 	if (!room.value) return;
 	room.value = mergeSharedRoomMetadata(room.value, payload);
@@ -715,6 +682,7 @@ function onOwnerTransferred(payload: Parameters<Misskey.Channels['chatRoom']['ev
 	if (room.value) {
 		room.value = applyOwnerTransferred(room.value, payload, $i.id);
 	}
+	roomAdminUserIds.value = roomAdminUserIds.value.filter(id => id !== payload.newOwnerId);
 	void membersComponentRef.value?.refresh();
 }
 
@@ -727,6 +695,9 @@ async function loadRoomMembersForFeatures(roomId: string) {
 		roomMembers.value = memberships
 			.map(m => m.user)
 			.filter((u): u is Misskey.entities.UserLite => u != null);
+		roomAdminUserIds.value = memberships
+			.filter(m => m.role === 'admin')
+			.map(m => m.userId);
 		const mine = memberships.find(m => m.userId === $i.id);
 		mySuspendedUntil.value = mine?.suspendedUntil ?? null;
 		nowMs.value = Date.now();
@@ -777,18 +748,18 @@ async function loadContext(targetId: string, limit = 20): Promise<boolean> {
 
 function bindChatUserEvents(conn: Misskey.IChannelConnection<Misskey.Channels['chatUser']>) {
 	conn.on('message', onMessage);
+	conn.on('recalled', onRecalled);
 	conn.on('deleted', onDeleted);
 	conn.on('react', onReact);
 	conn.on('unreact', onUnreact);
-	conn.on('edited', applyEditedMessage);
 }
 
 function bindChatRoomEvents(conn: Misskey.IChannelConnection<Misskey.Channels['chatRoom']>) {
 	conn.on('message', onMessage);
+	conn.on('recalled', onRecalled);
 	conn.on('deleted', onDeleted);
 	conn.on('react', onReact);
 	conn.on('unreact', onUnreact);
-	conn.on('edited', applyEditedMessage);
 	conn.on('roomUpdated', onRoomUpdated);
 	conn.on('roomDeleted', () => {
 		connection.value?.dispose();
@@ -817,6 +788,7 @@ function bindChatRoomEvents(conn: Misskey.IChannelConnection<Misskey.Channels['c
 			room.value = { ...room.value, memberCount: room.value.memberCount - 1 };
 		}
 		roomMembers.value = roomMembers.value.filter(u => u.id !== payload.userId);
+		roomAdminUserIds.value = roomAdminUserIds.value.filter(id => id !== payload.userId);
 		void membersComponentRef.value?.refresh();
 	});
 	conn.on('memberKicked', (payload) => {
@@ -834,6 +806,7 @@ function bindChatRoomEvents(conn: Misskey.IChannelConnection<Misskey.Channels['c
 			room.value = { ...room.value, memberCount: room.value.memberCount - 1 };
 		}
 		roomMembers.value = roomMembers.value.filter(u => u.id !== payload.userId);
+		roomAdminUserIds.value = roomAdminUserIds.value.filter(id => id !== payload.userId);
 		void membersComponentRef.value?.refresh();
 	});
 	conn.on('memberBanned', (payload) => {
@@ -857,9 +830,17 @@ function bindChatRoomEvents(conn: Misskey.IChannelConnection<Misskey.Channels['c
 			room.value = { ...room.value, memberCount: room.value.memberCount - 1 };
 		}
 		roomMembers.value = roomMembers.value.filter(u => u.id !== payload.userId);
+		roomAdminUserIds.value = roomAdminUserIds.value.filter(id => id !== payload.userId);
 		void membersComponentRef.value?.refresh();
 	});
 	conn.on('memberRoleChanged', (payload) => {
+		if (payload.role === 'admin') {
+			if (!roomAdminUserIds.value.includes(payload.userId)) {
+				roomAdminUserIds.value = [...roomAdminUserIds.value, payload.userId];
+			}
+		} else {
+			roomAdminUserIds.value = roomAdminUserIds.value.filter(id => id !== payload.userId);
+		}
 		if (payload.userId === $i.id && room.value) {
 			room.value = { ...room.value, myRole: payload.role };
 		}
@@ -1075,10 +1056,10 @@ watch(() => [props.roomId, props.userId], (nextPair, prevPair) => {
 	user.value = null;
 	room.value = null;
 	roomMembers.value = [];
+	roomAdminUserIds.value = [];
 	mySuspendedUntil.value = null;
 	notMember.value = false;
 	replyingTo.value = null;
-	editingMessage.value = null;
 	unreadSnapshot.value = null;
 	showUnreadJump.value = false;
 	showIndicator.value = false;
@@ -1264,6 +1245,25 @@ function onMessage(message: Misskey.entities.ChatMessageLite) {
 			id: message.id,
 		});
 		void markAsRead();
+	}
+}
+
+function onRecalled(recalledMsg: Misskey.entities.ChatMessageLite) {
+	const normalized = normalizeMessage(recalledMsg);
+	const index = messages.value.findIndex(m => m.id === recalledMsg.id);
+	if (index !== -1) {
+		messages.value[index] = normalized;
+	}
+	for (let i = 0; i < messages.value.length; i++) {
+		if (messages.value[i].replyId === recalledMsg.id && messages.value[i].reply != null) {
+			messages.value[i] = { ...messages.value[i], reply: null };
+		}
+	}
+	if (room.value?.pinnedMessageId === recalledMsg.id) {
+		room.value = { ...room.value, pinnedMessageId: null, pinnedMessage: null };
+	}
+	if (replyingTo.value?.id === recalledMsg.id) {
+		replyingTo.value = null;
 	}
 }
 

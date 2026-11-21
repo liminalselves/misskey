@@ -55,14 +55,14 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<span v-if="!item.isMe && !item.isRead && item.unreadCount != null && item.unreadCount > 0" class="_indicateCounter" :class="$style.unreadBadge">{{ item.unreadCount > 99 ? '99+' : item.unreadCount }}</span>
 				</header>
 				<div v-if="item.message.toRoom" :class="[$style.messageBodyText, $style.inlineLayout]">
-					<template v-if="!item.isMe && item.message.fromUser">
+					<template v-if="!item.isRecalled && !item.isMe && item.message.fromUser">
 						<MkUserName :class="$style.inlineSenderName" :user="item.message.fromUser"/>
 						<MkAcct :class="$style.inlineSenderAcct" :user="item.message.fromUser"/>
 					</template>
-					<span v-if="item.isMe" :class="$style.youSaid">{{ i18n.ts.you }}:</span>
+					<span v-if="!item.isRecalled && item.isMe" :class="$style.youSaid">{{ i18n.ts.you }}:</span>
 					<span :class="$style.messageText">{{ getMessagePreview(item.message) }}</span>
 				</div>
-				<div v-else :class="$style.messageBodyText"><span v-if="item.isMe" :class="$style.youSaid">{{ i18n.ts.you }}:</span>{{ getMessagePreview(item.message) }}</div>
+				<div v-else :class="$style.messageBodyText"><span v-if="!item.isRecalled && item.isMe" :class="$style.youSaid">{{ i18n.ts.you }}:</span>{{ getMessagePreview(item.message) }}</div>
 			</div>
 		</template>
 	</MkA>
@@ -91,6 +91,7 @@ import { ensureSignin } from '@/i.js';
 import { updateCurrentAccountPartial } from '@/accounts.js';
 import { useStream } from '@/stream.js';
 import MkDriveFileThumbnail from '@/components/MkDriveFileThumbnail.vue';
+import { formatRecallNoticeText } from '@/utility/chat-recall.js';
 
 const props = withDefaults(defineProps<{
 	/** 是否把智能体会话合并进列表（/chat「全部」页启用；Deck 列、Widget 保持原样） */
@@ -125,6 +126,7 @@ type ChatHistoryItem = {
 	}
 	| {
 		session?: undefined;
+		isRecalled: boolean;
 		message: Misskey.entities.ChatMessage;
 		other: Misskey.entities.ChatMessage['fromUser'] | Misskey.entities.ChatMessage['toUser'] | null;
 	}
@@ -170,6 +172,9 @@ let agentSessionsInFlight: Promise<AgentSessionRow[]> | null = null;
 let fetchSeq = 0;
 
 function getMessagePreview(message: Misskey.entities.ChatMessage): string {
+	if ('recalledAt' in message && message.recalledAt != null) {
+		return formatRecallNoticeText(message);
+	}
 	if (message.text != null && message.text !== '') return message.text;
 	if (message.file != null || message.fileId != null) return i18n.ts._chat.attachmentPlaceholder;
 	return '';
@@ -186,6 +191,7 @@ function toChatHistoryItem(m: Misskey.entities.ChatMessage): ChatHistoryItem | n
 
 	return {
 		id: m.id,
+		isRecalled: 'recalledAt' in m && m.recalledAt != null,
 		message: m,
 		other: peer,
 		isMe: m.fromUserId === $i.id,

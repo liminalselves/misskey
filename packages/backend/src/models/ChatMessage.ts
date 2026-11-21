@@ -107,7 +107,20 @@ export class MiChatMessage {
 
 	@Column('timestamp with time zone', {
 		nullable: true,
-		comment: 'The date and time when the message was last edited.',
+		comment: 'The date and time when the message was recalled.',
 	})
-	public editedAt: Date | null;
+	public recalledAt: Date | null;
+
+	@Column({
+		...id(),
+		nullable: true,
+		comment: 'The ID of the user who recalled the message.',
+	})
+	public recalledById: MiUser['id'] | null;
+
+	@ManyToOne(() => MiUser, {
+		onDelete: 'SET NULL',
+	})
+	@JoinColumn({ name: 'recalledById', foreignKeyConstraintName: 'FK_chat_message_recalledById' })
+	public recalledBy: MiUser | null;
 }

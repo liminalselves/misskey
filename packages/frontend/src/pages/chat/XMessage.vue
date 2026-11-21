@@ -5,6 +5,14 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <template>
 <div
+	v-if="isRecalled"
+	:class="[$style.recalledRoot, { [$style.highlighted]: highlighted }]"
+	:data-message-id="message.id"
+>
+	<span :class="$style.recalledPill">{{ recallNoticeText }}</span>
+</div>
+<div
+	v-else
 	:class="[$style.root, { [$style.isMe]: isMe, [$style.highlighted]: highlighted, [$style.clickable]: isSearchResult }]"
 	:data-message-id="message.id"
 	@click="onMessageClick"
@@ -37,7 +45,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<div v-else-if="hasReply" :class="[$style.replyPreview, $style.replyDeleted]">
 			<div :class="$style.replyBar"></div>
 			<div :class="$style.replyContent">
-				<span :class="$style.replyText">{{ i18n.ts._chat.deletedMessage }}</span>
+				<span :class="$style.replyText">{{ i18n.ts._chat.recalledMessagePlaceholder }}</span>
 			</div>
 		</div>
 		<MkFukidashi :class="$style.fukidashi" :tail="isMe ? 'right' : 'left'" :fullWidth="message.file != null" :accented="isMe">
@@ -89,7 +97,6 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</button>
 			</template>
 			<MkTime :class="$style.time" :time="message.createdAt"/>
-			<span v-if="editedAt" :class="$style.edited" :title="editedAt">({{ i18n.ts._chat.edited }})</span>
 			<span v-if="isPinned" :class="$style.pinnedTag"><i class="ti ti-pin"></i> {{ i18n.ts._chat.pinnedMessage }}</span>
 			<MkA v-if="isSearchResult && 'toRoom' in message && message.toRoom != null" :to="`/chat/room/${message.toRoomId}`">{{ message.toRoom.name }}</MkA>
 			<MkA v-if="isSearchResult && 'toUser' in message && message.toUser != null && isMe" :to="`/chat/user/${message.toUserId}`">@{{ message.toUser.username }}</MkA>
@@ -139,6 +146,79 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <script lang="ts">
 import * as Misskey from 'misskey-js';
+import { i18n as chatI18n } from '@/i18n.js';
+import { formatRecallNoticeText, formatUserDisplayName } from '@/utility/chat-recall.js';
+
+export { formatRecallNoticeText, formatUserDisplayName };
+
+export const CHAT_RECALL_WINDOW_MS = 2 * 60 * 1000;
+
+export type RecallAction = {
+	mode: 'self' | 'group';
+	label: string;
+	confirmText: string;
+};
+
+export function resolveRecallAction(params: {
+	createdAt: string;
+	nowMs: number;
+	isMe: boolean;
+	isRoomMessage: boolean;
+	isOwner: boolean;
+	isAdmin: boolean;
+	isRoomArchived: boolean;
+	isRoomSuspended: boolean;
+	isTargetOwner: boolean;
+	isTargetAdmin: boolean;
+	chatAvailable: boolean;
+	recalledAt?: string | null;
+}): RecallAction | null {
+	if (!params.chatAvailable || params.isRoomArchived || params.recalledAt != null) {
+		return null;
+	}
+
+	const createdAtMs = new Date(params.createdAt).getTime();
+	const isWithinWindow = Number.isFinite(createdAtMs) && (params.nowMs - createdAtMs) <= CHAT_RECALL_WINDOW_MS;
+	const canGroupRecall = params.isRoomMessage && (params.isOwner || (params.isAdmin && !params.isRoomSuspended));
+
+	if (params.isMe) {
+		if (params.isRoomSuspended && !params.isOwner) {
+			return null;
+		}
+		if (isWithinWindow) {
+			return {
+				mode: 'self',
+				label: chatI18n.ts._chat.recall,
+				confirmText: chatI18n.ts._chat.recallConfirm,
+			};
+		}
+		if (canGroupRecall) {
+			return {
+				mode: 'group',
+				label: chatI18n.ts._chat.groupRecall,
+				confirmText: chatI18n.ts._chat.groupRecallConfirm,
+			};
+		}
+		return null;
+	}
+
+	if (!canGroupRecall) return null;
+	if (params.isOwner) {
+		return {
+			mode: 'group',
+			label: chatI18n.ts._chat.groupRecall,
+			confirmText: chatI18n.ts._chat.groupRecallConfirm,
+		};
+	}
+	if (!params.isTargetOwner && !params.isTargetAdmin) {
+		return {
+			mode: 'group',
+			label: chatI18n.ts._chat.groupRecall,
+			confirmText: chatI18n.ts._chat.groupRecallConfirm,
+		};
+	}
+	return null;
+}
 
 export type GroupedReaction = {
 	reaction: string;
@@ -215,8 +295,9 @@ const props = defineProps<{
 	message: NormalizedChatMessage | Misskey.entities.ChatMessage;
 	isSearchResult?: boolean;
 	highlighted?: boolean;
-	roomOwnerId?: string; // 群主 ID，用于判断是否可以删除/置顶其他人的消息
+	roomOwnerId?: string; // 群主 ID，用于判断是否可以群撤回/置顶其他人的消息
 	myRole?: 'owner' | 'admin' | 'member' | null;
+	adminUserIds?: readonly string[];
 	isRoomArchived?: boolean;
 	isRoomSuspended?: boolean;
 	pinnedMessageId?: string | null;
@@ -225,7 +306,7 @@ const props = defineProps<{
 const emit = defineEmits<{
 	(e: 'navigate', messageId: string): void;
 	(e: 'reply', message: NormalizedChatMessage | Misskey.entities.ChatMessage): void;
-	(e: 'edit', message: NormalizedChatMessage | Misskey.entities.ChatMessage): void;
+	(e: 'recalled', message: Misskey.entities.ChatMessageLite): void;
 	(e: 'pin', messageId: string | null): void;
 	(e: 'mention', user: Misskey.entities.UserLite): void;
 	(e: 'scrollToMessage', messageId: string): void;
@@ -233,10 +314,13 @@ const emit = defineEmits<{
 
 const isMe = computed(() => props.message.fromUserId === $i.id);
 const isRoomMessage = computed(() => props.roomOwnerId != null || ('toRoomId' in props.message && props.message.toRoomId != null));
-const canAdminRoom = computed(() => props.roomOwnerId === $i.id || props.myRole === 'owner' || props.myRole === 'admin');
-const canInteract = computed(() => $i.policies.chatAvailability === 'available' && !props.isRoomArchived && !props.isRoomSuspended);
-const isPinned = computed(() => props.pinnedMessageId != null && props.pinnedMessageId === props.message.id);
-const editedAt = computed(() => ('editedAt' in props.message ? props.message.editedAt : null) ?? null);
+const isOwner = computed(() => props.roomOwnerId === $i.id || props.myRole === 'owner');
+const isAdmin = computed(() => !isOwner.value && props.myRole === 'admin');
+const canAdminRoom = computed(() => isOwner.value || isAdmin.value);
+const isRecalled = computed(() => ('recalledAt' in props.message ? props.message.recalledAt : null) != null);
+const recallNoticeText = computed(() => formatRecallNoticeText(props.message as Misskey.entities.ChatMessageLite));
+const canInteract = computed(() => !isRecalled.value && $i.policies.chatAvailability === 'available' && !props.isRoomArchived && !props.isRoomSuspended);
+const isPinned = computed(() => !isRecalled.value && props.pinnedMessageId != null && props.pinnedMessageId === props.message.id);
 const hasReply = computed(() => 'replyId' in props.message && props.message.replyId != null);
 const replyData = computed(() => ('reply' in props.message ? props.message.reply : null) ?? null);
 const urls = computed(() => props.message.text ? extractUrlFromMfm(mfm.parse(props.message.text)) : []);
@@ -324,23 +408,40 @@ function onContextmenu(ev: PointerEvent) {
 	showMenu(ev, true);
 }
 
-async function confirmAndDeleteMessage(): Promise<void> {
+async function confirmAndRecallMessage(action: RecallAction): Promise<void> {
 	const { canceled } = await os.confirm({
 		type: 'warning',
-		text: i18n.ts.deleteConfirm,
+		text: action.confirmText,
 	});
 	if (canceled) return;
 	try {
 		await misskeyApi('chat/messages/delete', {
 			messageId: props.message.id,
 		});
-		os.toast(i18n.ts.removed);
-	} catch (e) {
-		os.alert({ type: 'error', text: formatApiError(e) });
+		emit('recalled', {
+			...props.message,
+			text: null,
+			fileId: null,
+			file: null,
+			reactions: [],
+			replyId: null,
+			reply: null,
+			recalledAt: new Date().toISOString(),
+			recalledById: $i.id,
+			recalledBy: $i,
+		});
+		os.toast(i18n.ts._chat.recalled);
+	} catch (e: any) {
+		if (e?.code === 'RECALL_TIME_EXPIRED') {
+			os.alert({ type: 'error', text: i18n.ts._chat.recallTimeExpired });
+		} else {
+			os.alert({ type: 'error', text: formatApiError(e) });
+		}
 	}
 }
 
 function showMenu(ev: PointerEvent, contextmenu = false) {
+	if (isRecalled.value) return;
 	const sections: MenuItem[][] = [];
 
 	// 1. 交互操作区
@@ -364,13 +465,6 @@ function showMenu(ev: PointerEvent, contextmenu = false) {
 					text: i18n.ts._chat.mention,
 					icon: 'ti ti-at',
 					action: () => emit('mention', props.message.fromUser!),
-				});
-			}
-			if (isMe.value) {
-				interactSection.push({
-					text: i18n.ts._chat.editMessage,
-					icon: 'ti ti-pencil',
-					action: () => emit('edit', props.message),
 				});
 			}
 		}
@@ -414,17 +508,28 @@ function showMenu(ev: PointerEvent, contextmenu = false) {
 	}
 	if (utilitySection.length > 0) sections.push(utilitySection);
 
-	// 4. 删除操作区
-	const canDelete = $i.policies.chatAvailability === 'available'
-		&& !props.isRoomArchived
-		&& ((isMe.value && !props.isRoomSuspended) || (!isMe.value && canAdminRoom.value));
-	if (canDelete) {
+	// 4. 撤回 / 群撤回操作区
+	const recallAction = resolveRecallAction({
+		createdAt: props.message.createdAt,
+		nowMs: Date.now(),
+		isMe: isMe.value,
+		isRoomMessage: isRoomMessage.value,
+		isOwner: isOwner.value,
+		isAdmin: isAdmin.value,
+		isRoomArchived: Boolean(props.isRoomArchived),
+		isRoomSuspended: Boolean(props.isRoomSuspended),
+		isTargetOwner: props.roomOwnerId != null && props.message.fromUserId === props.roomOwnerId,
+		isTargetAdmin: Boolean(props.adminUserIds?.includes(props.message.fromUserId)),
+		chatAvailable: $i.policies.chatAvailability === 'available',
+		recalledAt: ('recalledAt' in props.message ? props.message.recalledAt : null) ?? null,
+	});
+	if (recallAction) {
 		sections.push([{
-			text: i18n.ts.delete,
-			icon: 'ti ti-trash',
+			text: recallAction.label,
+			icon: recallAction.mode === 'group' ? 'ti ti-arrow-back' : 'ti ti-arrow-back-up',
 			danger: true,
 			action: () => {
-				void confirmAndDeleteMessage();
+				void confirmAndRecallMessage(recallAction);
 			},
 		}]);
 	}
@@ -618,12 +723,28 @@ function showMenu(ev: PointerEvent, contextmenu = false) {
 	}
 }
 
-.time {
-	opacity: 0.5;
+.recalledRoot {
+	display: flex;
+	justify-content: center;
+	padding: 4px 12px;
+	border-radius: var(--MI-radius);
+
+	&.highlighted {
+		animation: highlightBlink 1s ease-in-out 1;
+	}
 }
 
-.edited {
-	opacity: 0.55;
+.recalledPill {
+	display: inline-block;
+	font-size: 0.8em;
+	color: var(--MI_THEME-fgTransparentWeak);
+	background: var(--MI_THEME-panel);
+	border-radius: 999px;
+	padding: 3px 12px;
+}
+
+.time {
+	opacity: 0.5;
 }
 
 .pinnedTag {

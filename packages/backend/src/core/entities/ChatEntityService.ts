@@ -99,7 +99,7 @@ export class ChatEntityService {
 				relations: { fromUser: true },
 			});
 
-		if (!replyMessage || !this.isReplyInSameConversation(message, replyMessage)) {
+		if (!replyMessage || replyMessage.recalledAt != null || !this.isReplyInSameConversation(message, replyMessage)) {
 			return null;
 		}
 
@@ -148,6 +148,12 @@ export class ChatEntityService {
 
 		const users: (MiUser | string)[] = [...seedUsers];
 		const seenUserIds = new Set(users.map(u => typeof u === 'string' ? u : u.id));
+		for (const m of messages) {
+			if (m.recalledById && !seenUserIds.has(m.recalledById)) {
+				seenUserIds.add(m.recalledById);
+				users.push(m.recalledBy ?? m.recalledById);
+			}
+		}
 		for (const r of replyMap.values()) {
 			const uid = r.fromUser ? r.fromUser.id : r.fromUserId;
 			if (!seenUserIds.has(uid)) {
@@ -186,42 +192,50 @@ export class ChatEntityService {
 		const skipToRoom = options?._hint_?.skipToRoom ?? false;
 
 		const message = typeof src === 'object' ? src : await this.chatMessagesRepository.findOneByOrFail({ id: src });
+		const isRecalled = message.recalledAt != null;
+		const recalledAt = message.recalledAt ? message.recalledAt.toISOString() : null;
+		const recalledById = isRecalled ? (message.recalledById ?? null) : null;
 
 		// userは削除されている可能性があるのでnull許容
 		const reactions: { user: Packed<'UserLite'> | null; reaction: string; }[] = [];
 
-		for (const record of message.reactions) {
-			const [userId, reaction] = record.split('/');
-			reactions.push({
-				user: packedUsers?.get(userId) ?? (await this.userEntityService.pack(userId).catch(() => null)),
-				reaction,
-			});
+		if (!isRecalled) {
+			for (const record of message.reactions) {
+				const [userId, reaction] = record.split('/');
+				reactions.push({
+					user: packedUsers?.get(userId) ?? (await this.userEntityService.pack(userId).catch(() => null)),
+					reaction,
+				});
+			}
 		}
 
-		const [fromUser, toUser, toRoom, file, reply] = await Promise.all([
+		const [fromUser, toUser, toRoom, file, reply, recalledBy] = await Promise.all([
 			packedUsers?.get(message.fromUserId) ?? this.userEntityService.pack(message.fromUser ?? message.fromUserId, me),
 			message.toUserId ? (packedUsers?.get(message.toUserId) ?? this.userEntityService.pack(message.toUser ?? message.toUserId, me)) : Promise.resolve(undefined),
 			(!skipToRoom && message.toRoomId) ? (packedRooms?.get(message.toRoomId) ?? this.packRoom(message.toRoom ?? message.toRoomId, me)) : Promise.resolve(undefined),
-			this.packMessageFile(message, packedFiles),
-			this.packMessageReply(message, { replyMap: options?._hint_?.replyMap, packedUsers }),
+			isRecalled ? Promise.resolve(null) : this.packMessageFile(message, packedFiles),
+			isRecalled ? Promise.resolve(null) : this.packMessageReply(message, { replyMap: options?._hint_?.replyMap, packedUsers }),
+			recalledById ? (packedUsers?.get(recalledById) ?? this.userEntityService.pack(message.recalledBy ?? recalledById, me).catch(() => null)) : Promise.resolve(null),
 		]);
 
 		return {
 			id: message.id,
 			createdAt: this.idService.parse(message.id).date.toISOString(),
-			editedAt: message.editedAt ? message.editedAt.toISOString() : null,
-			text: message.text,
+			recalledAt,
+			recalledById,
+			recalledBy,
+			text: isRecalled ? null : message.text,
 			fromUserId: message.fromUserId,
 			fromUser,
 			toUserId: message.toUserId,
 			toUser,
 			toRoomId: message.toRoomId,
 			toRoom,
-			fileId: message.fileId,
+			fileId: isRecalled ? null : message.fileId,
 			file,
-			replyId: message.replyId ?? null,
+			replyId: isRecalled ? null : (message.replyId ?? null),
 			reply,
-			reactions: reactions.filter((r): r is { user: Packed<'UserLite'>; reaction: string; } => r.user != null),
+			reactions: isRecalled ? [] : reactions.filter((r): r is { user: Packed<'UserLite'>; reaction: string; } => r.user != null),
 		};
 	}
 
@@ -288,32 +302,40 @@ export class ChatEntityService {
 		const replyMap = options?._hint_?.replyMap;
 
 		const message = typeof src === 'object' ? src : await this.chatMessagesRepository.findOneByOrFail({ id: src });
+		const isRecalled = message.recalledAt != null;
+		const recalledAt = message.recalledAt ? message.recalledAt.toISOString() : null;
+		const recalledById = isRecalled ? (message.recalledById ?? null) : null;
 
 		const reactions: { reaction: string; }[] = [];
 
-		for (const record of message.reactions) {
-			const [, reaction] = record.split('/');
-			reactions.push({
-				reaction,
-			});
+		if (!isRecalled) {
+			for (const record of message.reactions) {
+				const [, reaction] = record.split('/');
+				reactions.push({
+					reaction,
+				});
+			}
 		}
 
-		const [file, reply] = await Promise.all([
-			this.packMessageFile(message, packedFiles),
-			this.packMessageReply(message, { replyMap, packedUsers }),
+		const [file, reply, recalledBy] = await Promise.all([
+			isRecalled ? Promise.resolve(null) : this.packMessageFile(message, packedFiles),
+			isRecalled ? Promise.resolve(null) : this.packMessageReply(message, { replyMap, packedUsers }),
+			recalledById ? (packedUsers?.get(recalledById) ?? this.userEntityService.pack(message.recalledBy ?? recalledById).catch(() => null)) : Promise.resolve(null),
 		]);
 
 		return {
 			id: message.id,
 			createdAt: this.idService.parse(message.id).date.toISOString(),
-			editedAt: message.editedAt ? message.editedAt.toISOString() : null,
-			text: message.text,
+			recalledAt,
+			recalledById,
+			recalledBy,
+			text: isRecalled ? null : message.text,
 			fromUserId: message.fromUserId,
 			toUserId: message.toUserId!,
-			fileId: message.fileId,
+			fileId: isRecalled ? null : message.fileId,
 			file,
-			reactions,
-			replyId: message.replyId,
+			reactions: isRecalled ? [] : reactions,
+			replyId: isRecalled ? null : message.replyId,
 			reply,
 		};
 	}
@@ -348,36 +370,44 @@ export class ChatEntityService {
 		const replyMap = options?._hint_?.replyMap;
 
 		const message = typeof src === 'object' ? src : await this.chatMessagesRepository.findOneByOrFail({ id: src });
+		const isRecalled = message.recalledAt != null;
+		const recalledAt = message.recalledAt ? message.recalledAt.toISOString() : null;
+		const recalledById = isRecalled ? (message.recalledById ?? null) : null;
 
 		// userは削除されている可能性があるのでnull許容
 		const reactions: { user: Packed<'UserLite'> | null; reaction: string; }[] = [];
 
-		for (const record of message.reactions) {
-			const [userId, reaction] = record.split('/');
-			reactions.push({
-				user: packedUsers?.get(userId) ?? (await this.userEntityService.pack(userId).catch(() => null)),
-				reaction,
-			});
+		if (!isRecalled) {
+			for (const record of message.reactions) {
+				const [userId, reaction] = record.split('/');
+				reactions.push({
+					user: packedUsers?.get(userId) ?? (await this.userEntityService.pack(userId).catch(() => null)),
+					reaction,
+				});
+			}
 		}
 
-		const [fromUser, file, reply] = await Promise.all([
+		const [fromUser, file, reply, recalledBy] = await Promise.all([
 			packedUsers?.get(message.fromUserId) ?? this.userEntityService.pack(message.fromUser ?? message.fromUserId),
-			this.packMessageFile(message, packedFiles),
-			this.packMessageReply(message, { replyMap, packedUsers }),
+			isRecalled ? Promise.resolve(null) : this.packMessageFile(message, packedFiles),
+			isRecalled ? Promise.resolve(null) : this.packMessageReply(message, { replyMap, packedUsers }),
+			recalledById ? (packedUsers?.get(recalledById) ?? this.userEntityService.pack(message.recalledBy ?? recalledById).catch(() => null)) : Promise.resolve(null),
 		]);
 
 		return {
 			id: message.id,
 			createdAt: this.idService.parse(message.id).date.toISOString(),
-			editedAt: message.editedAt ? message.editedAt.toISOString() : null,
-			text: message.text,
+			recalledAt,
+			recalledById,
+			recalledBy,
+			text: isRecalled ? null : message.text,
 			fromUserId: message.fromUserId,
 			fromUser,
 			toRoomId: message.toRoomId!,
-			fileId: message.fileId,
+			fileId: isRecalled ? null : message.fileId,
 			file,
-			reactions: reactions.filter((r): r is { user: Packed<'UserLite'>; reaction: string; } => r.user != null),
-			replyId: message.replyId,
+			reactions: isRecalled ? [] : reactions.filter((r): r is { user: Packed<'UserLite'>; reaction: string; } => r.user != null),
+			replyId: isRecalled ? null : message.replyId,
 			reply,
 		};
 	}

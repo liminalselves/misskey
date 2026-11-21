@@ -190,7 +190,7 @@ export interface AdminEventTypes {
 
 export interface ChatEventTypes {
 	message: Packed<'ChatMessageLite'>;
-	edited: Packed<'ChatMessageLite'>;
+	recalled: Packed<'ChatMessageLite'>;
 	deleted: Packed<'ChatMessageLite'>['id'];
 	react: {
 		reaction: string;

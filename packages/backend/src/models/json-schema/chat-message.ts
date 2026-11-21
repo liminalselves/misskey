@@ -15,10 +15,19 @@ export const packedChatMessageSchema = {
 			format: 'date-time',
 			optional: false, nullable: false,
 		},
-		editedAt: {
+		recalledAt: {
 			type: 'string',
 			format: 'date-time',
 			optional: true, nullable: true,
+		},
+		recalledById: {
+			type: 'string',
+			optional: true, nullable: true,
+		},
+		recalledBy: {
+			type: 'object',
+			optional: true, nullable: true,
+			ref: 'UserLite',
 		},
 		fromUserId: {
 			type: 'string',
@@ -134,10 +143,19 @@ export const packedChatMessageLiteSchema = {
 			format: 'date-time',
 			optional: false, nullable: false,
 		},
-		editedAt: {
+		recalledAt: {
 			type: 'string',
 			format: 'date-time',
 			optional: true, nullable: true,
+		},
+		recalledById: {
+			type: 'string',
+			optional: true, nullable: true,
+		},
+		recalledBy: {
+			type: 'object',
+			optional: true, nullable: true,
+			ref: 'UserLite',
 		},
 		fromUserId: {
 			type: 'string',
@@ -234,10 +252,19 @@ export const packedChatMessageLiteFor1on1Schema = {
 			format: 'date-time',
 			optional: false, nullable: false,
 		},
-		editedAt: {
+		recalledAt: {
 			type: 'string',
 			format: 'date-time',
 			optional: true, nullable: true,
+		},
+		recalledById: {
+			type: 'string',
+			optional: true, nullable: true,
+		},
+		recalledBy: {
+			type: 'object',
+			optional: true, nullable: true,
+			ref: 'UserLite',
 		},
 		fromUserId: {
 			type: 'string',
@@ -320,10 +347,19 @@ export const packedChatMessageLiteForRoomSchema = {
 			format: 'date-time',
 			optional: false, nullable: false,
 		},
-		editedAt: {
+		recalledAt: {
 			type: 'string',
 			format: 'date-time',
 			optional: true, nullable: true,
+		},
+		recalledById: {
+			type: 'string',
+			optional: true, nullable: true,
+		},
+		recalledBy: {
+			type: 'object',
+			optional: true, nullable: true,
+			ref: 'UserLite',
 		},
 		fromUserId: {
 			type: 'string',

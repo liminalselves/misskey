@@ -56,6 +56,7 @@ function createChatServiceHarness(overrides?: {
 	timelineMessages?: any[];
 	mutings?: any[];
 	queryMessagesImpl?: (sql: string, params: any[]) => any[];
+	messageDates?: Record<string, Date>;
 }) {
 	const rooms = overrides?.rooms ?? [];
 	const memberships = overrides?.memberships ?? [];
@@ -68,7 +69,7 @@ function createChatServiceHarness(overrides?: {
 	let idSeq = 1;
 	const idService = {
 		gen: vi.fn(() => `id_${String(idSeq++).padStart(4, '0')}`),
-		parse: vi.fn(() => ({ date: new Date('2026-11-21T00:00:00.000Z') })),
+		parse: vi.fn((id: string) => ({ date: overrides?.messageDates?.[id] ?? new Date('2026-11-21T00:00:00.000Z') })),
 	};
 
 	const pipelineOps: any[] = [];
@@ -206,6 +207,7 @@ function createChatServiceHarness(overrides?: {
 
 	const usersRepository: any = {
 		findOneBy: vi.fn(async (where: any) => users.find(u => matchWhere(u, where)) ?? null),
+		findOneByOrFail: vi.fn(async (where: any) => users.find(u => matchWhere(u, where)) ?? { id: where.id, host: null }),
 		createQueryBuilder: vi.fn(() => ({
 			select: () => ({
 				where: (_sql1: string, p1: { ids: string[] }) => ({
@@ -251,8 +253,22 @@ function createChatServiceHarness(overrides?: {
 	};
 
 	const chatEntityService = {
-		packMessageLiteForRoom: vi.fn(async (m: any) => ({ id: m.id, text: m.text, toRoomId: m.toRoomId, editedAt: m.editedAt?.toISOString() ?? null })),
-		packMessageLiteFor1on1: vi.fn(async (m: any) => ({ id: m.id, text: m.text, toUserId: m.toUserId, editedAt: m.editedAt?.toISOString() ?? null })),
+		packMessageLiteForRoom: vi.fn(async (m: any) => ({
+			id: m.id,
+			text: m.recalledAt ? null : m.text,
+			toRoomId: m.toRoomId,
+			fromUserId: m.fromUserId,
+			recalledAt: m.recalledAt?.toISOString() ?? null,
+			recalledById: m.recalledById ?? null,
+		})),
+		packMessageLiteFor1on1: vi.fn(async (m: any) => ({
+			id: m.id,
+			text: m.recalledAt ? null : m.text,
+			toUserId: m.toUserId,
+			fromUserId: m.fromUserId,
+			recalledAt: m.recalledAt?.toISOString() ?? null,
+			recalledById: m.recalledById ?? null,
+		})),
 		packMessageDetailed: vi.fn(async (m: any) => ({ id: m.id, text: m.text })),
 		packRoom: vi.fn(async (r: any) => ({ id: r.id, name: r.name, ownerId: r.ownerId, pinnedMessageId: r.pinnedMessageId ?? null })),
 		packRoomMembership: vi.fn(async () => ({ id: 'mem1' })),
@@ -365,7 +381,7 @@ describe('ChatService messaging, reply validation, archive & mentions', () => {
 		}
 	});
 
-	test('dispatches chatRoomMention to active non-muted members excluding sender and blockers', async () => {
+	test('dispatches chatRoomMention ONLY to active non-muted room members (non-members can be @mentioned for reference without alert)', async () => {
 		const room = { id: 'r1', ownerId: 'owner1', isArchived: false };
 		const { service, notificationService } = createChatServiceHarness({
 			rooms: [room],
@@ -379,6 +395,7 @@ describe('ChatService messaging, reply validation, archive & mentions', () => {
 				{ id: 'u2', usernameLower: 'alice' },
 				{ id: 'u3', usernameLower: 'muteduser' },
 				{ id: 'u4', usernameLower: 'blocker' },
+				{ id: 'u_outsider', usernameLower: 'outsider' },
 			],
 			blockedPairs: [['u4', 'owner1']],
 		});
@@ -386,7 +403,7 @@ describe('ChatService messaging, reply validation, archive & mentions', () => {
 		await service.createMessageToRoom(
 			{ id: 'owner1', host: null },
 			room as any,
-			{ text: 'Hello @alice @alice @muteduser @blocker @owner' },
+			{ text: 'Hello @alice @alice @muteduser @blocker @owner @outsider' },
 		);
 
 		expect(notificationService.createNotification).toHaveBeenCalledTimes(1);
@@ -398,22 +415,86 @@ describe('ChatService messaging, reply validation, archive & mentions', () => {
 		);
 	});
 
-	test('editMessage updates text/editedAt and publishes edited event', async () => {
-		const room = { id: 'r1', ownerId: 'owner1', isArchived: false };
-		const msg = { id: 'msg1', fromUserId: 'u2', toRoomId: 'r1', toUserId: null, text: 'old', editedAt: null };
+	test('recallMessage enforces 2-minute window for 1on1 DMs and clears content while keeping recall notice', async () => {
+		const now = Date.now();
+		const msgRecent = { id: 'dm_recent', fromUserId: 'u1', toUserId: 'u2', toRoomId: null, text: 'secret', fileId: 'f1', reactions: ['u2/👍'], replyId: 'r0', recalledAt: null, recalledById: null };
+		const msgOld = { id: 'dm_old', fromUserId: 'u1', toUserId: 'u2', toRoomId: null, text: 'old', fileId: null, reactions: [], replyId: null, recalledAt: null, recalledById: null };
 		const { service, globalEventService } = createChatServiceHarness({
-			rooms: [room],
-			memberships: [{ id: 'm2', roomId: 'r1', userId: 'u2', isMuted: false, suspendedUntil: null, role: 'member' }],
-			messages: [msg],
+			messages: [msgRecent, msgOld],
+			users: [{ id: 'u1', host: null }, { id: 'u2', host: null }],
+			messageDates: {
+				dm_recent: new Date(now - 30_000),
+				dm_old: new Date(now - 180_000),
+			},
 		});
 
-		const updated = await service.editMessage('u2', 'msg1', '  new text  ');
-		expect(updated.text).toBe('new text');
-		expect(updated.editedAt).toBeInstanceOf(Date);
-		expect(globalEventService.publishChatRoomStream).toHaveBeenCalledWith('r1', 'edited', expect.objectContaining({
-			id: 'msg1',
-			text: 'new text',
+		await expect(service.recallMessage('u2', 'dm_recent')).rejects.toThrow('no such message');
+		await expect(service.recallMessage('u1', 'dm_old')).rejects.toThrow('recall time expired');
+
+		const recalled = await service.recallMessage('u1', 'dm_recent');
+		expect(recalled.text).toBeNull();
+		expect(recalled.fileId).toBeNull();
+		expect(recalled.reactions).toEqual([]);
+		expect(recalled.replyId).toBeNull();
+		expect(recalled.recalledAt).toBeInstanceOf(Date);
+		expect(recalled.recalledById).toBe('u1');
+		expect(globalEventService.publishChatUserStream).toHaveBeenCalledWith('u1', 'u2', 'recalled', expect.objectContaining({
+			id: 'dm_recent',
+			recalledById: 'u1',
 		}));
+		expect(globalEventService.publishChatUserStream).toHaveBeenCalledWith('u2', 'u1', 'recalled', expect.objectContaining({
+			id: 'dm_recent',
+			recalledById: 'u1',
+		}));
+	});
+
+	test('recallMessage in rooms allows member self-recall <=2m, admin/owner group-recall at any time, and keeps self-recall attribution', async () => {
+		const now = Date.now();
+		const room = { id: 'r1', ownerId: 'owner1', isArchived: false, pinnedMessageId: 'm_member_old' };
+		const msgMemberRecent = { id: 'm_member_recent', fromUserId: 'u2', toRoomId: 'r1', toUserId: null, text: 'hi', reactions: [], recalledAt: null, recalledById: null };
+		const msgMemberOld = { id: 'm_member_old', fromUserId: 'u2', toRoomId: 'r1', toUserId: null, text: 'pinned', reactions: [], recalledAt: null, recalledById: null };
+		const msgAdminOld = { id: 'm_admin_old', fromUserId: 'admin1', toRoomId: 'r1', toUserId: null, text: 'admin msg', reactions: [], recalledAt: null, recalledById: null };
+		const msgOwnerOld = { id: 'm_owner_old', fromUserId: 'owner1', toRoomId: 'r1', toUserId: null, text: 'owner msg', reactions: [], recalledAt: null, recalledById: null };
+
+		const { service, rooms, globalEventService } = createChatServiceHarness({
+			rooms: [room],
+			memberships: [
+				{ id: 'mem_admin', roomId: 'r1', userId: 'admin1', isMuted: false, suspendedUntil: null, role: 'admin' },
+				{ id: 'mem_member', roomId: 'r1', userId: 'u2', isMuted: false, suspendedUntil: null, role: 'member' },
+			],
+			messages: [msgMemberRecent, msgMemberOld, msgAdminOld, msgOwnerOld],
+			messageDates: {
+				m_member_recent: new Date(now - 30_000),
+				m_member_old: new Date(now - 300_000),
+				m_admin_old: new Date(now - 300_000),
+				m_owner_old: new Date(now - 300_000),
+			},
+		});
+
+		// Member cannot recall own message after 2m, nor another user's message
+		await expect(service.recallMessage('u2', 'm_member_old')).rejects.toThrow('recall time expired');
+		await expect(service.recallMessage('u2', 'm_admin_old')).rejects.toThrow('no such message');
+
+		// Admin cannot recall owner's message, CAN recall own >2m (self attribution) and member's >2m (admin attribution)
+		await expect(service.recallMessage('admin1', 'm_owner_old')).rejects.toThrow('no such message');
+
+		const adminSelf = await service.recallMessage('admin1', 'm_admin_old');
+		expect(adminSelf.recalledById).toBe('admin1');
+		expect(adminSelf.fromUserId).toBe('admin1');
+
+		const adminGroupRecall = await service.recallMessage('admin1', 'm_member_old');
+		expect(adminGroupRecall.recalledById).toBe('admin1');
+		expect(adminGroupRecall.fromUserId).toBe('u2');
+		expect(rooms[0].pinnedMessageId).toBeNull();
+		expect(globalEventService.publishChatRoomStream).toHaveBeenCalledWith('r1', 'pinnedMessageUpdated', expect.objectContaining({ pinnedMessageId: null }));
+
+		// Owner can recall own >2m too
+		const ownerSelf = await service.recallMessage('owner1', 'm_owner_old');
+		expect(ownerSelf.recalledById).toBe('owner1');
+
+		// Member can recall own <=2m
+		const memberSelf = await service.recallMessage('u2', 'm_member_recent');
+		expect(memberSelf.recalledById).toBe('u2');
 	});
 });
 

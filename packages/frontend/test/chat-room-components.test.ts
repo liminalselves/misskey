@@ -6,8 +6,8 @@
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import { cleanup, fireEvent, render } from '@testing-library/vue';
 import type * as Misskey from 'misskey-js';
-import { groupMessageReactions } from '@/pages/chat/XMessage.vue';
-import { extractMentionQuery, filterRoomMentionCandidates } from '@/pages/chat/room.form.vue';
+import { formatRecallNoticeText, groupMessageReactions, resolveRecallAction } from '@/pages/chat/XMessage.vue';
+import { extractMentionQuery, filterRoomMentionCandidates, mergeRoomMentionSuggestions } from '@/pages/chat/room.form.vue';
 import { splitHighlightParts } from '@/pages/chat/room.search.vue';
 import { applyOwnerTransferred, mergeLocalRoomUpdate, mergeSharedRoomMetadata } from '@/pages/chat/room.vue';
 import XRoom from '@/pages/chat/XRoom.vue';
@@ -36,19 +36,24 @@ vi.mock('@/i18n.js', () => ({
 				mutedBadge: 'Muted',
 				reply: 'Reply',
 				mention: '@Mention',
-				editMessage: 'Edit',
-				edited: 'Edited',
+				recall: 'Recall',
+				groupRecall: 'Group recall',
+				recallConfirm: 'Recall?',
+				groupRecallConfirm: 'Group recall?',
+				recalled: 'Recalled',
 				pinMessage: 'Pin',
 				unpinMessage: 'Unpin',
 				pinnedMessage: 'Pinned',
 				copyText: 'Copy text',
 				attachmentPlaceholder: '[Attachment]',
-				deletedMessage: '(Original message deleted)',
+				recalledMessagePlaceholder: '(Original message recalled)',
 			},
 		},
 		tsx: {
 			_chat: {
 				memberCount: ({ count }: { count: number }) => `${count} members`,
+				recalledMessageNotice: ({ user }: { user: string }) => `${user} recalled a message`,
+				groupRecalledMessageNotice: ({ actor, target }: { actor: string; target: string }) => `${actor} recalled ${target}'s message`,
 			},
 		},
 	},
@@ -412,7 +417,7 @@ describe('Chat room components', () => {
 		expect(container.textContent).toContain('Group chat description');
 	});
 
-	test('XMessage renders grouped reactions as <button>s, edited indicator, and deleted reply placeholder', () => {
+	test('XMessage renders grouped reactions as <button>s and recalled reply placeholder (no edit indicator)', () => {
 		const sender = makeUser('u2', 'bob', 'Bob');
 		const me = makeUser('me1', 'me', 'Me');
 
@@ -422,11 +427,10 @@ describe('Chat room components', () => {
 				message: {
 					id: 'm1',
 					createdAt: '2026-11-21T00:00:00Z',
-					editedAt: '2026-11-21T00:05:00Z',
 					fromUserId: 'u2',
 					fromUser: sender,
 					toRoomId: 'room1',
-					text: 'Updated message',
+					text: 'Message body',
 					replyId: 'm0',
 					reply: null,
 					reactions: [
@@ -438,12 +442,117 @@ describe('Chat room components', () => {
 			global: globalStubs,
 		});
 
-		expect(container.textContent).toContain('(Original message deleted)');
-		expect(container.textContent).toContain('(Edited)');
+		expect(container.textContent).toContain('(Original message recalled)');
+		expect(container.textContent).not.toContain('(Edited)');
 		const reactionButtons = container.querySelectorAll('button[aria-pressed]');
 		expect(reactionButtons).toHaveLength(1);
 		expect(reactionButtons[0].getAttribute('aria-pressed')).toBe('true');
 		expect(reactionButtons[0].textContent).toContain('2');
+	});
+
+	test('XMessage renders self-recall and group-recall notices correctly', () => {
+		const sender = makeUser('u2', 'bob', 'Bob');
+		const admin = makeUser('u3', 'alice', 'Alice');
+
+		const selfRecalled = render(XMessage, {
+			props: {
+				roomOwnerId: 'u3',
+				message: {
+					id: 'm1',
+					createdAt: '2026-11-21T00:00:00Z',
+					recalledAt: '2026-11-21T00:05:00Z',
+					recalledById: 'u3',
+					recalledBy: admin,
+					fromUserId: 'u3',
+					fromUser: admin,
+					toRoomId: 'room1',
+					text: null,
+					reactions: [],
+				},
+			},
+			global: globalStubs,
+		});
+		expect(selfRecalled.container.textContent).toBe('Alice recalled a message');
+
+		const groupRecalled = render(XMessage, {
+			props: {
+				roomOwnerId: 'u3',
+				message: {
+					id: 'm2',
+					createdAt: '2026-11-21T00:00:00Z',
+					recalledAt: '2026-11-21T00:05:00Z',
+					recalledById: 'u3',
+					recalledBy: admin,
+					fromUserId: 'u2',
+					fromUser: sender,
+					toRoomId: 'room1',
+					text: null,
+					reactions: [],
+				},
+			},
+			global: globalStubs,
+		});
+		expect(groupRecalled.container.textContent).toBe("Alice recalled Bob's message");
+	});
+
+	test('resolveRecallAction follows 2-minute DM/member rule and admin/owner group-recall rules', () => {
+		const baseTime = new Date('2026-11-21T10:00:00.000Z').getTime();
+		const within2m = baseTime + 60_000;
+		const after2m = baseTime + 150_000;
+		const createdAt = '2026-11-21T10:00:00.000Z';
+
+		// 1on1 DM
+		expect(resolveRecallAction({
+			createdAt, nowMs: within2m, isMe: true, isRoomMessage: false, isOwner: false, isAdmin: false,
+			isRoomArchived: false, isRoomSuspended: false, isTargetOwner: false, isTargetAdmin: false, chatAvailable: true,
+		})?.mode).toBe('self');
+		expect(resolveRecallAction({
+			createdAt, nowMs: after2m, isMe: true, isRoomMessage: false, isOwner: false, isAdmin: false,
+			isRoomArchived: false, isRoomSuspended: false, isTargetOwner: false, isTargetAdmin: false, chatAvailable: true,
+		})).toBeNull();
+
+		// Admin/Owner on own message: <=2m shows self 'Recall', >2m shows 'Group recall' (notice still self)
+		expect(resolveRecallAction({
+			createdAt, nowMs: within2m, isMe: true, isRoomMessage: true, isOwner: false, isAdmin: true,
+			isRoomArchived: false, isRoomSuspended: false, isTargetOwner: false, isTargetAdmin: false, chatAvailable: true,
+		})).toMatchObject({ mode: 'self', label: 'Recall' });
+		expect(resolveRecallAction({
+			createdAt, nowMs: after2m, isMe: true, isRoomMessage: true, isOwner: false, isAdmin: true,
+			isRoomArchived: false, isRoomSuspended: false, isTargetOwner: false, isTargetAdmin: false, chatAvailable: true,
+		})).toMatchObject({ mode: 'group', label: 'Group recall' });
+
+		// Admin on member vs owner/other admin
+		expect(resolveRecallAction({
+			createdAt, nowMs: after2m, isMe: false, isRoomMessage: true, isOwner: false, isAdmin: true,
+			isRoomArchived: false, isRoomSuspended: false, isTargetOwner: false, isTargetAdmin: false, chatAvailable: true,
+		})).toMatchObject({ mode: 'group', label: 'Group recall' });
+		expect(resolveRecallAction({
+			createdAt, nowMs: after2m, isMe: false, isRoomMessage: true, isOwner: false, isAdmin: true,
+			isRoomArchived: false, isRoomSuspended: false, isTargetOwner: true, isTargetAdmin: false, chatAvailable: true,
+		})).toBeNull();
+		expect(resolveRecallAction({
+			createdAt, nowMs: after2m, isMe: false, isRoomMessage: true, isOwner: true, isAdmin: false,
+			isRoomArchived: false, isRoomSuspended: false, isTargetOwner: false, isTargetAdmin: true, chatAvailable: true,
+		})).toMatchObject({ mode: 'group', label: 'Group recall' });
+
+		expect(formatRecallNoticeText({
+			fromUserId: 'u3',
+			fromUser: makeUser('u3', 'alice', 'Alice'),
+			recalledById: 'u3',
+			recalledBy: makeUser('u3', 'alice', 'Alice'),
+		})).toBe('Alice recalled a message');
+	});
+
+	test('mergeRoomMentionSuggestions prioritizes in-room members and keeps external users as non-notifying references', () => {
+		const me = makeUser('me1', 'me');
+		const alice = makeUser('u1', 'alice', 'Alice');
+		const outsider = makeUser('u2', 'alan', 'Alan External');
+
+		const merged = mergeRoomMentionSuggestions([me, alice], [], [alice, outsider], 'al', 'me1');
+		expect(merged).toEqual([
+			{ user: alice, inRoom: true },
+			{ user: outsider, inRoom: false },
+		]);
 	});
 
 	test('message.vue navigates to target room when clicking search-result room message', async () => {

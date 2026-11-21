@@ -7540,7 +7540,9 @@ export type components = {
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */
-            editedAt?: string | null;
+            recalledAt?: string | null;
+            recalledById?: string | null;
+            recalledBy?: components['schemas']['UserLite'] | null;
             fromUserId: string;
             fromUser: components['schemas']['UserLite'];
             toUserId?: string | null;
@@ -7570,7 +7572,9 @@ export type components = {
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */
-            editedAt?: string | null;
+            recalledAt?: string | null;
+            recalledById?: string | null;
+            recalledBy?: components['schemas']['UserLite'] | null;
             fromUserId: string;
             fromUser?: components['schemas']['UserLite'];
             toUserId?: string | null;
@@ -7596,7 +7600,9 @@ export type components = {
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */
-            editedAt?: string | null;
+            recalledAt?: string | null;
+            recalledById?: string | null;
+            recalledBy?: components['schemas']['UserLite'] | null;
             fromUserId: string;
             toUserId: string;
             text?: string | null;
@@ -7619,7 +7625,9 @@ export type components = {
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */
-            editedAt?: string | null;
+            recalledAt?: string | null;
+            recalledById?: string | null;
+            recalledBy?: components['schemas']['UserLite'] | null;
             fromUserId: string;
             fromUser: components['schemas']['UserLite'];
             toRoomId: string;

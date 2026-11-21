@@ -12,42 +12,26 @@ SPDX-License-Identifier: AGPL-3.0-only
 	<!-- 群内 @mention 自动补全浮层 -->
 	<div v-if="mentionOpen && mentionSuggestions.length > 0" :class="$style.mentionPopup" class="_popup _shadow" role="listbox">
 		<button
-			v-for="(candidate, idx) in mentionSuggestions"
-			:key="candidate.id"
+			v-for="(item, idx) in mentionSuggestions"
+			:key="item.user.id"
 			type="button"
 			role="option"
 			:aria-selected="idx === mentionSelectedIndex"
 			class="_button"
 			:class="[$style.mentionItem, { [$style.mentionItemSelected]: idx === mentionSelectedIndex }]"
-			@mousedown.prevent="selectMentionCandidate(candidate)"
+			@mousedown.prevent="selectMentionCandidate(item.user)"
 		>
-			<MkAvatar :user="candidate" :link="false" :class="$style.mentionAvatar"/>
-			<span :class="$style.mentionName"><MkUserName :user="candidate"/></span>
-			<span :class="$style.mentionAcct">@{{ formatUserAcct(candidate) }}</span>
-		</button>
-	</div>
-
-	<!-- 编辑消息提示条 -->
-	<div v-if="editingMessage" :class="$style.replyPreview">
-		<div :class="$style.replyBar"></div>
-		<div :class="$style.replyInfo">
-			<span :class="$style.replyLabel"><i class="ti ti-pencil"></i> {{ i18n.ts._chat.editMessage }}</span>
-			<span :class="$style.replyText">{{ editingMessage.text || i18n.ts._chat.attachmentPlaceholder }}</span>
-		</div>
-		<button
-			type="button"
-			class="_button"
-			:class="$style.replyCancelBtn"
-			:aria-label="i18n.ts._chat.cancelEdit"
-			:title="i18n.ts._chat.cancelEdit"
-			@click="cancelEdit"
-		>
-			<i class="ti ti-x"></i>
+			<MkAvatar :user="item.user" :link="false" :class="$style.mentionAvatar"/>
+			<span :class="$style.mentionName"><MkUserName :user="item.user"/></span>
+			<span :class="[$style.mentionBadge, item.inRoom ? $style.mentionBadgeInRoom : $style.mentionBadgeExternal]">
+				{{ item.inRoom ? i18n.ts._chat.mentionRoomMember : i18n.ts._chat.mentionExternalUser }}
+			</span>
+			<span :class="$style.mentionAcct">@{{ formatUserAcct(item.user) }}</span>
 		</button>
 	</div>
 
 	<!-- 引用预览条 -->
-	<div v-else-if="replyTo" :class="$style.replyPreview">
+	<div v-if="replyTo" :class="$style.replyPreview">
 		<div :class="$style.replyBar"></div>
 		<div :class="$style.replyInfo">
 			<span :class="$style.replyLabel">{{ i18n.ts._chat.reply }}</span>
@@ -66,7 +50,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 	</div>
 
 	<!-- 附件芯片 -->
-	<div v-if="file && !isEditing" :class="$style.fileWrap">
+	<div v-if="file" :class="$style.fileWrap">
 		<button
 			type="button"
 			class="_button"
@@ -102,7 +86,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 					type="button"
 					class="_button"
 					:class="$style.button"
-					:disabled="isFormDisabled || isEditing"
+					:disabled="isFormDisabled"
 					:aria-label="i18n.ts.attachFile"
 					:title="i18n.ts.attachFile"
 					@click="chooseFile"
@@ -129,12 +113,12 @@ SPDX-License-Identifier: AGPL-3.0-only
 					class="_button"
 					:class="[$style.button, $style.send]"
 					:disabled="!canSend || sending"
-					:aria-label="isEditing ? i18n.ts.save : i18n.ts._chat.send"
-					:title="isEditing ? i18n.ts.save : i18n.ts._chat.send"
+					:aria-label="i18n.ts._chat.send"
+					:title="i18n.ts._chat.send"
 					@click="send"
 				>
 					<template v-if="!sending">
-						<i :class="isEditing ? 'ti ti-check' : 'ti ti-send'"></i>
+						<i class="ti ti-send"></i>
 					</template>
 					<template v-else><MkLoading :em="true"/></template>
 				</button>
@@ -160,6 +144,37 @@ export function extractMentionQuery(text: string, caretPos: number): { start: nu
 		start: lineStartOffset + atIndexInLine,
 		query: match[2],
 	};
+}
+
+export type RoomMentionSuggestion = {
+	user: Misskey.entities.UserLite;
+	inRoom: boolean;
+};
+
+export function mergeRoomMentionSuggestions(
+	localRoomMembers: readonly Misskey.entities.UserLite[],
+	queriedRoomMembers: readonly Misskey.entities.UserLite[],
+	externalUsers: readonly Misskey.entities.UserLite[],
+	query: string,
+	myUserId: string,
+): RoomMentionSuggestion[] {
+	const localMatched = filterRoomMentionCandidates(localRoomMembers, query, myUserId);
+	const seen = new Set<string>(localMatched.map(u => u.id));
+	const suggestions: RoomMentionSuggestion[] = localMatched.map(user => ({ user, inRoom: true }));
+
+	for (const user of queriedRoomMembers) {
+		if (!user || user.id === myUserId || seen.has(user.id)) continue;
+		seen.add(user.id);
+		suggestions.push({ user, inRoom: true });
+	}
+
+	for (const user of externalUsers) {
+		if (!user || user.id === myUserId || seen.has(user.id)) continue;
+		seen.add(user.id);
+		suggestions.push({ user, inRoom: false });
+	}
+
+	return suggestions.slice(0, 12);
 }
 
 export function filterRoomMentionCandidates(
@@ -211,16 +226,13 @@ const props = defineProps<{
 	user?: Misskey.entities.UserDetailed | null;
 	room?: Misskey.entities.ChatRoom | null;
 	replyTo?: { id: string; text?: string | null } | null;
-	editingMessage?: { id: string; text?: string | null } | null;
 	roomMembers?: Misskey.entities.UserLite[];
 	isSuspended?: boolean;
 }>();
 
 const emit = defineEmits<{
 	(e: 'cancelReply'): void;
-	(e: 'cancelEdit'): void;
 	(e: 'sent'): void;
-	(e: 'edited', message: Misskey.entities.ChatMessage): void;
 }>();
 
 const textareaEl = shallowRef<HTMLTextAreaElement>();
@@ -230,25 +242,23 @@ const file = ref<Misskey.entities.DriveFile | null>(null);
 const sending = ref(false);
 const textareaReadOnly = ref(false);
 let autocompleteInstance: Autocomplete | null = null;
-let draftBeforeEdit: string | null = null;
 
 // 群内 @mention 自动补全状态
 const mentionOpen = ref(false);
 const mentionQuery = ref('');
 const mentionStartIndex = ref(-1);
 const mentionSelectedIndex = ref(0);
-const remoteMentionCandidates = ref<Misskey.entities.UserLite[]>([]);
+const queriedRoomMentionCandidates = ref<Misskey.entities.UserLite[]>([]);
+const externalMentionCandidates = ref<Misskey.entities.UserLite[]>([]);
 let mentionFetchSeq = 0;
 let mentionFetchTimer: number | null = null;
 
-const isEditing = computed(() => props.editingMessage != null);
 const isFormDisabled = computed(() => $i.policies.chatAvailability !== 'available' || Boolean(props.room?.isArchived) || Boolean(props.isSuspended));
 const textLength = computed(() => text.value.length);
 const isOverLimit = computed(() => textLength.value > MAX_MESSAGE_LENGTH);
 const canSend = computed(() => {
 	if (isFormDisabled.value || isOverLimit.value) return false;
 	const hasText = text.value.trim().length > 0;
-	if (isEditing.value) return hasText;
 	return hasText || file.value != null;
 });
 
@@ -260,19 +270,15 @@ const allLocalRoomMembers = computed<Misskey.entities.UserLite[]>(() => {
 	return list;
 });
 
-const mentionSuggestions = computed<Misskey.entities.UserLite[]>(() => {
+const mentionSuggestions = computed<RoomMentionSuggestion[]>(() => {
 	if (!props.room || !mentionOpen.value) return [];
-	const local = filterRoomMentionCandidates(allLocalRoomMembers.value, mentionQuery.value, $i.id);
-	if (remoteMentionCandidates.value.length === 0) return local;
-	const seen = new Set(local.map(u => u.id));
-	const merged = [...local];
-	for (const u of remoteMentionCandidates.value) {
-		if (u.id !== $i.id && !seen.has(u.id)) {
-			seen.add(u.id);
-			merged.push(u);
-		}
-	}
-	return merged.slice(0, 12);
+	return mergeRoomMentionSuggestions(
+		allLocalRoomMembers.value,
+		queriedRoomMentionCandidates.value,
+		externalMentionCandidates.value,
+		mentionQuery.value,
+		$i.id,
+	);
 });
 
 function formatUserAcct(user: Misskey.entities.UserLite): string {
@@ -325,7 +331,8 @@ function closeMentionPopup() {
 	mentionQuery.value = '';
 	mentionStartIndex.value = -1;
 	mentionSelectedIndex.value = 0;
-	remoteMentionCandidates.value = [];
+	queriedRoomMentionCandidates.value = [];
+	externalMentionCandidates.value = [];
 	if (mentionFetchTimer != null) {
 		window.clearTimeout(mentionFetchTimer);
 		mentionFetchTimer = null;
@@ -349,42 +356,39 @@ function updateRoomMentionState() {
 	mentionQuery.value = extracted.query;
 	mentionSelectedIndex.value = 0;
 
-	const localMatches = filterRoomMentionCandidates(allLocalRoomMembers.value, extracted.query, $i.id);
 	if (mentionFetchTimer != null) {
 		window.clearTimeout(mentionFetchTimer);
 		mentionFetchTimer = null;
 	}
-	if (extracted.query.length > 0 && localMatches.length === 0) {
+	if (extracted.query.length > 0) {
 		const seq = ++mentionFetchSeq;
 		const q = extracted.query;
 		const roomId = props.room.id;
 		mentionFetchTimer = window.setTimeout(async () => {
 			try {
-				const members = await (misskeyApi as unknown as (ep: string, data: Record<string, unknown>) => Promise<Misskey.entities.ChatRoomMembership[]>)(
-					'chat/rooms/members',
-					{ roomId, query: q, limit: 10 },
-				);
-				if (seq !== mentionFetchSeq) return;
-				const matchedUsers = members.map(m => m.user).filter((u): u is Misskey.entities.UserLite => u != null);
-				if (matchedUsers.length > 0) {
-					remoteMentionCandidates.value = matchedUsers;
-					return;
-				}
 				const [username, host] = q.split('@');
-				const fallbackUsers = await misskeyApi('users/search-by-username-and-host', {
-					username,
-					host,
-					limit: 8,
-					detail: false,
-				});
+				const [members, externalUsers] = await Promise.all([
+					(misskeyApi as unknown as (ep: string, data: Record<string, unknown>) => Promise<Misskey.entities.ChatRoomMembership[]>)(
+						'chat/rooms/members',
+						{ roomId, query: q, limit: 10 },
+					).catch(() => []),
+					misskeyApi('users/search-by-username-and-host', {
+						username,
+						host,
+						limit: 8,
+						detail: false,
+					}).catch(() => []),
+				]);
 				if (seq !== mentionFetchSeq) return;
-				remoteMentionCandidates.value = fallbackUsers;
+				queriedRoomMentionCandidates.value = members.map(m => m.user).filter((u): u is Misskey.entities.UserLite => u != null);
+				externalMentionCandidates.value = externalUsers;
 			} catch {
 				// 自动补全回退失败静默忽略
 			}
 		}, 180);
 	} else {
-		remoteMentionCandidates.value = [];
+		queriedRoomMentionCandidates.value = [];
+		externalMentionCandidates.value = [];
 	}
 }
 
@@ -423,10 +427,6 @@ function cancelReply() {
 	emit('cancelReply');
 }
 
-function cancelEdit() {
-	emit('cancelEdit');
-}
-
 function getDraftKey() {
 	return props.user ? 'user:' + props.user.id : 'room:' + props.room?.id;
 }
@@ -463,44 +463,18 @@ function restoreDraft() {
 }
 
 watch([text, file], () => {
-	if (!isEditing.value) {
-		saveDraft();
-	}
+	saveDraft();
 	void nextTick(() => adjustTextareaHeight());
-});
-
-watch(() => props.editingMessage, (nextEdit, prevEdit) => {
-	if (nextEdit != null) {
-		if (prevEdit == null) {
-			draftBeforeEdit = text.value;
-		}
-		text.value = nextEdit.text ?? '';
-		closeMentionPopup();
-		void nextTick(() => {
-			textareaEl.value?.focus();
-			adjustTextareaHeight();
-		});
-	} else if (prevEdit != null) {
-		if (draftBeforeEdit != null) {
-			text.value = draftBeforeEdit;
-			draftBeforeEdit = null;
-		} else {
-			restoreDraft();
-		}
-		void nextTick(() => adjustTextareaHeight());
-	}
 });
 
 watch(() => [props.user?.id, props.room?.id], () => {
 	closeMentionPopup();
 	setupAutocomplete();
-	if (!isEditing.value) {
-		restoreDraft();
-	}
+	restoreDraft();
 });
 
 async function onPaste(ev: ClipboardEvent) {
-	if (isFormDisabled.value || isEditing.value) return;
+	if (isFormDisabled.value) return;
 	if (!ev.clipboardData) return;
 
 	const pastedFileName = 'yyyy-MM-dd HH-mm-ss [{{number}}]';
@@ -530,7 +504,7 @@ async function onPaste(ev: ClipboardEvent) {
 }
 
 function onDragover(ev: DragEvent) {
-	if (isFormDisabled.value || isEditing.value) return;
+	if (isFormDisabled.value) return;
 	if (!ev.dataTransfer) return;
 
 	const isFile = ev.dataTransfer.items.length > 0 && ev.dataTransfer.items[0].kind === 'file';
@@ -556,7 +530,7 @@ function onDragover(ev: DragEvent) {
 }
 
 function onDrop(ev: DragEvent): void {
-	if (isFormDisabled.value || isEditing.value) return;
+	if (isFormDisabled.value) return;
 	if (!ev.dataTransfer) return;
 
 	// ファイルだったら
@@ -604,7 +578,7 @@ function onKeydown(ev: KeyboardEvent) {
 		}
 		if (ev.key === 'Enter' || ev.key === 'Tab') {
 			ev.preventDefault();
-			selectMentionCandidate(mentionSuggestions.value[mentionSelectedIndex.value]);
+			selectMentionCandidate(mentionSuggestions.value[mentionSelectedIndex.value].user);
 			return;
 		}
 		if (ev.key === 'Escape') {
@@ -628,7 +602,7 @@ function onKeydown(ev: KeyboardEvent) {
 }
 
 function chooseFile(ev: PointerEvent) {
-	if (isFormDisabled.value || isEditing.value) return;
+	if (isFormDisabled.value) return;
 	selectFile({
 		anchorElement: ev.currentTarget ?? ev.target,
 		multiple: false,
@@ -647,20 +621,6 @@ async function send() {
 	closeMentionPopup();
 
 	try {
-		if (isEditing.value && props.editingMessage) {
-			const edited = await (misskeyApi as unknown as (ep: string, data: Record<string, unknown>) => Promise<Misskey.entities.ChatMessage>)(
-				'chat/messages/edit',
-				{
-					messageId: props.editingMessage.id,
-					text: text.value.trim(),
-				},
-			);
-			draftBeforeEdit = null;
-			text.value = '';
-			emit('edited', edited);
-			return;
-		}
-
 		if (props.user) {
 			try {
 				await misskeyApi('chat/messages/create-to-user', {
@@ -797,9 +757,7 @@ function setupAutocomplete() {
 
 onMounted(() => {
 	setupAutocomplete();
-	if (!isEditing.value) {
-		restoreDraft();
-	}
+	restoreDraft();
 });
 
 onBeforeUnmount(() => {
@@ -860,6 +818,24 @@ onBeforeUnmount(() => {
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
+}
+
+.mentionBadge {
+	font-size: 0.75em;
+	padding: 1px 6px;
+	border-radius: 999px;
+	white-space: nowrap;
+	flex-shrink: 0;
+}
+
+.mentionBadgeInRoom {
+	background: color-mix(in srgb, var(--MI_THEME-accent) 15%, transparent);
+	color: var(--MI_THEME-accent);
+}
+
+.mentionBadgeExternal {
+	background: var(--MI_THEME-divider);
+	color: var(--MI_THEME-fgTransparentWeak);
 }
 
 .mentionAcct {
