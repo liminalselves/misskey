@@ -2099,6 +2099,9 @@ type ChatReadRequest = operations['chat___read']['requestBody']['content']['appl
 type ChatRoom = components['schemas']['ChatRoom'];
 
 // @public (undocumented)
+type ChatRoomBan = components['schemas']['ChatRoomBan'];
+
+// @public (undocumented)
 type ChatRoomInvitation = components['schemas']['ChatRoomInvitation'];
 
 // @public (undocumented)
@@ -3581,7 +3584,8 @@ declare namespace entities {
         ChatMessageLiteForRoom,
         ChatRoom,
         ChatRoomInvitation,
-        ChatRoomMembership
+        ChatRoomMembership,
+        ChatRoomBan
     }
 }
 export { entities }
@@ -4466,7 +4470,7 @@ type Notification_2 = components['schemas']['Notification'];
 type NotificationsCreateRequest = operations['notifications___create']['requestBody']['content']['application/json'];
 
 // @public (undocumented)
-export const notificationTypes: readonly ["note", "follow", "mention", "reply", "renote", "quote", "reaction", "pollEnded", "scheduledNotePosted", "scheduledNotePostFailed", "receiveFollowRequest", "followRequestAccepted", "app", "roleAssigned", "chatRoomInvitationReceived", "chatRoomMemberJoined", "chatRoomKicked", "chatRoomSuspended", "chatRoomUnsuspended", "achievementEarned", "exportCompleted", "test", "login", "createToken", "agentReviewApproved", "agentReviewRejected", "agentModelReportResolved", "agentCharacterBanned", "agentSessionBanned", "agentProactiveMessage"];
+export const notificationTypes: readonly ["note", "follow", "mention", "reply", "renote", "quote", "reaction", "pollEnded", "scheduledNotePosted", "scheduledNotePostFailed", "receiveFollowRequest", "followRequestAccepted", "app", "roleAssigned", "chatRoomInvitationReceived", "chatRoomMemberJoined", "chatRoomKicked", "chatRoomSuspended", "chatRoomUnsuspended", "chatRoomMention", "achievementEarned", "exportCompleted", "test", "login", "createToken", "agentReviewApproved", "agentReviewRejected", "agentModelReportResolved", "agentCharacterBanned", "agentSessionBanned", "agentProactiveMessage"];
 
 // @public (undocumented)
 export function nyaize(text: string): string;

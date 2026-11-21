@@ -6513,6 +6513,22 @@ export type components = {
             /** Format: date-time */
             createdAt: string;
             /** @enum {string} */
+            type: 'chatRoomMention';
+            isRead?: boolean;
+            /** Format: id */
+            userId: string;
+            user: components['schemas']['UserLite'];
+            /** Format: id */
+            chatRoomId: string;
+            chatRoom: components['schemas']['ChatRoom'];
+            /** Format: id */
+            messageId: string;
+        } | {
+            /** Format: id */
+            id: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** @enum {string} */
             type: 'achievementEarned';
             achievement: components['schemas']['AchievementName'];
         } | {
@@ -7478,6 +7494,8 @@ export type components = {
             id: string;
             /** Format: date-time */
             createdAt: string;
+            /** Format: date-time */
+            editedAt?: string | null;
             fromUserId: string;
             fromUser: components['schemas']['UserLite'];
             toUserId?: string | null;
@@ -7489,6 +7507,14 @@ export type components = {
             file?: components['schemas']['DriveFile'] | null;
             isRead?: boolean;
             unreadCount?: number | null;
+            replyId?: string | null;
+            reply?: {
+                id: string;
+                text: string | null;
+                fileId?: string | null;
+                fromUserId: string;
+                fromUser?: components['schemas']['UserLite'];
+            } | null;
             reactions: {
                 reaction: string;
                 user: components['schemas']['UserLite'];
@@ -7498,6 +7524,8 @@ export type components = {
             id: string;
             /** Format: date-time */
             createdAt: string;
+            /** Format: date-time */
+            editedAt?: string | null;
             fromUserId: string;
             fromUser?: components['schemas']['UserLite'];
             toUserId?: string | null;
@@ -7505,6 +7533,14 @@ export type components = {
             text?: string | null;
             fileId?: string | null;
             file?: components['schemas']['DriveFile'] | null;
+            replyId?: string | null;
+            reply?: {
+                id: string;
+                text?: string | null;
+                fileId?: string | null;
+                fromUserId: string;
+                fromUser?: components['schemas']['UserLite'];
+            } | null;
             reactions: {
                 reaction: string;
                 user?: components['schemas']['UserLite'] | null;
@@ -7514,6 +7550,8 @@ export type components = {
             id: string;
             /** Format: date-time */
             createdAt: string;
+            /** Format: date-time */
+            editedAt?: string | null;
             fromUserId: string;
             toUserId: string;
             text?: string | null;
@@ -7526,6 +7564,7 @@ export type components = {
             reply?: {
                 id: string;
                 text?: string | null;
+                fileId?: string | null;
                 fromUserId: string;
                 fromUser: components['schemas']['UserLite'];
             } | null;
@@ -7534,6 +7573,8 @@ export type components = {
             id: string;
             /** Format: date-time */
             createdAt: string;
+            /** Format: date-time */
+            editedAt?: string | null;
             fromUserId: string;
             fromUser: components['schemas']['UserLite'];
             toRoomId: string;
@@ -7548,6 +7589,7 @@ export type components = {
             reply?: {
                 id: string;
                 text?: string | null;
+                fileId?: string | null;
                 fromUserId: string;
                 fromUser: components['schemas']['UserLite'];
             } | null;
@@ -7565,6 +7607,16 @@ export type components = {
             isMember: boolean;
             isMuted?: boolean;
             invitationExists?: boolean;
+            allowMemberInvite?: boolean;
+            announcement?: string | null;
+            pinnedMessageId?: string | null;
+            pinnedMessage?: components['schemas']['ChatMessage'] | null;
+            isArchived?: boolean;
+            myRole?: 'owner' | 'admin' | 'member' | null;
+            isBanned?: boolean;
+            banReason?: string | null;
+            memberCount?: number;
+            unreadCount?: number;
         };
         ChatRoomInvitation: {
             id: string;
@@ -7585,6 +7637,18 @@ export type components = {
             room?: components['schemas']['ChatRoom'];
             /** Format: date-time */
             suspendedUntil: string | null;
+            role?: 'member' | 'admin';
+        };
+        ChatRoomBan: {
+            id: string;
+            /** Format: date-time */
+            createdAt: string;
+            roomId: string;
+            userId: string;
+            user?: components['schemas']['UserLite'];
+            bannedById: string | null;
+            bannedBy?: components['schemas']['UserLite'] | null;
+            reason: string | null;
         };
     };
     responses: never;
@@ -44745,8 +44809,8 @@ export interface operations {
                     untilDate?: number;
                     /** @default true */
                     markAsRead?: boolean;
-                    includeTypes?: ('note' | 'follow' | 'mention' | 'reply' | 'renote' | 'quote' | 'reaction' | 'pollEnded' | 'scheduledNotePosted' | 'scheduledNotePostFailed' | 'receiveFollowRequest' | 'followRequestAccepted' | 'roleAssigned' | 'chatRoomInvitationReceived' | 'achievementEarned' | 'exportCompleted' | 'login' | 'createToken' | 'app' | 'test' | 'agentReviewApproved' | 'agentReviewRejected' | 'agentModelReportResolved' | 'agentCharacterBanned' | 'agentSessionBanned' | 'agentProactiveMessage' | 'pollVote' | 'groupInvited')[];
-                    excludeTypes?: ('note' | 'follow' | 'mention' | 'reply' | 'renote' | 'quote' | 'reaction' | 'pollEnded' | 'scheduledNotePosted' | 'scheduledNotePostFailed' | 'receiveFollowRequest' | 'followRequestAccepted' | 'roleAssigned' | 'chatRoomInvitationReceived' | 'achievementEarned' | 'exportCompleted' | 'login' | 'createToken' | 'app' | 'test' | 'agentReviewApproved' | 'agentReviewRejected' | 'agentModelReportResolved' | 'agentCharacterBanned' | 'agentSessionBanned' | 'agentProactiveMessage' | 'pollVote' | 'groupInvited')[];
+                    includeTypes?: ('note' | 'follow' | 'mention' | 'reply' | 'renote' | 'quote' | 'reaction' | 'pollEnded' | 'scheduledNotePosted' | 'scheduledNotePostFailed' | 'receiveFollowRequest' | 'followRequestAccepted' | 'roleAssigned' | 'chatRoomInvitationReceived' | 'chatRoomMemberJoined' | 'chatRoomKicked' | 'chatRoomSuspended' | 'chatRoomUnsuspended' | 'chatRoomMention' | 'achievementEarned' | 'exportCompleted' | 'login' | 'createToken' | 'app' | 'test' | 'agentReviewApproved' | 'agentReviewRejected' | 'agentModelReportResolved' | 'agentCharacterBanned' | 'agentSessionBanned' | 'agentProactiveMessage' | 'pollVote' | 'groupInvited')[];
+                    excludeTypes?: ('note' | 'follow' | 'mention' | 'reply' | 'renote' | 'quote' | 'reaction' | 'pollEnded' | 'scheduledNotePosted' | 'scheduledNotePostFailed' | 'receiveFollowRequest' | 'followRequestAccepted' | 'roleAssigned' | 'chatRoomInvitationReceived' | 'chatRoomMemberJoined' | 'chatRoomKicked' | 'chatRoomSuspended' | 'chatRoomUnsuspended' | 'chatRoomMention' | 'achievementEarned' | 'exportCompleted' | 'login' | 'createToken' | 'app' | 'test' | 'agentReviewApproved' | 'agentReviewRejected' | 'agentModelReportResolved' | 'agentCharacterBanned' | 'agentSessionBanned' | 'agentProactiveMessage' | 'pollVote' | 'groupInvited')[];
                 };
             };
         };
@@ -44830,8 +44894,8 @@ export interface operations {
                     untilDate?: number;
                     /** @default true */
                     markAsRead?: boolean;
-                    includeTypes?: ('note' | 'follow' | 'mention' | 'reply' | 'renote' | 'quote' | 'reaction' | 'pollEnded' | 'scheduledNotePosted' | 'scheduledNotePostFailed' | 'receiveFollowRequest' | 'followRequestAccepted' | 'roleAssigned' | 'chatRoomInvitationReceived' | 'achievementEarned' | 'exportCompleted' | 'login' | 'createToken' | 'app' | 'test' | 'agentReviewApproved' | 'agentReviewRejected' | 'agentModelReportResolved' | 'agentCharacterBanned' | 'agentSessionBanned' | 'agentProactiveMessage' | 'pollVote' | 'groupInvited')[];
-                    excludeTypes?: ('note' | 'follow' | 'mention' | 'reply' | 'renote' | 'quote' | 'reaction' | 'pollEnded' | 'scheduledNotePosted' | 'scheduledNotePostFailed' | 'receiveFollowRequest' | 'followRequestAccepted' | 'roleAssigned' | 'chatRoomInvitationReceived' | 'achievementEarned' | 'exportCompleted' | 'login' | 'createToken' | 'app' | 'test' | 'agentReviewApproved' | 'agentReviewRejected' | 'agentModelReportResolved' | 'agentCharacterBanned' | 'agentSessionBanned' | 'agentProactiveMessage' | 'pollVote' | 'groupInvited')[];
+                    includeTypes?: ('note' | 'follow' | 'mention' | 'reply' | 'renote' | 'quote' | 'reaction' | 'pollEnded' | 'scheduledNotePosted' | 'scheduledNotePostFailed' | 'receiveFollowRequest' | 'followRequestAccepted' | 'roleAssigned' | 'chatRoomInvitationReceived' | 'chatRoomMemberJoined' | 'chatRoomKicked' | 'chatRoomSuspended' | 'chatRoomUnsuspended' | 'chatRoomMention' | 'achievementEarned' | 'exportCompleted' | 'login' | 'createToken' | 'app' | 'test' | 'agentReviewApproved' | 'agentReviewRejected' | 'agentModelReportResolved' | 'agentCharacterBanned' | 'agentSessionBanned' | 'agentProactiveMessage' | 'pollVote' | 'groupInvited')[];
+                    excludeTypes?: ('note' | 'follow' | 'mention' | 'reply' | 'renote' | 'quote' | 'reaction' | 'pollEnded' | 'scheduledNotePosted' | 'scheduledNotePostFailed' | 'receiveFollowRequest' | 'followRequestAccepted' | 'roleAssigned' | 'chatRoomInvitationReceived' | 'chatRoomMemberJoined' | 'chatRoomKicked' | 'chatRoomSuspended' | 'chatRoomUnsuspended' | 'chatRoomMention' | 'achievementEarned' | 'exportCompleted' | 'login' | 'createToken' | 'app' | 'test' | 'agentReviewApproved' | 'agentReviewRejected' | 'agentModelReportResolved' | 'agentCharacterBanned' | 'agentSessionBanned' | 'agentProactiveMessage' | 'pollVote' | 'groupInvited')[];
                 };
             };
         };

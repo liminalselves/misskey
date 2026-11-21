@@ -6578,7 +6578,7 @@ export interface Locale extends ILocale {
          */
         "kick": string;
         /**
-         * {name}をルームからキックしますか？
+         * {name}をグループからキックしますか？
          */
         "kickConfirm": ParameterizedString<"name">;
         /**
@@ -6616,9 +6616,269 @@ export interface Locale extends ILocale {
             "permanent": string;
         };
         /**
-         * ルームを検索
+         * グループを検索
          */
         "searchRoom": string;
+        /**
+         * オーナー
+         */
+        "owner": string;
+        /**
+         * 管理者
+         */
+        "admin": string;
+        /**
+         * メンバー
+         */
+        "member": string;
+        /**
+         * 管理者に設定
+         */
+        "setAdmin": string;
+        /**
+         * 管理者を解除
+         */
+        "removeAdmin": string;
+        /**
+         * オーナーを譲渡
+         */
+        "transferOwnership": string;
+        /**
+         * {name} にオーナーを譲渡しますか？譲渡後、あなたは一般メンバーになります。
+         */
+        "transferOwnershipConfirm": ParameterizedString<"name">;
+        /**
+         * お知らせ
+         */
+        "announcement": string;
+        /**
+         * グループのお知らせを入力（最大2048文字）...
+         */
+        "announcementPlaceholder": string;
+        /**
+         * ピン留めメッセージ
+         */
+        "pinnedMessage": string;
+        /**
+         * メッセージをピン留め
+         */
+        "pinMessage": string;
+        /**
+         * ピン留めを解除
+         */
+        "unpinMessage": string;
+        /**
+         * 編集
+         */
+        "editMessage": string;
+        /**
+         * 編集済み
+         */
+        "edited": string;
+        /**
+         * 編集をキャンセル
+         */
+        "cancelEdit": string;
+        /**
+         * テキストをコピー
+         */
+        "copyText": string;
+        /**
+         * 返信
+         */
+        "reply": string;
+        /**
+         * 引用
+         */
+        "quote": string;
+        /**
+         * [添付ファイル]
+         */
+        "attachmentPlaceholder": string;
+        /**
+         * (元のメッセージは削除されました)
+         */
+        "deletedMessage": string;
+        /**
+         * {count} 件の未読メッセージを見る
+         */
+        "unreadCountBanner": ParameterizedString<"count">;
+        /**
+         * ここから未読メッセージ
+         */
+        "newMessagesDivider": string;
+        /**
+         * 一番下へ
+         */
+        "scrollToBottom": string;
+        /**
+         * 公開すると、他のユーザーがこのグループを検索して参加できるようになります。
+         */
+        "publicRoomHint": string;
+        /**
+         * メンバーによる招待を許可
+         */
+        "allowMemberInvite": string;
+        /**
+         * 有効にすると、オーナーや管理者以外のメンバーも他のユーザーを招待できます。
+         */
+        "allowMemberInviteHint": string;
+        /**
+         * グループをアーカイブ
+         */
+        "archiveRoom": string;
+        /**
+         * アーカイブを解除
+         */
+        "unarchiveRoom": string;
+        /**
+         * このグループはアーカイブされており、閲覧のみ可能です。
+         */
+        "archivedBanner": string;
+        /**
+         * {until} まで発言・リアクションが制限されています。
+         */
+        "suspendedBanner": ParameterizedString<"until">;
+        /**
+         * 無期限で発言・リアクションが制限されています。
+         */
+        "suspendedBannerPermanent": string;
+        /**
+         * {until} まで制限中
+         */
+        "suspendedUntilLabel": ParameterizedString<"until">;
+        /**
+         * 無期限制限
+         */
+        "suspendedPermanentLabel": string;
+        /**
+         * 招待を取り消す
+         */
+        "cancelInvitation": string;
+        /**
+         * {name} への招待を取り消しますか？
+         */
+        "cancelInvitationConfirm": ParameterizedString<"name">;
+        /**
+         * BANする
+         */
+        "ban": string;
+        /**
+         * BANを解除
+         */
+        "unban": string;
+        /**
+         * {name} をBANしますか？グループから除外され、再参加できなくなります。
+         */
+        "banConfirm": ParameterizedString<"name">;
+        /**
+         * {name} のBANを解除しますか？
+         */
+        "unbanConfirm": ParameterizedString<"name">;
+        /**
+         * BANリスト
+         */
+        "bannedUsers": string;
+        /**
+         * BANされたユーザーはいません
+         */
+        "noBannedUsers": string;
+        /**
+         * BANの理由（任意）
+         */
+        "banReason": string;
+        /**
+         * メンバーを検索...
+         */
+        "searchMembersPlaceholder": string;
+        /**
+         * グループ名や説明を検索...
+         */
+        "searchRoomPlaceholder": string;
+        /**
+         * メッセージを検索...
+         */
+        "searchMessagesPlaceholder": string;
+        /**
+         * 送信者で絞り込む
+         */
+        "filterBySender": string;
+        /**
+         * すべての送信者
+         */
+        "allSenders": string;
+        /**
+         * グループを開く
+         */
+        "openRoom": string;
+        /**
+         * 参加中
+         */
+        "joinedBadge": string;
+        /**
+         * 公開
+         */
+        "publicBadge": string;
+        /**
+         * アーカイブ済み
+         */
+        "archivedBadge": string;
+        /**
+         * ミュート中
+         */
+        "mutedBadge": string;
+        /**
+         * {count} 人のメンバー
+         */
+        "memberCount": ParameterizedString<"count">;
+        /**
+         * すべて
+         */
+        "filterAll": string;
+        /**
+         * ダイレクト
+         */
+        "filterDirect": string;
+        /**
+         * グループ
+         */
+        "filterRooms": string;
+        /**
+         * グループ設定
+         */
+        "roomSettings": string;
+        /**
+         * グループアイコン
+         */
+        "roomAvatar": string;
+        /**
+         * グループ名を入力してください
+         */
+        "roomNameRequired": string;
+        /**
+         * 保存しました
+         */
+        "saved": string;
+        /**
+         * 再試行
+         */
+        "retry": string;
+        /**
+         * さらに読み込む
+         */
+        "loadMore": string;
+        /**
+         * メンション
+         */
+        "mention": string;
+        /**
+         * このグループは削除されました
+         */
+        "roomDeletedNotice": string;
+        /**
+         * このグループからキックされました
+         */
+        "kickedNotice": string;
     };
     "_emojiPalette": {
         /**
@@ -11644,21 +11904,25 @@ export interface Locale extends ILocale {
              */
             "chatRoomInvitationReceived": string;
             /**
-             * チャットルームにメンバーが参加した
+             * グループにメンバーが参加した
              */
             "chatRoomMemberJoined": string;
             /**
-             * チャットルームから削除された
+             * グループから削除された
              */
             "chatRoomKicked": string;
             /**
-             * チャットルームで一時的に利用停止になった
+             * グループで一時的に利用停止になった
              */
             "chatRoomSuspended": string;
             /**
-             * チャットルームの利用停止が解除された
+             * グループの利用停止が解除された
              */
             "chatRoomUnsuspended": string;
+            /**
+             * グループであなたにメンションしました
+             */
+            "chatRoomMention": string;
             /**
              * エージェント審査通過
              */
