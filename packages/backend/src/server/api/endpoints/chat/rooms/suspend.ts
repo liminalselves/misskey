@@ -52,7 +52,8 @@ export const paramDef = {
 	properties: {
 		roomId: { type: 'string', format: 'misskey:id' },
 		userId: { type: 'string', format: 'misskey:id' },
-		expiredAt: { type: 'string', format: 'date-time' },
+		// ISO 8601 string (endpoint Ajv does not register the date-time format; parsed below)
+		expiredAt: { type: 'string', minLength: 1 },
 	},
 	required: ['roomId', 'userId', 'expiredAt'],
 } as const;
