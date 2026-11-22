@@ -98,20 +98,20 @@ describe('useUploader retry readiness after failure or abort', () => {
 		expect(uploader.readyForUpload.value).toBe(true);
 
 		// 1) Simulate failed upload
-		uploadFileMock.mockReturnValueOnce({
+		uploadFileMock.mockImplementationOnce(() => ({
 			filePromise: Promise.reject(new Error('network fail')),
 			abort: vi.fn(),
-		});
+		}));
 		await uploader.upload();
 		expect(uploader.items.value[0].uploadFailed).toBe(true);
 		expect(uploader.readyForUpload.value).toBe(true);
 
 		// 2) Simulate user-aborted upload
 		let rejectAborted!: (err: Error) => void;
-		uploadFileMock.mockReturnValueOnce({
+		uploadFileMock.mockImplementationOnce(() => ({
 			filePromise: new Promise((_, reject) => { rejectAborted = reject; }),
 			abort: () => rejectAborted(new UploadAbortedErrorMock()),
-		});
+		}));
 		const uploadPromise = uploader.upload();
 		await nextTick();
 		uploader.abortAll();
@@ -120,10 +120,10 @@ describe('useUploader retry readiness after failure or abort', () => {
 		expect(uploader.readyForUpload.value).toBe(true);
 
 		// 3) Retry succeeds and marks allItemsUploaded
-		uploadFileMock.mockReturnValueOnce({
+		uploadFileMock.mockImplementationOnce(() => ({
 			filePromise: Promise.resolve(makeDriveFile('file-1')),
 			abort: vi.fn(),
-		});
+		}));
 		await uploader.upload();
 		expect(uploader.items.value[0].uploadFailed).toBe(false);
 		expect(uploader.items.value[0].aborted).toBe(false);
@@ -135,14 +135,14 @@ describe('useUploader retry readiness after failure or abort', () => {
 		const onDone = vi.fn();
 
 		uploadFileMock
-			.mockReturnValueOnce({
+			.mockImplementationOnce(() => ({
 				filePromise: Promise.reject(new Error('boom')),
 				abort: vi.fn(),
-			})
-			.mockReturnValueOnce({
+			}))
+			.mockImplementationOnce(() => ({
 				filePromise: Promise.resolve(makeDriveFile('file-2')),
 				abort: vi.fn(),
-			});
+			}));
 
 		const file = new File(['hello'], 'hello.txt', { type: 'text/plain' });
 		const { container } = render(MkUploaderDialog, {

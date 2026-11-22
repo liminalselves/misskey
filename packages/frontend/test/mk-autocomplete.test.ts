@@ -200,6 +200,7 @@ describe('MkAutocomplete bug fixes', () => {
 		// Bubble listener registered BEFORE MkAutocomplete mounts (mirrors <textarea @keydown="onKeydown"> in room.form.vue)
 		const formEnterSpy = vi.fn();
 		textarea.addEventListener('keydown', (ev) => {
+			if (ev.isComposing || ev.key === 'Process' || ev.keyCode === 229) return;
 			if (ev.key === 'Enter') formEnterSpy();
 		});
 

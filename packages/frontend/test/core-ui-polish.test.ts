@@ -413,7 +413,7 @@ describe('Core UI polish regressions', () => {
 					MkInput: defineComponent({
 						props: ['modelValue', 'type'],
 						emits: ['update:modelValue'],
-						template: '<input :type="type" :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)">',
+						template: '<div><input :type="type" :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)"><slot name="caption"/></div>',
 					}),
 				},
 			},
@@ -562,21 +562,21 @@ describe('Core UI polish regressions', () => {
 	test('ui/universal.vue updates showWidgetsSide reactively across 1090px threshold on resize', async () => {
 		Object.defineProperty(window, 'innerWidth', { value: 1200, configurable: true });
 		const { container } = render(UniversalUI, { global: commonGlobal });
-		await nextTick();
+		await flush();
 
 		expect(container.querySelector('[data-xwidgets]')).not.toBeNull();
 		expect(container.querySelector('[data-xsidebar]')?.getAttribute('data-widget-button')).toBe('false');
 
 		Object.defineProperty(window, 'innerWidth', { value: 1090, configurable: true });
 		window.dispatchEvent(new Event('resize'));
-		await nextTick();
+		await flush();
 
 		expect(container.querySelector('[data-xwidgets]')).toBeNull();
 		expect(container.querySelector('[data-xsidebar]')?.getAttribute('data-widget-button')).toBe('true');
 
 		Object.defineProperty(window, 'innerWidth', { value: 1091, configurable: true });
 		window.dispatchEvent(new Event('resize'));
-		await nextTick();
+		await flush();
 
 		expect(container.querySelector('[data-xwidgets]')).not.toBeNull();
 		expect(container.querySelector('[data-xsidebar]')?.getAttribute('data-widget-button')).toBe('false');
@@ -604,9 +604,9 @@ describe('Core UI polish regressions', () => {
 		const { container } = render(Host, { global: commonGlobal });
 		await flush();
 
-		const startupEl = container.querySelector('[data-startup-modal]')!.closest('[style*="z-index"]') as HTMLElement;
+		const startupEl = container.querySelector('[data-startup-modal]')!.closest('[style*="--transformOrigin"]') as HTMLElement;
 		const claimBtn = Array.from(container.querySelectorAll('button')).find(b => b.textContent?.includes(i18n.ts._agents.checkinPopupClaim))!;
-		const checkinModalEl = claimBtn.closest('[style*="z-index"]') as HTMLElement;
+		const checkinModalEl = claimBtn.closest('[style*="--transformOrigin"]') as HTMLElement;
 
 		expect(Number(checkinModalEl.style.zIndex)).toBeGreaterThan(Number(startupEl.style.zIndex));
 		expect(checkinModalEl.inert).toBe(false);
