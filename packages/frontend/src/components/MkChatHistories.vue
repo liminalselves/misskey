@@ -96,9 +96,9 @@ import { formatRecallNoticeText } from '@/utility/chat-recall.js';
 const props = withDefaults(defineProps<{
 	/** 是否把智能体会话合并进列表（/chat「全部」页启用；Deck 列、Widget 保持原样） */
 	includeAgentSessions?: boolean;
-	/** 只展示与用户的私信（/chat「私信」页启用；不含群聊与智能体会话） */
+	/** 只展示与用户的私信（/chat「私信」页启用；不含群组与智能体会话） */
 	directOnly?: boolean;
-	/** 筛选类型：all（全部）/ direct（仅私聊）/ rooms（仅群聊） */
+	/** 筛选类型：all（全部）/ direct（仅私聊）/ rooms（仅群组） */
 	filter?: 'all' | 'direct' | 'rooms';
 }>(), {
 	includeAgentSessions: false,
@@ -110,7 +110,7 @@ const $i = ensureSignin();
 
 const effectiveFilter = computed<'all' | 'direct' | 'rooms'>(() => props.directOnly ? 'direct' : props.filter);
 
-/** 历史列表条目：普通私信/群聊消息，或智能体会话（合并展示时 session 存在） */
+/** 历史列表条目：普通私信/群组消息，或智能体会话（合并展示时 session 存在） */
 type ChatHistoryItem = {
 	id: string;
 	isMe: boolean;

@@ -88,12 +88,13 @@ import * as Misskey from 'misskey-js';
 import XMessage from './XMessage.vue';
 import MkButton from '@/components/MkButton.vue';
 import { i18n } from '@/i18n.js';
-import { misskeyApi, formatApiError } from '@/utility/misskey-api.js';
+import { misskeyApi } from '@/utility/misskey-api.js';
 import MkInput from '@/components/MkInput.vue';
 import MkSelect from '@/components/MkSelect.vue';
 import type { MkSelectItem } from '@/components/MkSelect.vue';
 import MkFoldableSection from '@/components/MkFoldableSection.vue';
 import * as os from '@/os.js';
+import { formatChatError } from '@/utility/chat-error.js';
 import { ensureSignin } from '@/i.js';
 
 const LIMIT = 20;
@@ -232,7 +233,7 @@ async function loadMore() {
 		searchResults.value.push(...res);
 		hasMore.value = res.length === LIMIT;
 	} catch (err) {
-		os.alert({ type: 'error', text: formatApiError(err) });
+		os.alert({ type: 'error', text: formatChatError(err) });
 	} finally {
 		loadingMore.value = false;
 	}

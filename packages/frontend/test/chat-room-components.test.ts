@@ -7,7 +7,6 @@ import { afterEach, describe, expect, test, vi } from 'vitest';
 import { cleanup, fireEvent, render } from '@testing-library/vue';
 import type * as Misskey from 'misskey-js';
 import { formatRecallNoticeText, groupMessageReactions, resolveRecallAction } from '@/pages/chat/XMessage.vue';
-import { extractMentionQuery, filterRoomMentionCandidates, mergeRoomMentionSuggestions } from '@/pages/chat/room.form.vue';
 import { splitHighlightParts } from '@/pages/chat/room.search.vue';
 import { applyOwnerTransferred, mergeLocalRoomUpdate, mergeSharedRoomMetadata } from '@/pages/chat/room.vue';
 import XRoom from '@/pages/chat/XRoom.vue';
@@ -165,29 +164,6 @@ describe('Chat room helpers', () => {
 		expect(grouped[1].reaction).toBe('🎉');
 		expect(grouped[1].count).toBe(1);
 		expect(grouped[1].meReacted).toBe(false);
-	});
-
-	test('extractMentionQuery extracts @mention query at caret and ignores invalid contexts', () => {
-		expect(extractMentionQuery('@ali', 4)).toEqual({ start: 0, query: 'ali' });
-		expect(extractMentionQuery('hello @bo', 9)).toEqual({ start: 6, query: 'bo' });
-		expect(extractMentionQuery('foo@bar', 7)).toBeNull();
-		expect(extractMentionQuery('hi @', 4)).toEqual({ start: 3, query: '' });
-		expect(extractMentionQuery('line1\n@ca', 9)).toEqual({ start: 6, query: 'ca' });
-	});
-
-	test('filterRoomMentionCandidates excludes self, deduplicates, and matches username or display name', () => {
-		const me = makeUser('me1', 'me', 'My Name');
-		const alice = makeUser('u1', 'alice_dev', 'Alice Wonderland');
-		const bob = makeUser('u2', 'bob', 'Bob Builder');
-
-		const all = filterRoomMentionCandidates([me, alice, alice, bob], '', 'me1');
-		expect(all.map(u => u.id)).toEqual(['u1', 'u2']);
-
-		const byDisplayName = filterRoomMentionCandidates([me, alice, bob], 'wonder', 'me1');
-		expect(byDisplayName.map(u => u.id)).toEqual(['u1']);
-
-		const byUsername = filterRoomMentionCandidates([me, alice, bob], 'BOB', 'me1');
-		expect(byUsername.map(u => u.id)).toEqual(['u2']);
 	});
 
 	test('splitHighlightParts highlights matched substrings case-insensitively', () => {
@@ -541,18 +517,6 @@ describe('Chat room components', () => {
 			recalledById: 'u3',
 			recalledBy: makeUser('u3', 'alice', 'Alice'),
 		})).toBe('Alice recalled a message');
-	});
-
-	test('mergeRoomMentionSuggestions prioritizes in-room members and keeps external users as non-notifying references', () => {
-		const me = makeUser('me1', 'me');
-		const alice = makeUser('u1', 'alice', 'Alice');
-		const outsider = makeUser('u2', 'alan', 'Alan External');
-
-		const merged = mergeRoomMentionSuggestions([me, alice], [], [alice, outsider], 'al', 'me1');
-		expect(merged).toEqual([
-			{ user: alice, inRoom: true },
-			{ user: outsider, inRoom: false },
-		]);
 	});
 
 	test('message.vue navigates to target room when clicking search-result room message', async () => {

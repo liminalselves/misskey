@@ -18,6 +18,12 @@ export const meta = {
 	kind: 'write:chat',
 
 	errors: {
+		roomSuspended: {
+			message: 'You have been suspended from this room.',
+			code: 'ROOM_SUSPENDED',
+			id: '3124a010-caf9-406e-968a-bf3732a7d55c',
+			httpStatusCode: 403,
+		},
 		noSuchRoom: {
 			message: 'No such room.',
 			code: 'NO_SUCH_ROOM',
@@ -58,6 +64,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				await this.chatService.unsuspend(me, ps.roomId, ps.userId);
 			} catch (e: any) {
 				if (e instanceof EntityNotFoundError || e?.message === 'no such room') throw new ApiError(meta.errors.noSuchRoom);
+				if (e?.message === 'user has been suspended from this room') throw new ApiError(meta.errors.roomSuspended, e?.info);
 				if (e?.message === 'permission denied') throw new ApiError(meta.errors.permissionDenied);
 				if (e?.message === 'not a member') throw new ApiError(meta.errors.notAMember);
 				throw e;

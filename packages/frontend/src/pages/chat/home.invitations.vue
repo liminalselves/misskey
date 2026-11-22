@@ -55,11 +55,12 @@ import { onActivated, onBeforeUnmount, onDeactivated, onMounted, ref } from 'vue
 import * as Misskey from 'misskey-js';
 import MkButton from '@/components/MkButton.vue';
 import { i18n } from '@/i18n.js';
-import { formatApiError, misskeyApi } from '@/utility/misskey-api.js';
+import { misskeyApi } from '@/utility/misskey-api.js';
 import { appendCursorPage, mergeCursorTopPage, takeCursorFirstPage } from '@/utility/cursor-page.js';
 import { useRouter } from '@/router.js';
 import MkFolder from '@/components/MkFolder.vue';
 import * as os from '@/os.js';
+import { formatChatError } from '@/utility/chat-error.js';
 import { ensureSignin } from '@/i.js';
 import { prefer } from '@/preferences.js';
 import { useStream } from '@/stream.js';
@@ -157,7 +158,7 @@ async function join(invitation: Misskey.entities.ChatRoomInvitation) {
 			},
 		});
 	} catch (e) {
-		os.alert({ type: 'error', text: formatApiError(e) });
+		os.alert({ type: 'error', text: formatChatError(e) });
 	} finally {
 		delete processingIds.value[invitation.id];
 	}
@@ -174,7 +175,7 @@ async function ignore(invitation: Misskey.entities.ChatRoomInvitation) {
 		invitations.value = invitations.value.filter(i => i.id !== invitation.id);
 		emit('updateCount', invitations.value.length);
 	} catch (e) {
-		os.alert({ type: 'error', text: formatApiError(e) });
+		os.alert({ type: 'error', text: formatChatError(e) });
 	} finally {
 		delete processingIds.value[invitation.id];
 	}

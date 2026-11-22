@@ -81,7 +81,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<template #label>{{ i18n.ts._chat.muteThisRoom }}</template>
 	</MkSwitch>
 
-	<!-- 只有群主可以删除群聊，其他成员只能选择退出群聊 -->
+	<!-- 只有群主可以删除群组，其他成员只能选择退出群组 -->
 	<MkButton v-if="isOwner" danger :wait="deleting" @click="del">{{ i18n.ts._chat.deleteRoom }}</MkButton>
 	<MkButton v-else danger :wait="leaving" @click="leave">{{ i18n.ts._chat.leave }}</MkButton>
 </div>
@@ -93,6 +93,7 @@ import * as Misskey from 'misskey-js';
 import MkButton from '@/components/MkButton.vue';
 import { i18n } from '@/i18n.js';
 import * as os from '@/os.js';
+import { chatApiWithDialog } from '@/utility/chat-error.js';
 import { ensureSignin } from '@/i.js';
 import MkInput from '@/components/MkInput.vue';
 import MkTextarea from '@/components/MkTextarea.vue';
@@ -314,7 +315,7 @@ async function saveIcon(iconUrl: string | null) {
 	if (savingIcon.value) return;
 	savingIcon.value = true;
 	try {
-		const updated = await (os.apiWithDialog as unknown as (ep: string, data: Record<string, unknown>) => Promise<Misskey.entities.ChatRoom>)(
+		const updated = await chatApiWithDialog<Misskey.entities.ChatRoom>(
 			'chat/rooms/update',
 			{
 				roomId: props.room.id,
@@ -357,7 +358,7 @@ async function save() {
 
 	saving.value = true;
 	try {
-		const updated = await (os.apiWithDialog as unknown as (ep: string, data: Record<string, unknown>) => Promise<Misskey.entities.ChatRoom>)(
+		const updated = await chatApiWithDialog<Misskey.entities.ChatRoom>(
 			'chat/rooms/update',
 			payload,
 		);
@@ -383,7 +384,7 @@ async function del() {
 
 	deleting.value = true;
 	try {
-		await os.apiWithDialog('chat/rooms/delete', {
+		await chatApiWithDialog('chat/rooms/delete', {
 			roomId: props.room.id,
 		});
 		router.push('/chat');
@@ -404,7 +405,7 @@ async function leave() {
 
 	leaving.value = true;
 	try {
-		await os.apiWithDialog('chat/rooms/leave', {
+		await chatApiWithDialog('chat/rooms/leave', {
 			roomId: props.room.id,
 		});
 		router.push('/chat');
@@ -421,7 +422,7 @@ async function onToggleMute(nextValue: boolean) {
 	isMuted.value = nextValue;
 	muting.value = true;
 	try {
-		await os.apiWithDialog('chat/rooms/mute', {
+		await chatApiWithDialog('chat/rooms/mute', {
 			roomId: props.room.id,
 			mute: nextValue,
 		});

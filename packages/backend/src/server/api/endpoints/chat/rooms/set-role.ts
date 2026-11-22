@@ -23,6 +23,12 @@ export const meta = {
 	},
 
 	errors: {
+		roomSuspended: {
+			message: 'You have been suspended from this room.',
+			code: 'ROOM_SUSPENDED',
+			id: '6891ce08-f26c-40db-ba98-5fdd8eb2cbb8',
+			httpStatusCode: 403,
+		},
 		noSuchRoom: {
 			message: 'No such room.',
 			code: 'NO_SUCH_ROOM',
@@ -74,6 +80,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				});
 			} catch (e: any) {
 				if (e?.message === 'no such room') throw new ApiError(meta.errors.noSuchRoom);
+				if (e?.message === 'user has been suspended from this room') throw new ApiError(meta.errors.roomSuspended, e?.info);
 				if (e?.message === 'permission denied') throw new ApiError(meta.errors.permissionDenied);
 				if (e?.message === 'cannot set owner role') throw new ApiError(meta.errors.cannotSetOwnerRole);
 				if (e?.message === 'not a member') throw new ApiError(meta.errors.notAMember);

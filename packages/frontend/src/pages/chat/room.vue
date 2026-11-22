@@ -15,8 +15,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 >
 	<div v-if="tab === 'chat'" class="_spacer" style="--MI_SPACER-w: 700px;">
 		<div class="_gaps">
-			<!-- 群聊顶部信息条（群头像、置顶消息、群公告、状态横幅） -->
-			<div v-if="room && !notMember && (room.iconUrl || room.announcement || room.pinnedMessage || room.isArchived || isCurrentlySuspended)" class="_gaps_s" :class="$style.stickyTopBanners">
+			<!-- 群组顶部信息条（群头像、置顶消息、群公告）；禁言等输入限制统一显示在输入框 -->
+			<div v-if="room && !notMember && (room.iconUrl || room.announcement || room.pinnedMessage)" class="_gaps_s" :class="$style.stickyTopBanners">
 				<div v-if="room.iconUrl" :class="$style.roomHeaderStrip">
 					<img :src="room.iconUrl" :alt="room.name" :class="$style.roomHeaderIcon"/>
 					<div :class="$style.roomHeaderMeta">
@@ -24,9 +24,6 @@ SPDX-License-Identifier: AGPL-3.0-only
 						<div v-if="room.memberCount != null" :class="$style.roomHeaderSub">{{ i18n.tsx._chat.memberCount({ count: room.memberCount }) }}</div>
 					</div>
 				</div>
-
-				<MkInfo v-if="room.isArchived" warn>{{ i18n.ts._chat.archivedBanner }}</MkInfo>
-				<MkInfo v-if="isCurrentlySuspended" warn>{{ suspensionBannerText }}</MkInfo>
 
 				<div v-if="room.announcement || room.pinnedMessage" class="_panel" :class="$style.pinnedBanner">
 					<button
@@ -156,6 +153,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 							:adminUserIds="roomAdminUserIds"
 							:isRoomArchived="Boolean(room?.isArchived)"
 							:isRoomSuspended="isCurrentlySuspended"
+							:suspendedUntilMap="memberSuspendedUntil"
 							:pinnedMessageId="room?.pinnedMessageId"
 							:data-message-id="item.data.id"
 							@reply="handleReply"
@@ -177,13 +175,6 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</div>
 			</div>
 
-			<div v-if="user && (!user.canChat || user.host !== null)">
-				<MkInfo warn>{{ i18n.ts._chat.chatNotAvailableInOtherAccount }}</MkInfo>
-			</div>
-
-			<MkInfo v-if="$i.policies.chatAvailability !== 'available'" warn>
-				{{ $i.policies.chatAvailability === 'readonly' ? i18n.ts._chat.chatIsReadOnlyForThisAccountOrServer : i18n.ts._chat.chatNotAvailableForThisAccountOrServer }}
-			</MkInfo>
 		</div>
 	</div>
 
@@ -240,7 +231,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 					:room="room"
 					:replyTo="replyingTo"
 					:roomMembers="roomMembers"
-					:isSuspended="isCurrentlySuspended"
+					:disabledReason="formDisabledReason"
 					:class="$style.form"
 					@cancelReply="cancelReply"
 					@sent="onMessageSent"
@@ -277,7 +268,7 @@ const SHARED_ROOM_METADATA_KEYS = [
 ] as const;
 
 /**
- * 仅合并群聊共享元信息，绝不覆盖 per-user 字段（isMember / isMuted / invitationExists / myRole / isBanned / banReason / unreadCount）
+ * 仅合并群组共享元信息，绝不覆盖 per-user 字段（isMember / isMuted / invitationExists / myRole / isBanned / banReason / unreadCount）
  */
 export function mergeSharedRoomMetadata(
 	current: Misskey.entities.ChatRoom,
@@ -293,7 +284,7 @@ export function mergeSharedRoomMetadata(
 }
 
 /**
- * 合并本地用户操作返回或发出的群聊更新（含共享元信息与本地确认的 myRole / isMuted）
+ * 合并本地用户操作返回或发出的群组更新（含共享元信息与本地确认的 myRole / isMuted）
  */
 export function mergeLocalRoomUpdate(
 	current: Misskey.entities.ChatRoom,
@@ -348,17 +339,17 @@ import XInfo from './room.info.vue';
 import type { MenuItem } from '@/types/menu.js';
 import type { PageHeaderItem } from '@/types/page-header.js';
 import * as os from '@/os.js';
+import { chatApiWithDialog, formatChatError } from '@/utility/chat-error.js';
 import { useStream } from '@/stream.js';
 import * as sound from '@/utility/sound.js';
 import { i18n } from '@/i18n.js';
 import { ensureSignin } from '@/i.js';
-import { misskeyApi, formatApiError } from '@/utility/misskey-api.js';
+import { misskeyApi } from '@/utility/misskey-api.js';
 import { definePage } from '@/page.js';
 import { prefer } from '@/preferences.js';
 import MkButton from '@/components/MkButton.vue';
 import { useRouter } from '@/router.js';
 import { useMutationObserver } from '@/composables/use-mutation-observer.js';
-import MkInfo from '@/components/MkInfo.vue';
 import { makeDateSeparatedTimelineComputedRef } from '@/utility/timeline-date-separate.js';
 
 const $i = ensureSignin();
@@ -385,6 +376,8 @@ const room = ref<Misskey.entities.ChatRoom | null>(null);
 const roomMembers = ref<Misskey.entities.UserLite[]>([]);
 const roomAdminUserIds = ref<string[]>([]);
 const mySuspendedUntil = ref<string | null>(null);
+/** 群组成员禁言截止时间（userId → ISO），用于在消息旁标注 */
+const memberSuspendedUntil = ref<Record<string, string>>({});
 const nowMs = ref(Date.now());
 const bannerExpanded = ref(true);
 const connection = ref<Misskey.IChannelConnection<Misskey.Channels['chatUser']> | Misskey.IChannelConnection<Misskey.Channels['chatRoom']> | null>(null);
@@ -417,6 +410,17 @@ const suspensionBannerText = computed(() => {
 		return i18n.ts._chat.suspendedBannerPermanent;
 	}
 	return i18n.tsx._chat.suspendedBanner({ until: d.toLocaleString() });
+});
+
+/** 输入框不可用原因：一切影响输入的状态统一显示在输入框位置 */
+const formDisabledReason = computed<string | null>(() => {
+	if ($i.policies.chatAvailability !== 'available') {
+		return $i.policies.chatAvailability === 'readonly' ? i18n.ts._chat.chatIsReadOnlyForThisAccountOrServer : i18n.ts._chat.chatNotAvailableForThisAccountOrServer;
+	}
+	if (user.value && (!user.value.canChat || user.value.host !== null)) return i18n.ts._chat.chatNotAvailableInOtherAccount;
+	if (room.value?.isArchived) return i18n.ts._chat.archivedBanner;
+	if (isCurrentlySuspended.value) return suspensionBannerText.value;
+	return null;
 });
 
 watch(isCurrentlySuspended, (suspended) => {
@@ -639,7 +643,7 @@ function handleMention(targetUser: Misskey.entities.UserLite) {
 async function handlePin(messageId: string | null) {
 	if (!room.value) return;
 	try {
-		const updated = await (os.apiWithDialog as unknown as (ep: string, data: Record<string, unknown>) => Promise<Misskey.entities.ChatRoom>)(
+		const updated = await chatApiWithDialog<Misskey.entities.ChatRoom>(
 			'chat/rooms/pin-message',
 			{
 				roomId: room.value.id,
@@ -698,6 +702,11 @@ async function loadRoomMembersForFeatures(roomId: string) {
 		roomAdminUserIds.value = memberships
 			.filter(m => m.role === 'admin')
 			.map(m => m.userId);
+		const suspendedMap: Record<string, string> = {};
+		for (const m of memberships) {
+			if (m.suspendedUntil) suspendedMap[m.userId] = m.suspendedUntil;
+		}
+		memberSuspendedUntil.value = suspendedMap;
 		const mine = memberships.find(m => m.userId === $i.id);
 		mySuspendedUntil.value = mine?.suspendedUntil ?? null;
 		nowMs.value = Date.now();
@@ -739,7 +748,7 @@ async function loadContext(targetId: string, limit = 20): Promise<boolean> {
 		return true;
 	} catch (err) {
 		console.error(err);
-		await os.alert({ type: 'error', text: formatApiError(err) });
+		await os.alert({ type: 'error', text: formatChatError(err) });
 		return false;
 	} finally {
 		initializing.value = false;
@@ -809,30 +818,6 @@ function bindChatRoomEvents(conn: Misskey.IChannelConnection<Misskey.Channels['c
 		roomAdminUserIds.value = roomAdminUserIds.value.filter(id => id !== payload.userId);
 		void membersComponentRef.value?.refresh();
 	});
-	conn.on('memberBanned', (payload) => {
-		if (payload.userId === $i.id) {
-			connection.value?.dispose();
-			connection.value = null;
-			notMember.value = true;
-			if (room.value) {
-				room.value = {
-					...room.value,
-					isMember: false,
-					myRole: null,
-					isBanned: true,
-					banReason: payload.reason ?? null,
-				};
-			}
-			void os.alert({ type: 'error', text: i18n.ts._chat.kickedNotice });
-			return;
-		}
-		if (room.value && room.value.memberCount != null && room.value.memberCount > 0) {
-			room.value = { ...room.value, memberCount: room.value.memberCount - 1 };
-		}
-		roomMembers.value = roomMembers.value.filter(u => u.id !== payload.userId);
-		roomAdminUserIds.value = roomAdminUserIds.value.filter(id => id !== payload.userId);
-		void membersComponentRef.value?.refresh();
-	});
 	conn.on('memberRoleChanged', (payload) => {
 		if (payload.role === 'admin') {
 			if (!roomAdminUserIds.value.includes(payload.userId)) {
@@ -847,6 +832,7 @@ function bindChatRoomEvents(conn: Misskey.IChannelConnection<Misskey.Channels['c
 		void membersComponentRef.value?.refresh();
 	});
 	conn.on('memberSuspended', (payload) => {
+		memberSuspendedUntil.value = { ...memberSuspendedUntil.value, [payload.userId]: payload.suspendedUntil ?? new Date(9999, 0, 1).toISOString() };
 		if (payload.userId === $i.id) {
 			mySuspendedUntil.value = payload.suspendedUntil ?? new Date(9999, 0, 1).toISOString();
 			nowMs.value = Date.now();
@@ -854,6 +840,8 @@ function bindChatRoomEvents(conn: Misskey.IChannelConnection<Misskey.Channels['c
 		void membersComponentRef.value?.refresh();
 	});
 	conn.on('memberUnsuspended', (payload) => {
+		const { [payload.userId]: _removed, ...rest } = memberSuspendedUntil.value;
+		memberSuspendedUntil.value = rest;
 		if (payload.userId === $i.id) {
 			mySuspendedUntil.value = null;
 		}
@@ -937,7 +925,7 @@ async function initialize() {
 				} else {
 					await os.alert({
 						type: 'error',
-						text: formatApiError(err),
+						text: formatChatError(err),
 					});
 				}
 				router.push('/chat');
@@ -955,7 +943,7 @@ async function initialize() {
 					return;
 				}
 				try {
-					await os.apiWithDialog('chat/rooms/join', { roomId: r.id });
+					await chatApiWithDialog('chat/rooms/join', { roomId: r.id });
 				} catch {
 					// apiWithDialog 已弹窗提示，避免外层 catch 重复弹窗
 					router.push('/chat');
@@ -1020,7 +1008,7 @@ async function initialize() {
 		void evaluateUnreadJump();
 	} catch (err) {
 		console.error(err);
-		await os.alert({ type: 'error', text: formatApiError(err) });
+		await os.alert({ type: 'error', text: formatChatError(err) });
 	} finally {
 		initializing.value = false;
 	}
@@ -1058,6 +1046,7 @@ watch(() => [props.roomId, props.userId], (nextPair, prevPair) => {
 	roomMembers.value = [];
 	roomAdminUserIds.value = [];
 	mySuspendedUntil.value = null;
+	memberSuspendedUntil.value = {};
 	notMember.value = false;
 	replyingTo.value = null;
 	unreadSnapshot.value = null;
@@ -1098,7 +1087,7 @@ async function fetchMore() {
 		canFetchMore.value = newMessages.length === LIMIT;
 	} catch (err) {
 		console.error(err);
-		await os.alert({ type: 'error', text: formatApiError(err) });
+		await os.alert({ type: 'error', text: formatChatError(err) });
 	} finally {
 		moreFetching.value = false;
 	}
@@ -1146,7 +1135,7 @@ async function fetchNewer() {
 		}
 	} catch (err) {
 		console.error(err);
-		await os.alert({ type: 'error', text: formatApiError(err) });
+		await os.alert({ type: 'error', text: formatChatError(err) });
 	} finally {
 		fetchingNewer.value = false;
 	}
@@ -1339,7 +1328,7 @@ async function onIndicatorClick() {
 			}
 		} catch (err) {
 			console.error(err);
-			await os.alert({ type: 'error', text: formatApiError(err) });
+			await os.alert({ type: 'error', text: formatChatError(err) });
 		} finally {
 			initializing.value = false;
 		}
@@ -1416,7 +1405,7 @@ async function inviteUser() {
 	if (invitee == null) return;
 
 	try {
-		await os.apiWithDialog('chat/rooms/invitations/create', {
+		await chatApiWithDialog('chat/rooms/invitations/create', {
 			roomId: room.value.id,
 			userId: invitee.id,
 		});
@@ -1431,7 +1420,7 @@ async function joinRoom() {
 	if (room.value == null || joining.value) return;
 	joining.value = true;
 	try {
-		await os.apiWithDialog('chat/rooms/join', { roomId: room.value.id });
+		await chatApiWithDialog('chat/rooms/join', { roomId: room.value.id });
 		notMember.value = false;
 		initialized.value = false;
 		await initialize();
@@ -1452,7 +1441,7 @@ async function leaveRoom() {
 	if (canceled) return;
 
 	try {
-		await os.apiWithDialog('chat/rooms/leave', {
+		await chatApiWithDialog('chat/rooms/leave', {
 			roomId: room.value.id,
 		});
 		router.push('/chat');
@@ -1465,7 +1454,7 @@ async function toggleMuteFromMenu() {
 	if (!room.value) return;
 	const nextMute = !room.value.isMuted;
 	try {
-		await os.apiWithDialog('chat/rooms/mute', {
+		await chatApiWithDialog('chat/rooms/mute', {
 			roomId: room.value.id,
 			mute: nextMute,
 		});

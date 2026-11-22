@@ -97,31 +97,6 @@ SPDX-License-Identifier: AGPL-3.0-only
 		</div>
 	</template>
 
-	<!-- 封禁名单 -->
-	<template v-if="canManageBans">
-		<hr :class="$style.divider">
-		<div :class="$style.sectionTitle">{{ i18n.ts._chat.bannedUsers }}</div>
-		<MkLoading v-if="loadingBans"/>
-		<div v-else-if="bans.length === 0" :class="$style.emptyNote">{{ i18n.ts._chat.noBannedUsers }}</div>
-		<template v-else>
-			<div v-for="ban in bans" :key="ban.id" :class="$style.member">
-				<MkA v-if="ban.user" :class="$style.memberLink" :to="`${userPage(ban.user)}`">
-					<MkAvatar :class="$style.avatar" :user="ban.user"/>
-					<div :class="$style.info">
-						<MkUserName :user="ban.user"/>
-						<span v-if="ban.reason" :class="$style.banReason">{{ ban.reason }}</span>
-					</div>
-				</MkA>
-				<div v-else :class="$style.memberLink">
-					<div :class="$style.info">{{ ban.userId }}</div>
-				</div>
-				<MkButton rounded inline @click="unbanUser(ban)">{{ i18n.ts._chat.unban }}</MkButton>
-			</div>
-			<MkButton v-if="hasMoreBans" rounded :wait="loadingMoreBans" :class="$style.loadMore" @click="loadMoreBans">
-				{{ i18n.ts._chat.loadMore }}
-			</MkButton>
-		</template>
-	</template>
 </div>
 </template>
 
@@ -132,14 +107,14 @@ import type { MenuItem } from '@/types/menu.js';
 import MkButton from '@/components/MkButton.vue';
 import MkInput from '@/components/MkInput.vue';
 import { i18n } from '@/i18n.js';
-import { misskeyApi, formatApiError } from '@/utility/misskey-api.js';
+import { misskeyApi } from '@/utility/misskey-api.js';
 import { userPage } from '@/filters/user.js';
 import { ensureSignin } from '@/i.js';
 import * as os from '@/os.js';
+import { chatApiWithDialog, formatChatError } from '@/utility/chat-error.js';
 import MkUserName from '@/components/global/MkUserName.vue';
 
 const MEMBERS_LIMIT = 30;
-const BANS_LIMIT = 30;
 
 const $i = ensureSignin();
 
@@ -157,7 +132,6 @@ const isOwner = computed(() => props.room.ownerId === $i.id || props.room.myRole
 const isAdmin = computed(() => props.room.myRole === 'admin');
 const canInvite = computed(() => isOwner.value || isAdmin.value || Boolean(props.room.allowMemberInvite));
 const canManageInvitations = computed(() => isOwner.value || isAdmin.value);
-const canManageBans = computed(() => isOwner.value || isAdmin.value);
 
 const memberQuery = ref('');
 const memberships = ref<Misskey.entities.ChatRoomMembership[]>([]);
@@ -166,11 +140,6 @@ const loadingMoreMembers = ref(false);
 const hasMoreMembers = ref(false);
 const loadError = ref(false);
 const invitations = ref<Misskey.entities.ChatRoomInvitation[]>([]);
-const bans = ref<Misskey.entities.ChatRoomBan[]>([]);
-const loadingBans = ref(false);
-const loadingMoreBans = ref(false);
-const hasMoreBans = ref(false);
-
 let membersReqSeq = 0;
 let searchDebounceId: number | null = null;
 
@@ -262,7 +231,7 @@ async function loadMoreMembers() {
 		memberships.value.push(...filtered);
 		hasMoreMembers.value = res.length === MEMBERS_LIMIT;
 	} catch (err) {
-		os.alert({ type: 'error', text: formatApiError(err) });
+		os.alert({ type: 'error', text: formatChatError(err) });
 	} finally {
 		loadingMoreMembers.value = false;
 	}
@@ -283,56 +252,10 @@ async function loadInvitations() {
 	}
 }
 
-async function loadBans() {
-	if (!canManageBans.value) {
-		bans.value = [];
-		return;
-	}
-	loadingBans.value = true;
-	try {
-		const res = await (misskeyApi as unknown as (ep: string, data: Record<string, unknown>) => Promise<Misskey.entities.ChatRoomBan[]>)(
-			'chat/rooms/bans',
-			{
-				roomId: props.room.id,
-				limit: BANS_LIMIT,
-			},
-		);
-		bans.value = res;
-		hasMoreBans.value = res.length === BANS_LIMIT;
-	} catch {
-		bans.value = [];
-	} finally {
-		loadingBans.value = false;
-	}
-}
-
-async function loadMoreBans() {
-	if (loadingMoreBans.value || !hasMoreBans.value || bans.value.length === 0) return;
-	loadingMoreBans.value = true;
-	try {
-		const res = await (misskeyApi as unknown as (ep: string, data: Record<string, unknown>) => Promise<Misskey.entities.ChatRoomBan[]>)(
-			'chat/rooms/bans',
-			{
-				roomId: props.room.id,
-				limit: BANS_LIMIT,
-				untilId: bans.value[bans.value.length - 1].id,
-			},
-		);
-		const existing = new Set(bans.value.map(b => b.id));
-		bans.value.push(...res.filter(b => !existing.has(b.id)));
-		hasMoreBans.value = res.length === BANS_LIMIT;
-	} catch (err) {
-		os.alert({ type: 'error', text: formatApiError(err) });
-	} finally {
-		loadingMoreBans.value = false;
-	}
-}
-
 async function refresh() {
 	await Promise.all([
 		loadMembers(true),
 		loadInvitations(),
-		loadBans(),
 	]);
 }
 
@@ -413,13 +336,6 @@ function menu(membership: Misskey.entities.ChatRoomMembership, ev: MouseEvent) {
 			danger: true,
 			action: () => kick(membership),
 		});
-
-		items.push({
-			text: i18n.ts._chat.ban,
-			icon: 'ti ti-ban',
-			danger: true,
-			action: () => banMember(membership),
-		});
 	}
 
 	if (items.length > 0) {
@@ -429,7 +345,7 @@ function menu(membership: Misskey.entities.ChatRoomMembership, ev: MouseEvent) {
 
 async function setRole(membership: Misskey.entities.ChatRoomMembership, role: 'member' | 'admin') {
 	try {
-		const updated = await (os.apiWithDialog as unknown as (ep: string, data: Record<string, unknown>) => Promise<Misskey.entities.ChatRoomMembership>)(
+		const updated = await chatApiWithDialog<Misskey.entities.ChatRoomMembership>(
 			'chat/rooms/set-role',
 			{
 				roomId: props.room.id,
@@ -455,7 +371,7 @@ async function transferOwnership(membership: Misskey.entities.ChatRoomMembership
 	if (canceled) return;
 
 	try {
-		const updatedRoom = await (os.apiWithDialog as unknown as (ep: string, data: Record<string, unknown>) => Promise<Misskey.entities.ChatRoom>)(
+		const updatedRoom = await chatApiWithDialog<Misskey.entities.ChatRoom>(
 			'chat/rooms/transfer-ownership',
 			{
 				roomId: props.room.id,
@@ -473,65 +389,23 @@ async function transferOwnership(membership: Misskey.entities.ChatRoomMembership
 
 async function kick(membership: Misskey.entities.ChatRoomMembership) {
 	const userName = membership.user?.name || membership.user?.username || membership.userId;
-	const { canceled } = await os.confirm({
-		type: 'warning',
-		text: i18n.tsx._chat.kickConfirm({ name: userName }),
+	const { canceled, result } = await os.form(i18n.tsx._chat.kickConfirm({ name: userName }), {
+		ban: {
+			type: 'boolean',
+			label: '同时拉黑',
+			description: '拉黑后该用户无法再被邀请或主动加入本群组',
+			default: false,
+		},
 	});
 	if (canceled) return;
 
 	try {
-		await os.apiWithDialog('chat/rooms/kick', {
+		await chatApiWithDialog('chat/rooms/kick', {
 			roomId: props.room.id,
 			userId: membership.userId,
+			ban: Boolean(result.ban),
 		});
 		await loadMembers(true);
-	} catch {
-		// apiWithDialog 已显示错误提示
-	}
-}
-
-async function banMember(membership: Misskey.entities.ChatRoomMembership) {
-	const userName = membership.user?.name || membership.user?.username || membership.userId;
-	const { canceled, result } = await os.inputText({
-		title: i18n.ts._chat.ban,
-		text: i18n.tsx._chat.banConfirm({ name: userName }),
-		placeholder: i18n.ts._chat.banReason,
-		maxLength: 256,
-	});
-	if (canceled) return;
-
-	try {
-		await (os.apiWithDialog as unknown as (ep: string, data: Record<string, unknown>) => Promise<unknown>)(
-			'chat/rooms/ban',
-			{
-				roomId: props.room.id,
-				userId: membership.userId,
-				reason: result?.trim() || undefined,
-			},
-		);
-		await Promise.all([loadMembers(true), loadBans()]);
-	} catch {
-		// apiWithDialog 已显示错误提示
-	}
-}
-
-async function unbanUser(ban: Misskey.entities.ChatRoomBan) {
-	const userName = ban.user?.name || ban.user?.username || ban.userId;
-	const { canceled } = await os.confirm({
-		type: 'question',
-		text: i18n.tsx._chat.unbanConfirm({ name: userName }),
-	});
-	if (canceled) return;
-
-	try {
-		await (os.apiWithDialog as unknown as (ep: string, data: Record<string, unknown>) => Promise<unknown>)(
-			'chat/rooms/unban',
-			{
-				roomId: props.room.id,
-				userId: ban.userId,
-			},
-		);
-		bans.value = bans.value.filter(b => b.id !== ban.id);
 	} catch {
 		// apiWithDialog 已显示错误提示
 	}
@@ -546,7 +420,7 @@ async function cancelInvitation(invitation: Misskey.entities.ChatRoomInvitation)
 	if (canceled) return;
 
 	try {
-		await (os.apiWithDialog as unknown as (ep: string, data: Record<string, unknown>) => Promise<unknown>)(
+		await chatApiWithDialog<unknown>(
 			'chat/rooms/invitations/cancel',
 			{
 				invitationId: invitation.id,
@@ -579,7 +453,7 @@ async function suspend(membership: Misskey.entities.ChatRoomMembership) {
 	}
 
 	try {
-		await os.apiWithDialog('chat/rooms/suspend', {
+		await chatApiWithDialog('chat/rooms/suspend', {
 			roomId: props.room.id,
 			userId: membership.userId,
 			expiredAt,
@@ -592,7 +466,7 @@ async function suspend(membership: Misskey.entities.ChatRoomMembership) {
 
 async function unsuspend(membership: Misskey.entities.ChatRoomMembership) {
 	try {
-		await os.apiWithDialog('chat/rooms/unsuspend', {
+		await chatApiWithDialog('chat/rooms/unsuspend', {
 			roomId: props.room.id,
 			userId: membership.userId,
 		});
@@ -668,11 +542,6 @@ async function unsuspend(membership: Misskey.entities.ChatRoomMembership) {
 	color: var(--MI_THEME-error);
 }
 
-.banReason {
-	font-size: 0.85em;
-	color: var(--MI_THEME-fgTransparentWeak);
-}
-
 .menuBtn {
 	padding: 8px;
 	border-radius: 50%;
@@ -693,12 +562,6 @@ async function unsuspend(membership: Misskey.entities.ChatRoomMembership) {
 	font-size: 0.9em;
 	color: var(--MI_THEME-fgTransparentWeak);
 	font-weight: bold;
-}
-
-.emptyNote {
-	font-size: 0.9em;
-	color: var(--MI_THEME-fgTransparentWeak);
-	padding: 8px;
 }
 
 .loadMore {

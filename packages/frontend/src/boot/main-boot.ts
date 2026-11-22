@@ -380,14 +380,14 @@ export async function mainBoot() {
 				let isViewingSource = false;
 				let isViewingTargetRoom = false;
 
-				// 仅在非群聊（1v1 私信）时检查是否在查看发送者的私信页面
+				// 仅在非群组（1v1 私信）时检查是否在查看发送者的私信页面
 				if (!isRoomMessage && 'fromUserId' in message && message.fromUserId) {
 					if (currentPath === `/chat/user/${message.fromUserId}`) {
 						isViewingSource = true;
 					}
 				}
 
-				// 检查是否在查看群聊页面
+				// 检查是否在查看群组页面
 				if (isRoomMessage) {
 					if (currentPath === `/chat/room/${message.toRoomId}`) {
 						isViewingSource = true;
@@ -401,7 +401,7 @@ export async function mainBoot() {
 					updateCurrentAccountPartial({ hasUnreadChatMessages: true });
 				}
 
-				// 目标群聊页面已由 room.vue 的 chatRoom 频道播放音效，避免重复播放
+				// 目标群组页面已由 room.vue 的 chatRoom 频道播放音效，避免重复播放
 				if (!isViewingTargetRoom) {
 					sound.playMisskeySfx('chatMessage');
 				}

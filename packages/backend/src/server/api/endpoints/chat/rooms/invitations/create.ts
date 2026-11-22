@@ -33,6 +33,12 @@ export const meta = {
 	},
 
 	errors: {
+		roomSuspended: {
+			message: 'You have been suspended from this room.',
+			code: 'ROOM_SUSPENDED',
+			id: '8816129a-c1de-4e5f-b89f-ef8ec3b12f0d',
+			httpStatusCode: 403,
+		},
 		noSuchRoom: {
 			message: 'No such room.',
 			code: 'NO_SUCH_ROOM',
@@ -118,6 +124,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				if (e instanceof EntityNotFoundError || e?.message === 'no such room') throw new ApiError(meta.errors.noSuchRoom);
 				if (e?.message === 'no such user') throw new ApiError(meta.errors.noSuchUser);
 				if (e?.message === 'yourself') throw new ApiError(meta.errors.yourself);
+				if (e?.message === 'user has been suspended from this room') throw new ApiError(meta.errors.roomSuspended, e?.info);
 				if (e?.message === 'permission denied') throw new ApiError(meta.errors.permissionDenied);
 				if (e?.message === 'already member') throw new ApiError(meta.errors.alreadyMember);
 				if (e?.message === 'already invited') throw new ApiError(meta.errors.alreadyInvited);

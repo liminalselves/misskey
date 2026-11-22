@@ -9,27 +9,6 @@ SPDX-License-Identifier: AGPL-3.0-only
 	@dragover.stop="onDragover"
 	@drop.stop="onDrop"
 >
-	<!-- 群内 @mention 自动补全浮层 -->
-	<div v-if="mentionOpen && mentionSuggestions.length > 0" :class="$style.mentionPopup" class="_popup _shadow" role="listbox">
-		<button
-			v-for="(item, idx) in mentionSuggestions"
-			:key="item.user.id"
-			type="button"
-			role="option"
-			:aria-selected="idx === mentionSelectedIndex"
-			class="_button"
-			:class="[$style.mentionItem, { [$style.mentionItemSelected]: idx === mentionSelectedIndex }]"
-			@mousedown.prevent="selectMentionCandidate(item.user)"
-		>
-			<MkAvatar :user="item.user" :link="false" :class="$style.mentionAvatar"/>
-			<span :class="$style.mentionName"><MkUserName :user="item.user"/></span>
-			<span :class="[$style.mentionBadge, item.inRoom ? $style.mentionBadgeInRoom : $style.mentionBadgeExternal]">
-				{{ item.inRoom ? i18n.ts._chat.mentionRoomMember : i18n.ts._chat.mentionExternalUser }}
-			</span>
-			<span :class="$style.mentionAcct">@{{ formatUserAcct(item.user) }}</span>
-		</button>
-	</div>
-
 	<!-- 引用预览条 -->
 	<div v-if="replyTo" :class="$style.replyPreview">
 		<div :class="$style.replyBar"></div>
@@ -66,18 +45,20 @@ SPDX-License-Identifier: AGPL-3.0-only
 	</div>
 
 	<div :class="$style.compose">
+		<div v-if="disabledReason" :class="$style.disabledNotice" role="status">
+			<i class="ti ti-lock"></i>
+			<span>{{ disabledReason }}</span>
+		</div>
 		<textarea
+			v-else
 			ref="textareaEl"
 			v-model="text"
 			:class="$style.textarea"
 			class="_acrylic"
 			:placeholder="i18n.ts.inputMessageHere"
-			:disabled="isFormDisabled"
 			:readonly="textareaReadOnly"
-			@input="onTextareaInput"
+			@input="adjustTextareaHeight"
 			@keydown="onKeydown"
-			@keyup="onTextareaCaretMove"
-			@click="onTextareaCaretMove"
 			@paste="onPaste"
 		></textarea>
 		<footer :class="$style.footer">
@@ -132,76 +113,6 @@ SPDX-License-Identifier: AGPL-3.0-only
 import * as Misskey from 'misskey-js';
 
 export const MAX_MESSAGE_LENGTH = 2000;
-
-export function extractMentionQuery(text: string, caretPos: number): { start: number; query: string } | null {
-	const beforeCaret = text.slice(0, caretPos);
-	const lastLine = beforeCaret.split('\n').pop() ?? '';
-	const lineStartOffset = beforeCaret.length - lastLine.length;
-	const match = /(^|[\s\u3000(（[【「『])@([a-zA-Z0-9_.-]*)$/.exec(lastLine);
-	if (!match) return null;
-	const atIndexInLine = lastLine.length - match[2].length - 1;
-	return {
-		start: lineStartOffset + atIndexInLine,
-		query: match[2],
-	};
-}
-
-export type RoomMentionSuggestion = {
-	user: Misskey.entities.UserLite;
-	inRoom: boolean;
-};
-
-export function mergeRoomMentionSuggestions(
-	localRoomMembers: readonly Misskey.entities.UserLite[],
-	queriedRoomMembers: readonly Misskey.entities.UserLite[],
-	externalUsers: readonly Misskey.entities.UserLite[],
-	query: string,
-	myUserId: string,
-): RoomMentionSuggestion[] {
-	const localMatched = filterRoomMentionCandidates(localRoomMembers, query, myUserId);
-	const seen = new Set<string>(localMatched.map(u => u.id));
-	const suggestions: RoomMentionSuggestion[] = localMatched.map(user => ({ user, inRoom: true }));
-
-	for (const user of queriedRoomMembers) {
-		if (!user || user.id === myUserId || seen.has(user.id)) continue;
-		seen.add(user.id);
-		suggestions.push({ user, inRoom: true });
-	}
-
-	for (const user of externalUsers) {
-		if (!user || user.id === myUserId || seen.has(user.id)) continue;
-		seen.add(user.id);
-		suggestions.push({ user, inRoom: false });
-	}
-
-	return suggestions.slice(0, 12);
-}
-
-export function filterRoomMentionCandidates(
-	members: readonly Misskey.entities.UserLite[],
-	query: string,
-	myUserId: string,
-): Misskey.entities.UserLite[] {
-	const q = query.trim().toLowerCase();
-	const seen = new Set<string>();
-	const result: Misskey.entities.UserLite[] = [];
-
-	for (const user of members) {
-		if (!user || user.id === myUserId || seen.has(user.id)) continue;
-		seen.add(user.id);
-		if (!q) {
-			result.push(user);
-			continue;
-		}
-		const username = user.username.toLowerCase();
-		const name = (user.name ?? '').toLowerCase();
-		if (username.includes(q) || name.includes(q)) {
-			result.push(user);
-		}
-	}
-
-	return result.slice(0, 12);
-}
 </script>
 
 <script lang="ts" setup>
@@ -210,15 +121,15 @@ import { toASCII } from 'punycode.js';
 import { formatTimeString } from '@/utility/format-time-string.js';
 import { selectFile } from '@/utility/drive.js';
 import * as os from '@/os.js';
+import { formatChatError } from '@/utility/chat-error.js';
 import { i18n } from '@/i18n.js';
 import { miLocalStorage } from '@/local-storage.js';
-import { misskeyApi, formatApiError } from '@/utility/misskey-api.js';
+import { misskeyApi } from '@/utility/misskey-api.js';
 import { prefer } from '@/preferences.js';
 import { Autocomplete } from '@/utility/autocomplete.js';
 import { emojiPicker } from '@/utility/emoji-picker.js';
 import { checkDragDataType, getDragData } from '@/drag-and-drop.js';
 import { ensureSignin } from '@/i.js';
-import MkUserName from '@/components/global/MkUserName.vue';
 
 const $i = ensureSignin();
 
@@ -227,7 +138,8 @@ const props = defineProps<{
 	room?: Misskey.entities.ChatRoom | null;
 	replyTo?: { id: string; text?: string | null } | null;
 	roomMembers?: Misskey.entities.UserLite[];
-	isSuspended?: boolean;
+	/** 输入框不可用时显示在输入框位置的原因（禁言、归档、账号受限、对方不可私信等） */
+	disabledReason?: string | null;
 }>();
 
 const emit = defineEmits<{
@@ -243,17 +155,7 @@ const sending = ref(false);
 const textareaReadOnly = ref(false);
 let autocompleteInstance: Autocomplete | null = null;
 
-// 群内 @mention 自动补全状态
-const mentionOpen = ref(false);
-const mentionQuery = ref('');
-const mentionStartIndex = ref(-1);
-const mentionSelectedIndex = ref(0);
-const queriedRoomMentionCandidates = ref<Misskey.entities.UserLite[]>([]);
-const externalMentionCandidates = ref<Misskey.entities.UserLite[]>([]);
-let mentionFetchSeq = 0;
-let mentionFetchTimer: number | null = null;
-
-const isFormDisabled = computed(() => $i.policies.chatAvailability !== 'available' || Boolean(props.room?.isArchived) || Boolean(props.isSuspended));
+const isFormDisabled = computed(() => Boolean(props.disabledReason));
 const textLength = computed(() => text.value.length);
 const isOverLimit = computed(() => textLength.value > MAX_MESSAGE_LENGTH);
 const canSend = computed(() => {
@@ -268,17 +170,6 @@ const allLocalRoomMembers = computed<Misskey.entities.UserLite[]>(() => {
 	if (props.room.owner) list.push(props.room.owner);
 	if (props.roomMembers) list.push(...props.roomMembers);
 	return list;
-});
-
-const mentionSuggestions = computed<RoomMentionSuggestion[]>(() => {
-	if (!props.room || !mentionOpen.value) return [];
-	return mergeRoomMentionSuggestions(
-		allLocalRoomMembers.value,
-		queriedRoomMentionCandidates.value,
-		externalMentionCandidates.value,
-		mentionQuery.value,
-		$i.id,
-	);
 });
 
 function formatUserAcct(user: Misskey.entities.UserLite): string {
@@ -326,103 +217,6 @@ function adjustTextareaHeight() {
 	el.style.height = `${Math.min(el.scrollHeight, maxH)}px`;
 }
 
-function closeMentionPopup() {
-	mentionOpen.value = false;
-	mentionQuery.value = '';
-	mentionStartIndex.value = -1;
-	mentionSelectedIndex.value = 0;
-	queriedRoomMentionCandidates.value = [];
-	externalMentionCandidates.value = [];
-	if (mentionFetchTimer != null) {
-		window.clearTimeout(mentionFetchTimer);
-		mentionFetchTimer = null;
-	}
-}
-
-function updateRoomMentionState() {
-	if (!props.room || isFormDisabled.value || !textareaEl.value) {
-		closeMentionPopup();
-		return;
-	}
-	const caretPos = textareaEl.value.selectionStart ?? 0;
-	const extracted = extractMentionQuery(text.value, caretPos);
-	if (!extracted) {
-		closeMentionPopup();
-		return;
-	}
-
-	mentionOpen.value = true;
-	mentionStartIndex.value = extracted.start;
-	mentionQuery.value = extracted.query;
-	mentionSelectedIndex.value = 0;
-
-	if (mentionFetchTimer != null) {
-		window.clearTimeout(mentionFetchTimer);
-		mentionFetchTimer = null;
-	}
-	if (extracted.query.length > 0) {
-		const seq = ++mentionFetchSeq;
-		const q = extracted.query;
-		const roomId = props.room.id;
-		mentionFetchTimer = window.setTimeout(async () => {
-			try {
-				const [username, host] = q.split('@');
-				const [members, externalUsers] = await Promise.all([
-					(misskeyApi as unknown as (ep: string, data: Record<string, unknown>) => Promise<Misskey.entities.ChatRoomMembership[]>)(
-						'chat/rooms/members',
-						{ roomId, query: q, limit: 10 },
-					).catch(() => []),
-					misskeyApi('users/search-by-username-and-host', {
-						username,
-						host,
-						limit: 8,
-						detail: false,
-					}).catch(() => []),
-				]);
-				if (seq !== mentionFetchSeq) return;
-				queriedRoomMentionCandidates.value = members.map(m => m.user).filter((u): u is Misskey.entities.UserLite => u != null);
-				externalMentionCandidates.value = externalUsers;
-			} catch {
-				// 自动补全回退失败静默忽略
-			}
-		}, 180);
-	} else {
-		queriedRoomMentionCandidates.value = [];
-		externalMentionCandidates.value = [];
-	}
-}
-
-function selectMentionCandidate(user: Misskey.entities.UserLite) {
-	if (mentionStartIndex.value < 0 || !textareaEl.value) {
-		closeMentionPopup();
-		return;
-	}
-	const caretPos = textareaEl.value.selectionStart ?? text.value.length;
-	const before = text.value.slice(0, mentionStartIndex.value);
-	const after = text.value.slice(caretPos);
-	const acct = formatUserAcct(user);
-	const inserted = `@${acct} `;
-	text.value = `${before}${inserted}${after}`;
-	closeMentionPopup();
-	void nextTick(() => {
-		const el = textareaEl.value;
-		if (!el) return;
-		el.focus();
-		const nextPos = before.length + inserted.length;
-		el.setSelectionRange(nextPos, nextPos);
-		adjustTextareaHeight();
-	});
-}
-
-function onTextareaInput() {
-	adjustTextareaHeight();
-	updateRoomMentionState();
-}
-
-function onTextareaCaretMove() {
-	updateRoomMentionState();
-}
-
 function cancelReply() {
 	emit('cancelReply');
 }
@@ -468,7 +262,6 @@ watch([text, file], () => {
 });
 
 watch(() => [props.user?.id, props.room?.id], () => {
-	closeMentionPopup();
 	setupAutocomplete();
 	restoreDraft();
 });
@@ -565,29 +358,6 @@ function onDrop(ev: DragEvent): void {
 function onKeydown(ev: KeyboardEvent) {
 	if (ev.isComposing || ev.key === 'Process' || ev.keyCode === 229) return;
 
-	if (mentionOpen.value && mentionSuggestions.value.length > 0) {
-		if (ev.key === 'ArrowDown') {
-			ev.preventDefault();
-			mentionSelectedIndex.value = (mentionSelectedIndex.value + 1) % mentionSuggestions.value.length;
-			return;
-		}
-		if (ev.key === 'ArrowUp') {
-			ev.preventDefault();
-			mentionSelectedIndex.value = (mentionSelectedIndex.value - 1 + mentionSuggestions.value.length) % mentionSuggestions.value.length;
-			return;
-		}
-		if (ev.key === 'Enter' || ev.key === 'Tab') {
-			ev.preventDefault();
-			selectMentionCandidate(mentionSuggestions.value[mentionSelectedIndex.value].user);
-			return;
-		}
-		if (ev.key === 'Escape') {
-			ev.preventDefault();
-			closeMentionPopup();
-			return;
-		}
-	}
-
 	if (ev.key === 'Enter') {
 		if (prefer.s['chat.sendOnEnter']) {
 			if (!(ev.ctrlKey || ev.metaKey || ev.shiftKey)) {
@@ -618,7 +388,6 @@ async function send() {
 	if (!canSend.value || sending.value || isFormDisabled.value) return;
 
 	sending.value = true;
-	closeMentionPopup();
 
 	try {
 		if (props.user) {
@@ -644,7 +413,7 @@ async function send() {
 				};
 
 				const message = chatScopeErrorMessages[err?.code];
-				await os.alert({ type: 'error', text: message ?? formatApiError(err) });
+				await os.alert({ type: 'error', text: message ?? formatChatError(err) });
 			}
 		} else if (props.room) {
 			try {
@@ -659,27 +428,12 @@ async function send() {
 			} catch (err: any) {
 				console.error(err);
 
-				if (err?.code === 'ROOM_SUSPENDED') {
-					const remainingMs = err.info?.remainingMs as number | null | undefined;
-					const isPermanent = err.info?.isPermanent as boolean | undefined;
-
-					let message: string;
-					if (isPermanent || typeof remainingMs !== 'number' || remainingMs <= 0) {
-						message = i18n.ts._chat.suspendedBannerPermanent;
-					} else {
-						const untilText = new Date(Date.now() + remainingMs).toLocaleString();
-						message = i18n.tsx._chat.suspendedBanner({ until: untilText });
-					}
-
-					await os.alert({ type: 'error', text: message });
-				} else {
-					await os.alert({ type: 'error', text: formatApiError(err) });
-				}
+				await os.alert({ type: 'error', text: formatChatError(err) });
 			}
 		}
 	} catch (err) {
 		console.error(err);
-		await os.alert({ type: 'error', text: formatApiError(err) });
+		await os.alert({ type: 'error', text: formatChatError(err) });
 	} finally {
 		sending.value = false;
 	}
@@ -747,11 +501,12 @@ function setupAutocomplete() {
 		autocompleteInstance = null;
 	}
 	if (textareaEl.value != null) {
-		// 群聊中禁用全局 user 自动补全，改用当前群成员 @mention 自动补全
-		const types = props.room != null
-			? (['hashtag', 'emoji', 'mfmTag', 'mfmParam'] as const)
-			: undefined;
-		autocompleteInstance = new Autocomplete(textareaEl.value, text, types ? [...types] : undefined);
+		// 群组内 @ 补全：群内成员优先并标注群内/群外
+		const roomContext = props.room != null ? {
+			roomId: props.room.id,
+			getMembers: () => allLocalRoomMembers.value,
+		} : null;
+		autocompleteInstance = new Autocomplete(textareaEl.value, text, undefined, roomContext);
 	}
 }
 
@@ -760,8 +515,11 @@ onMounted(() => {
 	restoreDraft();
 });
 
+watch(textareaEl, () => {
+	setupAutocomplete();
+});
+
 onBeforeUnmount(() => {
-	closeMentionPopup();
 	if (autocompleteInstance) {
 		autocompleteInstance.detach();
 		autocompleteInstance = null;
@@ -780,69 +538,18 @@ onBeforeUnmount(() => {
 	max-width: 100%;
 }
 
-.mentionPopup {
-	position: absolute;
-	bottom: calc(100% + 6px);
-	left: 0;
-	right: 0;
-	max-height: 220px;
-	overflow-y: auto;
-	z-index: 20;
-	padding: 4px 0;
-}
-
-.mentionItem {
+.disabledNotice {
 	display: flex;
 	align-items: center;
-	gap: 8px;
-	width: 100%;
-	padding: 8px 12px;
-	text-align: left;
+	justify-content: center;
+	gap: 6px;
+	min-height: 80px;
+	padding: 12px 16px;
+	box-sizing: border-box;
 	font-size: 0.9em;
-
-	&:hover,
-	&.mentionItemSelected {
-		background: var(--MI_THEME-accentedBg);
-		color: var(--MI_THEME-accent);
-	}
-}
-
-.mentionAvatar {
-	width: 24px;
-	height: 24px;
-	flex-shrink: 0;
-}
-
-.mentionName {
-	font-weight: bold;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-}
-
-.mentionBadge {
-	font-size: 0.75em;
-	padding: 1px 6px;
-	border-radius: 999px;
-	white-space: nowrap;
-	flex-shrink: 0;
-}
-
-.mentionBadgeInRoom {
-	background: color-mix(in srgb, var(--MI_THEME-accent) 15%, transparent);
-	color: var(--MI_THEME-accent);
-}
-
-.mentionBadgeExternal {
-	background: var(--MI_THEME-divider);
+	text-align: center;
 	color: var(--MI_THEME-fgTransparentWeak);
-}
-
-.mentionAcct {
-	margin-left: auto;
-	font-size: 0.85em;
-	color: var(--MI_THEME-fgTransparentWeak);
-	white-space: nowrap;
+	background: var(--MI_THEME-panel);
 }
 
 .compose {
@@ -990,6 +697,15 @@ onBeforeUnmount(() => {
 	}
 
 	/* 覆盖全局 _acrylic，避免底栏里出现半透明模糊块；16px 防止 iOS 自动放大 */
+	.disabledNotice {
+		flex: 1 1 0;
+		min-width: 0;
+		min-height: 36px;
+		padding: 7px 12px;
+		border-radius: 18px;
+		font-size: 0.85em;
+	}
+
 	.textarea:global(._acrylic) {
 		min-height: 36px;
 		max-height: 76px;

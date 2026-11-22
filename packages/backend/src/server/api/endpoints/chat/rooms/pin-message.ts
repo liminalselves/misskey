@@ -23,6 +23,12 @@ export const meta = {
 	},
 
 	errors: {
+		roomSuspended: {
+			message: 'You have been suspended from this room.',
+			code: 'ROOM_SUSPENDED',
+			id: '1ef9881f-7d8c-41f7-a28d-1a085a59904e',
+			httpStatusCode: 403,
+		},
 		noSuchRoom: {
 			message: 'No such room.',
 			code: 'NO_SUCH_ROOM',
@@ -65,6 +71,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				return await this.chatEntityService.packRoom(room, me);
 			} catch (e: any) {
 				if (e?.message === 'no such room') throw new ApiError(meta.errors.noSuchRoom);
+				if (e?.message === 'user has been suspended from this room') throw new ApiError(meta.errors.roomSuspended, e?.info);
 				if (e?.message === 'permission denied') throw new ApiError(meta.errors.permissionDenied);
 				if (e?.message === 'no such message') throw new ApiError(meta.errors.noSuchMessage);
 				throw e;

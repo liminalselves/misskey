@@ -545,7 +545,7 @@ describe('ChatService owner mute, unread events, reactions & moderation', () => 
 		await expect(service.react('msg1', 'outsider', '👍')).rejects.toBeInstanceOf(ChatMessageAccessError);
 	});
 
-	test('banUserFromRoom blocks joinToRoom and createRoomInvitation', async () => {
+	test('kick with ban blacklists user from joinToRoom and createRoomInvitation', async () => {
 		const room = { id: 'r1', ownerId: 'owner1', isPublic: true, isArchived: false, allowMemberInvite: false };
 		const { service, memberships, bans, globalEventService } = createChatServiceHarness({
 			rooms: [room],
@@ -553,13 +553,12 @@ describe('ChatService owner mute, unread events, reactions & moderation', () => 
 			users: [{ id: 'u2', usernameLower: 'u2' }],
 		});
 
-		await service.banUserFromRoom({ id: 'owner1' } as any, 'r1', 'u2', 'spam');
+		await service.kick({ id: 'owner1' } as any, 'r1', 'u2', { ban: true });
 		expect(memberships).toHaveLength(0);
 		expect(bans).toHaveLength(1);
-		expect(globalEventService.publishChatRoomStream).toHaveBeenCalledWith('r1', 'memberBanned', {
+		expect(globalEventService.publishChatRoomStream).toHaveBeenCalledWith('r1', 'memberKicked', {
 			roomId: 'r1',
 			userId: 'u2',
-			reason: 'spam',
 		});
 
 		await expect(service.joinToRoom('u2', 'r1')).rejects.toThrow('banned');

@@ -25,6 +25,12 @@ export const meta = {
 	},
 
 	errors: {
+		roomSuspended: {
+			message: 'You have been suspended from this room.',
+			code: 'ROOM_SUSPENDED',
+			id: '7a70ba98-44a9-4348-a385-4783a920050b',
+			httpStatusCode: 403,
+		},
 		noSuchRoom: {
 			message: 'No such room.',
 			code: 'NO_SUCH_ROOM',
@@ -84,11 +90,11 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			const isOwner = room.ownerId === me.id;
 			if (!isOwner) {
 				const membership = await this.chatRoomMembershipsRepository.findOneBy({ roomId: room.id, userId: me.id });
-				const isAdmin = membership != null
-					&& membership.role === 'admin'
-					&& !(membership.suspendedUntil && new Date() < membership.suspendedUntil);
-				if (!isAdmin) {
-					throw new ApiError(meta.errors.noSuchRoom);
+				if (membership == null || membership.role !== 'admin') {
+					throw new ApiError(meta.errors.permissionDenied);
+				}
+				if (membership.suspendedUntil && new Date() < membership.suspendedUntil) {
+					throw new ApiError(meta.errors.roomSuspended);
 				}
 				if (ps.isPublic !== undefined || ps.isArchived !== undefined) {
 					throw new ApiError(meta.errors.permissionDenied);

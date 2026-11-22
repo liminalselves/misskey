@@ -93,7 +93,7 @@ describe('native-push-bridge-content (chat)', () => {
 			chatRoom: room,
 		} as any, 'zh-CN');
 		expect(unsuspended.title).toBe('General');
-		expect(unsuspended.body).toBe('您在该群聊中的禁言已解除');
+		expect(unsuspended.body).toBe('您在该群组中的禁言已解除');
 		expect(unsuspended.openPath).toBe('/chat/room/room1');
 
 		const mention = buildNativePushFromNotification({
@@ -107,7 +107,7 @@ describe('native-push-bridge-content (chat)', () => {
 			messageId: 'm1',
 		} as any, 'zh-CN');
 		expect(mention.title).toBe('General');
-		expect(mention.body).toBe('Alice 在群聊中提到了你');
+		expect(mention.body).toBe('Alice 在群组中提到了你');
 		expect(mention.openPath).toBe('/chat/room/room1');
 	});
 });

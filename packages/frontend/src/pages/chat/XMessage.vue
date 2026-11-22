@@ -23,6 +23,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<template v-if="message.fromUser != null && (prefer.s['chat.showSenderName'] || isRoomMessage)">
 				<MkUserName :class="$style.headerName" :user="message.fromUser"/>
 				<MkAcct v-if="isRoomMessage" :class="$style.headerAcct" :user="message.fromUser"/>
+				<span v-if="senderSuspensionText" :class="$style.headerSuspended"><i class="ti ti-volume-off"></i> {{ senderSuspensionText }}</span>
 			</template>
 		</div>
 		<!-- 引用消息预览 -->
@@ -275,10 +276,11 @@ import type { NormalizedChatMessage } from './room.vue';
 import { extractUrlFromMfm } from '@/utility/extract-url-from-mfm.js';
 import MkUrlPreview from '@/components/MkUrlPreview.vue';
 import { ensureSignin } from '@/i.js';
-import { misskeyApi, formatApiError } from '@/utility/misskey-api.js';
+import { misskeyApi } from '@/utility/misskey-api.js';
 import { i18n } from '@/i18n.js';
 import MkFukidashi from '@/components/MkFukidashi.vue';
 import * as os from '@/os.js';
+import { formatChatError } from '@/utility/chat-error.js';
 import { copyToClipboard } from '@/utility/copy-to-clipboard.js';
 import MkMediaList from '@/components/MkMediaList.vue';
 import MkUserName from '@/components/global/MkUserName.vue';
@@ -301,6 +303,8 @@ const props = defineProps<{
 	isRoomArchived?: boolean;
 	isRoomSuspended?: boolean;
 	pinnedMessageId?: string | null;
+	/** 群组成员禁言截止时间（userId → ISO） */
+	suspendedUntilMap?: Record<string, string>;
 }>();
 
 const emit = defineEmits<{
@@ -320,6 +324,13 @@ const canAdminRoom = computed(() => isOwner.value || isAdmin.value);
 const isRecalled = computed(() => ('recalledAt' in props.message ? props.message.recalledAt : null) != null);
 const recallNoticeText = computed(() => formatRecallNoticeText(props.message as Misskey.entities.ChatMessageLite));
 const canInteract = computed(() => !isRecalled.value && $i.policies.chatAvailability === 'available' && !props.isRoomArchived && !props.isRoomSuspended);
+const senderSuspensionText = computed(() => {
+	const until = props.suspendedUntilMap?.[props.message.fromUserId];
+	if (!until) return null;
+	const d = new Date(until);
+	if (d.getTime() <= Date.now()) return null;
+	return d.getFullYear() >= 9000 ? '已被永久禁言' : `禁言至 ${d.toLocaleString()}`;
+});
 const isPinned = computed(() => !isRecalled.value && props.pinnedMessageId != null && props.pinnedMessageId === props.message.id);
 const hasReply = computed(() => 'replyId' in props.message && props.message.replyId != null);
 const replyData = computed(() => ('reply' in props.message ? props.message.reply : null) ?? null);
@@ -357,7 +368,7 @@ provide(DI.mfmEmojiReactCallback, (reaction) => {
 		messageId: props.message.id,
 		reaction: reaction,
 	}).catch(e => {
-		os.alert({ type: 'error', text: formatApiError(e) });
+		os.alert({ type: 'error', text: formatChatError(e) });
 	});
 });
 
@@ -375,7 +386,7 @@ function react(ev: PointerEvent) {
 				reaction: reaction,
 			});
 		} catch (e) {
-			os.alert({ type: 'error', text: formatApiError(e) });
+			os.alert({ type: 'error', text: formatChatError(e) });
 		}
 	});
 }
@@ -388,7 +399,7 @@ function onReactionClick(group: GroupedReaction) {
 			messageId: props.message.id,
 			reaction: group.reaction,
 		}).catch(e => {
-			os.alert({ type: 'error', text: formatApiError(e) });
+			os.alert({ type: 'error', text: formatChatError(e) });
 		});
 	} else if (!isMe.value) {
 		sound.playMisskeySfx('reaction');
@@ -396,7 +407,7 @@ function onReactionClick(group: GroupedReaction) {
 			messageId: props.message.id,
 			reaction: group.reaction,
 		}).catch(e => {
-			os.alert({ type: 'error', text: formatApiError(e) });
+			os.alert({ type: 'error', text: formatChatError(e) });
 		});
 	}
 }
@@ -435,7 +446,7 @@ async function confirmAndRecallMessage(action: RecallAction): Promise<void> {
 		if (e?.code === 'RECALL_TIME_EXPIRED') {
 			os.alert({ type: 'error', text: i18n.ts._chat.recallTimeExpired });
 		} else {
-			os.alert({ type: 'error', text: formatApiError(e) });
+			os.alert({ type: 'error', text: formatChatError(e) });
 		}
 	}
 }
@@ -551,6 +562,17 @@ function showMenu(ev: PointerEvent, contextmenu = false) {
 </script>
 
 <style lang="scss" module>
+.headerSuspended {
+	display: inline-flex;
+	align-items: center;
+	gap: 2px;
+	margin-left: 6px;
+	font-size: 0.8em;
+	font-weight: normal;
+	color: var(--MI_THEME-error);
+	opacity: 0.85;
+}
+
 .transition_reaction_move,
 .transition_reaction_enterActive,
 .transition_reaction_leaveActive {

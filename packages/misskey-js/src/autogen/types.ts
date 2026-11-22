@@ -36043,6 +36043,8 @@ export interface operations {
                     roomId: string;
                     /** Format: misskey:id */
                     userId: string;
+                    /** @default false */
+                    ban?: boolean;
                 };
             };
         };

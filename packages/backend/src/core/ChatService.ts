@@ -26,7 +26,6 @@ import type {
 	ChatRoomsRepository,
 	MiChatMessage,
 	MiChatRoom,
-	MiChatRoomBan,
 	MiChatRoomInvitation,
 	MiChatRoomMembership,
 	MiDriveFile,
@@ -223,6 +222,10 @@ export class ChatService {
 		const isSiteModerator = await this.roleService.isModerator({ id: initiator.id });
 		if (isSiteModerator) {
 			return { isOwner: false, isSiteModerator: true };
+		}
+		// 被禁言的管理员：返回禁言错误，便于前端给出明确提示
+		if (membership && membership.role === 'admin' && isMembershipSuspended(membership)) {
+			throw buildSuspendedError(membership.suspendedUntil!);
 		}
 		throw new Error('permission denied');
 	}
@@ -932,7 +935,7 @@ export class ChatService {
 			return [];
 		}
 
-		// 先获取所有有消息群聊的真实最新消息 ID（不加 LIMIT/HAVING），避免把翻页前页已出现过的有消息群误判成 0 消息群
+		// 先获取所有有消息群组的真实最新消息 ID（不加 LIMIT/HAVING），避免把翻页前页已出现过的有消息群误判成 0 消息群
 		const rows = await this.chatMessagesRepository.createQueryBuilder('message')
 			.select('message.toRoomId', 'roomId')
 			.addSelect('MAX("message"."id")', 'messageId')
@@ -988,7 +991,7 @@ export class ChatService {
 			emptyRoomMap.set(r.id, r);
 		}
 
-		// 对于尚无消息的已加入/拥有群聊，合成占位条目使 chat/history 能返回该群聊
+		// 对于尚无消息的已加入/拥有群组，合成占位条目使 chat/history 能返回该群组
 		const syntheticEntries: MiChatMessage[] = [];
 		for (const room of emptyRoomMap.values()) {
 			syntheticEntries.push({
@@ -1100,7 +1103,7 @@ export class ChatService {
 		};
 	}
 
-	/** 单个群聊会话的未读详情（语义同 getUserChatUnreadInfo） */
+	/** 单个群组会话的未读详情（语义同 getUserChatUnreadInfo） */
 	@bindThis
 	public async getRoomChatUnreadInfo(userId: MiUser['id'], roomId: MiChatRoom['id']): Promise<{ count: number | null; firstUnreadId: MiChatMessage['id'] | null }> {
 		const [marker, count, firstUnreadId] = await this.redisClient.mget(
@@ -1135,7 +1138,7 @@ export class ChatService {
 		return countMap;
 	}
 
-	/** history 用：批量取群聊未读条数（语义同 getUserUnreadCountMap） */
+	/** history 用：批量取群组未读条数（语义同 getUserUnreadCountMap） */
 	@bindThis
 	public async getRoomUnreadCountMap(userId: MiUser['id'], roomIds: MiChatRoom['id'][]): Promise<Record<MiChatRoom['id'], number | null>> {
 		const countMap: Record<MiChatRoom['id'], number | null> = {};
@@ -1583,7 +1586,7 @@ export class ChatService {
 	}
 
 	@bindThis
-	public async kick(initiator: MiUser, roomId: MiChatRoom['id'], userId: MiUser['id']) {
+	public async kick(initiator: MiUser, roomId: MiChatRoom['id'], userId: MiUser['id'], options?: { ban?: boolean }) {
 		const room = await this.chatRoomsRepository.findOneBy({ id: roomId });
 		if (!room) {
 			throw new Error('no such room');
@@ -1595,16 +1598,34 @@ export class ChatService {
 			throw new Error('cannot kick owner');
 		}
 
-		const membership = await this.chatRoomMembershipsRepository.findOneBy({ roomId, userId });
-		if (!membership) {
-			throw new Error('not a member');
-		}
+		await this.runInTransaction(async (manager) => {
+			const membershipsRepo = manager.getRepository('MiChatRoomMembership') as ChatRoomMembershipsRepository;
+			const invitationsRepo = manager.getRepository('MiChatRoomInvitation') as ChatRoomInvitationsRepository;
+			const bansRepo = manager.getRepository('MiChatRoomBan') as ChatRoomBansRepository;
 
-		if (!isOwner && !isSiteModerator && membership.role === 'admin') {
-			throw new Error('permission denied');
-		}
+			const membership = await membershipsRepo.findOneBy({ roomId, userId });
+			if (!membership) {
+				throw new Error('not a member');
+			}
+			if (!isOwner && !isSiteModerator && membership.role === 'admin') {
+				throw new Error('permission denied');
+			}
 
-		await this.chatRoomMembershipsRepository.delete(membership.id);
+			await membershipsRepo.delete(membership.id);
+
+			// 拉黑：禁止再被邀请或主动加入
+			if (options?.ban && (await bansRepo.findOneBy({ roomId, userId })) == null) {
+				await invitationsRepo.delete({ roomId, userId });
+				await bansRepo.insert({
+					id: this.idService.gen(),
+					createdAt: new Date(),
+					roomId,
+					userId,
+					bannedById: initiator.id,
+					reason: null,
+				});
+			}
+		});
 
 		await this.clearRoomUnreadForUsers([userId], roomId);
 
@@ -1617,120 +1638,6 @@ export class ChatService {
 			roomId,
 			userId,
 		});
-	}
-
-	@bindThis
-	public async banUserFromRoom(initiator: MiUser, roomId: MiChatRoom['id'], userId: MiUser['id'], reason?: string | null): Promise<MiChatRoomBan> {
-		if (initiator.id === userId) {
-			throw new Error('yourself');
-		}
-
-		const targetUser = await this.usersRepository.findOneBy({ id: userId });
-		if (!targetUser) {
-			throw new Error('no such user');
-		}
-
-		const room = await this.chatRoomsRepository.findOneBy({ id: roomId });
-		if (!room) {
-			throw new Error('no such room');
-		}
-
-		const { isOwner, isSiteModerator } = await this.assertRoomModerationPermission(initiator, room);
-
-		if (room.ownerId === userId) {
-			throw new Error('cannot ban owner');
-		}
-
-		const normalizedReason = reason != null ? reason.trim() || null : null;
-
-		const createdBan = await this.runInTransaction(async (manager) => {
-			const membershipsRepo = manager.getRepository('MiChatRoomMembership') as ChatRoomMembershipsRepository;
-			const invitationsRepo = manager.getRepository('MiChatRoomInvitation') as ChatRoomInvitationsRepository;
-			const bansRepo = manager.getRepository('MiChatRoomBan') as ChatRoomBansRepository;
-
-			const existingMembership = await membershipsRepo.findOneBy({ roomId, userId });
-			if (existingMembership) {
-				if (!isOwner && !isSiteModerator && existingMembership.role === 'admin') {
-					throw new Error('permission denied');
-				}
-				await membershipsRepo.delete(existingMembership.id);
-			}
-
-			const existingBan = await bansRepo.findOneBy({ roomId, userId });
-			if (existingBan) {
-				throw new Error('already banned');
-			}
-
-			await invitationsRepo.delete({ roomId, userId });
-
-			const banId = this.idService.gen();
-			await bansRepo.insert({
-				id: banId,
-				createdAt: new Date(),
-				roomId,
-				userId,
-				bannedById: initiator.id,
-				reason: normalizedReason,
-			});
-
-			return await bansRepo.findOneByOrFail({ id: banId });
-		});
-
-		await this.clearRoomUnreadForUsers([userId], roomId);
-
-		this.globalEventService.publishChatRoomStream(roomId, 'memberBanned', {
-			roomId,
-			userId,
-			reason: createdBan.reason,
-		});
-
-		return createdBan;
-	}
-
-	@bindThis
-	public async unbanUserFromRoom(initiator: MiUser, roomId: MiChatRoom['id'], userId: MiUser['id']): Promise<void> {
-		const room = await this.chatRoomsRepository.findOneBy({ id: roomId });
-		if (!room) {
-			throw new Error('no such room');
-		}
-
-		await this.assertRoomModerationPermission(initiator, room);
-
-		const existingBan = await this.chatRoomBansRepository.findOneBy({ roomId, userId });
-		if (!existingBan) {
-			throw new Error('not banned');
-		}
-
-		await this.chatRoomBansRepository.delete(existingBan.id);
-	}
-
-	@bindThis
-	public async getRoomBansWithPagination(
-		initiator: MiUser,
-		roomId: MiChatRoom['id'],
-		limit: number,
-		sinceId?: MiChatRoomBan['id'] | null,
-		untilId?: MiChatRoomBan['id'] | null,
-	): Promise<MiChatRoomBan[]> {
-		const room = await this.chatRoomsRepository.findOneBy({ id: roomId });
-		if (!room) {
-			throw new Error('no such room');
-		}
-
-		await this.assertRoomModerationPermission(initiator, room);
-
-		const query = this.queryService.makePaginationQuery(this.chatRoomBansRepository.createQueryBuilder('ban'), sinceId, untilId)
-			.andWhere('ban.roomId = :roomId', { roomId })
-			.leftJoinAndSelect('ban.user', 'user')
-			.leftJoinAndSelect('ban.bannedBy', 'bannedBy');
-
-		const bans = await query.limit(limit).getMany();
-
-		if (sinceId && !untilId) {
-			bans.sort((a, b) => (a.id > b.id ? -1 : a.id < b.id ? 1 : 0));
-		}
-
-		return bans;
 	}
 
 	@bindThis

@@ -18,6 +18,12 @@ export const meta = {
 	kind: 'write:chat',
 
 	errors: {
+		roomSuspended: {
+			message: 'You have been suspended from this room.',
+			code: 'ROOM_SUSPENDED',
+			id: '48ee3509-e7cb-4c7c-8e5b-15504eb51d25',
+			httpStatusCode: 403,
+		},
 		noSuchRoom: {
 			message: 'No such room.',
 			code: 'NO_SUCH_ROOM',
@@ -47,6 +53,7 @@ export const paramDef = {
 	properties: {
 		roomId: { type: 'string', format: 'misskey:id' },
 		userId: { type: 'string', format: 'misskey:id' },
+		ban: { type: 'boolean', default: false },
 	},
 	required: ['roomId', 'userId'],
 } as const;
@@ -60,9 +67,10 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			await this.chatService.checkChatAvailability(me.id, 'write');
 
 			try {
-				await this.chatService.kick(me, ps.roomId, ps.userId);
+				await this.chatService.kick(me, ps.roomId, ps.userId, { ban: ps.ban });
 			} catch (e: any) {
 				if (e instanceof EntityNotFoundError || e?.message === 'no such room') throw new ApiError(meta.errors.noSuchRoom);
+				if (e?.message === 'user has been suspended from this room') throw new ApiError(meta.errors.roomSuspended, e?.info);
 				if (e?.message === 'permission denied') throw new ApiError(meta.errors.permissionDenied);
 				if (e?.message === 'cannot kick owner') throw new ApiError(meta.errors.cannotKickOwner);
 				if (e?.message === 'not a member') throw new ApiError(meta.errors.notAMember);

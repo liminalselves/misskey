@@ -64,11 +64,12 @@ import * as Misskey from 'misskey-js';
 import XMessage from './XMessage.vue';
 import MkButton from '@/components/MkButton.vue';
 import { i18n } from '@/i18n.js';
-import { formatApiError, misskeyApi } from '@/utility/misskey-api.js';
+import { misskeyApi } from '@/utility/misskey-api.js';
 import { appendCursorPage, takeCursorFirstPage } from '@/utility/cursor-page.js';
 import { ensureSignin } from '@/i.js';
 import { useRouter } from '@/router.js';
 import * as os from '@/os.js';
+import { formatChatError } from '@/utility/chat-error.js';
 import MkInput from '@/components/MkInput.vue';
 import MkFoldableSection from '@/components/MkFoldableSection.vue';
 import MkInfo from '@/components/MkInfo.vue';
@@ -200,7 +201,7 @@ async function createRoom() {
 			},
 		});
 	} catch (err) {
-		await os.alert({ type: 'error', text: formatApiError(err) });
+		await os.alert({ type: 'error', text: formatChatError(err) });
 	}
 }
 
@@ -261,7 +262,7 @@ async function loadMoreSearchResults() {
 
 // 点击搜索结果跳转到对应消息
 function navigateToMessage(message: Misskey.entities.ChatMessage, messageId: string) {
-	// 判断是群聊还是 1v1
+	// 判断是群组还是 1v1
 	if ('toRoomId' in message && message.toRoomId != null) {
 		router.pushByPath(`/chat/room/${message.toRoomId}?messageId=${messageId}`);
 	} else if ('fromUserId' in message && message.fromUserId !== $i.id) {

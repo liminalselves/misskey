@@ -6704,14 +6704,6 @@ export interface Locale extends ILocale {
          */
         "recallTimeExpired": string;
         /**
-         * メンバー・通知あり
-         */
-        "mentionRoomMember": string;
-        /**
-         * 外部・参照のみ
-         */
-        "mentionExternalUser": string;
-        /**
          * テキストをコピー
          */
         "copyText": string;
@@ -6791,34 +6783,6 @@ export interface Locale extends ILocale {
          * {name} への招待を取り消しますか？
          */
         "cancelInvitationConfirm": ParameterizedString<"name">;
-        /**
-         * BANする
-         */
-        "ban": string;
-        /**
-         * BANを解除
-         */
-        "unban": string;
-        /**
-         * {name} をBANしますか？グループから除外され、再参加できなくなります。
-         */
-        "banConfirm": ParameterizedString<"name">;
-        /**
-         * {name} のBANを解除しますか？
-         */
-        "unbanConfirm": ParameterizedString<"name">;
-        /**
-         * BANリスト
-         */
-        "bannedUsers": string;
-        /**
-         * BANされたユーザーはいません
-         */
-        "noBannedUsers": string;
-        /**
-         * BANの理由（任意）
-         */
-        "banReason": string;
         /**
          * メンバーを検索...
          */

@@ -43,7 +43,7 @@ const fetchError = ref(false);
 const hasMore = ref(false);
 const memberships = ref<Misskey.entities.ChatRoomMembership[]>([]);
 
-// 过滤掉自己作为群主但因免打扰产生的冗余成员记录，避免与「创建的群聊」重复
+// 过滤掉自己作为群主但因免打扰产生的冗余成员记录，避免与「创建的群组」重复
 const visibleMemberships = computed(() =>
 	memberships.value.filter(m => m.room != null && m.room.ownerId !== $i.id),
 );

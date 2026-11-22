@@ -35,7 +35,8 @@ import { definePage } from '@/page.js';
 import MkPolkadots from '@/components/MkPolkadots.vue';
 import { useRouter } from '@/router.js';
 import * as os from '@/os.js';
-import { formatApiError, misskeyApi } from '@/utility/misskey-api.js';
+import { formatChatError } from '@/utility/chat-error.js';
+import { misskeyApi } from '@/utility/misskey-api.js';
 import { useStream } from '@/stream.js';
 
 const props = defineProps<{ view?: string }>();
@@ -104,7 +105,7 @@ async function createRoom() {
 			},
 		});
 	} catch (err) {
-		await os.alert({ type: 'error', text: formatApiError(err) });
+		await os.alert({ type: 'error', text: formatChatError(err) });
 	}
 }
 

@@ -63,12 +63,13 @@ import { computed, ref } from 'vue';
 import * as Misskey from 'misskey-js';
 import MkButton from '@/components/MkButton.vue';
 import { i18n } from '@/i18n.js';
-import { misskeyApi, formatApiError } from '@/utility/misskey-api.js';
+import { misskeyApi } from '@/utility/misskey-api.js';
 import MkInput from '@/components/MkInput.vue';
 import MkFoldableSection from '@/components/MkFoldableSection.vue';
 import MkInfo from '@/components/MkInfo.vue';
 import MkUserName from '@/components/global/MkUserName.vue';
 import * as os from '@/os.js';
+import { chatApiWithDialog, formatChatError } from '@/utility/chat-error.js';
 import { useRouter } from '@/router.js';
 import { definePage } from '@/page.js';
 import { ensureSignin } from '@/i.js';
@@ -138,7 +139,7 @@ async function loadMore() {
 		searchResults.value.push(...res);
 		hasMore.value = res.length === LIMIT;
 	} catch (err) {
-		os.alert({ type: 'error', text: formatApiError(err) });
+		os.alert({ type: 'error', text: formatChatError(err) });
 	} finally {
 		loadingMore.value = false;
 	}
@@ -154,7 +155,7 @@ async function join(room: Misskey.entities.ChatRoom) {
 	if (!canJoin.value || joiningRoomId.value != null) return;
 	joiningRoomId.value = room.id;
 	try {
-		await os.apiWithDialog('chat/rooms/join', {
+		await chatApiWithDialog('chat/rooms/join', {
 			roomId: room.id,
 		});
 		router.push('/chat/room/:roomId', {
