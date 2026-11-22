@@ -20,7 +20,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { computed, markRaw, ref } from 'vue';
+import { computed, markRaw, onMounted, ref } from 'vue';
 import { notificationTypes } from 'misskey-js';
 import type { PageHeaderItem } from '@/types/page-header.js';
 import MkStreamingNotificationsTimeline from '@/components/MkStreamingNotificationsTimeline.vue';
@@ -29,6 +29,7 @@ import * as os from '@/os.js';
 import { i18n } from '@/i18n.js';
 import { definePage } from '@/page.js';
 import { Paginator } from '@/utility/paginator.js';
+import { misskeyApi } from '@/utility/misskey-api.js';
 
 const tab = ref('all');
 const includeTypes = ref<string[] | null>(null);
@@ -94,6 +95,11 @@ definePage(() => ({
 	title: i18n.ts.notifications,
 	icon: 'ti ti-bell',
 }));
+
+// 打开通知页即视为已读，清掉导航栏小黄点（上游只靠新通知到达时才清）
+onMounted(() => {
+	misskeyApi('notifications/mark-all-as-read', {}).catch(() => {});
+});
 </script>
 
 <style module lang="scss">
