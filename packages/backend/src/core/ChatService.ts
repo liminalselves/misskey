@@ -26,6 +26,7 @@ import type {
 	ChatRoomsRepository,
 	MiChatMessage,
 	MiChatRoom,
+	MiChatRoomBan,
 	MiChatRoomInvitation,
 	MiChatRoomMembership,
 	MiDriveFile,
@@ -1638,6 +1639,52 @@ export class ChatService {
 			roomId,
 			userId,
 		});
+	}
+
+	@bindThis
+	public async unbanUserFromRoom(initiator: MiUser, roomId: MiChatRoom['id'], userId: MiUser['id']): Promise<void> {
+		const room = await this.chatRoomsRepository.findOneBy({ id: roomId });
+		if (!room) {
+			throw new Error('no such room');
+		}
+
+		await this.assertRoomModerationPermission(initiator, room);
+
+		const existingBan = await this.chatRoomBansRepository.findOneBy({ roomId, userId });
+		if (!existingBan) {
+			throw new Error('not banned');
+		}
+
+		await this.chatRoomBansRepository.delete(existingBan.id);
+	}
+
+	@bindThis
+	public async getRoomBansWithPagination(
+		initiator: MiUser,
+		roomId: MiChatRoom['id'],
+		limit: number,
+		sinceId?: MiChatRoomBan['id'] | null,
+		untilId?: MiChatRoomBan['id'] | null,
+	): Promise<MiChatRoomBan[]> {
+		const room = await this.chatRoomsRepository.findOneBy({ id: roomId });
+		if (!room) {
+			throw new Error('no such room');
+		}
+
+		await this.assertRoomModerationPermission(initiator, room);
+
+		const query = this.queryService.makePaginationQuery(this.chatRoomBansRepository.createQueryBuilder('ban'), sinceId, untilId)
+			.andWhere('ban.roomId = :roomId', { roomId })
+			.leftJoinAndSelect('ban.user', 'user')
+			.leftJoinAndSelect('ban.bannedBy', 'bannedBy');
+
+		const bans = await query.limit(limit).getMany();
+
+		if (sinceId && !untilId) {
+			bans.sort((a, b) => (a.id > b.id ? -1 : a.id < b.id ? 1 : 0));
+		}
+
+		return bans;
 	}
 
 	@bindThis

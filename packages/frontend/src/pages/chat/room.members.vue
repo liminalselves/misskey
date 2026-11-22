@@ -9,9 +9,22 @@ SPDX-License-Identifier: AGPL-3.0-only
 		<i class="ti ti-plus"></i> {{ i18n.ts._chat.inviteUser }}
 	</MkButton>
 
-	<MkInput v-model="memberQuery" type="search" :placeholder="i18n.ts._chat.searchMembersPlaceholder">
-		<template #prefix><i class="ti ti-search"></i></template>
-	</MkInput>
+	<div :class="$style.searchRow">
+		<MkInput v-model="memberQuery" type="search" :placeholder="i18n.ts._chat.searchMembersPlaceholder" :class="$style.searchInput">
+			<template #prefix><i class="ti ti-search"></i></template>
+		</MkInput>
+		<button
+			v-if="canManageInvitations"
+			v-tooltip="'黑名单'"
+			type="button"
+			class="_button"
+			:class="$style.blacklistBtn"
+			aria-label="黑名单"
+			@click="openBlacklist"
+		>
+			<i class="ti ti-user-off"></i>
+		</button>
+	</div>
 
 	<!-- 群主 -->
 	<div v-if="showOwnerRow" :class="$style.member">
@@ -101,7 +114,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import * as Misskey from 'misskey-js';
 import type { MenuItem } from '@/types/menu.js';
 import MkButton from '@/components/MkButton.vue';
@@ -389,26 +402,36 @@ async function transferOwnership(membership: Misskey.entities.ChatRoomMembership
 
 async function kick(membership: Misskey.entities.ChatRoomMembership) {
 	const userName = membership.user?.name || membership.user?.username || membership.userId;
-	const { canceled, result } = await os.form(i18n.tsx._chat.kickConfirm({ name: userName }), {
-		ban: {
-			type: 'boolean',
-			label: '同时拉黑',
-			description: '拉黑后该用户无法再被邀请或主动加入本群组',
-			default: false,
-		},
+	const { canceled, result } = await os.actions({
+		type: 'warning',
+		title: `踢出 ${userName}`,
+		text: '踢出后对方可以再次被邀请或加入。选择「踢出并拉黑」则对方无法再被邀请，也不能主动加入本群组。',
+		actions: [
+			{ value: 'kick', text: '踢出', danger: true },
+			{ value: 'ban', text: '踢出并拉黑', danger: true },
+			{ value: 'cancel', text: i18n.ts.cancel },
+		],
 	});
-	if (canceled) return;
+	if (canceled || result === 'cancel') return;
 
 	try {
 		await chatApiWithDialog('chat/rooms/kick', {
 			roomId: props.room.id,
 			userId: membership.userId,
-			ban: Boolean(result.ban),
+			ban: result === 'ban',
 		});
 		await loadMembers(true);
 	} catch {
 		// apiWithDialog 已显示错误提示
 	}
+}
+
+function openBlacklist() {
+	const { dispose } = os.popup(defineAsyncComponent(() => import('./room.blacklist-dialog.vue')), {
+		roomId: props.room.id,
+	}, {
+		closed: () => dispose(),
+	});
 }
 
 async function cancelInvitation(invitation: Misskey.entities.ChatRoomInvitation) {
@@ -478,6 +501,30 @@ async function unsuspend(membership: Misskey.entities.ChatRoomMembership) {
 </script>
 
 <style lang="scss" module>
+.searchRow {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.searchInput {
+	flex: 1;
+	min-width: 0;
+}
+
+.blacklistBtn {
+	flex-shrink: 0;
+	width: 38px;
+	height: 38px;
+	border-radius: 50%;
+	color: var(--MI_THEME-fgTransparentWeak);
+
+	&:hover {
+		color: var(--MI_THEME-error);
+		background: var(--MI_THEME-buttonHoverBg);
+	}
+}
+
 .member {
 	display: flex;
 	align-items: center;

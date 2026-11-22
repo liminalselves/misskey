@@ -625,6 +625,8 @@ export * as 'chat/rooms/invitations/ignore' from './endpoints/chat/rooms/invitat
 export * as 'chat/rooms/invitations/inbox' from './endpoints/chat/rooms/invitations/inbox.js';
 export * as 'chat/rooms/invitations/outbox' from './endpoints/chat/rooms/invitations/outbox.js';
 export * as 'chat/rooms/kick' from './endpoints/chat/rooms/kick.js';
+export * as 'chat/rooms/unban' from './endpoints/chat/rooms/unban.js';
+export * as 'chat/rooms/bans' from './endpoints/chat/rooms/bans.js';
 export * as 'chat/rooms/suspend' from './endpoints/chat/rooms/suspend.js';
 export * as 'chat/rooms/unsuspend' from './endpoints/chat/rooms/unsuspend.js';
 export * as 'chat/rooms/search' from './endpoints/chat/rooms/search.js';
