@@ -221,10 +221,11 @@ export class AgentModelUsageService {
 	public async canAffordModelCall(instance: MiMeta, modelId: string | null, userId: string): Promise<boolean> {
 		// BYOK 用户自定义模型：平台不产生成本，直接放行
 		if (modelId && isAgentUserModelId(modelId)) return true;
-		if (await this.hasFreeQuotaRemaining(userId, modelId, instance)) return true;
-		const billingMode = this.agentService.resolveModelBillingMode(instance, modelId);
+		const effectiveModelId = this.agentService.resolveEffectiveModelId(instance, modelId);
+		if (await this.hasFreeQuotaRemaining(userId, effectiveModelId, instance)) return true;
+		const billingMode = this.agentService.resolveModelBillingMode(instance, effectiveModelId);
 		if (billingMode === 'usage') {
-			const model = this.agentService.lookupAnyModelById(instance, modelId);
+			const model = this.agentService.lookupAnyModelById(instance, effectiveModelId);
 			const priced = model != null && (
 				model.pricePerMillionInputCacheHitTokens > 0
 				|| model.pricePerMillionInputCacheMissTokens > 0
@@ -235,7 +236,7 @@ export class AgentModelUsageService {
 			const profile = await this.userProfilesRepository.findOneBy({ userId });
 			return (profile?.agentCreditBalance ?? 0) > 0;
 		}
-		const cost = this.agentService.getUserFacingModelCostPerCall(instance, modelId);
+		const cost = this.agentService.getUserFacingModelCostPerCall(instance, effectiveModelId);
 		if (cost <= 0) return true;
 		const profile = await this.userProfilesRepository.findOneBy({ userId });
 		return (profile?.agentCreditBalance ?? 0) >= cost;
@@ -320,10 +321,11 @@ export class AgentModelUsageService {
 	/** 判断用户某模型当日是否仍有剩余免费额度（供调用前余额预检查豁免） */
 	@bindThis
 	public async hasFreeQuotaRemaining(userId: string, modelId: string | null, instance: MiMeta): Promise<boolean> {
-		if (!modelId) return false;
-		const quota = this.resolveDailyFreeQuota(instance, modelId);
+		const effectiveModelId = modelId || this.agentService.resolveEffectiveModelId(instance, modelId);
+		if (!effectiveModelId) return false;
+		const quota = this.resolveDailyFreeQuota(instance, effectiveModelId);
 		if (quota <= 0) return false;
-		const used = await this.getFreeQuotaUsed(userId, modelId);
+		const used = await this.getFreeQuotaUsed(userId, effectiveModelId);
 		return used < quota;
 	}
 

@@ -99,15 +99,18 @@ function isMembershipSuspended(membership: { suspendedUntil: Date | null } | nul
 	return Boolean(membership?.suspendedUntil && new Date() < membership.suspendedUntil);
 }
 
-function buildSuspendedError(suspendedUntil: Date): Error {
+export function getRoomSuspensionInfo(suspendedUntil: Date): { remainingMs: number | null; isPermanent: boolean } {
 	const remainingMs = suspendedUntil.getTime() - Date.now();
 	const isPermanent = !Number.isFinite(remainingMs) || suspendedUntil.getUTCFullYear() >= 9999;
-
-	const error: any = new Error('user has been suspended from this room');
-	error.info = {
+	return {
 		remainingMs: isPermanent ? null : Math.max(0, remainingMs),
 		isPermanent,
 	};
+}
+
+function buildSuspendedError(suspendedUntil: Date): Error {
+	const error: any = new Error('user has been suspended from this room');
+	error.info = getRoomSuspensionInfo(suspendedUntil);
 	return error;
 }
 
@@ -494,13 +497,27 @@ export class ChatService {
 				}
 				const markers = await redisPipeline.exec();
 				if (markers == null) throw new Error('redis error');
-				if (markers.every(marker => marker[1] !== message.id)) return;
-				const packedMessageForTo = await this.chatEntityService.packMessageDetailed(inserted);
-				await Promise.all(membershipsOtherThanMe.map(async (membership, i) => {
-					if (markers[i][1] !== message.id) return;
-					this.globalEventService.publishMainStream(membership.userId, 'newChatMessage', packedMessageForTo);
-					await this.pushNotificationService.pushNotification(membership.userId, 'newChatMessage', packedMessageForTo);
-				}));
+				const unreadMemberships = membershipsOtherThanMe.filter((_, i) => markers[i][1] === message.id);
+				if (unreadMemberships.length === 0) return;
+
+				const deliver = async (userId: MiUser['id'], packed: Packed<'ChatMessage'>) => {
+					this.globalEventService.publishMainStream(userId, 'newChatMessage', packed);
+					await this.pushNotificationService.pushNotification(userId, 'newChatMessage', packed);
+				};
+
+				const [firstMembership, ...restMemberships] = unreadMemberships;
+				const firstPacked = await this.chatEntityService.packMessageDetailed(inserted, { id: firstMembership.userId });
+				const hint = restMemberships.length > 0 && inserted.fileId != null && firstPacked.file !== undefined
+					? { _hint_: { packedFiles: new Map<MiChatMessage['fileId'], Packed<'DriveFile'> | null>([[inserted.fileId, firstPacked.file]]) } }
+					: undefined;
+
+				await Promise.all([
+					deliver(firstMembership.userId, firstPacked),
+					...restMemberships.map(async membership => {
+						const packed = await this.chatEntityService.packMessageDetailed(inserted, { id: membership.userId }, hint);
+						await deliver(membership.userId, packed);
+					}),
+				]);
 			})().catch(error => this.logger.error('Delayed room message notification failed', error));
 		}, 3000);
 
@@ -719,6 +736,9 @@ export class ChatService {
 			} else {
 				// 群撤回：群主、群管理员或全站版主可任意时间撤回成员消息
 				if (!isOwner && !isSiteModerator && !isActiveAdmin) {
+					if (actorMembership?.role === 'admin' && isMembershipSuspended(actorMembership)) {
+						throw buildSuspendedError(actorMembership.suspendedUntil!);
+					}
 					throw new ChatMessageAccessError('no such message');
 				}
 				if (isActiveAdmin && !isOwner && !isSiteModerator) {

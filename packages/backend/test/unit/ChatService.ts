@@ -5,6 +5,7 @@
 
 import { describe, expect, test, vi } from 'vitest';
 import { ChatMessageAccessError, ChatService, validateRoomIconUrl } from '@/core/ChatService.js';
+import UpdateChatRoom from '@/server/api/endpoints/chat/rooms/update.js';
 
 function createQueryBuilderMock(options?: {
 	getManyResult?: any[];
@@ -57,6 +58,8 @@ function createChatServiceHarness(overrides?: {
 	mutings?: any[];
 	queryMessagesImpl?: (sql: string, params: any[]) => any[];
 	messageDates?: Record<string, Date>;
+	redisStore?: Map<string, string>;
+	packMessageDetailedImpl?: (m: any, me?: { id: string }, options?: any) => Promise<any>;
 }) {
 	const rooms = overrides?.rooms ?? [];
 	const memberships = overrides?.memberships ?? [];
@@ -73,15 +76,25 @@ function createChatServiceHarness(overrides?: {
 	};
 
 	const pipelineOps: any[] = [];
+	const redisStore = overrides?.redisStore ?? new Map<string, string>();
 	const makePipeline = () => {
+		const queuedGets: string[] = [];
 		const p: any = {
-			set: (...args: any[]) => { pipelineOps.push(['set', ...args]); return p; },
+			set: (...args: any[]) => {
+				pipelineOps.push(['set', ...args]);
+				if (args[2] === 'NX') {
+					if (!redisStore.has(args[0])) redisStore.set(args[0], args[1]);
+				} else {
+					redisStore.set(args[0], args[1]);
+				}
+				return p;
+			},
 			incr: (...args: any[]) => { pipelineOps.push(['incr', ...args]); return p; },
 			sadd: (...args: any[]) => { pipelineOps.push(['sadd', ...args]); return p; },
-			del: (...args: any[]) => { pipelineOps.push(['del', ...args]); return p; },
+			del: (...args: any[]) => { pipelineOps.push(['del', ...args]); redisStore.delete(args[0]); return p; },
 			srem: (...args: any[]) => { pipelineOps.push(['srem', ...args]); return p; },
-			get: (...args: any[]) => { pipelineOps.push(['get', ...args]); return p; },
-			exec: vi.fn(async () => []),
+			get: (...args: any[]) => { pipelineOps.push(['get', ...args]); queuedGets.push(args[0]); return p; },
+			exec: vi.fn(async () => queuedGets.map(k => [null, redisStore.get(k) ?? null])),
 		};
 		return p;
 	};
@@ -270,7 +283,7 @@ function createChatServiceHarness(overrides?: {
 			recalledAt: m.recalledAt?.toISOString() ?? null,
 			recalledById: m.recalledById ?? null,
 		})),
-		packMessageDetailed: vi.fn(async (m: any) => ({ id: m.id, text: m.text })),
+		packMessageDetailed: vi.fn(overrides?.packMessageDetailedImpl ?? (async (m: any) => ({ id: m.id, text: m.text }))),
 		packRoom: vi.fn(async (r: any) => ({ id: r.id, name: r.name, ownerId: r.ownerId, pinnedMessageId: r.pinnedMessageId ?? null })),
 		packRoomMembership: vi.fn(async () => ({ id: 'mem1' })),
 	};
@@ -284,6 +297,8 @@ function createChatServiceHarness(overrides?: {
 	const queryService = {
 		makePaginationQuery: vi.fn((qb: any) => qb),
 	};
+
+	const pushNotificationService = { pushNotification: vi.fn(async () => {}) };
 
 	const service = new ChatService(
 		{ host: 'example.com' } as any,
@@ -302,7 +317,7 @@ function createChatServiceHarness(overrides?: {
 		globalEventService as any,
 		{} as any,
 		{} as any,
-		{ pushNotification: vi.fn() } as any,
+		pushNotificationService as any,
 		notificationService as any,
 		userBlockingService as any,
 		queryService as any,
@@ -320,7 +335,10 @@ function createChatServiceHarness(overrides?: {
 		bans,
 		messages,
 		pipelineOps,
+		redisStore,
 		globalEventService,
+		pushNotificationService,
+		chatEntityService,
 		notificationService,
 		chatMessagesRepository,
 		chatRoomMembershipsRepository,
@@ -706,5 +724,139 @@ describe('ChatService owner mute, unread events, reactions & moderation', () => 
 
 		const page3 = await service.roomHistory('me1', 2, page2.at(-1)!.id);
 		expect(page3).toEqual([]);
+	});
+
+	test('recallMessage surfaces suspension error info for suspended room admins and allows site moderators', async () => {
+		const room = { id: 'r1', ownerId: 'owner1', isArchived: false, pinnedMessageId: null };
+		const msg = { id: 'm1', fromUserId: 'u3', toRoomId: 'r1', toUserId: null, text: 'hi', reactions: [], recalledAt: null, recalledById: null };
+
+		const timed = createChatServiceHarness({
+			rooms: [room],
+			memberships: [
+				{ id: 'mem_admin', roomId: 'r1', userId: 'admin_susp', isMuted: false, suspendedUntil: new Date(Date.now() + 60_000), role: 'admin' },
+				{ id: 'mem_member', roomId: 'r1', userId: 'member_susp', isMuted: false, suspendedUntil: new Date(Date.now() + 60_000), role: 'member' },
+			],
+			messages: [msg],
+		});
+
+		try {
+			await timed.service.recallMessage('admin_susp', 'm1');
+			expect.unreachable();
+		} catch (e: any) {
+			expect(e.message).toBe('user has been suspended from this room');
+			expect(e.info).toMatchObject({ isPermanent: false });
+			expect(e.info.remainingMs).toBeGreaterThan(0);
+		}
+
+		await expect(timed.service.recallMessage('member_susp', 'm1')).rejects.toThrow('no such message');
+
+		const permanent = createChatServiceHarness({
+			rooms: [room],
+			memberships: [
+				{ id: 'mem_admin', roomId: 'r1', userId: 'admin_perm', isMuted: false, suspendedUntil: new Date(Date.UTC(9999, 0, 1)), role: 'admin' },
+			],
+			messages: [msg],
+		});
+		await expect(permanent.service.recallMessage('admin_perm', 'm1')).rejects.toMatchObject({
+			message: 'user has been suspended from this room',
+			info: { remainingMs: null, isPermanent: true },
+		});
+
+		const mod = createChatServiceHarness({
+			rooms: [room],
+			memberships: [
+				{ id: 'mem_admin', roomId: 'r1', userId: 'mod_susp', isMuted: false, suspendedUntil: new Date(Date.now() + 60_000), role: 'admin' },
+			],
+			messages: [{ ...msg }],
+			isModerator: true,
+		});
+		const recalledByMod = await mod.service.recallMessage('mod_susp', 'm1');
+		expect(recalledByMod.recalledById).toBe('mod_susp');
+	});
+
+	test('chat/rooms/update returns roomSuspended with remainingMs and isPermanent info', async () => {
+		const room = { id: 'r1', ownerId: 'owner1', isArchived: false };
+		const timedEndpoint = new UpdateChatRoom(
+			{ findOneBy: async () => ({ roomId: 'r1', userId: 'admin1', role: 'admin', suspendedUntil: new Date(Date.now() + 30_000) }) } as never,
+			{ checkChatAvailability: async () => {}, findRoomById: async () => room } as never,
+			{} as never,
+		);
+		await expect(timedEndpoint.exec({ roomId: 'r1', name: 'Renamed' }, { id: 'admin1' } as never, null)).rejects.toMatchObject({
+			code: 'ROOM_SUSPENDED',
+			info: { remainingMs: expect.any(Number), isPermanent: false },
+		});
+
+		const permEndpoint = new UpdateChatRoom(
+			{ findOneBy: async () => ({ roomId: 'r1', userId: 'admin1', role: 'admin', suspendedUntil: new Date(Date.UTC(9999, 0, 1)) }) } as never,
+			{ checkChatAvailability: async () => {}, findRoomById: async () => room } as never,
+			{} as never,
+		);
+		await expect(permEndpoint.exec({ roomId: 'r1', name: 'Renamed' }, { id: 'admin1' } as never, null)).rejects.toMatchObject({
+			code: 'ROOM_SUSPENDED',
+			info: { remainingMs: null, isPermanent: true },
+		});
+	});
+
+	test('createMessageToRoom delayed newChatMessage packs per unread recipient with me context and reuses packedFiles hint', async () => {
+		vi.useFakeTimers();
+		try {
+			const room = { id: 'r1', ownerId: 'owner1', isArchived: false };
+			const packedFile = { id: 'file1', name: 'photo.png' };
+			const h = createChatServiceHarness({
+				rooms: [room],
+				memberships: [
+					{ id: 'm_u2', roomId: 'r1', userId: 'u2', isMuted: false, suspendedUntil: null, role: 'admin' },
+					{ id: 'm_u3', roomId: 'r1', userId: 'u3', isMuted: false, suspendedUntil: null, role: 'member' },
+					{ id: 'm_u4', roomId: 'r1', userId: 'u4', isMuted: false, suspendedUntil: null, role: 'member' },
+					{ id: 'm_u5', roomId: 'r1', userId: 'u5', isMuted: true, suspendedUntil: null, role: 'member' },
+				],
+				packMessageDetailedImpl: async (m, me, options: any) => ({
+					id: m.id,
+					text: m.text,
+					file: options?._hint_?.packedFiles?.get(m.fileId) ?? packedFile,
+					toRoom: me
+						? { id: m.toRoomId, isMember: true, myRole: me.id === 'u2' ? 'admin' : 'member', unreadCount: me.id === 'u2' ? 2 : 1 }
+						: { id: m.toRoomId, isMember: false, myRole: null, unreadCount: 0 },
+				}),
+			});
+
+			await h.service.createMessageToRoom(
+				{ id: 'owner1', host: null },
+				room as any,
+				{ text: 'hello room', file: { id: 'file1' } as any },
+			);
+
+			// Simulate u4 reading the room before the 3-second delayed notification fires
+			h.redisStore.delete('newRoomChatMessageExists:u4:r1');
+
+			await vi.advanceTimersByTimeAsync(3000);
+
+			expect(h.chatEntityService.packMessageDetailed).toHaveBeenCalledTimes(2);
+			expect(h.chatEntityService.packMessageDetailed).toHaveBeenNthCalledWith(1, expect.objectContaining({ id: 'id_0001' }), { id: 'u2' });
+			expect(h.chatEntityService.packMessageDetailed).toHaveBeenNthCalledWith(
+				2,
+				expect.objectContaining({ id: 'id_0001' }),
+				{ id: 'u3' },
+				{ _hint_: { packedFiles: new Map([['file1', packedFile]]) } },
+			);
+
+			expect(h.globalEventService.publishMainStream).toHaveBeenCalledTimes(2);
+			expect(h.globalEventService.publishMainStream).toHaveBeenCalledWith('u2', 'newChatMessage', expect.objectContaining({
+				toRoom: expect.objectContaining({ isMember: true, myRole: 'admin', unreadCount: 2 }),
+			}));
+			expect(h.globalEventService.publishMainStream).toHaveBeenCalledWith('u3', 'newChatMessage', expect.objectContaining({
+				toRoom: expect.objectContaining({ isMember: true, myRole: 'member', unreadCount: 1 }),
+			}));
+			expect(h.pushNotificationService.pushNotification).toHaveBeenCalledTimes(2);
+			expect(h.pushNotificationService.pushNotification).toHaveBeenCalledWith('u2', 'newChatMessage', expect.objectContaining({
+				toRoom: expect.objectContaining({ isMember: true, myRole: 'admin', unreadCount: 2 }),
+			}));
+			expect(h.pushNotificationService.pushNotification).toHaveBeenCalledWith('u3', 'newChatMessage', expect.objectContaining({
+				toRoom: expect.objectContaining({ isMember: true, myRole: 'member', unreadCount: 1 }),
+			}));
+		} finally {
+			vi.clearAllTimers();
+			vi.useRealTimers();
+		}
 	});
 });

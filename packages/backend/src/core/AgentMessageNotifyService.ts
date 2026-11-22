@@ -71,6 +71,14 @@ export class AgentMessageNotifyService {
 	}
 
 	@bindThis
+	public async emitAgentRead(userId: string): Promise<void> {
+		const hasUnreadAgentMessages = await this.hasUnreadAgentMessages(userId);
+		this.globalEventService.publishMainStream(userId, 'agentRead', {
+			hasUnreadAgentMessages,
+		});
+	}
+
+	@bindThis
 	public async readAgentMessages(userId: string, sessionId?: string): Promise<void> {
 		const redisPipeline = this.redisClient.multi();
 		if (sessionId) {
@@ -89,6 +97,7 @@ export class AgentMessageNotifyService {
 			}
 			await redisPipeline.exec();
 		}
+		await this.emitAgentRead(userId);
 	}
 
 	@bindThis
@@ -107,6 +116,7 @@ export class AgentMessageNotifyService {
 				.getRawOne<{ count: string; first: string | null; last: string | null }>();
 			return { count: Number(result?.count ?? 0), first: result?.first ?? null, last: result?.last ?? null };
 		});
+		await this.emitAgentRead(userId);
 	}
 
 	@bindThis

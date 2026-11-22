@@ -92,7 +92,8 @@ export class AgentCompressionMemoryService {
 	}
 
 	/**
-	 * 压缩便签：本会话列优先（创建会话时写入当时的默认）；空则 meta 压缩默认 → 全站对话默认）	 */
+	 * 压缩便签：本会话列优先（创建会话时写入当时的默认）；空则 meta 压缩默认 → 全站对话默认 → 首个启用模型
+	 */
 	@bindThis
 	public resolveEffectiveCompressionModelId(
 		session: MiAgentSession,
@@ -102,7 +103,7 @@ export class AgentCompressionMemoryService {
 		if (o) return o;
 		const d = instanceMeta.agentCompressionDefaultModelId?.trim();
 		if (d) return d;
-		return instanceMeta.agentDefaultModelId?.trim() ?? null;
+		return this.agentService.resolveEffectiveModelId(instanceMeta, instanceMeta.agentDefaultModelId?.trim() || null);
 	}
 
 	@bindThis

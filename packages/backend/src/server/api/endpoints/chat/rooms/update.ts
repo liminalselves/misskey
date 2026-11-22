@@ -6,7 +6,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { Endpoint } from '@/server/api/endpoint-base.js';
 import { DI } from '@/di-symbols.js';
-import { ChatService } from '@/core/ChatService.js';
+import { ChatService, getRoomSuspensionInfo } from '@/core/ChatService.js';
 import { ApiError } from '@/server/api/error.js';
 import { ChatEntityService } from '@/core/entities/ChatEntityService.js';
 import type { ChatRoomMembershipsRepository } from '@/models/_.js';
@@ -94,7 +94,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					throw new ApiError(meta.errors.permissionDenied);
 				}
 				if (membership.suspendedUntil && new Date() < membership.suspendedUntil) {
-					throw new ApiError(meta.errors.roomSuspended);
+					throw new ApiError(meta.errors.roomSuspended, getRoomSuspensionInfo(membership.suspendedUntil));
 				}
 				if (ps.isPublic !== undefined || ps.isArchived !== undefined) {
 					throw new ApiError(meta.errors.permissionDenied);
