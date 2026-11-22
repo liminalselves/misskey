@@ -28,9 +28,12 @@ export function useGovernancePagination<T extends { id: string }>(
 	async function load(reset = false): Promise<void> {
 		if (loading.value) {
 			if (reset) {
-				// 立即作废在途响应（旧筛选的结果不再落地），并排队补发一次 reset 加载
+				// 立即作废在途响应（旧筛选的结果不再落地），清空旧列表，并排队补发一次 reset 加载
 				epoch++;
 				queuedReset = true;
+				items.value = [];
+				hasMore.value = false;
+				error.value = null;
 			}
 			return;
 		}

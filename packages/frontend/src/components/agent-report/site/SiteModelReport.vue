@@ -82,13 +82,13 @@ SPDX-License-Identifier: AGPL-3.0-only
 					v-if="users.data.value != null"
 					:items="users.data.value.items"
 					:total="users.data.value.total"
-					:page="userPage"
-					:pageSize="userPrefs.pageSize"
-					:sort="userPrefs.sort"
+					:page="users.data.value.page"
+					:pageSize="users.data.value.pageSize"
+					:sort="users.data.value.sort"
 					:loading="users.loading.value"
 					@update:page="setUserPage"
-					@update:pageSize="userPrefs.pageSize = $event"
-					@update:sort="userPrefs.sort = $event"
+					@update:pageSize="setUserPageSize"
+					@update:sort="setUserSort"
 				/>
 			</ReportPanel>
 		</div>
@@ -175,12 +175,12 @@ watch(() => [userPrefs.sort, userPrefs.pageSize], () => {
 });
 
 const metric = ref<MetricKey>('total');
-const userPage = ref(1);
 const filterParams = filterState.params;
 
 type SummaryRes = { since: string; until: string; bucket: BucketUnit; current: ReportMetrics; previous: ReportMetrics; series: { t: string; m: ReportMetrics }[] };
 type ModelsRes = { catalog: CatalogEntry[]; rows: { modelId: string; m: ReportMetrics }[] };
 type UsersRes = { items: { userId: string; user: Misskey.entities.UserLite | null; m: ReportMetrics }[]; total: number; page: number; pageSize: number };
+type UsersLoaded = UsersRes & { sort: UserSort };
 
 // Breakdown used by the response currently displayed (the chart must not relabel old data with a new breakdown).
 const trendBreakdown = ref<Breakdown>(filters.breakdown);
@@ -208,9 +208,25 @@ const trend = useReportSection(async () => {
 });
 const breakdowns = useReportSection(() => reportApi<BreakdownsData>('admin/agents/reports/breakdowns', filterParams()));
 const models = useReportSection(() => reportApi<ModelsRes>('admin/agents/reports/models', filterParams()));
-const users = useReportSection(() => reportApi<UsersRes>('admin/agents/reports/users', {
-	...filterParams(), sort: userPrefs.sort, page: userPage.value, pageSize: userPrefs.pageSize,
-}));
+let nextUserQuery: { page: number; pageSize: number; sort: UserSort } = {
+	page: 1,
+	pageSize: userPrefs.pageSize,
+	sort: userPrefs.sort,
+};
+// Keep page/pageSize/sort attached to the resolved response so rank & pager never desync on failed reloads.
+const users = useReportSection(async (): Promise<UsersLoaded> => {
+	const { page, pageSize, sort } = nextUserQuery;
+	const res = await reportApi<UsersRes>('admin/agents/reports/users', {
+		...filterParams(), sort, page, pageSize,
+	});
+	return { ...res, page, pageSize, sort };
+});
+watch(() => users.data.value, d => {
+	if (d != null) {
+		userPrefs.sort = d.sort;
+		userPrefs.pageSize = d.pageSize;
+	}
+});
 
 const anyLoading = computed(() => summary.loading.value || trend.loading.value || models.loading.value || (!simple.value && (breakdowns.loading.value || users.loading.value)));
 
@@ -221,7 +237,11 @@ const usersSeen = ref(false);
 
 function loadAll() {
 	filterState.refreshWindow();
-	userPage.value = 1;
+	nextUserQuery = {
+		page: 1,
+		pageSize: users.data.value?.pageSize ?? userPrefs.pageSize,
+		sort: users.data.value?.sort ?? userPrefs.sort,
+	};
 	void summary.load();
 	void trend.load();
 	// The model catalog feeds the picker and labels, so models always load.
@@ -249,7 +269,29 @@ watch(() => models.data.value, d => {
 const toggleModel = filterState.toggleModel;
 
 function setUserPage(p: number) {
-	userPage.value = p;
+	nextUserQuery = {
+		page: p,
+		pageSize: users.data.value?.pageSize ?? userPrefs.pageSize,
+		sort: users.data.value?.sort ?? userPrefs.sort,
+	};
+	void users.load();
+}
+
+function setUserPageSize(pageSize: number) {
+	nextUserQuery = {
+		page: 1,
+		pageSize,
+		sort: users.data.value?.sort ?? userPrefs.sort,
+	};
+	void users.load();
+}
+
+function setUserSort(sort: UserSort) {
+	nextUserQuery = {
+		page: 1,
+		pageSize: users.data.value?.pageSize ?? userPrefs.pageSize,
+		sort,
+	};
 	void users.load();
 }
 
@@ -278,15 +320,15 @@ watch(metric, m => {
 	if (effectiveBreakdown() !== 'none' && trendColumns(m) !== trendLoadedColumns) void trend.load();
 });
 
-watch(() => [userPrefs.sort, userPrefs.pageSize], () => {
-	userPage.value = 1;
-	if (usersSeen.value) void users.load();
-});
-
 // Mode switch: granularity / grouping / compare / usage kinds change meaning, so reload the shared data.
 watch(simple, s => {
 	breakdownsSeen.value = false;
 	usersSeen.value = false;
+	nextUserQuery = {
+		page: 1,
+		pageSize: users.data.value?.pageSize ?? userPrefs.pageSize,
+		sort: users.data.value?.sort ?? userPrefs.sort,
+	};
 	if (s && !SIMPLE_METRIC_KEYS.includes(metric.value)) metric.value = 'total';
 	apply.schedule(loadAll);
 });

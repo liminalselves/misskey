@@ -13,6 +13,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 			type="button"
 			class="_button"
 			:class="[$style.pagerSizeBtn, pageSize === size ? $style.pagerSizeBtnActive : null]"
+			:disabled="loading"
 			@click="emit('update:pageSize', size)"
 		>
 			{{ size }}
@@ -79,6 +80,10 @@ const totalPages = computed(() => Math.max(1, Math.ceil(props.total / props.page
 
 .pagerSizeBtn:last-child {
 	border-right: none;
+}
+
+.pagerSizeBtn:disabled {
+	opacity: 0.4;
 }
 
 .pagerSizeBtnActive {

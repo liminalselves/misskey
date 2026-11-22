@@ -7,6 +7,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 <div>
 	<Transition :name="prefer.s.animation ? '_transition_zoom' : ''" mode="out-in">
 		<MkLoading v-if="fetching"/>
+		<MkError v-else-if="error" @retry="load"/>
 		<div v-else-if="stats != null" :class="$style.root">
 			<div class="item _panel users">
 				<div class="icon"><i class="ti ti-users"></i></div>
@@ -56,7 +57,6 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</div>
 			</div>
 		</div>
-		<MkError v-else/>
 	</Transition>
 </div>
 </template>
@@ -76,23 +76,40 @@ const usersComparedToThePrevDay = ref<number | null>(null);
 const notesComparedToThePrevDay = ref<number | null>(null);
 const onlineUsersCount = ref(0);
 const fetching = ref(true);
-onMounted(async () => {
-	const [_stats, _onlineUsersCount] = await Promise.all([
-		misskeyApi('stats', {}),
-		misskeyApiGet('get-online-users-count').then(res => res.count),
-	]);
-	stats.value = _stats;
-	onlineUsersCount.value = _onlineUsersCount;
+const error = ref(false);
 
-	misskeyApiGet('charts/users', { limit: 2, span: 'day' }).then(chart => {
-		usersComparedToThePrevDay.value = _stats.originalUsersCount - chart.local.total[1];
-	});
+async function load(): Promise<void> {
+	fetching.value = true;
+	error.value = false;
+	try {
+		const [_stats, _onlineUsersCount] = await Promise.all([
+			misskeyApi('stats', {}),
+			misskeyApiGet('get-online-users-count').then(res => res.count),
+		]);
+		stats.value = _stats;
+		onlineUsersCount.value = _onlineUsersCount;
 
-	misskeyApiGet('charts/notes', { limit: 2, span: 'day' }).then(chart => {
-		notesComparedToThePrevDay.value = _stats.originalNotesCount - chart.local.total[1];
-	});
+		misskeyApiGet('charts/users', { limit: 2, span: 'day' }).then(chart => {
+			usersComparedToThePrevDay.value = _stats.originalUsersCount - chart.local.total[1];
+		}).catch(() => {
+			// 日同比加载失败不阻塞主统计展示
+		});
 
-	fetching.value = false;
+		misskeyApiGet('charts/notes', { limit: 2, span: 'day' }).then(chart => {
+			notesComparedToThePrevDay.value = _stats.originalNotesCount - chart.local.total[1];
+		}).catch(() => {
+			// 日同比加载失败不阻塞主统计展示
+		});
+	} catch {
+		stats.value = null;
+		error.value = true;
+	} finally {
+		fetching.value = false;
+	}
+}
+
+onMounted(() => {
+	void load();
 });
 </script>
 

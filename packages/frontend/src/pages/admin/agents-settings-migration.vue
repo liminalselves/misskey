@@ -27,7 +27,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<div class="_buttons">
 				<MkButton rounded :disabled="logsLoading" @click="emit('refreshLogs')"><i class="ti ti-refresh"></i> 刷新</MkButton>
 			</div>
-			<MkLoading v-if="logsLoading"/>
+			<MkLoading v-if="logsLoading && logs.length === 0"/>
 			<!-- Mirrors the parent's .emptyModels placeholder (shared with other tabs there) -->
 			<div v-else-if="logs.length === 0" :class="$style.emptyNote">暂无迁移记录</div>
 			<div v-else :class="$style.simpleTable">
@@ -48,7 +48,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<span><MkUserName v-if="row.operator" :user="row.operator"/><template v-else>—</template></span>
 				</div>
 			</div>
-			<MkButton v-if="logs.length > 0 && logs.length % 30 === 0" rounded @click="emit('loadMore')"><i class="ti ti-chevron-down"></i> 加载更多</MkButton>
+			<MkButton v-if="logs.length > 0 && hasMore" rounded :disabled="logsLoading" :wait="logsLoading" @click="emit('loadMore')"><i class="ti ti-chevron-down"></i> {{ logsLoading ? '载入中…' : '加载更多' }}</MkButton>
 		</div>
 	</MkFolder>
 </div>
@@ -84,6 +84,7 @@ defineProps<{
 	keyGenerating: boolean;
 	logsLoading: boolean;
 	logs: MigrationLogRow[];
+	hasMore: boolean;
 }>();
 
 const emit = defineEmits<{

@@ -17,7 +17,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 					type="button"
 					class="_button"
 					:class="[$style.sortBtn, c.sort != null && sort === c.sort ? $style.sortBtnOn : null]"
-					:disabled="c.sort == null"
+					:disabled="c.sort == null || loading"
 					@click="c.sort != null && emit('update:sort', c.sort)"
 				>
 					{{ c.label }}<i v-if="c.sort != null && sort === c.sort" class="ti ti-arrow-down"></i>
@@ -52,6 +52,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 					type="button"
 					class="_button"
 					:class="[$style.pagerSizeBtn, pageSize === size ? $style.pagerSizeBtnActive : null]"
+					:disabled="loading"
 					@click="emit('update:pageSize', size)"
 				>
 					{{ size }}
@@ -240,6 +241,10 @@ function openUser(userId: string) {
 
 .pagerSizeBtn:last-child {
 	border-right: none;
+}
+
+.pagerSizeBtn:disabled {
+	opacity: 0.4;
 }
 
 .pagerSizeBtnActive {
