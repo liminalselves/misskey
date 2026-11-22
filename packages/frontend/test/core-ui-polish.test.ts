@@ -235,22 +235,24 @@ vi.mock('@/ui/_common_/mobile-footer-menu.vue', () => ({
 		template: '<div data-mobile-footer><button data-open-drawer @click="$emit(\'update:drawerMenuShowing\', true)">drawer</button></div>',
 	}),
 }));
-vi.mock('@/ui/_common_/titlebar.vue', () => ({ default: { template: '<div/>' } }));
-vi.mock('@/ui/_common_/PreferenceRestore.vue', () => ({ default: { template: '<div/>' } }));
-vi.mock('@/ui/_common_/ReloadSuggestion.vue', () => ({ default: { template: '<div/>' } }));
-vi.mock('@/ui/_common_/ThemePreviewing.vue', () => ({ default: { template: '<div/>' } }));
-vi.mock('@/ui/_common_/widgets.vue', () => ({ default: { template: '<div data-xwidgets/>' } }));
-vi.mock('@/ui/deck/main-column.vue', () => ({ default: { template: '<div/>' } }));
-vi.mock('@/ui/deck/tl-column.vue', () => ({ default: { template: '<div/>' } }));
-vi.mock('@/ui/deck/antenna-column.vue', () => ({ default: { template: '<div/>' } }));
-vi.mock('@/ui/deck/list-column.vue', () => ({ default: { template: '<div/>' } }));
-vi.mock('@/ui/deck/channel-column.vue', () => ({ default: { template: '<div/>' } }));
-vi.mock('@/ui/deck/notifications-column.vue', () => ({ default: { template: '<div/>' } }));
-vi.mock('@/ui/deck/widgets-column.vue', () => ({ default: { template: '<div/>' } }));
-vi.mock('@/ui/deck/mentions-column.vue', () => ({ default: { template: '<div/>' } }));
-vi.mock('@/ui/deck/direct-column.vue', () => ({ default: { template: '<div/>' } }));
-vi.mock('@/ui/deck/role-timeline-column.vue', () => ({ default: { template: '<div/>' } }));
-vi.mock('@/ui/deck/chat-column.vue', () => ({ default: { template: '<div/>' } }));
+vi.mock('@/ui/_common_/titlebar.vue', () => ({ __esModule: true, default: { template: '<div/>' } }));
+vi.mock('@/ui/_common_/PreferenceRestore.vue', () => ({ __esModule: true, default: { template: '<div/>' } }));
+vi.mock('@/ui/_common_/ReloadSuggestion.vue', () => ({ __esModule: true, default: { template: '<div/>' } }));
+vi.mock('@/ui/_common_/ThemePreviewing.vue', () => ({ __esModule: true, default: { template: '<div/>' } }));
+vi.mock('@/ui/_common_/widgets.vue', () => ({ __esModule: true, default: { template: '<div data-xwidgets/>' } }));
+vi.mock('@/ui/_common_/statusbars.vue', () => ({ __esModule: true, default: { template: '<div/>' } }));
+vi.mock('@/ui/_common_/announcements.vue', () => ({ __esModule: true, default: { template: '<div/>' } }));
+vi.mock('@/ui/deck/main-column.vue', () => ({ __esModule: true, default: { template: '<div/>' } }));
+vi.mock('@/ui/deck/tl-column.vue', () => ({ __esModule: true, default: { template: '<div/>' } }));
+vi.mock('@/ui/deck/antenna-column.vue', () => ({ __esModule: true, default: { template: '<div/>' } }));
+vi.mock('@/ui/deck/list-column.vue', () => ({ __esModule: true, default: { template: '<div/>' } }));
+vi.mock('@/ui/deck/channel-column.vue', () => ({ __esModule: true, default: { template: '<div/>' } }));
+vi.mock('@/ui/deck/notifications-column.vue', () => ({ __esModule: true, default: { template: '<div/>' } }));
+vi.mock('@/ui/deck/widgets-column.vue', () => ({ __esModule: true, default: { template: '<div/>' } }));
+vi.mock('@/ui/deck/mentions-column.vue', () => ({ __esModule: true, default: { template: '<div/>' } }));
+vi.mock('@/ui/deck/direct-column.vue', () => ({ __esModule: true, default: { template: '<div/>' } }));
+vi.mock('@/ui/deck/role-timeline-column.vue', () => ({ __esModule: true, default: { template: '<div/>' } }));
+vi.mock('@/ui/deck/chat-column.vue', () => ({ __esModule: true, default: { template: '<div/>' } }));
 
 import MkPullToRefresh from '@/components/MkPullToRefresh.vue';
 import MkSignupDialogForm from '@/components/MkSignupDialog.form.vue';
@@ -601,7 +603,12 @@ describe('Core UI polish regressions', () => {
 			},
 		});
 
-		const { container } = render(Host, { global: commonGlobal });
+		const { container } = render(Host, {
+			global: {
+				...commonGlobal,
+				stubs: { Transition: false },
+			},
+		});
 		await flush();
 
 		const startupEl = container.querySelector('[data-startup-modal]')!.closest('[style*="--transformOrigin"]') as HTMLElement;
