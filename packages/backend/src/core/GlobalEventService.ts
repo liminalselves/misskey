@@ -242,6 +242,10 @@ export interface ChatRoomEventTypes extends ChatEventTypes {
 		roomId: MiChatRoom['id'];
 		userId: MiUser['id'];
 	};
+	invitationIgnored: {
+		roomId: MiChatRoom['id'];
+		userId: MiUser['id'];
+	};
 	ownerTransferred: {
 		roomId: MiChatRoom['id'];
 		oldOwnerId: MiUser['id'];

@@ -348,6 +348,10 @@ export type Channels = {
 				roomId: ChatRoom['id'];
 				userId: User['id'];
 			}) => void;
+			invitationIgnored: (payload: {
+				roomId: ChatRoom['id'];
+				userId: User['id'];
+			}) => void;
 			ownerTransferred: (payload: {
 				roomId: ChatRoom['id'];
 				oldOwnerId: User['id'];

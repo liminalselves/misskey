@@ -1540,6 +1540,12 @@ export class ChatService {
 			throw new Error('no such invitation');
 		}
 		await this.chatRoomInvitationsRepository.update(invitation.id, { status: 'ignored' });
+
+		// 群组侧「已发送的邀请」即时移除该条目，便于再次邀请
+		this.globalEventService.publishChatRoomStream(roomId, 'invitationIgnored', {
+			roomId,
+			userId,
+		});
 	}
 
 	@bindThis

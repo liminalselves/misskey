@@ -847,6 +847,9 @@ function bindChatRoomEvents(conn: Misskey.IChannelConnection<Misskey.Channels['c
 		}
 		void membersComponentRef.value?.refresh();
 	});
+	conn.on('invitationIgnored', () => {
+		void membersComponentRef.value?.refresh();
+	});
 	conn.on('ownerTransferred', onOwnerTransferred);
 	conn.on('pinnedMessageUpdated', (payload) => {
 		if (!room.value) return;
