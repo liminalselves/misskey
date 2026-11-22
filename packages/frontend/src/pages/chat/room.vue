@@ -339,6 +339,7 @@ import XInfo from './room.info.vue';
 import type { MenuItem } from '@/types/menu.js';
 import type { PageHeaderItem } from '@/types/page-header.js';
 import * as os from '@/os.js';
+import { markRoomInvitationHandled } from '@/utility/chat-invitation-status.js';
 import { chatApiWithDialog, formatChatError } from '@/utility/chat-error.js';
 import { useStream } from '@/stream.js';
 import * as sound from '@/utility/sound.js';
@@ -947,6 +948,7 @@ async function initialize() {
 				}
 				try {
 					await chatApiWithDialog('chat/rooms/join', { roomId: r.id });
+				markRoomInvitationHandled(r.id, 'accepted');
 				} catch {
 					// apiWithDialog 已弹窗提示，避免外层 catch 重复弹窗
 					router.push('/chat');
@@ -1424,6 +1426,7 @@ async function joinRoom() {
 	joining.value = true;
 	try {
 		await chatApiWithDialog('chat/rooms/join', { roomId: room.value.id });
+		markRoomInvitationHandled(room.value.id, 'accepted');
 		notMember.value = false;
 		initialized.value = false;
 		await initialize();

@@ -247,13 +247,6 @@ SPDX-License-Identifier: AGPL-3.0-only
 </div>
 </template>
 
-<script lang="ts">
-import { reactive } from 'vue';
-
-// 同一邀请可能同时出现在通知页与通知小工具，处理结果须在所有实例间共享
-const localInvitationStatuses = reactive(new Map<string, 'accepted' | 'ignored'>());
-</script>
-
 <script lang="ts" setup>
 import { computed, ref } from 'vue';
 import * as Misskey from 'misskey-js';
@@ -267,6 +260,7 @@ import { formatApiError, misskeyApi } from '@/utility/misskey-api.js';
 import { ensureSignin } from '@/i.js';
 import { useRouter } from '@/router.js';
 import * as os from '@/os.js';
+import { markRoomInvitationHandled, getLocalInvitationStatus } from '@/utility/chat-invitation-status.js';
 import { formatChatError } from '@/utility/chat-error.js';
 
 const $i = ensureSignin();
@@ -302,7 +296,8 @@ const invitationProcessing = ref(false);
 
 const invitationStatusText = computed(() => {
 	if (props.notification.type !== 'chatRoomInvitationReceived') return null;
-	const status = localInvitationStatuses.get(props.notification.invitation.id) ?? props.notification.invitation.status;
+	const serverStatus = props.notification.invitation.status;
+	const status = serverStatus === 'pending' ? (getLocalInvitationStatus(props.notification.invitation) ?? serverStatus) : serverStatus;
 	if (status === 'accepted') return '已同意';
 	if (status === 'ignored') return '已忽略';
 	if (status === 'canceled') return '该邀请已被撤销';
@@ -328,7 +323,7 @@ async function acceptRoomInvitation() {
 	invitationProcessing.value = true;
 	try {
 		await misskeyApi('chat/rooms/join', { roomId });
-		localInvitationStatuses.set(props.notification.invitation.id, 'accepted');
+		markRoomInvitationHandled(props.notification.invitation.room.id, 'accepted');
 		router.push('/chat/room/:roomId', { params: { roomId } });
 	} catch (err) {
 		os.alert({ type: 'error', text: formatChatError(err) });
@@ -343,7 +338,7 @@ async function ignoreRoomInvitation() {
 	invitationProcessing.value = true;
 	try {
 		await misskeyApi('chat/rooms/invitations/ignore', { roomId });
-		localInvitationStatuses.set(props.notification.invitation.id, 'ignored');
+		markRoomInvitationHandled(props.notification.invitation.room.id, 'ignored');
 	} catch (err) {
 		os.alert({ type: 'error', text: formatChatError(err) });
 	} finally {

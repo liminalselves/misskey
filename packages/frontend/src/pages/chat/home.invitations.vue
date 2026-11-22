@@ -60,6 +60,7 @@ import { appendCursorPage, mergeCursorTopPage, takeCursorFirstPage } from '@/uti
 import { useRouter } from '@/router.js';
 import MkFolder from '@/components/MkFolder.vue';
 import * as os from '@/os.js';
+import { markRoomInvitationHandled } from '@/utility/chat-invitation-status.js';
 import { formatChatError } from '@/utility/chat-error.js';
 import { ensureSignin } from '@/i.js';
 import { prefer } from '@/preferences.js';
@@ -149,6 +150,7 @@ async function join(invitation: Misskey.entities.ChatRoomInvitation) {
 			roomId: invitation.room.id,
 		});
 
+		markRoomInvitationHandled(invitation.room.id, 'accepted');
 		invitations.value = invitations.value.filter(i => i.id !== invitation.id);
 		emit('updateCount', invitations.value.length);
 
@@ -172,6 +174,7 @@ async function ignore(invitation: Misskey.entities.ChatRoomInvitation) {
 			roomId: invitation.room.id,
 		});
 
+		markRoomInvitationHandled(invitation.room.id, 'ignored');
 		invitations.value = invitations.value.filter(i => i.id !== invitation.id);
 		emit('updateCount', invitations.value.length);
 	} catch (e) {
