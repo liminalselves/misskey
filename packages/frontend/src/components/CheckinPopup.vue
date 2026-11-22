@@ -4,7 +4,14 @@ SPDX-License-Identifier: AGPL-3.0-only
 -->
 
 <template>
-<div :class="$style.root" @click.self="close">
+<MkModal
+	ref="modal"
+	:zPriority="'middle'"
+	:preferType="'dialog'"
+	@click="close"
+	@esc="close"
+	@closed="emit('closed')"
+>
 	<div :class="$style.card">
 		<div :class="$style.banner">
 			<div :class="$style.bannerIcon">
@@ -39,10 +46,12 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<button class="_button" :class="$style.closeBtn" @click="close">{{ i18n.ts._agents.checkinPopupClaim }}</button>
 		</div>
 	</div>
-</div>
+</MkModal>
 </template>
 
 <script lang="ts" setup>
+import { useTemplateRef } from 'vue';
+import MkModal from '@/components/MkModal.vue';
 import { i18n } from '@/i18n.js';
 
 const props = defineProps<{
@@ -58,38 +67,21 @@ const emit = defineEmits<{
 	(ev: 'closed'): void;
 }>();
 
+const modal = useTemplateRef('modal');
+
 function close() {
-	emit('closed');
+	modal.value?.close();
 }
 </script>
 
 <style module lang="scss">
-.root {
-	position: fixed;
-	top: 0;
-	left: 0;
-	right: 0;
-	bottom: 0;
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	z-index: 9999;
-	background: rgba(0, 0, 0, 0.5);
-	backdrop-filter: blur(4px);
-	animation: fadeIn 0.2s ease;
-}
-
-@keyframes fadeIn {
-	from { opacity: 0; }
-	to { opacity: 1; }
-}
-
 @keyframes slideUp {
 	from { transform: translateY(20px); opacity: 0; }
 	to { transform: translateY(0); opacity: 1; }
 }
 
 .card {
+	margin: auto;
 	width: min(88vw, 340px);
 	border-radius: 20px;
 	overflow: hidden;

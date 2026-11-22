@@ -203,7 +203,7 @@ const scheduledPaginator = markRaw(new Paginator('notes/drafts/list', {
 const currentDraftsCount = ref(0);
 misskeyApi('notes/drafts/count').then((count) => {
 	currentDraftsCount.value = count;
-});
+}).catch(() => {});
 
 const dialogEl = shallowRef<InstanceType<typeof MkModalWindow>>();
 
@@ -225,19 +225,20 @@ async function deleteDraft(draft: Misskey.entities.NoteDraft) {
 
 	if (canceled) return;
 
-	os.apiWithDialog('notes/drafts/delete', { draftId: draft.id }).then(() => {
-		draftsPaginator.reload();
-	});
+	await os.apiWithDialog('notes/drafts/delete', { draftId: draft.id }).then(() => {
+		currentDraftsCount.value = Math.max(0, currentDraftsCount.value - 1);
+		(tab.value === 'scheduled' ? scheduledPaginator : draftsPaginator).reload();
+	}).catch(() => {});
 }
 
 async function cancelSchedule(draft: Misskey.entities.NoteDraft) {
-	os.apiWithDialog('notes/drafts/update', {
+	await os.apiWithDialog('notes/drafts/update', {
 		draftId: draft.id,
 		isActuallyScheduled: false,
 		scheduledAt: null,
 	}).then(() => {
 		scheduledPaginator.reload();
-	});
+	}).catch(() => {});
 }
 </script>
 

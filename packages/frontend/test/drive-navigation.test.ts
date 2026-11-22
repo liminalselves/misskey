@@ -97,7 +97,7 @@ beforeEach(() => {
 	api.mockImplementation(async (endpoint: string, data: { folderId?: string | null }) => {
 		switch (endpoint) {
 			case 'drive/stats': return { usage: 0, capacity: 100, usagePercent: 0 };
-			case 'drive/folders/show': return data.folderId === 'nested' ? pendingFolder ?? nested : parent;
+			case 'drive/folders/show': return pendingFolder ?? (data.folderId === 'nested' ? nested : parent);
 			case 'drive/folders': return [parent, nested].filter(folder => folder.parentId === data.folderId);
 			case 'drive/files': return data.folderId === 'nested' ? [{ id: 'file', createdAt: '2026-10-04T00:00:00.000Z' }] : [];
 			case 'drive/folders/delete': return;
@@ -198,5 +198,30 @@ describe('Drive folder navigation', () => {
 		await expectFolder(container, 'Drive');
 		expect(push).not.toHaveBeenCalled();
 		expect(router.getCurrentFullPath()).toBe('/outside');
+	});
+
+	test('clicking root breadcrumb during an unresolved folder fetch from root clears fetching', async () => {
+		const router = new Nirax<RouteDef[]>([{ path: '/outside', component: {} }], '/outside', true, {});
+		const { container } = render(defineComponent(() => {
+			provide(DI.router, router as never);
+			return () => h(MkDrive, { select: 'file' });
+		}), { global });
+		await expectFolder(container, 'Drive');
+		await waitFor(() => expect(container.querySelector('mk-loading-stub')).toBeNull());
+
+		let resolveFolder!: (folder: DriveFolder) => void;
+		pendingFolder = new Promise(resolve => { resolveFolder = resolve; });
+		await click(container, '[data-drive-folder="parent"]');
+		await waitFor(() => expect(api).toHaveBeenCalledWith('drive/folders/show', { folderId: 'parent' }));
+		expect(container.querySelector('mk-loading-stub')).not.toBeNull();
+
+		await click(container, '[data-drive-nav-folder="root"]');
+		await waitFor(() => expect(container.querySelector('mk-loading-stub')).toBeNull());
+
+		resolveFolder(parent);
+		await pendingFolder;
+		await new Promise(resolve => setTimeout(resolve, 0));
+		await expectFolder(container, 'Drive');
+		expect(container.querySelector('mk-loading-stub')).toBeNull();
 	});
 });

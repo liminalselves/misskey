@@ -20,7 +20,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { computed, markRaw, onMounted, ref } from 'vue';
+import { computed, markRaw, onActivated, onDeactivated, onMounted, ref } from 'vue';
 import { notificationTypes } from 'misskey-js';
 import type { PageHeaderItem } from '@/types/page-header.js';
 import MkStreamingNotificationsTimeline from '@/components/MkStreamingNotificationsTimeline.vue';
@@ -96,9 +96,28 @@ definePage(() => ({
 	icon: 'ti ti-bell',
 }));
 
-// 打开通知页即视为已读，清掉导航栏小黄点（上游只靠新通知到达时才清）
-onMounted(() => {
+let skipNextActivated = false;
+
+function markAllAsRead() {
 	misskeyApi('notifications/mark-all-as-read', {}).catch(() => {});
+}
+
+// 打开通知页即视为已读，清掉导航栏小黄点（上游只靠新通知到达时才清）；KeepAlive 缓存页切回时也重新标记
+onMounted(() => {
+	skipNextActivated = true;
+	markAllAsRead();
+});
+
+onActivated(() => {
+	if (skipNextActivated) {
+		skipNextActivated = false;
+		return;
+	}
+	markAllAsRead();
+});
+
+onDeactivated(() => {
+	skipNextActivated = false;
 });
 </script>
 

@@ -556,6 +556,7 @@ export function useUploader(options: {
 
 	async function uploadOne(item: UploaderItem): Promise<void> {
 		item.uploadFailed = false;
+		item.aborted = false;
 		item.uploading = true;
 
 		const { filePromise, abort } = uploadFile(item.preprocessedFile ?? item.file, {
@@ -842,7 +843,7 @@ export function useUploader(options: {
 		upload,
 		getMenu,
 		uploading: computed(() => items.value.some(item => item.uploading)),
-		readyForUpload: computed(() => items.value.length > 0 && items.value.some(item => item.uploaded == null) && !items.value.some(item => item.uploading || item.preprocessing || item.uploadFailed || item.aborted)),
+		readyForUpload: computed(() => items.value.length > 0 && items.value.some(item => item.uploaded == null) && !items.value.some(item => item.uploading || item.preprocessing)),
 		allItemsUploaded: computed(() => items.value.every(item => item.uploaded != null)),
 		events,
 	};

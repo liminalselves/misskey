@@ -8,6 +8,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 	ref="modal"
 	:preferType="'dialog'"
 	@click="onClose"
+	@esc="onClose"
 	@closed="emit('closed')"
 >
 	<div :class="$style.root">
