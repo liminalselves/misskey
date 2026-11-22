@@ -162,7 +162,9 @@ async function refreshSessionsTop() {
 	if (loading.value || loadingMore.value) return;
 	try {
 		const rows = await fetchSessions('agents/sessions/list-mine', { limit: SESSIONS_PAGE_SIZE + 1 });
-		const page = mergeCursorTopPage(sessions.value, rows, SESSIONS_PAGE_SIZE, hasMoreSessions.value);
+		const page = sessions.value.length > SESSIONS_PAGE_SIZE && rows.length > SESSIONS_PAGE_SIZE
+			? mergeCursorTopPage(sessions.value, rows, SESSIONS_PAGE_SIZE, hasMoreSessions.value)
+			: takeCursorFirstPage(rows, SESSIONS_PAGE_SIZE);
 		hasMoreSessions.value = page.hasMore;
 		sessions.value = page.items;
 	} catch {

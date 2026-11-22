@@ -292,4 +292,23 @@ describe('Agent message synchronization', () => {
 			: ['message2', 'message1', 'message3', 'message4']);
 		expect(state.os.alert).not.toHaveBeenCalled();
 	});
+
+	test('aborting during pending worldbook preview restores the just-submitted draft without removing prior committed messages', async () => {
+		const state = setup(['message1']);
+		const preview = deferred<void>();
+		state.previewPendingWorldbookMatches.mockReturnValueOnce(preview.promise);
+		state.misskeyApi.mockResolvedValueOnce({ aborted: false });
+		const request = state.onFormSubmit({ text: 'Pending draft', file: null });
+		await vi.waitFor(() => expect(state.previewPendingWorldbookMatches).toHaveBeenCalledWith('Pending draft'));
+
+		await state.onAbortRequest();
+		expect(state.formRef.value.restoreDraft).toHaveBeenCalledWith('Pending draft', null);
+		expect(state.messages.value.map(m => m.id)).toEqual(['message1']);
+		expect(state.sending.value).toBe(false);
+
+		preview.resolve();
+		await request;
+		expect(state.misskeyApi).not.toHaveBeenCalledWith('agents/messages/send', expect.anything(), expect.anything(), expect.anything());
+		expect(state.messages.value.map(m => m.id)).toEqual(['message1']);
+	});
 });

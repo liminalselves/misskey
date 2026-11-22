@@ -111,7 +111,9 @@ async function refreshInvitationsTop() {
 		const rows = await misskeyApi('chat/rooms/invitations/inbox', {
 			limit: PAGE_SIZE + 1,
 		});
-		const page = mergeCursorTopPage(invitations.value, rows, PAGE_SIZE, hasMore.value);
+		const page = invitations.value.length > PAGE_SIZE && rows.length > PAGE_SIZE
+			? mergeCursorTopPage(invitations.value, rows, PAGE_SIZE, hasMore.value)
+			: takeCursorFirstPage(rows, PAGE_SIZE);
 		invitations.value = page.items;
 		hasMore.value = page.hasMore;
 		emit('updateCount', invitations.value.length);

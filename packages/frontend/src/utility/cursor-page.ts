@@ -32,8 +32,11 @@ export function appendCursorPage<T extends { id: string }>(existing: T[], rows: 
 	};
 }
 
-/** 顶部刷新（实时事件）：重拉首页并与已加载深页按 id 合并——新条目置顶、旧条目保留，不整页重置 */
+/** 顶部刷新（实时事件）：重拉首页并与已加载深页按 id 合并——新条目置顶、旧条目保留，不整页重置；未加载深页时直接整页替换以清除已消失条目 */
 export function mergeCursorTopPage<T extends { id: string }>(existing: T[], rows: T[], pageSize: number, hasMore: boolean): CursorPageMerge<T> {
+	if (existing.length <= pageSize) {
+		return takeCursorFirstPage(rows, pageSize);
+	}
 	const top = rows.slice(0, pageSize);
 	const topIds = new Set(top.map(item => item.id));
 	return {
