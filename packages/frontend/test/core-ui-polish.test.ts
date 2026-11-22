@@ -6,7 +6,6 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { cleanup, fireEvent, render } from '@testing-library/vue';
 import { defineComponent, h, KeepAlive, nextTick, ref } from 'vue';
-import { EventEmitter } from 'eventemitter3';
 import { prefer } from '@/preferences.js';
 import { instance } from '@/instance.js';
 import { misskeyApi } from '@/utility/misskey-api.js';
@@ -20,15 +19,38 @@ const {
 	deckMockState,
 	scrollContainerEl,
 } = vi.hoisted(() => {
-	const emitter = new EventEmitter();
-	const routerObj = Object.assign(emitter, {
+	const listeners = new Map<string, Set<(...args: any[]) => void>>();
+	const routerObj = {
+		on(event: string, fn: (...args: any[]) => void) {
+			let set = listeners.get(event);
+			if (!set) {
+				set = new Set();
+				listeners.set(event, set);
+			}
+			set.add(fn);
+			return routerObj;
+		},
+		off(event: string, fn: (...args: any[]) => void) {
+			listeners.get(event)?.delete(fn);
+			return routerObj;
+		},
+		emit(event: string, ...args: any[]) {
+			for (const fn of [...(listeners.get(event) ?? [])]) {
+				fn(...args);
+			}
+			return true;
+		},
+		removeAllListeners() {
+			listeners.clear();
+			return routerObj;
+		},
 		currentRoute: { value: { path: '/', name: 'index' } },
 		navHook: null as ((path: string, flag?: 'forcePage') => boolean) | null,
 		getCurrentFullPath: () => '/',
 		push: vi.fn(),
 		pushByPath: vi.fn(),
 		replaceByPath: vi.fn(),
-	});
+	};
 	return {
 		mockState: {
 			deviceKind: 'desktop' as 'desktop' | 'tablet' | 'smartphone',
@@ -62,6 +84,10 @@ vi.mock('@/i.js', () => ({
 		twoFactorEnabled: false,
 		policies: { maxFileSizeMb: 50, chatAvailability: 'available' },
 	},
+	iAmModerator: false,
+	iAmAdmin: false,
+	notesCount: 0,
+	incNotesCount: vi.fn(),
 	ensureSignin: () => ({
 		id: 'u1',
 		username: 'alice',
@@ -674,8 +700,8 @@ describe('Core UI polish regressions', () => {
 		});
 
 		const eventProp = eventKey ? { [`on${eventKey[0].toUpperCase()}${eventKey.slice(1)}`]: eventSpy } : {};
-		const { container } = render(component as never, {
-			props: { ...props, ...eventProp },
+		const { container } = render(component as any, {
+			props: { ...props, ...eventProp } as any,
 			global: {
 				...commonGlobal,
 				stubs: {

@@ -396,7 +396,7 @@ function onKeydown(event: KeyboardEvent) {
 
 	const cancel = () => {
 		event.preventDefault();
-		event.stopPropagation();
+		event.stopImmediatePropagation();
 	};
 
 	switch (event.key) {

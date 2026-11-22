@@ -24,7 +24,7 @@ const { mockStorage, uploaderState, paginatorMocks } = vi.hoisted(() => ({
 		resetFn: vi.fn(),
 		abortAllFn: vi.fn(),
 	},
-	paginatorMocks: new Map<boolean, { items: any; reload: ReturnType<typeof vi.fn> }>(),
+	paginatorMocks: new Map<boolean, { items: any; reload: any }>(),
 }));
 
 vi.mock('@/i.js', () => ({
@@ -35,6 +35,8 @@ vi.mock('@/i.js', () => ({
 		isSilenced: false,
 		policies: { scheduledNoteLimit: 10, noteDraftLimit: 10 },
 	},
+	iAmModerator: false,
+	iAmAdmin: false,
 	ensureSignin: () => ({
 		id: 'u1',
 		username: 'alice',
@@ -74,6 +76,13 @@ vi.mock('@/local-storage.js', () => ({
 		getItem: (k: string) => mockStorage.get(k) ?? null,
 		setItem: (k: string, v: string) => { mockStorage.set(k, v); },
 		removeItem: (k: string) => { mockStorage.delete(k); },
+		getItemAsJson: (k: string) => {
+			const item = mockStorage.get(k);
+			return item === undefined ? undefined : JSON.parse(item);
+		},
+		setItemAsJson: (k: string, v: any) => {
+			mockStorage.set(k, JSON.stringify(v));
+		},
 	},
 }));
 
@@ -136,8 +145,8 @@ vi.mock('@/utility/paginator.js', async () => {
 	const { ref: vueRef } = await import('vue');
 	return {
 		Paginator: class {
-			items = vueRef<any[]>([]);
-			reload = vi.fn();
+			items: any = vueRef<any[]>([]);
+			reload: any = vi.fn();
 			constructor(_ep: string, opts?: { params?: { scheduled?: boolean } }) {
 				const isScheduled = Boolean(opts?.params?.scheduled);
 				const entry = paginatorMocks.get(isScheduled);

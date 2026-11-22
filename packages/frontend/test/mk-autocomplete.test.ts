@@ -35,6 +35,11 @@ vi.mock('@/utility/misskey-api.js', () => ({
 
 vi.mock('@/i.js', () => ({
 	$i: { id: 'me1', username: 'me1', host: null },
+	iAmModerator: false,
+	iAmAdmin: false,
+	notesCount: 0,
+	incNotesCount: vi.fn(),
+	ensureSignin: () => ({ id: 'me1', username: 'me1', host: null }),
 }));
 
 const apiMock = vi.mocked(misskeyApi);
@@ -54,7 +59,7 @@ async function flush() {
 }
 
 beforeEach(() => {
-	prefer.r.emojiStyle = ref('fluent');
+	prefer.r.emojiStyle = ref<'native' | 'twemoji' | 'fluentEmoji'>('fluentEmoji');
 	window.sessionStorage.clear();
 	window.localStorage.clear();
 	apiMock.mockReset();

@@ -26,6 +26,10 @@ const { uploadFileMock, UploadAbortedErrorMock } = vi.hoisted(() => {
 
 vi.mock('@/i.js', () => ({
 	$i: { id: 'u1', policies: { watermarkAvailable: false, maxFileSizeMb: 50 } },
+	iAmModerator: false,
+	iAmAdmin: false,
+	notesCount: 0,
+	incNotesCount: vi.fn(),
 	ensureSignin: () => ({ id: 'u1', policies: { watermarkAvailable: false, maxFileSizeMb: 50 } }),
 }));
 
