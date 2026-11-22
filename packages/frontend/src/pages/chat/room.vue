@@ -4,25 +4,111 @@ SPDX-License-Identifier: AGPL-3.0-only
 -->
 
 <template>
-<PageWithHeader v-model:tab="tab" :reversed="tab === 'chat'" :tabs="headerTabs" :actions="headerActions" narrowMergedRow showBack>
+<PageWithHeader
+	v-model:tab="tab"
+	:reversed="tab === 'chat'"
+	:swipable="false"
+	:tabs="headerTabs"
+	:actions="headerActions"
+	narrowMergedRow
+	showBack
+>
 	<div v-if="tab === 'chat'" class="_spacer" style="--MI_SPACER-w: 700px;">
 		<div class="_gaps">
-			<Transition name="fade">
-				<button v-if="showUnreadJump" class="_button" :class="$style.unreadJump" @click="onUnreadJumpClick">
-					<i class="ti ti-arrow-up"></i> 查看 {{ unreadSnapshot?.count }} 条未读消息
+			<!-- 群组顶部信息条（群头像、置顶消息、群公告）；禁言等输入限制统一显示在输入框 -->
+			<div v-if="room && !notMember && (room.iconUrl || room.announcement || room.pinnedMessage)" class="_gaps_s" :class="$style.stickyTopBanners">
+				<div v-if="room.iconUrl" :class="$style.roomHeaderStrip">
+					<img :src="room.iconUrl" :alt="room.name" :class="$style.roomHeaderIcon"/>
+					<div :class="$style.roomHeaderMeta">
+						<div :class="$style.roomHeaderName">{{ room.name }}</div>
+						<div v-if="room.memberCount != null" :class="$style.roomHeaderSub">{{ i18n.tsx._chat.memberCount({ count: room.memberCount }) }}</div>
+					</div>
+				</div>
+
+				<div v-if="room.announcement || room.pinnedMessage" class="_panel" :class="$style.pinnedBanner">
+					<button
+						type="button"
+						class="_button"
+						:class="$style.pinnedBannerHeader"
+						:aria-expanded="bannerExpanded"
+						@click="bannerExpanded = !bannerExpanded"
+					>
+						<span :class="$style.pinnedBannerTitle">
+							<i class="ti ti-pinned"></i>
+							<span v-if="room.pinnedMessage">{{ i18n.ts._chat.pinnedMessage }}</span>
+							<span v-if="room.pinnedMessage && room.announcement">·</span>
+							<span v-if="room.announcement">{{ i18n.ts._chat.announcement }}</span>
+						</span>
+						<i :class="bannerExpanded ? 'ti ti-chevron-up' : 'ti ti-chevron-down'"></i>
+					</button>
+
+					<div v-if="bannerExpanded" :class="$style.pinnedBannerBody">
+						<div v-if="room.announcement" :class="$style.announcementBox">
+							<div :class="$style.announcementLabel"><i class="ti ti-speakerphone"></i> {{ i18n.ts._chat.announcement }}</div>
+							<div :class="$style.announcementText">{{ room.announcement }}</div>
+						</div>
+						<div v-if="room.pinnedMessage" :class="$style.pinnedMsgRow">
+							<button
+								type="button"
+								class="_button"
+								:class="$style.pinnedMsgLink"
+								@click="handleScrollToMessage(room.pinnedMessage.id)"
+							>
+								<i class="ti ti-pin"></i>
+								<span v-if="room.pinnedMessage.fromUser" :class="$style.pinnedMsgAuthor">
+									{{ room.pinnedMessage.fromUser.name || room.pinnedMessage.fromUser.username }}:
+								</span>
+								<span :class="$style.pinnedMsgText">{{ room.pinnedMessage.text || i18n.ts._chat.attachmentPlaceholder }}</span>
+							</button>
+							<button
+								v-if="canAdminRoom"
+								type="button"
+								class="_button"
+								:class="$style.unpinBtn"
+								:aria-label="i18n.ts._chat.unpinMessage"
+								:title="i18n.ts._chat.unpinMessage"
+								@click="handlePin(null)"
+							>
+								<i class="ti ti-pinned-off"></i>
+							</button>
+						</div>
+					</div>
+				</div>
+			</div>
+
+			<Transition
+				:enterActiveClass="prefer.s.animation ? $style.fadeEnterActive : ''"
+				:leaveActiveClass="prefer.s.animation ? $style.fadeLeaveActive : ''"
+				:enterFromClass="prefer.s.animation ? $style.fadeEnterFrom : ''"
+				:leaveToClass="prefer.s.animation ? $style.fadeLeaveTo : ''"
+			>
+				<button v-if="showUnreadJump" type="button" class="_button" :class="$style.unreadJump" @click="onUnreadJumpClick">
+					<i class="ti ti-arrow-up"></i> {{ i18n.tsx._chat.unreadCountBanner({ count: unreadSnapshot?.count ?? 0 }) }}
 				</button>
 			</Transition>
+
 			<div v-if="initializing">
 				<MkLoading/>
 			</div>
 
 			<!-- 非成员：显示加入群组界面 -->
 			<div v-else-if="notMember && room" :class="$style.joinPanel">
-				<div :class="$style.joinIcon"><i class="ti ti-users"></i></div>
+				<img v-if="room.iconUrl" :src="room.iconUrl" :alt="room.name" :class="$style.joinAvatar"/>
+				<div v-else :class="$style.joinIcon"><i class="ti ti-users"></i></div>
 				<div :class="$style.joinName">{{ room.name }}</div>
 				<div v-if="room.description" :class="$style.joinDesc">{{ room.description }}</div>
-				<div :class="$style.joinHint">{{ i18n.ts._chat.youAreNotAMemberOfThisRoom }}</div>
-				<MkButton :wait="joining" primary rounded :class="$style.joinButton" @click="joinRoom"><i class="ti ti-user-plus"></i> {{ i18n.ts._chat.joinThisRoom }}</MkButton>
+				<div v-if="room.memberCount != null" :class="$style.joinMeta">{{ i18n.tsx._chat.memberCount({ count: room.memberCount }) }}</div>
+				<div :class="$style.joinHint">{{ room.isBanned ? (room.banReason || i18n.ts._chat.kickedNotice) : i18n.ts._chat.youAreNotAMemberOfThisRoom }}</div>
+				<MkButton
+					v-if="!room.isBanned && $i.policies.chatAvailability === 'available'"
+					:wait="joining"
+					primary
+					rounded
+					:class="$style.joinButton"
+					@click="joinRoom"
+				>
+					<i class="ti ti-user-plus"></i> {{ i18n.ts._chat.joinThisRoom }}
+				</MkButton>
 			</div>
 
 			<div v-else-if="messages.length === 0">
@@ -34,7 +120,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 						<div v-else-if="user.chatScope === 'mutual'">{{ i18n.ts._chat.thisUserAllowsChatOnlyFromMutualFollowing }}</div>
 						<div v-else-if="user.chatScope === 'none'">{{ i18n.ts._chat.thisUserNotAllowedChatAnyone }}</div>
 					</template>
-					<template v-else-if="room">
+					<template v-else-if="room && canInvite">
 						<div>{{ i18n.ts._chat.inviteUserToChat }}</div>
 					</template>
 				</div>
@@ -51,13 +137,31 @@ SPDX-License-Identifier: AGPL-3.0-only
 					:enterFromClass="prefer.s.animation ? $style.transition_x_enterFrom : ''"
 					:leaveToClass="prefer.s.animation ? $style.transition_x_leaveTo : ''"
 					:moveClass="prefer.s.animation ? $style.transition_x_move : ''"
-					tag="div" class="_gaps"
+					tag="div"
+					class="_gaps"
 				>
-					<template v-for="item in timeline.toReversed()" :key="item.id">
-						<div v-if="item.type === 'item' && unreadSnapshot?.firstUnreadId === item.data.id" :class="$style.unreadDivider">
-							<span>以下为新消息</span>
+					<template v-for="item in renderedTimeline" :key="item.id">
+						<div v-if="item.type === 'unread'" :class="$style.unreadDivider">
+							<span>{{ i18n.ts._chat.newMessagesDivider }}</span>
 						</div>
-						<XMessage v-if="item.type === 'item'" :message="item.data" :highlighted="highlightedMessageId === item.data.id" :roomOwnerId="room?.ownerId" :data-message-id="item.data.id" @reply="handleReply" @scrollToMessage="handleScrollToMessage"/>
+						<XMessage
+							v-else-if="item.type === 'item'"
+							:message="item.data"
+							:highlighted="highlightedMessageId === item.data.id"
+							:roomOwnerId="room?.ownerId"
+							:myRole="room?.myRole"
+							:adminUserIds="roomAdminUserIds"
+							:isRoomArchived="Boolean(room?.isArchived)"
+							:isRoomSuspended="isCurrentlySuspended"
+							:suspendedUntilMap="memberSuspendedUntil"
+							:pinnedMessageId="room?.pinnedMessageId"
+							:data-message-id="item.data.id"
+							@reply="handleReply"
+							@recalled="onRecalled"
+							@pin="handlePin"
+							@mention="handleMention"
+							@scrollToMessage="handleScrollToMessage"
+						/>
 						<div v-else-if="item.type === 'date'" :class="$style.dateDivider">
 							<span><i class="ti ti-chevron-up"></i> {{ item.nextText }}</span>
 							<span style="height: 1em; width: 1px; background: var(--MI_THEME-divider);"></span>
@@ -71,46 +175,161 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</div>
 			</div>
 
-			<div v-if="user && (!user.canChat || user.host !== null)">
-				<MkInfo warn>{{ i18n.ts._chat.chatNotAvailableInOtherAccount }}</MkInfo>
-			</div>
-
-			<MkInfo v-if="$i.policies.chatAvailability !== 'available'" warn>{{ $i.policies.chatAvailability === 'readonly' ? i18n.ts._chat.chatIsReadOnlyForThisAccountOrServer : i18n.ts._chat.chatNotAvailableForThisAccountOrServer }}</MkInfo>
 		</div>
 	</div>
 
 	<div v-else-if="tab === 'search'" class="_spacer" style="--MI_SPACER-w: 700px;">
-		<XSearch :userId="userId" :roomId="roomId" @scrollToMessage="handleScrollToMessage"/>
+		<XSearch :userId="userId" :roomId="roomId" :roomOwnerId="room?.ownerId" :room="room" :user="user" @scrollToMessage="handleScrollToMessage"/>
 	</div>
 
 	<div v-else-if="tab === 'members'" class="_spacer" style="--MI_SPACER-w: 700px;">
-		<XMembers v-if="room != null" :room="room" @inviteUser="inviteUser"/>
+		<XMembers
+			v-if="room != null"
+			ref="membersComponentRef"
+			:room="room"
+			@inviteUser="inviteUser"
+			@mention="handleMention"
+			@roomUpdated="onLocalRoomUpdated"
+		/>
 	</div>
 
 	<div v-else-if="tab === 'info'" class="_spacer" style="--MI_SPACER-w: 700px;">
-		<XInfo v-if="room != null" :room="room"/>
+		<XInfo v-if="room != null" :room="room" @updated="onLocalRoomUpdated"/>
 	</div>
 
 	<template #footer>
 		<div v-if="tab === 'chat' && !notMember" :class="$style.footer">
 			<div class="_gaps">
-				<Transition name="fade">
+				<div v-if="showScrollToBottom && !showIndicator" :class="$style.scrollFabWrap">
+					<button
+						type="button"
+						class="_button _shadow"
+						:class="$style.scrollFab"
+						:aria-label="i18n.ts._chat.scrollToBottom"
+						:title="i18n.ts._chat.scrollToBottom"
+						@click="scrollToBottom"
+					>
+						<i class="ti ti-arrow-down"></i>
+					</button>
+				</div>
+				<Transition
+					:enterActiveClass="prefer.s.animation ? $style.fadeEnterActive : ''"
+					:leaveActiveClass="prefer.s.animation ? $style.fadeLeaveActive : ''"
+					:enterFromClass="prefer.s.animation ? $style.fadeEnterFrom : ''"
+					:leaveToClass="prefer.s.animation ? $style.fadeLeaveTo : ''"
+				>
 					<div v-show="showIndicator" :class="$style.new">
-						<button class="_buttonPrimary" :class="$style.newButton" @click="onIndicatorClick">
+						<button type="button" class="_buttonPrimary" :class="$style.newButton" @click="onIndicatorClick">
 							<i class="fas ti-fw fa-arrow-circle-down" :class="$style.newIcon"></i>{{ i18n.ts._chat.newMessage }}
 						</button>
 					</div>
 				</Transition>
-				<XForm v-if="initialized" :user="user" :room="room" :replyTo="replyingTo" :class="$style.form" @cancelReply="cancelReply" @sent="onMessageSent"/>
+				<XForm
+					v-if="initialized"
+					ref="formRef"
+					:user="user"
+					:room="room"
+					:replyTo="replyingTo"
+					:roomMembers="roomMembers"
+					:disabledReason="formDisabledReason"
+					:class="$style.form"
+					@cancelReply="cancelReply"
+					@sent="onMessageSent"
+				/>
 			</div>
 		</div>
 	</template>
 </PageWithHeader>
 </template>
 
-<script lang="ts" setup>
-import { ref, useTemplateRef, computed, onMounted, onBeforeUnmount, onDeactivated, onActivated, nextTick } from 'vue';
+<script lang="ts">
 import * as Misskey from 'misskey-js';
+
+export type NormalizedChatMessage = Omit<Misskey.entities.ChatMessageLite, 'fromUser' | 'reactions'> & {
+	fromUser: Misskey.entities.UserLite;
+	reactions: (Misskey.entities.ChatMessageLite['reactions'][number] & {
+		user: Misskey.entities.UserLite;
+	})[];
+};
+
+const SHARED_ROOM_METADATA_KEYS = [
+	'name',
+	'description',
+	'iconUrl',
+	'isPublic',
+	'isArchived',
+	'allowMemberInvite',
+	'announcement',
+	'pinnedMessageId',
+	'pinnedMessage',
+	'ownerId',
+	'owner',
+	'memberCount',
+] as const;
+
+/**
+ * 仅合并群组共享元信息，绝不覆盖 per-user 字段（isMember / isMuted / invitationExists / myRole / isBanned / banReason / unreadCount）
+ */
+export function mergeSharedRoomMetadata(
+	current: Misskey.entities.ChatRoom,
+	payload: Partial<Misskey.entities.ChatRoom>,
+): Misskey.entities.ChatRoom {
+	const next: Misskey.entities.ChatRoom = { ...current };
+	for (const key of SHARED_ROOM_METADATA_KEYS) {
+		if (payload[key] !== undefined) {
+			(next as Record<string, unknown>)[key] = payload[key];
+		}
+	}
+	return next;
+}
+
+/**
+ * 合并本地用户操作返回或发出的群组更新（含共享元信息与本地确认的 myRole / isMuted）
+ */
+export function mergeLocalRoomUpdate(
+	current: Misskey.entities.ChatRoom,
+	updated: Misskey.entities.ChatRoom,
+): Misskey.entities.ChatRoom {
+	return {
+		...mergeSharedRoomMetadata(current, updated),
+		...(updated.myRole !== undefined ? { myRole: updated.myRole } : {}),
+		...(updated.isMuted !== undefined ? { isMuted: updated.isMuted } : {}),
+	};
+}
+
+export function applyOwnerTransferred(
+	current: Misskey.entities.ChatRoom,
+	payload: {
+		oldOwnerId?: string;
+		newOwnerId?: string;
+		ownerId?: string;
+		newOwner?: Misskey.entities.UserLite;
+		owner?: Misskey.entities.UserLite;
+	},
+	myUserId: string,
+): Misskey.entities.ChatRoom {
+	const nextOwnerId = payload.newOwnerId ?? payload.ownerId;
+	const nextOwner = payload.newOwner ?? payload.owner;
+	if (!nextOwnerId) return current;
+
+	let nextRole = current.myRole;
+	if (myUserId === nextOwnerId) {
+		nextRole = 'owner';
+	} else if (myUserId === payload.oldOwnerId || current.ownerId === myUserId) {
+		nextRole = 'member';
+	}
+
+	return {
+		...current,
+		ownerId: nextOwnerId,
+		owner: nextOwner ?? current.owner,
+		myRole: nextRole,
+	};
+}
+</script>
+
+<script lang="ts" setup>
+import { computed, nextTick, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, useTemplateRef, watch } from 'vue';
 import { getScrollContainer } from '@@/js/scroll.js';
 import XMessage from './XMessage.vue';
 import XForm from './room.form.vue';
@@ -120,6 +339,8 @@ import XInfo from './room.info.vue';
 import type { MenuItem } from '@/types/menu.js';
 import type { PageHeaderItem } from '@/types/page-header.js';
 import * as os from '@/os.js';
+import { markRoomInvitationHandled } from '@/utility/chat-invitation-status.js';
+import { chatApiWithDialog, formatChatError } from '@/utility/chat-error.js';
 import { useStream } from '@/stream.js';
 import * as sound from '@/utility/sound.js';
 import { i18n } from '@/i18n.js';
@@ -130,7 +351,6 @@ import { prefer } from '@/preferences.js';
 import MkButton from '@/components/MkButton.vue';
 import { useRouter } from '@/router.js';
 import { useMutationObserver } from '@/composables/use-mutation-observer.js';
-import MkInfo from '@/components/MkInfo.vue';
 import { makeDateSeparatedTimelineComputedRef } from '@/utility/timeline-date-separate.js';
 
 const $i = ensureSignin();
@@ -142,13 +362,7 @@ const props = defineProps<{
 	messageId?: string; // 用于定位到特定消息
 }>();
 
-export type NormalizedChatMessage = Omit<Misskey.entities.ChatMessageLite, 'fromUser' | 'reactions'> & {
-	fromUser: Misskey.entities.UserLite;
-	reactions: (Misskey.entities.ChatMessageLite['reactions'][number] & {
-		user: Misskey.entities.UserLite;
-	})[];
-};
-
+const tab = ref('chat');
 const initializing = ref(false);
 const initialized = ref(false);
 const notMember = ref(false);
@@ -160,13 +374,82 @@ const canFetchMore = ref(false);
 const canFetchNewer = ref(false);
 const user = ref<Misskey.entities.UserDetailed | null>(null);
 const room = ref<Misskey.entities.ChatRoom | null>(null);
+const roomMembers = ref<Misskey.entities.UserLite[]>([]);
+const roomAdminUserIds = ref<string[]>([]);
+const mySuspendedUntil = ref<string | null>(null);
+/** 群组成员禁言截止时间（userId → ISO），用于在消息旁标注 */
+const memberSuspendedUntil = ref<Record<string, string>>({});
+const nowMs = ref(Date.now());
+const bannerExpanded = ref(true);
 const connection = ref<Misskey.IChannelConnection<Misskey.Channels['chatUser']> | Misskey.IChannelConnection<Misskey.Channels['chatRoom']> | null>(null);
 const showIndicator = ref(false);
+const showScrollToBottom = ref(false);
 const timelineEl = useTemplateRef('timelineEl');
+const formRef = useTemplateRef('formRef');
+const membersComponentRef = useTemplateRef('membersComponentRef');
 const timeline = makeDateSeparatedTimelineComputedRef(messages);
 const highlightedMessageId = ref<string | null>(null);
-let highlightTimeoutId: number | null = null; // 防抖用
+let highlightTimeoutId: number | null = null;
+let suspensionTimerId: number | null = null;
+let scrollFabListenerEl: HTMLElement | null = null;
 const replyingTo = ref<{ id: string; text?: string | null } | null>(null);
+
+const isOwner = computed(() => room.value != null && (room.value.ownerId === $i.id || room.value.myRole === 'owner'));
+const isAdmin = computed(() => room.value?.myRole === 'admin');
+const canAdminRoom = computed(() => isOwner.value || isAdmin.value);
+const canInvite = computed(() => room.value != null && (canAdminRoom.value || Boolean(room.value.allowMemberInvite)));
+
+const isCurrentlySuspended = computed(() => {
+	if (!mySuspendedUntil.value) return false;
+	return new Date(mySuspendedUntil.value).getTime() > nowMs.value;
+});
+
+const suspensionBannerText = computed(() => {
+	if (!mySuspendedUntil.value) return '';
+	const d = new Date(mySuspendedUntil.value);
+	if (d.getFullYear() >= 9000) {
+		return i18n.ts._chat.suspendedBannerPermanent;
+	}
+	return i18n.tsx._chat.suspendedBanner({ until: d.toLocaleString() });
+});
+
+/** 输入框不可用原因：一切影响输入的状态统一显示在输入框位置 */
+const formDisabledReason = computed<string | null>(() => {
+	if ($i.policies.chatAvailability !== 'available') {
+		return $i.policies.chatAvailability === 'readonly' ? i18n.ts._chat.chatIsReadOnlyForThisAccountOrServer : i18n.ts._chat.chatNotAvailableForThisAccountOrServer;
+	}
+	if (user.value && (!user.value.canChat || user.value.host !== null)) return i18n.ts._chat.chatNotAvailableInOtherAccount;
+	if (room.value?.isArchived) return i18n.ts._chat.archivedBanner;
+	if (isCurrentlySuspended.value) return suspensionBannerText.value;
+	return null;
+});
+
+watch(isCurrentlySuspended, (suspended) => {
+	if (suspensionTimerId != null) {
+		window.clearInterval(suspensionTimerId);
+		suspensionTimerId = null;
+	}
+	if (suspended) {
+		suspensionTimerId = window.setInterval(() => {
+			nowMs.value = Date.now();
+		}, 15000);
+	}
+}, { immediate: true });
+
+const renderedTimeline = computed(() => {
+	const items = timeline.value.toReversed();
+	const firstUnreadId = unreadSnapshot.value?.firstUnreadId;
+	if (!firstUnreadId) return items;
+
+	const out: (typeof items[number] | { type: 'unread'; id: string })[] = [];
+	for (const item of items) {
+		if (item.type === 'item' && item.data.id === firstUnreadId) {
+			out.push({ type: 'unread', id: `unread-${item.data.id}` });
+		}
+		out.push(item);
+	}
+	return out;
+});
 
 /**
  * 进入会话时（read 清除标记之前）抓取的未读快照：
@@ -182,6 +465,7 @@ async function captureUnreadSnapshot(): Promise<void> {
 	unreadSnapshot.value = null;
 	showUnreadJump.value = false;
 	unbindUnreadScrollListener();
+	if (!props.userId && !props.roomId) return;
 	try {
 		const res = await (misskeyApi as unknown as (endpoint: string, data: Record<string, string>) => Promise<{ count: number | null; firstUnreadId: string | null }>)(
 			'chat/unread-info',
@@ -233,10 +517,46 @@ function unbindUnreadScrollListener() {
 	unreadScrollListenerEl = null;
 }
 
-/**
- * 未读消息在当前屏幕显示不完（首条未读不在视口内）时展示跳转按钮。
- * 进入页面时停在底部（最新消息），首条未读不可见即说明未读占满/超出首屏。
- */
+function onTimelineScroll() {
+	const root = timelineEl.value;
+	if (!root) {
+		showScrollToBottom.value = false;
+		return;
+	}
+	const container = getScrollContainer(root);
+	if (!container) {
+		showScrollToBottom.value = false;
+		return;
+	}
+	// column-reverse 中向上翻看历史时 scrollTop 为负值
+	showScrollToBottom.value = canFetchNewer.value || -container.scrollTop > 300;
+}
+
+function bindScrollFabListener() {
+	unbindScrollFabListener();
+	const root = timelineEl.value;
+	if (!root) return;
+	const container = getScrollContainer(root);
+	if (!container) return;
+	scrollFabListenerEl = container;
+	container.addEventListener('scroll', onTimelineScroll, { passive: true });
+	onTimelineScroll();
+}
+
+function unbindScrollFabListener() {
+	scrollFabListenerEl?.removeEventListener('scroll', onTimelineScroll);
+	scrollFabListenerEl = null;
+}
+
+watch(timelineEl, (el) => {
+	if (el) {
+		bindScrollFabListener();
+	} else {
+		unbindScrollFabListener();
+		showScrollToBottom.value = false;
+	}
+});
+
 async function evaluateUnreadJump(): Promise<void> {
 	if (unreadSnapshot.value == null) return;
 	await nextTick();
@@ -252,14 +572,12 @@ async function onUnreadJumpClick() {
 	if (snapshot == null) return;
 	showUnreadJump.value = false;
 	unbindUnreadScrollListener();
-	// 首条未读不在已加载列表时逐页向上加载；仍找不到则由 scrollToMessage 退化到上下文定位
 	const isLoaded = () => messages.value.some(m => m.id === snapshot.firstUnreadId);
 	let guard = 0;
 	while (!isLoaded() && canFetchMore.value && guard < 20) {
 		await fetchMore();
 		guard++;
 		const tail = messages.value[messages.value.length - 1];
-		// 时序 id：加载范围已越过目标仍不存在，说明目标消息已被删除，放弃定位
 		if (!isLoaded() && (tail == null || tail.id < snapshot.firstUnreadId)) return;
 	}
 	await scrollToMessage(snapshot.firstUnreadId);
@@ -267,19 +585,14 @@ async function onUnreadJumpClick() {
 
 const SCROLL_HEAD_THRESHOLD = 200;
 
-// column-reverseなので本来はスクロール位置の最下部への追従は不要なはずだが、おそらくブラウザのバグにより、最下部にスクロールした状態でも追従されない場合がある(スクロール位置が少数になることがあるのが関わっていそう)
-// そのため補助としてMutationObserverを使って追従を行う
-// そのため補助としてMutationObserverを使って追従を行う
 useMutationObserver(timelineEl, {
 	subtree: true,
 	childList: true,
 	attributes: false,
 }, () => {
-	// 只有在没有加载更多新消息时才自动滚动到底部
 	if (canFetchNewer.value) return;
 
 	const scrollContainer = getScrollContainer(timelineEl.value)!;
-	// column-reverseなのでscrollTopは負になる
 	if (-scrollContainer.scrollTop < SCROLL_HEAD_THRESHOLD) {
 		scrollContainer.scrollTo({
 			top: 0,
@@ -289,9 +602,17 @@ useMutationObserver(timelineEl, {
 });
 
 function normalizeMessage(message: Misskey.entities.ChatMessageLite | Misskey.entities.ChatMessage): NormalizedChatMessage {
+	const recalledById = 'recalledById' in message ? message.recalledById ?? null : null;
+	const existingRecalledBy = 'recalledBy' in message ? message.recalledBy ?? null : null;
+	const resolvedRecalledBy = existingRecalledBy ?? (
+		recalledById == null
+			? null
+			: (recalledById === $i.id ? $i : (recalledById === user.value?.id ? user.value : null))
+	);
 	return {
 		...message,
 		fromUser: message.fromUser ?? (message.fromUserId === $i.id ? $i : user.value!),
+		...(recalledById != null || existingRecalledBy != null ? { recalledBy: resolvedRecalledBy } : {}),
 		reactions: message.reactions.map(record => ({
 			...record,
 			user: record.user ?? (message.fromUserId === $i.id ? user.value! : $i),
@@ -299,30 +620,108 @@ function normalizeMessage(message: Misskey.entities.ChatMessageLite | Misskey.en
 	};
 }
 
-// 引用回复处理
 function handleReply(message: NormalizedChatMessage | Misskey.entities.ChatMessage) {
 	replyingTo.value = {
 		id: message.id,
 		text: message.text,
 	};
+	formRef.value?.focus();
 }
 
 function cancelReply() {
 	replyingTo.value = null;
 }
 
+function handleMention(targetUser: Misskey.entities.UserLite) {
+	if (tab.value !== 'chat') {
+		tab.value = 'chat';
+	}
+	void nextTick(() => {
+		formRef.value?.insertMention(targetUser);
+	});
+}
+
+async function handlePin(messageId: string | null) {
+	if (!room.value) return;
+	try {
+		const updated = await chatApiWithDialog<Misskey.entities.ChatRoom>(
+			'chat/rooms/pin-message',
+			{
+				roomId: room.value.id,
+				messageId,
+			},
+		);
+		if (updated) {
+			room.value = { ...room.value, ...updated };
+		} else {
+			room.value = {
+				...room.value,
+				pinnedMessageId: messageId,
+				pinnedMessage: messageId == null ? null : room.value.pinnedMessage,
+			};
+		}
+		os.toast(i18n.ts._chat.saved);
+	} catch {
+		// apiWithDialog 已显示错误提示
+	}
+}
+
 function onMessageSent() {
 	replyingTo.value = null;
 }
 
-// 加载特定消息及其上下文
-async function loadContext(targetId: string, limit = 20) {
+function onRoomUpdated(payload: Partial<Misskey.entities.ChatRoom>) {
+	if (!room.value) return;
+	room.value = mergeSharedRoomMetadata(room.value, payload);
+}
+
+function onLocalRoomUpdated(updated: Misskey.entities.ChatRoom) {
+	if (!room.value) {
+		room.value = updated;
+		return;
+	}
+	room.value = mergeLocalRoomUpdate(room.value, updated);
+}
+
+function onOwnerTransferred(payload: Parameters<Misskey.Channels['chatRoom']['events']['ownerTransferred']>[0]) {
+	if (room.value) {
+		room.value = applyOwnerTransferred(room.value, payload, $i.id);
+	}
+	roomAdminUserIds.value = roomAdminUserIds.value.filter(id => id !== payload.newOwnerId);
+	void membersComponentRef.value?.refresh();
+}
+
+async function loadRoomMembersForFeatures(roomId: string) {
+	try {
+		const memberships = await misskeyApi('chat/rooms/members', {
+			roomId,
+			limit: 50,
+		});
+		roomMembers.value = memberships
+			.map(m => m.user)
+			.filter((u): u is Misskey.entities.UserLite => u != null);
+		roomAdminUserIds.value = memberships
+			.filter(m => m.role === 'admin')
+			.map(m => m.userId);
+		const suspendedMap: Record<string, string> = {};
+		for (const m of memberships) {
+			if (m.suspendedUntil) suspendedMap[m.userId] = m.suspendedUntil;
+		}
+		memberSuspendedUntil.value = suspendedMap;
+		const mine = memberships.find(m => m.userId === $i.id);
+		mySuspendedUntil.value = mine?.suspendedUntil ?? null;
+		nowMs.value = Date.now();
+	} catch {
+		// 加载失败不阻断聊天主流程
+	}
+}
+
+// 加载特定消息及其上下文（失败时保留现有消息）
+async function loadContext(targetId: string, limit = 20): Promise<boolean> {
 	initializing.value = true;
-	messages.value = [];
 
 	try {
-		const targetParam = { messageId: targetId };
-		const target = await misskeyApi('chat/messages/show', targetParam);
+		const target = await misskeyApi('chat/messages/show', { messageId: targetId });
 
 		let older: Misskey.entities.ChatMessageLite[] = [];
 		let newer: Misskey.entities.ChatMessageLite[] = [];
@@ -341,20 +740,126 @@ async function loadContext(targetId: string, limit = 20) {
 
 		const normalizedTarget = normalizeMessage(target);
 		const normalizedOlder = older.map(x => normalizeMessage(x));
-		// sinceId 返回的是 ASC (旧->新)，我们需要 DESC (新->旧) 以便与 messages 列表（Column Reverse）匹配
+		// sinceId 返回的是 ASC (旧->新)，我们需要 DESC (新->旧)
 		const normalizedNewer = newer.map(x => normalizeMessage(x)).reverse();
 
-		// messages 顺序: [Newer... (Newest First), Target, Older... (Newest First)]
 		messages.value = [...normalizedNewer, normalizedTarget, ...normalizedOlder];
-
 		canFetchMore.value = older.length === limit;
 		canFetchNewer.value = newer.length === limit;
+		return true;
 	} catch (err) {
 		console.error(err);
-		os.alert({ type: 'error', text: i18n.ts.somethingHappened });
+		await os.alert({ type: 'error', text: formatChatError(err) });
+		return false;
 	} finally {
 		initializing.value = false;
 	}
+}
+
+function bindChatUserEvents(conn: Misskey.IChannelConnection<Misskey.Channels['chatUser']>) {
+	conn.on('message', onMessage);
+	conn.on('recalled', onRecalled);
+	conn.on('deleted', onDeleted);
+	conn.on('react', onReact);
+	conn.on('unreact', onUnreact);
+}
+
+function bindChatRoomEvents(conn: Misskey.IChannelConnection<Misskey.Channels['chatRoom']>) {
+	conn.on('message', onMessage);
+	conn.on('recalled', onRecalled);
+	conn.on('deleted', onDeleted);
+	conn.on('react', onReact);
+	conn.on('unreact', onUnreact);
+	conn.on('roomUpdated', onRoomUpdated);
+	conn.on('roomDeleted', () => {
+		connection.value?.dispose();
+		connection.value = null;
+		void os.alert({ type: 'info', text: i18n.ts._chat.roomDeletedNotice }).then(() => {
+			router.push('/chat');
+		});
+	});
+	conn.on('memberJoined', (payload) => {
+		if (room.value && room.value.memberCount != null) {
+			room.value = { ...room.value, memberCount: room.value.memberCount + 1 };
+		}
+		if (payload.user && !roomMembers.value.some(u => u.id === payload.user.id)) {
+			roomMembers.value.push(payload.user);
+		}
+		void membersComponentRef.value?.refresh();
+	});
+	conn.on('memberLeft', (payload) => {
+		if (payload.userId === $i.id) {
+			connection.value?.dispose();
+			connection.value = null;
+			router.push('/chat');
+			return;
+		}
+		if (room.value && room.value.memberCount != null && room.value.memberCount > 0) {
+			room.value = { ...room.value, memberCount: room.value.memberCount - 1 };
+		}
+		roomMembers.value = roomMembers.value.filter(u => u.id !== payload.userId);
+		roomAdminUserIds.value = roomAdminUserIds.value.filter(id => id !== payload.userId);
+		void membersComponentRef.value?.refresh();
+	});
+	conn.on('memberKicked', (payload) => {
+		if (payload.userId === $i.id) {
+			connection.value?.dispose();
+			connection.value = null;
+			notMember.value = true;
+			if (room.value) {
+				room.value = { ...room.value, isMember: false, myRole: null };
+			}
+			void os.alert({ type: 'warning', text: i18n.ts._chat.kickedNotice });
+			return;
+		}
+		if (room.value && room.value.memberCount != null && room.value.memberCount > 0) {
+			room.value = { ...room.value, memberCount: room.value.memberCount - 1 };
+		}
+		roomMembers.value = roomMembers.value.filter(u => u.id !== payload.userId);
+		roomAdminUserIds.value = roomAdminUserIds.value.filter(id => id !== payload.userId);
+		void membersComponentRef.value?.refresh();
+	});
+	conn.on('memberRoleChanged', (payload) => {
+		if (payload.role === 'admin') {
+			if (!roomAdminUserIds.value.includes(payload.userId)) {
+				roomAdminUserIds.value = [...roomAdminUserIds.value, payload.userId];
+			}
+		} else {
+			roomAdminUserIds.value = roomAdminUserIds.value.filter(id => id !== payload.userId);
+		}
+		if (payload.userId === $i.id && room.value) {
+			room.value = { ...room.value, myRole: payload.role };
+		}
+		void membersComponentRef.value?.refresh();
+	});
+	conn.on('memberSuspended', (payload) => {
+		memberSuspendedUntil.value = { ...memberSuspendedUntil.value, [payload.userId]: payload.suspendedUntil ?? new Date(9999, 0, 1).toISOString() };
+		if (payload.userId === $i.id) {
+			mySuspendedUntil.value = payload.suspendedUntil ?? new Date(9999, 0, 1).toISOString();
+			nowMs.value = Date.now();
+		}
+		void membersComponentRef.value?.refresh();
+	});
+	conn.on('memberUnsuspended', (payload) => {
+		const { [payload.userId]: _removed, ...rest } = memberSuspendedUntil.value;
+		memberSuspendedUntil.value = rest;
+		if (payload.userId === $i.id) {
+			mySuspendedUntil.value = null;
+		}
+		void membersComponentRef.value?.refresh();
+	});
+	conn.on('invitationIgnored', () => {
+		void membersComponentRef.value?.refresh();
+	});
+	conn.on('ownerTransferred', onOwnerTransferred);
+	conn.on('pinnedMessageUpdated', (payload) => {
+		if (!room.value) return;
+		room.value = {
+			...room.value,
+			pinnedMessageId: payload.pinnedMessageId,
+			pinnedMessage: payload.pinnedMessage ?? null,
+		};
+	});
 }
 
 async function initialize() {
@@ -362,100 +867,76 @@ async function initialize() {
 
 	if (initializing.value) return;
 
-	// 如果有 props.messageId，直接进入上下文加载模式
-	if (props.messageId) {
-		// 先获取 Room/User 信息以便建立连接
-		try {
-			if (props.userId) {
-				user.value = await misskeyApi('users/show', { userId: props.userId });
-				connection.value = useStream().useChannel('chatUser', { otherId: user.value!.id });
-			} else if (props.roomId) {
-				const r = await misskeyApi('chat/rooms/show', { roomId: props.roomId });
-				room.value = r;
-				connection.value = useStream().useChannel('chatRoom', { roomId: room.value.id });
-			}
-		} catch (err) {
-			console.error(err);
-			os.alert({ type: 'error', text: i18n.ts.somethingHappened });
-			router.push('/chat');
-			return;
-		}
-
-		if (connection.value) {
-			connection.value.on('message', onMessage);
-			connection.value.on('deleted', onDeleted);
-			connection.value.on('react', onReact);
-			connection.value.on('unreact', onUnreact);
-		}
-
-		await loadContext(props.messageId);
-		initialized.value = true;
-
-		// 滚动到该消息
-		await new Promise(resolve => window.setTimeout(resolve, 300));
-		await scrollToMessage(props.messageId);
-		return;
-	}
-
 	initializing.value = true;
 	initialized.value = false;
 	canFetchNewer.value = false;
+	notMember.value = false;
 
 	try {
 		if (props.userId) {
-			const [u, m] = await Promise.all([
+			// 先抓取未读快照，严格先于 timeline / read 清除未读计数
+			const [u] = await Promise.all([
 				misskeyApi('users/show', { userId: props.userId }),
-				misskeyApi('chat/messages/user-timeline', { userId: props.userId, limit: LIMIT }),
-				// 必须先于 read 信号完成：read 会清除后端的未读标记与计数
-				captureUnreadSnapshot(),
+				props.messageId ? Promise.resolve() : captureUnreadSnapshot(),
 			]);
-
 			user.value = u;
-			messages.value = m.map(x => normalizeMessage(x));
 
-			if (messages.value.length === LIMIT) {
-				canFetchMore.value = true;
-			}
-
-			connection.value = useStream().useChannel('chatUser', {
+			connection.value?.dispose();
+			const userConn = useStream().useChannel('chatUser', {
 				otherId: user.value.id,
 			});
-			connection.value.on('message', onMessage);
-			connection.value.on('deleted', onDeleted);
-			connection.value.on('react', onReact);
-			connection.value.on('unreact', onUnreact);
+			connection.value = userConn;
+			bindChatUserEvents(userConn);
 
-			// 打开对话页面时立即发送 read 信号，标记该对话的消息为已读
-			// 这样后端会更新已读状态并发送 chatRead 事件
-			// 使用类型断言：后端实际上不需要 id 参数
+			window.document.removeEventListener('visibilitychange', onVisibilitychange);
+			window.document.addEventListener('visibilitychange', onVisibilitychange);
+
+			if (props.messageId) {
+				const ok = await loadContext(props.messageId);
+				initialized.value = true;
+				if (!canFetchNewer.value) {
+					(connection.value as any).send('read', {});
+					void markAsRead();
+				}
+				if (ok) {
+					await new Promise(resolve => window.setTimeout(resolve, 300));
+					await scrollToMessage(props.messageId);
+				}
+				return;
+			}
+
+			const m = await misskeyApi('chat/messages/user-timeline', { userId: props.userId, limit: LIMIT });
+			messages.value = m.map(x => normalizeMessage(x));
+			canFetchMore.value = messages.value.length === LIMIT;
+
 			(connection.value as any).send('read', {});
-			markAsRead(); // 调用 API 强制标记已读
+			void markAsRead();
 		} else if (props.roomId) {
 			let r: Misskey.entities.ChatRoomsShowResponse;
 			try {
 				r = await misskeyApi('chat/rooms/show', { roomId: props.roomId });
 			} catch (err: any) {
 				if (err?.code === 'ACCESS_DENIED') {
-					os.alert({
+					await os.alert({
 						type: 'error',
-						text: i18n.ts.permissionDeniedError as string,
+						text: i18n.ts.permissionDeniedError,
 					});
 				} else if (err?.code === 'NO_SUCH_ROOM') {
-					os.alert({
+					await os.alert({
 						type: 'error',
-						text: i18n.ts.noSuchRoom as string ?? 'No such room',
+						text: i18n.ts.noSuchRoom,
 					});
 				} else {
-					os.alert({
+					await os.alert({
 						type: 'error',
-						text: i18n.ts.somethingHappened,
+						text: formatChatError(err),
 					});
 				}
 				router.push('/chat');
 				return;
 			}
 
-			if (r.invitationExists) {
+			if (r.invitationExists && !r.isBanned) {
 				const confirm = await os.confirm({
 					type: 'question',
 					title: r.name,
@@ -464,59 +945,75 @@ async function initialize() {
 				if (confirm.canceled) {
 					router.push('/chat');
 					return;
-				} else {
-					await os.apiWithDialog('chat/rooms/join', { roomId: r.id });
-					// 复位防重入守卫后重新加载（外层 finally 不得在重入完成前复位标志，故 await）
-					initializing.value = false;
-					await initialize();
+				}
+				try {
+					await chatApiWithDialog('chat/rooms/join', { roomId: r.id });
+				markRoomInvitationHandled(r.id, 'accepted');
+				} catch {
+					// apiWithDialog 已弹窗提示，避免外层 catch 重复弹窗
+					router.push('/chat');
 					return;
 				}
+				initializing.value = false;
+				await initialize();
+				return;
 			}
 
-			// 非成员（公开群组通过链接访问）：显示加入界面，不加载消息
-			if (!(r as any).isMember) {
+			// 非成员（或被封禁）：显示加入/提示界面，不加载消息
+			if (!r.isMember || r.isBanned) {
 				room.value = r;
 				notMember.value = true;
 				initialized.value = true;
 				return;
 			}
 
-			// 已是成员：加载消息时间线（未读快照必须先于 read 信号完成）
-			const [m] = await Promise.all([
-				misskeyApi('chat/messages/room-timeline', { roomId: props.roomId, limit: LIMIT }),
-				captureUnreadSnapshot(),
-			]);
-
 			room.value = r;
-			messages.value = m.map(x => normalizeMessage(x));
 
-			if (messages.value.length === LIMIT) {
-				canFetchMore.value = true;
+			// 先抓取未读快照，严格先于 room-timeline / read
+			if (!props.messageId) {
+				await captureUnreadSnapshot();
 			}
 
-			connection.value = useStream().useChannel('chatRoom', {
+			connection.value?.dispose();
+			const roomConn = useStream().useChannel('chatRoom', {
 				roomId: room.value.id,
 			});
-			connection.value.on('message', onMessage);
-			connection.value.on('deleted', onDeleted);
-			connection.value.on('react', onReact);
-			connection.value.on('unreact', onUnreact);
+			connection.value = roomConn;
+			bindChatRoomEvents(roomConn);
 
-			// 打开对话页面时立即发送 read 信号，标记该对话的消息为已读
-			// 这样后端会更新已读状态并发送 chatRead 事件
-			// 使用类型断言：后端实际上不需要 id 参数
+			window.document.removeEventListener('visibilitychange', onVisibilitychange);
+			window.document.addEventListener('visibilitychange', onVisibilitychange);
+
+			// 并行拉取成员信息（用于 @mention 补全与当前用户禁言状态）
+			void loadRoomMembersForFeatures(room.value.id);
+
+			if (props.messageId) {
+				const ok = await loadContext(props.messageId);
+				initialized.value = true;
+				if (!canFetchNewer.value) {
+					(connection.value as any).send('read', {});
+					void markAsRead();
+				}
+				if (ok) {
+					await new Promise(resolve => window.setTimeout(resolve, 300));
+					await scrollToMessage(props.messageId);
+				}
+				return;
+			}
+
+			const m = await misskeyApi('chat/messages/room-timeline', { roomId: props.roomId, limit: LIMIT });
+			messages.value = m.map(x => normalizeMessage(x));
+			canFetchMore.value = messages.value.length === LIMIT;
+
 			(connection.value as any).send('read', {});
-			markAsRead(); // 调用 API 强制标记已读
+			void markAsRead();
 		}
-
-		window.document.addEventListener('visibilitychange', onVisibilitychange);
 
 		initialized.value = true;
 		void evaluateUnreadJump();
 	} catch (err) {
-		// 任何加载步骤失败都必须复位 initializing：防重入守卫复用它，不复位即整页永久转圈
 		console.error(err);
-		os.alert({ type: 'error', text: i18n.ts.somethingHappened });
+		await os.alert({ type: 'error', text: formatChatError(err) });
 	} finally {
 		initializing.value = false;
 	}
@@ -526,11 +1023,15 @@ let isActivated = true;
 
 onActivated(() => {
 	isActivated = true;
-	// 用户从其他页面返回时，发送 read 信号标记该对话为已读
-	// read 会清除后端未读标记，先重新抓取未读快照（离开期间可能有新消息）
-	if (connection.value && initialized.value && !window.document.hidden) {
+	if (!initialized.value) {
+		void initialize();
+		return;
+	}
+	if (connection.value && !window.document.hidden && !canFetchNewer.value) {
 		void captureUnreadSnapshot().then(() => {
+			if (!isActivated || window.document.hidden) return;
 			(connection.value as any)?.send('read', {});
+			void markAsRead();
 			void evaluateUnreadJump();
 		});
 	}
@@ -540,10 +1041,38 @@ onDeactivated(() => {
 	isActivated = false;
 });
 
+watch(() => [props.roomId, props.userId], (nextPair, prevPair) => {
+	if (nextPair[0] === prevPair[0] && nextPair[1] === prevPair[1]) return;
+	connection.value?.dispose();
+	connection.value = null;
+	messages.value = [];
+	user.value = null;
+	room.value = null;
+	roomMembers.value = [];
+	roomAdminUserIds.value = [];
+	mySuspendedUntil.value = null;
+	memberSuspendedUntil.value = {};
+	notMember.value = false;
+	replyingTo.value = null;
+	unreadSnapshot.value = null;
+	showUnreadJump.value = false;
+	showIndicator.value = false;
+	showScrollToBottom.value = false;
+	canFetchMore.value = false;
+	canFetchNewer.value = false;
+	tab.value = 'chat';
+	void initialize();
+});
+
+watch(() => props.messageId, (nextMsgId, prevMsgId) => {
+	if (!nextMsgId || nextMsgId === prevMsgId || !initialized.value || notMember.value) return;
+	void handleScrollToMessage(nextMsgId);
+});
+
 async function fetchMore() {
 	const LIMIT = 30;
 
-	if (moreFetching.value) return;
+	if (moreFetching.value || messages.value.length === 0) return;
 	moreFetching.value = true;
 
 	try {
@@ -557,12 +1086,13 @@ async function fetchMore() {
 			untilId: messages.value[messages.value.length - 1].id,
 		});
 
-		messages.value.push(...newMessages.map(x => normalizeMessage(x)));
+		const existingIds = new Set(messages.value.map(m => m.id));
+		messages.value.push(...newMessages.filter(x => !existingIds.has(x.id)).map(x => normalizeMessage(x)));
 
 		canFetchMore.value = newMessages.length === LIMIT;
 	} catch (err) {
 		console.error(err);
-		os.alert({ type: 'error', text: i18n.ts.somethingHappened });
+		await os.alert({ type: 'error', text: formatChatError(err) });
 	} finally {
 		moreFetching.value = false;
 	}
@@ -574,40 +1104,34 @@ async function fetchNewer() {
 	if (fetchingNewer.value) return;
 	fetchingNewer.value = true;
 
-	// 获取当前列表最新消息 ID
 	const sinceId = messages.value[0]?.id;
 	if (!sinceId) {
 		fetchingNewer.value = false;
 		return;
 	}
 
-	let newMessages: Misskey.entities.ChatMessageLite[] = [];
-
 	try {
-		if (props.userId) {
-			newMessages = await misskeyApi('chat/messages/user-timeline', {
+		const newMessages = props.userId
+			? await misskeyApi('chat/messages/user-timeline', {
 				userId: user.value!.id,
 				limit: LIMIT,
-				sinceId: sinceId,
-			});
-		} else {
-			newMessages = await misskeyApi('chat/messages/room-timeline', {
+				sinceId,
+			})
+			: await misskeyApi('chat/messages/room-timeline', {
 				roomId: room.value!.id,
 				limit: LIMIT,
-				sinceId: sinceId,
+				sinceId,
 			});
-		}
 
 		if (newMessages.length > 0) {
-			// NewMessages 是 Newest First.
-			// Messages 列表也是 Newest First.
-			// 所以直接 unshift 进去
-			// NewMessages 是 ASC (旧->新)，我们需要反转为 DESC (新->旧)
-			const reversed = newMessages.map(x => normalizeMessage(x)).reverse();
+			const existingIds = new Set(messages.value.map(m => m.id));
+			const reversed = newMessages
+				.filter(x => !existingIds.has(x.id))
+				.map(x => normalizeMessage(x))
+				.reverse();
 			messages.value.unshift(...reversed);
 		}
 
-		// 如果返回数量少于 Limit，说明已经到达最顶端（最新），没有更多 gap 了
 		if (newMessages.length < LIMIT) {
 			canFetchNewer.value = false;
 			showIndicator.value = false;
@@ -616,7 +1140,7 @@ async function fetchNewer() {
 		}
 	} catch (err) {
 		console.error(err);
-		os.alert({ type: 'error', text: i18n.ts.somethingHappened });
+		await os.alert({ type: 'error', text: formatChatError(err) });
 	} finally {
 		fetchingNewer.value = false;
 	}
@@ -624,36 +1148,32 @@ async function fetchNewer() {
 
 // 滚动到指定消息
 async function scrollToMessage(targetMessageId: string) {
-	// 清除旧的高光 timeout
 	if (highlightTimeoutId !== null) {
 		window.clearTimeout(highlightTimeoutId);
 		highlightTimeoutId = null;
 	}
 	highlightedMessageId.value = null;
 
-	// 辅助函数：执行滚动和高光
 	const performScrollAndHighlight = (targetEl: HTMLElement) => {
-		// 强制执行滚动（即使元素已在视口内也执行）
 		targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
 
-		// 等待滚动动画完成后（约500ms）开始高光，持续1秒
 		highlightTimeoutId = window.setTimeout(() => {
 			highlightedMessageId.value = targetMessageId;
 			highlightTimeoutId = window.setTimeout(() => {
 				highlightedMessageId.value = null;
 				highlightTimeoutId = null;
-			}, 1000); // 高光持续1秒
-		}, 500); // 等待滚动完成
+			}, 1000);
+		}, 500);
 	};
 
-	// 辅助函数：尝试查找元素并滚动
 	const tryScrollToElement = async (retryCount = 0): Promise<boolean> => {
-		const targetEl = window.document.querySelector(`[data-message-id="${targetMessageId}"]`) as HTMLElement | null;
+		const escaped = CSS.escape(targetMessageId);
+		const targetEl = (timelineEl.value?.querySelector(`[data-message-id="${escaped}"]`)
+			?? window.document.querySelector(`[data-message-id="${escaped}"]`)) as HTMLElement | null;
 		if (targetEl) {
 			performScrollAndHighlight(targetEl);
 			return true;
 		}
-		// 最多重试3次，每次等待100ms
 		if (retryCount < 3) {
 			await new Promise(resolve => window.setTimeout(resolve, 100));
 			return tryScrollToElement(retryCount + 1);
@@ -661,22 +1181,19 @@ async function scrollToMessage(targetMessageId: string) {
 		return false;
 	};
 
-	// 第一步：尝试在当前DOM中查找
 	if (await tryScrollToElement()) {
 		return;
 	}
 
-	// 第二步：检查消息是否在列表中但DOM还没渲染
-	const exists = messages.value.some(m => m.id === targetMessageId);
-	if (exists) {
+	if (messages.value.some(m => m.id === targetMessageId)) {
 		await nextTick();
 		if (await tryScrollToElement()) {
 			return;
 		}
 	}
 
-	// 第三步：消息不在当前列表，需要加载上下文
-	await loadContext(targetMessageId);
+	const loaded = await loadContext(targetMessageId);
+	if (!loaded) return;
 	await nextTick();
 	await tryScrollToElement();
 }
@@ -684,23 +1201,20 @@ async function scrollToMessage(targetMessageId: string) {
 // 处理从搜索结果或引用点击定位的事件
 async function handleScrollToMessage(messageId: string) {
 	tab.value = 'chat';
-	// 等待 tab 切换完成
 	await nextTick();
-	// scrollToMessage 已处理消息是否在当前页的逻辑
 	await scrollToMessage(messageId);
 }
 
 // 标记为已读
 async function markAsRead() {
-	// 延迟 100ms 以确保后端已经写入了未读标记（双重保障）
 	await new Promise(resolve => window.setTimeout(resolve, 100));
 
 	if (!window.document.hidden && isActivated) {
 		try {
 			if (props.userId) {
-				await misskeyApi('chat/read' as any, { userId: props.userId });
+				await misskeyApi('chat/read', { userId: props.userId });
 			} else if (props.roomId) {
-				await misskeyApi('chat/read' as any, { roomId: props.roomId });
+				await misskeyApi('chat/read', { roomId: props.roomId });
 			}
 		} catch (err) {
 			console.error('Failed to mark as read:', err);
@@ -709,9 +1223,10 @@ async function markAsRead() {
 }
 
 function onMessage(message: Misskey.entities.ChatMessageLite) {
-	sound.playMisskeySfx('chatMessage');
+	if (messages.value.some(m => m.id === message.id)) return;
 
-	// 如果我们处于历史模式（canFetchNewer=true），不直接把新消息加进去，而是显示提示
+	if (message.systemType == null) sound.playMisskeySfx('chatMessage');
+
 	if (canFetchNewer.value) {
 		showIndicator.value = true;
 		return;
@@ -719,16 +1234,30 @@ function onMessage(message: Misskey.entities.ChatMessageLite) {
 
 	messages.value.unshift(normalizeMessage(message));
 
-	// TODO: DOM的にバックグラウンドになっていないかどうかも考慮する
 	if (message.fromUserId !== $i.id && !window.document.hidden && isActivated) {
 		connection.value?.send('read', {
 			id: message.id,
 		});
-		markAsRead(); // 调用 API 强制标记已读
+		void markAsRead();
 	}
+}
 
-	if (message.fromUserId !== $i.id) {
-		//notifyNewMessage();
+function onRecalled(recalledMsg: Misskey.entities.ChatMessageLite) {
+	const normalized = normalizeMessage(recalledMsg);
+	const index = messages.value.findIndex(m => m.id === recalledMsg.id);
+	if (index !== -1) {
+		messages.value[index] = normalized;
+	}
+	for (let i = 0; i < messages.value.length; i++) {
+		if (messages.value[i].replyId === recalledMsg.id && messages.value[i].reply != null) {
+			messages.value[i] = { ...messages.value[i], reply: null };
+		}
+	}
+	if (room.value?.pinnedMessageId === recalledMsg.id) {
+		room.value = { ...room.value, pinnedMessageId: null, pinnedMessage: null };
+	}
+	if (replyingTo.value?.id === recalledMsg.id) {
+		replyingTo.value = null;
 	}
 }
 
@@ -737,108 +1266,172 @@ function onDeleted(id: string) {
 	if (index !== -1) {
 		messages.value.splice(index, 1);
 	}
+	if (room.value?.pinnedMessageId === id) {
+		room.value = { ...room.value, pinnedMessageId: null, pinnedMessage: null };
+	}
 }
 
 function onReact(ctx: Parameters<Misskey.Channels['chatUser']['events']['react']>[0] | Parameters<Misskey.Channels['chatRoom']['events']['react']>[0]) {
 	const message = messages.value.find(m => m.id === ctx.messageId);
-	if (message) {
-		if (room.value == null) { // 1on1の時はuserは省略される
-			message.reactions.push({
-				reaction: ctx.reaction,
-				user: message.fromUserId === $i.id ? user.value! : $i,
-			});
-		} else {
-			message.reactions.push({
-				reaction: ctx.reaction,
-				user: ctx.user!,
-			});
-		}
-	}
+	if (!message) return;
+
+	const reactor = room.value == null
+		? (ctx.user ?? (message.fromUserId === $i.id ? user.value! : $i))
+		: ctx.user;
+	if (!reactor) return;
+
+	if (message.reactions.some(r => r.reaction === ctx.reaction && r.user.id === reactor.id)) return;
+
+	message.reactions.push({
+		reaction: ctx.reaction,
+		user: reactor,
+	});
 }
 
 function onUnreact(ctx: Parameters<Misskey.Channels['chatUser']['events']['unreact']>[0] | Parameters<Misskey.Channels['chatRoom']['events']['unreact']>[0]) {
 	const message = messages.value.find(m => m.id === ctx.messageId);
-	if (message) {
-		const index = message.reactions.findIndex(r => r.reaction === ctx.reaction && r.user.id === ctx.user!.id);
-		if (index !== -1) {
-			message.reactions.splice(index, 1);
-		}
+	if (!message) return;
+
+	const reactorId = ctx.user?.id ?? (message.fromUserId === $i.id ? user.value?.id : $i.id);
+	if (!reactorId) return;
+
+	const index = message.reactions.findIndex(r => r.reaction === ctx.reaction && r.user.id === reactorId);
+	if (index !== -1) {
+		message.reactions.splice(index, 1);
 	}
 }
 
-function onIndicatorClick() {
+function scrollToBottom() {
+	if (canFetchNewer.value) {
+		void onIndicatorClick();
+		return;
+	}
+	if (timelineEl.value) {
+		const scrollContainer = getScrollContainer(timelineEl.value);
+		scrollContainer?.scrollTo({ top: 0, behavior: 'smooth' });
+	}
+}
+
+async function onIndicatorClick() {
 	if (canFetchNewer.value) {
 		showIndicator.value = false;
-		// 重新初始化以加载最新消息
+		unreadSnapshot.value = null;
+		showUnreadJump.value = false;
 		initializing.value = true;
-		(async () => {
-			try {
-				const LIMIT = 20;
-				let m: Misskey.entities.ChatMessageLite[] = [];
-				if (props.userId) {
-					m = await misskeyApi('chat/messages/user-timeline', { userId: props.userId, limit: LIMIT });
-				} else {
-					m = await misskeyApi('chat/messages/room-timeline', { roomId: props.roomId!, limit: LIMIT });
-				}
-				messages.value = m.map(x => normalizeMessage(x));
-				canFetchMore.value = messages.value.length === LIMIT;
-				canFetchNewer.value = false;
-			} finally {
-				initializing.value = false;
+		try {
+			const LIMIT = 20;
+			const m = props.userId
+				? await misskeyApi('chat/messages/user-timeline', { userId: props.userId, limit: LIMIT })
+				: await misskeyApi('chat/messages/room-timeline', { roomId: props.roomId!, limit: LIMIT });
+			messages.value = m.map(x => normalizeMessage(x));
+			canFetchMore.value = messages.value.length === LIMIT;
+			canFetchNewer.value = false;
+			await nextTick();
+			if (timelineEl.value) {
+				const scrollContainer = getScrollContainer(timelineEl.value);
+				scrollContainer?.scrollTo({ top: 0, behavior: 'instant' });
 			}
-		})();
+		} catch (err) {
+			console.error(err);
+			await os.alert({ type: 'error', text: formatChatError(err) });
+		} finally {
+			initializing.value = false;
+		}
 	} else {
 		showIndicator.value = false;
-		// 滚动到底部（顶部）
-		const scrollContainer = getScrollContainer(timelineEl.value!);
-		scrollContainer?.scrollTo({ top: 0, behavior: 'smooth' });
+		if (timelineEl.value) {
+			const scrollContainer = getScrollContainer(timelineEl.value);
+			scrollContainer?.scrollTo({ top: 0, behavior: 'smooth' });
+		}
 	}
 }
 
 function onVisibilitychange() {
 	if (window.document.hidden) return;
-	// 页面从后台切回可见时补发已读：消息在后台期间到达时 onMessage 会跳过 read（用户当时没看到），
-	// 但消息已渲染进时间线，切回即视为看到，不补已读的话返回列表会出现未读点
-	if (connection.value && isActivated) {
-		(connection.value as any).send('read', {});
-		markAsRead();
+	if (connection.value && isActivated && initialized.value && !canFetchNewer.value) {
+		void captureUnreadSnapshot().then(() => {
+			if (window.document.hidden || !isActivated || !connection.value) return;
+			(connection.value as any).send('read', {});
+			void markAsRead();
+			void evaluateUnreadJump();
+		});
 	}
 }
 
 onMounted(() => {
-	initialize();
-});
-
-onActivated(() => {
-	if (!initialized.value) {
-		initialize();
-	}
+	void initialize();
 });
 
 onBeforeUnmount(() => {
+	if (highlightTimeoutId !== null) {
+		window.clearTimeout(highlightTimeoutId);
+		highlightTimeoutId = null;
+	}
+	if (suspensionTimerId !== null) {
+		window.clearInterval(suspensionTimerId);
+		suspensionTimerId = null;
+	}
 	connection.value?.dispose();
+	connection.value = null;
 	unbindUnreadScrollListener();
+	unbindScrollFabListener();
 	window.document.removeEventListener('visibilitychange', onVisibilitychange);
 });
+
+function selectUserOrCancel(): Promise<Misskey.entities.UserDetailed | null> {
+	return new Promise((resolve) => {
+		let settled = false;
+		let disposeFn: (() => void) | null = null;
+		const finish = (selected: Misskey.entities.UserDetailed | null) => {
+			if (settled) return;
+			settled = true;
+			resolve(selected);
+		};
+		os.popupAsyncWithDialog(import('@/components/MkUserSelectDialog.vue').then(x => x.default), {
+			includeSelf: false,
+			localOnly: true,
+		}, {
+			ok: (selected: Misskey.entities.UserDetailed) => finish(selected),
+			cancel: () => finish(null),
+			closed: () => {
+				disposeFn?.();
+				finish(null);
+			},
+		}).then(d => {
+			disposeFn = d.dispose;
+		}).catch(() => finish(null));
+	});
+}
 
 async function inviteUser() {
 	if (room.value == null) return;
 
-	const invitee = await os.selectUser({ includeSelf: false, localOnly: true });
-	os.apiWithDialog('chat/rooms/invitations/create', {
-		roomId: room.value.id,
-		userId: invitee.id,
-	});
+	const invitee = await selectUserOrCancel();
+	if (invitee == null) return;
+
+	try {
+		await chatApiWithDialog('chat/rooms/invitations/create', {
+			roomId: room.value.id,
+			userId: invitee.id,
+		});
+		os.toast(i18n.ts._chat.saved);
+		await membersComponentRef.value?.refresh();
+	} catch {
+		// apiWithDialog 已显示错误提示
+	}
 }
 
 async function joinRoom() {
-	if (room.value == null) return;
+	if (room.value == null || joining.value) return;
 	joining.value = true;
 	try {
-		await os.apiWithDialog('chat/rooms/join', { roomId: room.value.id });
+		await chatApiWithDialog('chat/rooms/join', { roomId: room.value.id });
+		markRoomInvitationHandled(room.value.id, 'accepted');
 		notMember.value = false;
 		initialized.value = false;
-		initialize();
+		await initialize();
+	} catch {
+		// apiWithDialog 已显示错误提示
 	} finally {
 		joining.value = false;
 	}
@@ -853,39 +1446,66 @@ async function leaveRoom() {
 	});
 	if (canceled) return;
 
-	misskeyApi('chat/rooms/leave', {
-		roomId: room.value.id,
-	});
-	router.push('/chat');
+	try {
+		await chatApiWithDialog('chat/rooms/leave', {
+			roomId: room.value.id,
+		});
+		router.push('/chat');
+	} catch {
+		// apiWithDialog 已显示错误提示
+	}
+}
+
+async function toggleMuteFromMenu() {
+	if (!room.value) return;
+	const nextMute = !room.value.isMuted;
+	try {
+		await chatApiWithDialog('chat/rooms/mute', {
+			roomId: room.value.id,
+			mute: nextMute,
+		});
+		room.value = { ...room.value, isMuted: nextMute };
+	} catch {
+		// apiWithDialog 已显示错误提示
+	}
 }
 
 function showMenu(ev: PointerEvent) {
-	const menuItems: MenuItem[] = [];
+	if (!room.value) return;
 
-	if (room.value) {
-		if (room.value.ownerId === $i.id) {
-			menuItems.push({
-				text: i18n.ts._chat.inviteUser,
-				icon: 'ti ti-user-plus',
-				action: () => {
-					inviteUser();
-				},
-			});
-		} else {
-			menuItems.push({
-				text: i18n.ts._chat.leave,
-				icon: 'ti ti-x',
-				action: () => {
-					leaveRoom();
-				},
-			});
-		}
+	const menuItems: MenuItem[] = [{
+		text: i18n.ts._chat.muteThisRoom,
+		icon: room.value.isMuted ? 'ti ti-bell' : 'ti ti-bell-off',
+		active: Boolean(room.value.isMuted),
+		action: () => {
+			void toggleMuteFromMenu();
+		},
+	}];
+
+	if (canInvite.value && !room.value.isArchived) {
+		menuItems.push({
+			text: i18n.ts._chat.inviteUser,
+			icon: 'ti ti-user-plus',
+			action: () => {
+				void inviteUser();
+			},
+		});
+	}
+
+	if (!isOwner.value) {
+		menuItems.push({ type: 'divider' });
+		menuItems.push({
+			text: i18n.ts._chat.leave,
+			icon: 'ti ti-door-exit',
+			danger: true,
+			action: () => {
+				void leaveRoom();
+			},
+		});
 	}
 
 	os.popupMenu(menuItems, ev.currentTarget ?? ev.target);
 }
-
-const tab = ref('chat');
 
 const headerTabs = computed(() => notMember.value ? [] : room.value ? [{
 	key: 'chat',
@@ -913,10 +1533,14 @@ const headerTabs = computed(() => notMember.value ? [] : room.value ? [{
 	icon: 'ti ti-search',
 }]);
 
-const headerActions = computed<PageHeaderItem[]>(() => notMember.value ? [] : [{
-	icon: 'ti ti-dots',
-	handler: showMenu,
-}]);
+const headerActions = computed<PageHeaderItem[]>(() => {
+	if (notMember.value || room.value == null) return [];
+	return [{
+		text: i18n.ts.menu,
+		icon: 'ti ti-dots',
+		handler: showMenu,
+	}];
+});
 
 definePage(computed(() => {
 	if (initialized.value) {
@@ -930,6 +1554,7 @@ definePage(computed(() => {
 		} else if (room.value) {
 			return {
 				title: room.value.name,
+				subtitle: room.value.memberCount != null ? i18n.tsx._chat.memberCount({ count: room.value.memberCount }) : undefined,
 				icon: 'ti ti-users',
 				hideMobileFooter: true,
 			};
@@ -963,7 +1588,143 @@ definePage(computed(() => {
 	position: absolute;
 }
 
-.root {
+.stickyTopBanners {
+	position: sticky;
+	top: calc(var(--MI-stickyTop, 0px) + 8px);
+	z-index: 4;
+}
+
+.roomHeaderStrip {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 8px 12px;
+	border-radius: var(--MI-radius);
+	background: color(from var(--MI_THEME-panel) srgb r g b / 0.9);
+	border: 1px solid var(--MI_THEME-divider);
+	-webkit-backdrop-filter: var(--MI-blur, blur(15px));
+	backdrop-filter: var(--MI-blur, blur(15px));
+}
+
+.roomHeaderIcon {
+	width: 32px;
+	height: 32px;
+	border-radius: 50%;
+	object-fit: cover;
+	flex-shrink: 0;
+}
+
+.roomHeaderMeta {
+	min-width: 0;
+	flex: 1;
+}
+
+.roomHeaderName {
+	font-weight: bold;
+	font-size: 0.95em;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.roomHeaderSub {
+	font-size: 0.8em;
+	color: var(--MI_THEME-fgTransparentWeak);
+}
+
+.pinnedBanner {
+	border: 1px solid var(--MI_THEME-divider);
+	background: color(from var(--MI_THEME-panel) srgb r g b / 0.92);
+	-webkit-backdrop-filter: var(--MI-blur, blur(15px));
+	backdrop-filter: var(--MI-blur, blur(15px));
+}
+
+.pinnedBannerHeader {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	width: 100%;
+	padding: 8px 12px;
+	font-size: 0.85em;
+	font-weight: 600;
+	color: var(--MI_THEME-accent);
+}
+
+.pinnedBannerTitle {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.pinnedBannerBody {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	padding: 0 12px 10px;
+	border-top: 1px solid var(--MI_THEME-divider);
+	padding-top: 8px;
+}
+
+.announcementBox {
+	font-size: 0.88em;
+}
+
+.announcementLabel {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	font-size: 0.85em;
+	font-weight: bold;
+	color: var(--MI_THEME-accent);
+	margin-bottom: 2px;
+}
+
+.announcementText {
+	white-space: pre-wrap;
+	word-break: break-word;
+}
+
+.pinnedMsgRow {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.pinnedMsgLink {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	flex: 1;
+	min-width: 0;
+	text-align: left;
+	font-size: 0.88em;
+	color: var(--MI_THEME-fg);
+
+	&:hover {
+		color: var(--MI_THEME-accent);
+	}
+}
+
+.pinnedMsgAuthor {
+	font-weight: bold;
+	flex-shrink: 0;
+}
+
+.pinnedMsgText {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	opacity: 0.85;
+}
+
+.unpinBtn {
+	padding: 4px;
+	color: var(--MI_THEME-fgTransparentWeak);
+	flex-shrink: 0;
+
+	&:hover {
+		color: var(--MI_THEME-error);
+	}
 }
 
 .more {
@@ -973,6 +1734,31 @@ definePage(computed(() => {
 .footer {
 	width: 100%;
 	padding-top: 8px;
+}
+
+.scrollFabWrap {
+	display: flex;
+	justify-content: flex-end;
+	max-width: 700px;
+	margin: 0 auto;
+	padding: 0 8px;
+}
+
+.scrollFab {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 38px;
+	height: 38px;
+	border-radius: 50%;
+	background: var(--MI_THEME-panel);
+	color: var(--MI_THEME-fg);
+	border: 1px solid var(--MI_THEME-divider);
+
+	&:hover {
+		color: var(--MI_THEME-accent);
+		border-color: var(--MI_THEME-accent);
+	}
 }
 
 .new {
@@ -995,10 +1781,6 @@ definePage(computed(() => {
 	margin-right: 8px;
 }
 
-.footer {
-
-}
-
 .form {
 	margin: 0 auto;
 	width: 100%;
@@ -1007,12 +1789,13 @@ definePage(computed(() => {
 	min-width: 0;
 }
 
-.fade-enter-active, .fade-leave-active {
-	transition: opacity 0.1s;
+.fadeEnterActive,
+.fadeLeaveActive {
+	transition: opacity 0.2s ease;
 }
 
-.fade-enter-from, .fade-leave-to {
-	transition: opacity 0.5s;
+.fadeEnterFrom,
+.fadeLeaveTo {
 	opacity: 0;
 }
 
@@ -1074,6 +1857,13 @@ definePage(computed(() => {
 	border: solid 0.5px var(--MI_THEME-divider);
 }
 
+.joinAvatar {
+	width: 72px;
+	height: 72px;
+	border-radius: 50%;
+	object-fit: cover;
+}
+
 .joinIcon {
 	display: flex;
 	align-items: center;
@@ -1096,6 +1886,12 @@ definePage(computed(() => {
 	margin-top: 8px;
 	font-size: 0.95em;
 	opacity: 0.7;
+}
+
+.joinMeta {
+	margin-top: 8px;
+	font-size: 0.85em;
+	color: var(--MI_THEME-fgTransparentWeak);
 }
 
 .joinHint {

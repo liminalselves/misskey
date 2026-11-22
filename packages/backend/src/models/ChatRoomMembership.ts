@@ -8,6 +8,8 @@ import { id } from './util/id.js';
 import { MiUser } from './User.js';
 import { MiChatRoom } from './ChatRoom.js';
 
+export type ChatRoomMembershipRole = 'member' | 'admin';
+
 @Entity('chat_room_membership')
 @Index(['userId', 'roomId'], { unique: true })
 export class MiChatRoomMembership {
@@ -47,4 +49,11 @@ export class MiChatRoomMembership {
 		nullable: true,
 	})
 	public suspendedUntil: Date | null;
+
+	@Column('varchar', {
+		length: 16,
+		default: 'member',
+		comment: 'The role of the user in the room.',
+	})
+	public role: ChatRoomMembershipRole;
 }

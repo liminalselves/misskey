@@ -39,6 +39,7 @@ export class ChatRoomChannel extends Channel {
 	public async init(params: JsonObject): Promise<boolean> {
 		if (typeof params.roomId !== 'string') return false;
 		if (!this.user) return false;
+		if (!(await this.chatService.getChatAvailability(this.user.id)).read) return false;
 
 		this.roomId = params.roomId;
 
@@ -57,6 +58,13 @@ export class ChatRoomChannel extends Channel {
 	@bindThis
 	private async onEvent(data: GlobalEvents['chatRoom']['payload']) {
 		this.send(data.type, data.body);
+
+		if (
+			data.type === 'roomDeleted' ||
+			((data.type === 'memberKicked' || data.type === 'memberBanned' || data.type === 'memberLeft') && (data.body as any)?.userId === this.user?.id)
+		) {
+			this.connection.disconnectChannel(this.id);
+		}
 	}
 
 	@bindThis
@@ -65,12 +73,6 @@ export class ChatRoomChannel extends Channel {
 			case 'read':
 				if (this.roomId) {
 					await this.chatService.readRoomChatMessage(this.user!.id, this.roomId);
-					// 发送 chatRead 事件通知前端刷新未读状态
-					// 这样 MkChatHistories 会重新获取数据并更新 isRead 状态
-					const hasUnread = await this.chatService.hasUnreadMessages(this.user!.id);
-					this.globalEventService.publishMainStream(this.user!.id, 'chatRead', {
-						hasUnreadChatMessages: hasUnread,
-					});
 				}
 				break;
 		}

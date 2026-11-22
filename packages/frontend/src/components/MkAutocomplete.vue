@@ -12,6 +12,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<MkUserName :key="user.id" :user="user"/>
 			</span>
 			<span>@{{ acct(user) }}</span>
+			<span v-if="roomContext != null" :class="[$style.roomBadge, roomMemberIds.has(user.id) ? $style.roomBadgeIn : null]">{{ roomMemberIds.has(user.id) ? '群内' : '群外' }}</span>
 		</li>
 		<li tabindex="-1" :class="$style.item" @click="chooseUser()" @keydown="onKeydown">{{ i18n.ts.selectUser }}</li>
 	</ol>
@@ -60,6 +61,8 @@ import { miLocalStorage } from '@/local-storage.js';
 import { customEmojis } from '@/custom-emojis.js';
 import { searchEmoji, searchEmojiExact } from '@/utility/search-emoji.js';
 import { prefer } from '@/preferences.js';
+import type { AutocompleteRoomContext } from '@/utility/autocomplete.js';
+import { $i } from '@/i.js';
 
 function highlightEmojiName(name: string, query: string): string {
 	const start = name.indexOf(query);
@@ -186,6 +189,7 @@ type PropsType<T extends keyof CompleteInfo> = {
 	close: () => void;
 	x: number;
 	y: number;
+	roomContext?: AutocompleteRoomContext | null;
 };
 //const props = defineProps<PropsType<keyof CompleteInfo>>();
 // ↑と同じだけど↓にしないとdiscriminated unionにならない。
@@ -195,6 +199,7 @@ const props = defineProps<PropsType<'user'> | PropsType<'hashtag'> | PropsType<'
 const emit = defineEmits<{
 	<T extends keyof CompleteInfo>(event: 'done', value: { type: T; value: CompleteInfo[T]['payload'] }): void;
 	(event: 'closed'): void;
+	(event: 'chooseUser'): void;
 }>();
 
 const suggests = ref<Element>();
@@ -209,6 +214,28 @@ const mfmTags = ref<string[]>([]);
 const mfmParams = ref<string[]>([]);
 const select = ref(-1);
 const zIndex = os.claimZIndex('high');
+const roomMemberIds = ref(new Set<string>());
+let userSearchSeq = 0;
+
+function matchRoomMembers(q: string | null): Misskey.entities.UserLite[] {
+	if (props.roomContext == null) return [];
+	const lower = (q ?? '').toLowerCase();
+	return props.roomContext.getMembers()
+		.filter(u => u.id !== $i?.id)
+		.filter(u => lower === '' || u.username.toLowerCase().startsWith(lower) || (u.name ?? '').toLowerCase().includes(lower));
+}
+
+/** 群内成员在前，群外用户在后，去重后最多 10 条 */
+function mergeRoomUsers(members: Misskey.entities.UserLite[], others: Misskey.entities.User[]): Misskey.entities.User[] {
+	const seen = new Set<string>();
+	const out: Misskey.entities.User[] = [];
+	for (const u of [...members, ...others]) {
+		if (seen.has(u.id)) continue;
+		seen.add(u.id);
+		out.push(u as Misskey.entities.User);
+	}
+	return out.slice(0, 10);
+}
 
 function completeMfmParam(param: string) {
 	if (props.type !== 'mfmParam') throw new Error('Invalid type');
@@ -248,6 +275,27 @@ function exec() {
 		for (const el of Array.from(items.value)) {
 			el.removeAttribute('data-selected');
 		}
+	}
+	if (props.type === 'user' && props.roomContext != null) {
+		const q = props.q ?? '';
+		const roomId = props.roomContext.roomId;
+		const localMembers = matchRoomMembers(q);
+		roomMemberIds.value = new Set(props.roomContext.getMembers().map(u => u.id));
+		users.value = mergeRoomUsers(localMembers, []);
+		fetching.value = false;
+		if (!q) return;
+		const seq = ++userSearchSeq;
+		const [username, host] = q.split('@');
+		Promise.all([
+			misskeyApi('chat/rooms/members', { roomId, query: q, limit: 10 }).catch(() => []),
+			misskeyApi('users/search-by-username-and-host', { username, host, limit: 10, detail: false }).catch(() => []),
+		]).then(([memberships, searched]) => {
+			if (seq !== userSearchSeq) return;
+			const queriedMembers = memberships.map(m => m.user).filter((u): u is Misskey.entities.UserLite => u != null && u.id !== $i?.id);
+			roomMemberIds.value = new Set([...roomMemberIds.value, ...queriedMembers.map(u => u.id)]);
+			users.value = mergeRoomUsers([...localMembers, ...queriedMembers], searched);
+		});
+		return;
 	}
 	if (props.type === 'user') {
 		if (!props.q) {
@@ -408,11 +456,8 @@ function applySelect() {
 }
 
 function chooseUser() {
-	props.close();
-	os.selectUser({ includeSelf: true }).then(user => {
-		complete('user', user);
-		props.textarea.focus();
-	});
+	// 选择对话框打开前本组件会被关闭销毁，交给 Autocomplete 实例完成补全
+	emit('chooseUser');
 }
 
 onUpdated(() => {
@@ -503,6 +548,20 @@ onBeforeUnmount(() => {
 
 .userName {
 	margin: 0 8px 0 0;
+}
+
+.roomBadge {
+	margin-left: 8px;
+	padding: 0 6px;
+	border-radius: 999px;
+	font-size: 0.85em;
+	opacity: 0.7;
+	border: solid 1px currentColor;
+}
+
+.roomBadgeIn {
+	opacity: 1;
+	color: var(--MI_THEME-accent);
 }
 
 .emoji {

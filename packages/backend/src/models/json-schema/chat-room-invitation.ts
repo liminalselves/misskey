@@ -33,5 +33,10 @@ export const packedChatRoomInvitationSchema = {
 			optional: false, nullable: false,
 			ref: 'ChatRoom',
 		},
+		status: {
+			type: 'string',
+			optional: false, nullable: false,
+			enum: ['pending', 'accepted', 'ignored', 'canceled'],
+		},
 	},
 } as const;

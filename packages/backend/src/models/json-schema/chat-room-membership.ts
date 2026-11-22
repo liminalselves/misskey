@@ -38,5 +38,10 @@ export const packedChatRoomMembershipSchema = {
 			format: 'date-time',
 			optional: false, nullable: true,
 		},
+		role: {
+			type: 'string',
+			enum: ['member', 'admin'],
+			optional: true, nullable: false,
+		},
 	},
 } as const;

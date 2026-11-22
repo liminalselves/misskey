@@ -37,6 +37,23 @@ export const meta = {
 			code: 'NO_INVITATION',
 			id: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
 		},
+		banned: {
+			message: 'You are banned from this room.',
+			code: 'BANNED_FROM_ROOM',
+			id: 'f2f93801-0896-44d0-b32d-067eb4df350d',
+			httpStatusCode: 403,
+		},
+		blocked: {
+			message: 'You have been blocked by the room owner.',
+			code: 'YOU_HAVE_BEEN_BLOCKED',
+			id: 'b84a73e5-5cc4-4cf7-a5c0-5b3b3f5318ea',
+			httpStatusCode: 403,
+		},
+		roomArchived: {
+			message: 'This room has been archived.',
+			code: 'ROOM_ARCHIVED',
+			id: '20d79616-8e0f-461c-aa0c-bbd932406b63',
+		},
 	},
 } as const;
 
@@ -67,6 +84,12 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 					throw new ApiError(meta.errors.noInvitation);
 				} else if (e.message === 'no such room') {
 					throw new ApiError(meta.errors.noSuchRoom);
+				} else if (e.message === 'banned') {
+					throw new ApiError(meta.errors.banned);
+				} else if (e.message === 'blocked') {
+					throw new ApiError(meta.errors.blocked);
+				} else if (e.message === 'room is archived') {
+					throw new ApiError(meta.errors.roomArchived);
 				}
 				throw e;
 			}

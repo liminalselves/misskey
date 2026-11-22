@@ -92,6 +92,12 @@ export const meta = {
 			code: 'RECIPIENT_CHAT_UNAVAILABLE',
 			id: 'e7b5a2c6-3f8b-4c1d-e0a5-6b9c2d4e5f7a',
 		},
+
+		invalidReplyTarget: {
+			message: 'Invalid reply target.',
+			code: 'INVALID_REPLY_TARGET',
+			id: 'c26e47a0-8e02-4002-bcff-4eaa2ac0bec2',
+		},
 	},
 } as const;
 
@@ -130,8 +136,10 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				}
 			}
 
+			const text = ps.text != null ? ps.text.trim() || null : null;
+
 			// テキストが無いかつ添付ファイルも無かったらエラー
-			if (ps.text == null && file == null) {
+			if (text == null && file == null) {
 				throw new ApiError(meta.errors.contentRequired);
 			}
 
@@ -147,7 +155,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 
 			try {
 				return await this.chatService.createMessageToUser(me, toUser, {
-					text: ps.text,
+					text,
 					file: file,
 					replyId: ps.replyId,
 				});
@@ -158,6 +166,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				if (e.message === 'recipient is cannot chat (mutual)') throw new ApiError(meta.errors.recipientChatScopeMutual);
 				if (e.message === 'recipient is cannot chat (policy)') throw new ApiError(meta.errors.recipientChatUnavailable);
 				if (e.message === 'blocked') throw new ApiError(meta.errors.youHaveBeenBlocked);
+				if (e.message === 'invalid replyId') throw new ApiError(meta.errors.invalidReplyTarget);
+				if (e.message === 'content required') throw new ApiError(meta.errors.contentRequired);
 				throw e;
 			}
 		});

@@ -8,9 +8,16 @@ import getCaretCoordinates from 'textarea-caret';
 import { toASCII } from 'punycode.js';
 import type { Ref } from 'vue';
 import type { CompleteInfo } from '@/components/MkAutocomplete.vue';
-import { popup } from '@/os.js';
+import * as Misskey from 'misskey-js';
+import { popup, selectUser } from '@/os.js';
 
 export type SuggestionType = 'user' | 'hashtag' | 'emoji' | 'mfmTag' | 'mfmParam';
+
+/** 群组内 @ 补全上下文：群内成员优先并标注 */
+export type AutocompleteRoomContext = {
+	roomId: string;
+	getMembers: () => Misskey.entities.UserLite[];
+};
 
 type CompleteProps<T extends keyof CompleteInfo> = {
 	type: T;
@@ -33,6 +40,7 @@ export class Autocomplete {
 	private textRef: Ref<string | number | null>;
 	private opening: boolean;
 	private onlyType: SuggestionType[];
+	private roomContext: AutocompleteRoomContext | null;
 
 	private get text(): string {
 		// Use raw .value to get the latest value
@@ -49,7 +57,7 @@ export class Autocomplete {
 	/**
 	 * 対象のテキストエリアを与えてインスタンスを初期化します。
 	 */
-	constructor(textarea: HTMLInputElement | HTMLTextAreaElement, textRef: Ref<string | number | null>, onlyType?: SuggestionType[]) {
+	constructor(textarea: HTMLInputElement | HTMLTextAreaElement, textRef: Ref<string | number | null>, onlyType?: SuggestionType[], roomContext?: AutocompleteRoomContext | null) {
 		//#region BIND
 		this.onInput = this.onInput.bind(this);
 		this.complete = this.complete.bind(this);
@@ -61,6 +69,7 @@ export class Autocomplete {
 		this.textRef = textRef;
 		this.opening = false;
 		this.onlyType = onlyType ?? ['user', 'hashtag', 'emoji', 'mfmTag', 'mfmParam'];
+		this.roomContext = roomContext ?? null;
 
 		this.attach();
 	}
@@ -230,9 +239,13 @@ export class Autocomplete {
 				q: _q,
 				x: _x,
 				y: _y,
+				roomContext: this.roomContext,
 			}, {
 				done: (res) => {
 					this.complete(res);
+				},
+				chooseUser: () => {
+					this.chooseUser();
 				},
 			});
 
@@ -245,6 +258,17 @@ export class Autocomplete {
 
 			this.opening = false;
 		}
+	}
+
+	/**
+	 * ユーザー選択ダイアログから選んだユーザーを補完する。
+	 * サジェストは閉じると破棄されるため、選択結果はこのインスタンス側で受け取る。
+	 */
+	private chooseUser() {
+		this.close();
+		selectUser({ includeSelf: true }).then(user => {
+			this.complete({ type: 'user', value: user });
+		});
 	}
 
 	/**

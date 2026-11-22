@@ -52,5 +52,47 @@ export const packedChatRoomSchema = {
 			type: 'boolean',
 			optional: true, nullable: false,
 		},
+		allowMemberInvite: {
+			type: 'boolean',
+			optional: true, nullable: false,
+		},
+		announcement: {
+			type: 'string',
+			optional: true, nullable: true,
+		},
+		pinnedMessageId: {
+			type: 'string',
+			optional: true, nullable: true,
+		},
+		pinnedMessage: {
+			type: 'object',
+			optional: true, nullable: true,
+			ref: 'ChatMessage',
+		},
+		isArchived: {
+			type: 'boolean',
+			optional: true, nullable: false,
+		},
+		myRole: {
+			type: 'string',
+			enum: ['owner', 'admin', 'member'],
+			optional: true, nullable: true,
+		},
+		isBanned: {
+			type: 'boolean',
+			optional: true, nullable: false,
+		},
+		banReason: {
+			type: 'string',
+			optional: true, nullable: true,
+		},
+		memberCount: {
+			type: 'number',
+			optional: true, nullable: false,
+		},
+		unreadCount: {
+			type: 'number',
+			optional: true, nullable: false,
+		},
 	},
 } as const;

@@ -6002,6 +6002,51 @@ export type components = {
                     /** Format: misskey:id */
                     userListId: string;
                 };
+                chatRoomMemberJoined?: {
+                    /** @enum {string} */
+                    type: 'all' | 'following' | 'follower' | 'mutualFollow' | 'followingOrFollower' | 'never';
+                } | {
+                    /** @enum {string} */
+                    type: 'list';
+                    /** Format: misskey:id */
+                    userListId: string;
+                };
+                chatRoomKicked?: {
+                    /** @enum {string} */
+                    type: 'all' | 'following' | 'follower' | 'mutualFollow' | 'followingOrFollower' | 'never';
+                } | {
+                    /** @enum {string} */
+                    type: 'list';
+                    /** Format: misskey:id */
+                    userListId: string;
+                };
+                chatRoomSuspended?: {
+                    /** @enum {string} */
+                    type: 'all' | 'following' | 'follower' | 'mutualFollow' | 'followingOrFollower' | 'never';
+                } | {
+                    /** @enum {string} */
+                    type: 'list';
+                    /** Format: misskey:id */
+                    userListId: string;
+                };
+                chatRoomUnsuspended?: {
+                    /** @enum {string} */
+                    type: 'all' | 'following' | 'follower' | 'mutualFollow' | 'followingOrFollower' | 'never';
+                } | {
+                    /** @enum {string} */
+                    type: 'list';
+                    /** Format: misskey:id */
+                    userListId: string;
+                };
+                chatRoomMention?: {
+                    /** @enum {string} */
+                    type: 'all' | 'following' | 'follower' | 'mutualFollow' | 'followingOrFollower' | 'never';
+                } | {
+                    /** @enum {string} */
+                    type: 'list';
+                    /** Format: misskey:id */
+                    userListId: string;
+                };
                 achievementEarned?: {
                     /** @enum {string} */
                     type: 'all' | 'following' | 'follower' | 'mutualFollow' | 'followingOrFollower' | 'never';
@@ -6507,6 +6552,22 @@ export type components = {
             /** Format: id */
             userId: string;
             chatRoom: components['schemas']['ChatRoom'];
+        } | {
+            /** Format: id */
+            id: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** @enum {string} */
+            type: 'chatRoomMention';
+            isRead?: boolean;
+            /** Format: id */
+            userId: string;
+            user: components['schemas']['UserLite'];
+            /** Format: id */
+            chatRoomId: string;
+            chatRoom: components['schemas']['ChatRoom'];
+            /** Format: id */
+            messageId: string;
         } | {
             /** Format: id */
             id: string;
@@ -7478,6 +7539,12 @@ export type components = {
             id: string;
             /** Format: date-time */
             createdAt: string;
+            /** Format: date-time */
+            recalledAt?: string | null;
+            recalledById?: string | null;
+            recalledBy?: components['schemas']['UserLite'] | null;
+            /** @enum {string|null} */
+            systemType?: 'memberJoined' | 'memberInvitedJoined' | 'memberLeft' | null;
             fromUserId: string;
             fromUser: components['schemas']['UserLite'];
             toUserId?: string | null;
@@ -7489,6 +7556,14 @@ export type components = {
             file?: components['schemas']['DriveFile'] | null;
             isRead?: boolean;
             unreadCount?: number | null;
+            replyId?: string | null;
+            reply?: {
+                id: string;
+                text: string | null;
+                fileId?: string | null;
+                fromUserId: string;
+                fromUser?: components['schemas']['UserLite'];
+            } | null;
             reactions: {
                 reaction: string;
                 user: components['schemas']['UserLite'];
@@ -7498,6 +7573,12 @@ export type components = {
             id: string;
             /** Format: date-time */
             createdAt: string;
+            /** Format: date-time */
+            recalledAt?: string | null;
+            recalledById?: string | null;
+            recalledBy?: components['schemas']['UserLite'] | null;
+            /** @enum {string|null} */
+            systemType?: 'memberJoined' | 'memberInvitedJoined' | 'memberLeft' | null;
             fromUserId: string;
             fromUser?: components['schemas']['UserLite'];
             toUserId?: string | null;
@@ -7505,6 +7586,14 @@ export type components = {
             text?: string | null;
             fileId?: string | null;
             file?: components['schemas']['DriveFile'] | null;
+            replyId?: string | null;
+            reply?: {
+                id: string;
+                text?: string | null;
+                fileId?: string | null;
+                fromUserId: string;
+                fromUser?: components['schemas']['UserLite'];
+            } | null;
             reactions: {
                 reaction: string;
                 user?: components['schemas']['UserLite'] | null;
@@ -7514,6 +7603,12 @@ export type components = {
             id: string;
             /** Format: date-time */
             createdAt: string;
+            /** Format: date-time */
+            recalledAt?: string | null;
+            recalledById?: string | null;
+            recalledBy?: components['schemas']['UserLite'] | null;
+            /** @enum {string|null} */
+            systemType?: 'memberJoined' | 'memberInvitedJoined' | 'memberLeft' | null;
             fromUserId: string;
             toUserId: string;
             text?: string | null;
@@ -7526,6 +7621,7 @@ export type components = {
             reply?: {
                 id: string;
                 text?: string | null;
+                fileId?: string | null;
                 fromUserId: string;
                 fromUser: components['schemas']['UserLite'];
             } | null;
@@ -7534,6 +7630,12 @@ export type components = {
             id: string;
             /** Format: date-time */
             createdAt: string;
+            /** Format: date-time */
+            recalledAt?: string | null;
+            recalledById?: string | null;
+            recalledBy?: components['schemas']['UserLite'] | null;
+            /** @enum {string|null} */
+            systemType?: 'memberJoined' | 'memberInvitedJoined' | 'memberLeft' | null;
             fromUserId: string;
             fromUser: components['schemas']['UserLite'];
             toRoomId: string;
@@ -7548,6 +7650,7 @@ export type components = {
             reply?: {
                 id: string;
                 text?: string | null;
+                fileId?: string | null;
                 fromUserId: string;
                 fromUser: components['schemas']['UserLite'];
             } | null;
@@ -7565,6 +7668,16 @@ export type components = {
             isMember: boolean;
             isMuted?: boolean;
             invitationExists?: boolean;
+            allowMemberInvite?: boolean;
+            announcement?: string | null;
+            pinnedMessageId?: string | null;
+            pinnedMessage?: components['schemas']['ChatMessage'] | null;
+            isArchived?: boolean;
+            myRole?: 'owner' | 'admin' | 'member' | null;
+            isBanned?: boolean;
+            banReason?: string | null;
+            memberCount?: number;
+            unreadCount?: number;
         };
         ChatRoomInvitation: {
             id: string;
@@ -7574,6 +7687,8 @@ export type components = {
             user: components['schemas']['UserLite'];
             roomId: string;
             room: components['schemas']['ChatRoom'];
+            /** @enum {string} */
+            status: 'pending' | 'accepted' | 'ignored' | 'canceled';
         };
         ChatRoomMembership: {
             id: string;
@@ -7585,6 +7700,18 @@ export type components = {
             room?: components['schemas']['ChatRoom'];
             /** Format: date-time */
             suspendedUntil: string | null;
+            role?: 'member' | 'admin';
+        };
+        ChatRoomBan: {
+            id: string;
+            /** Format: date-time */
+            createdAt: string;
+            roomId: string;
+            userId: string;
+            user?: components['schemas']['UserLite'];
+            bannedById: string | null;
+            bannedBy?: components['schemas']['UserLite'] | null;
+            reason: string | null;
         };
     };
     responses: never;
@@ -20582,6 +20709,51 @@ export interface operations {
                                 userListId: string;
                             };
                             chatRoomInvitationReceived?: {
+                                /** @enum {string} */
+                                type: 'all' | 'following' | 'follower' | 'mutualFollow' | 'followingOrFollower' | 'never';
+                            } | {
+                                /** @enum {string} */
+                                type: 'list';
+                                /** Format: misskey:id */
+                                userListId: string;
+                            };
+                            chatRoomMemberJoined?: {
+                                /** @enum {string} */
+                                type: 'all' | 'following' | 'follower' | 'mutualFollow' | 'followingOrFollower' | 'never';
+                            } | {
+                                /** @enum {string} */
+                                type: 'list';
+                                /** Format: misskey:id */
+                                userListId: string;
+                            };
+                            chatRoomKicked?: {
+                                /** @enum {string} */
+                                type: 'all' | 'following' | 'follower' | 'mutualFollow' | 'followingOrFollower' | 'never';
+                            } | {
+                                /** @enum {string} */
+                                type: 'list';
+                                /** Format: misskey:id */
+                                userListId: string;
+                            };
+                            chatRoomSuspended?: {
+                                /** @enum {string} */
+                                type: 'all' | 'following' | 'follower' | 'mutualFollow' | 'followingOrFollower' | 'never';
+                            } | {
+                                /** @enum {string} */
+                                type: 'list';
+                                /** Format: misskey:id */
+                                userListId: string;
+                            };
+                            chatRoomUnsuspended?: {
+                                /** @enum {string} */
+                                type: 'all' | 'following' | 'follower' | 'mutualFollow' | 'followingOrFollower' | 'never';
+                            } | {
+                                /** @enum {string} */
+                                type: 'list';
+                                /** Format: misskey:id */
+                                userListId: string;
+                            };
+                            chatRoomMention?: {
                                 /** @enum {string} */
                                 type: 'all' | 'following' | 'follower' | 'mutualFollow' | 'followingOrFollower' | 'never';
                             } | {
@@ -35881,6 +36053,8 @@ export interface operations {
                     roomId: string;
                     /** Format: misskey:id */
                     userId: string;
+                    /** @default false */
+                    ban?: boolean;
                 };
             };
         };
@@ -44745,8 +44919,8 @@ export interface operations {
                     untilDate?: number;
                     /** @default true */
                     markAsRead?: boolean;
-                    includeTypes?: ('note' | 'follow' | 'mention' | 'reply' | 'renote' | 'quote' | 'reaction' | 'pollEnded' | 'scheduledNotePosted' | 'scheduledNotePostFailed' | 'receiveFollowRequest' | 'followRequestAccepted' | 'roleAssigned' | 'chatRoomInvitationReceived' | 'achievementEarned' | 'exportCompleted' | 'login' | 'createToken' | 'app' | 'test' | 'agentReviewApproved' | 'agentReviewRejected' | 'agentModelReportResolved' | 'agentCharacterBanned' | 'agentSessionBanned' | 'agentProactiveMessage' | 'pollVote' | 'groupInvited')[];
-                    excludeTypes?: ('note' | 'follow' | 'mention' | 'reply' | 'renote' | 'quote' | 'reaction' | 'pollEnded' | 'scheduledNotePosted' | 'scheduledNotePostFailed' | 'receiveFollowRequest' | 'followRequestAccepted' | 'roleAssigned' | 'chatRoomInvitationReceived' | 'achievementEarned' | 'exportCompleted' | 'login' | 'createToken' | 'app' | 'test' | 'agentReviewApproved' | 'agentReviewRejected' | 'agentModelReportResolved' | 'agentCharacterBanned' | 'agentSessionBanned' | 'agentProactiveMessage' | 'pollVote' | 'groupInvited')[];
+                    includeTypes?: ('note' | 'follow' | 'mention' | 'reply' | 'renote' | 'quote' | 'reaction' | 'pollEnded' | 'scheduledNotePosted' | 'scheduledNotePostFailed' | 'receiveFollowRequest' | 'followRequestAccepted' | 'roleAssigned' | 'chatRoomInvitationReceived' | 'chatRoomMemberJoined' | 'chatRoomKicked' | 'chatRoomSuspended' | 'chatRoomUnsuspended' | 'chatRoomMention' | 'achievementEarned' | 'exportCompleted' | 'login' | 'createToken' | 'app' | 'test' | 'agentReviewApproved' | 'agentReviewRejected' | 'agentModelReportResolved' | 'agentCharacterBanned' | 'agentSessionBanned' | 'agentProactiveMessage' | 'pollVote' | 'groupInvited')[];
+                    excludeTypes?: ('note' | 'follow' | 'mention' | 'reply' | 'renote' | 'quote' | 'reaction' | 'pollEnded' | 'scheduledNotePosted' | 'scheduledNotePostFailed' | 'receiveFollowRequest' | 'followRequestAccepted' | 'roleAssigned' | 'chatRoomInvitationReceived' | 'chatRoomMemberJoined' | 'chatRoomKicked' | 'chatRoomSuspended' | 'chatRoomUnsuspended' | 'chatRoomMention' | 'achievementEarned' | 'exportCompleted' | 'login' | 'createToken' | 'app' | 'test' | 'agentReviewApproved' | 'agentReviewRejected' | 'agentModelReportResolved' | 'agentCharacterBanned' | 'agentSessionBanned' | 'agentProactiveMessage' | 'pollVote' | 'groupInvited')[];
                 };
             };
         };
@@ -44830,8 +45004,8 @@ export interface operations {
                     untilDate?: number;
                     /** @default true */
                     markAsRead?: boolean;
-                    includeTypes?: ('note' | 'follow' | 'mention' | 'reply' | 'renote' | 'quote' | 'reaction' | 'pollEnded' | 'scheduledNotePosted' | 'scheduledNotePostFailed' | 'receiveFollowRequest' | 'followRequestAccepted' | 'roleAssigned' | 'chatRoomInvitationReceived' | 'achievementEarned' | 'exportCompleted' | 'login' | 'createToken' | 'app' | 'test' | 'agentReviewApproved' | 'agentReviewRejected' | 'agentModelReportResolved' | 'agentCharacterBanned' | 'agentSessionBanned' | 'agentProactiveMessage' | 'pollVote' | 'groupInvited')[];
-                    excludeTypes?: ('note' | 'follow' | 'mention' | 'reply' | 'renote' | 'quote' | 'reaction' | 'pollEnded' | 'scheduledNotePosted' | 'scheduledNotePostFailed' | 'receiveFollowRequest' | 'followRequestAccepted' | 'roleAssigned' | 'chatRoomInvitationReceived' | 'achievementEarned' | 'exportCompleted' | 'login' | 'createToken' | 'app' | 'test' | 'agentReviewApproved' | 'agentReviewRejected' | 'agentModelReportResolved' | 'agentCharacterBanned' | 'agentSessionBanned' | 'agentProactiveMessage' | 'pollVote' | 'groupInvited')[];
+                    includeTypes?: ('note' | 'follow' | 'mention' | 'reply' | 'renote' | 'quote' | 'reaction' | 'pollEnded' | 'scheduledNotePosted' | 'scheduledNotePostFailed' | 'receiveFollowRequest' | 'followRequestAccepted' | 'roleAssigned' | 'chatRoomInvitationReceived' | 'chatRoomMemberJoined' | 'chatRoomKicked' | 'chatRoomSuspended' | 'chatRoomUnsuspended' | 'chatRoomMention' | 'achievementEarned' | 'exportCompleted' | 'login' | 'createToken' | 'app' | 'test' | 'agentReviewApproved' | 'agentReviewRejected' | 'agentModelReportResolved' | 'agentCharacterBanned' | 'agentSessionBanned' | 'agentProactiveMessage' | 'pollVote' | 'groupInvited')[];
+                    excludeTypes?: ('note' | 'follow' | 'mention' | 'reply' | 'renote' | 'quote' | 'reaction' | 'pollEnded' | 'scheduledNotePosted' | 'scheduledNotePostFailed' | 'receiveFollowRequest' | 'followRequestAccepted' | 'roleAssigned' | 'chatRoomInvitationReceived' | 'chatRoomMemberJoined' | 'chatRoomKicked' | 'chatRoomSuspended' | 'chatRoomUnsuspended' | 'chatRoomMention' | 'achievementEarned' | 'exportCompleted' | 'login' | 'createToken' | 'app' | 'test' | 'agentReviewApproved' | 'agentReviewRejected' | 'agentModelReportResolved' | 'agentCharacterBanned' | 'agentSessionBanned' | 'agentProactiveMessage' | 'pollVote' | 'groupInvited')[];
                 };
             };
         };
@@ -46151,6 +46325,51 @@ export interface operations {
                             userListId: string;
                         };
                         chatRoomInvitationReceived?: {
+                            /** @enum {string} */
+                            type: 'all' | 'following' | 'follower' | 'mutualFollow' | 'followingOrFollower' | 'never';
+                        } | {
+                            /** @enum {string} */
+                            type: 'list';
+                            /** Format: misskey:id */
+                            userListId: string;
+                        };
+                        chatRoomMemberJoined?: {
+                            /** @enum {string} */
+                            type: 'all' | 'following' | 'follower' | 'mutualFollow' | 'followingOrFollower' | 'never';
+                        } | {
+                            /** @enum {string} */
+                            type: 'list';
+                            /** Format: misskey:id */
+                            userListId: string;
+                        };
+                        chatRoomKicked?: {
+                            /** @enum {string} */
+                            type: 'all' | 'following' | 'follower' | 'mutualFollow' | 'followingOrFollower' | 'never';
+                        } | {
+                            /** @enum {string} */
+                            type: 'list';
+                            /** Format: misskey:id */
+                            userListId: string;
+                        };
+                        chatRoomSuspended?: {
+                            /** @enum {string} */
+                            type: 'all' | 'following' | 'follower' | 'mutualFollow' | 'followingOrFollower' | 'never';
+                        } | {
+                            /** @enum {string} */
+                            type: 'list';
+                            /** Format: misskey:id */
+                            userListId: string;
+                        };
+                        chatRoomUnsuspended?: {
+                            /** @enum {string} */
+                            type: 'all' | 'following' | 'follower' | 'mutualFollow' | 'followingOrFollower' | 'never';
+                        } | {
+                            /** @enum {string} */
+                            type: 'list';
+                            /** Format: misskey:id */
+                            userListId: string;
+                        };
+                        chatRoomMention?: {
                             /** @enum {string} */
                             type: 'all' | 'following' | 'follower' | 'mutualFollow' | 'followingOrFollower' | 'never';
                         } | {
