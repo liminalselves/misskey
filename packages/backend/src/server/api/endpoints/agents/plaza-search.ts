@@ -261,8 +261,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			.addSelect('c.userId', 'userId');
 
 		// For each keyword, add a condition group (AND between keywords)
-		const nameExpr = `COALESCE(c.publishedSnapshot->>'name', c.name)`;
-		const summaryExpr = `COALESCE(c.publishedSnapshot->>'summary', c.summary)`;
+		const nameExpr = `COALESCE(c."publishedSnapshot"->>'name', c.name)`;
+		const summaryExpr = `COALESCE(c."publishedSnapshot"->>'summary', c.summary)`;
 		const params: Record<string, string> = {};
 		let scoreExpr = '0';
 

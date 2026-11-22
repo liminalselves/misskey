@@ -150,7 +150,10 @@ describe('Notification read/flush HTTP endpoints await NotificationService', () 
 			readAllNotification: vi.fn(async () => await deferred.promise),
 			flushAllNotifications: vi.fn(async () => await deferred.promise),
 		};
-		const entityService = { packMany: vi.fn(async () => [{ id: 'n1' }]) };
+		const entityService = {
+			packMany: vi.fn(async () => [{ id: 'n1' }]),
+			packGroupedMany: vi.fn(async () => [{ id: 'n1' }]),
+		};
 		const idService = { gen: vi.fn(() => 'id-1') };
 
 		let pending: Promise<unknown>;

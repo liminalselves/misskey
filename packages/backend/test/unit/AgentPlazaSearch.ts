@@ -100,9 +100,12 @@ describe('agents/plaza-search publishedSnapshot handling', () => {
 			},
 		};
 
-		const agentService = Object.assign(Object.create(AgentService.prototype), {
+		const realAgent = Object.create(AgentService.prototype) as AgentService;
+		const agentService = {
 			assertAgentsEnabled: vi.fn(),
-		}) as AgentService;
+			characterPlazaDisplayFields: realAgent.characterPlazaDisplayFields,
+			stylePlazaDisplayFields: realAgent.stylePlazaDisplayFields,
+		} as unknown as AgentService;
 
 		const endpoint = new PlazaSearch(
 			{
@@ -132,11 +135,11 @@ describe('agents/plaza-search publishedSnapshot handling', () => {
 		});
 
 		expect(charWhereClauses.some(sql =>
-			sql.includes("COALESCE(c.publishedSnapshot->>'name', c.name) ILIKE")
-			&& sql.includes("COALESCE(c.publishedSnapshot->>'summary', c.summary) ILIKE"),
+			sql.includes(`COALESCE(c."publishedSnapshot"->>'name', c.name) ILIKE`)
+			&& sql.includes(`COALESCE(c."publishedSnapshot"->>'summary', c.summary) ILIKE`),
 		)).toBe(true);
 		const scoreExpr = charAddSelects.find(([, alias]) => alias === 'score')?.[0] ?? '';
-		expect(scoreExpr).toContain("COALESCE(c.publishedSnapshot->>'name', c.name) ILIKE");
-		expect(scoreExpr).toContain("COALESCE(c.publishedSnapshot->>'summary', c.summary) ILIKE");
+		expect(scoreExpr).toContain(`COALESCE(c."publishedSnapshot"->>'name', c.name) ILIKE`);
+		expect(scoreExpr).toContain(`COALESCE(c."publishedSnapshot"->>'summary', c.summary) ILIKE`);
 	});
 });
