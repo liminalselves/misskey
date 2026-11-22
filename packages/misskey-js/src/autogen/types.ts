@@ -7543,6 +7543,8 @@ export type components = {
             recalledAt?: string | null;
             recalledById?: string | null;
             recalledBy?: components['schemas']['UserLite'] | null;
+            /** @enum {string|null} */
+            systemType?: 'memberJoined' | 'memberInvitedJoined' | 'memberLeft' | null;
             fromUserId: string;
             fromUser: components['schemas']['UserLite'];
             toUserId?: string | null;
@@ -7575,6 +7577,8 @@ export type components = {
             recalledAt?: string | null;
             recalledById?: string | null;
             recalledBy?: components['schemas']['UserLite'] | null;
+            /** @enum {string|null} */
+            systemType?: 'memberJoined' | 'memberInvitedJoined' | 'memberLeft' | null;
             fromUserId: string;
             fromUser?: components['schemas']['UserLite'];
             toUserId?: string | null;
@@ -7603,6 +7607,8 @@ export type components = {
             recalledAt?: string | null;
             recalledById?: string | null;
             recalledBy?: components['schemas']['UserLite'] | null;
+            /** @enum {string|null} */
+            systemType?: 'memberJoined' | 'memberInvitedJoined' | 'memberLeft' | null;
             fromUserId: string;
             toUserId: string;
             text?: string | null;
@@ -7628,6 +7634,8 @@ export type components = {
             recalledAt?: string | null;
             recalledById?: string | null;
             recalledBy?: components['schemas']['UserLite'] | null;
+            /** @enum {string|null} */
+            systemType?: 'memberJoined' | 'memberInvitedJoined' | 'memberLeft' | null;
             fromUserId: string;
             fromUser: components['schemas']['UserLite'];
             toRoomId: string;
@@ -7679,6 +7687,8 @@ export type components = {
             user: components['schemas']['UserLite'];
             roomId: string;
             room: components['schemas']['ChatRoom'];
+            /** @enum {string} */
+            status: 'pending' | 'accepted' | 'ignored' | 'canceled';
         };
         ChatRoomMembership: {
             id: string;

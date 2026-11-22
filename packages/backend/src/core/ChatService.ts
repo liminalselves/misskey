@@ -445,7 +445,7 @@ export class ChatService {
 
 		if (params.replyId != null) {
 			const replyTarget = await this.chatMessagesRepository.findOneBy({ id: params.replyId });
-			if (!replyTarget || replyTarget.recalledAt != null || replyTarget.toRoomId !== toRoom.id) {
+			if (!replyTarget || replyTarget.recalledAt != null || replyTarget.systemType != null || replyTarget.toRoomId !== toRoom.id) {
 				throw new Error('invalid replyId');
 			}
 		}
@@ -669,6 +669,9 @@ export class ChatService {
 		if (!message) {
 			throw new ChatMessageAccessError('no such message');
 		}
+		if (message.systemType != null) {
+			throw new ChatMessageAccessError('no such message');
+		}
 		if (message.recalledAt != null) {
 			throw new ChatMessageAccessError('already recalled');
 		}
@@ -806,7 +809,8 @@ export class ChatService {
 			const query = this.chatMessagesRepository.createQueryBuilder('message')
 				.select('COUNT(*)', 'count').addSelect('MIN(message.id)', 'first').addSelect('MAX(message.id)', 'last')
 				.where('message.id >= :first AND message.id <= :last', { first, last })
-				.andWhere('message.recalledAt IS NULL');
+				.andWhere('message.recalledAt IS NULL')
+				.andWhere('message.systemType IS NULL');
 			if (kind === 'user') {
 				query.andWhere('message.toUserId = :readerId AND message.fromUserId = :conversationId', { readerId, conversationId });
 			} else {
@@ -1014,6 +1018,7 @@ export class ChatService {
 				recalledAt: null,
 				recalledById: null,
 				recalledBy: null,
+				systemType: null,
 			});
 		}
 
@@ -1291,7 +1296,7 @@ export class ChatService {
 		const invitation = await this.chatRoomInvitationsRepository.findOneBy({
 			roomId: room.id,
 			userId: userId,
-			ignored: false,
+			status: 'pending',
 		});
 		if (invitation != null) return true;
 
@@ -1352,11 +1357,10 @@ export class ChatService {
 
 			const existingInvitation = await invitationsRepo.findOneBy({ roomId, userId: inviteeId });
 			if (existingInvitation) {
-				if (existingInvitation.ignored) {
-					await invitationsRepo.delete(existingInvitation.id);
-				} else {
+				if (existingInvitation.status === 'pending') {
 					throw new Error('already invited');
 				}
+				await invitationsRepo.delete(existingInvitation.id);
 			}
 
 			const membershipsCount = await this.countNonOwnerMemberships(room, membershipsRepo);
@@ -1404,13 +1408,19 @@ export class ChatService {
 
 		await this.assertRoomModerationPermission(initiator, room);
 
-		await this.chatRoomInvitationsRepository.delete(invitation.id);
+		if (invitation.status !== 'pending') {
+			throw new Error('no such invitation');
+		}
+
+		// 保留记录，便于被邀请者的通知显示「邀请已撤销」
+		await this.chatRoomInvitationsRepository.update(invitation.id, { status: 'canceled' });
 	}
 
 	@bindThis
 	public async getSentRoomInvitationsWithPagination(roomId: MiChatRoom['id'], limit: number, sinceId?: MiChatRoomInvitation['id'] | null, untilId?: MiChatRoomInvitation['id'] | null) {
 		const query = this.queryService.makePaginationQuery(this.chatRoomInvitationsRepository.createQueryBuilder('invitation'), sinceId, untilId)
-			.andWhere('invitation.roomId = :roomId', { roomId });
+			.andWhere('invitation.roomId = :roomId', { roomId })
+			.andWhere('invitation.status = :status', { status: 'pending' });
 
 		const invitations = await query.take(limit).getMany();
 
@@ -1431,7 +1441,7 @@ export class ChatService {
 	public async getReceivedRoomInvitationsWithPagination(userId: MiUser['id'], limit: number, sinceId?: MiChatRoomInvitation['id'] | null, untilId?: MiChatRoomInvitation['id'] | null) {
 		const query = this.queryService.makePaginationQuery(this.chatRoomInvitationsRepository.createQueryBuilder('invitation'), sinceId, untilId)
 			.andWhere('invitation.userId = :userId', { userId })
-			.andWhere('invitation.ignored = FALSE');
+			.andWhere('invitation.status = :status', { status: 'pending' });
 
 		const invitations = await query.take(limit).getMany();
 
@@ -1440,7 +1450,7 @@ export class ChatService {
 
 	@bindThis
 	public async joinToRoom(userId: MiUser['id'], roomId: MiChatRoom['id']) {
-		const { room, membershipId } = await this.runInTransaction(async (manager) => {
+		const { room, membershipId, viaInvitation } = await this.runInTransaction(async (manager) => {
 			const roomsRepo = manager.getRepository('MiChatRoom') as ChatRoomsRepository;
 			const membershipsRepo = manager.getRepository('MiChatRoomMembership') as ChatRoomMembershipsRepository;
 			const invitationsRepo = manager.getRepository('MiChatRoomInvitation') as ChatRoomInvitationsRepository;
@@ -1468,8 +1478,8 @@ export class ChatService {
 				throw new Error('already member');
 			}
 
-			// 检查是否有邀请
-			const invitation = await invitationsRepo.findOne({ where: { roomId, userId } });
+			// 检查是否有待处理的邀请
+			const invitation = await invitationsRepo.findOne({ where: { roomId, userId, status: 'pending' } });
 
 			if (!room.isPublic) {
 				// 私有群组需要邀请
@@ -1493,12 +1503,12 @@ export class ChatService {
 
 			await membershipsRepo.insert(membership);
 
-			// 如果有邀请，无论公开还是私有群组都删除邀请
+			// 如果有邀请，无论公开还是私有群组都标记为已同意
 			if (invitation != null) {
-				await invitationsRepo.delete(invitation.id);
+				await invitationsRepo.update(invitation.id, { status: 'accepted' });
 			}
 
-			return { room, membershipId };
+			return { room, membershipId, viaInvitation: invitation != null };
 		});
 
 		// 通知群主有新成员加入
@@ -1519,15 +1529,17 @@ export class ChatService {
 			user: packedUser,
 			membership: packedMembership,
 		});
+
+		await this.createRoomSystemMessage(roomId, userId, viaInvitation ? 'memberInvitedJoined' : 'memberJoined');
 	}
 
 	@bindThis
 	public async ignoreRoomInvitation(userId: MiUser['id'], roomId: MiChatRoom['id']) {
-		const invitation = await this.chatRoomInvitationsRepository.findOneBy({ roomId, userId });
+		const invitation = await this.chatRoomInvitationsRepository.findOneBy({ roomId, userId, status: 'pending' });
 		if (!invitation) {
 			throw new Error('no such invitation');
 		}
-		await this.chatRoomInvitationsRepository.update(invitation.id, { ignored: true });
+		await this.chatRoomInvitationsRepository.update(invitation.id, { status: 'ignored' });
 	}
 
 	@bindThis
@@ -1553,6 +1565,25 @@ export class ChatService {
 			roomId,
 			userId,
 		});
+
+		await this.createRoomSystemMessage(roomId, userId, 'memberLeft');
+	}
+
+	/** 群组成员变动的系统小字：不计未读、不推送 */
+	private async createRoomSystemMessage(roomId: MiChatRoom['id'], userId: MiUser['id'], systemType: NonNullable<MiChatMessage['systemType']>): Promise<void> {
+		const inserted = await this.chatMessagesRepository.insertOne({
+			id: this.idService.gen(),
+			fromUserId: userId,
+			toRoomId: roomId,
+			text: null,
+			fileId: null,
+			reads: [],
+			uri: null,
+			replyId: null,
+			systemType,
+		});
+		const packed = await this.chatEntityService.packMessageLiteForRoom(inserted);
+		this.globalEventService.publishChatRoomStream(roomId, 'message', packed);
 	}
 
 	@bindThis
@@ -1822,7 +1853,7 @@ export class ChatService {
 				where: { id: messageId },
 				relations: { fromUser: true, file: true },
 			});
-			if (!targetMessage || targetMessage.recalledAt != null || targetMessage.toRoomId !== roomId) {
+			if (!targetMessage || targetMessage.recalledAt != null || targetMessage.systemType != null || targetMessage.toRoomId !== roomId) {
 				throw new Error('no such message');
 			}
 		}
@@ -2094,6 +2125,7 @@ export class ChatService {
 		}
 
 		q.andWhere('message.recalledAt IS NULL');
+		q.andWhere('message.systemType IS NULL');
 		q.andWhere('LOWER(message.text) LIKE :q', { q: `%${sqlLikeEscape(query.toLowerCase())}%` });
 
 		q.leftJoinAndSelect('message.file', 'file');
@@ -2131,7 +2163,7 @@ export class ChatService {
 		}
 
 		const message = await this.chatMessagesRepository.findOneBy({ id: messageId });
-		if (message == null || message.recalledAt != null) throw new ChatMessageAccessError('no such message');
+		if (message == null || message.recalledAt != null || message.systemType != null) throw new ChatMessageAccessError('no such message');
 
 		if (message.fromUserId === userId) {
 			throw new ChatMessageAccessError('cannot react to own message');
@@ -2216,7 +2248,7 @@ export class ChatService {
 		}
 
 		const message = await this.chatMessagesRepository.findOneBy({ id: messageId });
-		if (message == null || message.recalledAt != null) throw new ChatMessageAccessError('no such message');
+		if (message == null || message.recalledAt != null || message.systemType != null) throw new ChatMessageAccessError('no such message');
 
 		const room = message.toRoomId ? await this.chatRoomsRepository.findOneBy({ id: message.toRoomId }) : null;
 		if (message.toRoomId && room == null) {

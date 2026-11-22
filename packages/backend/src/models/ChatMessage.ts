@@ -123,4 +123,11 @@ export class MiChatMessage {
 	})
 	@JoinColumn({ name: 'recalledById', foreignKeyConstraintName: 'FK_chat_message_recalledById' })
 	public recalledBy: MiUser | null;
+
+	@Column('varchar', {
+		length: 32,
+		nullable: true,
+		comment: 'System notice type (memberJoined / memberInvitedJoined / memberLeft); NULL for normal messages.',
+	})
+	public systemType: 'memberJoined' | 'memberInvitedJoined' | 'memberLeft' | null;
 }

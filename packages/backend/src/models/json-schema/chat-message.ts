@@ -29,6 +29,11 @@ export const packedChatMessageSchema = {
 			optional: true, nullable: true,
 			ref: 'UserLite',
 		},
+		systemType: {
+			type: 'string',
+			optional: true, nullable: true,
+			enum: ['memberJoined', 'memberInvitedJoined', 'memberLeft'],
+		},
 		fromUserId: {
 			type: 'string',
 			optional: false, nullable: false,
@@ -157,6 +162,11 @@ export const packedChatMessageLiteSchema = {
 			optional: true, nullable: true,
 			ref: 'UserLite',
 		},
+		systemType: {
+			type: 'string',
+			optional: true, nullable: true,
+			enum: ['memberJoined', 'memberInvitedJoined', 'memberLeft'],
+		},
 		fromUserId: {
 			type: 'string',
 			optional: false, nullable: false,
@@ -266,6 +276,11 @@ export const packedChatMessageLiteFor1on1Schema = {
 			optional: true, nullable: true,
 			ref: 'UserLite',
 		},
+		systemType: {
+			type: 'string',
+			optional: true, nullable: true,
+			enum: ['memberJoined', 'memberInvitedJoined', 'memberLeft'],
+		},
 		fromUserId: {
 			type: 'string',
 			optional: false, nullable: false,
@@ -360,6 +375,11 @@ export const packedChatMessageLiteForRoomSchema = {
 			type: 'object',
 			optional: true, nullable: true,
 			ref: 'UserLite',
+		},
+		systemType: {
+			type: 'string',
+			optional: true, nullable: true,
+			enum: ['memberJoined', 'memberInvitedJoined', 'memberLeft'],
 		},
 		fromUserId: {
 			type: 'string',

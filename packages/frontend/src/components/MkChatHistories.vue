@@ -91,7 +91,7 @@ import { ensureSignin } from '@/i.js';
 import { updateCurrentAccountPartial } from '@/accounts.js';
 import { useStream } from '@/stream.js';
 import MkDriveFileThumbnail from '@/components/MkDriveFileThumbnail.vue';
-import { formatRecallNoticeText } from '@/utility/chat-recall.js';
+import { formatRecallNoticeText, formatSystemNoticeText } from '@/utility/chat-recall.js';
 
 const props = withDefaults(defineProps<{
 	/** 是否把智能体会话合并进列表（/chat「全部」页启用；Deck 列、Widget 保持原样） */
@@ -172,6 +172,8 @@ let agentSessionsInFlight: Promise<AgentSessionRow[]> | null = null;
 let fetchSeq = 0;
 
 function getMessagePreview(message: Misskey.entities.ChatMessage): string {
+	const systemText = formatSystemNoticeText(message);
+	if (systemText != null) return systemText;
 	if ('recalledAt' in message && message.recalledAt != null) {
 		return formatRecallNoticeText(message);
 	}

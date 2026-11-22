@@ -5,7 +5,14 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <template>
 <div
-	v-if="isRecalled"
+	v-if="systemNoticeText != null"
+	:class="$style.recalledRoot"
+	:data-message-id="message.id"
+>
+	<span :class="$style.recalledPill">{{ systemNoticeText }}</span>
+</div>
+<div
+	v-else-if="isRecalled"
 	:class="[$style.recalledRoot, { [$style.highlighted]: highlighted }]"
 	:data-message-id="message.id"
 >
@@ -148,7 +155,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 <script lang="ts">
 import * as Misskey from 'misskey-js';
 import { i18n as chatI18n } from '@/i18n.js';
-import { formatRecallNoticeText, formatUserDisplayName } from '@/utility/chat-recall.js';
+import { formatRecallNoticeText, formatSystemNoticeText, formatUserDisplayName } from '@/utility/chat-recall.js';
 
 export { formatRecallNoticeText, formatUserDisplayName };
 
@@ -322,6 +329,7 @@ const isOwner = computed(() => props.roomOwnerId === $i.id || props.myRole === '
 const isAdmin = computed(() => !isOwner.value && props.myRole === 'admin');
 const canAdminRoom = computed(() => isOwner.value || isAdmin.value);
 const isRecalled = computed(() => ('recalledAt' in props.message ? props.message.recalledAt : null) != null);
+const systemNoticeText = computed(() => formatSystemNoticeText(props.message as Misskey.entities.ChatMessageLite));
 const recallNoticeText = computed(() => formatRecallNoticeText(props.message as Misskey.entities.ChatMessageLite));
 const canInteract = computed(() => !isRecalled.value && $i.policies.chatAvailability === 'available' && !props.isRoomArchived && !props.isRoomSuspended);
 const senderSuspensionText = computed(() => {

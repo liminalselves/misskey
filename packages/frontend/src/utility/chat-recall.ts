@@ -26,3 +26,17 @@ export function formatRecallNoticeText(message: {
 	const actorName = formatUserDisplayName(message.recalledBy, message.recalledById);
 	return i18n.tsx._chat.groupRecalledMessageNotice({ actor: actorName, target: targetName });
 }
+
+export function formatSystemNoticeText(message: {
+	fromUserId: string;
+	fromUser?: Misskey.entities.UserLite | null;
+	systemType?: 'memberJoined' | 'memberInvitedJoined' | 'memberLeft' | null;
+}): string | null {
+	const name = formatUserDisplayName(message.fromUser, message.fromUserId);
+	switch (message.systemType) {
+		case 'memberJoined': return `${name} 加入了群组`;
+		case 'memberInvitedJoined': return `${name} 接受邀请加入了群组`;
+		case 'memberLeft': return `${name} 退出了群组`;
+		default: return null;
+	}
+}

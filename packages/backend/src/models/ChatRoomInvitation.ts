@@ -38,8 +38,10 @@ export class MiChatRoomInvitation {
 	@JoinColumn()
 	public room: MiChatRoom | null;
 
-	@Column('boolean', {
-		default: false,
+	@Column('varchar', {
+		length: 16,
+		default: 'pending',
+		comment: 'pending / accepted / ignored / canceled',
 	})
-	public ignored: boolean;
+	public status: 'pending' | 'accepted' | 'ignored' | 'canceled';
 }

@@ -1220,7 +1220,7 @@ async function markAsRead() {
 function onMessage(message: Misskey.entities.ChatMessageLite) {
 	if (messages.value.some(m => m.id === message.id)) return;
 
-	sound.playMisskeySfx('chatMessage');
+	if (message.systemType == null) sound.playMisskeySfx('chatMessage');
 
 	if (canFetchNewer.value) {
 		showIndicator.value = true;

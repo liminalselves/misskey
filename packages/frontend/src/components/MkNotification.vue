@@ -165,7 +165,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 				<MkA :class="$style.text" to="/chat?view=invitations">
 					{{ notification.invitation.room.name }}
 				</MkA>
-				<div v-if="!invitationDone && !notification.invitation.room.isMember" :class="$style.followRequestCommands">
+				<div v-if="invitationStatusText" :class="$style.invitationStatus">{{ invitationStatusText }}</div>
+				<div v-else :class="$style.followRequestCommands">
 					<MkButton v-if="$i.policies.chatAvailability === 'available'" :class="$style.followRequestCommandButton" rounded primary :disabled="invitationProcessing" @click="acceptRoomInvitation()"><i class="ti ti-check"></i> {{ i18n.ts._chat.join }}</MkButton>
 					<MkButton :class="$style.followRequestCommandButton" rounded danger :disabled="invitationProcessing" @click="ignoreRoomInvitation()"><i class="ti ti-x"></i> {{ i18n.ts._chat.ignore }}</MkButton>
 				</div>
@@ -247,7 +248,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import * as Misskey from 'misskey-js';
 import MkReactionIcon from '@/components/MkReactionIcon.vue';
 import MkButton from '@/components/MkButton.vue';
@@ -259,6 +260,7 @@ import { formatApiError, misskeyApi } from '@/utility/misskey-api.js';
 import { ensureSignin } from '@/i.js';
 import { useRouter } from '@/router.js';
 import * as os from '@/os.js';
+import { formatChatError } from '@/utility/chat-error.js';
 
 const $i = ensureSignin();
 const router = useRouter();
@@ -289,8 +291,18 @@ const exportEntityName = {
 } as const satisfies Record<ExportCompletedNotification['exportedEntity'], string>;
 
 const followRequestDone = ref(false);
-const invitationDone = ref(false);
+const invitationLocalStatus = ref<'accepted' | 'ignored' | null>(null);
 const invitationProcessing = ref(false);
+
+const invitationStatusText = computed(() => {
+	if (props.notification.type !== 'chatRoomInvitationReceived') return null;
+	const status = invitationLocalStatus.value ?? props.notification.invitation.status;
+	if (status === 'accepted') return '已同意';
+	if (status === 'ignored') return '已忽略';
+	if (status === 'canceled') return '该邀请已被撤销';
+	if (props.notification.invitation.room.isMember) return '已同意';
+	return null;
+});
 
 const acceptFollowRequest = () => {
 	if (!('user' in props.notification)) return;
@@ -310,10 +322,10 @@ async function acceptRoomInvitation() {
 	invitationProcessing.value = true;
 	try {
 		await misskeyApi('chat/rooms/join', { roomId });
-		invitationDone.value = true;
+		invitationLocalStatus.value = 'accepted';
 		router.push('/chat/room/:roomId', { params: { roomId } });
 	} catch (err) {
-		os.alert({ type: 'error', text: formatApiError(err) });
+		os.alert({ type: 'error', text: formatChatError(err) });
 	} finally {
 		invitationProcessing.value = false;
 	}
@@ -325,9 +337,9 @@ async function ignoreRoomInvitation() {
 	invitationProcessing.value = true;
 	try {
 		await misskeyApi('chat/rooms/invitations/ignore', { roomId });
-		invitationDone.value = true;
+		invitationLocalStatus.value = 'ignored';
 	} catch (err) {
-		os.alert({ type: 'error', text: formatApiError(err) });
+		os.alert({ type: 'error', text: formatChatError(err) });
 	} finally {
 		invitationProcessing.value = false;
 	}
@@ -340,6 +352,12 @@ function getActualReactedUsersCount(notification: Misskey.entities.Notification)
 </script>
 
 <style lang="scss" module>
+.invitationStatus {
+	margin-top: 4px;
+	font-size: 0.85em;
+	color: var(--MI_THEME-fgTransparentWeak);
+}
+
 .root {
 	position: relative;
 	box-sizing: border-box;

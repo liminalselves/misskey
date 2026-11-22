@@ -224,6 +224,7 @@ export class ChatEntityService {
 			recalledAt,
 			recalledById,
 			recalledBy,
+			systemType: message.systemType ?? null,
 			text: isRecalled ? null : message.text,
 			fromUserId: message.fromUserId,
 			fromUser,
@@ -329,6 +330,7 @@ export class ChatEntityService {
 			recalledAt,
 			recalledById,
 			recalledBy,
+			systemType: message.systemType ?? null,
 			text: isRecalled ? null : message.text,
 			fromUserId: message.fromUserId,
 			toUserId: message.toUserId!,
@@ -400,6 +402,7 @@ export class ChatEntityService {
 			recalledAt,
 			recalledById,
 			recalledBy,
+			systemType: message.systemType ?? null,
 			text: isRecalled ? null : message.text,
 			fromUserId: message.fromUserId,
 			fromUser,
@@ -458,7 +461,7 @@ export class ChatEntityService {
 			: await this.chatRoomMembershipsRepository.findOneBy({ roomId: room.id, userId: me.id })) : null;
 		const invitation = me && me.id !== room.ownerId ? (options?._hint_?.myInvitations
 			? (options._hint_.myInvitations.get(room.id) ?? null)
-			: await this.chatRoomInvitationsRepository.findOneBy({ roomId: room.id, userId: me.id, ignored: false })) : null;
+			: await this.chatRoomInvitationsRepository.findOneBy({ roomId: room.id, userId: me.id, status: 'pending' })) : null;
 		const ban = me && me.id !== room.ownerId ? (options?._hint_?.myBans
 			? (options._hint_.myBans.get(room.id) ?? null)
 			: await this.chatRoomBansRepository.findOneBy({ roomId: room.id, userId: me.id })) : null;
@@ -580,7 +583,7 @@ export class ChatEntityService {
 				where: {
 					roomId: In(roomIds),
 					userId: me.id,
-					ignored: false,
+					status: 'pending',
 				},
 			}).then(invitations => new Map(orderedRooms.map(r => [r.id, invitations.find(i => i.roomId === r.id)]))),
 			this.chatRoomBansRepository.find({
@@ -665,6 +668,7 @@ export class ChatEntityService {
 			room: options?._hint_?.packedRooms.get(invitation.roomId) ?? (await this.packRoom(invitation.room ?? invitation.roomId, me)),
 			userId: invitation.userId,
 			user: options?._hint_?.packedUsers.get(invitation.userId) ?? (await this.userEntityService.pack(invitation.user ?? invitation.userId, me)),
+			status: invitation.status,
 		};
 	}
 

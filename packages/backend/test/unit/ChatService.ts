@@ -260,6 +260,7 @@ function createChatServiceHarness(overrides?: {
 			fromUserId: m.fromUserId,
 			recalledAt: m.recalledAt?.toISOString() ?? null,
 			recalledById: m.recalledById ?? null,
+			systemType: m.systemType ?? null,
 		})),
 		packMessageLiteFor1on1: vi.fn(async (m: any) => ({
 			id: m.id,
@@ -563,6 +564,30 @@ describe('ChatService owner mute, unread events, reactions & moderation', () => 
 
 		await expect(service.joinToRoom('u2', 'r1')).rejects.toThrow('banned');
 		await expect(service.createRoomInvitation('owner1', 'r1', 'u2')).rejects.toThrow('banned');
+	});
+
+	test('invitation keeps status on cancel/accept and join/leave post system notices', async () => {
+		const room = { id: 'r1', ownerId: 'owner1', isPublic: false, isArchived: false, allowMemberInvite: false };
+		const invitations = [
+			{ id: 'i1', roomId: 'r1', userId: 'u2', status: 'pending' },
+			{ id: 'i2', roomId: 'r1', userId: 'u3', status: 'pending' },
+		];
+		const { service, globalEventService } = createChatServiceHarness({
+			rooms: [room],
+			invitations,
+			users: [{ id: 'u2', usernameLower: 'u2' }, { id: 'u3', usernameLower: 'u3' }],
+		});
+
+		await service.cancelRoomInvitation({ id: 'owner1' }, { invitationId: 'i2' });
+		expect(invitations.find(i => i.id === 'i2')?.status).toBe('canceled');
+		await expect(service.joinToRoom('u3', 'r1')).rejects.toThrow('no invitation');
+
+		await service.joinToRoom('u2', 'r1');
+		expect(invitations.find(i => i.id === 'i1')?.status).toBe('accepted');
+		expect(globalEventService.publishChatRoomStream).toHaveBeenCalledWith('r1', 'message', expect.objectContaining({ systemType: 'memberInvitedJoined', fromUserId: 'u2' }));
+
+		await service.leaveRoom('u2', 'r1');
+		expect(globalEventService.publishChatRoomStream).toHaveBeenCalledWith('r1', 'message', expect.objectContaining({ systemType: 'memberLeft', fromUserId: 'u2' }));
 	});
 
 	test('transferRoomOwnership preserves old owner mute and cleans non-muted new owner membership', async () => {

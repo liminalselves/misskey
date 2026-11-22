@@ -94,7 +94,7 @@ function createEntityServiceHarness(overrides?: {
 }
 
 describe('ChatEntityService', () => {
-	test('packRooms filters ignored: false invitations and computes memberCount/myRole/ban fields in batch', async () => {
+	test('packRooms filters pending invitations and computes memberCount/myRole/ban fields in batch', async () => {
 		const { service, chatRoomInvitationsFind } = createEntityServiceHarness({
 			memberships: [
 				{ id: 'mem1', roomId: 'room2', userId: 'me1', isMuted: true, role: 'admin', suspendedUntil: null },
@@ -125,7 +125,7 @@ describe('ChatEntityService', () => {
 		expect(chatRoomInvitationsFind).toHaveBeenCalledWith({
 			where: expect.objectContaining({
 				userId: 'me1',
-				ignored: false,
+				status: 'pending',
 			}),
 		});
 		expect(packed.map(r => r.id)).toEqual(['room1', 'room2', 'room3']);
