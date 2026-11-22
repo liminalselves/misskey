@@ -247,6 +247,13 @@ SPDX-License-Identifier: AGPL-3.0-only
 </div>
 </template>
 
+<script lang="ts">
+import { reactive } from 'vue';
+
+// 同一邀请可能同时出现在通知页与通知小工具，处理结果须在所有实例间共享
+const localInvitationStatuses = reactive(new Map<string, 'accepted' | 'ignored'>());
+</script>
+
 <script lang="ts" setup>
 import { computed, ref } from 'vue';
 import * as Misskey from 'misskey-js';
@@ -291,12 +298,11 @@ const exportEntityName = {
 } as const satisfies Record<ExportCompletedNotification['exportedEntity'], string>;
 
 const followRequestDone = ref(false);
-const invitationLocalStatus = ref<'accepted' | 'ignored' | null>(null);
 const invitationProcessing = ref(false);
 
 const invitationStatusText = computed(() => {
 	if (props.notification.type !== 'chatRoomInvitationReceived') return null;
-	const status = invitationLocalStatus.value ?? props.notification.invitation.status;
+	const status = localInvitationStatuses.get(props.notification.invitation.id) ?? props.notification.invitation.status;
 	if (status === 'accepted') return '已同意';
 	if (status === 'ignored') return '已忽略';
 	if (status === 'canceled') return '该邀请已被撤销';
@@ -322,7 +328,7 @@ async function acceptRoomInvitation() {
 	invitationProcessing.value = true;
 	try {
 		await misskeyApi('chat/rooms/join', { roomId });
-		invitationLocalStatus.value = 'accepted';
+		localInvitationStatuses.set(props.notification.invitation.id, 'accepted');
 		router.push('/chat/room/:roomId', { params: { roomId } });
 	} catch (err) {
 		os.alert({ type: 'error', text: formatChatError(err) });
@@ -337,7 +343,7 @@ async function ignoreRoomInvitation() {
 	invitationProcessing.value = true;
 	try {
 		await misskeyApi('chat/rooms/invitations/ignore', { roomId });
-		invitationLocalStatus.value = 'ignored';
+		localInvitationStatuses.set(props.notification.invitation.id, 'ignored');
 	} catch (err) {
 		os.alert({ type: 'error', text: formatChatError(err) });
 	} finally {
