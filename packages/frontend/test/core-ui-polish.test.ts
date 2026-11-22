@@ -4,7 +4,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
-import { cleanup, fireEvent, render } from '@testing-library/vue';
+import { cleanup, fireEvent, render, waitFor } from '@testing-library/vue';
 import { defineComponent, h, KeepAlive, nextTick, ref } from 'vue';
 import { prefer } from '@/preferences.js';
 import { instance } from '@/instance.js';
@@ -620,8 +620,7 @@ describe('Core UI polish regressions', () => {
 		expect(startupEl.inert).toBe(true);
 
 		window.document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
-		await flush();
-		expect(onClosed).toHaveBeenCalledTimes(1);
+		await waitFor(() => expect(onClosed).toHaveBeenCalledTimes(1));
 	});
 
 	test.each([
