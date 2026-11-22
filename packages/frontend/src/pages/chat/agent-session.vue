@@ -3644,7 +3644,8 @@ async function flushDrawSettingsSave(): Promise<boolean> {
 	}
 	if (!session.value || settingsHydrating.value || moderationLocksSessionWrites.value) return false;
 	if (!drawConfigDirty.value) return true;
-	const run = (async (): Promise<boolean> => {
+	let run!: Promise<boolean>;
+	run = (async (): Promise<boolean> => {
 		drawSaving.value = true;
 		drawAutoSaveState.value = 'saving';
 		try {
