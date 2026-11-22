@@ -11,9 +11,11 @@ import OverviewActiveUsers from '@/pages/admin/overview.active-users.vue';
 import OverviewApRequests from '@/pages/admin/overview.ap-requests.vue';
 import { misskeyApi, misskeyApiGet } from '@/utility/misskey-api.js';
 
-const ChartMock = vi.fn(function () {
-	return { destroy: vi.fn() };
-});
+const { ChartMock } = vi.hoisted(() => ({
+	ChartMock: vi.fn(function () {
+		return { destroy: vi.fn() };
+	}),
+}));
 vi.mock('chart.js', () => ({ Chart: ChartMock }));
 vi.mock('chartjs-plugin-gradient', () => ({ default: {} }));
 vi.mock('chromatic', () => ({ default: () => false }));
