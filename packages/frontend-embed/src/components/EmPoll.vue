@@ -7,7 +7,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 <div>
 	<ul :class="$style.choices">
 		<li v-for="(choice, i) in poll.choices" :key="i" :class="$style.choice">
-			<div :class="$style.bg" :style="{ 'width': `${choice.votes / total * 100}%` }"></div>
+			<div :class="$style.bg" :style="{ 'width': `${total > 0 ? choice.votes / total * 100 : 0}%` }"></div>
 			<span :class="$style.fg">
 				<template v-if="choice.isVoted"><i class="ti ti-check" style="margin-right: 4px; color: var(--MI_THEME-accent);"></i></template>
 				<EmMfm :text="choice.text" :plain="true"/>

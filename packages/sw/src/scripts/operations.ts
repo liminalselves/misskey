@@ -60,11 +60,11 @@ export function openAntenna(antennaId: string, loginId: string): ReturnType<type
 	return openClient('push', `/timeline/antenna/${antennaId}`, loginId, { antennaId });
 }
 
-export function openChat(body: any, loginId: string): ReturnType<typeof openClient> {
+export function openChat(body: Misskey.entities.ChatMessage, loginId: string): ReturnType<typeof openClient> {
 	if (body.toRoomId != null) {
 		return openClient('push', `/chat/room/${body.toRoomId}`, loginId, { body });
 	} else {
-		return openClient('push', `/chat/user/${body.toUserId}`, loginId, { body });
+		return openClient('push', `/chat/user/${body.fromUserId}`, loginId, { body });
 	}
 }
 

@@ -23,7 +23,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 			</I18n>
 		</span>
 		<div :class="$style.renoteInfo">
-			<div class="$style.renoteTime">
+			<div :class="$style.renoteTime">
 				<EmTime :time="note.createdAt"/>
 			</div>
 			<span v-if="note.visibility !== 'public'" style="margin-left: 0.5em;" :title="i18n.ts._visibility[note.visibility]">
