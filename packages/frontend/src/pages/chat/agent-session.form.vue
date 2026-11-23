@@ -173,6 +173,7 @@ watch([text, file], () => {
 });
 
 function onKeydown(ev: KeyboardEvent) {
+	if (ev.isComposing || ev.key === 'Process' || ev.keyCode === 229) return;
 	if (ev.key === 'Enter') {
 		if (prefer.s['chat.sendOnEnter']) {
 			if (!(ev.ctrlKey || ev.metaKey || ev.shiftKey)) {
@@ -258,27 +259,35 @@ watch(() => props.editing?.id ?? null, async (id) => {
 	}
 });
 
-async function insertEmoji(ev: MouseEvent) {
-	textareaReadOnly.value = true;
+function insertEmoji(ev: MouseEvent) {
 	const target = ev.currentTarget ?? ev.target;
 	if (target == null) return;
 
 	let pos = textareaEl.value?.selectionStart ?? 0;
 	let posEnd = textareaEl.value?.selectionEnd ?? text.value.length;
-	emojiPicker.show(
-		target as HTMLElement,
-		emoji => {
-			const textBefore = text.value.substring(0, pos);
-			const textAfter = text.value.substring(posEnd);
-			text.value = textBefore + emoji + textAfter;
-			pos += emoji.length;
-			posEnd += emoji.length;
-		},
-		() => {
+	let opened = false;
+	textareaReadOnly.value = true;
+	try {
+		emojiPicker.show(
+			target as HTMLElement,
+			emoji => {
+				const textBefore = text.value.substring(0, pos);
+				const textAfter = text.value.substring(posEnd);
+				text.value = textBefore + emoji + textAfter;
+				pos += emoji.length;
+				posEnd = pos;
+			},
+			() => {
+				textareaReadOnly.value = false;
+				nextTick(() => textareaEl.value?.focus());
+			},
+		);
+		opened = true;
+	} finally {
+		if (!opened) {
 			textareaReadOnly.value = false;
-			nextTick(() => textareaEl.value?.focus());
-		},
-	);
+		}
+	}
 }
 
 onMounted(() => {

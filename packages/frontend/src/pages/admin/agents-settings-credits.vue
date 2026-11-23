@@ -111,7 +111,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 					</span>
 				</div>
 			</div>
-			<div v-if="redeemCodes.length > 0" :class="$style.pagerBar" role="navigation" :aria-label="i18n.ts._agents.redeemCodesList">
+			<div v-if="redeemCodes.length > 0 || listPage > 1" :class="$style.pagerBar" role="navigation" :aria-label="i18n.ts._agents.redeemCodesList">
 				<div :class="$style.pagerSegGroup" :aria-label="i18n.ts._agents.pageSize" role="group">
 					<button
 						v-for="size in redeemPageSizeOptions"
@@ -119,6 +119,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 						type="button"
 						class="_button"
 						:class="[$style.pagerSegBtn, pageSize === size ? $style.pagerSegBtnActive : null]"
+						:disabled="redeemLoading"
 						@click="pageSize = size"
 					>
 						{{ size }}
@@ -471,6 +472,10 @@ function redeemStatusColor(codeStatus: RedeemCodeRow['status']) {
 }
 .pagerSegBtn:hover:not(:disabled) {
 	background: var(--MI_THEME-buttonHoverBg);
+}
+.pagerSegBtn:disabled {
+	opacity: 0.4;
+	cursor: default;
 }
 .pagerSegBtnActive {
 	color: var(--MI_THEME-accent);

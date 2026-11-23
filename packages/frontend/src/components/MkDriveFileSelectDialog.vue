@@ -12,6 +12,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 	:okButtonDisabled="selected.length === 0"
 	@click="cancel()"
 	@close="cancel()"
+	@esc="cancel()"
 	@ok="ok()"
 	@closed="emit('closed')"
 >

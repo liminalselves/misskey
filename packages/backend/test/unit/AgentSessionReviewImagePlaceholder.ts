@@ -9,9 +9,13 @@ import type { MiAgentImageGeneration } from '@/models/AgentImageGeneration.js';
 
 vi.doMock('../../src/core/AgentService.js', () => ({ AgentService: class {} }));
 vi.doMock('../../src/core/entities/DriveFileEntityService.js', () => ({ DriveFileEntityService: class {} }));
+vi.doMock('../../src/core/MetaService.js', () => ({ MetaService: class {} }));
+vi.doMock('../../src/core/entities/UserEntityService.js', () => ({ UserEntityService: class {} }));
 
 const { default: ReviewImageStatus, meta } = await import('../../src/server/api/endpoints/admin/agents/governance/session-review/image-placeholder-status.js');
 const { default: UserImageStatus } = await import('../../src/server/api/endpoints/agents/images/placeholder-status.js');
+const { default: ReviewSessionShow } = await import('../../src/server/api/endpoints/admin/agents/governance/session-review/session.js');
+const { default: ReviewCharacterShow } = await import('../../src/server/api/endpoints/admin/agents/governance/session-review/character.js');
 
 const params = { sessionId: 'session1', messageId: 'message1', placeholderIndex: 0 };
 const moderator = { id: 'moderator1' };
@@ -130,5 +134,113 @@ describe('Agent session review image status', () => {
 		const h = harness(generation({ status: 'generating', fileId: null, url: null }));
 		await expect(h.review.exec(params, moderator as never, null)).resolves.toMatchObject({ status: 'generating', file: null, url: null });
 		expect(h.fileService.pack).not.toHaveBeenCalled();
+	});
+});
+
+describe('Agent session review sticker tombstones', () => {
+	test('session-review/session and session-review/character pack stickers with { withDeleted: true }', async () => {
+		const deletedSticker = { id: 'sticker1', isDeleted: true, deletedAt: '2026-10-07T00:00:00.000Z', url: null };
+		const fileService = { pack: vi.fn(async () => deletedSticker) };
+
+		const sessionEndpoint = new ReviewSessionShow(
+			{
+				findOneBy: async () => ({
+					id: 'session1',
+					userId: 'owner1',
+					characterId: 'char1',
+					dialogueStyleId: null,
+					sessionKind: 'draft_test',
+					name: 'Session',
+					lastMessageAt: null,
+					createdAt: new Date('2026-10-01T00:00:00.000Z'),
+					agentModelId: null,
+					agentCompressionModelId: null,
+					agentImageModelId: null,
+					agentVisionModelId: null,
+					agentImageSettings: {},
+					agentLongMemoryProvider: 'none',
+					agentReplyPending: false,
+					segmentedOutputEnabled: false,
+					timeAwarenessEnabled: false,
+					randomProactiveEnabled: false,
+					scheduledProactiveEnabled: false,
+					randomProactiveMinSilenceMinutes: 60,
+					randomProactiveMaxWindowMinutes: 180,
+					randomProactiveDaytimeWeight: 1,
+					randomProactiveRecencyBias: 1,
+					randomProactiveChainLength: 1,
+					randomProactiveLastError: null,
+					scheduledProactiveLastError: null,
+					moderationBanned: false,
+					moderationBannedReason: null,
+					ruleOverrides: {},
+				}),
+			} as never,
+			{ findOneBy: async () => ({ id: 'owner1' }) } as never,
+			{
+				assertAgentsEnabled: vi.fn(),
+				loadCharacterForAgentSessionOrThrow: async () => ({
+					id: 'char1',
+					userId: 'owner1',
+					name: 'Char',
+					avatarFileId: null,
+					moderationBanned: false,
+					stickers: [{ key: 'wave', description: 'Wave', fileId: 'sticker1' }],
+				}),
+			} as never,
+			fileService as never,
+			{ pack: async () => ({ id: 'owner1' }) } as never,
+			{ fetch: async () => ({ agentImageMaxPerReply: 1 }) } as never,
+		);
+
+		const sessionResult = await sessionEndpoint.exec({ sessionId: 'session1' }, moderator as never, null);
+		expect(sessionResult.characterStickers).toEqual([{ key: 'wave', file: deletedSticker }]);
+		expect(fileService.pack).toHaveBeenCalledWith('sticker1', { withDeleted: true });
+
+		fileService.pack.mockClear();
+
+		const characterEndpoint = new ReviewCharacterShow(
+			{ findOneBy: async () => ({ id: 'session1', userId: 'owner1' }) } as never,
+			{
+				findOneBy: async () => ({
+					id: 'char1',
+					userId: 'owner1',
+					name: 'Char',
+					summary: null,
+					personality: '',
+					background: '',
+					speakingStyle: '',
+					greeting: '',
+					exampleDialogue: '',
+					forbiddenBehavior: '',
+					worldbook: [],
+					regexRules: [],
+					rules: [],
+					isPublished: false,
+					reviewStatus: 'draft',
+					publishedVersion: null,
+					reviewRejectReason: null,
+					reviewRejectMessage: null,
+					draftRevision: 1,
+					avatarFileId: null,
+					referenceImageFileIds: [],
+					stickers: [{ key: 'wave', description: 'Wave', fileId: 'sticker1' }],
+					promptOpenSourced: false,
+					createdAt: new Date('2026-10-01T00:00:00.000Z'),
+					updatedAt: new Date('2026-10-01T00:00:00.000Z'),
+				}),
+			} as never,
+			{
+				assertAgentsEnabled: vi.fn(),
+				exampleTurnsFromStored: () => [],
+				normalizeRegexRules: () => [],
+				normalizeRules: () => [],
+			} as never,
+			fileService as never,
+		);
+
+		const characterResult = await characterEndpoint.exec({ sessionId: 'session1', characterId: 'char1' }, moderator as never, null);
+		expect(characterResult.stickers).toEqual([{ key: 'wave', description: 'Wave', file: deletedSticker }]);
+		expect(fileService.pack).toHaveBeenCalledWith('sticker1', { withDeleted: true });
 	});
 });

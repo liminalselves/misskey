@@ -932,6 +932,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 				:keyGenerating="migrationKeyGenerating"
 				:logsLoading="migrationLogsLoading"
 				:logs="migrationLogs"
+				:hasMore="migrationHasMore"
 				@generateKey="generateMigrationKey"
 				@refreshLogs="loadMigrationLogs()"
 				@loadMore="loadMoreMigrationLogs"
@@ -2159,10 +2160,13 @@ const redeemCodes = ref<RedeemCodeRow[]>([]);
 const redeemStatus = ref<'available' | 'redeemed' | 'expired' | 'revoked' | 'all'>('available');
 
 // === 迁移 Tab ===
+const MIGRATION_PAGE_SIZE = 30;
 const migrationKeyExists = ref(Boolean(meta.agentMigrationKeyConfigured));
 const migrationKeyGenerating = ref(false);
 const migrationLogsLoading = ref(false);
+const migrationHasMore = ref(false);
 const migrationLogs = ref<MigrationLogRow[]>([]);
+let migrationRequestSeq = 0;
 
 async function generateMigrationKey() {
 	const { canceled } = await os.confirm({
@@ -2186,29 +2190,37 @@ async function generateMigrationKey() {
 		os.alert({ type: 'info', text: i18n.ts._agents.adminMigrationKeyCopied });
 	} catch (err) {
 		os.alert({ type: 'error', text: formatApiError(err) });
+	} finally {
+		migrationKeyGenerating.value = false;
 	}
-	migrationKeyGenerating.value = false;
 }
 
 async function loadMigrationLogs(append = false) {
+	const mySeq = ++migrationRequestSeq;
 	migrationLogsLoading.value = true;
 	try {
 		const untilId = append && migrationLogs.value.length > 0
 			? migrationLogs.value[migrationLogs.value.length - 1].id
 			: undefined;
 		const res = await misskeyApi('admin/agents/credits/migration/logs' as any, {
-			limit: 30,
+			limit: MIGRATION_PAGE_SIZE + 1,
 			untilId,
 		}) as typeof migrationLogs.value;
+		if (mySeq !== migrationRequestSeq) return;
+		migrationHasMore.value = res.length > MIGRATION_PAGE_SIZE;
+		const pageRows = res.slice(0, MIGRATION_PAGE_SIZE);
 		if (append) {
-			migrationLogs.value.push(...res);
+			const existingIds = new Set(migrationLogs.value.map(r => r.id));
+			migrationLogs.value.push(...pageRows.filter(r => !existingIds.has(r.id)));
 		} else {
-			migrationLogs.value = res;
+			migrationLogs.value = pageRows;
 		}
 	} catch (err) {
+		if (mySeq !== migrationRequestSeq) return;
 		os.alert({ type: 'error', text: formatApiError(err) });
+	} finally {
+		if (mySeq === migrationRequestSeq) migrationLogsLoading.value = false;
 	}
-	migrationLogsLoading.value = false;
 }
 
 function loadMoreMigrationLogs() {
@@ -2236,7 +2248,9 @@ const redeemPageSize = ref<number>(20);
 const redeemHasNext = ref(false);
 const redeemRevoking = ref(false);
 const redeemPageCache = ref<Record<number, RedeemCodeRow[]>>({});
+const redeemPageHasNext = ref<Record<number, boolean>>({});
 const redeemPageCursorMap = ref<Record<number, string | null>>({ 1: null });
+let redeemRequestSeq = 0;
 
 // 报表分类切换：模型报表 / 签到报表
 const reportTypeTabs = [
@@ -2279,56 +2293,96 @@ async function generateRedeemCodes() {
 	}
 }
 
+async function fetchRedeemPage(untilId: string | null, pageSize: number): Promise<{ rows: RedeemCodeRow[]; hasNext: boolean }> {
+	const params: Record<string, unknown> = { limit: pageSize + 1 };
+	if (redeemStatus.value !== 'all') params.status = redeemStatus.value;
+	const keyword = redeemQuery.value.trim();
+	if (keyword) params.query = keyword;
+	if (untilId) params.untilId = untilId;
+	const rawRows = await misskeyApi('admin/agents/redeem-codes/list' as any, params) as RedeemCodeRow[];
+	return {
+		rows: rawRows.slice(0, pageSize),
+		hasNext: rawRows.length > pageSize,
+	};
+}
+
 async function loadRedeemListPage(page: number, force = false) {
 	if (page < 1) return;
+	const mySeq = ++redeemRequestSeq;
+	const pageSize = redeemPageSize.value;
 	redeemLoading.value = true;
 	try {
+		if (force && page === 1) {
+			redeemPageCache.value = {};
+			redeemPageHasNext.value = {};
+			redeemPageCursorMap.value = { 1: null };
+		}
 		if (!force && redeemPageCache.value[page]) {
 			redeemCodes.value = redeemPageCache.value[page];
 			redeemListPage.value = page;
 			redeemListPageInput.value = String(page);
-			redeemHasNext.value = redeemCodes.value.length === redeemPageSize.value;
+			redeemHasNext.value = redeemPageHasNext.value[page] ?? false;
 			return;
 		}
-		if (redeemPageCursorMap.value[page] === undefined) {
+		if (page > 1 && redeemPageCursorMap.value[page] === undefined) {
 			for (let p = 1; p < page; p++) {
-				if (redeemPageCursorMap.value[p + 1] !== undefined) continue;
-				if (!redeemPageCache.value[p]) {
-					await loadRedeemListPage(p, true);
+				if (redeemPageCursorMap.value[p + 1] === undefined) {
+					if (!redeemPageCache.value[p]) {
+						const cursor = redeemPageCursorMap.value[p] ?? null;
+						if (p > 1 && cursor == null) break;
+						const fetched = await fetchRedeemPage(cursor, pageSize);
+						if (mySeq !== redeemRequestSeq) return;
+						redeemPageCache.value[p] = fetched.rows;
+						redeemPageHasNext.value[p] = fetched.hasNext;
+					}
+					const prevRows = redeemPageCache.value[p] ?? [];
+					const prevHasNext = redeemPageHasNext.value[p] ?? false;
+					const prevLast = prevRows.at(-1);
+					redeemPageCursorMap.value[p + 1] = prevHasNext && prevLast ? prevLast.id : null;
 				}
 				const prevRows = redeemPageCache.value[p] ?? [];
-				const prevLast = prevRows.at(-1);
-				redeemPageCursorMap.value[p + 1] = prevLast ? prevLast.id : null;
+				const prevHasNext = redeemPageHasNext.value[p] ?? false;
+				if (!prevHasNext || prevRows.length < pageSize || prevRows.length === 0) {
+					redeemCodes.value = prevRows;
+					redeemListPage.value = p;
+					redeemListPageInput.value = String(p);
+					redeemHasNext.value = false;
+					return;
+				}
 			}
 		}
-		const params: Record<string, unknown> = { limit: redeemPageSize.value };
-		if (redeemStatus.value !== 'all') params.status = redeemStatus.value;
-		const keyword = redeemQuery.value.trim();
-		if (keyword) params.query = keyword;
 		const untilId = redeemPageCursorMap.value[page] ?? null;
-		if (untilId) params.untilId = untilId;
-		const rows = await misskeyApi('admin/agents/redeem-codes/list' as any, params) as RedeemCodeRow[];
+		if (page > 1 && untilId == null) {
+			redeemListPageInput.value = String(redeemListPage.value);
+			return;
+		}
+		const fetched = await fetchRedeemPage(untilId, pageSize);
+		if (mySeq !== redeemRequestSeq) return;
 
-		redeemPageCache.value[page] = rows;
-		redeemCodes.value = rows;
+		redeemPageCache.value[page] = fetched.rows;
+		redeemPageHasNext.value[page] = fetched.hasNext;
+		redeemCodes.value = fetched.rows;
 		redeemListPage.value = page;
 		redeemListPageInput.value = String(page);
-		redeemHasNext.value = rows.length === redeemPageSize.value;
+		redeemHasNext.value = fetched.hasNext;
 
-		const last = rows.at(-1);
-		redeemPageCursorMap.value[page + 1] = last ? last.id : null;
+		const last = fetched.rows.at(-1);
+		redeemPageCursorMap.value[page + 1] = fetched.hasNext && last ? last.id : null;
 	} catch (err) {
+		if (mySeq !== redeemRequestSeq) return;
 		os.alert({ type: 'error', text: formatApiError(err) });
 	} finally {
-		redeemLoading.value = false;
+		if (mySeq === redeemRequestSeq) redeemLoading.value = false;
 	}
 }
 
 function resetRedeemPager() {
+	redeemRequestSeq++;
 	redeemListPage.value = 1;
 	redeemListPageInput.value = '1';
 	redeemHasNext.value = false;
 	redeemPageCache.value = {};
+	redeemPageHasNext.value = {};
 	redeemPageCursorMap.value = { 1: null };
 	redeemCodes.value = [];
 }

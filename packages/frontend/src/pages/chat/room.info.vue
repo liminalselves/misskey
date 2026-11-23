@@ -135,17 +135,83 @@ const muting = ref(false);
 const deleting = ref(false);
 const leaving = ref(false);
 
+type RoomFormBaseline = {
+	id: string;
+	name: string;
+	description: string;
+	announcement: string;
+	allowMemberInvite: boolean;
+	isPublic: boolean;
+	isArchived: boolean;
+	iconUrl: string | null;
+	isMuted: boolean;
+};
+
+function toRoomBaseline(r: Misskey.entities.ChatRoom): RoomFormBaseline {
+	return {
+		id: r.id,
+		name: r.name,
+		description: r.description,
+		announcement: r.announcement ?? '',
+		allowMemberInvite: r.allowMemberInvite ?? false,
+		isPublic: r.isPublic ?? false,
+		isArchived: r.isArchived ?? false,
+		iconUrl: r.iconUrl ?? null,
+		isMuted: r.isMuted ?? false,
+	};
+}
+
+let syncedBaseline = toRoomBaseline(props.room);
+
 const roomIconUrl = computed<string | null>(() => props.room.iconUrl ?? null);
 
 watch(() => props.room, (nextRoom) => {
-	name_.value = nextRoom.name;
-	description_.value = nextRoom.description;
-	announcement_.value = nextRoom.announcement ?? '';
-	allowMemberInvite_.value = nextRoom.allowMemberInvite ?? false;
-	isPublic_.value = nextRoom.isPublic ?? false;
-	isArchived_.value = nextRoom.isArchived ?? false;
-	iconUrl_.value = nextRoom.iconUrl ?? null;
-	isMuted.value = nextRoom.isMuted ?? false;
+	const next = toRoomBaseline(nextRoom);
+	if (next.id !== syncedBaseline.id) {
+		name_.value = next.name;
+		description_.value = next.description;
+		announcement_.value = next.announcement;
+		allowMemberInvite_.value = next.allowMemberInvite;
+		isPublic_.value = next.isPublic;
+		isArchived_.value = next.isArchived;
+		iconUrl_.value = next.iconUrl;
+		isMuted.value = next.isMuted;
+		syncedBaseline = next;
+		return;
+	}
+	// 仅同步尚未被本地修改的字段，避免成员进出/置顶等实时事件冲掉正在编辑的表单
+	if (name_.value === syncedBaseline.name) {
+		name_.value = next.name;
+		syncedBaseline.name = next.name;
+	}
+	if (description_.value === syncedBaseline.description) {
+		description_.value = next.description;
+		syncedBaseline.description = next.description;
+	}
+	if (announcement_.value === syncedBaseline.announcement) {
+		announcement_.value = next.announcement;
+		syncedBaseline.announcement = next.announcement;
+	}
+	if (allowMemberInvite_.value === syncedBaseline.allowMemberInvite) {
+		allowMemberInvite_.value = next.allowMemberInvite;
+		syncedBaseline.allowMemberInvite = next.allowMemberInvite;
+	}
+	if (isPublic_.value === syncedBaseline.isPublic) {
+		isPublic_.value = next.isPublic;
+		syncedBaseline.isPublic = next.isPublic;
+	}
+	if (isArchived_.value === syncedBaseline.isArchived) {
+		isArchived_.value = next.isArchived;
+		syncedBaseline.isArchived = next.isArchived;
+	}
+	if (iconUrl_.value === syncedBaseline.iconUrl) {
+		iconUrl_.value = next.iconUrl;
+		syncedBaseline.iconUrl = next.iconUrl;
+	}
+	if (isMuted.value === syncedBaseline.isMuted) {
+		isMuted.value = next.isMuted;
+		syncedBaseline.isMuted = next.isMuted;
+	}
 }, { deep: true });
 
 function pickImageFileFromPc(): Promise<File | null> {
@@ -322,7 +388,9 @@ async function saveIcon(iconUrl: string | null) {
 				iconUrl,
 			},
 		);
-		iconUrl_.value = updated?.iconUrl ?? iconUrl;
+		const nextIconUrl = updated?.iconUrl ?? iconUrl;
+		iconUrl_.value = nextIconUrl;
+		syncedBaseline.iconUrl = nextIconUrl;
 		if (updated) {
 			emit('updated', updated);
 		} else {
@@ -362,7 +430,20 @@ async function save() {
 			'chat/rooms/update',
 			payload,
 		);
-		name_.value = trimmedName;
+		name_.value = updated?.name ?? trimmedName;
+		description_.value = updated?.description ?? description_.value;
+		announcement_.value = updated ? (updated.announcement ?? '') : announcement_.value.trim();
+		allowMemberInvite_.value = updated?.allowMemberInvite ?? allowMemberInvite_.value;
+		syncedBaseline.name = name_.value;
+		syncedBaseline.description = description_.value;
+		syncedBaseline.announcement = announcement_.value;
+		syncedBaseline.allowMemberInvite = allowMemberInvite_.value;
+		if (isOwner.value) {
+			isPublic_.value = updated?.isPublic ?? isPublic_.value;
+			isArchived_.value = updated?.isArchived ?? isArchived_.value;
+			syncedBaseline.isPublic = isPublic_.value;
+			syncedBaseline.isArchived = isArchived_.value;
+		}
 		if (updated) {
 			emit('updated', updated);
 		}
@@ -426,6 +507,7 @@ async function onToggleMute(nextValue: boolean) {
 			roomId: props.room.id,
 			mute: nextValue,
 		});
+		syncedBaseline.isMuted = nextValue;
 		emit('updated', { ...props.room, isMuted: nextValue });
 	} catch {
 		isMuted.value = prev;

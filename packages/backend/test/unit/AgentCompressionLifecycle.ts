@@ -55,9 +55,10 @@ function harness(rows: CompressionScanRow[], stored: MiAgentSessionCompressionSt
 	};
 	const messages = { find: vi.fn(async () => [...rows].reverse()) };
 	const invoke = vi.fn(async (_params: { userText: string }) => ({ text: 'summary' }));
-	const usage = { canAffordModelCall: async () => true, startLog: async () => ({}), finishLog: vi.fn(async (..._args: unknown[]) => {}) };
+	const usage = { canAffordModelCall: vi.fn(async () => true), startLog: vi.fn(async (params: Record<string, unknown>) => params), finishLog: vi.fn(async (..._args: unknown[]) => {}) };
 	const agent = {
 		formatMessageForLlmHistory: formatter.formatMessageForLlmHistory,
+		resolveEffectiveModelId: formatter.resolveEffectiveModelId.bind(formatter),
 		resolveModelApiNameForUser: async () => 'model', invokeChatCompletions: invoke, newId: () => 'generated',
 		assertAgentsEnabled: () => {}, assertAgentUserSessionChatAllowed: () => {}, assertSessionStylePolicy: () => {},
 		effectiveCharacterForLlm: () => ({}), effectiveStyleForSession: () => ({}),
@@ -241,5 +242,56 @@ describe('Source-scoped compression invalidation', () => {
 		const { manager } = invalidationHarness();
 		await invalidateMessageCompression(manager as never, 's1', message('later', 10));
 		expect(manager.update).not.toHaveBeenCalled();
+	});
+});
+
+describe('Compression model fallback resolution', () => {
+	test('falls back to first active LLM model when agentDefaultModelId and compression defaults are unset', async () => {
+		const h = harness([message('m1', 1)]);
+		const activeUsageModel = {
+			id: 'active-usage-model',
+			name: 'Active Usage Model',
+			baseUrl: 'https://example.com/v1',
+			apiKey: 'sk-test',
+			apiModelName: 'model-x',
+			maxContextTokens: 8192,
+			maxOutputTokensPerCall: 2048,
+			unlisted: false,
+			billingMode: 'usage',
+			costPerCall: 0,
+			pricePerMillionInputCacheHitTokens: 0.1,
+			pricePerMillionInputCacheMissTokens: 1,
+			pricePerMillionOutputTokens: 2,
+		};
+		const metaWithFallback = {
+			...h.instance,
+			agentDefaultModelId: null,
+			agentCompressionDefaultModelId: null,
+			agentLlmModels: [
+				{ ...activeUsageModel, id: 'unlisted-first', unlisted: true },
+				activeUsageModel,
+			],
+		} as unknown as MiMeta;
+
+		expect(h.service.resolveEffectiveCompressionModelId(h.session, metaWithFallback)).toBe('active-usage-model');
+
+		await h.service.afterAssistantForCompression(
+			h.session,
+			{} as never,
+			{} as never,
+			metaWithFallback,
+			'owner',
+			[message('m1', 1)],
+			h.sidecar,
+		);
+
+		expect(h.usage.canAffordModelCall).toHaveBeenCalledWith(metaWithFallback, 'active-usage-model', 'owner');
+		expect(h.usage.startLog).toHaveBeenCalledWith(expect.objectContaining({
+			modelId: 'active-usage-model',
+			usageKind: 'compression',
+		}));
+		expect(h.invoke).toHaveBeenCalledWith(expect.objectContaining({
+			sessionModelId: 'active-usage-model',
+		}));
 	});
 });

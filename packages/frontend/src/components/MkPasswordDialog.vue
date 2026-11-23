@@ -9,6 +9,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 	:width="370"
 	:height="400"
 	@close="onClose"
+	@esc="onClose"
 	@closed="emit('closed')"
 >
 	<template #header>{{ i18n.ts.authentication }}</template>

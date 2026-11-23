@@ -27,6 +27,25 @@ import { FilterUnionByProperty, groupedNotificationTypes, obsoleteNotificationTy
 import { trackPromise } from '@/misc/promise-tracker.js';
 // import { escapeHtml } from '@/misc/escape-html.js';
 
+function parseRedisStreamId(id: string): [bigint, bigint] | null {
+	const dash = id.indexOf('-');
+	const msPart = dash === -1 ? id : id.slice(0, dash);
+	const seqPart = dash === -1 ? '0' : id.slice(dash + 1);
+	if (!/^\d+$/.test(msPart) || !/^\d+$/.test(seqPart)) return null;
+	return [BigInt(msPart), BigInt(seqPart)];
+}
+
+export function compareRedisStreamIds(a: string, b: string): number {
+	const pa = parseRedisStreamId(a);
+	const pb = parseRedisStreamId(b);
+	if (!pa || !pb) {
+		return a < b ? -1 : a > b ? 1 : 0;
+	}
+	if (pa[0] !== pb[0]) return pa[0] < pb[0] ? -1 : 1;
+	if (pa[1] !== pb[1]) return pa[1] < pb[1] ? -1 : 1;
+	return 0;
+}
+
 @Injectable()
 export class NotificationService implements OnApplicationShutdown {
 	#shutdownController = new AbortController();
@@ -73,9 +92,9 @@ export class NotificationService implements OnApplicationShutdown {
 
 		if (latestNotificationId == null) return;
 
-		this.redisClient.set(`latestReadNotification:${userId}`, latestNotificationId);
+		await this.redisClient.set(`latestReadNotification:${userId}`, latestNotificationId);
 
-		if (force || latestReadNotificationId == null || (latestReadNotificationId < latestNotificationId)) {
+		if (force || latestReadNotificationId == null || compareRedisStreamIds(latestReadNotificationId, latestNotificationId) < 0) {
 			return this.postReadAllNotifications(userId);
 		}
 	}
@@ -215,7 +234,7 @@ export class NotificationService implements OnApplicationShutdown {
 		const interval = notification.type === 'test' ? 0 : 2000;
 		setTimeout(interval, 'unread notification', { signal: this.#shutdownController.signal }).then(async () => {
 			const latestReadNotificationId = await this.redisClient.get(`latestReadNotification:${notifieeId}`);
-			if (latestReadNotificationId && (latestReadNotificationId >= redisId)) return;
+			if (latestReadNotificationId && compareRedisStreamIds(latestReadNotificationId, redisId) >= 0) return;
 
 			this.globalEventService.publishMainStream(notifieeId, 'unreadNotification', packed);
 

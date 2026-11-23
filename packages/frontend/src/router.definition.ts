@@ -101,6 +101,7 @@ export const ROUTE_DEF = [{
 }, {
 	path: '/agents/embed/:sessionId/:panel',
 	component: AgentControlEmbedPage,
+	reuseComponent: true,
 }, {
 	path: '/agents/square/character/:characterId',
 	component: page(() => import('@/pages/agents/square-character-detail.vue')),

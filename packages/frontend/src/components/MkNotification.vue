@@ -215,8 +215,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<template v-else-if="notification.type === 'receiveFollowRequest'">
 				<span :class="$style.text" style="opacity: 0.6;">{{ i18n.ts.receiveFollowRequest }}</span>
 				<div v-if="full && !followRequestDone" :class="$style.followRequestCommands">
-					<MkButton :class="$style.followRequestCommandButton" rounded primary @click="acceptFollowRequest()"><i class="ti ti-check"></i> {{ i18n.ts.accept }}</MkButton>
-					<MkButton :class="$style.followRequestCommandButton" rounded danger @click="rejectFollowRequest()"><i class="ti ti-x"></i> {{ i18n.ts.reject }}</MkButton>
+					<MkButton :class="$style.followRequestCommandButton" rounded primary :disabled="followRequestProcessing" @click="acceptFollowRequest()"><i class="ti ti-check"></i> {{ i18n.ts.accept }}</MkButton>
+					<MkButton :class="$style.followRequestCommandButton" rounded danger :disabled="followRequestProcessing" @click="rejectFollowRequest()"><i class="ti ti-x"></i> {{ i18n.ts.reject }}</MkButton>
 				</div>
 			</template>
 			<span v-else-if="notification.type === 'test'" :class="$style.text">{{ i18n.ts._notification.notificationWillBeDisplayedLikeThis }}</span>
@@ -292,6 +292,7 @@ const exportEntityName = {
 } as const satisfies Record<ExportCompletedNotification['exportedEntity'], string>;
 
 const followRequestDone = ref(false);
+const followRequestProcessing = ref(false);
 const invitationProcessing = ref(false);
 
 const invitationStatusText = computed(() => {
@@ -305,17 +306,22 @@ const invitationStatusText = computed(() => {
 	return null;
 });
 
-const acceptFollowRequest = () => {
-	if (!('user' in props.notification)) return;
-	followRequestDone.value = true;
-	misskeyApi('following/requests/accept', { userId: props.notification.user.id });
-};
+async function handleFollowRequest(endpoint: 'following/requests/accept' | 'following/requests/reject') {
+	if (!('user' in props.notification) || followRequestProcessing.value || followRequestDone.value) return;
+	followRequestProcessing.value = true;
+	try {
+		await misskeyApi(endpoint, { userId: props.notification.user.id });
+		followRequestDone.value = true;
+	} catch (err) {
+		os.alert({ type: 'error', text: formatApiError(err) });
+	} finally {
+		followRequestProcessing.value = false;
+	}
+}
 
-const rejectFollowRequest = () => {
-	if (!('user' in props.notification)) return;
-	followRequestDone.value = true;
-	misskeyApi('following/requests/reject', { userId: props.notification.user.id });
-};
+const acceptFollowRequest = () => handleFollowRequest('following/requests/accept');
+
+const rejectFollowRequest = () => handleFollowRequest('following/requests/reject');
 
 async function acceptRoomInvitation() {
 	if (props.notification.type !== 'chatRoomInvitationReceived' || invitationProcessing.value) return;

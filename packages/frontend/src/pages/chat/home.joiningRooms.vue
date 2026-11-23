@@ -76,7 +76,9 @@ async function refreshRoomsTop() {
 		const rows = await misskeyApi('chat/rooms/joining', {
 			limit: PAGE_SIZE + 1,
 		});
-		const page = mergeCursorTopPage(memberships.value, rows, PAGE_SIZE, hasMore.value);
+		const page = memberships.value.length > PAGE_SIZE && rows.length > PAGE_SIZE
+			? mergeCursorTopPage(memberships.value, rows, PAGE_SIZE, hasMore.value)
+			: takeCursorFirstPage(rows, PAGE_SIZE);
 		memberships.value = page.items;
 		hasMore.value = page.hasMore;
 	} catch {

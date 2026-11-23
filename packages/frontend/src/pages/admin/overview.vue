@@ -204,7 +204,7 @@ definePage(() => ({
 <style lang="scss" module>
 .root {
 	display: grid;
-	grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+	grid-template-columns: repeat(auto-fill, minmax(min(400px, 100%), 1fr));
 	grid-gap: 16px;
 }
 </style>

@@ -15,77 +15,79 @@ SPDX-License-Identifier: AGPL-3.0-only
 >
 	<div v-if="tab === 'chat'" class="_spacer" style="--MI_SPACER-w: 700px;">
 		<div class="_gaps">
-			<!-- 群组顶部信息条（群头像、置顶消息、群公告）；禁言等输入限制统一显示在输入框 -->
-			<div v-if="room && !notMember && (room.iconUrl || room.announcement || room.pinnedMessage)" class="_gaps_s" :class="$style.stickyTopBanners">
-				<div v-if="room.iconUrl" :class="$style.roomHeaderStrip">
-					<img :src="room.iconUrl" :alt="room.name" :class="$style.roomHeaderIcon"/>
-					<div :class="$style.roomHeaderMeta">
-						<div :class="$style.roomHeaderName">{{ room.name }}</div>
-						<div v-if="room.memberCount != null" :class="$style.roomHeaderSub">{{ i18n.tsx._chat.memberCount({ count: room.memberCount }) }}</div>
+			<!-- 群组顶部信息条（群头像、置顶消息、群公告）与未读定位按钮共用粘性容器，避免信息条覆盖未读胶囊；禁言等输入限制统一显示在输入框 -->
+			<div v-if="(room && !notMember && (room.iconUrl || room.announcement || room.pinnedMessage)) || showUnreadJump" class="_gaps_s" :class="$style.stickyTopContainer">
+				<div v-if="room && !notMember && (room.iconUrl || room.announcement || room.pinnedMessage)" class="_gaps_s" :class="$style.stickyTopBanners">
+					<div v-if="room.iconUrl" :class="$style.roomHeaderStrip">
+						<img :src="room.iconUrl" :alt="room.name" :class="$style.roomHeaderIcon"/>
+						<div :class="$style.roomHeaderMeta">
+							<div :class="$style.roomHeaderName">{{ room.name }}</div>
+							<div v-if="room.memberCount != null" :class="$style.roomHeaderSub">{{ i18n.tsx._chat.memberCount({ count: room.memberCount }) }}</div>
+						</div>
+					</div>
+
+					<div v-if="room.announcement || room.pinnedMessage" class="_panel" :class="$style.pinnedBanner">
+						<button
+							type="button"
+							class="_button"
+							:class="$style.pinnedBannerHeader"
+							:aria-expanded="bannerExpanded"
+							@click="bannerExpanded = !bannerExpanded"
+						>
+							<span :class="$style.pinnedBannerTitle">
+								<i class="ti ti-pinned"></i>
+								<span v-if="room.pinnedMessage">{{ i18n.ts._chat.pinnedMessage }}</span>
+								<span v-if="room.pinnedMessage && room.announcement">·</span>
+								<span v-if="room.announcement">{{ i18n.ts._chat.announcement }}</span>
+							</span>
+							<i :class="bannerExpanded ? 'ti ti-chevron-up' : 'ti ti-chevron-down'"></i>
+						</button>
+
+						<div v-if="bannerExpanded" :class="$style.pinnedBannerBody">
+							<div v-if="room.announcement" :class="$style.announcementBox">
+								<div :class="$style.announcementLabel"><i class="ti ti-speakerphone"></i> {{ i18n.ts._chat.announcement }}</div>
+								<div :class="$style.announcementText">{{ room.announcement }}</div>
+							</div>
+							<div v-if="room.pinnedMessage" :class="$style.pinnedMsgRow">
+								<button
+									type="button"
+									class="_button"
+									:class="$style.pinnedMsgLink"
+									@click="handleScrollToMessage(room.pinnedMessage.id)"
+								>
+									<i class="ti ti-pin"></i>
+									<span v-if="room.pinnedMessage.fromUser" :class="$style.pinnedMsgAuthor">
+										{{ room.pinnedMessage.fromUser.name || room.pinnedMessage.fromUser.username }}:
+									</span>
+									<span :class="$style.pinnedMsgText">{{ room.pinnedMessage.text || i18n.ts._chat.attachmentPlaceholder }}</span>
+								</button>
+								<button
+									v-if="canAdminRoom"
+									type="button"
+									class="_button"
+									:class="$style.unpinBtn"
+									:aria-label="i18n.ts._chat.unpinMessage"
+									:title="i18n.ts._chat.unpinMessage"
+									@click="handlePin(null)"
+								>
+									<i class="ti ti-pinned-off"></i>
+								</button>
+							</div>
+						</div>
 					</div>
 				</div>
 
-				<div v-if="room.announcement || room.pinnedMessage" class="_panel" :class="$style.pinnedBanner">
-					<button
-						type="button"
-						class="_button"
-						:class="$style.pinnedBannerHeader"
-						:aria-expanded="bannerExpanded"
-						@click="bannerExpanded = !bannerExpanded"
-					>
-						<span :class="$style.pinnedBannerTitle">
-							<i class="ti ti-pinned"></i>
-							<span v-if="room.pinnedMessage">{{ i18n.ts._chat.pinnedMessage }}</span>
-							<span v-if="room.pinnedMessage && room.announcement">·</span>
-							<span v-if="room.announcement">{{ i18n.ts._chat.announcement }}</span>
-						</span>
-						<i :class="bannerExpanded ? 'ti ti-chevron-up' : 'ti ti-chevron-down'"></i>
+				<Transition
+					:enterActiveClass="prefer.s.animation ? $style.fadeEnterActive : ''"
+					:leaveActiveClass="prefer.s.animation ? $style.fadeLeaveActive : ''"
+					:enterFromClass="prefer.s.animation ? $style.fadeEnterFrom : ''"
+					:leaveToClass="prefer.s.animation ? $style.fadeLeaveTo : ''"
+				>
+					<button v-if="showUnreadJump" type="button" class="_button" :class="$style.unreadJump" @click="onUnreadJumpClick">
+						<i class="ti ti-arrow-up"></i> {{ i18n.tsx._chat.unreadCountBanner({ count: unreadSnapshot?.count ?? 0 }) }}
 					</button>
-
-					<div v-if="bannerExpanded" :class="$style.pinnedBannerBody">
-						<div v-if="room.announcement" :class="$style.announcementBox">
-							<div :class="$style.announcementLabel"><i class="ti ti-speakerphone"></i> {{ i18n.ts._chat.announcement }}</div>
-							<div :class="$style.announcementText">{{ room.announcement }}</div>
-						</div>
-						<div v-if="room.pinnedMessage" :class="$style.pinnedMsgRow">
-							<button
-								type="button"
-								class="_button"
-								:class="$style.pinnedMsgLink"
-								@click="handleScrollToMessage(room.pinnedMessage.id)"
-							>
-								<i class="ti ti-pin"></i>
-								<span v-if="room.pinnedMessage.fromUser" :class="$style.pinnedMsgAuthor">
-									{{ room.pinnedMessage.fromUser.name || room.pinnedMessage.fromUser.username }}:
-								</span>
-								<span :class="$style.pinnedMsgText">{{ room.pinnedMessage.text || i18n.ts._chat.attachmentPlaceholder }}</span>
-							</button>
-							<button
-								v-if="canAdminRoom"
-								type="button"
-								class="_button"
-								:class="$style.unpinBtn"
-								:aria-label="i18n.ts._chat.unpinMessage"
-								:title="i18n.ts._chat.unpinMessage"
-								@click="handlePin(null)"
-							>
-								<i class="ti ti-pinned-off"></i>
-							</button>
-						</div>
-					</div>
-				</div>
+				</Transition>
 			</div>
-
-			<Transition
-				:enterActiveClass="prefer.s.animation ? $style.fadeEnterActive : ''"
-				:leaveActiveClass="prefer.s.animation ? $style.fadeLeaveActive : ''"
-				:enterFromClass="prefer.s.animation ? $style.fadeEnterFrom : ''"
-				:leaveToClass="prefer.s.animation ? $style.fadeLeaveTo : ''"
-			>
-				<button v-if="showUnreadJump" type="button" class="_button" :class="$style.unreadJump" @click="onUnreadJumpClick">
-					<i class="ti ti-arrow-up"></i> {{ i18n.tsx._chat.unreadCountBanner({ count: unreadSnapshot?.count ?? 0 }) }}
-				</button>
-			</Transition>
 
 			<div v-if="initializing">
 				<MkLoading/>
@@ -109,6 +111,12 @@ SPDX-License-Identifier: AGPL-3.0-only
 				>
 					<i class="ti ti-user-plus"></i> {{ i18n.ts._chat.joinThisRoom }}
 				</MkButton>
+			</div>
+
+			<div v-else-if="initError && messages.length === 0">
+				<MkResult type="error">
+					<MkButton primary rounded @click="initialize">{{ i18n.ts.retry }}</MkButton>
+				</MkResult>
 			</div>
 
 			<div v-else-if="messages.length === 0">
@@ -365,6 +373,7 @@ const props = defineProps<{
 const tab = ref('chat');
 const initializing = ref(false);
 const initialized = ref(false);
+const initError = ref(false);
 const notMember = ref(false);
 const joining = ref(false);
 const moreFetching = ref(false);
@@ -592,7 +601,8 @@ useMutationObserver(timelineEl, {
 }, () => {
 	if (canFetchNewer.value) return;
 
-	const scrollContainer = getScrollContainer(timelineEl.value)!;
+	const scrollContainer = getScrollContainer(timelineEl.value);
+	if (!scrollContainer) return;
 	if (-scrollContainer.scrollTop < SCROLL_HEAD_THRESHOLD) {
 		scrollContainer.scrollTo({
 			top: 0,
@@ -868,6 +878,7 @@ async function initialize() {
 	if (initializing.value) return;
 
 	initializing.value = true;
+	initError.value = false;
 	initialized.value = false;
 	canFetchNewer.value = false;
 	notMember.value = false;
@@ -893,15 +904,17 @@ async function initialize() {
 
 			if (props.messageId) {
 				const ok = await loadContext(props.messageId);
+				if (!ok) {
+					initError.value = true;
+					return;
+				}
 				initialized.value = true;
-				if (!canFetchNewer.value) {
-					(connection.value as any).send('read', {});
+				if (!canFetchNewer.value && !window.document.hidden && isActivated) {
+					(connection.value as any)?.send('read', {});
 					void markAsRead();
 				}
-				if (ok) {
-					await new Promise(resolve => window.setTimeout(resolve, 300));
-					await scrollToMessage(props.messageId);
-				}
+				await new Promise(resolve => window.setTimeout(resolve, 300));
+				await scrollToMessage(props.messageId);
 				return;
 			}
 
@@ -989,15 +1002,17 @@ async function initialize() {
 
 			if (props.messageId) {
 				const ok = await loadContext(props.messageId);
+				if (!ok) {
+					initError.value = true;
+					return;
+				}
 				initialized.value = true;
-				if (!canFetchNewer.value) {
-					(connection.value as any).send('read', {});
+				if (!canFetchNewer.value && !window.document.hidden && isActivated) {
+					(connection.value as any)?.send('read', {});
 					void markAsRead();
 				}
-				if (ok) {
-					await new Promise(resolve => window.setTimeout(resolve, 300));
-					await scrollToMessage(props.messageId);
-				}
+				await new Promise(resolve => window.setTimeout(resolve, 300));
+				await scrollToMessage(props.messageId);
 				return;
 			}
 
@@ -1013,6 +1028,7 @@ async function initialize() {
 		void evaluateUnreadJump();
 	} catch (err) {
 		console.error(err);
+		initError.value = true;
 		await os.alert({ type: 'error', text: formatChatError(err) });
 	} finally {
 		initializing.value = false;
@@ -1045,6 +1061,8 @@ watch(() => [props.roomId, props.userId], (nextPair, prevPair) => {
 	if (nextPair[0] === prevPair[0] && nextPair[1] === prevPair[1]) return;
 	connection.value?.dispose();
 	connection.value = null;
+	initError.value = false;
+	initialized.value = false;
 	messages.value = [];
 	user.value = null;
 	room.value = null;
@@ -1133,8 +1151,13 @@ async function fetchNewer() {
 		}
 
 		if (newMessages.length < LIMIT) {
+			const wasCanFetchNewer = canFetchNewer.value;
 			canFetchNewer.value = false;
 			showIndicator.value = false;
+			if (wasCanFetchNewer && !window.document.hidden && isActivated) {
+				(connection.value as any)?.send('read', {});
+				void markAsRead();
+			}
 		} else {
 			canFetchNewer.value = true;
 		}
@@ -1326,6 +1349,10 @@ async function onIndicatorClick() {
 			messages.value = m.map(x => normalizeMessage(x));
 			canFetchMore.value = messages.value.length === LIMIT;
 			canFetchNewer.value = false;
+			if (!window.document.hidden && isActivated) {
+				(connection.value as any)?.send('read', {});
+				void markAsRead();
+			}
 			await nextTick();
 			if (timelineEl.value) {
 				const scrollContainer = getScrollContainer(timelineEl.value);
@@ -1588,10 +1615,15 @@ definePage(computed(() => {
 	position: absolute;
 }
 
-.stickyTopBanners {
+.stickyTopContainer {
 	position: sticky;
 	top: calc(var(--MI-stickyTop, 0px) + 8px);
 	z-index: 4;
+	pointer-events: none;
+}
+
+.stickyTopBanners {
+	pointer-events: auto;
 }
 
 .roomHeaderStrip {
@@ -1825,9 +1857,7 @@ definePage(computed(() => {
 }
 
 .unreadJump {
-	position: sticky;
-	top: calc(var(--MI-stickyTop, 0px) + 8px);
-	z-index: 3;
+	pointer-events: auto;
 	align-self: flex-end;
 	display: flex;
 	align-items: center;

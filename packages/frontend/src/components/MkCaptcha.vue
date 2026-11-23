@@ -6,7 +6,14 @@ SPDX-License-Identifier: AGPL-3.0-only
 <template>
 <div :class="$style.root">
 	<div :class="$style.widget">
-		<div v-if="!available" :class="$style.loading">
+		<div v-if="loadError" :class="$style.loadError">
+			<i class="ti ti-alert-triangle" aria-hidden="true"></i>
+			<span>{{ i18n.ts._captcha._error._requestFailed.title }}</span>
+			<button type="button" class="_textButton" @click="retryLoad">
+				<i class="ti ti-reload" aria-hidden="true"></i> {{ i18n.ts.retry }}
+			</button>
+		</div>
+		<div v-else-if="!available" :class="$style.loading">
 			<i class="ti ti-loader-2" aria-hidden="true"></i>
 			<span>{{ i18n.ts.loading }}<MkEllipsis/></span>
 		</div>
@@ -107,6 +114,9 @@ const emit = defineEmits<{
 }>();
 
 const available = ref(false);
+const loadError = ref(false);
+let isMounted = false;
+let trackedScript: HTMLScriptElement | null = null;
 
 const captchaEl = useTemplateRef('captchaEl');
 const captchaWidgetId = ref<string | undefined>(undefined);
@@ -152,8 +162,6 @@ const variable = computed(() => {
 	return '';
 });
 
-const loaded = !!(window as any)[variable.value];
-
 const src = computed(() => {
 	switch (props.provider) {
 		case 'hcaptcha': return 'https://js.hcaptcha.com/1/api.js?render=explicit&recaptchacompat=off';
@@ -179,9 +187,39 @@ watch(() => [props.instanceUrl, props.sitekey, props.secretKey, props.sceneId, p
 	}
 });
 
-if (loaded || props.provider === 'mcaptcha' || props.provider === 'testcaptcha') {
+function onScriptLoad() {
+	if (trackedScript) {
+		delete trackedScript.dataset.loadFailed;
+	}
+	loadError.value = false;
 	available.value = true;
-} else if (src.value !== null) {
+}
+
+function onScriptError() {
+	if (trackedScript) {
+		trackedScript.dataset.loadFailed = 'true';
+	}
+	loadError.value = true;
+}
+
+function cleanupScriptListeners() {
+	if (trackedScript == null) return;
+	trackedScript.removeEventListener('load', onScriptLoad);
+	trackedScript.removeEventListener('error', onScriptError);
+	trackedScript = null;
+}
+
+function loadScript() {
+	if ((window as any)[variable.value] || props.provider === 'mcaptcha' || props.provider === 'testcaptcha') {
+		loadError.value = false;
+		available.value = true;
+		return;
+	}
+
+	if (src.value === null) return;
+
+	loadError.value = false;
+
 	// 阿里云验证码要求 AliyunCaptchaConfig 必须在主脚本加载前设置
 	if (props.provider === 'aliyuncaptcha' && props.sitekey) {
 		(window as AliyunCaptchaWindow).AliyunCaptchaConfig = {
@@ -189,13 +227,46 @@ if (loaded || props.provider === 'mcaptcha' || props.provider === 'testcaptcha')
 			prefix: props.sitekey,
 		};
 	}
-	(window.document.getElementById(scriptId.value) ?? window.document.head.appendChild(Object.assign(window.document.createElement('script'), {
-		async: true,
-		id: scriptId.value,
-		src: src.value,
-	})))
-		.addEventListener('load', () => available.value = true);
+
+	cleanupScriptListeners();
+
+	const existing = window.document.getElementById(scriptId.value);
+	if (existing?.dataset.loadFailed === 'true') {
+		existing.remove();
+	}
+
+	const current = window.document.getElementById(scriptId.value) as HTMLScriptElement | null;
+	let scriptEl: HTMLScriptElement;
+	if (current != null) {
+		scriptEl = current;
+	} else {
+		scriptEl = Object.assign(window.document.createElement('script'), {
+			async: true,
+			id: scriptId.value,
+			src: src.value,
+		});
+		// 即使所有实例在脚本结束前卸载，也把失败标记落在节点上以便下次挂载重建
+		scriptEl.addEventListener('error', () => {
+			scriptEl.dataset.loadFailed = 'true';
+		}, { once: true });
+		scriptEl.addEventListener('load', () => {
+			delete scriptEl.dataset.loadFailed;
+		}, { once: true });
+		window.document.head.appendChild(scriptEl);
+	}
+
+	trackedScript = scriptEl;
+	scriptEl.addEventListener('load', onScriptLoad);
+	scriptEl.addEventListener('error', onScriptError);
 }
+
+function retryLoad() {
+	const existing = window.document.getElementById(scriptId.value);
+	if (existing) existing.remove();
+	loadScript();
+}
+
+loadScript();
 
 // Called by forms after the server consumed the response (wrong password, failed signup...).
 function reset() {
@@ -411,15 +482,22 @@ function testcaptchaSubmit() {
 	if (!testcaptchaPassed.value) testcaptchaInput.value = '';
 }
 
+watch(available, (isAvailable) => {
+	if (isAvailable && isMounted) {
+		void requestRender();
+	}
+});
+
 onMounted(() => {
+	isMounted = true;
 	if (available.value) {
 		void requestRender();
-	} else {
-		watch(available, () => void requestRender());
 	}
 });
 
 onBeforeUnmount(() => {
+	isMounted = false;
+	cleanupScriptListeners();
 	clearWidget();
 });
 
@@ -455,6 +533,16 @@ defineExpose({
 		color: var(--MI_THEME-accent);
 		animation: captcha-spin 1s linear infinite;
 	}
+}
+
+.loadError {
+	display: inline-flex;
+	align-items: center;
+	flex-wrap: wrap;
+	justify-content: center;
+	gap: 8px;
+	color: var(--MI_THEME-error);
+	font-size: 0.9em;
 }
 
 .mCaptchaIframe {

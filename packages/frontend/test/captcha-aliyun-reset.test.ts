@@ -52,6 +52,8 @@ beforeEach(() => {
 afterEach(() => {
 	cleanup();
 	delete (window as unknown as { initAliyunCaptcha?: unknown }).initAliyunCaptcha;
+	delete (window as unknown as { hcaptcha?: unknown }).hcaptcha;
+	document.getElementById('script-hcaptcha')?.remove();
 });
 
 describe('MkCaptcha aliyuncaptcha reset', () => {
@@ -105,5 +107,82 @@ describe('MkCaptcha aliyuncaptcha reset', () => {
 		inits[0].fail?.('late-stale-failure');
 		await nextTick();
 		expect(response.value).toBe('fresh-param');
+	});
+});
+
+describe('MkCaptcha script load error and recovery', () => {
+	const stubHcaptcha = () => {
+		(window as unknown as { hcaptcha: object }).hcaptcha = {
+			render: vi.fn(() => 'widget-1'),
+			remove: vi.fn(),
+			execute: vi.fn(),
+			reset: vi.fn(),
+			getResponse: vi.fn(() => ''),
+		};
+	};
+
+	test('clears loading spinner on script error and recovers when retried', async () => {
+		const view = render(MkCaptcha, {
+			props: { provider: 'hcaptcha', sitekey: 'site-key' },
+			global: { stubs: { MkEllipsis: true } },
+		});
+		await nextTick();
+
+		expect(view.container.querySelector('.ti-loader-2')).not.toBeNull();
+		const firstScript = document.getElementById('script-hcaptcha') as HTMLScriptElement;
+		expect(firstScript).not.toBeNull();
+
+		firstScript.dispatchEvent(new Event('error'));
+		await nextTick();
+
+		expect(view.container.querySelector('.ti-loader-2')).toBeNull();
+		const retryBtn = view.container.querySelector('button');
+		expect(retryBtn).not.toBeNull();
+
+		await fireEvent.click(retryBtn!);
+		await nextTick();
+
+		const retriedScript = document.getElementById('script-hcaptcha') as HTMLScriptElement;
+		expect(retriedScript).not.toBeNull();
+		expect(retriedScript).not.toBe(firstScript);
+		expect(view.container.querySelector('.ti-loader-2')).not.toBeNull();
+
+		stubHcaptcha();
+		retriedScript.dispatchEvent(new Event('load'));
+		await nextTick();
+
+		expect(view.container.querySelector('.ti-loader-2')).toBeNull();
+		expect(view.container.querySelector('.ti-alert-triangle')).toBeNull();
+	});
+
+	test('recovers on remount when an already-failed script element sits in head', async () => {
+		const firstView = render(MkCaptcha, {
+			props: { provider: 'hcaptcha', sitekey: 'site-key' },
+			global: { stubs: { MkEllipsis: true } },
+		});
+		await nextTick();
+
+		const failedScript = document.getElementById('script-hcaptcha') as HTMLScriptElement;
+		expect(failedScript).not.toBeNull();
+		// Even if unmounted before the network failure event fires, dataset.loadFailed must persist.
+		firstView.unmount();
+		failedScript.dispatchEvent(new Event('error'));
+		expect(failedScript.dataset.loadFailed).toBe('true');
+
+		const secondView = render(MkCaptcha, {
+			props: { provider: 'hcaptcha', sitekey: 'site-key' },
+			global: { stubs: { MkEllipsis: true } },
+		});
+		await nextTick();
+
+		const freshScript = document.getElementById('script-hcaptcha') as HTMLScriptElement;
+		expect(freshScript).not.toBeNull();
+		expect(freshScript).not.toBe(failedScript);
+
+		stubHcaptcha();
+		freshScript.dispatchEvent(new Event('load'));
+		await nextTick();
+
+		expect(secondView.container.querySelector('.ti-loader-2')).toBeNull();
 	});
 });

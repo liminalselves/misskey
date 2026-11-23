@@ -169,9 +169,12 @@ function onPullRelease() {
 		isRefreshing.value = true;
 		fixOverContent().then(() => {
 			emit('refresh');
-			props.refresher().then(() => {
-				refreshFinished();
-			});
+			return Promise.resolve()
+				.then(() => props.refresher())
+				.catch(() => {})
+				.finally(() => {
+					refreshFinished();
+				});
 		});
 	} else {
 		closeContent().then(() => isPulling.value = false);

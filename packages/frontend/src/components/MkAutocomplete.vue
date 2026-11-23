@@ -21,7 +21,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<span class="name">{{ hashtag }}</span>
 		</li>
 	</ol>
-	<ol v-else-if="type === 'emoji' || type === 'emojiComplete' && emojis.length > 0" ref="suggests" :class="$style.list">
+	<ol v-else-if="(type === 'emoji' || type === 'emojiComplete') && emojis.length > 0" ref="suggests" :class="$style.list">
 		<li v-for="emoji in emojis" :key="emoji.emoji" :class="$style.item" tabindex="-1" @click="complete(type, emoji.emoji)" @keydown="onKeydown">
 			<MkCustomEmoji v-if="'isCustomEmoji' in emoji && emoji.isCustomEmoji" :name="emoji.emoji" :class="$style.emoji" :fallbackToImage="true"/>
 			<MkEmoji v-else :emoji="emoji.emoji" :class="$style.emoji"/>
@@ -216,6 +216,7 @@ const select = ref(-1);
 const zIndex = os.claimZIndex('high');
 const roomMemberIds = ref(new Set<string>());
 let userSearchSeq = 0;
+let hashtagSearchSeq = 0;
 
 function matchRoomMembers(q: string | null): Misskey.entities.UserLite[] {
 	if (props.roomContext == null) return [];
@@ -277,6 +278,7 @@ function exec() {
 		}
 	}
 	if (props.type === 'user' && props.roomContext != null) {
+		const seq = ++userSearchSeq;
 		const q = props.q ?? '';
 		const roomId = props.roomContext.roomId;
 		const localMembers = matchRoomMembers(q);
@@ -284,7 +286,6 @@ function exec() {
 		users.value = mergeRoomUsers(localMembers, []);
 		fetching.value = false;
 		if (!q) return;
-		const seq = ++userSearchSeq;
 		const [username, host] = q.split('@');
 		Promise.all([
 			misskeyApi('chat/rooms/members', { roomId, query: q, limit: 10 }).catch(() => []),
@@ -298,6 +299,7 @@ function exec() {
 		return;
 	}
 	if (props.type === 'user') {
+		const seq = ++userSearchSeq;
 		if (!props.q) {
 			users.value = [];
 			fetching.value = false;
@@ -311,6 +313,7 @@ function exec() {
 			users.value = JSON.parse(cache);
 			fetching.value = false;
 		} else {
+			fetching.value = true;
 			const [username, host] = props.q.toString().split('@');
 			misskeyApi('users/search-by-username-and-host', {
 				username: username,
@@ -318,13 +321,18 @@ function exec() {
 				limit: 10,
 				detail: false,
 			}).then(searchedUsers => {
+				if (seq !== userSearchSeq) return;
 				users.value = searchedUsers;
 				fetching.value = false;
 				// キャッシュ
 				sessionStorage.setItem(cacheKey, JSON.stringify(searchedUsers));
+			}).catch(() => {
+				if (seq !== userSearchSeq) return;
+				fetching.value = false;
 			});
 		}
 	} else if (props.type === 'hashtag') {
+		const seq = ++hashtagSearchSeq;
 		if (!props.q || props.q === '') {
 			hashtags.value = JSON.parse(miLocalStorage.getItem('hashtags') ?? '[]');
 			fetching.value = false;
@@ -332,18 +340,23 @@ function exec() {
 			const cacheKey = `autocomplete:hashtag:${props.q}`;
 			const cache = sessionStorage.getItem(cacheKey);
 			if (cache) {
-				const hashtags = JSON.parse(cache);
-				hashtags.value = hashtags;
+				const cachedHashtags = JSON.parse(cache);
+				hashtags.value = cachedHashtags;
 				fetching.value = false;
 			} else {
+				fetching.value = true;
 				misskeyApi('hashtags/search', {
 					query: props.q,
 					limit: 30,
 				}).then(searchedHashtags => {
+					if (seq !== hashtagSearchSeq) return;
 					hashtags.value = searchedHashtags;
 					fetching.value = false;
 					// キャッシュ
 					sessionStorage.setItem(cacheKey, JSON.stringify(searchedHashtags));
+				}).catch(() => {
+					if (seq !== hashtagSearchSeq) return;
+					fetching.value = false;
 				});
 			}
 		}
@@ -370,7 +383,7 @@ function exec() {
 			return;
 		}
 
-		mfmParams.value = MFM_PARAMS[props.q.tag].filter(param => param.startsWith(props.q.params.at(-1) ?? ''));
+		mfmParams.value = (MFM_PARAMS[props.q.tag] ?? []).filter(param => param.startsWith(props.q.params.at(-1) ?? ''));
 	}
 }
 
@@ -379,9 +392,11 @@ function onMousedown(event: MouseEvent) {
 }
 
 function onKeydown(event: KeyboardEvent) {
+	if (event.isComposing || event.key === 'Process' || event.keyCode === 229) return;
+
 	const cancel = () => {
 		event.preventDefault();
-		event.stopPropagation();
+		event.stopImmediatePropagation();
 	};
 
 	switch (event.key) {
@@ -428,8 +443,10 @@ function onKeydown(event: KeyboardEvent) {
 			break;
 
 		default:
-			event.stopPropagation();
-			props.textarea.focus();
+			if (event.currentTarget !== props.textarea) {
+				event.stopPropagation();
+				props.textarea.focus();
+			}
 	}
 }
 
@@ -468,7 +485,7 @@ onUpdated(() => {
 onMounted(() => {
 	setPosition();
 
-	props.textarea.addEventListener('keydown', onKeydown);
+	props.textarea.addEventListener('keydown', onKeydown, { capture: true });
 
 	window.document.body.addEventListener('mousedown', onMousedown);
 
@@ -484,7 +501,9 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
-	props.textarea.removeEventListener('keydown', onKeydown);
+	userSearchSeq++;
+	hashtagSearchSeq++;
+	props.textarea.removeEventListener('keydown', onKeydown, true);
 
 	window.document.body.removeEventListener('mousedown', onMousedown);
 });

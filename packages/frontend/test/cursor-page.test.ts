@@ -39,4 +39,11 @@ describe('cursor page merging (limit/untilId bare-array lists)', () => {
 		expect(merged.hasMore).toBe(true);
 		expect(mergeCursorTopPage(loaded, rows(3), 3, false).hasMore).toBe(false);
 	});
+
+	test('top refresh replaces first page cleanly when only a single page is loaded', () => {
+		const existing = rows(3); // 0000, 0001, 0002 (existing.length <= pageSize=3)
+		const refreshed = mergeCursorTopPage(existing, [rows(1, 0)[0], rows(1, 2)[0]], 3, false);
+		expect(refreshed.items.map(item => item.id)).toEqual(['0000', '0002']);
+		expect(refreshed.hasMore).toBe(false);
+	});
 });

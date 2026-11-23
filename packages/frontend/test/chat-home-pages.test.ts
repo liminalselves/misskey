@@ -9,6 +9,8 @@ import { cleanup, fireEvent, render } from '@testing-library/vue';
 import ChatHomeHome from '@/pages/chat/home.home.vue';
 import ChatHomeInvitations from '@/pages/chat/home.invitations.vue';
 import ChatHomeJoiningRooms from '@/pages/chat/home.joiningRooms.vue';
+import ChatHomeOwnedRooms from '@/pages/chat/home.ownedRooms.vue';
+import ChatHomeAgents from '@/pages/chat/home.agents.vue';
 import MkNotification from '@/components/MkNotification.vue';
 import WidgetChat from '@/widgets/WidgetChat.vue';
 import MkWidgets from '@/components/MkWidgets.vue';
@@ -19,16 +21,25 @@ import { misskeyApi } from '@/utility/misskey-api.js';
 import { DI } from '@/di.js';
 import * as os from '@/os.js';
 
-const { mockState, pushMock, pushByPathMock } = vi.hoisted(() => ({
-	mockState: {
-		account: {
-			id: 'me1',
-			policies: { chatAvailability: 'available' as 'available' | 'readonly' | 'unavailable' },
-		} as { id: string; policies: { chatAvailability: 'available' | 'readonly' | 'unavailable' } } | null,
-	},
-	pushMock: vi.fn(),
-	pushByPathMock: vi.fn(),
-}));
+const { mockState, pushMock, pushByPathMock, emitStreamEvent } = vi.hoisted(() => {
+	const channelListeners = new Map<string, Array<(payload: any) => void>>();
+	return {
+		mockState: {
+			account: {
+				id: 'me1',
+				policies: { chatAvailability: 'available' as 'available' | 'readonly' | 'unavailable' },
+			} as { id: string; policies: { chatAvailability: 'available' | 'readonly' | 'unavailable' } } | null,
+			channelListeners,
+		},
+		pushMock: vi.fn(),
+		pushByPathMock: vi.fn(),
+		emitStreamEvent: (event: string, payload: unknown) => {
+			for (const listener of channelListeners.get(event) ?? []) {
+				listener(payload);
+			}
+		},
+	};
+});
 
 vi.mock('@@/js/locale.js', () => ({ locale: {} }));
 vi.mock('@/utility/misskey-api.js', () => ({
@@ -52,7 +63,14 @@ vi.mock('@/preferences.js', () => ({
 }));
 vi.mock('@/stream.js', () => ({
 	useStream: () => ({
-		useChannel: () => ({ on: vi.fn(), dispose: vi.fn() }),
+		useChannel: () => ({
+			on: (event: string, listener: (payload: any) => void) => {
+				const list = mockState.channelListeners.get(event) ?? [];
+				list.push(listener);
+				mockState.channelListeners.set(event, list);
+			},
+			dispose: vi.fn(),
+		}),
 	}),
 }));
 vi.mock('@/router.js', () => ({
@@ -156,6 +174,12 @@ vi.mock('@/pages/chat/XRoom.vue', () => ({
 		template: '<div data-xroom :data-room-id="room.id">{{ room.name }}</div>',
 	}),
 }));
+vi.mock('@/pages/chat/home.agents.row.vue', () => ({
+	default: defineComponent({
+		props: ['session'],
+		template: '<div data-agent-session :data-session-id="session.id">{{ session.name }}</div>',
+	}),
+}));
 vi.mock('@/components/MkReactionIcon.vue', () => ({ default: { render: () => null } }));
 vi.mock('@/i18n.js', () => ({
 	i18n: {
@@ -231,6 +255,11 @@ vi.mock('@/i18n.js', () => ({
 					chat: 'Chat',
 				},
 			},
+			_agents: {
+				noSessionsYet: 'No sessions yet',
+				sessionKindDraft: 'Draft',
+				sessionKindCommunity: 'Community',
+			},
 		},
 		tsx: {
 			_chat: {
@@ -288,6 +317,7 @@ async function flush() {
 afterEach(() => {
 	cleanup();
 	mockState.account = { id: 'me1', policies: { chatAvailability: 'available' } };
+	mockState.channelListeners.clear();
 	apiMock.mockReset();
 	pushMock.mockReset();
 	pushByPathMock.mockReset();
@@ -520,5 +550,110 @@ describe('Chat home pages & entries', () => {
 		const tabsText = container.querySelector('[data-tabs]')?.textContent ?? '';
 		expect(tabsText).toContain('invitations:Invitations (2):ti ti-ticket:true');
 		expect(tabsText).toContain('ownedRooms:Owned rooms:ti ti-crown:false');
+	});
+
+	test('home.joiningRooms.vue removes kicked room on chatRoomKicked top refresh', async () => {
+		let callCount = 0;
+		apiMock.mockImplementation((() => {
+			callCount++;
+			if (callCount === 1) {
+				return Promise.resolve([
+					{ id: 'm1', createdAt: '2026-11-21T00:00:00Z', userId: 'me1', roomId: 'r1', suspendedUntil: null, room: { id: 'r1', ownerId: 'o1', name: 'Room A' } },
+					{ id: 'm2', createdAt: '2026-11-21T00:00:00Z', userId: 'me1', roomId: 'r2', suspendedUntil: null, room: { id: 'r2', ownerId: 'o2', name: 'Room B' } },
+				]);
+			}
+			return Promise.resolve([
+				{ id: 'm2', createdAt: '2026-11-21T00:00:00Z', userId: 'me1', roomId: 'r2', suspendedUntil: null, room: { id: 'r2', ownerId: 'o2', name: 'Room B' } },
+			]);
+		}) as typeof misskeyApi);
+
+		const { container } = render(ChatHomeJoiningRooms, { global });
+		await flush();
+		expect(container.textContent).toContain('Room A');
+		expect(container.textContent).toContain('Room B');
+
+		emitStreamEvent('notification', { type: 'chatRoomKicked' });
+		await flush();
+		expect(container.textContent).not.toContain('Room A');
+		expect(container.textContent).toContain('Room B');
+	});
+
+	test('home.invitations.vue drops vanished invitations and updates badge count on top refresh', async () => {
+		const onUpdateCount = vi.fn();
+		const makeInv = (id: string, name: string) => ({
+			id,
+			createdAt: '2026-11-21T00:00:00Z',
+			userId: 'me1',
+			roomId: `room-${id}`,
+			room: {
+				id: `room-${id}`,
+				createdAt: '2026-11-20T00:00:00Z',
+				ownerId: 'owner1',
+				owner: { id: 'owner1', username: 'owner1', host: null, name: 'Owner', avatarUrl: '', avatarBlurhash: null, avatarDecorations: [], emojis: {} },
+				name,
+				description: '',
+				iconUrl: null,
+				isPublic: false,
+				isMember: false,
+				memberCount: 2,
+			},
+		});
+		let callCount = 0;
+		apiMock.mockImplementation((() => {
+			callCount++;
+			return Promise.resolve(callCount === 1
+				? [makeInv('inv1', 'Inv One'), makeInv('inv2', 'Inv Two')]
+				: [makeInv('inv2', 'Inv Two')]);
+		}) as typeof misskeyApi);
+
+		const { container } = render(ChatHomeInvitations, { props: { onUpdateCount }, global });
+		await flush();
+		expect(onUpdateCount).toHaveBeenLastCalledWith(2);
+		expect(container.textContent).toContain('Inv One');
+
+		emitStreamEvent('chatRoomInvitationReceived', {});
+		await flush();
+		expect(onUpdateCount).toHaveBeenLastCalledWith(1);
+		expect(container.textContent).not.toContain('Inv One');
+		expect(container.textContent).toContain('Inv Two');
+	});
+
+	test('home.ownedRooms.vue and home.agents.vue remove deleted items on top refresh', async () => {
+		let ownedCalls = 0;
+		let agentCalls = 0;
+		apiMock.mockImplementation(((ep: string) => {
+			if (ep === 'chat/rooms/owned') {
+				ownedCalls++;
+				return Promise.resolve(ownedCalls === 1
+					? [{ id: 'or1', name: 'Owned 1' }, { id: 'or2', name: 'Owned 2' }]
+					: [{ id: 'or2', name: 'Owned 2' }]);
+			}
+			if (ep === 'agents/sessions/list-mine') {
+				agentCalls++;
+				return Promise.resolve(agentCalls === 1
+					? [
+						{ id: 'as1', name: 'Agent 1', characterName: 'C1', characterSummary: null, lastMessagePreview: '', lastMessageAt: '2026-11-21T00:00:00Z', sessionKind: 'community', hasUnread: false, unreadCount: 0 },
+						{ id: 'as2', name: 'Agent 2', characterName: 'C2', characterSummary: null, lastMessagePreview: '', lastMessageAt: '2026-11-21T00:00:00Z', sessionKind: 'community', hasUnread: false, unreadCount: 0 },
+					]
+					: [
+						{ id: 'as2', name: 'Agent 2', characterName: 'C2', characterSummary: null, lastMessagePreview: '', lastMessageAt: '2026-11-21T00:00:00Z', sessionKind: 'community', hasUnread: false, unreadCount: 0 },
+					]);
+			}
+			return Promise.resolve([]);
+		}) as typeof misskeyApi);
+
+		const ownedView = render(ChatHomeOwnedRooms, { global });
+		const agentsView = render(ChatHomeAgents, { global });
+		await flush();
+		expect(ownedView.container.textContent).toContain('Owned 1');
+		expect(agentsView.container.textContent).toContain('Agent 1');
+
+		emitStreamEvent('newChatMessage', { toRoomId: 'or2' });
+		emitStreamEvent('newAgentMessage', {});
+		await flush();
+		expect(ownedView.container.textContent).not.toContain('Owned 1');
+		expect(ownedView.container.textContent).toContain('Owned 2');
+		expect(agentsView.container.textContent).not.toContain('Agent 1');
+		expect(agentsView.container.textContent).toContain('Agent 2');
 	});
 });

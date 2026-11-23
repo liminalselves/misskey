@@ -171,6 +171,13 @@ window.fetch(`/url?url=${encodeURIComponent(requestUrl.href)}&lang=${versatileLa
 		unknownUrl.value = false;
 
 		summalyResult.value = info;
+	})
+	.catch(err => {
+		if (_DEV_) {
+			console.warn('Failed to fetch url preview', err);
+		}
+		fetching.value = false;
+		unknownUrl.value = true;
 	});
 
 function adjustTweetHeight(message: MessageEvent) {

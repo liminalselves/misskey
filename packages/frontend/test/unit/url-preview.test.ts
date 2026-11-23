@@ -8,6 +8,7 @@ import { render, cleanup, type RenderResult } from '@testing-library/vue';
 import type { SummalyResult } from '@misskey-dev/summaly';
 import { components } from '@/components/index.js';
 import { directives } from '@/directives/index.js';
+import { i18n } from '@/i18n.js';
 import MkUrlPreview from '@/components/MkUrlPreview.vue';
 
 describe('MkUrlPreview', () => {
@@ -203,5 +204,18 @@ describe('MkUrlPreview', () => {
 		assert.exists(iframe, 'iframe should exist');
 		assert.strictEqual(iframe?.getAttribute('allow'), 'fullscreen;web-share');
 		assert.strictEqual(iframe?.getAttribute('sandbox'), 'allow-popups allow-popups-to-escape-sandbox allow-scripts allow-same-origin');
+	});
+
+	test('Should stop loading and render fallback on network error', async () => {
+		fetchMock.mockRejectOnce(new Error('network error'));
+
+		const mkUrlPreview = render(MkUrlPreview, {
+			props: { url: 'https://example.local/broken' },
+			global: { directives, components },
+		});
+
+		await mkUrlPreview.findByText('https://example.local/broken');
+		mkUrlPreview.getByText(i18n.ts.failedToPreviewUrl);
+		mkUrlPreview.getByText('example.local');
 	});
 });

@@ -33,7 +33,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { defineAsyncComponent, provide, onMounted, computed, ref } from 'vue';
+import { defineAsyncComponent, provide, onBeforeUnmount, computed, ref } from 'vue';
 import { instanceName } from '@@/js/config.js';
 import { isLink } from '@@/js/is-link.js';
 import XCommon from './_common_/common.vue';
@@ -63,16 +63,19 @@ const XAnnouncements = defineAsyncComponent(() => import('@/ui/_common_/announce
 
 const isRoot = computed(() => mainRouter.currentRoute.value.name === 'index');
 
-const DESKTOP_THRESHOLD = 1100;
+const WIDGETS_HIDE_THRESHOLD = 1090;
 const MOBILE_THRESHOLD = 500;
 
 // デスクトップでウィンドウを狭くしたときモバイルUIが表示されて欲しいことはあるので deviceKind === 'desktop' の判定は行わない
-const showWidgetsSide = window.innerWidth >= DESKTOP_THRESHOLD;
+// CSS の @media (max-width: 1090px) と閾値を揃えてリサイズに追従させる
+const showWidgetsSide = ref(window.innerWidth > WIDGETS_HIDE_THRESHOLD);
 
 const isMobile = ref(deviceKind === 'smartphone' || window.innerWidth <= MOBILE_THRESHOLD);
-window.addEventListener('resize', () => {
+const onResize = () => {
+	showWidgetsSide.value = window.innerWidth > WIDGETS_HIDE_THRESHOLD;
 	isMobile.value = deviceKind === 'smartphone' || window.innerWidth <= MOBILE_THRESHOLD;
-});
+};
+window.addEventListener('resize', onResize);
 
 const pageMetadata = ref<null | PageMetadata>(null);
 const widgetsShowing = ref(false);
@@ -99,8 +102,14 @@ provideReactiveMetadata(pageMetadata);
 
 const drawerMenuShowing = ref(false);
 
-mainRouter.on('change', () => {
+const onRouteChange = () => {
 	drawerMenuShowing.value = false;
+};
+mainRouter.on('change', onRouteChange);
+
+onBeforeUnmount(() => {
+	window.removeEventListener('resize', onResize);
+	mainRouter.off('change', onRouteChange);
 });
 
 if (window.innerWidth > 1024) {

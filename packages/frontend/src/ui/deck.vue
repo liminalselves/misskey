@@ -86,7 +86,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { computed, defineAsyncComponent, ref, useTemplateRef } from 'vue';
+import { computed, defineAsyncComponent, onBeforeUnmount, ref, useTemplateRef } from 'vue';
 import XCommon from './_common_/common.vue';
 import { genId } from '@/utility/id.js';
 import XSidebar from '@/ui/_common_/navbar.vue';
@@ -139,20 +139,24 @@ const columnComponents = {
 	chat: XChatColumn,
 };
 
-mainRouter.navHook = (path, flag): boolean => {
+const navHook = (path: string, flag?: 'forcePage'): boolean => {
 	if (flag === 'forcePage') return false;
 	const noMainColumn = !columns.value.some(x => x.type === 'main');
 	if (prefer.s['deck.navWindow'] || noMainColumn) {
+		drawerMenuShowing.value = false;
 		os.pageWindow(path);
 		return true;
 	}
 	return false;
 };
+mainRouter.navHook = navHook;
 
-const isMobile = ref(window.innerWidth <= 500);
-window.addEventListener('resize', () => {
-	isMobile.value = window.innerWidth <= 500;
-});
+const MOBILE_THRESHOLD = 500;
+const isMobile = ref(deviceKind === 'smartphone' || window.innerWidth <= MOBILE_THRESHOLD);
+const onResize = () => {
+	isMobile.value = deviceKind === 'smartphone' || window.innerWidth <= MOBILE_THRESHOLD;
+};
+window.addEventListener('resize', onResize);
 
 const hideMobileFooter = computed(() => {
 	const path = mainRouter.currentRoute.value.path;
@@ -166,12 +170,10 @@ const drawerMenuShowing = ref(false);
 const widgetsShowing = ref(false);
 const gap = prefer.r['deck.columnGap'];
 
-/*
-const route = 'TODO';
-watch(route, () => {
+const onRouteChange = () => {
 	drawerMenuShowing.value = false;
-});
-*/
+};
+mainRouter.on('change', onRouteChange);
 
 function showSettings() {
 	os.pageWindow('/settings/deck');
@@ -262,6 +264,15 @@ function showTour() {
 
 window.document.documentElement.style.overflowY = 'hidden';
 window.document.documentElement.style.scrollBehavior = 'auto';
+
+onBeforeUnmount(() => {
+	window.removeEventListener('resize', onResize);
+	window.document.removeEventListener('pointerdown', pointerEvent);
+	mainRouter.off('change', onRouteChange);
+	if (mainRouter.navHook === navHook) {
+		mainRouter.navHook = null;
+	}
+});
 </script>
 
 <style lang="scss" module>

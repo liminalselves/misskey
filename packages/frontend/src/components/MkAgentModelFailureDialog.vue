@@ -8,6 +8,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 	ref="dialog"
 	:width="520"
 	@close="close"
+	@esc="close"
 	@closed="emit('closed')"
 >
 	<template #header>{{ i18n.ts._agents.modelFailureTitle }}</template>

@@ -45,7 +45,7 @@ export const meta = {
 export const paramDef = {
 	type: 'object',
 	properties: {
-		status: { type: 'string', enum: ['available', 'redeemed', 'expired', 'revoked'], nullable: true },
+		status: { type: 'string', enum: [null, 'available', 'redeemed', 'expired', 'revoked'], nullable: true },
 		query: { type: 'string', minLength: 1, maxLength: 512, nullable: true },
 		limit: { type: 'integer', minimum: 1, maximum: 100, default: 30 },
 		untilId: { type: 'string', format: 'misskey:id', nullable: true },
