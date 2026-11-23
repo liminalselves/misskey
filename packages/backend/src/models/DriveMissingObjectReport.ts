@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
-import { Entity, Index, Column, PrimaryColumn, JoinColumn, OneToOne } from 'typeorm';
+import { Entity, Index, Column, PrimaryColumn, JoinColumn, ManyToOne } from 'typeorm';
 import { id } from './util/id.js';
 import { MiDriveFile } from './DriveFile.js';
 
@@ -24,7 +24,9 @@ export class MiDriveMissingObjectReport {
 	@Column({ ...id() })
 	public fileId: MiDriveFile['id'];
 
-	@OneToOne(() => MiDriveFile, { onDelete: 'CASCADE' })
+	// 使用 ManyToOne + 唯一索引 IDX_drive_missing_object_report_file 实现 1:1 约束，
+	// 避免 @OneToOne 额外生成与迁移不一致的 REL_* 唯一约束。
+	@ManyToOne(() => MiDriveFile, { onDelete: 'CASCADE' })
 	@JoinColumn({ name: 'fileId', foreignKeyConstraintName: 'FK_drive_missing_object_report_file' })
 	public file: MiDriveFile | null;
 
@@ -63,10 +65,8 @@ export class MiDriveMissingObjectReport {
 	})
 	public verifiedAt: Date;
 
-	constructor(data: Partial<MiDriveMissingObjectReport>) {
+	constructor(data?: Partial<MiDriveMissingObjectReport>) {
 		if (data == null) return;
-		for (const [k, v] of Object.entries(data)) {
-			(this as any)[k] = v;
-		}
+		Object.assign(this, data);
 	}
 }

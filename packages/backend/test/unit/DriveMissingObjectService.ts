@@ -59,9 +59,11 @@ function makeFile(n: number, overrides: Record<string, unknown> = {}) {
 		type: 'image/webp',
 		name: `name${n}.webp`,
 		accessKey: `misskey/obj${n}.webp`,
+		thumbnailAccessKey: `misskey/thumbnail-obj${n}.webp`,
+		webpublicAccessKey: null as string | null,
 		url: `${BASE}/misskey/obj${n}.webp`,
 		thumbnailUrl: `${BASE}/misskey/thumbnail-obj${n}.webp`,
-		webpublicUrl: null,
+		webpublicUrl: null as string | null,
 		...overrides,
 	};
 }
@@ -91,14 +93,14 @@ function setup(opts: { useObjectStorage?: boolean } = {}) {
 	const driveFilesRepository = {
 		findOneBy: vi.fn(async ({ id }: { id: string }) => files.get(id) ?? null),
 		createQueryBuilder: vi.fn(() => {
-			const params: { url?: string } = {};
+			const params: { key?: string } = {};
 			const qb: Record<string, unknown> = {};
 			const self = () => qb;
-			const capture = (_sql: string, p?: { url?: string }) => { if (p?.url) params.url = p.url; return self(); };
+			const capture = (_sql: string, p?: { key?: string }) => { if (p?.key) params.key = p.key; return self(); };
 			qb.where = vi.fn(capture);
 			qb.orWhere = vi.fn(capture);
-			// Brackets 把 URL 条件放在回调里：用同一个收集器执行它
-			qb.andWhere = vi.fn((arg: unknown, p?: { url?: string }) => {
+			// Brackets 把 key 条件放在回调里：用同一个收集器执行它
+			qb.andWhere = vi.fn((arg: unknown, p?: { key?: string }) => {
 				const whereFactory = (arg as { whereFactory?: (b: unknown) => unknown } | null)?.whereFactory;
 				if (typeof whereFactory === 'function') whereFactory(qb);
 				else capture('', p);
@@ -106,7 +108,10 @@ function setup(opts: { useObjectStorage?: boolean } = {}) {
 			});
 			qb.orderBy = vi.fn(self);
 			qb.limit = vi.fn(self);
-			qb.getOne = vi.fn(async () => [...files.values()].find(f => f.url === params.url || f.thumbnailUrl === params.url || f.webpublicUrl === params.url) ?? null);
+			qb.getOne = vi.fn(async () => [...files.values()].find(f =>
+				!f.storedInternal && !f.isLink && f.userHost === null
+				&& (f.accessKey === params.key || f.thumbnailAccessKey === params.key || f.webpublicAccessKey === params.key),
+			) ?? null);
 			qb.getMany = vi.fn(async () => [...files.values()].reverse());
 			return qb;
 		}),
@@ -310,6 +315,35 @@ describe('DriveMissingObjectService', () => {
 			expect(await h.service.reportByUrl(file.url)).toBe('recorded');
 			expect(h.head).toHaveBeenCalledWith(expect.anything(), { Bucket: 'old-bucket', Key: file.accessKey });
 			expect([...h.reports.values()][0]).toMatchObject({ bucket: 'old-bucket', scope: 'legacy' });
+		});
+
+		test('matches by accessKey even when the reported url differs only by scheme', async () => {
+			const h = setup();
+			const file = h.add(1); // http://oss.example.top/bucket-a/misskey/obj1.webp
+			h.add(2);
+			h.objects.set(file.accessKey, 'missing');
+			expect(await h.service.reportByUrl(`https://oss.example.top/bucket-a/misskey/obj1.webp`)).toBe('recorded');
+			expect(h.reports.size).toBe(1);
+		});
+
+		test('a webpublic url is resolved to its owner file via webpublicAccessKey', async () => {
+			const h = setup();
+			const webpublicUrl = `${BASE}/misskey/webpublic-obj1.webp`;
+			const file = h.add(1, {
+				webpublicAccessKey: 'misskey/webpublic-obj1.webp',
+				webpublicUrl,
+			});
+			h.add(2);
+			h.objects.set(file.accessKey, 'missing');
+			expect(await h.service.reportByUrl(webpublicUrl)).toBe('recorded');
+			expect(h.head).toHaveBeenCalledWith(expect.anything(), { Bucket: 'bucket-a', Key: file.accessKey });
+		});
+
+		test('a bogus url on the object storage host is ignored without hitting HEAD', async () => {
+			const h = setup();
+			h.add(1);
+			expect(await h.service.reportByUrl(`${BASE}/misskey/does-not-exist.webp`)).toBe('ignored');
+			expect(h.head).not.toHaveBeenCalled();
 		});
 	});
 

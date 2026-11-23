@@ -99,7 +99,7 @@ Redis 在线状态、连接计数、离线推送判断和用户休眠唤醒逻�
 实现：`core/DriveMissingObjectService.ts`，判定用纯函数在 `misc/drive-missing-object.ts`。对象存储里的原图被外部删除（如云厂商审查）而 `drive_file` 行还在时，访问上报只负责"发现并核实"，**不自动删任何数据**；确认缺失的文件进入待审表 `drive_missing_object_report`，由管理员在「控制面板 → 对象存储 → 丢失文件」审查后批量删除。原则：任何无法确认的情况都不动数据，删除永远是人工动作。
 
 - 触发（匿名入口）：`/proxy/` 回源 404（`FileServerService`）或前端媒体 `error` 上报 `drive/files/report-missing`（30 次/分钟/IP；前端每页最多 30 次、间隔 ≥1.5s、同 URL 只报一次）。入口只传 URL，是否写入待审表由服务端独立核实，不信任调用方。
-- 核实（`reportByUrl`）：定位本地文件 → `resolveObjectLocation` 判定位置 → 带凭证 HEAD。明确 404/NoSuchKey 且当前桶金丝雀通过才写入/更新待审行（`reportCount` 累加、刷新时间）；对象存在则删除已有待审行（视为恢复）；403、5xx、超时、NoSuchBucket、鉴权失败一律视为"不确定"，不记录。防滥用：单文件核查冷却 30s，全站每分钟 HEAD 预算 120 次。
+- 核实（`reportByUrl`）：提取候选 key 后走 `accessKey` / `thumbnailAccessKey` / `webpublicAccessKey` 唯一索引定位本地文件 → `resolveObjectLocation` 判定位置 → 带凭证 HEAD。明确 404/NoSuchKey 且当前桶金丝雀通过才写入/更新待审行（`reportCount` 累加、刷新时间）；对象存在则删除已有待审行（视为恢复）；403、5xx、超时、NoSuchBucket、鉴权失败一律视为"不确定"，不记录。防滥用：单文件核查冷却 30s，全站每分钟 HEAD 预算 120 次。
 - 位置判定 `resolveObjectLocation`：URL 属于当前桶按当前桶；否则仅在**路径风格访问、主机与端口等于当前端点、`/<桶>/<accessKey>` 与记录 accessKey 完全一致**时按遗留桶处理（生产有 239 条 `aliya-misskey` 记录）。其余一律不处理。
 - 待审表 `drive_missing_object_report`：`fileId` 唯一、外键级联（文件被删则行自动消失），存 bucket/objectKey/scope、reportCount、首次/最后上报时间、最后核实时间。migration `1785000000000`。
 - 管理端点（`admin/drive/missing-reports/`，`requireModerator`）：`list`（页码分页，含属主 UserLite）、`recheck`（重新核实，恢复则移除、仍缺失则刷新核实时间）、`delete`（批量删除）。批量上限 100 条/次。

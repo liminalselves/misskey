@@ -19,7 +19,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 				class="_button"
 				:class="[$style.chip, scope === opt.key ? $style.chipActive : null]"
 				@click="setScope(opt.key)"
-			>{{ opt.label }}</button>
+			>
+				{{ opt.label }}
+			</button>
 		</div>
 		<div :class="$style.actions">
 			<MkButton :disabled="busy || selectedIds.length === 0" @click="recheckSelected"><i class="ti ti-refresh"></i> 重新核实选中</MkButton>
@@ -70,7 +72,9 @@ SPDX-License-Identifier: AGPL-3.0-only
 					:class="[$style.pagerSizeBtn, pageSize === size ? $style.pagerSizeBtnActive : null]"
 					:disabled="busy"
 					@click="setPageSize(size)"
-				>{{ size }}</button>
+				>
+					{{ size }}
+				</button>
 			</div>
 			<button type="button" class="_button" :class="$style.pagerNavBtn" :disabled="page <= 1 || loading || busy" @click="load(page - 1)">
 				<i class="ti ti-chevron-left"></i>
@@ -87,6 +91,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 <script lang="ts" setup>
 import { computed, onMounted, ref } from 'vue';
 import * as Misskey from 'misskey-js';
+import type { MissingBatchResponse } from '@/utility/drive-missing-reports.js';
 import MkButton from '@/components/MkButton.vue';
 import MkInfo from '@/components/MkInfo.vue';
 import MkResult from '@/components/global/MkResult.vue';
@@ -102,7 +107,6 @@ import {
 	scopeLabel,
 	summarizeBatch,
 } from '@/utility/drive-missing-reports.js';
-import type { MissingBatchResponse } from '@/utility/drive-missing-reports.js';
 
 type ReportItem = {
 	id: string;
@@ -201,7 +205,7 @@ function toggleAll(): void {
 	selected.value = allSelected.value ? new Set() : new Set(items.value.map(i => i.id));
 }
 
-/** 就地移除已处理的行，不整表重载；当前页空了则回退一页。 */
+/** 就地移除已处理的行，不整表重载；当前页空了回退一页，末页被删缩导致后面页消失时补齐当前页。 */
 function removeRows(ids: string[]): void {
 	if (ids.length === 0) return;
 	const gone = new Set(ids);
@@ -209,7 +213,8 @@ function removeRows(ids: string[]): void {
 	total.value = Math.max(0, total.value - ids.length);
 	selected.value = new Set([...selected.value].filter(id => !gone.has(id)));
 	const nextPage = pageAfterRemoval(page.value, items.value.length);
-	if (nextPage !== page.value || items.value.length === 0) void load(nextPage);
+	const strandedRemaining = page.value >= totalPages.value && (page.value - 1) * pageSize.value + items.value.length < total.value;
+	if (nextPage !== page.value || items.value.length === 0 || strandedRemaining) void load(nextPage);
 }
 
 async function recheckSelected(): Promise<void> {

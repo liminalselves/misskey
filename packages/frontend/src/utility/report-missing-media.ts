@@ -57,6 +57,6 @@ const MEDIA_TAGS = new Set(['IMG', 'VIDEO', 'AUDIO', 'SOURCE']);
 export function getMediaElementUrl(target: EventTarget | null): string | null {
 	const el = target as { tagName?: string; currentSrc?: string; src?: string } | null;
 	if (el == null || typeof el.tagName !== 'string' || !MEDIA_TAGS.has(el.tagName)) return null;
-	const url = el.currentSrc || el.src;
+	const url = el.currentSrc !== undefined && el.currentSrc !== '' ? el.currentSrc : el.src;
 	return url === '' || url == null ? null : url;
 }

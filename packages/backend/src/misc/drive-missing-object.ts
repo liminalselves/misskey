@@ -40,23 +40,7 @@ export type ObjectLocation = { bucket: string; key: string; scope: 'current' | '
 
 const BUCKET_NAME_PATTERN = /^[a-z0-9][a-z0-9._-]{1,62}$/i;
 
-/**
- * 判定文件记录指向的对象位置；无法可靠判定时返回 null（调用方必须保持数据不动）。
- *
- * legacy 只在这些条件同时成立时才认：
- * - 使用路径风格访问（URL 路径里的第一段就是 SDK 请求里的 Bucket，二者才一一对应）；
- * - URL 的主机与端口和当前配置的端点一致，即用同一套端点与凭证就能访问到该地址；
- * - URL 路径 = /<桶>/<accessKey>，与记录的 accessKey 完全一致。
- */
-export function resolveObjectLocation(url: string, accessKey: string, meta: ObjectStorageMeta): ObjectLocation | null {
-	const baseUrl = computeObjectStorageBaseUrl(meta);
-	if (baseUrl != null && meta.objectStorageBucket) {
-		const key = objectKeyFromUrl(url, baseUrl);
-		if (key != null) {
-			return key === accessKey ? { bucket: meta.objectStorageBucket, key, scope: 'current' } : null;
-		}
-	}
-
+function parseLegacyPathStyleLocation(url: string, meta: ObjectStorageMeta): { bucket: string; key: string } | null {
 	if (!meta.objectStorageS3ForcePathStyle || !meta.objectStorageEndpoint) return null;
 
 	let target: URL;
@@ -78,10 +62,45 @@ export function resolveObjectLocation(url: string, accessKey: string, meta: Obje
 	const bucket = path.slice(1, slash);
 	const key = path.slice(slash + 1);
 	if (!BUCKET_NAME_PATTERN.test(bucket)) return null;
-	if (key === '' || key !== accessKey || key.split('/').some(seg => seg === '..' || seg === '.')) return null;
+	if (key === '' || key.split('/').some(seg => seg === '..' || seg === '.')) return null;
 	// 与当前桶同名却没能按 current 解析，说明记录与配置不一致，不能当作 legacy 处理
 	if (bucket === meta.objectStorageBucket) return null;
-	return { bucket, key, scope: 'legacy' };
+	return { bucket, key };
+}
+
+/**
+ * 判定文件记录指向的对象位置；无法可靠判定时返回 null（调用方必须保持数据不动）。
+ *
+ * legacy 只在这些条件同时成立时才认：
+ * - 使用路径风格访问（URL 路径里的第一段就是 SDK 请求里的 Bucket，二者才一一对应）；
+ * - URL 的主机与端口和当前配置的端点一致，即用同一套端点与凭证就能访问到该地址；
+ * - URL 路径 = /<桶>/<accessKey>，与记录的 accessKey 完全一致。
+ */
+export function resolveObjectLocation(url: string, accessKey: string, meta: ObjectStorageMeta): ObjectLocation | null {
+	const baseUrl = computeObjectStorageBaseUrl(meta);
+	if (baseUrl != null && meta.objectStorageBucket) {
+		const key = objectKeyFromUrl(url, baseUrl);
+		if (key != null) {
+			return key === accessKey ? { bucket: meta.objectStorageBucket, key, scope: 'current' } : null;
+		}
+	}
+
+	const legacy = parseLegacyPathStyleLocation(url, meta);
+	if (legacy == null || legacy.key !== accessKey) return null;
+	return { bucket: legacy.bucket, key: legacy.key, scope: 'legacy' };
+}
+
+/**
+ * 从上报 URL 中提取候选对象 key（对应 drive_file 的 accessKey / thumbnailAccessKey / webpublicAccessKey），
+ * 供服务端走已建唯一索引的列查库，避免对无索引的 url 列做全表扫描。
+ */
+export function extractCandidateObjectKey(url: string, meta: ObjectStorageMeta): string | null {
+	const baseUrl = computeObjectStorageBaseUrl(meta);
+	if (baseUrl != null && meta.objectStorageBucket) {
+		const key = objectKeyFromUrl(url, baseUrl);
+		if (key != null) return key;
+	}
+	return parseLegacyPathStyleLocation(url, meta)?.key ?? null;
 }
 
 /** 粗筛：这个 URL 的主机是否可能属于对象存储（避免为任意外链去查库）。 */

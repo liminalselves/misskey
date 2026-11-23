@@ -8,6 +8,7 @@ import {
 	buildMissingObjectNotice,
 	classifyObjectProbeError,
 	computeObjectStorageBaseUrl,
+	extractCandidateObjectKey,
 	extractReportedObjectUrl,
 	objectKeyFromUrl,
 	resolveObjectLocation,
@@ -124,6 +125,32 @@ describe('resolveObjectLocation', () => {
 	test('an unparseable url is never resolved', () => {
 		expect(resolveObjectLocation('not a url', 'x', meta)).toBeNull();
 		expect(resolveObjectLocation('ftp://oss.example.top/old-bucket/x', 'x', meta)).toBeNull();
+	});
+});
+
+describe('extractCandidateObjectKey', () => {
+	const meta = {
+		objectStorageBaseUrl: 'https://cdn.example.com/media',
+		objectStorageUseSSL: true,
+		objectStorageEndpoint: 'oss.example.top',
+		objectStoragePort: null,
+		objectStorageBucket: 'bucket-a',
+		objectStorageS3ForcePathStyle: true,
+	};
+
+	test('extracts key from current base url regardless of scheme', () => {
+		expect(extractCandidateObjectKey('https://cdn.example.com/media/misskey/x.webp', meta)).toBe('misskey/x.webp');
+		expect(extractCandidateObjectKey('http://cdn.example.com/media/misskey/x.webp', meta)).toBe('misskey/x.webp');
+	});
+
+	test('extracts key from legacy path-style bucket on the same endpoint', () => {
+		expect(extractCandidateObjectKey('http://oss.example.top/old-bucket/misskey/x.webp', meta)).toBe('misskey/x.webp');
+	});
+
+	test('rejects unrelated hosts, same-bucket path-style mismatch, and traversal', () => {
+		expect(extractCandidateObjectKey('https://evil.example.org/media/misskey/x.webp', meta)).toBeNull();
+		expect(extractCandidateObjectKey('https://oss.example.top/bucket-a/misskey/x.webp', meta)).toBeNull();
+		expect(extractCandidateObjectKey('https://cdn.example.com/media/../secret', meta)).toBeNull();
 	});
 });
 

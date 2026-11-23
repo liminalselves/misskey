@@ -82,8 +82,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		private userEntityService: UserEntityService,
 	) {
 		super(meta, paramDef, async (ps, me) => {
-			const page = ps.page ?? 1;
-			const pageSize = ps.pageSize ?? 20;
+			const page = ps.page;
+			const pageSize = ps.pageSize;
 
 			const where = ps.scope != null ? { scope: ps.scope } : {};
 			const [rows, total] = await this.reportsRepository.findAndCount({

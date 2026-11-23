@@ -19,6 +19,7 @@ import { LoggerService } from '@/core/LoggerService.js';
 import {
 	buildMissingObjectNotice,
 	classifyObjectProbeError,
+	extractCandidateObjectKey,
 	extractReportedObjectUrl,
 	resolveObjectLocation,
 	urlMayBelongToObjectStorage,
@@ -106,17 +107,20 @@ export class DriveMissingObjectService {
 		try {
 			const url = extractReportedObjectUrl(rawUrl, this.config.url);
 			if (url == null) return 'ignored';
-			// 粗筛：主机不属于对象存储的外链不查库
+			// 粗筛：主机不属于对象存储或无法解析出对象 key 的外链不查库
 			if (!this.meta.useObjectStorage || !urlMayBelongToObjectStorage(url, this.meta)) return 'ignored';
+			const key = extractCandidateObjectKey(url, this.meta);
+			if (key == null) return 'ignored';
 
-			// 缩略图/webpublic 上报同样能定位到所属文件
+			// 走 accessKey / thumbnailAccessKey / webpublicAccessKey 唯一索引定位文件，避免扫描无索引的 url 列
 			const file = await this.driveFilesRepository.createQueryBuilder('file')
 				.where('file.userHost IS NULL')
 				.andWhere('file.storedInternal = false')
+				.andWhere('file.isLink = false')
 				.andWhere(new Brackets(qb => {
-					qb.where('file.url = :url', { url })
-						.orWhere('file.thumbnailUrl = :url', { url })
-						.orWhere('file.webpublicUrl = :url', { url });
+					qb.where('file.accessKey = :key', { key })
+						.orWhere('file.thumbnailAccessKey = :key', { key })
+						.orWhere('file.webpublicAccessKey = :key', { key });
 				}))
 				.getOne();
 			if (file == null) return 'ignored';
@@ -197,7 +201,7 @@ export class DriveMissingObjectService {
 	 */
 	@bindThis
 	public async recheck(reportIds: string[]): Promise<MissingBatchSummary> {
-		return await this.processBatch(reportIds, async (report, file, location) => {
+		return await this.processBatch(reportIds, async (report, _file, location) => {
 			const probe = await this.probe(location.bucket, location.key);
 			if (probe === 'unknown') return 'unknown';
 			if (probe === 'present') {

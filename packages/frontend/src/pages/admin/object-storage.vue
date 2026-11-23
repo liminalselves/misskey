@@ -140,11 +140,11 @@ function resolveView(value: string | undefined): ViewKey {
 	return (viewKeys as readonly string[]).includes(value ?? '') ? value as ViewKey : 'settings';
 }
 
-const activeView = ref<ViewKey>(resolveView(props.view));
+const activeView = ref<ViewKey>('settings');
 
 watch(() => props.view, v => {
 	activeView.value = resolveView(v);
-});
+}, { immediate: true });
 
 watch(activeView, view => {
 	const url = new URL(router.getCurrentFullPath(), window.location.origin);
@@ -166,7 +166,7 @@ const objectStoragePort = ref(meta.objectStoragePort);
 const objectStorageAccessKey = ref(meta.objectStorageAccessKey);
 const objectStorageSecretKey = ref(meta.objectStorageSecretKey);
 const objectStorageUseSSL = ref(meta.objectStorageUseSSL);
-const objectStorageForceHttps = ref(meta.objectStorageForceHttps ?? false);
+const objectStorageForceHttps = ref(meta.objectStorageForceHttps);
 const objectStorageUseProxy = ref(meta.objectStorageUseProxy);
 const objectStorageSetPublicRead = ref(meta.objectStorageSetPublicRead);
 const objectStorageS3ForcePathStyle = ref(meta.objectStorageS3ForcePathStyle);

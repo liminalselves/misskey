@@ -155,7 +155,7 @@ describe('FileServerService', () => {
 
 		const loggerService = new LoggerService();
 		// 本测试不涉及对象存储核查，桩实现即可
-		const driveMissingObjectService = { checkByReportedUrl: async () => 'ignored' } as unknown as DriveMissingObjectService;
+		const driveMissingObjectService = { reportByUrl: async () => 'ignored' } as unknown as DriveMissingObjectService;
 		const sensitiveMediaDetectionService = {
 			detectSensitive: async () => null,
 			detectSensitiveMany: async (sources: Buffer[]) => sources.map(() => null),
