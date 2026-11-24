@@ -91,6 +91,7 @@ import { AgentPlazaReviewService } from './AgentPlazaReviewService.js';
 import { AgentModelUsageService } from './AgentModelUsageService.js';
 import { AgentModelReportService } from './AgentModelReportService.js';
 import { AgentModelAnnouncementService } from './AgentModelAnnouncementService.js';
+import { DriveMissingObjectService } from './DriveMissingObjectService.js';
 import { AgentUserModelService } from './AgentUserModelService.js';
 import { AgentCheckinService } from './AgentCheckinService.js';
 import { ChatService } from './ChatService.js';
@@ -256,6 +257,7 @@ const $AgentPlazaReviewService: Provider = { provide: 'AgentPlazaReviewService',
 const $AgentModelUsageService: Provider = { provide: 'AgentModelUsageService', useExisting: AgentModelUsageService };
 const $AgentModelReportService: Provider = { provide: 'AgentModelReportService', useExisting: AgentModelReportService };
 const $AgentModelAnnouncementService: Provider = { provide: 'AgentModelAnnouncementService', useExisting: AgentModelAnnouncementService };
+const $DriveMissingObjectService: Provider = { provide: 'DriveMissingObjectService', useExisting: DriveMissingObjectService };
 const $AgentUserModelService: Provider = { provide: 'AgentUserModelService', useExisting: AgentUserModelService };
 const $AgentCheckinService: Provider = { provide: 'AgentCheckinService', useExisting: AgentCheckinService };
 const $AgentMessageNotifyService: Provider = { provide: 'AgentMessageNotifyService', useExisting: AgentMessageNotifyService };
@@ -428,6 +430,7 @@ const $ApQuestionService: Provider = { provide: 'ApQuestionService', useExisting
 		AgentModelUsageService,
 		AgentModelReportService,
 		AgentModelAnnouncementService,
+		DriveMissingObjectService,
 		AgentUserModelService,
 		AgentCheckinService,
 		ChatService,
@@ -592,6 +595,7 @@ const $ApQuestionService: Provider = { provide: 'ApQuestionService', useExisting
 		$AgentModelUsageService,
 		$AgentModelReportService,
 		$AgentModelAnnouncementService,
+		$DriveMissingObjectService,
 		$AgentUserModelService,
 		$AgentCheckinService,
 		$AgentMessageNotifyService,
@@ -762,6 +766,7 @@ const $ApQuestionService: Provider = { provide: 'ApQuestionService', useExisting
 		AgentModelUsageService,
 		AgentModelReportService,
 		AgentModelAnnouncementService,
+		DriveMissingObjectService,
 		AgentUserModelService,
 		AgentCheckinService,
 		ChatService,
@@ -922,6 +927,7 @@ const $ApQuestionService: Provider = { provide: 'ApQuestionService', useExisting
 		$AgentModelUsageService,
 		$AgentModelReportService,
 		$AgentModelAnnouncementService,
+		$DriveMissingObjectService,
 		$AgentUserModelService,
 		$AgentCheckinService,
 		$AgentMessageNotifyService,

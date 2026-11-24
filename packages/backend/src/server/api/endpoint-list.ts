@@ -97,6 +97,9 @@ export * as 'admin/delete-all-files-of-a-user' from './endpoints/admin/delete-al
 export * as 'admin/drive/clean-remote-files' from './endpoints/admin/drive/clean-remote-files.js';
 export * as 'admin/drive/cleanup' from './endpoints/admin/drive/cleanup.js';
 export * as 'admin/drive/files' from './endpoints/admin/drive/files.js';
+export * as 'admin/drive/missing-reports/list' from './endpoints/admin/drive/missing-reports/list.js';
+export * as 'admin/drive/missing-reports/recheck' from './endpoints/admin/drive/missing-reports/recheck.js';
+export * as 'admin/drive/missing-reports/delete' from './endpoints/admin/drive/missing-reports/delete.js';
 export * as 'admin/drive/folders' from './endpoints/admin/drive/folders.js';
 export * as 'admin/drive/files/set-blocked' from './endpoints/admin/drive/files/set-blocked.js';
 export * as 'admin/drive/show-file' from './endpoints/admin/drive/show-file.js';
@@ -354,6 +357,7 @@ export * as 'drive/files/delete' from './endpoints/drive/files/delete.js';
 export * as 'drive/files/download-url' from './endpoints/drive/files/download-url.js';
 export * as 'drive/files/find' from './endpoints/drive/files/find.js';
 export * as 'drive/files/find-by-hash' from './endpoints/drive/files/find-by-hash.js';
+export * as 'drive/files/report-missing' from './endpoints/drive/files/report-missing.js';
 export * as 'drive/files/show' from './endpoints/drive/files/show.js';
 export * as 'drive/files/update' from './endpoints/drive/files/update.js';
 export * as 'drive/files/move-bulk' from './endpoints/drive/files/move-bulk.js';

@@ -7,14 +7,14 @@ import { URL } from 'node:url';
 import * as http from 'node:http';
 import * as https from 'node:https';
 import { Injectable } from '@nestjs/common';
-import { DeleteObjectCommand, GetObjectCommand, PutObjectAclCommand, S3Client } from '@aws-sdk/client-s3';
+import { DeleteObjectCommand, GetObjectCommand, HeadObjectCommand, PutObjectAclCommand, S3Client } from '@aws-sdk/client-s3';
 import { Upload } from '@aws-sdk/lib-storage';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { NodeHttpHandler, NodeHttpHandlerOptions } from '@smithy/node-http-handler';
 import type { MiMeta } from '@/models/Meta.js';
 import { HttpRequestService } from '@/core/HttpRequestService.js';
 import { bindThis } from '@/decorators.js';
-import type { DeleteObjectCommandInput, GetObjectCommandInput, PutObjectAclCommandInput, PutObjectCommandInput } from '@aws-sdk/client-s3';
+import type { DeleteObjectCommandInput, GetObjectCommandInput, HeadObjectCommandInput, PutObjectAclCommandInput, PutObjectCommandInput } from '@aws-sdk/client-s3';
 
 function trimObjectStorageConfigValue(value: string | null | undefined): string | undefined {
 	const trimmed = value?.trim();
@@ -78,6 +78,13 @@ export class S3Service {
 	public delete(meta: MiMeta, input: DeleteObjectCommandInput) {
 		const client = this.getS3Client(meta);
 		return client.send(new DeleteObjectCommand(input));
+	}
+
+	/** 带凭证的 HEAD，用于确认对象是否真实存在；失败时抛出 SDK 原始错误，由调用方分类。 */
+	@bindThis
+	public head(meta: MiMeta, input: HeadObjectCommandInput) {
+		const client = this.getS3Client(meta);
+		return client.send(new HeadObjectCommand(input), { abortSignal: AbortSignal.timeout(10_000) });
 	}
 
 	@bindThis

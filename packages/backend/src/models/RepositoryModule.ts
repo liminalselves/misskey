@@ -27,6 +27,7 @@ import {
 	MiClipNote,
 	MiDriveFile,
 	MiDriveFileTombstone,
+	MiDriveMissingObjectReport,
 	MiDriveFolder,
 	MiEmoji,
 	MiFlash,
@@ -280,6 +281,12 @@ const $driveFilesRepository: Provider = {
 const $driveFileTombstonesRepository: Provider = {
 	provide: DI.driveFileTombstonesRepository,
 	useFactory: (db: DataSource) => db.getRepository(MiDriveFileTombstone).extend(miRepository as MiRepository<MiDriveFileTombstone>),
+	inject: [DI.db],
+};
+
+const $driveMissingObjectReportsRepository: Provider = {
+	provide: DI.driveMissingObjectReportsRepository,
+	useFactory: (db: DataSource) => db.getRepository(MiDriveMissingObjectReport).extend(miRepository as MiRepository<MiDriveMissingObjectReport>),
 	inject: [DI.db],
 };
 
@@ -723,6 +730,7 @@ const $reversiGamesRepository: Provider = {
 		$emojisRepository,
 		$driveFilesRepository,
 		$driveFileTombstonesRepository,
+		$driveMissingObjectReportsRepository,
 		$driveFoldersRepository,
 		$metasRepository,
 		$mutingsRepository,
@@ -822,6 +830,7 @@ const $reversiGamesRepository: Provider = {
 		$emojisRepository,
 		$driveFilesRepository,
 		$driveFileTombstonesRepository,
+		$driveMissingObjectReportsRepository,
 		$driveFoldersRepository,
 		$metasRepository,
 		$mutingsRepository,
