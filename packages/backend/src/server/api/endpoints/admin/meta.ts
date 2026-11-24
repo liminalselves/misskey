@@ -14,6 +14,7 @@ import { resolveAgentImageNegativePrompt } from '@/core/agent-image-defaults.js'
 import { resolveAgentImageArtistPresets } from '@/core/agent-image-presets.js';
 import { DEFAULT_AGENT_EXTERNAL_AUDIT_OTHER_RULE, DEFAULT_AGENT_EXTERNAL_AUDIT_STANDARD, cloneDefaultAgentExternalAuditRules, normalizeAgentExternalAuditOtherRule, normalizeAgentExternalAuditRules } from '@/core/agent-external-audit-rules.js';
 import { normalizeAgentLlmApiKeys } from '@/misc/agent-llm-models.js';
+import { DEFAULT_APP_GITHUB_REPO } from '@/core/app-release-helpers.js';
 
 export const meta = {
 	tags: ['meta'],
@@ -335,6 +336,18 @@ export const meta = {
 				type: 'object',
 				optional: false, nullable: false,
 				properties: {
+					autoFetchGithub: {
+						type: 'boolean',
+						optional: false, nullable: false,
+					},
+					githubRepo: {
+						type: 'string',
+						optional: false, nullable: true,
+					},
+					githubDownloadProxy: {
+						type: 'string',
+						optional: false, nullable: true,
+					},
 					latestAndroidVersion: {
 						type: 'string',
 						optional: false, nullable: true,
@@ -1168,6 +1181,9 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				nativeClientAppInfo: (() => {
 					const n = instance.nativeClientAppInfo ?? {};
 					return {
+						autoFetchGithub: n.autoFetchGithub !== false,
+						githubRepo: n.githubRepo ?? DEFAULT_APP_GITHUB_REPO,
+						githubDownloadProxy: n.githubDownloadProxy ?? null,
 						latestAndroidVersion: n.latestAndroidVersion ?? null,
 						latestIosVersion: n.latestIosVersion ?? null,
 						minRequiredAppVersion: n.minRequiredAppVersion ?? null,

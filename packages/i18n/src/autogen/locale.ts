@@ -2801,6 +2801,78 @@ export interface Locale extends ILocale {
      */
     "nativeClientAppInfoAnnouncement": string;
     /**
+     * GitHub Releases から自動取得する
+     */
+    "nativeClientAppInfoAutoFetchGithub": string;
+    /**
+     * 有効にすると、Android の最新バージョン・APK ダウンロード URL・更新ログを GitHub Releases から自動同期します。下の Android / 更新ログの手動入力欄は、自動取得が無効または同期失敗時のフォールバックとして使われます。
+     */
+    "nativeClientAppInfoAutoFetchGithubCaption": string;
+    /**
+     * GitHub リポジトリ（owner/repo）
+     */
+    "nativeClientAppInfoGithubRepo": string;
+    /**
+     * owner/repo 形式で指定します。空欄の場合は liminalselves/liminalselves_app を使用します。
+     */
+    "nativeClientAppInfoGithubRepoCaption": string;
+    /**
+     * GitHub ダウンロードプロキシ接頭辞（任意）
+     */
+    "nativeClientAppInfoGithubDownloadProxy": string;
+    /**
+     * 任意の https:// 接頭辞（例: https://ghfast.top/）を指定すると、パッケージのダウンロード URL に付与されます。GitHub API リクエストには影響しません。
+     */
+    "nativeClientAppInfoGithubDownloadProxyCaption": string;
+    /**
+     * GitHub Releases 同期状態
+     */
+    "nativeClientAppInfoGithubSyncSection": string;
+    /**
+     * 今すぐ GitHub から同期
+     */
+    "nativeClientAppInfoSyncNow": string;
+    /**
+     * 最終同期日時
+     */
+    "nativeClientAppInfoSyncedAt": string;
+    /**
+     * 未同期
+     */
+    "nativeClientAppInfoNeverSynced": string;
+    /**
+     * 同期済み Android バージョン
+     */
+    "nativeClientAppInfoSyncedAndroid": string;
+    /**
+     * 同期済み iOS バージョン
+     */
+    "nativeClientAppInfoSyncedIos": string;
+    /**
+     * キャッシュ済みリリース数
+     */
+    "nativeClientAppInfoSyncedReleaseCount": string;
+    /**
+     * 直近の同期エラー
+     */
+    "nativeClientAppInfoSyncError": string;
+    /**
+     * {repo} から {count} 件のリリースを同期しました。
+     */
+    "nativeClientAppInfoSyncSuccess": ParameterizedString<"repo" | "count">;
+    /**
+     * 同期に失敗しました: {error}
+     */
+    "nativeClientAppInfoSyncFailed": ParameterizedString<"error">;
+    /**
+     * 手動設定とフォールバック
+     */
+    "nativeClientAppInfoManualFallbackTitle": string;
+    /**
+     * 現在 GitHub 自動同期が有効です。Android のバージョン・APK ダウンロードリンク・更新ログは GitHub Releases が優先され、手動欄はフォールバックになります（iOS リンク・最低必須バージョン・お知らせはここで管理できます）。
+     */
+    "nativeClientAppInfoManualFallbackNotice": string;
+    /**
      * 削除されたノート
      */
     "deletedNote": string;
@@ -4592,6 +4664,102 @@ export interface Locale extends ILocale {
      * 更新ログ
      */
     "appClientChangelog": string;
+    /**
+     * 公式ネイティブアプリのインストーラー、リリース履歴、サーバーからのお知らせを確認できます。
+     */
+    "appDownloadHeroDescription": string;
+    /**
+     * GitHub リポジトリ
+     */
+    "appDownloadViewOnGithub": string;
+    /**
+     * Release を開く
+     */
+    "appDownloadViewRelease": string;
+    /**
+     * 最終同期
+     */
+    "appDownloadLastSynced": string;
+    /**
+     * GitHub Releases 自動同期
+     */
+    "appDownloadSourceGithub": string;
+    /**
+     * サーバー設定フォールバック
+     */
+    "appDownloadSourceFallback": string;
+    /**
+     * おすすめ（現在の端末）
+     */
+    "appDownloadRecommendedForDevice": string;
+    /**
+     * デスクトップまたはネイティブ版未提供の環境です
+     */
+    "appDownloadDesktopNoticeTitle": string;
+    /**
+     * 現在、公式アプリは Android 版（および管理者設定に応じた iOS 版）を提供しています。デスクトップでは Web 版または PWA をご利用ください。下からパッケージをダウンロードすることもできます。
+     */
+    "appDownloadDesktopNoticeBody": string;
+    /**
+     * ファイル名
+     */
+    "appDownloadFileName": string;
+    /**
+     * サイズ
+     */
+    "appDownloadFileSize": string;
+    /**
+     * ダウンロード数
+     */
+    "appDownloadCount": string;
+    /**
+     * {count} 回
+     */
+    "appDownloadCountTimes": ParameterizedString<"count">;
+    /**
+     * SHA-256
+     */
+    "appDownloadSha256": string;
+    /**
+     * 完全な SHA-256 をコピー
+     */
+    "appDownloadCopySha256": string;
+    /**
+     * {date} 公開
+     */
+    "appDownloadReleaseDate": ParameterizedString<"date">;
+    /**
+     * 重要アップデート
+     */
+    "appDownloadImportantUpdate": string;
+    /**
+     * 最新版
+     */
+    "appDownloadLatestBadge": string;
+    /**
+     * v{version} 未満のバージョンは更新が必要です
+     */
+    "appDownloadMinVersionNote": ParameterizedString<"version">;
+    /**
+     * 過去のバージョンを表示（残り {count} 件）
+     */
+    "appDownloadShowOlderReleases": ParameterizedString<"count">;
+    /**
+     * 過去のバージョンを折りたたむ
+     */
+    "appDownloadHideOlderReleases": string;
+    /**
+     * サーバー最低必須バージョン: v{version}
+     */
+    "appDownloadMinRequiredVersion": ParameterizedString<"version">;
+    /**
+     * リリース情報を読み込めませんでした
+     */
+    "appDownloadLoadFailed": string;
+    /**
+     * このバージョンの詳細な更新内容はありません。
+     */
+    "appDownloadNoReleaseNotes": string;
     /**
      * 通知が既読になったらプッシュ通知を削除する
      */
