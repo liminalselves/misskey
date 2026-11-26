@@ -4,13 +4,21 @@
  */
 
 import 'reflect-metadata';
+import { createHash } from 'node:crypto';
+import * as fs from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { Readable } from 'node:stream';
 import { describe, expect, test, vi } from 'vitest';
 import {
 	DEFAULT_APP_GITHUB_REPO,
 	applyDownloadProxy,
 	buildEffectiveNativeClientAppInfo,
+	buildRelayDownloadUrl,
 	classifyAppReleaseAssets,
 	compareSemver,
+	isSafeAssetFilename,
 	isValidGitHubRepo,
 	normalizeGitHubRepo,
 	parseGitHubReleaseBody,
@@ -231,7 +239,7 @@ describe('app-release-helpers', () => {
 	});
 });
 
-function createHarness(initialMeta: Record<string, unknown> = {}) {
+function createHarness(initialMeta: Record<string, unknown> = {}, configOverrides: Record<string, unknown> = {}) {
 	const redisStore = new Map<string, string>();
 	const redisClient = {
 		get: vi.fn(async (key: string) => redisStore.get(key) ?? null),
@@ -258,7 +266,7 @@ function createHarness(initialMeta: Record<string, unknown> = {}) {
 	};
 
 	const service = new AppReleaseService(
-		{} as never,
+		{ url: 'https://misskey.example.com', ...configOverrides } as never,
 		redisClient as never,
 		metaObj as never,
 		metaService as never,
@@ -267,6 +275,17 @@ function createHarness(initialMeta: Record<string, unknown> = {}) {
 	);
 
 	return { service, redisStore, redisClient, metaObj, send };
+}
+
+function mockBinaryResponse(status: number, data: Buffer) {
+	return {
+		ok: status >= 200 && status < 300,
+		status,
+		statusText: status === 200 ? 'OK' : 'Error',
+		headers: new Headers(),
+		body: Readable.from([data]),
+		arrayBuffer: async () => data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength),
+	};
 }
 
 function mockJsonResponse(status: number, data: unknown, headers: Record<string, string> = {}) {
@@ -329,7 +348,7 @@ describe('AppReleaseService', () => {
 		const effective1 = await service.getEffectiveNativeClientAppInfo();
 		expect(effective1.latestAndroidVersion).toBe('1.9.0');
 		expect(effective1.minRequiredAppVersion).toBe('1.5.0');
-		expect(effective1.androidDownloadUrl).toBe('https://proxy.example.com/https://github.com/a/b/v1.9.apk');
+		expect(effective1.androidDownloadUrl).toBe('https://misskey.example.com/files/app-releases/1.9.0/app.apk');
 
 		// 2. Subsequent sync gets 304 Not Modified and destroys body stream
 		const destroy = vi.fn();
@@ -359,7 +378,8 @@ describe('AppReleaseService', () => {
 
 		const publicView = await service.getPublicReleasesView();
 		expect(publicView.syncError).toContain('403');
-		expect(publicView.latest.android?.downloadUrl).toBe('https://proxy.example.com/https://github.com/a/b/v1.9.apk');
+		expect(publicView.latest.android?.downloadUrl).toBe('https://misskey.example.com/files/app-releases/1.9.0/app.apk');
+		expect(publicView.latest.android?.rawDownloadUrl).toBe('https://github.com/a/b/v1.9.apk');
 		expect(publicView.latest.android?.sha256).toBe('b'.repeat(64));
 		expect(publicView.releases).toHaveLength(2);
 		expect(publicView.releases[1]?.isLatest).toBe(true);
@@ -400,5 +420,69 @@ describe('AppReleaseService', () => {
 		expect(view.latest.android?.downloadUrl).toBe('https://manual.example.com/0.8.0.apk');
 		expect(view.releases).toHaveLength(1);
 		expect(view.releases[0]?.notes).toBe('手动记录');
+	});
+
+	test('relays and mirrors release APK to local storage with proxy fallback, SHA-256 verification and disk cache reuse', async () => {
+		expect(isSafeAssetFilename('LiminalSelves_v1.1.0.apk')).toBe(true);
+		expect(isSafeAssetFilename('../evil.apk')).toBe(false);
+		expect(isSafeAssetFilename('a/b.apk')).toBe(false);
+		expect(buildRelayDownloadUrl('https://misskey.example.com/', 'v1.1.0', 'LiminalSelves_v1.1.0.apk'))
+			.toBe('https://misskey.example.com/files/app-releases/1.1.0/LiminalSelves_v1.1.0.apk');
+
+		const tempRoot = mkdtempSync(join(tmpdir(), 'misskey-app-relay-'));
+		try {
+			const payload = Buffer.from('fake-apk-binary-payload-v1.1.0', 'utf8');
+			const digest = createHash('sha256').update(payload).digest('hex');
+			const { service, send } = createHarness(
+				{ githubDownloadProxy: 'https://ghproxy.test/' },
+				{ rootDir: tempRoot },
+			);
+
+			send.mockResolvedValueOnce(mockJsonResponse(200, [
+				{
+					tag_name: 'v1.1.0',
+					name: '1.1.0',
+					body: '### 变更\n- 测试中转下载',
+					published_at: '2026-11-26T00:00:00Z',
+					assets: [
+						{
+							name: 'LiminalSelves_v1.1.0.apk',
+							state: 'uploaded',
+							size: payload.length,
+							digest: `sha256:${digest}`,
+							browser_download_url: 'https://github.com/liminalselves/liminalselves_app/releases/download/v1.1.0/LiminalSelves_v1.1.0.apk',
+							download_count: 3,
+						},
+					],
+				},
+			]));
+
+			await service.syncNow({ force: true });
+
+			// Reject unknown or unsafe filenames
+			expect(await service.resolveRelayedAssetForDownload('1.1.0', '../etc/passwd')).toBeNull();
+			expect(await service.resolveRelayedAssetForDownload('1.1.0', 'unknown.apk')).toBeNull();
+
+			// Proxy fails with 502, automatically falls back to direct GitHub raw URL
+			send.mockResolvedValueOnce(mockBinaryResponse(502, Buffer.from('bad gateway')));
+			send.mockResolvedValueOnce(mockBinaryResponse(200, payload));
+
+			const mirrored1 = await service.resolveRelayedAssetForDownload('v1.1.0', 'LiminalSelves_v1.1.0.apk');
+			expect(mirrored1).not.toBeNull();
+			expect(mirrored1?.filename).toBe('LiminalSelves_v1.1.0.apk');
+			expect(mirrored1?.size).toBe(payload.length);
+			expect(mirrored1?.mimeType).toBe('application/vnd.android.package-archive');
+			expect(fs.readFileSync(mirrored1!.filePath)).toEqual(payload);
+			expect(send).toHaveBeenCalledTimes(3);
+			expect(send.mock.calls[1]![0]).toBe('https://ghproxy.test/https://github.com/liminalselves/liminalselves_app/releases/download/v1.1.0/LiminalSelves_v1.1.0.apk');
+			expect(send.mock.calls[2]![0]).toBe('https://github.com/liminalselves/liminalselves_app/releases/download/v1.1.0/LiminalSelves_v1.1.0.apk');
+
+			// Second request hits local disk cache without calling upstream
+			const mirrored2 = await service.resolveRelayedAssetForDownload('1.1.0', 'LiminalSelves_v1.1.0.apk');
+			expect(mirrored2?.filePath).toBe(mirrored1?.filePath);
+			expect(send).toHaveBeenCalledTimes(3);
+		} finally {
+			rmSync(tempRoot, { recursive: true, force: true });
+		}
 	});
 });

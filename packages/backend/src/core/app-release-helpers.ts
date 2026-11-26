@@ -11,6 +11,7 @@ const SEMVER_RE = /^v?(\d+)\.(\d+)\.(\d+)$/;
 const MIN_VERSION_COMMENT_RE = /<!--\s*min-version:\s*(v?\d+\.\d+\.\d+)\s*-->/i;
 const GITHUB_REPO_RE = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
 const SHA256_DIGEST_RE = /^sha256:([0-9a-f]{64})$/i;
+const SAFE_ASSET_FILENAME_RE = /^[A-Za-z0-9._-]+$/;
 
 export type SemverTuple = [number, number, number];
 
@@ -189,6 +190,25 @@ export function isValidDownloadProxy(proxyPrefix: unknown): proxyPrefix is strin
 	}
 }
 
+export function isSafeAssetFilename(filename: unknown): filename is string {
+	if (typeof filename !== 'string') return false;
+	const trimmed = filename.trim();
+	if (!trimmed || trimmed === '.' || trimmed === '..') return false;
+	return SAFE_ASSET_FILENAME_RE.test(trimmed);
+}
+
+export function buildRelayDownloadUrl(
+	instanceOrigin: string | null | undefined,
+	version: string,
+	assetName: string,
+): string | null {
+	const origin = typeof instanceOrigin === 'string' ? instanceOrigin.trim().replace(/\/+$/, '') : '';
+	if (!origin) return null;
+	const cleanVersion = normalizeSemver(version);
+	if (!cleanVersion || !isSafeAssetFilename(assetName)) return null;
+	return `${origin}/files/app-releases/${encodeURIComponent(cleanVersion)}/${encodeURIComponent(assetName)}`;
+}
+
 export function applyDownloadProxy(url: string, proxyPrefix?: string | null): string;
 export function applyDownloadProxy(url: string | null | undefined, proxyPrefix?: string | null): string | null;
 export function applyDownloadProxy(url: string | null | undefined, proxyPrefix?: string | null): string | null {
@@ -279,6 +299,7 @@ function snapshotHasData(snapshot: GitHubAppReleaseSnapshot | null | undefined):
 export function buildEffectiveNativeClientAppInfo(
 	stored: MiNativeClientAppInfo | null | undefined,
 	githubSnapshot: GitHubAppReleaseSnapshot | null | undefined,
+	relayOrigin?: string | null,
 ): EffectiveNativeClientAppInfo {
 	const s = stored ?? {};
 	const storedChangelog = Array.isArray(s.changelog) ? s.changelog : [];
@@ -286,10 +307,16 @@ export function buildEffectiveNativeClientAppInfo(
 	if (s.autoFetchGithub !== false && snapshotHasData(githubSnapshot)) {
 		const minRequiredStored = s.minRequiredAppVersion?.trim();
 		const androidUrl = githubSnapshot.latestAndroid
-			? applyDownloadProxy(githubSnapshot.latestAndroid.asset.rawDownloadUrl, s.githubDownloadProxy)
+			? (
+				buildRelayDownloadUrl(relayOrigin, githubSnapshot.latestAndroid.version, githubSnapshot.latestAndroid.asset.name)
+				?? applyDownloadProxy(githubSnapshot.latestAndroid.asset.rawDownloadUrl, s.githubDownloadProxy)
+			)
 			: null;
 		const iosUrl = githubSnapshot.latestIos
-			? applyDownloadProxy(githubSnapshot.latestIos.asset.rawDownloadUrl, s.githubDownloadProxy)
+			? (
+				buildRelayDownloadUrl(relayOrigin, githubSnapshot.latestIos.version, githubSnapshot.latestIos.asset.name)
+				?? applyDownloadProxy(githubSnapshot.latestIos.asset.rawDownloadUrl, s.githubDownloadProxy)
+			)
 			: null;
 
 		return {

@@ -3,6 +3,10 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
+import { createHash, randomUUID } from 'node:crypto';
+import * as fs from 'node:fs';
+import * as Path from 'node:path';
+import { Readable } from 'node:stream';
 import { Inject, Injectable, OnApplicationShutdown, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import * as Redis from 'ioredis';
 import type { Config } from '@/config.js';
@@ -17,8 +21,13 @@ import type Logger from '@/logger.js';
 import {
 	applyDownloadProxy,
 	buildEffectiveNativeClientAppInfo,
+	buildRelayDownloadUrl,
+	compareSemver,
+	isSafeAssetFilename,
 	normalizeGitHubRepo,
+	normalizeSemver,
 	parseGitHubReleasesResponse,
+	type AppReleaseAsset,
 	type EffectiveNativeClientAppInfo,
 	type GitHubAppReleaseSnapshot,
 	type GitHubReleaseRaw,
@@ -32,6 +41,22 @@ const MEMORY_CACHE_TTL_MS = 60 * 1000;
 const GITHUB_REQUEST_TIMEOUT_MS = 15 * 1000;
 const GITHUB_RESPONSE_MAX_BYTES = 2 * 1024 * 1024;
 const GITHUB_ERROR_BODY_MAX_BYTES = 64 * 1024;
+const ASSET_MIRROR_TIMEOUT_MS = 120 * 1000;
+const ASSET_MIRROR_MAX_BYTES = 200 * 1024 * 1024;
+const KEEP_MIRRORED_VERSIONS = 2;
+
+export type MirroredAppAsset = {
+	filePath: string;
+	filename: string;
+	size: number;
+	mimeType: string;
+};
+
+function resolveAssetMimeType(filename: string): string {
+	const lower = filename.toLowerCase();
+	if (lower.endsWith('.apk')) return 'application/vnd.android.package-archive';
+	return 'application/octet-stream';
+}
 
 export type PublicAppLatestPlatformRelease = {
 	version: string;
@@ -138,6 +163,7 @@ export class AppReleaseService implements OnModuleInit, OnModuleDestroy, OnAppli
 	private logger: Logger;
 	private memoryCache = new Map<string, { snapshot: GitHubAppReleaseSnapshot; loadedAt: number }>();
 	private inFlightSync: { force: boolean; promise: Promise<AppReleaseSyncResult> } | null = null;
+	private inFlightMirrors = new Map<string, Promise<MirroredAppAsset>>();
 	private syncTimer: NodeJS.Timeout | null = null;
 
 	constructor(
@@ -237,7 +263,7 @@ export class AppReleaseService implements OnModuleInit, OnModuleDestroy, OnAppli
 		}
 		const repo = normalizeGitHubRepo(effectiveStored.githubRepo);
 		const snapshot = await this.getCachedSnapshot(repo);
-		return buildEffectiveNativeClientAppInfo(effectiveStored, snapshot);
+		return buildEffectiveNativeClientAppInfo(effectiveStored, snapshot, this.config?.url);
 	}
 
 	@bindThis
@@ -263,6 +289,11 @@ export class AppReleaseService implements OnModuleInit, OnModuleDestroy, OnAppli
 				|| snapshot.latestIos?.minVersion
 				|| null;
 
+			const resolveDownloadUrl = (version: string, asset: { name: string; rawDownloadUrl: string }): string | null => (
+				buildRelayDownloadUrl(this.config?.url, version, asset.name)
+				?? applyDownloadProxy(asset.rawDownloadUrl, proxyPrefix)
+			);
+
 			const mapLatest = (entry: LatestAppReleaseEntry | null): PublicAppLatestPlatformRelease | null => {
 				if (!entry) return null;
 				return {
@@ -276,17 +307,17 @@ export class AppReleaseService implements OnModuleInit, OnModuleDestroy, OnAppli
 					assetName: entry.asset.name,
 					size: entry.asset.size,
 					sha256: entry.asset.sha256,
-					downloadUrl: applyDownloadProxy(entry.asset.rawDownloadUrl, proxyPrefix),
+					downloadUrl: resolveDownloadUrl(entry.version, entry.asset),
 					rawDownloadUrl: entry.asset.rawDownloadUrl,
 					downloadCount: entry.asset.downloadCount,
 				};
 			};
 
-			const mapReleaseAsset = (asset: { name: string; size: number; sha256: string | null; rawDownloadUrl: string; downloadCount: number }): PublicAppReleaseAsset => ({
+			const mapReleaseAsset = (version: string, asset: { name: string; size: number; sha256: string | null; rawDownloadUrl: string; downloadCount: number }): PublicAppReleaseAsset => ({
 				name: asset.name,
 				size: asset.size,
 				sha256: asset.sha256,
-				downloadUrl: applyDownloadProxy(asset.rawDownloadUrl, proxyPrefix),
+				downloadUrl: resolveDownloadUrl(version, asset),
 				rawDownloadUrl: asset.rawDownloadUrl,
 				downloadCount: asset.downloadCount,
 			});
@@ -312,8 +343,8 @@ export class AppReleaseService implements OnModuleInit, OnModuleDestroy, OnAppli
 					notes: r.notes,
 					isLatest: r.version === snapshot.latestAndroid?.version || r.version === snapshot.latestIos?.version,
 					assets: {
-						...(r.assets.android ? { android: mapReleaseAsset(r.assets.android) } : {}),
-						...(r.assets.ios ? { ios: mapReleaseAsset(r.assets.ios) } : {}),
+						...(r.assets.android ? { android: mapReleaseAsset(r.version, r.assets.android) } : {}),
+						...(r.assets.ios ? { ios: mapReleaseAsset(r.version, r.assets.ios) } : {}),
 					},
 				})),
 			};
@@ -567,6 +598,12 @@ export class AppReleaseService implements OnModuleInit, OnModuleDestroy, OnAppli
 			};
 			await this.saveSnapshot(updatedSnapshot);
 
+			if (process.env.NODE_ENV !== 'test' && this.mirrorRootDir()) {
+				const currentMeta = await this.metaService.fetch(false).catch(() => this.meta);
+				const proxyPrefix = currentMeta?.nativeClientAppInfo?.githubDownloadProxy ?? null;
+				void this.preMirrorLatest(parsed.latestAndroid, parsed.latestIos, proxyPrefix);
+			}
+
 			return {
 				ok: true,
 				repo,
@@ -602,6 +639,262 @@ export class AppReleaseService implements OnModuleInit, OnModuleDestroy, OnAppli
 				latestIosVersion: preservedSnapshot.latestIos?.version ?? null,
 				releaseCount: preservedSnapshot.releases.length,
 			};
+		}
+	}
+
+	private mirrorRootDir(): string | null {
+		const rootDir = this.config?.rootDir;
+		if (typeof rootDir !== 'string' || rootDir.trim() === '') return null;
+		return Path.resolve(rootDir, 'files', 'app-releases');
+	}
+
+	private async preMirrorLatest(
+		latestAndroid: LatestAppReleaseEntry | null,
+		latestIos: LatestAppReleaseEntry | null,
+		proxyPrefix: string | null | undefined,
+	): Promise<void> {
+		const targets = [latestAndroid, latestIos].filter((e): e is LatestAppReleaseEntry => e != null);
+		for (const entry of targets) {
+			try {
+				await this.ensureMirroredAsset(entry.version, entry.asset, proxyPrefix);
+			} catch (err) {
+				this.logger.warn(`Background pre-mirror failed for v${entry.version}/${entry.asset.name}: ${err instanceof Error ? err.message : String(err)}`);
+			}
+		}
+	}
+
+	@bindThis
+	public async resolveRelayedAssetForDownload(versionRaw: string, filenameRaw: string): Promise<MirroredAppAsset | null> {
+		const cleanVersion = normalizeSemver(versionRaw);
+		if (!cleanVersion || !isSafeAssetFilename(filenameRaw)) return null;
+
+		const currentMeta = await this.metaService.fetch(false).catch(() => this.meta);
+		const stored = currentMeta?.nativeClientAppInfo ?? this.meta?.nativeClientAppInfo ?? {};
+		if (stored.autoFetchGithub === false) return null;
+
+		const repo = normalizeGitHubRepo(stored.githubRepo);
+		let snapshot = await this.getCachedSnapshot(repo, true);
+		if (!snapshot) {
+			await this.syncNow({ force: false }).catch(() => {});
+			snapshot = await this.getCachedSnapshot(repo, true);
+		}
+		if (!snapshot) return null;
+
+		const release = snapshot.releases.find(r => r.version === cleanVersion);
+		if (!release) return null;
+
+		const asset = [release.assets.android, release.assets.ios]
+			.find((a): a is AppReleaseAsset => a != null && a.name === filenameRaw);
+		if (!asset) return null;
+
+		return await this.ensureMirroredAsset(cleanVersion, asset, stored.githubDownloadProxy);
+	}
+
+	private async ensureMirroredAsset(
+		version: string,
+		asset: AppReleaseAsset,
+		proxyPrefix: string | null | undefined,
+	): Promise<MirroredAppAsset> {
+		const rootDir = this.mirrorRootDir();
+		if (!rootDir) {
+			throw new Error('Server file storage directory is not configured');
+		}
+		if (!isSafeAssetFilename(asset.name)) {
+			throw new Error(`Unsafe asset filename: ${asset.name}`);
+		}
+
+		const versionDir = Path.join(rootDir, version);
+		const targetPath = Path.join(versionDir, asset.name);
+
+		try {
+			const stat = await fs.promises.stat(targetPath);
+			if (stat.isFile() && stat.size > 0 && (asset.size <= 0 || stat.size === asset.size)) {
+				return {
+					filePath: targetPath,
+					filename: asset.name,
+					size: stat.size,
+					mimeType: resolveAssetMimeType(asset.name),
+				};
+			}
+		} catch {
+			// Cache miss; download below
+		}
+
+		const key = `${version}/${asset.name}`;
+		const existingTask = this.inFlightMirrors.get(key);
+		if (existingTask) return await existingTask;
+
+		const task = this.downloadAndVerifyAsset(rootDir, versionDir, targetPath, version, asset, proxyPrefix)
+			.finally(() => {
+				if (this.inFlightMirrors.get(key) === task) {
+					this.inFlightMirrors.delete(key);
+				}
+			});
+		this.inFlightMirrors.set(key, task);
+		return await task;
+	}
+
+	private async downloadAndVerifyAsset(
+		rootDir: string,
+		versionDir: string,
+		targetPath: string,
+		version: string,
+		asset: AppReleaseAsset,
+		proxyPrefix: string | null | undefined,
+	): Promise<MirroredAppAsset> {
+		await fs.promises.mkdir(versionDir, { recursive: true });
+
+		const proxiedUrl = applyDownloadProxy(asset.rawDownloadUrl, proxyPrefix);
+		const candidateUrls = proxiedUrl !== asset.rawDownloadUrl
+			? [proxiedUrl, asset.rawDownloadUrl]
+			: [asset.rawDownloadUrl];
+
+		let lastError: unknown = null;
+		for (const url of candidateUrls) {
+			const partialPath = `${targetPath}.partial.${randomUUID()}`;
+			try {
+				await this.fetchAssetToFile(url, partialPath, asset);
+				await fs.promises.rename(partialPath, targetPath);
+				const stat = await fs.promises.stat(targetPath);
+				await this.pruneOldMirroredVersions(rootDir, version);
+				return {
+					filePath: targetPath,
+					filename: asset.name,
+					size: stat.size,
+					mimeType: resolveAssetMimeType(asset.name),
+				};
+			} catch (err) {
+				lastError = err;
+				await fs.promises.rm(partialPath, { force: true }).catch(() => {});
+				this.logger.warn(`Failed to mirror ${asset.name} from ${url}: ${err instanceof Error ? err.message : String(err)}`);
+			}
+		}
+
+		throw lastError instanceof Error ? lastError : new Error(String(lastError ?? 'Download failed'));
+	}
+
+	private async fetchAssetToFile(url: string, partialPath: string, asset: AppReleaseAsset): Promise<void> {
+		const res = await this.httpRequestService.send(
+			url,
+			{
+				method: 'GET',
+				headers: {
+					'User-Agent': this.config?.userAgent ?? 'Misskey',
+				},
+				timeout: ASSET_MIRROR_TIMEOUT_MS,
+				size: ASSET_MIRROR_MAX_BYTES,
+			},
+			{
+				throwErrorWhenResponseNotOk: false,
+			},
+		);
+
+		if (!res.ok) {
+			await drainResponseBody(res);
+			throw new Error(`HTTP ${res.status} ${res.statusText}`);
+		}
+
+		const hash = createHash('sha256');
+		let totalBytes = 0;
+
+		const body = res.body as unknown;
+		const nodeStream: NodeJS.ReadableStream | null = body && typeof (body as NodeJS.ReadableStream).pipe === 'function'
+			? (body as NodeJS.ReadableStream)
+			: body && typeof (body as { getReader?: unknown }).getReader === 'function'
+				? (Readable.fromWeb(body as never) as unknown as NodeJS.ReadableStream)
+				: null;
+
+		if (nodeStream) {
+			const writeStream = fs.createWriteStream(partialPath);
+			try {
+				await new Promise<void>((resolve, reject) => {
+					let settled = false;
+					const fail = (err: unknown) => {
+						if (settled) return;
+						settled = true;
+						writeStream.destroy();
+						const destroyable = nodeStream as { destroy?: () => void };
+						destroyable.destroy?.();
+						reject(err);
+					};
+
+					nodeStream.on('data', (chunk: Buffer | string) => {
+						const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+						totalBytes += buf.length;
+						if (totalBytes > ASSET_MIRROR_MAX_BYTES) {
+							fail(new Error(`Asset exceeds max size (${ASSET_MIRROR_MAX_BYTES} bytes)`));
+							return;
+						}
+						hash.update(buf);
+						if (!writeStream.write(buf)) {
+							nodeStream.pause?.();
+						}
+					});
+
+					writeStream.on('drain', () => {
+						nodeStream.resume?.();
+					});
+
+					nodeStream.on('end', () => {
+						writeStream.end(() => {
+							if (!settled) {
+								settled = true;
+								resolve();
+							}
+						});
+					});
+
+					nodeStream.on('error', fail);
+					writeStream.on('error', fail);
+				});
+			} catch (err) {
+				await fs.promises.rm(partialPath, { force: true }).catch(() => {});
+				throw err;
+			}
+		} else {
+			const buf = await readBodyWithLimit(res, ASSET_MIRROR_MAX_BYTES);
+			totalBytes = buf.length;
+			hash.update(buf);
+			await fs.promises.writeFile(partialPath, buf);
+		}
+
+		if (totalBytes <= 0) {
+			throw new Error('Downloaded empty asset');
+		}
+		if (asset.size > 0 && totalBytes !== asset.size) {
+			throw new Error(`Size mismatch: expected ${asset.size}, got ${totalBytes}`);
+		}
+		if (asset.sha256) {
+			const actualDigest = hash.digest('hex').toLowerCase();
+			if (actualDigest !== asset.sha256.toLowerCase()) {
+				throw new Error(`SHA-256 mismatch: expected ${asset.sha256}, got ${actualDigest}`);
+			}
+		}
+	}
+
+	private async pruneOldMirroredVersions(rootDir: string, keepVersion: string): Promise<void> {
+		try {
+			const entries = await fs.promises.readdir(rootDir, { withFileTypes: true });
+			const versions = entries
+				.filter(e => e.isDirectory())
+				.map(e => normalizeSemver(e.name))
+				.filter((v): v is string => v != null);
+
+			versions.sort((a, b) => compareSemver(b, a));
+
+			const keepSet = new Set(versions.slice(0, KEEP_MIRRORED_VERSIONS));
+			keepSet.add(keepVersion);
+			for (const inFlightKey of this.inFlightMirrors.keys()) {
+				const ver = inFlightKey.split('/')[0];
+				if (ver) keepSet.add(ver);
+			}
+
+			for (const ver of versions) {
+				if (keepSet.has(ver)) continue;
+				await fs.promises.rm(Path.join(rootDir, ver), { recursive: true, force: true }).catch(() => {});
+			}
+		} catch {
+			// Ignore prune errors
 		}
 	}
 }

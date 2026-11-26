@@ -703,7 +703,7 @@ nativeClientAppInfoAutoFetchGithubCaption: "开启后，将自动从 GitHub Rele
 nativeClientAppInfoGithubRepo: "GitHub 仓库（owner/repo）"
 nativeClientAppInfoGithubRepoCaption: "填写格式为 owner/repo，留空默认使用 liminalselves/liminalselves_app。"
 nativeClientAppInfoGithubDownloadProxy: "GitHub 下载加速代理前缀（可选）"
-nativeClientAppInfoGithubDownloadProxyCaption: "可选的 https:// 代理前缀（例如 https://ghfast.top/），用于拼接安装包下载地址；不影响 GitHub API 拉取。"
+nativeClientAppInfoGithubDownloadProxyCaption: "可选的 https:// 代理前缀（例如 https://ghfast.top/），仅用于加速服务器从 GitHub 拉取缓存安装包；用户始终通过本服务器中转下载，不影响 GitHub API 拉取。"
 nativeClientAppInfoGithubSyncSection: "GitHub Releases 同步状态"
 nativeClientAppInfoSyncNow: "立即从 GitHub 同步"
 nativeClientAppInfoSyncedAt: "最近同步时间"

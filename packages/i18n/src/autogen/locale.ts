@@ -2821,7 +2821,7 @@ export interface Locale extends ILocale {
      */
     "nativeClientAppInfoGithubDownloadProxy": string;
     /**
-     * 任意の https:// 接頭辞（例: https://ghfast.top/）を指定すると、パッケージのダウンロード URL に付与されます。GitHub API リクエストには影響しません。
+     * 任意の https:// 接頭辞（例: https://ghfast.top/）を指定すると、サーバーが GitHub からパッケージをキャッシュ取得する際の加速に使われます（ユーザーには常に本サーバー経由で配信されます）。GitHub API リクエストには影響しません。
      */
     "nativeClientAppInfoGithubDownloadProxyCaption": string;
     /**

@@ -703,7 +703,7 @@ nativeClientAppInfoAutoFetchGithubCaption: "When enabled, the latest Android ver
 nativeClientAppInfoGithubRepo: "GitHub repository (owner/repo)"
 nativeClientAppInfoGithubRepoCaption: "Format: owner/repo. Leave empty to use liminalselves/liminalselves_app."
 nativeClientAppInfoGithubDownloadProxy: "GitHub download proxy prefix (optional)"
-nativeClientAppInfoGithubDownloadProxyCaption: "Optional https:// prefix (e.g. https://ghfast.top/) prepended to package download URLs. Does not affect GitHub API requests."
+nativeClientAppInfoGithubDownloadProxyCaption: "Optional https:// proxy prefix (e.g. https://ghfast.top/) used when this server mirrors release packages from GitHub; users always download via this server's relay. Does not affect GitHub API requests."
 nativeClientAppInfoGithubSyncSection: "GitHub Releases sync status"
 nativeClientAppInfoSyncNow: "Sync from GitHub now"
 nativeClientAppInfoSyncedAt: "Last synced"

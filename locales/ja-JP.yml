@@ -703,7 +703,7 @@ nativeClientAppInfoAutoFetchGithubCaption: "有効にすると、Android の最�
 nativeClientAppInfoGithubRepo: "GitHub リポジトリ（owner/repo）"
 nativeClientAppInfoGithubRepoCaption: "owner/repo 形式で指定します。空欄の場合は liminalselves/liminalselves_app を使用します。"
 nativeClientAppInfoGithubDownloadProxy: "GitHub ダウンロードプロキシ接頭辞（任意）"
-nativeClientAppInfoGithubDownloadProxyCaption: "任意の https:// 接頭辞（例: https://ghfast.top/）を指定すると、パッケージのダウンロード URL に付与されます。GitHub API リクエストには影響しません。"
+nativeClientAppInfoGithubDownloadProxyCaption: "任意の https:// 接頭辞（例: https://ghfast.top/）を指定すると、サーバーが GitHub からパッケージをキャッシュ取得する際の加速に使われます（ユーザーには常に本サーバー経由で配信されます）。GitHub API リクエストには影響しません。"
 nativeClientAppInfoGithubSyncSection: "GitHub Releases 同期状態"
 nativeClientAppInfoSyncNow: "今すぐ GitHub から同期"
 nativeClientAppInfoSyncedAt: "最終同期日時"
