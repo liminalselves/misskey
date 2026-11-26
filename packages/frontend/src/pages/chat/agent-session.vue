@@ -900,6 +900,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<MkSelect
 						:modelValue="visionModelSelectionId"
 						:items="visionModelSelectItems"
+						placeholder="请选择识图模型"
 						:disabled="savingSettings || moderationLocksSessionWrites"
 						@update:modelValue="selectVisionModel"
 					>
@@ -2278,6 +2279,9 @@ function refreshPanelLiveData(panel: AgentControlPanel | 'chat' | 'search', mode
 	if (mode === 'live' && (!isPageActivated || window.document.hidden)) return;
 	switch (panel) {
 		case 'model':
+			if (mode === 'enter') {
+				void loadVisionModels();
+			}
 			void loadModelSuccessRates();
 			void loadModelFreeQuota();
 			void loadAgentCreditBalance();
@@ -2707,7 +2711,7 @@ async function loadSession() {
 			: [];
 		if (session.value) {
 			selectedModelId.value = displayModelIdForSession(session.value.agentModelId);
-			visionModelSelectionId.value = session.value.agentVisionModelId ?? visionModels.value.find(model => model.isDefault)?.id ?? '';
+			syncVisionModelSelection();
 			selectedStyleId.value = session.value.dialogueStyleId ?? '';
 			{
 				const p = session.value.agentLongMemoryProvider;
@@ -2755,13 +2759,23 @@ async function loadSession() {
 	}
 }
 
+function syncVisionModelSelection() {
+	const savedId = session.value?.agentVisionModelId?.trim() || '';
+	if (savedId !== '') {
+		visionModelSelectionId.value = visionModels.value.some(model => model.id === savedId) ? savedId : '';
+		return;
+	}
+	visionModelSelectionId.value = visionModels.value.find(model => model.isDefault)?.id ?? visionModels.value[0]?.id ?? '';
+}
+
 async function loadVisionModels() {
 	try {
 		const result = await misskeyApi('agents/vision-models/list' as Parameters<typeof misskeyApi>[0], {}) as { defaultModelId: string | null; models: Array<{ id: string; name: string; costPerCall: number; isDefault: boolean }> };
 		visionModels.value = result.models;
-		if (session.value && !session.value.agentVisionModelId) visionModelSelectionId.value = result.defaultModelId ?? '';
+		syncVisionModelSelection();
 	} catch {
 		visionModels.value = [];
+		visionModelSelectionId.value = '';
 	}
 }
 
@@ -2771,6 +2785,7 @@ async function selectVisionModel(value: unknown) {
 	if (!session.value || !modelId || savingSettings.value || moderationLocksSessionWrites.value) return;
 	const previousModelId = visionModelSelectionId.value;
 	if (modelId === previousModelId) return;
+	visionModelSelectionId.value = modelId;
 	savingSettings.value = true;
 	try {
 		const updated = await misskeyApi('agents/sessions/update' as Parameters<typeof misskeyApi>[0], {
@@ -2780,8 +2795,9 @@ async function selectVisionModel(value: unknown) {
 		if (updated.agentVisionModelId !== modelId) {
 			throw new Error(i18n.ts._agents.visionModelSaveFailed);
 		}
-		visionModelSelectionId.value = modelId;
-		session.value.agentVisionModelId = modelId;
+		if (session.value) {
+			session.value.agentVisionModelId = modelId;
+		}
 	} catch (error) {
 		visionModelSelectionId.value = previousModelId;
 		await loadSession();
