@@ -6,7 +6,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 <template>
 <PageWithHeader>
 	<div class="_spacer" :class="$style.appPage">
-		<div class="_gaps_l" :class="$style.mainStack">
+		<div class="_gaps" :class="$style.mainStack">
 			<div class="_panel _gaps_s" :class="$style.hero">
 				<div :class="$style.heroTop">
 					<div :class="$style.heroTitleWrap">
@@ -659,12 +659,15 @@ definePage(() => ({
 }
 
 .mainStack {
+	display: flex;
+	flex-direction: column;
+	gap: 20px;
 	padding-top: 8px;
 	padding-bottom: 16px;
 }
 
 .sectionBlock {
-	margin-top: 14px;
+	margin-top: 0;
 }
 
 .sectionBody {

@@ -4665,7 +4665,7 @@ export interface Locale extends ILocale {
      */
     "appClientChangelog": string;
     /**
-     * 公式ネイティブアプリのインストーラー、リリース履歴、サーバーからのお知らせを確認できます。
+     * 公式モバイルアプリのダウンロード、更新履歴、お知らせを確認できます。
      */
     "appDownloadHeroDescription": string;
     /**
@@ -4685,7 +4685,7 @@ export interface Locale extends ILocale {
      */
     "appDownloadSourceGithub": string;
     /**
-     * サーバー設定フォールバック
+     * サーバー手動設定
      */
     "appDownloadSourceFallback": string;
     /**
@@ -4693,11 +4693,11 @@ export interface Locale extends ILocale {
      */
     "appDownloadRecommendedForDevice": string;
     /**
-     * デスクトップまたはネイティブ版未提供の環境です
+     * デスクトップ版アプリはありません
      */
     "appDownloadDesktopNoticeTitle": string;
     /**
-     * 現在、公式アプリは Android 版（および管理者設定に応じた iOS 版）を提供しています。デスクトップでは Web 版または PWA をご利用ください。下からパッケージをダウンロードすることもできます。
+     * パソコンではこのまま Web 版をご利用ください。スマホ用のインストーラーは下からダウンロードできます。
      */
     "appDownloadDesktopNoticeBody": string;
     /**
