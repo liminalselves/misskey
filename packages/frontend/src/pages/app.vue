@@ -17,16 +17,16 @@ SPDX-License-Identifier: AGPL-3.0-only
 				</div>
 
 				<div :class="$style.heroMeta">
-					<span :class="$style.metaChip">
+					<span :class="$style.metaPill">
 						<i class="ti ti-brand-github"></i>
 						{{ sourceLabel }}
 					</span>
-					<span v-if="effectiveSyncedAt" :class="$style.metaChip">
+					<span v-if="effectiveSyncedAt" :class="$style.metaPill">
 						<i class="ti ti-clock"></i>
 						{{ i18n.ts.appDownloadLastSynced }}
 						<MkTime :time="effectiveSyncedAt" mode="relative"/>
 					</span>
-					<span v-if="effectiveMinRequiredVersion" :class="$style.metaChip">
+					<span v-if="effectiveMinRequiredVersion" :class="$style.metaPill">
 						<i class="ti ti-shield-check"></i>
 						{{ i18n.tsx.appDownloadMinRequiredVersion({ version: effectiveMinRequiredVersion }) }}
 					</span>
@@ -35,7 +35,6 @@ SPDX-License-Identifier: AGPL-3.0-only
 						:href="repoUrl"
 						target="_blank"
 						rel="noopener noreferrer"
-						class="_link"
 						:class="$style.repoLink"
 					>
 						<i class="ti ti-external-link"></i>
@@ -54,159 +53,115 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 			<template v-else>
 				<MkInfo v-if="clientPlatform === 'desktop' || clientPlatform === 'unknown'">
-					<div :class="$style.desktopNoticeTitle">{{ i18n.ts.appDownloadDesktopNoticeTitle }}</div>
-					<div>{{ i18n.ts.appDownloadDesktopNoticeBody }}</div>
+					<span><b>{{ i18n.ts.appDownloadDesktopNoticeTitle }}</b> · {{ i18n.ts.appDownloadDesktopNoticeBody }}</span>
 				</MkInfo>
 
 				<FormSection :class="$style.sectionBlock">
 					<template #label>{{ i18n.ts.download }}</template>
-					<FormSplit :class="$style.sectionBody" :minWidth="280">
-						<div
-							class="_panel _gaps_m"
-							:class="[$style.card, { [$style.cardFeatured]: clientPlatform === 'android' }]"
-						>
-							<div :class="$style.cardHead">
-								<div :class="$style.platformWrap">
-									<div :class="$style.platform">
-										<i class="ti ti-brand-android"></i>
-										{{ i18n.ts.appClientPlatformAndroid }}
+					<div :class="[$style.sectionBody, $style.downloadStack]">
+						<div v-if="availableCards.length > 0" :class="$style.downloadGrid">
+							<article
+								v-for="card in availableCards"
+								:key="card.platform"
+								class="_panel"
+								:class="[$style.card, { [$style.cardSpotlight]: card.isSpotlight }]"
+							>
+								<div :class="$style.cardInfo">
+									<div :class="$style.cardHead">
+										<div :class="$style.platformWrap">
+											<span :class="$style.platformIcon">
+												<i :class="card.icon"></i>
+											</span>
+											<div :class="$style.platformTitleBlock">
+												<div :class="$style.platformNameRow">
+													<span :class="$style.platform">{{ card.label }}</span>
+													<span v-if="card.version" class="_monospace" :class="$style.versionPill">v{{ card.version }}</span>
+													<span v-if="card.isRecommended" :class="$style.recommendedBadge">
+														{{ i18n.ts.appDownloadRecommendedForDevice }}
+													</span>
+												</div>
+												<div v-if="card.publishedDate" :class="$style.publishedLine">
+													<i class="ti ti-calendar"></i>
+													<span>{{ i18n.tsx.appDownloadReleaseDate({ date: card.publishedDate }) }}</span>
+												</div>
+											</div>
+										</div>
 									</div>
-									<span v-if="clientPlatform === 'android'" :class="$style.recommendedBadge">
-										{{ i18n.ts.appDownloadRecommendedForDevice }}
-									</span>
-								</div>
-								<div class="_monospace" :class="$style.version">
-									{{ androidCard.version ? `v${androidCard.version}` : '-' }}
-								</div>
-							</div>
 
-							<div v-if="androidCard.hasMeta" :class="$style.assetMetaList">
-								<div v-if="androidCard.publishedDate" :class="$style.assetMetaRow">
-									<span :class="$style.assetMetaLabel"><i class="ti ti-calendar"></i> {{ i18n.tsx.appDownloadReleaseDate({ date: androidCard.publishedDate }) }}</span>
-								</div>
-								<div v-if="androidCard.assetName" :class="$style.assetMetaRow">
-									<span :class="$style.assetMetaLabel">{{ i18n.ts.appDownloadFileName }}</span>
-									<span class="_monospace _selectable" :class="$style.assetMetaValue">{{ androidCard.assetName }}</span>
-								</div>
-								<div v-if="androidCard.sizeText" :class="$style.assetMetaRow">
-									<span :class="$style.assetMetaLabel">{{ i18n.ts.appDownloadFileSize }}</span>
-									<span class="_monospace" :class="$style.assetMetaValue">{{ androidCard.sizeText }}</span>
-								</div>
-								<div v-if="androidCard.downloadCountText" :class="$style.assetMetaRow">
-									<span :class="$style.assetMetaLabel">{{ i18n.ts.appDownloadCount }}</span>
-									<span class="_monospace" :class="$style.assetMetaValue">{{ androidCard.downloadCountText }}</span>
-								</div>
-								<div v-if="androidCard.sha256" :class="$style.assetMetaRow">
-									<span :class="$style.assetMetaLabel">{{ i18n.ts.appDownloadSha256 }}</span>
-									<span :class="$style.shaWrap">
-										<span class="_monospace _selectable" :class="$style.shaShort" :title="androidCard.sha256">{{ androidCard.sha256Short }}</span>
+									<div v-if="card.hasMeta" :class="$style.specPills">
+										<span v-if="card.assetName" class="_monospace _selectable" :class="$style.specPill">
+											<i class="ti ti-package"></i>
+											{{ card.assetName }}
+										</span>
+										<span v-if="card.sizeText" class="_monospace" :class="$style.specPill">
+											<i class="ti ti-file-zip"></i>
+											{{ card.sizeText }}
+										</span>
+										<span v-if="card.downloadCountText" class="_monospace" :class="$style.specPill">
+											<i class="ti ti-download"></i>
+											{{ card.downloadCountText }}
+										</span>
 										<button
+											v-if="card.sha256"
 											type="button"
 											class="_button"
-											:class="$style.copyButton"
+											:class="$style.shaPill"
 											:aria-label="i18n.ts.appDownloadCopySha256"
-											:title="i18n.ts.appDownloadCopySha256"
-											@click="copyToClipboard(androidCard.sha256)"
+											:title="`${i18n.ts.appDownloadSha256}: ${card.sha256}`"
+											@click="copyToClipboard(card.sha256)"
 										>
+											<span class="_monospace">SHA-256 {{ card.sha256Short }}</span>
 											<i class="ti ti-copy"></i>
 										</button>
-									</span>
-								</div>
-							</div>
-
-							<div :class="$style.cardActions">
-								<MkButton primary rounded full :disabled="!androidCard.canDownload" @click="openExternal(androidCard.downloadUrl)">
-									<i class="ti ti-download"></i>
-									{{ androidCard.canDownload ? i18n.ts.download : temporaryUnavailableText }}
-								</MkButton>
-								<a
-									v-if="androidCard.canOpenRelease"
-									:href="androidCard.releaseUrl"
-									target="_blank"
-									rel="noopener noreferrer"
-									class="_link"
-									:class="$style.releaseLink"
-								>
-									<i class="ti ti-brand-github"></i>
-									{{ i18n.ts.appDownloadViewRelease }}
-								</a>
-							</div>
-							<div v-if="androidCard.downloadUrl" class="_monospace _selectable" :class="$style.urlText">{{ androidCard.downloadUrl }}</div>
-						</div>
-
-						<div
-							class="_panel _gaps_m"
-							:class="[$style.card, { [$style.cardFeatured]: clientPlatform === 'ios' }]"
-						>
-							<div :class="$style.cardHead">
-								<div :class="$style.platformWrap">
-									<div :class="$style.platform">
-										<i class="ti ti-brand-apple"></i>
-										{{ i18n.ts.appClientPlatformIos }}
 									</div>
-									<span v-if="clientPlatform === 'ios'" :class="$style.recommendedBadge">
-										{{ i18n.ts.appDownloadRecommendedForDevice }}
-									</span>
 								</div>
-								<div class="_monospace" :class="$style.version">
-									{{ iosCard.version ? `v${iosCard.version}` : '-' }}
-								</div>
-							</div>
 
-							<div v-if="iosCard.hasMeta" :class="$style.assetMetaList">
-								<div v-if="iosCard.publishedDate" :class="$style.assetMetaRow">
-									<span :class="$style.assetMetaLabel"><i class="ti ti-calendar"></i> {{ i18n.tsx.appDownloadReleaseDate({ date: iosCard.publishedDate }) }}</span>
-								</div>
-								<div v-if="iosCard.assetName" :class="$style.assetMetaRow">
-									<span :class="$style.assetMetaLabel">{{ i18n.ts.appDownloadFileName }}</span>
-									<span class="_monospace _selectable" :class="$style.assetMetaValue">{{ iosCard.assetName }}</span>
-								</div>
-								<div v-if="iosCard.sizeText" :class="$style.assetMetaRow">
-									<span :class="$style.assetMetaLabel">{{ i18n.ts.appDownloadFileSize }}</span>
-									<span class="_monospace" :class="$style.assetMetaValue">{{ iosCard.sizeText }}</span>
-								</div>
-								<div v-if="iosCard.downloadCountText" :class="$style.assetMetaRow">
-									<span :class="$style.assetMetaLabel">{{ i18n.ts.appDownloadCount }}</span>
-									<span class="_monospace" :class="$style.assetMetaValue">{{ iosCard.downloadCountText }}</span>
-								</div>
-								<div v-if="iosCard.sha256" :class="$style.assetMetaRow">
-									<span :class="$style.assetMetaLabel">{{ i18n.ts.appDownloadSha256 }}</span>
-									<span :class="$style.shaWrap">
-										<span class="_monospace _selectable" :class="$style.shaShort" :title="iosCard.sha256">{{ iosCard.sha256Short }}</span>
+								<div :class="$style.cardActions">
+									<MkButton primary rounded full :disabled="!card.canDownload" @click="openExternal(card.downloadUrl)">
+										<i class="ti ti-download"></i>
+										{{ card.canDownload ? i18n.ts.download : temporaryUnavailableText }}
+									</MkButton>
+									<div v-if="card.canOpenRelease || card.canDownload" :class="$style.secondaryActions">
+										<a
+											v-if="card.canOpenRelease"
+											:href="card.releaseUrl"
+											target="_blank"
+											rel="noopener noreferrer"
+											:class="$style.secondaryLink"
+										>
+											<i class="ti ti-brand-github"></i>
+											{{ i18n.ts.appDownloadViewRelease }}
+										</a>
 										<button
+											v-if="card.canDownload"
 											type="button"
 											class="_button"
-											:class="$style.copyButton"
-											:aria-label="i18n.ts.appDownloadCopySha256"
-											:title="i18n.ts.appDownloadCopySha256"
-											@click="copyToClipboard(iosCard.sha256)"
+											:class="$style.copyUrlBtn"
+											:aria-label="card.downloadUrl"
+											:title="card.downloadUrl"
+											@click="copyToClipboard(card.downloadUrl)"
 										>
-											<i class="ti ti-copy"></i>
+											<i class="ti ti-link"></i>
 										</button>
-									</span>
+									</div>
 								</div>
-							</div>
-
-							<div :class="$style.cardActions">
-								<MkButton primary rounded full :disabled="!iosCard.canDownload" @click="openExternal(iosCard.downloadUrl)">
-									<i class="ti ti-download"></i>
-									{{ iosCard.canDownload ? i18n.ts.download : temporaryUnavailableText }}
-								</MkButton>
-								<a
-									v-if="iosCard.canOpenRelease"
-									:href="iosCard.releaseUrl"
-									target="_blank"
-									rel="noopener noreferrer"
-									class="_link"
-									:class="$style.releaseLink"
-								>
-									<i class="ti ti-brand-github"></i>
-									{{ i18n.ts.appDownloadViewRelease }}
-								</a>
-							</div>
-							<div v-if="iosCard.downloadUrl" class="_monospace _selectable" :class="$style.urlText">{{ iosCard.downloadUrl }}</div>
+							</article>
 						</div>
-					</FormSplit>
+
+						<div v-if="unavailableCards.length > 0" :class="$style.unavailableList">
+							<div
+								v-for="card in unavailableCards"
+								:key="card.platform"
+								:class="$style.unavailableStrip"
+							>
+								<div :class="$style.unavailablePlatform">
+									<i :class="card.icon"></i>
+									<span>{{ card.label }}</span>
+								</div>
+								<span :class="$style.unavailableStatus">{{ temporaryUnavailableText }}</span>
+							</div>
+						</div>
+					</div>
 				</FormSection>
 
 				<FormSection v-if="announcementText" :class="$style.sectionBlock">
@@ -348,7 +303,6 @@ import { compareVersions } from 'compare-versions';
 import MkButton from '@/components/MkButton.vue';
 import MkInfo from '@/components/MkInfo.vue';
 import FormSection from '@/components/form/section.vue';
-import FormSplit from '@/components/form/split.vue';
 import { definePage } from '@/page.js';
 import { i18n } from '@/i18n.js';
 import { instance, fetchInstance } from '@/instance.js';
@@ -428,6 +382,9 @@ type NativeClientAppInfoLike = {
 };
 
 type PlatformCardView = {
+	platform: 'android' | 'ios';
+	label: string;
+	icon: string;
 	version: string;
 	publishedDate: string;
 	assetName: string;
@@ -440,6 +397,9 @@ type PlatformCardView = {
 	releaseUrl: string;
 	canOpenRelease: boolean;
 	hasMeta: boolean;
+	isAvailable: boolean;
+	isRecommended: boolean;
+	isSpotlight: boolean;
 };
 
 type TimelineReleaseView = {
@@ -549,10 +509,13 @@ const repoUrl = computed(() => {
 });
 
 function buildPlatformCard(
+	platform: 'android' | 'ios',
+	label: string,
+	icon: string,
 	latest: AppLatestPlatform | null | undefined,
 	fallbackVersion: string | undefined,
 	fallbackUrl: string | undefined,
-): PlatformCardView {
+): Omit<PlatformCardView, 'isSpotlight'> {
 	const version = latest?.version?.trim() || fallbackVersion?.trim() || '';
 	const downloadUrl = latest?.downloadUrl?.trim() || fallbackUrl?.trim() || '';
 	const releaseUrl = latest?.releaseUrl?.trim() || '';
@@ -565,8 +528,12 @@ function buildPlatformCard(
 		: '';
 	const sha256 = latest?.sha256?.trim() || '';
 	const sha256Short = shortenSha256(sha256);
+	const canDownload = isSafeHttpUrl(downloadUrl);
 
 	return {
+		platform,
+		label,
+		icon,
 		version,
 		publishedDate,
 		assetName,
@@ -575,24 +542,45 @@ function buildPlatformCard(
 		sha256,
 		sha256Short,
 		downloadUrl,
-		canDownload: isSafeHttpUrl(downloadUrl),
+		canDownload,
 		releaseUrl,
 		canOpenRelease: isSafeHttpUrl(releaseUrl),
-		hasMeta: Boolean(publishedDate || assetName || sizeText || downloadCountText || sha256),
+		hasMeta: Boolean(assetName || sizeText || downloadCountText || sha256),
+		isAvailable: canDownload || version.length > 0,
+		isRecommended: clientPlatform === platform,
 	};
 }
 
-const androidCard = computed(() => buildPlatformCard(
-	releasesData.value?.latest?.android,
-	appInfo.value.latestAndroidVersion,
-	appInfo.value.androidDownloadUrl,
-));
+const platformCards = computed<PlatformCardView[]>(() => {
+	const base = [
+		buildPlatformCard(
+			'android',
+			i18n.ts.appClientPlatformAndroid,
+			'ti ti-brand-android',
+			releasesData.value?.latest?.android,
+			appInfo.value.latestAndroidVersion,
+			appInfo.value.androidDownloadUrl,
+		),
+		buildPlatformCard(
+			'ios',
+			i18n.ts.appClientPlatformIos,
+			'ti ti-brand-apple',
+			releasesData.value?.latest?.ios,
+			appInfo.value.latestIosVersion,
+			appInfo.value.iosDownloadUrl,
+		),
+	];
 
-const iosCard = computed(() => buildPlatformCard(
-	releasesData.value?.latest?.ios,
-	appInfo.value.latestIosVersion,
-	appInfo.value.iosDownloadUrl,
-));
+	const availableCount = base.filter(c => c.isAvailable).length;
+	const sorted = [...base].sort((a, b) => Number(b.isRecommended) - Number(a.isRecommended));
+	return sorted.map(card => ({
+		...card,
+		isSpotlight: card.isAvailable && (availableCount === 1 || card.isRecommended),
+	}));
+});
+
+const availableCards = computed(() => platformCards.value.filter(c => c.isAvailable));
+const unavailableCards = computed(() => platformCards.value.filter(c => !c.isAvailable));
 
 const temporaryUnavailableText = computed(() => i18n.ts.cannotPerformTemporary);
 
@@ -675,11 +663,11 @@ definePage(() => ({
 }
 
 .hero {
-	padding: 20px;
+	padding: 22px 24px;
 	background:
-		radial-gradient(circle at 0 0, color-mix(in srgb, var(--MI_THEME-accent), transparent 84%), transparent 48%),
+		radial-gradient(ellipse 80% 90% at 0% 0%, color-mix(in srgb, var(--MI_THEME-accent), transparent 82%), transparent 60%),
 		var(--MI_THEME-panel);
-	border: 1px solid color-mix(in srgb, var(--MI_THEME-accent), transparent 78%);
+	border: 1px solid color-mix(in srgb, var(--MI_THEME-accent), transparent 76%);
 }
 
 .heroTop {
@@ -695,8 +683,8 @@ definePage(() => ({
 
 .heroTag {
 	flex-shrink: 0;
-	font-size: 0.85rem;
-	padding: 4px 10px;
+	font-size: 0.8rem;
+	padding: 4px 11px;
 	border-radius: 999px;
 	background: var(--MI_THEME-accentedBg);
 	color: var(--MI_THEME-accent);
@@ -704,13 +692,13 @@ definePage(() => ({
 }
 
 .heroTitle {
-	font-size: 1.9rem;
+	font-size: 1.85rem;
 	font-weight: 800;
-	letter-spacing: 0.01em;
+	letter-spacing: -0.01em;
 }
 
 .heroSub {
-	margin-top: 4px;
+	margin-top: 6px;
 	opacity: 0.82;
 	line-height: 1.55;
 	white-space: pre-wrap;
@@ -720,16 +708,20 @@ definePage(() => ({
 	display: flex;
 	flex-wrap: wrap;
 	align-items: center;
-	gap: 8px 14px;
-	margin-top: 6px;
-	font-size: 0.85rem;
-	opacity: 0.82;
+	gap: 8px;
+	margin-top: 10px;
+	font-size: 0.82rem;
 }
 
-.metaChip {
+.metaPill {
 	display: inline-flex;
 	align-items: center;
 	gap: 5px;
+	padding: 4px 10px;
+	border-radius: 999px;
+	background: var(--MI_THEME-bg);
+	border: 1px solid var(--MI_THEME-divider);
+	opacity: 0.88;
 }
 
 .repoLink {
@@ -737,37 +729,96 @@ definePage(() => ({
 	align-items: center;
 	gap: 5px;
 	margin-left: auto;
+	padding: 4px 11px;
+	border-radius: 999px;
+	background: var(--MI_THEME-accentedBg);
+	color: var(--MI_THEME-accent);
 	font-weight: 600;
+	text-decoration: none;
+	transition: opacity 0.15s ease;
+
+	&:hover {
+		opacity: 0.85;
+	}
 }
 
-.desktopNoticeTitle {
-	font-weight: 700;
-	margin-bottom: 2px;
+.downloadStack {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+}
+
+.downloadGrid {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 14px;
 }
 
 .card {
 	display: flex;
 	flex-direction: column;
-	padding: 18px;
+	justify-content: space-between;
+	gap: 18px;
+	padding: 20px 22px;
 	border: 1px solid var(--MI_THEME-divider);
+	transition: border-color 0.2s ease;
 }
 
-.cardFeatured {
-	order: -1;
-	border-color: var(--MI_THEME-accent);
+.cardSpotlight {
+	grid-column: 1 / -1;
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) minmax(220px, 260px);
+	align-items: center;
+	gap: 20px 28px;
+	padding: 24px;
+	border-color: color-mix(in srgb, var(--MI_THEME-accent), transparent 45%);
 	background:
-		radial-gradient(circle at 100% 0, color-mix(in srgb, var(--MI_THEME-accent), transparent 88%), transparent 55%),
+		radial-gradient(circle at 100% 0%, color-mix(in srgb, var(--MI_THEME-accent), transparent 86%), transparent 55%),
 		var(--MI_THEME-panel);
+}
+
+.cardInfo {
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
+	min-width: 0;
 }
 
 .cardHead {
 	display: flex;
 	align-items: flex-start;
 	justify-content: space-between;
-	gap: 10px;
+	gap: 12px;
 }
 
 .platformWrap {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	min-width: 0;
+}
+
+.platformIcon {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 44px;
+	height: 44px;
+	flex-shrink: 0;
+	border-radius: 12px;
+	background: var(--MI_THEME-accentedBg);
+	color: var(--MI_THEME-accent);
+	font-size: 1.4rem;
+}
+
+.platformTitleBlock {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	min-width: 0;
+}
+
+.platformNameRow {
 	display: flex;
 	flex-wrap: wrap;
 	align-items: center;
@@ -775,104 +826,169 @@ definePage(() => ({
 }
 
 .platform {
-	display: inline-flex;
-	align-items: center;
-	gap: 8px;
-	font-size: 1.05rem;
+	font-size: 1.15rem;
+	font-weight: 800;
+}
+
+.versionPill {
+	padding: 2px 9px;
+	border-radius: 999px;
+	font-size: 0.82rem;
 	font-weight: 700;
+	background: var(--MI_THEME-bg);
+	border: 1px solid var(--MI_THEME-divider);
 }
 
 .recommendedBadge {
 	padding: 2px 9px;
 	border-radius: 999px;
-	font-size: 0.78rem;
+	font-size: 0.76rem;
 	font-weight: 700;
 	background: var(--MI_THEME-accentedBg);
 	color: var(--MI_THEME-accent);
 }
 
-.version {
-	font-weight: 700;
-	opacity: 0.9;
-}
-
-.assetMetaList {
-	display: flex;
-	flex-direction: column;
-	gap: 6px;
-	padding: 10px 12px;
-	border-radius: var(--MI-radius);
-	background: var(--MI_THEME-bg);
-	font-size: 0.85rem;
-}
-
-.assetMetaRow {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	gap: 10px;
-	min-width: 0;
-}
-
-.assetMetaLabel {
+.publishedLine {
 	display: inline-flex;
 	align-items: center;
 	gap: 5px;
-	opacity: 0.72;
-	flex-shrink: 0;
+	font-size: 0.83rem;
+	opacity: 0.68;
 }
 
-.assetMetaValue {
-	text-align: right;
-	overflow-wrap: anywhere;
+.specPills {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px;
 }
 
-.shaWrap {
+.specPill,
+.shaPill {
 	display: inline-flex;
 	align-items: center;
 	gap: 6px;
-	min-width: 0;
+	padding: 5px 10px;
+	border-radius: 8px;
+	background: var(--MI_THEME-bg);
+	border: 1px solid var(--MI_THEME-divider);
+	font-size: 0.8rem;
+	line-height: 1.3;
+	max-width: 100%;
+	overflow-wrap: anywhere;
 }
 
-.shaShort {
-	opacity: 0.9;
-}
+.shaPill {
+	color: inherit;
+	transition: border-color 0.15s ease, color 0.15s ease;
 
-.copyButton {
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	width: 24px;
-	height: 24px;
-	border-radius: 6px;
-	color: var(--MI_THEME-accent);
+	> i {
+		color: var(--MI_THEME-accent);
+	}
 
 	&:hover {
-		background: var(--MI_THEME-accentedBg);
+		border-color: var(--MI_THEME-accent);
 	}
 }
 
 .cardActions {
 	display: flex;
 	flex-direction: column;
-	gap: 8px;
-	margin-top: auto;
+	gap: 10px;
+	width: 100%;
 }
 
-.releaseLink {
+.secondaryActions {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+}
+
+.secondaryLink {
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
 	gap: 6px;
-	font-size: 0.85rem;
-	padding: 2px 0;
+	padding: 6px 12px;
+	border-radius: 999px;
+	font-size: 0.83rem;
+	font-weight: 600;
+	color: var(--MI_THEME-fg);
+	background: var(--MI_THEME-bg);
+	border: 1px solid var(--MI_THEME-divider);
+	text-decoration: none;
+	transition: border-color 0.15s ease, color 0.15s ease;
+
+	&:hover {
+		border-color: var(--MI_THEME-accent);
+		color: var(--MI_THEME-accent);
+	}
 }
 
-.urlText {
+.copyUrlBtn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 30px;
+	height: 30px;
+	border-radius: 999px;
+	background: var(--MI_THEME-bg);
+	border: 1px solid var(--MI_THEME-divider);
+	color: var(--MI_THEME-fg);
+	opacity: 0.78;
+	transition: border-color 0.15s ease, color 0.15s ease, opacity 0.15s ease;
+
+	&:hover {
+		border-color: var(--MI_THEME-accent);
+		color: var(--MI_THEME-accent);
+		opacity: 1;
+	}
+}
+
+.unavailableList {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.unavailableStrip {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	padding: 12px 16px;
+	border-radius: var(--MI-radius);
+	border: 1px dashed var(--MI_THEME-divider);
+	background: color-mix(in srgb, var(--MI_THEME-panel), transparent 40%);
+}
+
+.unavailablePlatform {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	font-weight: 600;
+	opacity: 0.72;
+}
+
+.unavailableStatus {
+	padding: 2px 10px;
+	border-radius: 999px;
 	font-size: 0.78rem;
-	word-break: break-all;
-	opacity: 0.6;
-	line-height: 1.45;
+	background: var(--MI_THEME-bg);
+	border: 1px solid var(--MI_THEME-divider);
+	opacity: 0.65;
+}
+
+@media (max-width: 700px) {
+	.downloadGrid {
+		grid-template-columns: 1fr;
+	}
+
+	.cardSpotlight {
+		grid-template-columns: 1fr;
+		padding: 20px;
+	}
 }
 
 .sectionPanel {
@@ -924,7 +1040,7 @@ definePage(() => ({
 }
 
 .releaseCard {
-	padding: 16px 18px;
+	padding: 18px 22px;
 	border: 1px solid var(--MI_THEME-divider);
 }
 
@@ -944,7 +1060,7 @@ definePage(() => ({
 }
 
 .releaseVersion {
-	font-size: 1.1rem;
+	font-size: 1.2rem;
 	font-weight: 800;
 }
 
@@ -1052,11 +1168,29 @@ definePage(() => ({
 
 .notesList {
 	margin: 4px 0;
-	padding-left: 20px;
+	padding-left: 0;
+	list-style: none;
 	line-height: 1.65;
 
+	> li {
+		position: relative;
+		padding-left: 16px;
+	}
+
+	> li::before {
+		content: '';
+		position: absolute;
+		left: 2px;
+		top: 0.85em;
+		width: 6px;
+		height: 1.5px;
+		border-radius: 1px;
+		background: currentColor;
+		opacity: 0.45;
+	}
+
 	> li + li {
-		margin-top: 3px;
+		margin-top: 4px;
 	}
 }
 
