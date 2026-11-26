@@ -48,15 +48,22 @@ export const meta = {
 } as const;
 
 export const paramDef = {
-	type: 'object',
-	properties: {
-		invitationId: { type: 'string', format: 'misskey:id' },
-		roomId: { type: 'string', format: 'misskey:id' },
-		userId: { type: 'string', format: 'misskey:id' },
-	},
 	anyOf: [
-		{ required: ['invitationId'] },
-		{ required: ['roomId', 'userId'] },
+		{
+			type: 'object',
+			properties: {
+				invitationId: { type: 'string', format: 'misskey:id' },
+			},
+			required: ['invitationId'],
+		},
+		{
+			type: 'object',
+			properties: {
+				roomId: { type: 'string', format: 'misskey:id' },
+				userId: { type: 'string', format: 'misskey:id' },
+			},
+			required: ['roomId', 'userId'],
+		},
 	],
 } as const;
 
@@ -69,11 +76,12 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			await this.chatService.checkChatAvailability(me.id, 'write');
 
 			try {
-				await this.chatService.cancelRoomInvitation(me, {
-					invitationId: ps.invitationId,
-					roomId: ps.roomId,
-					userId: ps.userId,
-				});
+				await this.chatService.cancelRoomInvitation(
+					me,
+					'invitationId' in ps
+						? { invitationId: ps.invitationId }
+						: { roomId: ps.roomId, userId: ps.userId },
+				);
 				return {};
 			} catch (e: any) {
 				if (e?.message === 'no such invitation') throw new ApiError(meta.errors.noSuchInvitation);
