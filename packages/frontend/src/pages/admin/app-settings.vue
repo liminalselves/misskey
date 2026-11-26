@@ -6,7 +6,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 <template>
 <PageWithHeader :tabs="headerTabs">
 	<div class="_spacer" style="--MI_SPACER-w: 700px; --MI_SPACER-min: 16px; --MI_SPACER-max: 32px;">
-		<SearchMarker path="/admin/app-settings" :label="i18n.ts.adminAppSettings" :keywords="['app', 'mobile', 'push', 'aliyun', 'native', 'client', 'apk', 'ios']" icon="ti ti-device-mobile">
+		<SearchMarker path="/admin/app-settings" :label="i18n.ts.adminAppSettings" :keywords="['app', 'mobile', 'push', 'aliyun', 'native', 'client', 'apk', 'ios', 'github']" icon="ti ti-device-mobile">
 			<div class="_gaps_m">
 				<MkInfo>{{ i18n.ts.adminAppSettingsDescription }}</MkInfo>
 
@@ -60,7 +60,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 					</MkFolder>
 				</SearchMarker>
 
-				<SearchMarker v-slot="slotProps" :keywords="['native', 'app', 'client', 'mobile', 'apk', 'ios', 'version']">
+				<SearchMarker v-slot="slotProps" :keywords="['native', 'app', 'client', 'mobile', 'apk', 'ios', 'version', 'github', 'release', 'proxy']">
 					<MkFolder :defaultOpen="slotProps.isParentOfTarget">
 						<template #icon><SearchIcon><i class="ti ti-apps"></i></SearchIcon></template>
 						<template #label><SearchLabel>{{ i18n.ts.nativeClientAppInfo }}</SearchLabel></template>
@@ -70,6 +70,75 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 						<div class="_gaps">
 							<MkInfo>{{ i18n.ts.nativeClientAppInfoDescription }}</MkInfo>
+
+							<SearchMarker>
+								<MkSwitch v-model="nativeClientAppInfoForm.state.autoFetchGithub">
+									<template #label><SearchLabel>{{ i18n.ts.nativeClientAppInfoAutoFetchGithub }}</SearchLabel><span v-if="nativeClientAppInfoForm.modifiedStates.autoFetchGithub" class="_modified">{{ i18n.ts.modified }}</span></template>
+									<template #caption><SearchText>{{ i18n.ts.nativeClientAppInfoAutoFetchGithubCaption }}</SearchText></template>
+								</MkSwitch>
+							</SearchMarker>
+
+							<FormSplit :minWidth="280">
+								<SearchMarker>
+									<MkInput v-model="nativeClientAppInfoForm.state.githubRepo" placeholder="liminalselves/liminalselves_app">
+										<template #label><SearchLabel>{{ i18n.ts.nativeClientAppInfoGithubRepo }}</SearchLabel><span v-if="nativeClientAppInfoForm.modifiedStates.githubRepo" class="_modified">{{ i18n.ts.modified }}</span></template>
+										<template #caption><SearchText>{{ i18n.ts.nativeClientAppInfoGithubRepoCaption }}</SearchText></template>
+										<template #prefix><i class="ti ti-brand-github"></i></template>
+									</MkInput>
+								</SearchMarker>
+								<SearchMarker>
+									<MkInput v-model="nativeClientAppInfoForm.state.githubDownloadProxy" type="url" placeholder="https://ghfast.top/">
+										<template #label><SearchLabel>{{ i18n.ts.nativeClientAppInfoGithubDownloadProxy }}</SearchLabel><span v-if="nativeClientAppInfoForm.modifiedStates.githubDownloadProxy" class="_modified">{{ i18n.ts.modified }}</span></template>
+										<template #caption><SearchText>{{ i18n.ts.nativeClientAppInfoGithubDownloadProxyCaption }}</SearchText></template>
+										<template #prefix><i class="ti ti-world-download"></i></template>
+									</MkInput>
+								</SearchMarker>
+							</FormSplit>
+
+							<div class="_panel _gaps_s" :class="$style.syncBox">
+								<div :class="$style.syncHead">
+									<div class="_title">{{ i18n.ts.nativeClientAppInfoGithubSyncSection }}</div>
+									<MkButton primary :disabled="syncingReleases" @click="syncReleasesNow">
+										<i class="ti ti-refresh"></i> {{ i18n.ts.nativeClientAppInfoSyncNow }}
+									</MkButton>
+								</div>
+								<FormSplit :minWidth="200">
+									<MkKeyValue>
+										<template #key>{{ i18n.ts.nativeClientAppInfoSyncedAndroid }}</template>
+										<template #value>
+											<span class="_monospace">{{ syncStatus.latestAndroidVersion ? `v${syncStatus.latestAndroidVersion}` : '-' }}</span>
+										</template>
+									</MkKeyValue>
+									<MkKeyValue>
+										<template #key>{{ i18n.ts.nativeClientAppInfoSyncedIos }}</template>
+										<template #value>
+											<span class="_monospace">{{ syncStatus.latestIosVersion ? `v${syncStatus.latestIosVersion}` : '-' }}</span>
+										</template>
+									</MkKeyValue>
+									<MkKeyValue>
+										<template #key>{{ i18n.ts.nativeClientAppInfoSyncedReleaseCount }}</template>
+										<template #value>
+											<span class="_monospace">{{ syncStatus.releaseCount }}</span>
+										</template>
+									</MkKeyValue>
+									<MkKeyValue>
+										<template #key>{{ i18n.ts.nativeClientAppInfoSyncedAt }}</template>
+										<template #value>
+											<MkTime v-if="syncStatus.syncedAt" :time="syncStatus.syncedAt" mode="detail"/>
+											<span v-else>{{ i18n.ts.nativeClientAppInfoNeverSynced }}</span>
+										</template>
+									</MkKeyValue>
+								</FormSplit>
+								<MkInfo v-if="syncStatus.syncError" warn>
+									{{ i18n.ts.nativeClientAppInfoSyncError }}: {{ syncStatus.syncError }}
+								</MkInfo>
+							</div>
+
+							<div class="_gaps_s">
+								<div class="_title">{{ i18n.ts.nativeClientAppInfoManualFallbackTitle }}</div>
+								<MkInfo v-if="nativeClientAppInfoForm.state.autoFetchGithub">{{ i18n.ts.nativeClientAppInfoManualFallbackNotice }}</MkInfo>
+							</div>
+
 							<FormSplit :minWidth="280">
 								<MkInput v-model="nativeClientAppInfoForm.state.latestAndroidVersion">
 									<template #label><SearchLabel>{{ i18n.ts.nativeClientAppInfoLatestAndroidVersion }}</SearchLabel><span v-if="nativeClientAppInfoForm.modifiedStates.latestAndroidVersion" class="_modified">{{ i18n.ts.modified }}</span></template>
@@ -131,12 +200,13 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { computed, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import MkInput from '@/components/MkInput.vue';
 import MkTextarea from '@/components/MkTextarea.vue';
 import MkButton from '@/components/MkButton.vue';
 import MkInfo from '@/components/MkInfo.vue';
 import MkSwitch from '@/components/MkSwitch.vue';
+import MkKeyValue from '@/components/MkKeyValue.vue';
 import FormSplit from '@/components/form/split.vue';
 import * as os from '@/os.js';
 import { misskeyApi } from '@/utility/misskey-api.js';
@@ -192,6 +262,9 @@ type NativeClientChangelogItem = {
 };
 
 type NativeClientAppInfoDefaults = {
+	autoFetchGithub?: boolean;
+	githubRepo?: string | null;
+	githubDownloadProxy?: string | null;
 	latestAndroidVersion?: string | null;
 	latestIosVersion?: string | null;
 	minRequiredAppVersion?: string | null;
@@ -199,6 +272,39 @@ type NativeClientAppInfoDefaults = {
 	iosDownloadUrl?: string | null;
 	changelog?: unknown;
 	announcement?: string | null;
+};
+
+type SyncStatusView = {
+	repo: string;
+	autoFetchGithub: boolean;
+	syncedAt: string | null;
+	syncError: string | null;
+	latestAndroidVersion: string | null;
+	latestIosVersion: string | null;
+	releaseCount: number;
+};
+
+type AppReleasesSummaryResponse = {
+	repo: string;
+	autoFetchGithub: boolean;
+	syncedAt: string | null;
+	syncError: string | null;
+	latest: {
+		android: { version: string } | null;
+		ios: { version: string } | null;
+	};
+	releases: unknown[];
+};
+
+type SyncReleasesResponse = {
+	ok: boolean;
+	repo: string;
+	autoFetchGithub: boolean;
+	syncedAt: string | null;
+	error: string | null;
+	latestAndroidVersion: string | null;
+	latestIosVersion: string | null;
+	releaseCount: number;
 };
 
 const nativeClientAppInfoDefaults = (meta.nativeClientAppInfo && typeof meta.nativeClientAppInfo === 'object'
@@ -213,6 +319,76 @@ const initialChangelog = Array.isArray(nativeClientAppInfoDefaults.changelog)
 		}))
 	: [];
 
+const syncStatus = ref<SyncStatusView>({
+	repo: nativeClientAppInfoDefaults.githubRepo ?? 'liminalselves/liminalselves_app',
+	autoFetchGithub: nativeClientAppInfoDefaults.autoFetchGithub !== false,
+	syncedAt: null,
+	syncError: null,
+	latestAndroidVersion: nativeClientAppInfoDefaults.latestAndroidVersion ?? null,
+	latestIosVersion: nativeClientAppInfoDefaults.latestIosVersion ?? null,
+	releaseCount: 0,
+});
+const syncingReleases = ref(false);
+
+async function loadSyncStatus() {
+	try {
+		const res = await (misskeyApi as unknown as (ep: string, data?: Record<string, unknown>) => Promise<AppReleasesSummaryResponse>)('app/releases', {});
+		syncStatus.value = {
+			repo: res.repo,
+			autoFetchGithub: res.autoFetchGithub,
+			syncedAt: res.syncedAt,
+			syncError: res.syncError,
+			latestAndroidVersion: res.latest?.android?.version ?? null,
+			latestIosVersion: res.latest?.ios?.version ?? null,
+			releaseCount: Array.isArray(res.releases) ? res.releases.length : 0,
+		};
+	} catch {
+		// Keep existing status if endpoint is unavailable
+	}
+}
+
+onMounted(() => {
+	void loadSyncStatus();
+});
+
+async function syncReleasesNow() {
+	if (syncingReleases.value) return;
+	syncingReleases.value = true;
+	try {
+		const res = await (os.apiWithDialog as unknown as (ep: string, data?: Record<string, unknown>) => Promise<SyncReleasesResponse>)('admin/app/sync-releases', {});
+		syncStatus.value = {
+			repo: res.repo,
+			autoFetchGithub: res.autoFetchGithub,
+			syncedAt: res.syncedAt,
+			syncError: res.error,
+			latestAndroidVersion: res.latestAndroidVersion,
+			latestIosVersion: res.latestIosVersion,
+			releaseCount: res.releaseCount,
+		};
+		fetchInstance(true);
+		if (res.ok) {
+			os.alert({
+				type: 'success',
+				text: i18n.tsx.nativeClientAppInfoSyncSuccess({
+					repo: res.repo,
+					count: String(res.releaseCount),
+				}),
+			});
+		} else {
+			os.alert({
+				type: 'error',
+				text: i18n.tsx.nativeClientAppInfoSyncFailed({
+					error: res.error ?? i18n.ts.somethingHappened,
+				}),
+			});
+		}
+	} catch {
+		// os.apiWithDialog already displays the error dialog
+	} finally {
+		syncingReleases.value = false;
+	}
+}
+
 function normalizeChangelog(items: NativeClientChangelogItem[]): NativeClientChangelogItem[] {
 	return items
 		.map((item) => ({
@@ -223,6 +399,9 @@ function normalizeChangelog(items: NativeClientChangelogItem[]): NativeClientCha
 }
 
 const nativeClientAppInfoForm = useForm({
+	autoFetchGithub: nativeClientAppInfoDefaults.autoFetchGithub !== false,
+	githubRepo: nativeClientAppInfoDefaults.githubRepo ?? '',
+	githubDownloadProxy: nativeClientAppInfoDefaults.githubDownloadProxy ?? '',
 	latestAndroidVersion: nativeClientAppInfoDefaults.latestAndroidVersion ?? '',
 	latestIosVersion: nativeClientAppInfoDefaults.latestIosVersion ?? '',
 	minRequiredAppVersion: nativeClientAppInfoDefaults.minRequiredAppVersion ?? '',
@@ -232,8 +411,13 @@ const nativeClientAppInfoForm = useForm({
 	announcement: nativeClientAppInfoDefaults.announcement ?? '',
 }, async (state) => {
 	const changelog = normalizeChangelog(state.changelog);
+	const githubRepo = state.githubRepo.trim();
+	const githubDownloadProxy = state.githubDownloadProxy.trim();
 	await os.apiWithDialog('admin/update-meta', {
 		nativeClientAppInfo: {
+			autoFetchGithub: state.autoFetchGithub,
+			githubRepo: githubRepo === '' ? null : githubRepo,
+			githubDownloadProxy: githubDownloadProxy === '' ? null : githubDownloadProxy,
 			latestAndroidVersion: state.latestAndroidVersion === '' ? null : state.latestAndroidVersion,
 			latestIosVersion: state.latestIosVersion === '' ? null : state.latestIosVersion,
 			minRequiredAppVersion: state.minRequiredAppVersion === '' ? null : state.minRequiredAppVersion,
@@ -244,6 +428,7 @@ const nativeClientAppInfoForm = useForm({
 		},
 	} as Record<string, unknown>);
 	fetchInstance(true);
+	void loadSyncStatus();
 });
 
 function appendChangelogRow() {
@@ -265,3 +450,18 @@ definePage(() => ({
 	icon: 'ti ti-device-mobile',
 }));
 </script>
+
+<style lang="scss" module>
+.syncBox {
+	padding: 14px;
+	border: 1px solid var(--MI_THEME-divider);
+}
+
+.syncHead {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px 12px;
+}
+</style>

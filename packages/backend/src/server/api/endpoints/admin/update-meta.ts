@@ -21,6 +21,8 @@ import { normalizeAgentByokProvidersParam } from '@/core/AgentUserModelService.j
 import { AgentCompressionMemoryService } from '@/core/AgentCompressionMemoryService.js';
 import { GlobalEventService } from '@/core/GlobalEventService.js';
 import { AgentModelAnnouncementService } from '@/core/AgentModelAnnouncementService.js';
+import { AppReleaseService } from '@/core/AppReleaseService.js';
+import { isValidDownloadProxy, isValidGitHubRepo, normalizeGitHubRepo } from '@/core/app-release-helpers.js';
 
 function normalizeObjectStorageConfigValue(value: string | null | undefined): string | null {
 	const trimmed = value?.trim();
@@ -408,6 +410,9 @@ export const paramDef = {
 		nativeClientAppInfo: {
 			type: 'object', nullable: false,
 			properties: {
+				autoFetchGithub: { type: 'boolean' },
+				githubRepo: { type: 'string', nullable: true },
+				githubDownloadProxy: { type: 'string', nullable: true },
 				latestAndroidVersion: { type: 'string', nullable: true },
 				latestIosVersion: { type: 'string', nullable: true },
 				minRequiredAppVersion: { type: 'string', nullable: true },
@@ -568,9 +573,11 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		private agentCompressionMemoryService: AgentCompressionMemoryService,
 		private globalEventService: GlobalEventService,
 		private agentModelAnnouncementService: AgentModelAnnouncementService,
+		private appReleaseService: AppReleaseService,
 	) {
 		super(meta, paramDef, async (ps, me) => {
 			const set = {} as Partial<MiMeta>;
+			let appReleaseSettingsChanged = false;
 			const beforeMeta = await this.metaService.fetch(true);
 			const validateLlmUrl = createLlmUrlBatchValidator([
 				beforeMeta.agentOpenaiCompatibleBaseUrl,
@@ -1448,29 +1455,68 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				}
 
 				if (ps.nativeClientAppInfo !== undefined) {
-					const cur: MiNativeClientAppInfo = { ...(serverSettings.nativeClientAppInfo ?? {}) };
-				const p = ps.nativeClientAppInfo;
-				const keys = ['latestAndroidVersion', 'latestIosVersion', 'minRequiredAppVersion', 'androidDownloadUrl', 'iosDownloadUrl', 'announcement'] as const;
-				for (const key of keys) {
-					if (p[key] !== undefined) {
-						const v = p[key];
-						cur[key] = v === '' ? null : v;
+					const prev = beforeMeta.nativeClientAppInfo ?? {};
+					const cur: MiNativeClientAppInfo = { ...prev };
+					const p = ps.nativeClientAppInfo;
+
+					if (p.autoFetchGithub !== undefined) {
+						cur.autoFetchGithub = p.autoFetchGithub;
 					}
-				}
-				if (p.changelog !== undefined) {
-					if (!Array.isArray(p.changelog)) {
-						cur.changelog = [];
-					} else {
-						cur.changelog = p.changelog
-							.map((entry) => ({
-								version: (entry?.version ?? '').trim(),
-								content: (entry?.content ?? '').trim(),
-							}))
-							.filter((entry) => entry.version.length > 0 || entry.content.length > 0);
+					if (p.githubRepo !== undefined) {
+						const trimmed = p.githubRepo == null ? '' : p.githubRepo.trim();
+						if (trimmed === '') {
+							cur.githubRepo = null;
+						} else if (!isValidGitHubRepo(trimmed)) {
+							throw new ApiError({
+								message: 'Invalid GitHub repository format. Expected "owner/repo".',
+								code: 'INVALID_PARAM',
+								id: '6573f159-d5bc-43e5-a615-7a6ffbc5a3cc',
+							});
+						} else {
+							cur.githubRepo = trimmed;
+						}
 					}
+					if (p.githubDownloadProxy !== undefined) {
+						const trimmed = p.githubDownloadProxy == null ? '' : p.githubDownloadProxy.trim();
+						if (trimmed === '') {
+							cur.githubDownloadProxy = null;
+						} else if (!isValidDownloadProxy(trimmed)) {
+							throw new ApiError({
+								message: 'Invalid GitHub download proxy URL. Must be an https:// URL.',
+								code: 'INVALID_PARAM',
+								id: '5a72cd09-10c7-4014-884e-064f6a8b9cb0',
+							});
+						} else {
+							cur.githubDownloadProxy = trimmed;
+						}
+					}
+
+					const keys = ['latestAndroidVersion', 'latestIosVersion', 'minRequiredAppVersion', 'androidDownloadUrl', 'iosDownloadUrl', 'announcement'] as const;
+					for (const key of keys) {
+						if (p[key] !== undefined) {
+							const v = p[key];
+							cur[key] = v === '' ? null : v;
+						}
+					}
+					if (p.changelog !== undefined) {
+						if (!Array.isArray(p.changelog)) {
+							cur.changelog = [];
+						} else {
+							cur.changelog = p.changelog
+								.map((entry) => ({
+									version: (entry?.version ?? '').trim(),
+									content: (entry?.content ?? '').trim(),
+								}))
+								.filter((entry) => entry.version.length > 0 || entry.content.length > 0);
+						}
+					}
+					set.nativeClientAppInfo = cur;
+
+					appReleaseSettingsChanged =
+						(prev.autoFetchGithub !== false) !== (cur.autoFetchGithub !== false)
+						|| normalizeGitHubRepo(prev.githubRepo) !== normalizeGitHubRepo(cur.githubRepo)
+						|| (prev.githubDownloadProxy ?? null) !== (cur.githubDownloadProxy ?? null);
 				}
-				set.nativeClientAppInfo = cur;
-			}
 
 			if (ps.tosUrl !== undefined) {
 				set.termsOfServiceUrl = ps.tosUrl;
@@ -1784,6 +1830,10 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 
 			for (const kind of changedKinds) {
 				this.globalEventService.publishBroadcastStream('agentModelsChanged', { kind });
+			}
+
+			if (appReleaseSettingsChanged) {
+				void this.appReleaseService.onSettingsUpdated();
 			}
 		});
 	}

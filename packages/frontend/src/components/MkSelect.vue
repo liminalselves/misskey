@@ -28,7 +28,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 			@mousedown.prevent="() => {}"
 			@keydown.prevent="() => {}"
 		>
-			<div style="pointer-events: none;">{{ currentValueText ?? '' }}</div>
+			<div v-if="currentValueText != null" style="pointer-events: none;">{{ currentValueText }}</div>
+			<div v-else-if="placeholder" style="pointer-events: none; opacity: 0.5;">{{ placeholder }}</div>
 			<div style="display: none;">
 				<slot></slot>
 			</div>
@@ -160,9 +161,7 @@ watch([model, () => props.items], () => {
 			}
 		}
 	}
-	if (found) {
-		currentValueText.value = found.label;
-	}
+	currentValueText.value = found ? found.label : null;
 }, { immediate: true, deep: true });
 
 function show() {

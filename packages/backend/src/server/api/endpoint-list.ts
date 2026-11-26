@@ -86,6 +86,7 @@ export * as 'admin/announcements/create' from './endpoints/admin/announcements/c
 export * as 'admin/announcements/delete' from './endpoints/admin/announcements/delete.js';
 export * as 'admin/announcements/list' from './endpoints/admin/announcements/list.js';
 export * as 'admin/announcements/update' from './endpoints/admin/announcements/update.js';
+export * as 'admin/app/sync-releases' from './endpoints/admin/app/sync-releases.js';
 export * as 'admin/avatar-decorations/create' from './endpoints/admin/avatar-decorations/create.js';
 export * as 'admin/avatar-decorations/delete' from './endpoints/admin/avatar-decorations/delete.js';
 export * as 'admin/avatar-decorations/list' from './endpoints/admin/avatar-decorations/list.js';
@@ -298,6 +299,7 @@ export * as 'antennas/update' from './endpoints/antennas/update.js';
 export * as 'ap/get' from './endpoints/ap/get.js';
 export * as 'ap/show' from './endpoints/ap/show.js';
 export * as 'app/create' from './endpoints/app/create.js';
+export * as 'app/releases' from './endpoints/app/releases.js';
 export * as 'app/show' from './endpoints/app/show.js';
 export * as 'auth/accept' from './endpoints/auth/accept.js';
 export * as 'auth/session/generate' from './endpoints/auth/session/generate.js';

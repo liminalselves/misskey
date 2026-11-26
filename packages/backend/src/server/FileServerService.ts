@@ -5,12 +5,14 @@
 
 import * as fs from 'node:fs';
 import { resolve } from 'node:path';
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import type { Config } from '@/config.js';
 import type { DriveFilesRepository } from '@/models/_.js';
 import { DI } from '@/di-symbols.js';
 import { StatusError } from '@/misc/status-error.js';
+import { contentDisposition } from '@/misc/content-disposition.js';
 import type Logger from '@/logger.js';
+import { AppReleaseService } from '@/core/AppReleaseService.js';
 import { DownloadService } from '@/core/DownloadService.js';
 import { InternalStorageService } from '@/core/InternalStorageService.js';
 import { FileInfoService } from '@/core/FileInfoService.js';
@@ -23,6 +25,7 @@ import { handleRequestRedirectToOmitSearch } from '@/misc/fastify-hook-handlers.
 import { FileServerDriveHandler } from './file/FileServerDriveHandler.js';
 import { FileServerFileResolver } from './file/FileServerFileResolver.js';
 import { FileServerProxyHandler } from './file/FileServerProxyHandler.js';
+import { handleRangeRequest } from './file/FileServerUtils.js';
 import type { FastifyInstance, FastifyRequest, FastifyReply, FastifyPluginOptions } from 'fastify';
 
 @Injectable()
@@ -48,6 +51,8 @@ export class FileServerService {
 		private internalStorageService: InternalStorageService,
 		private loggerService: LoggerService,
 		private driveMissingObjectService: DriveMissingObjectService,
+		@Optional()
+		private appReleaseService?: AppReleaseService,
 	) {
 		this.logger = this.loggerService.getLogger('server', 'gray');
 		this.assets = resolve(this.config.rootDir, 'packages/backend/src/server/file/assets');
@@ -92,6 +97,10 @@ export class FileServerService {
 				return reply.send(file);
 			});
 
+			fastify.get<{ Params: { version: string; filename: string } }>('/files/app-releases/:version/:filename', async (request, reply) => {
+				return await this.handleAppReleaseDownload(request, reply);
+			});
+
 			fastify.get<{ Params: { key: string; } }>('/files/:key', async (request, reply) => {
 				return await this.driveHandler.handle(request, reply)
 					.catch(err => this.errorHandler(request, reply, err));
@@ -130,6 +139,37 @@ export class FileServerService {
 		if (target == null) return;
 
 		this.driveMissingObjectService.reportByUrl(target).catch(() => {});
+	}
+
+	@bindThis
+	private async handleAppReleaseDownload(
+		request: FastifyRequest<{ Params: { version: string; filename: string } }>,
+		reply: FastifyReply,
+	) {
+		if (!this.appReleaseService) {
+			reply.code(404);
+			return { error: 'Not found' };
+		}
+
+		try {
+			const asset = await this.appReleaseService.resolveRelayedAssetForDownload(
+				request.params.version,
+				request.params.filename,
+			);
+			if (!asset) {
+				reply.code(404);
+				return { error: 'Not found' };
+			}
+
+			reply.header('Content-Type', asset.mimeType);
+			reply.header('Cache-Control', 'public, max-age=31536000, immutable');
+			reply.header('Content-Disposition', contentDisposition('attachment', asset.filename));
+			return handleRangeRequest(reply, request.headers.range as string | undefined, asset.size, asset.filePath);
+		} catch (err) {
+			this.logger.error(`Failed to relay app release ${request.params.version}/${request.params.filename}: ${err instanceof Error ? err.message : String(err)}`);
+			reply.code(502);
+			return { error: 'Upstream download failed' };
+		}
 	}
 
 	@bindThis

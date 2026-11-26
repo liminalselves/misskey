@@ -42,7 +42,7 @@ function updateMetaEndpoint() {
 	const update = vi.fn(async (patch: Partial<MiMeta>) => { Object.assign(instance, patch); });
 	const metaService = { fetch: async () => instance, update };
 	const endpoint = new UpdateMeta(instance, metaService as never, { log: async () => {} } as never,
-		memoryService(), {} as never, {} as never);
+		memoryService(), {} as never, {} as never, {} as never);
 	return { instance, endpoint, update, metaService };
 }
 

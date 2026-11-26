@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
+import * as dns from 'node:dns';
 import * as http from 'node:http';
 import * as https from 'node:https';
 import * as net from 'node:net';
@@ -21,6 +22,41 @@ import { assertActivityMatchesUrl, FetchAllowSoftFailMask } from '@/core/activit
 import type { IObject } from '@/core/activitypub/type.js';
 import type { BodyInit, Response } from 'node-fetch';
 import type { URL } from 'node:url';
+import {
+	isDevWindowsSystemProxyEligible,
+	normalizeExplicitConfigProxy,
+	parseWindowsProxyServer,
+	readWindowsSystemProxyAsync,
+	readWindowsSystemProxySync,
+	resolveOutboundProxyForUrl,
+	resolveProxyConfigFromEnv,
+	type WindowsSystemProxyState,
+} from '@/misc/resolve-proxy.js';
+
+const WINDOWS_PROXY_REFRESH_TTL_MS = 5000;
+
+export function createResilientDnsLookup(
+	cache: Pick<CacheableLookup, 'lookup'>,
+	fallbackLookup: typeof dns.lookup = dns.lookup,
+): net.LookupFunction {
+	return ((
+		hostname: string,
+		optionsOrCallback: dns.LookupOptions | number | ((err: NodeJS.ErrnoException | null, address: string | dns.LookupAddress[], family?: number) => void),
+		maybeCallback?: (err: NodeJS.ErrnoException | null, address: string | dns.LookupAddress[], family?: number) => void,
+	) => {
+		const callback = typeof optionsOrCallback === 'function' ? optionsOrCallback : maybeCallback;
+		const options = typeof optionsOrCallback === 'function' ? {} : optionsOrCallback;
+		if (!callback) return;
+
+		cache.lookup(hostname, options as never, (err: NodeJS.ErrnoException | null, address: string | dns.LookupAddress[], family?: number) => {
+			if (err && (process.env.NODE_ENV !== 'production' || err.code === 'ECONNREFUSED')) {
+				fallbackLookup(hostname, options as never, callback as never);
+				return;
+			}
+			callback(err, address, family);
+		});
+	}) as unknown as net.LookupFunction;
+}
 
 export type HttpRequestSendOptions = {
 	throwErrorWhenResponseNotOk: boolean;
@@ -139,15 +175,35 @@ export class HttpRequestService {
 	 */
 	private readonly https: https.Agent;
 
+	private readonly agentOption: http.AgentOptions;
+
+	private readonly maxSockets: number;
+
+	private readonly httpProxyAgents = new Map<string, http.Agent>();
+
+	private readonly httpsProxyAgents = new Map<string, https.Agent>();
+
+	private windowsSystemProxy: WindowsSystemProxyState | null = null;
+
+	private windowsSystemProxyCheckedAt = 0;
+
+	private windowsSystemProxyRefreshPromise: Promise<void> | null = null;
+
 	/**
 	 * Get http proxy or non-proxy agent
 	 */
-	public readonly httpAgent: http.Agent;
+	public get httpAgent(): http.Agent {
+		const proxyUrl = this.resolveDefaultProxyUrl('http:');
+		return proxyUrl ? this.getOrCreateHttpProxyAgent(proxyUrl) : this.http;
+	}
 
 	/**
 	 * Get https proxy or non-proxy agent
 	 */
-	public readonly httpsAgent: https.Agent;
+	public get httpsAgent(): https.Agent {
+		const proxyUrl = this.resolveDefaultProxyUrl('https:');
+		return proxyUrl ? this.getOrCreateHttpsProxyAgent(proxyUrl) : this.https;
+	}
 
 	constructor(
 		@Inject(DI.config)
@@ -159,46 +215,113 @@ export class HttpRequestService {
 			lookup: false,	// nativeのdns.lookupにfallbackしない
 		});
 
-		const agentOption = {
+		this.agentOption = {
 			keepAlive: true,
 			keepAliveMsecs: 30 * 1000,
-			lookup: cache.lookup as unknown as net.LookupFunction,
+			lookup: createResilientDnsLookup(cache),
 			localAddress: config.outgoingAddress,
 		};
 
-		this.httpNative = new http.Agent(agentOption);
+		this.httpNative = new http.Agent(this.agentOption);
 
-		this.httpsNative = new https.Agent(agentOption);
+		this.httpsNative = new https.Agent(this.agentOption);
 
-		this.http = new HttpRequestServiceAgent(config, agentOption);
+		this.http = new HttpRequestServiceAgent(config, this.agentOption);
 
-		this.https = new HttpsRequestServiceAgent(config, agentOption);
+		this.https = new HttpsRequestServiceAgent(config, this.agentOption);
 
-		const maxSockets = Math.max(256, config.deliverJobConcurrency ?? 128);
+		this.maxSockets = Math.max(256, config.deliverJobConcurrency ?? 128);
 
-		this.httpAgent = config.proxy
-			? new HttpProxyAgent({
+		if (this.shouldUseWindowsSystemProxyFallback()) {
+			this.windowsSystemProxy = readWindowsSystemProxySync();
+			this.windowsSystemProxyCheckedAt = Date.now();
+		}
+	}
+
+	private shouldUseWindowsSystemProxyFallback(): boolean {
+		if (!isDevWindowsSystemProxyEligible()) return false;
+		if (normalizeExplicitConfigProxy(this.config.proxy)) return false;
+		return !resolveProxyConfigFromEnv().hasAnyProxyVar;
+	}
+
+	private maybeRefreshWindowsSystemProxy(): void {
+		if (!this.shouldUseWindowsSystemProxyFallback()) return;
+		if (this.windowsSystemProxyRefreshPromise) return;
+		if (Date.now() - this.windowsSystemProxyCheckedAt < WINDOWS_PROXY_REFRESH_TTL_MS) return;
+
+		this.windowsSystemProxyRefreshPromise = readWindowsSystemProxyAsync()
+			.then((state) => {
+				this.windowsSystemProxy = state;
+				this.windowsSystemProxyCheckedAt = Date.now();
+			})
+			.catch(() => {
+				this.windowsSystemProxyCheckedAt = Date.now();
+			})
+			.finally(() => {
+				this.windowsSystemProxyRefreshPromise = null;
+			});
+	}
+
+	private getOrCreateHttpProxyAgent(proxyUrl: string): http.Agent {
+		let agent = this.httpProxyAgents.get(proxyUrl);
+		if (!agent) {
+			agent = new HttpProxyAgent({
 				keepAlive: true,
 				keepAliveMsecs: 30 * 1000,
-				maxSockets,
+				maxSockets: this.maxSockets,
 				maxFreeSockets: 256,
 				scheduling: 'lifo',
-				proxy: config.proxy,
-				localAddress: config.outgoingAddress,
-			})
-			: this.http;
+				proxy: proxyUrl,
+				localAddress: this.config.outgoingAddress,
+			});
+			this.httpProxyAgents.set(proxyUrl, agent);
+		}
+		return agent;
+	}
 
-		this.httpsAgent = config.proxy
-			? new HttpsProxyAgent({
+	private getOrCreateHttpsProxyAgent(proxyUrl: string): https.Agent {
+		let agent = this.httpsProxyAgents.get(proxyUrl);
+		if (!agent) {
+			agent = new HttpsProxyAgent({
 				keepAlive: true,
 				keepAliveMsecs: 30 * 1000,
-				maxSockets,
+				maxSockets: this.maxSockets,
 				maxFreeSockets: 256,
 				scheduling: 'lifo',
-				proxy: config.proxy,
-				localAddress: config.outgoingAddress,
-			})
-			: this.https;
+				proxy: proxyUrl,
+				localAddress: this.config.outgoingAddress,
+			});
+			this.httpsProxyAgents.set(proxyUrl, agent);
+		}
+		return agent;
+	}
+
+	private resolveDefaultProxyUrl(protocol: 'http:' | 'https:'): string | null {
+		const explicit = normalizeExplicitConfigProxy(this.config.proxy);
+		if (explicit) return explicit;
+
+		const envProxy = resolveProxyConfigFromEnv();
+		if (envProxy.hasAnyProxyVar) {
+			return protocol === 'https:'
+				? (envProxy.httpsProxy ?? envProxy.allProxy)
+				: (envProxy.httpProxy ?? envProxy.allProxy);
+		}
+
+		this.maybeRefreshWindowsSystemProxy();
+		if (this.windowsSystemProxy?.enabled && this.windowsSystemProxy.proxyServer) {
+			return parseWindowsProxyServer(this.windowsSystemProxy.proxyServer, protocol);
+		}
+
+		return null;
+	}
+
+	private resolveEffectiveProxyUrl(url: URL): string | null {
+		this.maybeRefreshWindowsSystemProxy();
+		return resolveOutboundProxyForUrl(url, {
+			configProxy: this.config.proxy,
+			configBypassHosts: this.config.proxyBypassHosts,
+			windowsSystemProxy: this.windowsSystemProxy,
+		});
 	}
 
 	/**
@@ -209,17 +332,17 @@ export class HttpRequestService {
 	 */
 	@bindThis
 	public getAgentByUrl(url: URL, bypassProxy = false, isLocalAddressAllowed = false): http.Agent | https.Agent {
-		if (bypassProxy || (this.config.proxyBypassHosts ?? []).includes(url.hostname)) {
-			if (isLocalAddressAllowed) {
-				return url.protocol === 'http:' ? this.httpNative : this.httpsNative;
-			}
-			return url.protocol === 'http:' ? this.http : this.https;
-		} else {
-			if (isLocalAddressAllowed && (!this.config.proxy)) {
-				return url.protocol === 'http:' ? this.httpNative : this.httpsNative;
-			}
-			return url.protocol === 'http:' ? this.httpAgent : this.httpsAgent;
+		const proxyUrl = bypassProxy ? null : this.resolveEffectiveProxyUrl(url);
+		if (proxyUrl) {
+			return url.protocol === 'http:'
+				? this.getOrCreateHttpProxyAgent(proxyUrl)
+				: this.getOrCreateHttpsProxyAgent(proxyUrl);
 		}
+
+		if (isLocalAddressAllowed) {
+			return url.protocol === 'http:' ? this.httpNative : this.httpsNative;
+		}
+		return url.protocol === 'http:' ? this.http : this.https;
 	}
 
 	/**
@@ -229,13 +352,7 @@ export class HttpRequestService {
 	 */
 	@bindThis
 	public getAgentForHttp(url: URL, isLocalAddressAllowed = false): http.Agent {
-		if ((this.config.proxyBypassHosts ?? []).includes(url.hostname)) {
-			return isLocalAddressAllowed
-				? this.httpNative
-				: this.http;
-		} else {
-			return this.httpAgent;
-		}
+		return this.getAgentByUrl(url, false, isLocalAddressAllowed) as http.Agent;
 	}
 
 	/**
@@ -245,13 +362,7 @@ export class HttpRequestService {
 	 */
 	@bindThis
 	public getAgentForHttps(url: URL, isLocalAddressAllowed = false): https.Agent {
-		if ((this.config.proxyBypassHosts ?? []).includes(url.hostname)) {
-			return isLocalAddressAllowed
-				? this.httpsNative
-				: this.https;
-		} else {
-			return this.httpsAgent;
-		}
+		return this.getAgentByUrl(url, false, isLocalAddressAllowed) as https.Agent;
 	}
 
 	@bindThis
