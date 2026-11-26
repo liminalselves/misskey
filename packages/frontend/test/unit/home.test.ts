@@ -3,13 +3,19 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
-import { afterEach, assert, describe, test } from 'vitest';
+import { afterEach, assert, describe, test, vi } from 'vitest';
+import { nextTick } from 'vue';
 import { cleanup, render, type RenderResult } from '@testing-library/vue';
 import * as Misskey from 'misskey-js';
 import { directives } from '@/directives/index.js';
 import { components } from '@/components/index.js';
 import XHome from '@/pages/user/home.vue';
 import 'intersection-observer';
+
+// defineAsyncComponent で読み込まれる子ページは stubs では止まらないため、モジュール単位で差し替えて環境破棄後の遅延 import を防ぐ
+vi.mock('@/pages/user/index.files.vue', () => ({ __esModule: true, default: { template: '<div/>' } }));
+vi.mock('@/pages/user/index.activity.vue', () => ({ __esModule: true, default: { template: '<div/>' } }));
+vi.mock('@/pages/user/index.timeline.vue', () => ({ __esModule: true, default: { template: '<div/>' } }));
 
 describe('XHome', () => {
 	const renderHome = (user: Partial<Misskey.entities.UserDetailed>): RenderResult => {
@@ -23,7 +29,9 @@ describe('XHome', () => {
 		});
 	};
 
-	afterEach(() => {
+	afterEach(async () => {
+		await nextTick();
+		await new Promise(resolve => setTimeout(resolve, 0));
 		cleanup();
 	});
 
