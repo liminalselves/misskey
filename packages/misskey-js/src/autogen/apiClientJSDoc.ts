@@ -1038,6 +1038,17 @@ declare module '../api.js' {
     /**
      * No description provided.
      * 
+     * **Credential required**: *Yes* / **Permission**: *write:admin:meta*
+     */
+    request<E extends 'admin/app/sync-releases', P extends Endpoints[E]['req']>(
+      endpoint: E,
+      params: P,
+      credential?: string | null,
+    ): Promise<SwitchCaseResponseType<E, P>>;
+
+    /**
+     * No description provided.
+     * 
      * **Credential required**: *Yes* / **Permission**: *write:admin:avatar-decorations*
      */
     request<E extends 'admin/avatar-decorations/create', P extends Endpoints[E]['req']>(
@@ -1174,6 +1185,39 @@ declare module '../api.js' {
      * **Credential required**: *Yes* / **Permission**: *read:admin:drive*
      */
     request<E extends 'admin/drive/folders', P extends Endpoints[E]['req']>(
+      endpoint: E,
+      params: P,
+      credential?: string | null,
+    ): Promise<SwitchCaseResponseType<E, P>>;
+
+    /**
+     * Delete reported drive files whose object is confirmed missing from the object storage. Each file is verified again right before deletion; owners are notified.
+     * 
+     * **Credential required**: *Yes* / **Permission**: *write:admin:drive*
+     */
+    request<E extends 'admin/drive/missing-reports/delete', P extends Endpoints[E]['req']>(
+      endpoint: E,
+      params: P,
+      credential?: string | null,
+    ): Promise<SwitchCaseResponseType<E, P>>;
+
+    /**
+     * List drive files reported as missing from the object storage, waiting for review.
+     * 
+     * **Credential required**: *Yes* / **Permission**: *read:admin:drive*
+     */
+    request<E extends 'admin/drive/missing-reports/list', P extends Endpoints[E]['req']>(
+      endpoint: E,
+      params: P,
+      credential?: string | null,
+    ): Promise<SwitchCaseResponseType<E, P>>;
+
+    /**
+     * Re-verify reported missing drive files against the object storage. Files whose object exists again are removed from the list.
+     * 
+     * **Credential required**: *Yes* / **Permission**: *write:admin:drive*
+     */
+    request<E extends 'admin/drive/missing-reports/recheck', P extends Endpoints[E]['req']>(
       endpoint: E,
       params: P,
       credential?: string | null,
@@ -3232,6 +3276,17 @@ declare module '../api.js' {
      * 
      * **Credential required**: *No*
      */
+    request<E extends 'app/releases', P extends Endpoints[E]['req']>(
+      endpoint: E,
+      params: P,
+      credential?: string | null,
+    ): Promise<SwitchCaseResponseType<E, P>>;
+
+    /**
+     * No description provided.
+     * 
+     * **Credential required**: *No*
+     */
     request<E extends 'app/show', P extends Endpoints[E]['req']>(
       endpoint: E,
       params: P,
@@ -3759,7 +3814,7 @@ declare module '../api.js' {
     /**
      * No description provided.
      * 
-     * **Credential required**: *Yes* / **Permission**: *write:chat*
+     * **Credential required**: *Yes* / **Permission**: *read:chat*
      */
     request<E extends 'chat/read', P extends Endpoints[E]['req']>(
       endpoint: E,
@@ -3770,9 +3825,20 @@ declare module '../api.js' {
     /**
      * No description provided.
      * 
-     * **Credential required**: *Yes* / **Permission**: *write:chat*
+     * **Credential required**: *Yes* / **Permission**: *read:chat*
      */
     request<E extends 'chat/read-all', P extends Endpoints[E]['req']>(
+      endpoint: E,
+      params: P,
+      credential?: string | null,
+    ): Promise<SwitchCaseResponseType<E, P>>;
+
+    /**
+     * No description provided.
+     * 
+     * **Credential required**: *Yes* / **Permission**: *read:chat*
+     */
+    request<E extends 'chat/rooms/bans', P extends Endpoints[E]['req']>(
       endpoint: E,
       params: P,
       credential?: string | null,
@@ -3795,6 +3861,17 @@ declare module '../api.js' {
      * **Credential required**: *Yes* / **Permission**: *write:chat*
      */
     request<E extends 'chat/rooms/delete', P extends Endpoints[E]['req']>(
+      endpoint: E,
+      params: P,
+      credential?: string | null,
+    ): Promise<SwitchCaseResponseType<E, P>>;
+
+    /**
+     * No description provided.
+     * 
+     * **Credential required**: *Yes* / **Permission**: *write:chat*
+     */
+    request<E extends 'chat/rooms/invitations/cancel', P extends Endpoints[E]['req']>(
       endpoint: E,
       params: P,
       credential?: string | null,
@@ -3891,7 +3968,7 @@ declare module '../api.js' {
     /**
      * No description provided.
      * 
-     * **Credential required**: *Yes* / **Permission**: *write:chat*
+     * **Credential required**: *Yes* / **Permission**: *read:chat*
      */
     request<E extends 'chat/rooms/members', P extends Endpoints[E]['req']>(
       endpoint: E,
@@ -3924,9 +4001,31 @@ declare module '../api.js' {
     /**
      * No description provided.
      * 
+     * **Credential required**: *Yes* / **Permission**: *write:chat*
+     */
+    request<E extends 'chat/rooms/pin-message', P extends Endpoints[E]['req']>(
+      endpoint: E,
+      params: P,
+      credential?: string | null,
+    ): Promise<SwitchCaseResponseType<E, P>>;
+
+    /**
+     * No description provided.
+     * 
      * **Credential required**: *Yes* / **Permission**: *read:chat*
      */
     request<E extends 'chat/rooms/search', P extends Endpoints[E]['req']>(
+      endpoint: E,
+      params: P,
+      credential?: string | null,
+    ): Promise<SwitchCaseResponseType<E, P>>;
+
+    /**
+     * No description provided.
+     * 
+     * **Credential required**: *Yes* / **Permission**: *write:chat*
+     */
+    request<E extends 'chat/rooms/set-role', P extends Endpoints[E]['req']>(
       endpoint: E,
       params: P,
       credential?: string | null,
@@ -3949,6 +4048,28 @@ declare module '../api.js' {
      * **Credential required**: *Yes* / **Permission**: *write:chat*
      */
     request<E extends 'chat/rooms/suspend', P extends Endpoints[E]['req']>(
+      endpoint: E,
+      params: P,
+      credential?: string | null,
+    ): Promise<SwitchCaseResponseType<E, P>>;
+
+    /**
+     * No description provided.
+     * 
+     * **Credential required**: *Yes* / **Permission**: *write:chat*
+     */
+    request<E extends 'chat/rooms/transfer-ownership', P extends Endpoints[E]['req']>(
+      endpoint: E,
+      params: P,
+      credential?: string | null,
+    ): Promise<SwitchCaseResponseType<E, P>>;
+
+    /**
+     * No description provided.
+     * 
+     * **Credential required**: *Yes* / **Permission**: *write:chat*
+     */
+    request<E extends 'chat/rooms/unban', P extends Endpoints[E]['req']>(
       endpoint: E,
       params: P,
       credential?: string | null,
@@ -4224,6 +4345,17 @@ declare module '../api.js' {
      * **Credential required**: *Yes* / **Permission**: *write:drive*
      */
     request<E extends 'drive/files/move-bulk', P extends Endpoints[E]['req']>(
+      endpoint: E,
+      params: P,
+      credential?: string | null,
+    ): Promise<SwitchCaseResponseType<E, P>>;
+
+    /**
+     * Report that a media URL failed to load. The server verifies it against the object storage on its own.
+     * 
+     * **Credential required**: *No*
+     */
+    request<E extends 'drive/files/report-missing', P extends Endpoints[E]['req']>(
       endpoint: E,
       params: P,
       credential?: string | null,
