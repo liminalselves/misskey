@@ -6,7 +6,7 @@
 import { afterEach, describe, expect, test } from 'vitest';
 import { HttpProxyAgent, HttpsProxyAgent } from 'hpagent';
 import type { Config } from '@/config.js';
-import { HttpRequestService } from '@/core/HttpRequestService.js';
+import { createResilientDnsLookup, HttpRequestService } from '@/core/HttpRequestService.js';
 import {
 	normalizeExplicitConfigProxy,
 	normalizeProxyUrl,
@@ -194,5 +194,34 @@ describe('HttpRequestService dynamic env proxy resolution', () => {
 		clearProxyEnv();
 		expect(service.getAgentByUrl(new URL('https://api.github.com/'))).not.toBeInstanceOf(HttpsProxyAgent);
 		expect(service.getAgentByUrl(new URL('http://example.com/'))).not.toBeInstanceOf(HttpProxyAgent);
+	});
+});
+
+describe('createResilientDnsLookup', () => {
+	test('falls back to native dns.lookup when CacheableLookup fails with queryA ECONNREFUSED', async () => {
+		const econnrefused = Object.assign(new Error('queryA ECONNREFUSED api.github.com'), {
+			code: 'ECONNREFUSED',
+			syscall: 'queryA',
+		}) as NodeJS.ErrnoException;
+
+		const lookupFn = createResilientDnsLookup(
+			{
+				lookup: ((_hostname: string, _opts: unknown, cb: (err: NodeJS.ErrnoException | null) => void) => {
+					cb(econnrefused);
+				}) as never,
+			},
+			((_hostname: string, _opts: unknown, cb: (err: null, addr: string, fam: number) => void) => {
+				cb(null, '198.18.0.66', 4);
+			}) as never,
+		);
+
+		const result = await new Promise<{ address: string | undefined; family: number | undefined }>((resolve, reject) => {
+			lookupFn('api.github.com', { family: 4 }, (err, address, family) => {
+				if (err) reject(err);
+				else resolve({ address: typeof address === 'string' ? address : undefined, family });
+			});
+		});
+
+		expect(result).toEqual({ address: '198.18.0.66', family: 4 });
 	});
 });

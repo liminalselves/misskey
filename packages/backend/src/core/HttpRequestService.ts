@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
+import * as dns from 'node:dns';
 import * as http from 'node:http';
 import * as https from 'node:https';
 import * as net from 'node:net';
@@ -33,6 +34,29 @@ import {
 } from '@/misc/resolve-proxy.js';
 
 const WINDOWS_PROXY_REFRESH_TTL_MS = 5000;
+
+export function createResilientDnsLookup(
+	cache: Pick<CacheableLookup, 'lookup'>,
+	fallbackLookup: typeof dns.lookup = dns.lookup,
+): net.LookupFunction {
+	return ((
+		hostname: string,
+		optionsOrCallback: dns.LookupOptions | number | ((err: NodeJS.ErrnoException | null, address: string | dns.LookupAddress[], family?: number) => void),
+		maybeCallback?: (err: NodeJS.ErrnoException | null, address: string | dns.LookupAddress[], family?: number) => void,
+	) => {
+		const callback = typeof optionsOrCallback === 'function' ? optionsOrCallback : maybeCallback;
+		const options = typeof optionsOrCallback === 'function' ? {} : optionsOrCallback;
+		if (!callback) return;
+
+		cache.lookup(hostname, options as never, (err: NodeJS.ErrnoException | null, address: string | dns.LookupAddress[], family?: number) => {
+			if (err && (process.env.NODE_ENV !== 'production' || err.code === 'ECONNREFUSED')) {
+				fallbackLookup(hostname, options as never, callback as never);
+				return;
+			}
+			callback(err, address, family);
+		});
+	}) as unknown as net.LookupFunction;
+}
 
 export type HttpRequestSendOptions = {
 	throwErrorWhenResponseNotOk: boolean;
@@ -194,7 +218,7 @@ export class HttpRequestService {
 		this.agentOption = {
 			keepAlive: true,
 			keepAliveMsecs: 30 * 1000,
-			lookup: cache.lookup as unknown as net.LookupFunction,
+			lookup: createResilientDnsLookup(cache),
 			localAddress: config.outgoingAddress,
 		};
 
