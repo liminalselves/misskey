@@ -141,6 +141,7 @@ describe('Compression result commit boundary', () => {
 		const service = new AgentCompressionMemoryService({} as never, {
 			manager: { transaction: async (cb: (m: unknown) => Promise<void>) => cb(manager) },
 		} as never, {} as never, {
+			resolveEffectiveModelId: () => null,
 			resolveModelApiNameForUser: async () => 'model',
 			invokeChatCompletions: async () => ({ text: 'summary' }),
 			formatMessageForLlmHistory: (m: { content: string }) => m.content,

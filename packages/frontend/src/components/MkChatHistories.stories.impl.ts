@@ -39,6 +39,11 @@ export const Default = {
 					action('POST /api/chat/history')(body);
 					return HttpResponse.json([chatMessage(body.room)]);
 				}),
+				http.post('/api/agents/sessions/list-mine', async ({ request }) => {
+					const body = await request.json().catch(() => ({}));
+					action('POST /api/agents/sessions/list-mine')(body);
+					return HttpResponse.json([]);
+				}),
 			],
 		},
 	},

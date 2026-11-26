@@ -159,6 +159,7 @@ import type {
 	AdminAnnouncementsListRequest,
 	AdminAnnouncementsListResponse,
 	AdminAnnouncementsUpdateRequest,
+	AdminAppSyncReleasesResponse,
 	AdminAvatarDecorationsCreateRequest,
 	AdminAvatarDecorationsCreateResponse,
 	AdminAvatarDecorationsDeleteRequest,
@@ -175,6 +176,12 @@ import type {
 	AdminDriveFilesSetBlockedResponse,
 	AdminDriveFoldersRequest,
 	AdminDriveFoldersResponse,
+	AdminDriveMissingReportsDeleteRequest,
+	AdminDriveMissingReportsDeleteResponse,
+	AdminDriveMissingReportsListRequest,
+	AdminDriveMissingReportsListResponse,
+	AdminDriveMissingReportsRecheckRequest,
+	AdminDriveMissingReportsRecheckResponse,
 	AdminDriveShowFileRequest,
 	AdminDriveShowFileResponse,
 	AdminEmojiAddRequest,
@@ -476,6 +483,7 @@ import type {
 	ApShowResponse,
 	AppCreateRequest,
 	AppCreateResponse,
+	AppReleasesResponse,
 	AppShowRequest,
 	AppShowResponse,
 	AuthAcceptRequest,
@@ -559,9 +567,13 @@ import type {
 	ChatMessagesUserTimelineRequest,
 	ChatMessagesUserTimelineResponse,
 	ChatReadRequest,
+	ChatRoomsBansRequest,
+	ChatRoomsBansResponse,
 	ChatRoomsCreateRequest,
 	ChatRoomsCreateResponse,
 	ChatRoomsDeleteRequest,
+	ChatRoomsInvitationsCancelRequest,
+	ChatRoomsInvitationsCancelResponse,
 	ChatRoomsInvitationsCreateRequest,
 	ChatRoomsInvitationsCreateResponse,
 	ChatRoomsInvitationsIgnoreRequest,
@@ -579,11 +591,18 @@ import type {
 	ChatRoomsMuteRequest,
 	ChatRoomsOwnedRequest,
 	ChatRoomsOwnedResponse,
+	ChatRoomsPinMessageRequest,
+	ChatRoomsPinMessageResponse,
 	ChatRoomsSearchRequest,
 	ChatRoomsSearchResponse,
+	ChatRoomsSetRoleRequest,
+	ChatRoomsSetRoleResponse,
 	ChatRoomsShowRequest,
 	ChatRoomsShowResponse,
 	ChatRoomsSuspendRequest,
+	ChatRoomsTransferOwnershipRequest,
+	ChatRoomsTransferOwnershipResponse,
+	ChatRoomsUnbanRequest,
 	ChatRoomsUnsuspendRequest,
 	ChatRoomsUpdateRequest,
 	ChatRoomsUpdateResponse,
@@ -624,6 +643,7 @@ import type {
 	DriveFilesFindByHashRequest,
 	DriveFilesFindByHashResponse,
 	DriveFilesMoveBulkRequest,
+	DriveFilesReportMissingRequest,
 	DriveFilesShowRequest,
 	DriveFilesShowResponse,
 	DriveFilesUpdateRequest,
@@ -1085,6 +1105,7 @@ export type Endpoints = {
 	'admin/announcements/delete': { req: AdminAnnouncementsDeleteRequest; res: EmptyResponse };
 	'admin/announcements/list': { req: AdminAnnouncementsListRequest; res: AdminAnnouncementsListResponse };
 	'admin/announcements/update': { req: AdminAnnouncementsUpdateRequest; res: EmptyResponse };
+	'admin/app/sync-releases': { req: EmptyRequest; res: AdminAppSyncReleasesResponse };
 	'admin/avatar-decorations/create': { req: AdminAvatarDecorationsCreateRequest; res: AdminAvatarDecorationsCreateResponse };
 	'admin/avatar-decorations/delete': { req: AdminAvatarDecorationsDeleteRequest; res: EmptyResponse };
 	'admin/avatar-decorations/list': { req: AdminAvatarDecorationsListRequest; res: AdminAvatarDecorationsListResponse };
@@ -1098,6 +1119,9 @@ export type Endpoints = {
 	'admin/drive/files': { req: AdminDriveFilesRequest; res: AdminDriveFilesResponse };
 	'admin/drive/files/set-blocked': { req: AdminDriveFilesSetBlockedRequest; res: AdminDriveFilesSetBlockedResponse };
 	'admin/drive/folders': { req: AdminDriveFoldersRequest; res: AdminDriveFoldersResponse };
+	'admin/drive/missing-reports/delete': { req: AdminDriveMissingReportsDeleteRequest; res: AdminDriveMissingReportsDeleteResponse };
+	'admin/drive/missing-reports/list': { req: AdminDriveMissingReportsListRequest; res: AdminDriveMissingReportsListResponse };
+	'admin/drive/missing-reports/recheck': { req: AdminDriveMissingReportsRecheckRequest; res: AdminDriveMissingReportsRecheckResponse };
 	'admin/drive/show-file': { req: AdminDriveShowFileRequest; res: AdminDriveShowFileResponse };
 	'admin/emoji/add': { req: AdminEmojiAddRequest; res: AdminEmojiAddResponse };
 	'admin/emoji/add-aliases-bulk': { req: AdminEmojiAddAliasesBulkRequest; res: EmptyResponse };
@@ -1283,6 +1307,7 @@ export type Endpoints = {
 	'ap/get': { req: ApGetRequest; res: ApGetResponse };
 	'ap/show': { req: ApShowRequest; res: ApShowResponse };
 	'app/create': { req: AppCreateRequest; res: AppCreateResponse };
+	'app/releases': { req: EmptyRequest; res: AppReleasesResponse };
 	'app/show': { req: AppShowRequest; res: AppShowResponse };
 	'auth/accept': { req: AuthAcceptRequest; res: EmptyResponse };
 	'auth/session/generate': { req: AuthSessionGenerateRequest; res: AuthSessionGenerateResponse };
@@ -1333,8 +1358,10 @@ export type Endpoints = {
 	'chat/messages/user-timeline': { req: ChatMessagesUserTimelineRequest; res: ChatMessagesUserTimelineResponse };
 	'chat/read': { req: ChatReadRequest; res: EmptyResponse };
 	'chat/read-all': { req: EmptyRequest; res: EmptyResponse };
+	'chat/rooms/bans': { req: ChatRoomsBansRequest; res: ChatRoomsBansResponse };
 	'chat/rooms/create': { req: ChatRoomsCreateRequest; res: ChatRoomsCreateResponse };
 	'chat/rooms/delete': { req: ChatRoomsDeleteRequest; res: EmptyResponse };
+	'chat/rooms/invitations/cancel': { req: ChatRoomsInvitationsCancelRequest; res: ChatRoomsInvitationsCancelResponse };
 	'chat/rooms/invitations/create': { req: ChatRoomsInvitationsCreateRequest; res: ChatRoomsInvitationsCreateResponse };
 	'chat/rooms/invitations/ignore': { req: ChatRoomsInvitationsIgnoreRequest; res: EmptyResponse };
 	'chat/rooms/invitations/inbox': { req: ChatRoomsInvitationsInboxRequest; res: ChatRoomsInvitationsInboxResponse };
@@ -1346,9 +1373,13 @@ export type Endpoints = {
 	'chat/rooms/members': { req: ChatRoomsMembersRequest; res: ChatRoomsMembersResponse };
 	'chat/rooms/mute': { req: ChatRoomsMuteRequest; res: EmptyResponse };
 	'chat/rooms/owned': { req: ChatRoomsOwnedRequest; res: ChatRoomsOwnedResponse };
+	'chat/rooms/pin-message': { req: ChatRoomsPinMessageRequest; res: ChatRoomsPinMessageResponse };
 	'chat/rooms/search': { req: ChatRoomsSearchRequest; res: ChatRoomsSearchResponse };
+	'chat/rooms/set-role': { req: ChatRoomsSetRoleRequest; res: ChatRoomsSetRoleResponse };
 	'chat/rooms/show': { req: ChatRoomsShowRequest; res: ChatRoomsShowResponse };
 	'chat/rooms/suspend': { req: ChatRoomsSuspendRequest; res: EmptyResponse };
+	'chat/rooms/transfer-ownership': { req: ChatRoomsTransferOwnershipRequest; res: ChatRoomsTransferOwnershipResponse };
+	'chat/rooms/unban': { req: ChatRoomsUnbanRequest; res: EmptyResponse };
 	'chat/rooms/unsuspend': { req: ChatRoomsUnsuspendRequest; res: EmptyResponse };
 	'chat/rooms/update': { req: ChatRoomsUpdateRequest; res: ChatRoomsUpdateResponse };
 	'chat/unread-info': { req: ChatUnreadInfoRequest; res: ChatUnreadInfoResponse };
@@ -1374,6 +1405,7 @@ export type Endpoints = {
 	'drive/files/find': { req: DriveFilesFindRequest; res: DriveFilesFindResponse };
 	'drive/files/find-by-hash': { req: DriveFilesFindByHashRequest; res: DriveFilesFindByHashResponse };
 	'drive/files/move-bulk': { req: DriveFilesMoveBulkRequest; res: EmptyResponse };
+	'drive/files/report-missing': { req: DriveFilesReportMissingRequest; res: EmptyResponse };
 	'drive/files/show': { req: DriveFilesShowRequest; res: DriveFilesShowResponse };
 	'drive/files/update': { req: DriveFilesUpdateRequest; res: DriveFilesUpdateResponse };
 	'drive/files/upload-from-url': { req: DriveFilesUploadFromUrlRequest; res: EmptyResponse };

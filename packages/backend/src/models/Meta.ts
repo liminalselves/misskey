@@ -12,6 +12,9 @@ import { MiUser } from './User.js';
 
 /** 管理后台配置、公开 meta 下发给官方 App 壳使用（版本提示、下载链接等） */
 export type MiNativeClientAppInfo = {
+	autoFetchGithub?: boolean;
+	githubRepo?: string | null;
+	githubDownloadProxy?: string | null;
 	latestAndroidVersion?: string | null;
 	latestIosVersion?: string | null;
 	/** semver。客户端版本 **低于** 此值时禁止使用壳（留空则不限制） */

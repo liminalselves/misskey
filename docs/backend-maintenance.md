@@ -94,6 +94,23 @@ Redis 在线状态、连接计数、离线推送判断和用户休眠唤醒逻�
 
 图片封禁两张数据库表同事务更新，S3 ACL 在事务外改动并在失败时补偿，补偿失败记日志。它不构成跨存储事务，也未串行化所有并发 ACL 操作。
 
+## 网盘对象丢失：上报 → 待审 → 管理员批量删除
+
+实现：`core/DriveMissingObjectService.ts`，判定用纯函数在 `misc/drive-missing-object.ts`。对象存储里的原图被外部删除（如云厂商审查）而 `drive_file` 行还在时，访问上报只负责"发现并核实"，**不自动删任何数据**；确认缺失的文件进入待审表 `drive_missing_object_report`，由管理员在「控制面板 → 对象存储 → 丢失文件」审查后批量删除。原则：任何无法确认的情况都不动数据，删除永远是人工动作。
+
+- 触发（匿名入口）：`/proxy/` 回源 404（`FileServerService`）或前端媒体 `error` 上报 `drive/files/report-missing`（30 次/分钟/IP；前端每页最多 30 次、间隔 ≥1.5s、同 URL 只报一次）。入口只传 URL，是否写入待审表由服务端独立核实，不信任调用方。
+- 核实（`reportByUrl`）：提取候选 key 后走 `accessKey` / `thumbnailAccessKey` / `webpublicAccessKey` 唯一索引定位本地文件 → `resolveObjectLocation` 判定位置 → 带凭证 HEAD。明确 404/NoSuchKey 且当前桶金丝雀通过才写入/更新待审行（`reportCount` 累加、刷新时间）；对象存在则删除已有待审行（视为恢复）；403、5xx、超时、NoSuchBucket、鉴权失败一律视为"不确定"，不记录。防滥用：单文件核查冷却 30s，全站每分钟 HEAD 预算 120 次。
+- 位置判定 `resolveObjectLocation`：URL 属于当前桶按当前桶；否则仅在**路径风格访问、主机与端口等于当前端点、`/<桶>/<accessKey>` 与记录 accessKey 完全一致**时按遗留桶处理（生产有 239 条 `aliya-misskey` 记录）。其余一律不处理。
+- 待审表 `drive_missing_object_report`：`fileId` 唯一、外键级联（文件被删则行自动消失），存 bucket/objectKey/scope、reportCount、首次/最后上报时间、最后核实时间。migration `1785000000000`。
+- 管理端点（`admin/drive/missing-reports/`，`requireModerator`）：`list`（页码分页，含属主 UserLite）、`recheck`（重新核实，恢复则移除、仍缺失则刷新核实时间）、`delete`（批量删除）。批量上限 100 条/次。
+- 批量删除 `deleteReported`：整批先过端点健康检查（**对照池排除本批待处理文件**，否则整批缺失会被误判成存储不健康、永远删不掉），不可用则整批中止。每条用当前配置重新解析位置并 HEAD，**必须明确 404 才删**；对象存在则移除待审行；配置变更后无法解析的一律不动。逐条返回 deleted/present/unknown/gone。
+- 修复落点 `DriveService.deleteFileWithMissingObject(file, moderator)`：重新读取并校验行未变（accessKey、url）后，**墓碑与删行同一事务**；不向对象存储发删除。头像/横幅外键被置空后同步清 `user` 上冗余 URL 列并发 `localUserUpdated`；传 moderator 时写 `deleteDriveFile` 审计日志（`logSafely`，失败不影响删除）。
+- 通知：用 Misskey 自带 `app` 类型通知（`appAccessTokenId: null`），标题「网盘内容已被清理」，正文固定为"因相关审查原因，您网盘中的部分图片已被删除。"（本批含非图片时改说"文件"，复用 `buildMissingObjectNotice`），图标取站点图标。**每批每个用户只发一条**，在删除全部提交后发送，失败只记日志不回滚。
+- 前端：`pages/admin/object-storage.vue` 两 tab（`?view` 路由同步），「丢失文件」组件 `components/MkDriveMissingReportsForAdmin.vue`——无省略号横向滚动表格（`display:contents` 行）、页码分页条（10/20/50）、桶筛选、本页全选、「重新核实选中」「删除选中」。删除前确认框写明数量与后果，结果汇总成一条提示并就地移除已处理行，不整表重载。
+- SDK 错误形态（本地假 S3 + 真实 `@aws-sdk/client-s3` 实测）：HEAD 缺失 → `name: NotFound, status 404`；403 与 5xx → `name: Unknown`，状态码分别为 403/500，均判为"不确定"。**HEAD 的 404 没有响应体，SDK 无法区分"桶不存在"与"key 不存在"**：当前桶靠金丝雀兜底（桶不存在时金丝雀同样失败，整体"不确定"）。
+- 生产现状（2026-11-08 只读核查）：25407 个对象存储本地文件中，当前桶 `yjrg-misskey` 25168 个，遗留桶 `aliya-misskey` 239 个；抽样 30 个遗留文件公网访问全部 404（`NoSuchKey`），抽样当前桶文件全部 200。这 239 条会随访问陆续进入待审表，由管理员决定是否批量删除，系统不会自动清理。
+- 验证边界：单测用内存 Redis 与桩覆盖各分支，不替代真实 OSS 验收；对真实阿里云 OSS 的签名 HEAD 未验证。上线验收顺序：先 migrate → 访问一张已丢失的图，确认进入待审列表 → 重新核实、批量删除 → 在被删用户端看到通知与墓碑占位。
+
 ## 验证与部署边界
 
 - 本地不连库验证：`pnpm --filter backend typecheck`；定向 Vitest 命令及数据库边界统一见 [CI 检查清单](ci-checklist.md)，清理与删用户的回归文件为 `test/unit/AgentSessionCleanupService.ts`、`test/unit/UserService.ts`。

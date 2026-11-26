@@ -251,11 +251,12 @@ function onChangeEmail(): void {
 function onChangePassword(): void {
 	if (password.value === '') {
 		passwordStrength.value = '';
-		return;
+	} else {
+		const strength = getPasswordStrength(password.value);
+		passwordStrength.value = strength > 0.7 ? 'high' : strength > 0.3 ? 'medium' : 'low';
 	}
 
-	const strength = getPasswordStrength(password.value);
-	passwordStrength.value = strength > 0.7 ? 'high' : strength > 0.3 ? 'medium' : 'low';
+	onChangePasswordRetype();
 }
 
 function onChangePasswordRetype(): void {

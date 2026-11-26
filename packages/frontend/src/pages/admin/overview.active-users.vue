@@ -6,7 +6,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 <template>
 <div>
 	<MkLoading v-if="fetching"/>
-	<div v-show="!fetching" :class="$style.root" class="_panel">
+	<MkError v-else-if="error" @retry="renderChart"/>
+	<div v-show="!fetching && !error" :class="$style.root" class="_panel">
 		<canvas ref="chartEl"></canvas>
 	</div>
 </div>
@@ -31,138 +32,146 @@ let chartInstance: Chart | null = null;
 let disposed = false;
 const chartLimit = 7;
 const fetching = ref(true);
+const error = ref(false);
 
 const { handler: externalTooltipHandler } = useChartTooltip();
 
 async function renderChart() {
 	if (chartInstance) {
 		chartInstance.destroy();
+		chartInstance = null;
 	}
 
-	if (chartEl.value == null) return;
+	fetching.value = true;
+	error.value = false;
+	try {
+		if (chartEl.value == null) return;
 
-	const getDate = (ago: number) => {
-		const y = now.getFullYear();
-		const m = now.getMonth();
-		const d = now.getDate();
+		const getDate = (ago: number) => {
+			const y = now.getFullYear();
+			const m = now.getMonth();
+			const d = now.getDate();
 
-		return new Date(y, m, d - ago);
-	};
+			return new Date(y, m, d - ago);
+		};
 
-	const format = (arr: number[]) => {
-		return arr.map((v, i) => ({
-			x: getDate(i).getTime(),
-			y: v,
-		}));
-	};
+		const format = (arr: number[]) => {
+			return arr.map((v, i) => ({
+				x: getDate(i).getTime(),
+				y: v,
+			}));
+		};
 
-	const raw = await misskeyApi('charts/active-users', { limit: chartLimit, span: 'day' });
+		const raw = await misskeyApi('charts/active-users', { limit: chartLimit, span: 'day' });
 
-	if (disposed || chartEl.value == null) return;
+		if (disposed || chartEl.value == null) return;
 
-	const vLineColor = store.s.darkMode ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.2)';
+		const vLineColor = store.s.darkMode ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.2)';
 
-	const colorRead = '#3498db';
-	const colorWrite = '#2ecc71';
+		const colorRead = '#3498db';
+		const colorWrite = '#2ecc71';
 
-	const max = Math.max(...raw.read);
+		const max = Math.max(...raw.read);
 
-	chartInstance = new Chart(chartEl.value, {
-		type: 'bar',
-		data: {
-			datasets: [{
-				parsing: false,
-				label: i18n.ts.adminOverviewRead,
-				data: format(raw.read).slice().reverse(),
-				pointRadius: 0,
-				borderWidth: 0,
-				borderJoinStyle: 'round',
-				borderRadius: 4,
-				backgroundColor: colorRead,
-				barPercentage: 0.7,
-				categoryPercentage: 0.5,
-				fill: true,
-			}, {
-				parsing: false,
-				label: i18n.ts.adminOverviewWrite,
-				data: format(raw.write).slice().reverse(),
-				pointRadius: 0,
-				borderWidth: 0,
-				borderJoinStyle: 'round',
-				borderRadius: 4,
-				backgroundColor: colorWrite,
-				barPercentage: 0.7,
-				categoryPercentage: 0.5,
-				fill: true,
-			}],
-		},
-		options: {
-			aspectRatio: 2.5,
-			layout: {
-				padding: {
-					left: 0,
-					right: 8,
-					top: 0,
-					bottom: 0,
-				},
+		chartInstance = new Chart(chartEl.value, {
+			type: 'bar',
+			data: {
+				datasets: [{
+					parsing: false,
+					label: i18n.ts.adminOverviewRead,
+					data: format(raw.read).slice().reverse(),
+					pointRadius: 0,
+					borderWidth: 0,
+					borderJoinStyle: 'round',
+					borderRadius: 4,
+					backgroundColor: colorRead,
+					barPercentage: 0.7,
+					categoryPercentage: 0.5,
+					fill: true,
+				}, {
+					parsing: false,
+					label: i18n.ts.adminOverviewWrite,
+					data: format(raw.write).slice().reverse(),
+					pointRadius: 0,
+					borderWidth: 0,
+					borderJoinStyle: 'round',
+					borderRadius: 4,
+					backgroundColor: colorWrite,
+					barPercentage: 0.7,
+					categoryPercentage: 0.5,
+					fill: true,
+				}],
 			},
-			scales: {
-				x: {
-					type: 'time',
-					offset: true,
-					time: {
-						unit: 'day',
-						displayFormats: {
-							day: 'M/d',
-							month: 'Y/M',
+			options: {
+				aspectRatio: 2.5,
+				layout: {
+					padding: {
+						left: 0,
+						right: 8,
+						top: 0,
+						bottom: 0,
+					},
+				},
+				scales: {
+					x: {
+						type: 'time',
+						offset: true,
+						time: {
+							unit: 'day',
+							displayFormats: {
+								day: 'M/d',
+								month: 'Y/M',
+							},
+						},
+						grid: {
+							display: false,
+						},
+						ticks: {
+							display: true,
+							maxRotation: 0,
+							autoSkipPadding: 8,
 						},
 					},
-					grid: {
+					y: {
+						position: 'left',
+						suggestedMax: 10,
+						grid: {
+							display: true,
+						},
+						ticks: {
+							display: true,
+							//mirror: true,
+						},
+					},
+				},
+				interaction: {
+					intersect: false,
+					mode: 'index',
+				},
+				plugins: {
+					legend: {
 						display: false,
 					},
-					ticks: {
-						display: true,
-						maxRotation: 0,
-						autoSkipPadding: 8,
+					tooltip: {
+						enabled: false,
+						mode: 'index',
+						animation: {
+							duration: 0,
+						},
+						external: externalTooltipHandler,
 					},
-				},
-				y: {
-					position: 'left',
-					suggestedMax: 10,
-					grid: {
-						display: true,
-					},
-					ticks: {
-						display: true,
-						//mirror: true,
-					},
+					...({ // TSを黙らすため
+						gradient,
+					}),
 				},
 			},
-			interaction: {
-				intersect: false,
-				mode: 'index',
-			},
-			plugins: {
-				legend: {
-					display: false,
-				},
-				tooltip: {
-					enabled: false,
-					mode: 'index',
-					animation: {
-						duration: 0,
-					},
-					external: externalTooltipHandler,
-				},
-				...({ // TSを黙らすため
-					gradient,
-				}),
-			},
-		},
-		plugins: [chartVLine(vLineColor)],
-	});
-
-	fetching.value = false;
+			plugins: [chartVLine(vLineColor)],
+		});
+	} catch {
+		if (!disposed) error.value = true;
+	} finally {
+		if (!disposed) fetching.value = false;
+	}
 }
 
 onMounted(() => {

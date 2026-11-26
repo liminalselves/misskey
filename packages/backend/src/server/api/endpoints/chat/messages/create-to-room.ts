@@ -62,6 +62,18 @@ export const meta = {
 			code: 'NOT_A_MEMBER',
 			id: 'f8a2c3d4-7e5b-4a9f-b1c6-8d0e2f4a6b8c',
 		},
+
+		roomArchived: {
+			message: 'This room has been archived.',
+			code: 'ROOM_ARCHIVED',
+			id: '60e9e780-60bb-463d-98e2-3ec85e09b3a0',
+		},
+
+		invalidReplyTarget: {
+			message: 'Invalid reply target.',
+			code: 'INVALID_REPLY_TARGET',
+			id: 'e5349b96-9ee7-47c9-b361-efc7d58cf1dc',
+		},
 	},
 } as const;
 
@@ -105,14 +117,16 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				}
 			}
 
+			const text = ps.text != null ? ps.text.trim() || null : null;
+
 			// テキストが無いかつ添付ファイルも無かったらエラー
-			if (ps.text == null && file == null) {
+			if (text == null && file == null) {
 				throw new ApiError(meta.errors.contentRequired);
 			}
 
 			try {
 				return await this.chatService.createMessageToRoom(me, room, {
-					text: ps.text,
+					text,
 					file: file,
 					replyId: ps.replyId,
 				});
@@ -124,6 +138,15 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				}
 				if (e?.message === 'you are not a member of the room') {
 					throw new ApiError(meta.errors.notAMember);
+				}
+				if (e?.message === 'room is archived') {
+					throw new ApiError(meta.errors.roomArchived);
+				}
+				if (e?.message === 'invalid replyId') {
+					throw new ApiError(meta.errors.invalidReplyTarget);
+				}
+				if (e?.message === 'content required') {
+					throw new ApiError(meta.errors.contentRequired);
 				}
 				throw e;
 			}

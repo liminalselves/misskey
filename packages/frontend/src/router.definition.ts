@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
-import { defineAsyncComponent } from 'vue';
+import { defineAsyncComponent, defineComponent, h } from 'vue';
 import type { AsyncComponentLoader } from 'vue';
 import type { RouteDef } from '@/lib/nirax.js';
 import { $i, iAmAdmin, iAmModerator } from '@/i.js';
@@ -18,8 +18,16 @@ export const page = (loader: AsyncComponentLoader) => defineAsyncComponent({
 	errorComponent: MkError,
 });
 
-function chatPage(...args: Parameters<typeof page>) {
-	return $i?.policies.chatAvailability !== 'unavailable' ? page(...args) : page(() => import('@/pages/not-found.vue'));
+function chatPage(loader: AsyncComponentLoader) {
+	const AsyncPage = page(loader);
+	const NotFoundPage = page(() => import('@/pages/not-found.vue'));
+	return defineComponent({
+		name: 'ChatRouteGuard',
+		inheritAttrs: false,
+		setup(_, { attrs }) {
+			return () => h($i?.policies.chatAvailability !== 'unavailable' ? AsyncPage : NotFoundPage, attrs);
+		},
+	});
 }
 
 export const ROUTE_DEF = [{
@@ -93,6 +101,7 @@ export const ROUTE_DEF = [{
 }, {
 	path: '/agents/embed/:sessionId/:panel',
 	component: AgentControlEmbedPage,
+	reuseComponent: true,
 }, {
 	path: '/agents/square/character/:characterId',
 	component: page(() => import('@/pages/agents/square-character-detail.vue')),
@@ -580,6 +589,8 @@ export const ROUTE_DEF = [{
 		path: '/object-storage',
 		name: 'object-storage',
 		component: page(() => import('@/pages/admin/object-storage.vue')),
+		query: { view: 'view' },
+		reuseComponent: true,
 	}, {
 		path: '/security',
 		name: 'security',

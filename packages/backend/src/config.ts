@@ -12,6 +12,7 @@ import type * as SentryVue from '@sentry/vue';
 import type { RedisOptions as IoRedisRedisOptions } from 'ioredis';
 import type { RedisOptions as BullMqRedisOptions } from 'bullmq';
 import type { AccessLogConfiguration, LogFormat, LogLevelSetting } from './logging/types.js';
+import { normalizeExplicitConfigProxy } from './misc/resolve-proxy.js';
 
 type RedisOptionsRequiredFields = {
 	host: string;
@@ -331,7 +332,7 @@ export function loadConfig(): Config {
 		sentryForBackend: config.sentryForBackend,
 		sentryForFrontend: config.sentryForFrontend,
 		id: config.id,
-		proxy: config.proxy,
+		proxy: normalizeExplicitConfigProxy(config.proxy),
 		proxySmtp: config.proxySmtp,
 		proxyBypassHosts: config.proxyBypassHosts,
 		allowedPrivateNetworks: config.allowedPrivateNetworks,

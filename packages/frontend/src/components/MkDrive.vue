@@ -889,8 +889,11 @@ async function deleteFilesBulk() {
 }
 
 function goRoot() {
-	// 既にrootにいるなら何もしない
-	if (folder.value == null) return;
+	// 既にrootにいるなら何もしない（ただし未完了の cd() をキャンセルして戻った場合に fetching 固着を防ぐ）
+	if (folder.value == null) {
+		if (!initializeRunning) fetching.value = false;
+		return;
+	}
 
 	folder.value = null;
 	hierarchyFolders.value = [];

@@ -2801,6 +2801,78 @@ export interface Locale extends ILocale {
      */
     "nativeClientAppInfoAnnouncement": string;
     /**
+     * GitHub Releases から自動取得する
+     */
+    "nativeClientAppInfoAutoFetchGithub": string;
+    /**
+     * 有効にすると、Android の最新バージョン・APK ダウンロード URL・更新ログを GitHub Releases から自動同期します。下の Android / 更新ログの手動入力欄は、自動取得が無効または同期失敗時のフォールバックとして使われます。
+     */
+    "nativeClientAppInfoAutoFetchGithubCaption": string;
+    /**
+     * GitHub リポジトリ（owner/repo）
+     */
+    "nativeClientAppInfoGithubRepo": string;
+    /**
+     * owner/repo 形式で指定します。空欄の場合は liminalselves/liminalselves_app を使用します。
+     */
+    "nativeClientAppInfoGithubRepoCaption": string;
+    /**
+     * GitHub ダウンロードプロキシ接頭辞（任意）
+     */
+    "nativeClientAppInfoGithubDownloadProxy": string;
+    /**
+     * 任意の https:// 接頭辞（例: https://ghfast.top/）を指定すると、サーバーが GitHub からパッケージをキャッシュ取得する際の加速に使われます（ユーザーには常に本サーバー経由で配信されます）。GitHub API リクエストには影響しません。
+     */
+    "nativeClientAppInfoGithubDownloadProxyCaption": string;
+    /**
+     * GitHub Releases 同期状態
+     */
+    "nativeClientAppInfoGithubSyncSection": string;
+    /**
+     * 今すぐ GitHub から同期
+     */
+    "nativeClientAppInfoSyncNow": string;
+    /**
+     * 最終同期日時
+     */
+    "nativeClientAppInfoSyncedAt": string;
+    /**
+     * 未同期
+     */
+    "nativeClientAppInfoNeverSynced": string;
+    /**
+     * 同期済み Android バージョン
+     */
+    "nativeClientAppInfoSyncedAndroid": string;
+    /**
+     * 同期済み iOS バージョン
+     */
+    "nativeClientAppInfoSyncedIos": string;
+    /**
+     * キャッシュ済みリリース数
+     */
+    "nativeClientAppInfoSyncedReleaseCount": string;
+    /**
+     * 直近の同期エラー
+     */
+    "nativeClientAppInfoSyncError": string;
+    /**
+     * {repo} から {count} 件のリリースを同期しました。
+     */
+    "nativeClientAppInfoSyncSuccess": ParameterizedString<"repo" | "count">;
+    /**
+     * 同期に失敗しました: {error}
+     */
+    "nativeClientAppInfoSyncFailed": ParameterizedString<"error">;
+    /**
+     * 手動設定とフォールバック
+     */
+    "nativeClientAppInfoManualFallbackTitle": string;
+    /**
+     * 現在 GitHub 自動同期が有効です。Android のバージョン・APK ダウンロードリンク・更新ログは GitHub Releases が優先され、手動欄はフォールバックになります（iOS リンク・最低必須バージョン・お知らせはここで管理できます）。
+     */
+    "nativeClientAppInfoManualFallbackNotice": string;
+    /**
      * 削除されたノート
      */
     "deletedNote": string;
@@ -4592,6 +4664,102 @@ export interface Locale extends ILocale {
      * 更新ログ
      */
     "appClientChangelog": string;
+    /**
+     * 公式モバイルアプリのダウンロード、更新履歴、お知らせを確認できます。
+     */
+    "appDownloadHeroDescription": string;
+    /**
+     * GitHub リポジトリ
+     */
+    "appDownloadViewOnGithub": string;
+    /**
+     * Release を開く
+     */
+    "appDownloadViewRelease": string;
+    /**
+     * 最終同期
+     */
+    "appDownloadLastSynced": string;
+    /**
+     * GitHub Releases 自動同期
+     */
+    "appDownloadSourceGithub": string;
+    /**
+     * サーバー手動設定
+     */
+    "appDownloadSourceFallback": string;
+    /**
+     * おすすめ（現在の端末）
+     */
+    "appDownloadRecommendedForDevice": string;
+    /**
+     * デスクトップ版アプリはありません
+     */
+    "appDownloadDesktopNoticeTitle": string;
+    /**
+     * パソコンではこのまま Web 版をご利用ください。スマホ用のインストーラーは下からダウンロードできます。
+     */
+    "appDownloadDesktopNoticeBody": string;
+    /**
+     * ファイル名
+     */
+    "appDownloadFileName": string;
+    /**
+     * サイズ
+     */
+    "appDownloadFileSize": string;
+    /**
+     * ダウンロード数
+     */
+    "appDownloadCount": string;
+    /**
+     * {count} 回
+     */
+    "appDownloadCountTimes": ParameterizedString<"count">;
+    /**
+     * SHA-256
+     */
+    "appDownloadSha256": string;
+    /**
+     * 完全な SHA-256 をコピー
+     */
+    "appDownloadCopySha256": string;
+    /**
+     * {date} 公開
+     */
+    "appDownloadReleaseDate": ParameterizedString<"date">;
+    /**
+     * 重要アップデート
+     */
+    "appDownloadImportantUpdate": string;
+    /**
+     * 最新版
+     */
+    "appDownloadLatestBadge": string;
+    /**
+     * v{version} 未満のバージョンは更新が必要です
+     */
+    "appDownloadMinVersionNote": ParameterizedString<"version">;
+    /**
+     * 過去のバージョンを表示（残り {count} 件）
+     */
+    "appDownloadShowOlderReleases": ParameterizedString<"count">;
+    /**
+     * 過去のバージョンを折りたたむ
+     */
+    "appDownloadHideOlderReleases": string;
+    /**
+     * サーバー最低必須バージョン: v{version}
+     */
+    "appDownloadMinRequiredVersion": ParameterizedString<"version">;
+    /**
+     * リリース情報を読み込めませんでした
+     */
+    "appDownloadLoadFailed": string;
+    /**
+     * このバージョンの詳細な更新内容はありません。
+     */
+    "appDownloadNoReleaseNotes": string;
     /**
      * 通知が既読になったらプッシュ通知を削除する
      */
@@ -6578,7 +6746,7 @@ export interface Locale extends ILocale {
          */
         "kick": string;
         /**
-         * {name}をルームからキックしますか？
+         * {name}をグループからキックしますか？
          */
         "kickConfirm": ParameterizedString<"name">;
         /**
@@ -6616,9 +6784,265 @@ export interface Locale extends ILocale {
             "permanent": string;
         };
         /**
-         * ルームを検索
+         * グループを検索
          */
         "searchRoom": string;
+        /**
+         * オーナー
+         */
+        "owner": string;
+        /**
+         * 管理者
+         */
+        "admin": string;
+        /**
+         * メンバー
+         */
+        "member": string;
+        /**
+         * 管理者に設定
+         */
+        "setAdmin": string;
+        /**
+         * 管理者を解除
+         */
+        "removeAdmin": string;
+        /**
+         * オーナーを譲渡
+         */
+        "transferOwnership": string;
+        /**
+         * {name} にオーナーを譲渡しますか？譲渡後、あなたは一般メンバーになります。
+         */
+        "transferOwnershipConfirm": ParameterizedString<"name">;
+        /**
+         * お知らせ
+         */
+        "announcement": string;
+        /**
+         * グループのお知らせを入力（最大2048文字）...
+         */
+        "announcementPlaceholder": string;
+        /**
+         * ピン留めメッセージ
+         */
+        "pinnedMessage": string;
+        /**
+         * メッセージをピン留め
+         */
+        "pinMessage": string;
+        /**
+         * ピン留めを解除
+         */
+        "unpinMessage": string;
+        /**
+         * 取り消す
+         */
+        "recall": string;
+        /**
+         * グループ取り消し
+         */
+        "groupRecall": string;
+        /**
+         * このメッセージを取り消しますか？
+         */
+        "recallConfirm": string;
+        /**
+         * このメッセージをグループ取り消ししますか？
+         */
+        "groupRecallConfirm": string;
+        /**
+         * メッセージを取り消しました
+         */
+        "recalled": string;
+        /**
+         * {user} がメッセージを取り消しました
+         */
+        "recalledMessageNotice": ParameterizedString<"user">;
+        /**
+         * {actor} が {target} のメッセージを取り消しました
+         */
+        "groupRecalledMessageNotice": ParameterizedString<"actor" | "target">;
+        /**
+         * (元のメッセージは取り消されました)
+         */
+        "recalledMessagePlaceholder": string;
+        /**
+         * 2分以上経過したメッセージは取り消せません
+         */
+        "recallTimeExpired": string;
+        /**
+         * テキストをコピー
+         */
+        "copyText": string;
+        /**
+         * 返信
+         */
+        "reply": string;
+        /**
+         * 引用
+         */
+        "quote": string;
+        /**
+         * [添付ファイル]
+         */
+        "attachmentPlaceholder": string;
+        /**
+         * (元のメッセージは削除されました)
+         */
+        "deletedMessage": string;
+        /**
+         * {count} 件の未読メッセージを見る
+         */
+        "unreadCountBanner": ParameterizedString<"count">;
+        /**
+         * ここから未読メッセージ
+         */
+        "newMessagesDivider": string;
+        /**
+         * 一番下へ
+         */
+        "scrollToBottom": string;
+        /**
+         * 公開すると、他のユーザーがこのグループを検索して参加できるようになります。
+         */
+        "publicRoomHint": string;
+        /**
+         * メンバーによる招待を許可
+         */
+        "allowMemberInvite": string;
+        /**
+         * 有効にすると、オーナーや管理者以外のメンバーも他のユーザーを招待できます。
+         */
+        "allowMemberInviteHint": string;
+        /**
+         * グループをアーカイブ
+         */
+        "archiveRoom": string;
+        /**
+         * アーカイブを解除
+         */
+        "unarchiveRoom": string;
+        /**
+         * このグループはアーカイブされており、閲覧のみ可能です。
+         */
+        "archivedBanner": string;
+        /**
+         * {until} まで発言・リアクションが制限されています。
+         */
+        "suspendedBanner": ParameterizedString<"until">;
+        /**
+         * 無期限で発言・リアクションが制限されています。
+         */
+        "suspendedBannerPermanent": string;
+        /**
+         * {until} まで制限中
+         */
+        "suspendedUntilLabel": ParameterizedString<"until">;
+        /**
+         * 無期限制限
+         */
+        "suspendedPermanentLabel": string;
+        /**
+         * 招待を取り消す
+         */
+        "cancelInvitation": string;
+        /**
+         * {name} への招待を取り消しますか？
+         */
+        "cancelInvitationConfirm": ParameterizedString<"name">;
+        /**
+         * メンバーを検索...
+         */
+        "searchMembersPlaceholder": string;
+        /**
+         * グループ名や説明を検索...
+         */
+        "searchRoomPlaceholder": string;
+        /**
+         * メッセージを検索...
+         */
+        "searchMessagesPlaceholder": string;
+        /**
+         * 送信者で絞り込む
+         */
+        "filterBySender": string;
+        /**
+         * すべての送信者
+         */
+        "allSenders": string;
+        /**
+         * グループを開く
+         */
+        "openRoom": string;
+        /**
+         * 参加中
+         */
+        "joinedBadge": string;
+        /**
+         * 公開
+         */
+        "publicBadge": string;
+        /**
+         * アーカイブ済み
+         */
+        "archivedBadge": string;
+        /**
+         * ミュート中
+         */
+        "mutedBadge": string;
+        /**
+         * {count} 人のメンバー
+         */
+        "memberCount": ParameterizedString<"count">;
+        /**
+         * すべて
+         */
+        "filterAll": string;
+        /**
+         * ダイレクト
+         */
+        "filterDirect": string;
+        /**
+         * グループ
+         */
+        "filterRooms": string;
+        /**
+         * グループ設定
+         */
+        "roomSettings": string;
+        /**
+         * グループアイコン
+         */
+        "roomAvatar": string;
+        /**
+         * グループ名を入力してください
+         */
+        "roomNameRequired": string;
+        /**
+         * 保存しました
+         */
+        "saved": string;
+        /**
+         * 再試行
+         */
+        "retry": string;
+        /**
+         * さらに読み込む
+         */
+        "loadMore": string;
+        /**
+         * メンション
+         */
+        "mention": string;
+        /**
+         * このグループは削除されました
+         */
+        "roomDeletedNotice": string;
+        /**
+         * このグループからキックされました
+         */
+        "kickedNotice": string;
     };
     "_emojiPalette": {
         /**
@@ -11644,21 +12068,25 @@ export interface Locale extends ILocale {
              */
             "chatRoomInvitationReceived": string;
             /**
-             * チャットルームにメンバーが参加した
+             * グループにメンバーが参加した
              */
             "chatRoomMemberJoined": string;
             /**
-             * チャットルームから削除された
+             * グループから削除された
              */
             "chatRoomKicked": string;
             /**
-             * チャットルームで一時的に利用停止になった
+             * グループで一時的に利用停止になった
              */
             "chatRoomSuspended": string;
             /**
-             * チャットルームの利用停止が解除された
+             * グループの利用停止が解除された
              */
             "chatRoomUnsuspended": string;
+            /**
+             * グループであなたにメンションしました
+             */
+            "chatRoomMention": string;
             /**
              * エージェント審査通過
              */

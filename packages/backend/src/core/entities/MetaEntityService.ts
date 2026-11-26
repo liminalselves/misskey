@@ -12,6 +12,7 @@ import type { AdsRepository } from '@/models/_.js';
 import { MAX_NOTE_TEXT_LENGTH } from '@/const.js';
 import { bindThis } from '@/decorators.js';
 import { SystemAccountService } from '@/core/SystemAccountService.js';
+import { AppReleaseService } from '@/core/AppReleaseService.js';
 import type { Config } from '@/config.js';
 import { DI } from '@/di-symbols.js';
 import { DEFAULT_POLICIES } from '@/core/RoleService.js';
@@ -30,6 +31,7 @@ export class MetaEntityService {
 		private adsRepository: AdsRepository,
 
 		private systemAccountService: SystemAccountService,
+		private appReleaseService: AppReleaseService,
 	) { }
 
 	@bindThis
@@ -144,18 +146,7 @@ export class MetaEntityService {
 			noteSearchableScope: (this.config.fulltextSearch?.provider === 'meilisearch' && this.config.meilisearch?.scope === 'local') ? 'local' : 'global',
 			maxFileSize: this.config.maxFileSize,
 			federation: instance.federation,
-			nativeClientAppInfo: (() => {
-				const n = instance.nativeClientAppInfo ?? {};
-				return {
-					latestAndroidVersion: n.latestAndroidVersion ?? null,
-					latestIosVersion: n.latestIosVersion ?? null,
-					minRequiredAppVersion: n.minRequiredAppVersion ?? null,
-					androidDownloadUrl: n.androidDownloadUrl ?? null,
-					iosDownloadUrl: n.iosDownloadUrl ?? null,
-					changelog: Array.isArray(n.changelog) ? n.changelog : [],
-					announcement: n.announcement ?? null,
-				};
-			})(),
+			nativeClientAppInfo: await this.appReleaseService.getEffectiveNativeClientAppInfo(instance.nativeClientAppInfo),
 			agentFeatureEnabled: instance.agentFeatureEnabled,
 			agentModelDisplayName: defAgentModel?.name ?? null,
 			agentModelDescription: defAgentModel?.description ?? null,

@@ -147,7 +147,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 					:characterId="character.id"
 					:rating="character.rating"
 					:showRatingSummary="false"
-					@updated="load"
+					@updated="() => void load({ silent: true })"
 				/>
 			</div>
 
@@ -271,29 +271,44 @@ definePage(computed(() => ({
 	icon: 'ti ti-user',
 })));
 
-async function load() {
-	loading.value = true;
-	character.value = null;
-	creator.value = null;
-	avatarFile.value = null;
+let loadSeq = 0;
+
+async function load(options: { silent?: boolean } = {}) {
+	const seq = ++loadSeq;
+	const silent = options.silent === true && character.value != null;
+	if (!silent) {
+		loading.value = true;
+		character.value = null;
+		creator.value = null;
+		avatarFile.value = null;
+	}
 	try {
 		const row = await misskeyApi(
 			'agents/characters/plaza-detail' as keyof Misskey.Endpoints,
 			{ characterId: props.characterId } as Misskey.Endpoints[keyof Misskey.Endpoints]['req'],
 		) as CharacterPlazaDetail;
+		if (seq !== loadSeq) return;
 		character.value = row;
-		const [u, file] = await Promise.all([
-			misskeyApi('users/show', { userId: row.userId }) as Promise<UserDetailed>,
-			row.avatarFileId
-				? misskeyApi('drive/files/show', { fileId: row.avatarFileId }) as Promise<DriveFile>
-				: Promise.resolve(null),
-		]);
-		creator.value = u;
-		avatarFile.value = file;
+		if (!silent || creator.value?.id !== row.userId || (avatarFile.value?.id ?? null) !== (row.avatarFileId ?? null)) {
+			const [u, file] = await Promise.all([
+				(misskeyApi('users/show', { userId: row.userId }) as Promise<UserDetailed>).catch(() => null),
+				row.avatarFileId
+					? (misskeyApi('drive/files/show', { fileId: row.avatarFileId }) as Promise<DriveFile>).catch(() => null)
+					: Promise.resolve(null),
+			]);
+			if (seq !== loadSeq) return;
+			if (!silent || u != null) creator.value = u;
+			if (!silent || file != null || row.avatarFileId == null) avatarFile.value = file;
+		}
 	} catch {
-		os.alert({ type: 'error', text: i18n.ts.somethingHappened });
+		if (seq !== loadSeq) return;
+		if (!silent) {
+			os.alert({ type: 'error', text: i18n.ts.somethingHappened });
+		}
 	} finally {
-		loading.value = false;
+		if (seq === loadSeq && !silent) {
+			loading.value = false;
+		}
 	}
 }
 

@@ -72,7 +72,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<div v-if="editingId !== st.id && st.summaryText" :class="$style.stickySummary">{{ st.summaryText }}</div>
 
 					<!-- 编辑模式 -->
-					<div v-else class="_gaps">
+					<div v-else-if="editingId === st.id" class="_gaps">
 						<MkTextarea v-model="editingText" :disabled="mutating || moderationLocked" tall pre/>
 						<div :class="$style.editActions">
 							<MkButton rounded small :disabled="mutating || moderationLocked" @click="cancelEdit">{{ i18n.ts.cancel }}</MkButton>

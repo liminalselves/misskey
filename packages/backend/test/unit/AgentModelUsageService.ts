@@ -5,6 +5,7 @@
 
 import { vi, describe, test, expect, beforeEach, afterEach } from 'vitest';
 import { AgentModelUsageService } from '@/core/AgentModelUsageService.js';
+import { AgentService } from '@/core/AgentService.js';
 import { MiAgentModelUsageLog } from '@/models/AgentModelUsageLog.js';
 import { MiUserProfile } from '@/models/UserProfile.js';
 import type { MiMeta } from '@/models/Meta.js';
@@ -233,5 +234,77 @@ describe('AgentModelUsageService finishLog atomicity', () => {
 		expect(redis.eval).not.toHaveBeenCalled();
 		expect(em.decrement).not.toHaveBeenCalled();
 		expect(updates[0]![2]).toMatchObject({ status: 'failed', cost: 0, errorCode: 'X' });
+	});
+});
+
+describe('AgentModelUsageService default model resolution in prechecks', () => {
+	function createPrecheckService(opts: { balance?: number; freeUsed?: string | null } = {}) {
+		const userProfilesRepository = {
+			findOneBy: vi.fn(async () => ({ agentCreditBalance: opts.balance ?? 0 })),
+		};
+		const redis = {
+			get: vi.fn(async () => opts.freeUsed ?? null),
+		};
+		const realAgentService = Object.create(AgentService.prototype) as AgentService;
+		const service = new AgentModelUsageService(
+			{} as never,
+			userProfilesRepository as never,
+			redis as never,
+			{} as never,
+			{ gen: vi.fn(() => 'log-id') } as never,
+			realAgentService,
+		);
+		return { service, userProfilesRepository, redis };
+	}
+
+	test('modelId === null on per_call default model preserves dailyFreeQuota and checks balance after exhaustion', async () => {
+		const meta = {
+			agentDefaultModelId: 'model-a',
+			agentLlmModels: instance.agentLlmModels,
+		} as unknown as MiMeta;
+
+		const withQuota = createPrecheckService({ balance: 0, freeUsed: '1' });
+		await expect(withQuota.service.hasFreeQuotaRemaining('user-1', null, meta)).resolves.toBe(true);
+		await expect(withQuota.service.canAffordModelCall(meta, null, 'user-1')).resolves.toBe(true);
+		expect(withQuota.redis.get).toHaveBeenCalledWith(expect.stringContaining(':user-1:model-a:'));
+
+		const exhaustedLowBalance = createPrecheckService({ balance: 0.5, freeUsed: '2' });
+		await expect(exhaustedLowBalance.service.hasFreeQuotaRemaining('user-1', null, meta)).resolves.toBe(false);
+		await expect(exhaustedLowBalance.service.canAffordModelCall(meta, null, 'user-1')).resolves.toBe(false);
+
+		const exhaustedSufficient = createPrecheckService({ balance: 1, freeUsed: '2' });
+		await expect(exhaustedSufficient.service.canAffordModelCall(meta, null, 'user-1')).resolves.toBe(true);
+	});
+
+	test('modelId === null on usage default model enforces positive balance even when agentDefaultModelId is unset', async () => {
+		const usageInstance = {
+			agentDefaultModelId: null,
+			agentLlmModels: [{
+				...instance.agentLlmModels![0]!,
+				id: 'usage-first',
+				billingMode: 'usage',
+				costPerCall: 0,
+				dailyFreeQuota: 0,
+				pricePerMillionInputCacheHitTokens: 0.1,
+				pricePerMillionInputCacheMissTokens: 1,
+				pricePerMillionOutputTokens: 2,
+			}],
+		} as unknown as MiMeta;
+
+		const zeroBalance = createPrecheckService({ balance: 0 });
+		await expect(zeroBalance.service.canAffordModelCall(usageInstance, null, 'user-1')).resolves.toBe(false);
+
+		const negativeBalance = createPrecheckService({ balance: -0.5 });
+		await expect(negativeBalance.service.canAffordModelCall(usageInstance, null, 'user-1')).resolves.toBe(false);
+
+		const positiveBalance = createPrecheckService({ balance: 0.01 });
+		await expect(positiveBalance.service.canAffordModelCall(usageInstance, null, 'user-1')).resolves.toBe(true);
+	});
+
+	test('BYOK modelId bypasses prechecks without querying Redis or balance', async () => {
+		const { service, userProfilesRepository, redis } = createPrecheckService({ balance: 0 });
+		await expect(service.canAffordModelCall(instance, 'u123456', 'user-1')).resolves.toBe(true);
+		expect(redis.get).not.toHaveBeenCalled();
+		expect(userProfilesRepository.findOneBy).not.toHaveBeenCalled();
 	});
 });

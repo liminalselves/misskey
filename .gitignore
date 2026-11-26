@@ -87,7 +87,6 @@ vite.config.local-dev.ts.timestamp-*
 .opencode
 .zcode
 /.zcodeignore
-/AGENTS.md
 
 # Affinity
 *.af~lock~

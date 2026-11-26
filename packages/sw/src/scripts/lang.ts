@@ -28,7 +28,12 @@ class SwLang {
 	public i18n: Promise<I18n<Locale>> | null = null;
 
 	public fetchLocale(): Promise<I18n<Locale>> {
-		return (this.i18n = this._fetch());
+		const p: Promise<I18n<Locale>> = this._fetch().catch(err => {
+			if (this.i18n === p) this.i18n = null;
+			throw err;
+		});
+		this.i18n = p;
+		return p;
 	}
 
 	private async _fetch(): Promise<I18n<Locale>> {

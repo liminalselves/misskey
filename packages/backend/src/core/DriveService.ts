@@ -17,6 +17,7 @@ import type { Config } from '@/config.js';
 import Logger from '@/logger.js';
 import type { MiRemoteUser, MiUser } from '@/models/User.js';
 import { MiDriveFile } from '@/models/DriveFile.js';
+import { MiDriveFileTombstone } from '@/models/DriveFileTombstone.js';
 import { IdService } from '@/core/IdService.js';
 import { isDuplicateKeyValueError } from '@/misc/is-duplicate-key-value-error.js';
 import { FILE_TYPE_BROWSERSAFE } from '@/const.js';
@@ -921,6 +922,78 @@ export class DriveService {
 				fileUserHost: user?.host ?? null,
 			});
 		}
+	}
+
+	/**
+	 * 对象存储中的原图已确认丢失：写墓碑并删除 drive_file 行，不再向对象存储发删除请求。
+	 * 仅在行仍指向同一个对象（accessKey 未变）且为本地用户的对象存储文件时才删除，
+	 * 返回是否实际删除；调用方必须已完成丢失确认，本方法不做存在性判断。
+	 * 传入 deleter 时写入审计日志；日志失败不影响已提交的删除。
+	 */
+	@bindThis
+	public async deleteFileWithMissingObject(file: MiDriveFile, deleter?: MiUser): Promise<boolean> {
+		if (file.storedInternal || file.isLink || file.userHost !== null || file.accessKey == null) return false;
+
+		const current = await this.driveFilesRepository.findOneBy({ id: file.id });
+		if (current == null) return false;
+		if (current.storedInternal || current.isLink || current.userHost !== null) return false;
+		if (current.accessKey == null || current.accessKey !== file.accessKey || current.url !== file.url) return false;
+		const accessKey = current.accessKey;
+
+		// 墓碑与删行放进同一事务：要么都生效，要么都不生效，
+		// 避免留下「行还在却已有墓碑」的状态（withDeleted 打包会把它误当成已删除）
+		const deleted = await this.driveFilesRepository.manager.transaction(async manager => {
+			const result = await manager.getRepository(MiDriveFile).delete({ id: current.id, accessKey });
+			if ((result.affected ?? 0) === 0) return false;
+
+			await manager.getRepository(MiDriveFileTombstone).createQueryBuilder()
+				.insert()
+				.values({
+					id: current.id,
+					userId: current.userId,
+					userHost: current.userHost,
+					name: current.name,
+					type: current.type,
+					size: current.size,
+					properties: {
+						...(current.properties.width != null ? { width: current.properties.width } : {}),
+						...(current.properties.height != null ? { height: current.properties.height } : {}),
+						...(current.properties.orientation != null ? { orientation: current.properties.orientation } : {}),
+					},
+					deletedAt: new Date(),
+				})
+				.orIgnore()
+				.execute();
+			return true;
+		});
+		if (!deleted) return false;
+
+		// 用户头像/横幅的外键会被置空，但 user 表上冗余的 URL 列不会，需要一并清掉。
+		// 条件 avatarId IS NULL 保证只在「被删的恰好是当前头像」时才清：
+		// 若用户当前头像是另一个文件，avatarId 不为空，不会被误清。
+		if (current.userId) {
+			await this.usersRepository.update({ id: current.userId, avatarId: IsNull() }, { avatarUrl: null, avatarBlurhash: null });
+			await this.usersRepository.update({ id: current.userId, bannerId: IsNull() }, { bannerUrl: null, bannerBlurhash: null });
+		}
+
+		this.driveChart.update(current, false);
+		this.perUserDriveChart.update(current, false);
+
+		if (current.userId) {
+			this.globalEventService.publishDriveStream(current.userId, 'fileDeleted', current.id);
+			this.globalEventService.publishInternalEvent('localUserUpdated', { id: current.userId });
+		}
+
+		if (deleter) {
+			const owner = current.userId ? await this.usersRepository.findOneBy({ id: current.userId }).catch(() => null) : null;
+			await this.moderationLogService.logSafely(deleter, 'deleteDriveFile', {
+				fileId: current.id,
+				fileUserId: current.userId,
+				fileUserUsername: owner?.username ?? null,
+				fileUserHost: owner?.host ?? null,
+			});
+		}
+		return true;
 	}
 
 	@bindThis

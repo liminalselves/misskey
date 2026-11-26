@@ -860,6 +860,15 @@ export type paths = {
          */
         post: operations['admin___announcements___update'];
     };
+    '/admin/app/sync-releases': {
+        /**
+         * admin/app/sync-releases
+         * @description No description provided.
+         *
+         *     **Credential required**: *Yes* / **Permission**: *write:admin:meta*
+         */
+        post: operations['admin___app___sync-releases'];
+    };
     '/admin/avatar-decorations/create': {
         /**
          * admin/avatar-decorations/create
@@ -977,6 +986,33 @@ export type paths = {
          *     **Credential required**: *Yes* / **Permission**: *read:admin:drive*
          */
         post: operations['admin___drive___folders'];
+    };
+    '/admin/drive/missing-reports/delete': {
+        /**
+         * admin/drive/missing-reports/delete
+         * @description Delete reported drive files whose object is confirmed missing from the object storage. Each file is verified again right before deletion; owners are notified.
+         *
+         *     **Credential required**: *Yes* / **Permission**: *write:admin:drive*
+         */
+        post: operations['admin___drive___missing-reports___delete'];
+    };
+    '/admin/drive/missing-reports/list': {
+        /**
+         * admin/drive/missing-reports/list
+         * @description List drive files reported as missing from the object storage, waiting for review.
+         *
+         *     **Credential required**: *Yes* / **Permission**: *read:admin:drive*
+         */
+        post: operations['admin___drive___missing-reports___list'];
+    };
+    '/admin/drive/missing-reports/recheck': {
+        /**
+         * admin/drive/missing-reports/recheck
+         * @description Re-verify reported missing drive files against the object storage. Files whose object exists again are removed from the list.
+         *
+         *     **Credential required**: *Yes* / **Permission**: *write:admin:drive*
+         */
+        post: operations['admin___drive___missing-reports___recheck'];
     };
     '/admin/drive/show-file': {
         /**
@@ -2656,6 +2692,15 @@ export type paths = {
          */
         post: operations['app___create'];
     };
+    '/app/releases': {
+        /**
+         * app/releases
+         * @description No description provided.
+         *
+         *     **Credential required**: *No*
+         */
+        post: operations['app___releases'];
+    };
     '/app/show': {
         /**
          * app/show
@@ -3094,7 +3139,7 @@ export type paths = {
          * chat/read
          * @description No description provided.
          *
-         *     **Credential required**: *Yes* / **Permission**: *write:chat*
+         *     **Credential required**: *Yes* / **Permission**: *read:chat*
          */
         post: operations['chat___read'];
     };
@@ -3103,9 +3148,18 @@ export type paths = {
          * chat/read-all
          * @description No description provided.
          *
-         *     **Credential required**: *Yes* / **Permission**: *write:chat*
+         *     **Credential required**: *Yes* / **Permission**: *read:chat*
          */
         post: operations['chat___read-all'];
+    };
+    '/chat/rooms/bans': {
+        /**
+         * chat/rooms/bans
+         * @description No description provided.
+         *
+         *     **Credential required**: *Yes* / **Permission**: *read:chat*
+         */
+        post: operations['chat___rooms___bans'];
     };
     '/chat/rooms/create': {
         /**
@@ -3124,6 +3178,15 @@ export type paths = {
          *     **Credential required**: *Yes* / **Permission**: *write:chat*
          */
         post: operations['chat___rooms___delete'];
+    };
+    '/chat/rooms/invitations/cancel': {
+        /**
+         * chat/rooms/invitations/cancel
+         * @description No description provided.
+         *
+         *     **Credential required**: *Yes* / **Permission**: *write:chat*
+         */
+        post: operations['chat___rooms___invitations___cancel'];
     };
     '/chat/rooms/invitations/create': {
         /**
@@ -3202,7 +3265,7 @@ export type paths = {
          * chat/rooms/members
          * @description No description provided.
          *
-         *     **Credential required**: *Yes* / **Permission**: *write:chat*
+         *     **Credential required**: *Yes* / **Permission**: *read:chat*
          */
         post: operations['chat___rooms___members'];
     };
@@ -3224,6 +3287,15 @@ export type paths = {
          */
         post: operations['chat___rooms___owned'];
     };
+    '/chat/rooms/pin-message': {
+        /**
+         * chat/rooms/pin-message
+         * @description No description provided.
+         *
+         *     **Credential required**: *Yes* / **Permission**: *write:chat*
+         */
+        post: operations['chat___rooms___pin-message'];
+    };
     '/chat/rooms/search': {
         /**
          * chat/rooms/search
@@ -3232,6 +3304,15 @@ export type paths = {
          *     **Credential required**: *Yes* / **Permission**: *read:chat*
          */
         post: operations['chat___rooms___search'];
+    };
+    '/chat/rooms/set-role': {
+        /**
+         * chat/rooms/set-role
+         * @description No description provided.
+         *
+         *     **Credential required**: *Yes* / **Permission**: *write:chat*
+         */
+        post: operations['chat___rooms___set-role'];
     };
     '/chat/rooms/show': {
         /**
@@ -3250,6 +3331,24 @@ export type paths = {
          *     **Credential required**: *Yes* / **Permission**: *write:chat*
          */
         post: operations['chat___rooms___suspend'];
+    };
+    '/chat/rooms/transfer-ownership': {
+        /**
+         * chat/rooms/transfer-ownership
+         * @description No description provided.
+         *
+         *     **Credential required**: *Yes* / **Permission**: *write:chat*
+         */
+        post: operations['chat___rooms___transfer-ownership'];
+    };
+    '/chat/rooms/unban': {
+        /**
+         * chat/rooms/unban
+         * @description No description provided.
+         *
+         *     **Credential required**: *Yes* / **Permission**: *write:chat*
+         */
+        post: operations['chat___rooms___unban'];
     };
     '/chat/rooms/unsuspend': {
         /**
@@ -3475,6 +3574,15 @@ export type paths = {
          *     **Credential required**: *Yes* / **Permission**: *write:drive*
          */
         post: operations['drive___files___move-bulk'];
+    };
+    '/drive/files/report-missing': {
+        /**
+         * drive/files/report-missing
+         * @description Report that a media URL failed to load. The server verifies it against the object storage on its own.
+         *
+         *     **Credential required**: *No*
+         */
+        post: operations['drive___files___report-missing'];
     };
     '/drive/files/show': {
         /**
@@ -6002,6 +6110,51 @@ export type components = {
                     /** Format: misskey:id */
                     userListId: string;
                 };
+                chatRoomMemberJoined?: {
+                    /** @enum {string} */
+                    type: 'all' | 'following' | 'follower' | 'mutualFollow' | 'followingOrFollower' | 'never';
+                } | {
+                    /** @enum {string} */
+                    type: 'list';
+                    /** Format: misskey:id */
+                    userListId: string;
+                };
+                chatRoomKicked?: {
+                    /** @enum {string} */
+                    type: 'all' | 'following' | 'follower' | 'mutualFollow' | 'followingOrFollower' | 'never';
+                } | {
+                    /** @enum {string} */
+                    type: 'list';
+                    /** Format: misskey:id */
+                    userListId: string;
+                };
+                chatRoomSuspended?: {
+                    /** @enum {string} */
+                    type: 'all' | 'following' | 'follower' | 'mutualFollow' | 'followingOrFollower' | 'never';
+                } | {
+                    /** @enum {string} */
+                    type: 'list';
+                    /** Format: misskey:id */
+                    userListId: string;
+                };
+                chatRoomUnsuspended?: {
+                    /** @enum {string} */
+                    type: 'all' | 'following' | 'follower' | 'mutualFollow' | 'followingOrFollower' | 'never';
+                } | {
+                    /** @enum {string} */
+                    type: 'list';
+                    /** Format: misskey:id */
+                    userListId: string;
+                };
+                chatRoomMention?: {
+                    /** @enum {string} */
+                    type: 'all' | 'following' | 'follower' | 'mutualFollow' | 'followingOrFollower' | 'never';
+                } | {
+                    /** @enum {string} */
+                    type: 'list';
+                    /** Format: misskey:id */
+                    userListId: string;
+                };
                 achievementEarned?: {
                     /** @enum {string} */
                     type: 'all' | 'following' | 'follower' | 'mutualFollow' | 'followingOrFollower' | 'never';
@@ -6507,6 +6660,21 @@ export type components = {
             /** Format: id */
             userId: string;
             chatRoom: components['schemas']['ChatRoom'];
+        } | {
+            /** Format: id */
+            id: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** @enum {string} */
+            type: 'chatRoomMention';
+            user: components['schemas']['UserLite'];
+            /** Format: id */
+            userId: string;
+            /** Format: id */
+            chatRoomId: string;
+            chatRoom: components['schemas']['ChatRoom'];
+            /** Format: id */
+            messageId: string;
         } | {
             /** Format: id */
             id: string;
@@ -7478,6 +7646,12 @@ export type components = {
             id: string;
             /** Format: date-time */
             createdAt: string;
+            /** Format: date-time */
+            recalledAt?: string | null;
+            recalledById?: string | null;
+            recalledBy?: components['schemas']['UserLite'] | null;
+            /** @enum {string|null} */
+            systemType?: 'memberJoined' | 'memberInvitedJoined' | 'memberLeft' | null;
             fromUserId: string;
             fromUser: components['schemas']['UserLite'];
             toUserId?: string | null;
@@ -7489,6 +7663,14 @@ export type components = {
             file?: components['schemas']['DriveFile'] | null;
             isRead?: boolean;
             unreadCount?: number | null;
+            replyId?: string | null;
+            reply?: {
+                id: string;
+                text: string | null;
+                fileId?: string | null;
+                fromUserId: string;
+                fromUser?: components['schemas']['UserLite'];
+            } | null;
             reactions: {
                 reaction: string;
                 user: components['schemas']['UserLite'];
@@ -7498,6 +7680,12 @@ export type components = {
             id: string;
             /** Format: date-time */
             createdAt: string;
+            /** Format: date-time */
+            recalledAt?: string | null;
+            recalledById?: string | null;
+            recalledBy?: components['schemas']['UserLite'] | null;
+            /** @enum {string|null} */
+            systemType?: 'memberJoined' | 'memberInvitedJoined' | 'memberLeft' | null;
             fromUserId: string;
             fromUser?: components['schemas']['UserLite'];
             toUserId?: string | null;
@@ -7505,6 +7693,14 @@ export type components = {
             text?: string | null;
             fileId?: string | null;
             file?: components['schemas']['DriveFile'] | null;
+            replyId?: string | null;
+            reply?: {
+                id: string;
+                text?: string | null;
+                fileId?: string | null;
+                fromUserId: string;
+                fromUser?: components['schemas']['UserLite'];
+            } | null;
             reactions: {
                 reaction: string;
                 user?: components['schemas']['UserLite'] | null;
@@ -7514,6 +7710,12 @@ export type components = {
             id: string;
             /** Format: date-time */
             createdAt: string;
+            /** Format: date-time */
+            recalledAt?: string | null;
+            recalledById?: string | null;
+            recalledBy?: components['schemas']['UserLite'] | null;
+            /** @enum {string|null} */
+            systemType?: 'memberJoined' | 'memberInvitedJoined' | 'memberLeft' | null;
             fromUserId: string;
             toUserId: string;
             text?: string | null;
@@ -7526,6 +7728,7 @@ export type components = {
             reply?: {
                 id: string;
                 text?: string | null;
+                fileId?: string | null;
                 fromUserId: string;
                 fromUser: components['schemas']['UserLite'];
             } | null;
@@ -7534,6 +7737,12 @@ export type components = {
             id: string;
             /** Format: date-time */
             createdAt: string;
+            /** Format: date-time */
+            recalledAt?: string | null;
+            recalledById?: string | null;
+            recalledBy?: components['schemas']['UserLite'] | null;
+            /** @enum {string|null} */
+            systemType?: 'memberJoined' | 'memberInvitedJoined' | 'memberLeft' | null;
             fromUserId: string;
             fromUser: components['schemas']['UserLite'];
             toRoomId: string;
@@ -7548,6 +7757,7 @@ export type components = {
             reply?: {
                 id: string;
                 text?: string | null;
+                fileId?: string | null;
                 fromUserId: string;
                 fromUser: components['schemas']['UserLite'];
             } | null;
@@ -7565,6 +7775,28 @@ export type components = {
             isMember: boolean;
             isMuted?: boolean;
             invitationExists?: boolean;
+            allowMemberInvite?: boolean;
+            announcement?: string | null;
+            pinnedMessageId?: string | null;
+            pinnedMessage?: components['schemas']['ChatMessage'] | null;
+            isArchived?: boolean;
+            /** @enum {string|null} */
+            myRole?: 'owner' | 'admin' | 'member' | null;
+            isBanned?: boolean;
+            banReason?: string | null;
+            memberCount?: number;
+            unreadCount?: number;
+        };
+        ChatRoomBan: {
+            id: string;
+            /** Format: date-time */
+            createdAt: string;
+            roomId: string;
+            userId: string;
+            user?: components['schemas']['UserLite'];
+            bannedById: string | null;
+            bannedBy?: components['schemas']['UserLite'] | null;
+            reason: string | null;
         };
         ChatRoomInvitation: {
             id: string;
@@ -7574,6 +7806,8 @@ export type components = {
             user: components['schemas']['UserLite'];
             roomId: string;
             room: components['schemas']['ChatRoom'];
+            /** @enum {string} */
+            status: 'pending' | 'accepted' | 'ignored' | 'canceled';
         };
         ChatRoomMembership: {
             id: string;
@@ -7585,6 +7819,8 @@ export type components = {
             room?: components['schemas']['ChatRoom'];
             /** Format: date-time */
             suspendedUntil: string | null;
+            /** @enum {string} */
+            role?: 'member' | 'admin';
         };
     };
     responses: never;
@@ -12786,7 +13022,7 @@ export interface operations {
                     /** Format: misskey:id */
                     characterId?: string | null;
                     /** @enum {string|null} */
-                    role?: 'user' | 'assistant' | 'system' | null;
+                    role?: null | 'user' | 'assistant' | 'system';
                     query?: string | null;
                     /** @default 40 */
                     limit?: number;
@@ -13133,7 +13369,7 @@ export interface operations {
             content: {
                 'application/json': {
                     /** @enum {string|null} */
-                    status?: 'available' | 'redeemed' | 'expired' | 'revoked' | null;
+                    status?: null | 'available' | 'redeemed' | 'expired' | 'revoked';
                     query?: string | null;
                     /** @default 30 */
                     limit?: number;
@@ -14986,6 +15222,73 @@ export interface operations {
             };
         };
     };
+    'admin___app___sync-releases': {
+        responses: {
+            /** @description OK (with results) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': {
+                        ok: boolean;
+                        repo: string;
+                        autoFetchGithub: boolean;
+                        syncedAt: string | null;
+                        error: string | null;
+                        latestAndroidVersion: string | null;
+                        latestIosVersion: string | null;
+                        releaseCount: number;
+                    };
+                };
+            };
+            /** @description Client error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Authentication error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Forbidden error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description I'm Ai */
+            418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+        };
+    };
     'admin___avatar-decorations___create': {
         requestBody: {
             content: {
@@ -15899,6 +16202,270 @@ export interface operations {
             };
             /** @description I'm Ai */
             418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+        };
+    };
+    'admin___drive___missing-reports___delete': {
+        requestBody: {
+            content: {
+                'application/json': {
+                    ids: string[];
+                };
+            };
+        };
+        responses: {
+            /** @description OK (with results) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': {
+                        aborted: boolean;
+                        items: {
+                            id: string;
+                            /** @enum {string} */
+                            result: 'deleted' | 'present' | 'missing' | 'unknown' | 'gone';
+                        }[];
+                    };
+                };
+            };
+            /** @description Client error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Authentication error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Forbidden error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description I'm Ai */
+            418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+        };
+    };
+    'admin___drive___missing-reports___list': {
+        requestBody: {
+            content: {
+                'application/json': {
+                    /** @default 1 */
+                    page?: number;
+                    /** @default 20 */
+                    pageSize?: number;
+                    /** @enum {string} */
+                    scope?: 'current' | 'legacy';
+                };
+            };
+        };
+        responses: {
+            /** @description OK (with results) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': {
+                        items: {
+                            id: string;
+                            fileId: string;
+                            name: string;
+                            type: string;
+                            size: number;
+                            user: components['schemas']['UserLite'] | null;
+                            bucket: string;
+                            objectKey: string;
+                            /** @enum {string} */
+                            scope: 'current' | 'legacy';
+                            reportCount: number;
+                            /** Format: date-time */
+                            firstReportedAt: string;
+                            /** Format: date-time */
+                            lastReportedAt: string;
+                            /** Format: date-time */
+                            verifiedAt: string;
+                        }[];
+                        total: number;
+                        page: number;
+                        pageSize: number;
+                    };
+                };
+            };
+            /** @description Client error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Authentication error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Forbidden error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description I'm Ai */
+            418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+        };
+    };
+    'admin___drive___missing-reports___recheck': {
+        requestBody: {
+            content: {
+                'application/json': {
+                    ids: string[];
+                };
+            };
+        };
+        responses: {
+            /** @description OK (with results) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': {
+                        aborted: boolean;
+                        items: {
+                            id: string;
+                            /** @enum {string} */
+                            result: 'deleted' | 'present' | 'missing' | 'unknown' | 'gone';
+                        }[];
+                    };
+                };
+            };
+            /** @description Client error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Authentication error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Forbidden error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description I'm Ai */
+            418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Too many requests */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -17860,6 +18427,9 @@ export interface operations {
                         aliyunMobilePushAppKey: string | null;
                         enableAliyunMobilePush: boolean;
                         nativeClientAppInfo: {
+                            autoFetchGithub: boolean;
+                            githubRepo: string | null;
+                            githubDownloadProxy: string | null;
                             latestAndroidVersion: string | null;
                             latestIosVersion: string | null;
                             minRequiredAppVersion: string | null;
@@ -20590,6 +21160,51 @@ export interface operations {
                                 /** Format: misskey:id */
                                 userListId: string;
                             };
+                            chatRoomMemberJoined?: {
+                                /** @enum {string} */
+                                type: 'all' | 'following' | 'follower' | 'mutualFollow' | 'followingOrFollower' | 'never';
+                            } | {
+                                /** @enum {string} */
+                                type: 'list';
+                                /** Format: misskey:id */
+                                userListId: string;
+                            };
+                            chatRoomKicked?: {
+                                /** @enum {string} */
+                                type: 'all' | 'following' | 'follower' | 'mutualFollow' | 'followingOrFollower' | 'never';
+                            } | {
+                                /** @enum {string} */
+                                type: 'list';
+                                /** Format: misskey:id */
+                                userListId: string;
+                            };
+                            chatRoomSuspended?: {
+                                /** @enum {string} */
+                                type: 'all' | 'following' | 'follower' | 'mutualFollow' | 'followingOrFollower' | 'never';
+                            } | {
+                                /** @enum {string} */
+                                type: 'list';
+                                /** Format: misskey:id */
+                                userListId: string;
+                            };
+                            chatRoomUnsuspended?: {
+                                /** @enum {string} */
+                                type: 'all' | 'following' | 'follower' | 'mutualFollow' | 'followingOrFollower' | 'never';
+                            } | {
+                                /** @enum {string} */
+                                type: 'list';
+                                /** Format: misskey:id */
+                                userListId: string;
+                            };
+                            chatRoomMention?: {
+                                /** @enum {string} */
+                                type: 'all' | 'following' | 'follower' | 'mutualFollow' | 'followingOrFollower' | 'never';
+                            } | {
+                                /** @enum {string} */
+                                type: 'list';
+                                /** Format: misskey:id */
+                                userListId: string;
+                            };
                             achievementEarned?: {
                                 /** @enum {string} */
                                 type: 'all' | 'following' | 'follower' | 'mutualFollow' | 'followingOrFollower' | 'never';
@@ -21819,6 +22434,9 @@ export interface operations {
                     agentProactiveRecencyBias?: number;
                     agentProactiveMaxChainLength?: number;
                     nativeClientAppInfo?: {
+                        autoFetchGithub?: boolean;
+                        githubRepo?: string | null;
+                        githubDownloadProxy?: string | null;
                         latestAndroidVersion?: string | null;
                         latestIosVersion?: string | null;
                         minRequiredAppVersion?: string | null;
@@ -31693,6 +32311,131 @@ export interface operations {
             };
         };
     };
+    app___releases: {
+        responses: {
+            /** @description OK (with results) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': {
+                        repo: string;
+                        autoFetchGithub: boolean;
+                        syncedAt: string | null;
+                        syncError: string | null;
+                        announcement: string | null;
+                        minRequiredAppVersion: string | null;
+                        latest: {
+                            android: {
+                                version: string;
+                                tagName: string;
+                                name: string;
+                                publishedAt: string | null;
+                                releaseUrl: string;
+                                minVersion: string | null;
+                                notes: string;
+                                assetName: string;
+                                size: number;
+                                sha256: string | null;
+                                downloadUrl: string | null;
+                                rawDownloadUrl: string | null;
+                                downloadCount: number;
+                            } | null;
+                            ios: {
+                                version: string;
+                                tagName: string;
+                                name: string;
+                                publishedAt: string | null;
+                                releaseUrl: string;
+                                minVersion: string | null;
+                                notes: string;
+                                assetName: string;
+                                size: number;
+                                sha256: string | null;
+                                downloadUrl: string | null;
+                                rawDownloadUrl: string | null;
+                                downloadCount: number;
+                            } | null;
+                        };
+                        releases: {
+                            version: string;
+                            tagName: string;
+                            name: string;
+                            publishedAt: string | null;
+                            releaseUrl: string;
+                            minVersion: string | null;
+                            notes: string;
+                            isLatest: boolean;
+                            assets: {
+                                android?: {
+                                    name: string;
+                                    size: number;
+                                    sha256: string | null;
+                                    downloadUrl: string | null;
+                                    rawDownloadUrl: string | null;
+                                    downloadCount: number;
+                                };
+                                ios?: {
+                                    name: string;
+                                    size: number;
+                                    sha256: string | null;
+                                    downloadUrl: string | null;
+                                    rawDownloadUrl: string | null;
+                                    downloadCount: number;
+                                };
+                            };
+                        }[];
+                    };
+                };
+            };
+            /** @description Client error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Authentication error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Forbidden error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description I'm Ai */
+            418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+        };
+    };
     app___show: {
         requestBody: {
             content: {
@@ -34493,6 +35236,8 @@ export interface operations {
                 'application/json': {
                     /** @default 10 */
                     limit?: number;
+                    /** Format: misskey:id */
+                    untilId?: string;
                     /** @default false */
                     room?: boolean;
                 };
@@ -34924,9 +35669,15 @@ export interface operations {
                     /** @default 10 */
                     limit?: number;
                     /** Format: misskey:id */
+                    sinceId?: string;
+                    /** Format: misskey:id */
+                    untilId?: string;
+                    /** Format: misskey:id */
                     userId?: string | null;
                     /** Format: misskey:id */
                     roomId?: string | null;
+                    /** Format: misskey:id */
+                    fromUserId?: string | null;
                 };
             };
         };
@@ -35311,6 +36062,78 @@ export interface operations {
             };
         };
     };
+    chat___rooms___bans: {
+        requestBody: {
+            content: {
+                'application/json': {
+                    /** Format: misskey:id */
+                    roomId: string;
+                    /** @default 30 */
+                    limit?: number;
+                    /** Format: misskey:id */
+                    sinceId?: string;
+                    /** Format: misskey:id */
+                    untilId?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK (with results) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['ChatRoomBan'][];
+                };
+            };
+            /** @description Client error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Authentication error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Forbidden error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description I'm Ai */
+            418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+        };
+    };
     chat___rooms___create: {
         requestBody: {
             content: {
@@ -35320,6 +36143,9 @@ export interface operations {
                     /** @default false */
                     isPublic?: boolean;
                     iconUrl?: string | null;
+                    /** @default false */
+                    allowMemberInvite?: boolean;
+                    announcement?: string | null;
                 };
             };
         };
@@ -35403,6 +36229,77 @@ export interface operations {
             204: {
                 headers: {
                     [name: string]: unknown;
+                };
+            };
+            /** @description Client error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Authentication error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Forbidden error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description I'm Ai */
+            418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+        };
+    };
+    chat___rooms___invitations___cancel: {
+        requestBody: {
+            content: {
+                'application/json': {
+                    /** Format: misskey:id */
+                    invitationId: string;
+                } | {
+                    /** Format: misskey:id */
+                    roomId: string;
+                    /** Format: misskey:id */
+                    userId: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK (with results) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': Record<string, never>;
                 };
             };
             /** @description Client error */
@@ -35881,6 +36778,8 @@ export interface operations {
                     roomId: string;
                     /** Format: misskey:id */
                     userId: string;
+                    /** @default false */
+                    ban?: boolean;
                 };
             };
         };
@@ -36015,6 +36914,7 @@ export interface operations {
                     untilId?: string;
                     sinceDate?: number;
                     untilDate?: number;
+                    query?: string;
                 };
             };
         };
@@ -36211,6 +37111,74 @@ export interface operations {
             };
         };
     };
+    'chat___rooms___pin-message': {
+        requestBody: {
+            content: {
+                'application/json': {
+                    /** Format: misskey:id */
+                    roomId: string;
+                    /** Format: misskey:id */
+                    messageId: string | null;
+                };
+            };
+        };
+        responses: {
+            /** @description OK (with results) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['ChatRoom'];
+                };
+            };
+            /** @description Client error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Authentication error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Forbidden error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description I'm Ai */
+            418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+        };
+    };
     chat___rooms___search: {
         requestBody: {
             content: {
@@ -36233,6 +37201,76 @@ export interface operations {
                 };
                 content: {
                     'application/json': components['schemas']['ChatRoom'][];
+                };
+            };
+            /** @description Client error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Authentication error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Forbidden error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description I'm Ai */
+            418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+        };
+    };
+    'chat___rooms___set-role': {
+        requestBody: {
+            content: {
+                'application/json': {
+                    /** Format: misskey:id */
+                    roomId: string;
+                    /** Format: misskey:id */
+                    userId: string;
+                    /** @enum {string} */
+                    role: 'member' | 'admin';
+                };
+            };
+        };
+        responses: {
+            /** @description OK (with results) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['ChatRoomMembership'];
                 };
             };
             /** @description Client error */
@@ -36414,6 +37452,139 @@ export interface operations {
             };
         };
     };
+    'chat___rooms___transfer-ownership': {
+        requestBody: {
+            content: {
+                'application/json': {
+                    /** Format: misskey:id */
+                    roomId: string;
+                    /** Format: misskey:id */
+                    userId: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK (with results) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['ChatRoom'];
+                };
+            };
+            /** @description Client error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Authentication error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Forbidden error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description I'm Ai */
+            418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+        };
+    };
+    chat___rooms___unban: {
+        requestBody: {
+            content: {
+                'application/json': {
+                    /** Format: misskey:id */
+                    roomId: string;
+                    /** Format: misskey:id */
+                    userId: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK (without any results) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+            };
+            /** @description Client error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Authentication error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Forbidden error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description I'm Ai */
+            418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+        };
+    };
     chat___rooms___unsuspend: {
         requestBody: {
             content: {
@@ -36489,6 +37660,9 @@ export interface operations {
                     description?: string;
                     isPublic?: boolean;
                     iconUrl?: string | null;
+                    announcement?: string | null;
+                    allowMemberInvite?: boolean;
+                    isArchived?: boolean;
                 };
             };
         };
@@ -38122,6 +39296,77 @@ export interface operations {
             };
             /** @description I'm Ai */
             418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+        };
+    };
+    'drive___files___report-missing': {
+        requestBody: {
+            content: {
+                'application/json': {
+                    url: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK (without any results) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+            };
+            /** @description Client error */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Authentication error */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Forbidden error */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description I'm Ai */
+            418: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    'application/json': components['schemas']['Error'];
+                };
+            };
+            /** @description Too many requests */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -44745,8 +45990,8 @@ export interface operations {
                     untilDate?: number;
                     /** @default true */
                     markAsRead?: boolean;
-                    includeTypes?: ('note' | 'follow' | 'mention' | 'reply' | 'renote' | 'quote' | 'reaction' | 'pollEnded' | 'scheduledNotePosted' | 'scheduledNotePostFailed' | 'receiveFollowRequest' | 'followRequestAccepted' | 'roleAssigned' | 'chatRoomInvitationReceived' | 'achievementEarned' | 'exportCompleted' | 'login' | 'createToken' | 'app' | 'test' | 'agentReviewApproved' | 'agentReviewRejected' | 'agentModelReportResolved' | 'agentCharacterBanned' | 'agentSessionBanned' | 'agentProactiveMessage' | 'pollVote' | 'groupInvited')[];
-                    excludeTypes?: ('note' | 'follow' | 'mention' | 'reply' | 'renote' | 'quote' | 'reaction' | 'pollEnded' | 'scheduledNotePosted' | 'scheduledNotePostFailed' | 'receiveFollowRequest' | 'followRequestAccepted' | 'roleAssigned' | 'chatRoomInvitationReceived' | 'achievementEarned' | 'exportCompleted' | 'login' | 'createToken' | 'app' | 'test' | 'agentReviewApproved' | 'agentReviewRejected' | 'agentModelReportResolved' | 'agentCharacterBanned' | 'agentSessionBanned' | 'agentProactiveMessage' | 'pollVote' | 'groupInvited')[];
+                    includeTypes?: ('note' | 'follow' | 'mention' | 'reply' | 'renote' | 'quote' | 'reaction' | 'pollEnded' | 'scheduledNotePosted' | 'scheduledNotePostFailed' | 'receiveFollowRequest' | 'followRequestAccepted' | 'roleAssigned' | 'chatRoomInvitationReceived' | 'chatRoomMemberJoined' | 'chatRoomKicked' | 'chatRoomSuspended' | 'chatRoomUnsuspended' | 'chatRoomMention' | 'achievementEarned' | 'exportCompleted' | 'login' | 'createToken' | 'app' | 'test' | 'agentReviewApproved' | 'agentReviewRejected' | 'agentModelReportResolved' | 'agentCharacterBanned' | 'agentSessionBanned' | 'agentProactiveMessage' | 'pollVote' | 'groupInvited')[];
+                    excludeTypes?: ('note' | 'follow' | 'mention' | 'reply' | 'renote' | 'quote' | 'reaction' | 'pollEnded' | 'scheduledNotePosted' | 'scheduledNotePostFailed' | 'receiveFollowRequest' | 'followRequestAccepted' | 'roleAssigned' | 'chatRoomInvitationReceived' | 'chatRoomMemberJoined' | 'chatRoomKicked' | 'chatRoomSuspended' | 'chatRoomUnsuspended' | 'chatRoomMention' | 'achievementEarned' | 'exportCompleted' | 'login' | 'createToken' | 'app' | 'test' | 'agentReviewApproved' | 'agentReviewRejected' | 'agentModelReportResolved' | 'agentCharacterBanned' | 'agentSessionBanned' | 'agentProactiveMessage' | 'pollVote' | 'groupInvited')[];
                 };
             };
         };
@@ -44830,8 +46075,8 @@ export interface operations {
                     untilDate?: number;
                     /** @default true */
                     markAsRead?: boolean;
-                    includeTypes?: ('note' | 'follow' | 'mention' | 'reply' | 'renote' | 'quote' | 'reaction' | 'pollEnded' | 'scheduledNotePosted' | 'scheduledNotePostFailed' | 'receiveFollowRequest' | 'followRequestAccepted' | 'roleAssigned' | 'chatRoomInvitationReceived' | 'achievementEarned' | 'exportCompleted' | 'login' | 'createToken' | 'app' | 'test' | 'agentReviewApproved' | 'agentReviewRejected' | 'agentModelReportResolved' | 'agentCharacterBanned' | 'agentSessionBanned' | 'agentProactiveMessage' | 'pollVote' | 'groupInvited')[];
-                    excludeTypes?: ('note' | 'follow' | 'mention' | 'reply' | 'renote' | 'quote' | 'reaction' | 'pollEnded' | 'scheduledNotePosted' | 'scheduledNotePostFailed' | 'receiveFollowRequest' | 'followRequestAccepted' | 'roleAssigned' | 'chatRoomInvitationReceived' | 'achievementEarned' | 'exportCompleted' | 'login' | 'createToken' | 'app' | 'test' | 'agentReviewApproved' | 'agentReviewRejected' | 'agentModelReportResolved' | 'agentCharacterBanned' | 'agentSessionBanned' | 'agentProactiveMessage' | 'pollVote' | 'groupInvited')[];
+                    includeTypes?: ('note' | 'follow' | 'mention' | 'reply' | 'renote' | 'quote' | 'reaction' | 'pollEnded' | 'scheduledNotePosted' | 'scheduledNotePostFailed' | 'receiveFollowRequest' | 'followRequestAccepted' | 'roleAssigned' | 'chatRoomInvitationReceived' | 'chatRoomMemberJoined' | 'chatRoomKicked' | 'chatRoomSuspended' | 'chatRoomUnsuspended' | 'chatRoomMention' | 'achievementEarned' | 'exportCompleted' | 'login' | 'createToken' | 'app' | 'test' | 'agentReviewApproved' | 'agentReviewRejected' | 'agentModelReportResolved' | 'agentCharacterBanned' | 'agentSessionBanned' | 'agentProactiveMessage' | 'pollVote' | 'groupInvited')[];
+                    excludeTypes?: ('note' | 'follow' | 'mention' | 'reply' | 'renote' | 'quote' | 'reaction' | 'pollEnded' | 'scheduledNotePosted' | 'scheduledNotePostFailed' | 'receiveFollowRequest' | 'followRequestAccepted' | 'roleAssigned' | 'chatRoomInvitationReceived' | 'chatRoomMemberJoined' | 'chatRoomKicked' | 'chatRoomSuspended' | 'chatRoomUnsuspended' | 'chatRoomMention' | 'achievementEarned' | 'exportCompleted' | 'login' | 'createToken' | 'app' | 'test' | 'agentReviewApproved' | 'agentReviewRejected' | 'agentModelReportResolved' | 'agentCharacterBanned' | 'agentSessionBanned' | 'agentProactiveMessage' | 'pollVote' | 'groupInvited')[];
                 };
             };
         };
@@ -46151,6 +47396,51 @@ export interface operations {
                             userListId: string;
                         };
                         chatRoomInvitationReceived?: {
+                            /** @enum {string} */
+                            type: 'all' | 'following' | 'follower' | 'mutualFollow' | 'followingOrFollower' | 'never';
+                        } | {
+                            /** @enum {string} */
+                            type: 'list';
+                            /** Format: misskey:id */
+                            userListId: string;
+                        };
+                        chatRoomMemberJoined?: {
+                            /** @enum {string} */
+                            type: 'all' | 'following' | 'follower' | 'mutualFollow' | 'followingOrFollower' | 'never';
+                        } | {
+                            /** @enum {string} */
+                            type: 'list';
+                            /** Format: misskey:id */
+                            userListId: string;
+                        };
+                        chatRoomKicked?: {
+                            /** @enum {string} */
+                            type: 'all' | 'following' | 'follower' | 'mutualFollow' | 'followingOrFollower' | 'never';
+                        } | {
+                            /** @enum {string} */
+                            type: 'list';
+                            /** Format: misskey:id */
+                            userListId: string;
+                        };
+                        chatRoomSuspended?: {
+                            /** @enum {string} */
+                            type: 'all' | 'following' | 'follower' | 'mutualFollow' | 'followingOrFollower' | 'never';
+                        } | {
+                            /** @enum {string} */
+                            type: 'list';
+                            /** Format: misskey:id */
+                            userListId: string;
+                        };
+                        chatRoomUnsuspended?: {
+                            /** @enum {string} */
+                            type: 'all' | 'following' | 'follower' | 'mutualFollow' | 'followingOrFollower' | 'never';
+                        } | {
+                            /** @enum {string} */
+                            type: 'list';
+                            /** Format: misskey:id */
+                            userListId: string;
+                        };
+                        chatRoomMention?: {
                             /** @enum {string} */
                             type: 'all' | 'following' | 'follower' | 'mutualFollow' | 'followingOrFollower' | 'never';
                         } | {

@@ -169,8 +169,9 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 				charRows = await this.agentCharactersRepository.findBy({ id: In(charIds) });
 			}
 			const charRowById = new Map(charRows.map(r => [r.id, r]));
+			const charDisplayById = new Map(charRows.map(r => [r.id, this.agentService.characterPlazaDisplayFields(r)]));
 
-			const avatarIds = [...new Set(charRows.map(r => r.avatarFileId).filter((id): id is string => id != null))];
+			const avatarIds = [...new Set([...charDisplayById.values()].map(d => d.avatarFileId).filter((id): id is string => id != null))];
 			const avatarMap = avatarIds.length > 0
 				? await this.driveFileEntityService.packManyByIdsMap(avatarIds, {})
 				: new Map();
@@ -185,7 +186,7 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 
 			const characters = charScores.map(({ id }) => {
 				const r = charRowById.get(id)!;
-				const d = this.agentService.characterPlazaDisplayFields(r);
+				const d = charDisplayById.get(id)!;
 				const avatarId = d.avatarFileId;
 				const agg = charRatings.get(id) ?? { average: null, count: 0 };
 				return {
@@ -260,6 +261,8 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			.addSelect('c.userId', 'userId');
 
 		// For each keyword, add a condition group (AND between keywords)
+		const nameExpr = `COALESCE(c."publishedSnapshot"->>'name', c.name)`;
+		const summaryExpr = `COALESCE(c."publishedSnapshot"->>'summary', c.summary)`;
 		const params: Record<string, string> = {};
 		let scoreExpr = '0';
 
@@ -268,11 +271,11 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			params[pName] = `%${escapeIlikePattern(keywords[i])}%`;
 			// Each keyword must match at least one field
 			qb.andWhere(
-				`(c.name ILIKE :${pName} ESCAPE '\\' OR c.summary ILIKE :${pName} ESCAPE '\\' OR u.name ILIKE :${pName} ESCAPE '\\' OR u.username ILIKE :${pName} ESCAPE '\\')`,
+				`(${nameExpr} ILIKE :${pName} ESCAPE '\\' OR ${summaryExpr} ILIKE :${pName} ESCAPE '\\' OR u.name ILIKE :${pName} ESCAPE '\\' OR u.username ILIKE :${pName} ESCAPE '\\')`,
 			);
 			// Accumulate score
-			scoreExpr += ` + (CASE WHEN c.name ILIKE :${pName} ESCAPE '\\' THEN 10 ELSE 0 END)`;
-			scoreExpr += ` + (CASE WHEN c.summary ILIKE :${pName} ESCAPE '\\' THEN 5 ELSE 0 END)`;
+			scoreExpr += ` + (CASE WHEN ${nameExpr} ILIKE :${pName} ESCAPE '\\' THEN 10 ELSE 0 END)`;
+			scoreExpr += ` + (CASE WHEN ${summaryExpr} ILIKE :${pName} ESCAPE '\\' THEN 5 ELSE 0 END)`;
 			scoreExpr += ` + (CASE WHEN u.name ILIKE :${pName} ESCAPE '\\' OR u.username ILIKE :${pName} ESCAPE '\\' THEN 3 ELSE 0 END)`;
 		}
 

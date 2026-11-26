@@ -135,7 +135,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 								</div>
 							</article>
 							<div v-if="messagesHasMore" :class="$style.loadMore">
-								<MkButton v-appear="prefer.s.enableInfiniteScroll && !messagesLoading && !messagesPagination.error.value ? () => messagesPagination.load(false) : null" small rounded :disabled="messagesLoading" @click="messagesPagination.load(false)"><i class="ti ti-chevron-down"></i> {{ messagesLoading ? '载入中…' : '继续载入' }}</MkButton>
+								<MkButton v-appear="prefer.s.enableInfiniteScroll && !messagesLoading && !messagesPagination.error.value ? loadMoreMessages : null" small rounded :disabled="messagesLoading" @click="loadMoreMessages"><i class="ti ti-chevron-down"></i> {{ messagesLoading ? '载入中…' : '继续载入' }}</MkButton>
 							</div>
 						</div>
 					</section>
@@ -179,7 +179,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 							</article>
 						</div>
 						<div v-if="sessions.length > 0 && sessionsHasMore" :class="$style.loadMore">
-							<MkButton v-appear="prefer.s.enableInfiniteScroll && !sessionsLoading && !sessionsPagination.error.value ? () => sessionsPagination.load(false) : null" small rounded :disabled="sessionsLoading" @click="sessionsPagination.load(false)"><i class="ti ti-chevron-down"></i> {{ sessionsLoading ? '载入中…' : '继续载入' }}</MkButton>
+							<MkButton v-appear="prefer.s.enableInfiniteScroll && !sessionsLoading && !sessionsPagination.error.value ? loadMoreSessions : null" small rounded :disabled="sessionsLoading" @click="loadMoreSessions"><i class="ti ti-chevron-down"></i> {{ sessionsLoading ? '载入中…' : '继续载入' }}</MkButton>
 						</div>
 					</section>
 				</template>
@@ -234,7 +234,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 							</div>
 						</article>
 						<div v-if="externalHasMore" :class="$style.loadMore">
-							<MkButton v-appear="prefer.s.enableInfiniteScroll && !externalLoading && !externalPagination.error.value ? () => externalPagination.load(false) : null" small rounded :disabled="externalLoading" @click="externalPagination.load(false)"><i class="ti ti-chevron-down"></i> {{ externalLoading ? '载入中…' : '继续载入' }}</MkButton>
+							<MkButton v-appear="prefer.s.enableInfiniteScroll && !externalLoading && !externalPagination.error.value ? loadMoreExternalAudits : null" small rounded :disabled="externalLoading" @click="loadMoreExternalAudits"><i class="ti ti-chevron-down"></i> {{ externalLoading ? '载入中…' : '继续载入' }}</MkButton>
 						</div>
 					</div>
 				</template>
@@ -387,7 +387,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 							</div>
 						</article>
 						<div v-if="imagesHasMore" :class="$style.loadMore">
-							<MkButton v-appear="prefer.s.enableInfiniteScroll && !imagesLoading && !imagesPagination.error.value ? () => imagesPagination.load(false) : null" small rounded :disabled="imagesLoading" @click="imagesPagination.load(false)"><i class="ti ti-chevron-down"></i> {{ imagesLoading ? '载入中…' : '继续载入' }}</MkButton>
+							<MkButton v-appear="prefer.s.enableInfiniteScroll && !imagesLoading && !imagesPagination.error.value ? loadMoreImages : null" small rounded :disabled="imagesLoading" @click="loadMoreImages"><i class="ti ti-chevron-down"></i> {{ imagesLoading ? '载入中…' : '继续载入' }}</MkButton>
 						</div>
 					</div>
 				</template>
@@ -471,7 +471,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 							</div>
 						</article>
 						<div v-if="logsHasMore" :class="$style.loadMore">
-							<MkButton v-appear="prefer.s.enableInfiniteScroll && !logsLoading && !logsPagination.error.value ? () => logsPagination.load(false) : null" small rounded :disabled="logsLoading" @click="logsPagination.load(false)"><i class="ti ti-chevron-down"></i> {{ logsLoading ? '载入中…' : '继续载入' }}</MkButton>
+							<MkButton v-appear="prefer.s.enableInfiniteScroll && !logsLoading && !logsPagination.error.value ? loadMoreLogs : null" small rounded :disabled="logsLoading" @click="loadMoreLogs"><i class="ti ti-chevron-down"></i> {{ logsLoading ? '载入中…' : '继续载入' }}</MkButton>
 						</div>
 					</div>
 				</template>
@@ -906,21 +906,64 @@ const headerActions = computed(() => [{
 	handler: refreshCurrentView,
 }]);
 const summaryCards = computed(() => [
-	{ key: 'pending', label: '待处理审核', value: summary.value?.pendingTotal ?? '—', icon: 'ti ti-inbox', go: () => openFiltered('queue', () => { reviewFilters.kind = 'all'; }) },
-	{ key: 'characters', label: '待审角色', value: summary.value?.pendingCharacters ?? '—', icon: 'ti ti-user', go: () => openFiltered('queue', () => { reviewFilters.kind = 'character'; }) },
-	{ key: 'styles', label: '待审风格', value: summary.value?.pendingStyles ?? '—', icon: 'ti ti-palette', go: () => openFiltered('queue', () => { reviewFilters.kind = 'style'; }) },
+	{ key: 'pending', label: '待处理审核', value: summary.value?.pendingTotal ?? '—', icon: 'ti ti-inbox', go: () => openFiltered('queue', () => { Object.assign(reviewFilters, { kind: 'all', status: 'all', query: '', userId: '' }); }) },
+	{ key: 'characters', label: '待审角色', value: summary.value?.pendingCharacters ?? '—', icon: 'ti ti-user', go: () => openFiltered('queue', () => { Object.assign(reviewFilters, { kind: 'character', status: 'all', query: '', userId: '' }); }) },
+	{ key: 'styles', label: '待审风格', value: summary.value?.pendingStyles ?? '—', icon: 'ti ti-palette', go: () => openFiltered('queue', () => { Object.assign(reviewFilters, { kind: 'style', status: 'all', query: '', userId: '' }); }) },
 	{ key: 'reports', label: '未处理上报', value: summary.value?.unresolvedModelReports ?? '—', icon: 'ti ti-flag', go: () => openFiltered('modelReports', () => { Object.assign(modelReportFilters, { status: 'unresolved', modelKind: '', reasonType: '', userId: '', modelId: '', query: '' }); }) },
 	{ key: 'bannedCharacters', label: '封禁角色', value: summary.value?.bannedCharacters ?? '—', icon: 'ti ti-user-off', go: () => openFiltered('library', () => { Object.assign(reviewFilters, { kind: 'character', status: 'all', query: '', userId: '' }); }) },
 	{ key: 'review', label: '待复审会话', value: summary.value?.pendingReviewSessions ?? '—', icon: 'ti ti-shield-exclamation', go: () => openFiltered('review', () => { reviewUserFilter.value = ''; }) },
-	{ key: 'external', label: '外审拦截', value: summary.value?.blockedExternalAudits ?? '—', icon: 'ti ti-shield-check', go: () => openFiltered('externalAudit', () => { externalFilters.status = 'block'; }) },
-	{ key: 'images', label: '封禁图片', value: summary.value?.blockedImages ?? '—', icon: 'ti ti-photo-shield', go: () => openFiltered('images', () => { imageFilters.blocked = 'true'; }) },
-	{ key: 'sessions', label: '封禁会话', value: summary.value?.bannedSessions ?? '—', icon: 'ti ti-messages', go: () => openFiltered('sessions', () => {}) },
+	{ key: 'external', label: '外审拦截', value: summary.value?.blockedExternalAudits ?? '—', icon: 'ti ti-shield-check', go: () => openFiltered('externalAudit', () => { Object.assign(externalFilters, { status: 'block', blockCode: '', userId: '', sessionId: '', modelId: '', query: '' }); }) },
+	{ key: 'images', label: '封禁图片', value: summary.value?.blockedImages ?? '—', icon: 'ti ti-photo-shield', go: () => openFiltered('images', () => { Object.assign(imageFilters, { userId: '', sessionId: '', messageId: '', status: '', blocked: 'true', query: '' }); }) },
+	{ key: 'sessions', label: '封禁会话', value: summary.value?.bannedSessions ?? '—', icon: 'ti ti-messages', go: () => openFiltered('sessions', () => { Object.assign(sessionFilters, { userId: '', sessionId: '' }); }) },
 	{ key: 'logs', label: '治理操作', value: summary.value?.recentOperations ?? '—', icon: 'ti ti-history', go: () => openFiltered('logs', () => { logType.value = 'all'; }) },
 ]);
 
-/** 概览卡片跳转：先套用对应筛选，再切 tab；筛选 watcher 会自动刷新目标列表 */
+let skipFilterAutoApply = false;
+let forceReloadOnNextView: ViewKey | null = null;
+
+function cancelViewApplier(view: ViewKey) {
+	if (view === 'queue' || view === 'library') reviewApplier.cancel();
+	else if (view === 'sessions') sessionsApplier.cancel();
+	else if (view === 'externalAudit') externalApplier.cancel();
+	else if (view === 'review') reviewUsersApplier.cancel();
+	else if (view === 'images') imagesApplier.cancel();
+	else if (view === 'modelReports') modelReportsApplier.cancel();
+	else if (view === 'logs') logsApplier.cancel();
+}
+
+function resetViewPagination(view: ViewKey) {
+	if (view === 'queue' || view === 'library') reviewPagination.reset();
+	else if (view === 'sessions') sessionsPagination.reset();
+	else if (view === 'externalAudit') externalPagination.reset();
+	else if (view === 'images') imagesPagination.reset();
+	else if (view === 'modelReports') modelReportsPagination.reset();
+	else if (view === 'logs') logsPagination.reset();
+}
+
+function loadView(view: ViewKey) {
+	if (view === 'overview') void loadSummary();
+	else if (view === 'queue' || view === 'library') void loadReviewList(true);
+	else if (view === 'sessions') void loadSessions(true);
+	else if (view === 'externalAudit') void loadExternalAudits(true);
+	else if (view === 'review') void loadReviewListItems(true);
+	else if (view === 'images') void loadImages(true);
+	else if (view === 'modelReports') void loadModelReports(true);
+	else void loadLogs(true);
+}
+
+/** 概览卡片跳转：抑制筛选防抖、取消在途 applier 并重置旧分页，切 tab 后立即单次加载目标列表 */
 function openFiltered(view: ViewKey, applyFilter: () => void) {
+	skipFilterAutoApply = true;
+	cancelViewApplier(view);
+	resetViewPagination(view);
 	applyFilter();
+	saveFilters();
+	void nextTick(() => { skipFilterAutoApply = false; });
+	if (activeView.value === view) {
+		loadView(view);
+		return;
+	}
+	forceReloadOnNextView = view;
 	activeView.value = view;
 }
 
@@ -1051,6 +1094,7 @@ function createFilterApplier(apply: () => Promise<void>) {
 	};
 
 	const cancel = () => {
+		queued = false;
 		if (timer != null) {
 			window.clearTimeout(timer);
 			timer = null;
@@ -1073,18 +1117,18 @@ const logsApplier = createFilterApplier(() => loadLogs(true));
 // 消息检索保持「未检索不拉取」语义：重置仅清空条件与结果，不触发自动检索
 let skipMessageAutoApply = false;
 
-watch(reviewFilters, () => { saveFilters(); reviewApplier.trigger(); });
-watch(sessionFilters, () => { saveFilters(); sessionsApplier.trigger(); });
+watch(reviewFilters, () => { saveFilters(); if (!skipFilterAutoApply) reviewApplier.trigger(); });
+watch(sessionFilters, () => { saveFilters(); if (!skipFilterAutoApply) sessionsApplier.trigger(); });
 watch(messageFilters, () => {
 	saveFilters();
-	if (skipMessageAutoApply) return;
+	if (skipMessageAutoApply || skipFilterAutoApply) return;
 	messagesApplier.trigger();
 });
-watch(externalFilters, () => { saveFilters(); externalApplier.trigger(); });
-watch(imageFilters, () => { saveFilters(); imagesApplier.trigger(); });
-watch(modelReportFilters, () => { saveFilters(); modelReportsApplier.trigger(); });
-watch(reviewUserFilter, () => { saveFilters(); reviewUsersApplier.trigger(); });
-watch(logType, () => { saveFilters(); logsApplier.trigger(); });
+watch(externalFilters, () => { saveFilters(); if (!skipFilterAutoApply) externalApplier.trigger(); });
+watch(imageFilters, () => { saveFilters(); if (!skipFilterAutoApply) imagesApplier.trigger(); });
+watch(modelReportFilters, () => { saveFilters(); if (!skipFilterAutoApply) modelReportsApplier.trigger(); });
+watch(reviewUserFilter, () => { saveFilters(); if (!skipFilterAutoApply) reviewUsersApplier.trigger(); });
+watch(logType, () => { saveFilters(); if (!skipFilterAutoApply) logsApplier.trigger(); });
 
 async function loadSummary() {
 	summaryLoading.value = true;
@@ -1103,22 +1147,24 @@ watch(activeView, view => {
 	else url.searchParams.set('view', view);
 	const path = `${url.pathname}${url.search}${url.hash}`;
 	if (path !== router.getCurrentFullPath()) router.replaceByPath(path);
+	const force = forceReloadOnNextView === view;
+	if (force) forceReloadOnNextView = null;
 	if (view === 'overview') {
 		void loadSummary();
 		return;
 	} else if (view === 'queue' || view === 'library') {
 		void loadReviewList(true);
-	} else if (view === 'sessions' && sessions.value.length === 0) {
+	} else if (view === 'sessions' && (force || sessions.value.length === 0)) {
 		void loadSessions(true);
-	} else if (view === 'externalAudit' && externalAudits.value.length === 0) {
+	} else if (view === 'externalAudit' && (force || externalAudits.value.length === 0)) {
 		void loadExternalAudits(true);
 	} else if (view === 'review') {
 		void loadReviewListItems(true);
-	} else if (view === 'images' && images.value.length === 0) {
+	} else if (view === 'images' && (force || images.value.length === 0)) {
 		void loadImages(true);
-	} else if (view === 'modelReports' && modelReports.value.length === 0) {
+	} else if (view === 'modelReports' && (force || modelReports.value.length === 0)) {
 		void loadModelReports(true);
-	} else if (view === 'logs' && logs.value.length === 0) {
+	} else if (view === 'logs' && (force || logs.value.length === 0)) {
 		void loadLogs(true);
 	}
 });
@@ -1143,7 +1189,8 @@ async function loadReviewList(reset: boolean) {
 }
 
 function loadMoreReviews() {
-	void reviewPagination.load(false);
+	reviewPagination.error.value = null;
+	void loadReviewList(false);
 }
 
 // 各重置函数只恢复默认值并落盘，列表刷新由对应 watcher 的自动应用统一触发
@@ -1157,6 +1204,11 @@ async function loadSessions(reset: boolean) {
 	if (sessionsPagination.error.value) {
 		os.alert({ type: 'error', text: formatApiError(sessionsPagination.error.value) });
 	}
+}
+
+function loadMoreSessions() {
+	sessionsPagination.error.value = null;
+	void loadSessions(false);
 }
 
 function resetSessionFilters() {
@@ -1244,6 +1296,14 @@ async function searchMessages() {
 	}
 }
 
+async function loadMoreMessages() {
+	messagesPagination.error.value = null;
+	await messagesPagination.load(false);
+	if (messagesPagination.error.value) {
+		os.alert({ type: 'error', text: formatApiError(messagesPagination.error.value) });
+	}
+}
+
 function resetMessageFilters() {
 	skipMessageAutoApply = true;
 	messagesApplier.cancel();
@@ -1262,6 +1322,11 @@ async function loadExternalAudits(reset: boolean) {
 	}
 }
 
+function loadMoreExternalAudits() {
+	externalPagination.error.value = null;
+	void loadExternalAudits(false);
+}
+
 function resetExternalFilters() {
 	Object.assign(externalFilters, { status: 'block', blockCode: '', userId: '', sessionId: '', modelId: '', query: '' });
 	saveFilters();
@@ -1272,6 +1337,11 @@ async function loadImages(reset: boolean) {
 	if (imagesPagination.error.value) {
 		os.alert({ type: 'error', text: formatApiError(imagesPagination.error.value) });
 	}
+}
+
+function loadMoreImages() {
+	imagesPagination.error.value = null;
+	void loadImages(false);
 }
 
 function resetImageFilters() {
@@ -1302,6 +1372,11 @@ async function loadLogs(reset: boolean) {
 	if (logsPagination.error.value) {
 		os.alert({ type: 'error', text: formatApiError(logsPagination.error.value) });
 	}
+}
+
+function loadMoreLogs() {
+	logsPagination.error.value = null;
+	void loadLogs(false);
 }
 
 function resetLogFilters() {
@@ -1378,6 +1453,7 @@ async function openQuickActionForUser(card: ReviewUserCard) {
 		if (res.userSuspended) parts.push(`用户已封禁（${res.suspendDurationHours === 0 ? '永久' : `${res.suspendDurationHours}小时`}）`);
 		if (res.noteAdded) parts.push('管理笔记已记录');
 		os.toast(parts.join('，') || '处理完成');
+		patchSessionBanned(result.sessionIds, true);
 		await Promise.all([loadSummary(), loadReviewListItems(true)]);
 	} catch (err) {
 		os.alert({ type: 'error', text: formatApiError(err) });

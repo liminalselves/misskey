@@ -86,7 +86,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 					:styleId="styleRow.id"
 					:rating="styleRow.rating"
 					:showRatingSummary="false"
-					@updated="load"
+					@updated="() => void load({ silent: true })"
 				/>
 			</div>
 
@@ -191,22 +191,40 @@ async function loadUsableFlag() {
 	}
 }
 
-async function load() {
-	loading.value = true;
-	styleRow.value = null;
-	creator.value = null;
+let loadSeq = 0;
+
+async function load(options: { silent?: boolean } = {}) {
+	const seq = ++loadSeq;
+	const silent = options.silent === true && styleRow.value != null;
+	if (!silent) {
+		loading.value = true;
+		styleRow.value = null;
+		creator.value = null;
+	}
 	try {
-		await loadUsableFlag();
-		const row = await misskeyApi(
-			'agents/styles/plaza-detail' as keyof Misskey.Endpoints,
-			{ styleId: props.styleId } as Misskey.Endpoints[keyof Misskey.Endpoints]['req'],
-		) as StylePlazaDetail;
+		const [, row] = await Promise.all([
+			loadUsableFlag(),
+			misskeyApi(
+				'agents/styles/plaza-detail' as keyof Misskey.Endpoints,
+				{ styleId: props.styleId } as Misskey.Endpoints[keyof Misskey.Endpoints]['req'],
+			) as Promise<StylePlazaDetail>,
+		]);
+		if (seq !== loadSeq) return;
 		styleRow.value = row;
-		creator.value = await misskeyApi('users/show', { userId: row.userId }) as UserDetailed;
+		if (!silent || creator.value?.id !== row.userId) {
+			const u = await (misskeyApi('users/show', { userId: row.userId }) as Promise<UserDetailed>).catch(() => null);
+			if (seq !== loadSeq) return;
+			if (!silent || u != null) creator.value = u;
+		}
 	} catch {
-		os.alert({ type: 'error', text: i18n.ts.somethingHappened });
+		if (seq !== loadSeq) return;
+		if (!silent) {
+			os.alert({ type: 'error', text: i18n.ts.somethingHappened });
+		}
 	} finally {
-		loading.value = false;
+		if (seq === loadSeq && !silent) {
+			loading.value = false;
+		}
 	}
 }
 
@@ -221,7 +239,7 @@ function goEdit() {
 async function subscribe() {
 	try {
 		await misskeyApi('agents/styles/subscribe', { styleId: props.styleId });
-		await load();
+		await load({ silent: true });
 	} catch (e) {
 		os.alert({ type: 'error', text: formatApiError(e) });
 	}
@@ -230,7 +248,7 @@ async function subscribe() {
 async function unsubscribe() {
 	try {
 		await misskeyApi('agents/styles/unsubscribe', { styleId: props.styleId });
-		await load();
+		await load({ silent: true });
 	} catch (e) {
 		os.alert({ type: 'error', text: formatApiError(e) });
 	}

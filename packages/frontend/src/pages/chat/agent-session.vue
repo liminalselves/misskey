@@ -900,6 +900,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<MkSelect
 						:modelValue="visionModelSelectionId"
 						:items="visionModelSelectItems"
+						placeholder="请选择识图模型"
 						:disabled="savingSettings || moderationLocksSessionWrites"
 						@update:modelValue="selectVisionModel"
 					>
@@ -1242,10 +1243,14 @@ function dismissAliyaBanner() {
 }
 
 aliyABannerDismissed.value = readAliyaSeenCookie();
-// 首次打开时写入 cookie，确保每个会话横幅只出现一次（审查模式不算用户的首次打开）
-if (isAliyaSession.value && !isReviewMode.value && !aliyABannerDismissed.value) {
-	writeAliyaSeenCookie();
-}
+let aliyaSeenCookieWritten = false;
+// 会话加载后 isAliyaSession 才变为 true；首次展示横幅时写入 cookie，确保每个会话仅出现一次（审查模式不算）
+watch(showAliyaBanner, (visible) => {
+	if (visible && !aliyaSeenCookieWritten) {
+		aliyaSeenCookieWritten = true;
+		writeAliyaSeenCookie();
+	}
+}, { immediate: true });
 // ---- Aliya Web 推荐 END ----
 
 const timelineEl = useTemplateRef('timelineEl');
@@ -2255,6 +2260,15 @@ watch(tab, (v) => {
 	}
 });
 
+watch(() => props.embeddedPanel, (nextPanel) => {
+	if (nextPanel == null) return;
+	tab.value = nextPanel;
+	if (nextPanel === 'model' && !loading.value && !isSessionBannedPage.value) {
+		void loadUserModels();
+		void loadVisionModels();
+	}
+});
+
 /**
  * 子面板动态数据统一刷新入口。
  * - enter：切到该面板时刷新全部数据（含世界书条目等重数据）
@@ -2265,6 +2279,9 @@ function refreshPanelLiveData(panel: AgentControlPanel | 'chat' | 'search', mode
 	if (mode === 'live' && (!isPageActivated || window.document.hidden)) return;
 	switch (panel) {
 		case 'model':
+			if (mode === 'enter') {
+				void loadVisionModels();
+			}
 			void loadModelSuccessRates();
 			void loadModelFreeQuota();
 			void loadAgentCreditBalance();
@@ -2694,7 +2711,7 @@ async function loadSession() {
 			: [];
 		if (session.value) {
 			selectedModelId.value = displayModelIdForSession(session.value.agentModelId);
-			visionModelSelectionId.value = session.value.agentVisionModelId ?? visionModels.value.find(model => model.isDefault)?.id ?? '';
+			syncVisionModelSelection();
 			selectedStyleId.value = session.value.dialogueStyleId ?? '';
 			{
 				const p = session.value.agentLongMemoryProvider;
@@ -2742,22 +2759,33 @@ async function loadSession() {
 	}
 }
 
+function syncVisionModelSelection() {
+	const savedId = session.value?.agentVisionModelId?.trim() || '';
+	if (savedId !== '') {
+		visionModelSelectionId.value = visionModels.value.some(model => model.id === savedId) ? savedId : '';
+		return;
+	}
+	visionModelSelectionId.value = visionModels.value.find(model => model.isDefault)?.id ?? visionModels.value[0]?.id ?? '';
+}
+
 async function loadVisionModels() {
 	try {
 		const result = await misskeyApi('agents/vision-models/list' as Parameters<typeof misskeyApi>[0], {}) as { defaultModelId: string | null; models: Array<{ id: string; name: string; costPerCall: number; isDefault: boolean }> };
 		visionModels.value = result.models;
-		if (session.value && !session.value.agentVisionModelId) visionModelSelectionId.value = result.defaultModelId ?? '';
+		syncVisionModelSelection();
 	} catch {
 		visionModels.value = [];
+		visionModelSelectionId.value = '';
 	}
 }
 
 async function selectVisionModel(value: unknown) {
 	if (typeof value !== 'string') return;
 	const modelId = value.trim();
-	if (!session.value || !modelId || savingSettings.value || moderationLocksSessionWrites) return;
+	if (!session.value || !modelId || savingSettings.value || moderationLocksSessionWrites.value) return;
 	const previousModelId = visionModelSelectionId.value;
 	if (modelId === previousModelId) return;
+	visionModelSelectionId.value = modelId;
 	savingSettings.value = true;
 	try {
 		const updated = await misskeyApi('agents/sessions/update' as Parameters<typeof misskeyApi>[0], {
@@ -2767,8 +2795,9 @@ async function selectVisionModel(value: unknown) {
 		if (updated.agentVisionModelId !== modelId) {
 			throw new Error(i18n.ts._agents.visionModelSaveFailed);
 		}
-		visionModelSelectionId.value = modelId;
-		session.value.agentVisionModelId = modelId;
+		if (session.value) {
+			session.value.agentVisionModelId = modelId;
+		}
 	} catch (error) {
 		visionModelSelectionId.value = previousModelId;
 		await loadSession();
@@ -3619,27 +3648,31 @@ function scheduleDrawSettingsSave() {
 	}, DRAW_AUTO_SAVE_DEBOUNCE_MS);
 }
 
+let drawSaveInFlight: Promise<boolean> | null = null;
+
 /** 立即保存未落库的生图配置（测试生图、离开页面前调用）；干净时直接视为成功 */
 async function flushDrawSettingsSave(): Promise<boolean> {
 	clearDrawAutoSaveTimer();
-	if (drawSaving.value) {
-		// 上一笔保存在途：稍后重试，避免并发覆盖
-		scheduleDrawSettingsSave();
-		return false;
+	while (drawSaveInFlight) {
+		// 上一笔保存在途：等待落库完成（若期间又有新修改则继续串行保存），避免测试生图被静默丢弃
+		const prevOk = await drawSaveInFlight;
+		if (!prevOk) return false;
 	}
 	if (!session.value || settingsHydrating.value || moderationLocksSessionWrites.value) return false;
 	if (!drawConfigDirty.value) return true;
-	drawSaving.value = true;
-	drawAutoSaveState.value = 'saving';
-	try {
-		const res = await misskeyApi(
-			'agents/sessions/update' as Parameters<typeof misskeyApi>[0],
-			{
-				sessionId,
-				agentImageModelId: drawImageModelId.value === '' ? null : drawImageModelId.value,
-				agentImageSettings: drawCurrentSettings.value,
-			} as any,
-		) as { agentImageModelId?: string | null; agentImageSettings?: Record<string, unknown> };
+	let run!: Promise<boolean>;
+	run = (async (): Promise<boolean> => {
+		drawSaving.value = true;
+		drawAutoSaveState.value = 'saving';
+		try {
+			const res = await misskeyApi(
+				'agents/sessions/update' as Parameters<typeof misskeyApi>[0],
+				{
+					sessionId,
+					agentImageModelId: drawImageModelId.value === '' ? null : drawImageModelId.value,
+					agentImageSettings: drawCurrentSettings.value,
+				} as any,
+			) as { agentImageModelId?: string | null; agentImageSettings?: Record<string, unknown> };
 			if (session.value) {
 				session.value.agentImageModelId = res.agentImageModelId ?? null;
 				session.value.agentImageSettings = res.agentImageSettings ?? {};
@@ -3648,18 +3681,24 @@ async function flushDrawSettingsSave(): Promise<boolean> {
 			}
 			drawAutoSaveState.value = 'saved';
 			if (drawModelsStale) {
-			drawModelsStale = false;
-			void loadDrawImageModels();
-			void loadDrawArtistPresets();
+				drawModelsStale = false;
+				void loadDrawImageModels();
+				void loadDrawArtistPresets();
+			}
+			return true;
+		} catch (e) {
+			drawAutoSaveState.value = 'error';
+			os.alert({ type: 'error', text: formatApiError(e) });
+			return false;
+		} finally {
+			drawSaving.value = false;
+			if (drawSaveInFlight === run) {
+				drawSaveInFlight = null;
+			}
 		}
-		return true;
-	} catch (e) {
-		drawAutoSaveState.value = 'error';
-		os.alert({ type: 'error', text: formatApiError(e) });
-		return false;
-	} finally {
-		drawSaving.value = false;
-	}
+	})();
+	drawSaveInFlight = run;
+	return run;
 }
 
 async function loadDrawImageModels() {
@@ -4897,7 +4936,8 @@ async function onFormSubmit(payload: { text: string; file: DriveFile | null }) {
 	sendAbortController?.abort();
 	sendAbortController = new AbortController();
 	const sendSignal = sendAbortController.signal;
-	await previewPendingWorldbookMatches(trimmed);
+	// 在异步世界书预览前先插入乐观气泡：若用户在预览期间点中断，onAbortRequest 可立即据此回填刚提交的草稿，
+	// 不会误将上一条已发送用户消息当作回滚目标
 	const optimisticId = OPTIMISTIC_MESSAGE_ID_PREFIX + crypto.randomUUID();
 	const userCreatedAt = new Date().toISOString();
 	messages.value.unshift({
@@ -4909,6 +4949,15 @@ async function onFormSubmit(payload: { text: string; file: DriveFile | null }) {
 	});
 
 	try {
+		await previewPendingWorldbookMatches(trimmed);
+		if (abortedRequestIds.has(clientRequestId)) {
+			abortedRequestIds.delete(clientRequestId);
+			messages.value = messages.value.filter(m => m.id !== optimisticId);
+			if (getStoredPendingRequestId(sessionId) === clientRequestId) {
+				setStoredPendingRequestId(sessionId, previousPendingRequestId);
+			}
+			return;
+		}
 		const res = await misskeyApi('agents/messages/send', { sessionId, text: trimmed, fileId: payload.file?.id ?? null, clientRequestId } as any, undefined, sendSignal) as {
 			userMessageId: string | null;
 			assistantMessageId: string | null;
@@ -5103,7 +5152,9 @@ async function onFormSubmit(payload: { text: string; file: DriveFile | null }) {
 			sendAbortController = null;
 		}
 		recoveredSendRequests.delete(clientRequestId);
-		pendingWorldbookMatches.value = [];
+		if (currentClientRequestId === clientRequestId || currentClientRequestId == null) {
+			pendingWorldbookMatches.value = [];
+		}
 	}
 }
 
@@ -5234,7 +5285,7 @@ async function onAbortRequest() {
 		// 中断即回滚：被中断的用户消息会被服务端撤销，这里先把内容（含附件）回填
 		// 到输入框，让用户可以修改后重新发送。必须在下方 await 之前同步完成：
 		// 否则旧 send 请求若抢先 settle 并移除乐观气泡，文本将无处可寻。
-		if (optimisticMsg.content) formRef.value?.restoreDraft(optimisticMsg.content, optimisticMsg.file ?? null);
+		if (optimisticMsg.content || optimisticMsg.file != null) formRef.value?.restoreDraft(optimisticMsg.content, optimisticMsg.file ?? null);
 	}
 
 	let serverAborted = true;
@@ -5256,7 +5307,7 @@ async function onAbortRequest() {
 		// 刷新后场景：服务端确认回滚后才回填并移除气泡。若 aborted=false，说明服务端
 		// 已无此在途请求（生成已结束），消息应保留、内容不回填，避免气泡与输入框重复
 		if (optimisticMsg == null && rollbackMsg != null) {
-			if (rollbackMsg.content) formRef.value?.restoreDraft(rollbackMsg.content, rollbackMsg.file ?? null);
+			if (rollbackMsg.content || rollbackMsg.file != null) formRef.value?.restoreDraft(rollbackMsg.content, rollbackMsg.file ?? null);
 			messages.value = messages.value.filter(m => m.id !== rollbackMsg.id);
 		}
 	}

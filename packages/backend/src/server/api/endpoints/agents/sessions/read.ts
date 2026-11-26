@@ -8,7 +8,6 @@ import type { AgentSessionsRepository } from '@/models/_.js';
 import { Endpoint } from '@/server/api/endpoint-base.js';
 import { DI } from '@/di-symbols.js';
 import { AgentMessageNotifyService } from '@/core/AgentMessageNotifyService.js';
-import { GlobalEventService } from '@/core/GlobalEventService.js';
 import { ApiError } from '@/server/api/error.js';
 
 export const meta = {
@@ -42,7 +41,6 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		private agentSessionsRepository: AgentSessionsRepository,
 
 		private agentMessageNotifyService: AgentMessageNotifyService,
-		private globalEventService: GlobalEventService,
 	) {
 		super(meta, paramDef, async (ps, me) => {
 			const session = await this.agentSessionsRepository.findOneBy({ id: ps.sessionId });
@@ -51,12 +49,6 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 			}
 
 			await this.agentMessageNotifyService.readAgentMessages(me.id, ps.sessionId);
-
-			// 发送 agentRead 事件通知前端刷新未读状态（与私信 chat/read 对齐）
-			const hasUnread = await this.agentMessageNotifyService.hasUnreadAgentMessages(me.id);
-			this.globalEventService.publishMainStream(me.id, 'agentRead', {
-				hasUnreadAgentMessages: hasUnread,
-			});
 		});
 	}
 }

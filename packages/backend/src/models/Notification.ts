@@ -118,6 +118,13 @@ export type MiNotification = {
 	notifierId: MiUser['id'];
 	chatRoomId: string;
 } | {
+	type: 'chatRoomMention';
+	id: string;
+	createdAt: string;
+	notifierId: MiUser['id'];
+	chatRoomId: string;
+	messageId: string;
+} | {
 	type: 'achievementEarned';
 	id: string;
 	createdAt: string;

@@ -15,14 +15,14 @@ SPDX-License-Identifier: AGPL-3.0-only
 				{{ i18n.ts._abuseUserReport.resolveTutorial }}
 			</MkTip>
 
-			<div :class="$style.inputs" class="_gaps">
-				<MkSelect v-model="state" :items="stateDef" style="margin: 0; flex: 1;">
+			<div :class="$style.inputs">
+				<MkSelect v-model="state" :items="stateDef" style="margin: 0;">
 					<template #label>{{ i18n.ts.state }}</template>
 				</MkSelect>
-				<MkSelect v-model="targetUserOrigin" :items="targetUserOriginDef" style="margin: 0; flex: 1;">
+				<MkSelect v-model="targetUserOrigin" :items="targetUserOriginDef" style="margin: 0;">
 					<template #label>{{ i18n.ts.reporteeOrigin }}</template>
 				</MkSelect>
-				<MkSelect v-model="reporterOrigin" :items="reporterOriginDef" style="margin: 0; flex: 1;">
+				<MkSelect v-model="reporterOrigin" :items="reporterOriginDef" style="margin: 0;">
 					<template #label>{{ i18n.ts.reporterOrigin }}</template>
 				</MkSelect>
 			</div>
@@ -137,7 +137,13 @@ definePage(() => ({
 .inputs {
 	display: flex;
 	flex-direction: row;
-	justify-content: space-between;
-	align-items: center;
+	flex-wrap: wrap;
+	gap: 12px;
+	align-items: flex-end;
+
+	> * {
+		flex: 1 1 160px;
+		min-width: 0;
+	}
 }
 </style>

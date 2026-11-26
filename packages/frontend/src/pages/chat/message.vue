@@ -4,7 +4,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 -->
 
 <template>
-<PageWithHeader>
+<PageWithHeader showBack>
 	<div class="_spacer" style="--MI_SPACER-w: 700px;">
 		<div v-if="initializing">
 			<MkLoading/>
@@ -13,20 +13,25 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<MkButton primary rounded @click="initialize">{{ i18n.ts.retry }}</MkButton>
 		</MkResult>
 		<div v-else>
-			<XMessage :message="message" :isSearchResult="true"/>
+			<XMessage :message="message" :roomOwnerId="message.toRoom?.ownerId" :isSearchResult="true" @navigate="onNavigate"/>
 		</div>
 	</div>
 </PageWithHeader>
 </template>
 
 <script lang="ts" setup>
-import { ref, onMounted } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import * as Misskey from 'misskey-js';
 import XMessage from './XMessage.vue';
 import MkButton from '@/components/MkButton.vue';
 import { i18n } from '@/i18n.js';
 import { misskeyApi } from '@/utility/misskey-api.js';
 import { definePage } from '@/page.js';
+import { useRouter } from '@/router.js';
+import { ensureSignin } from '@/i.js';
+
+const $i = ensureSignin();
+const router = useRouter();
 
 const props = defineProps<{
 	messageId: string;
@@ -51,11 +56,33 @@ async function initialize() {
 	}
 }
 
-onMounted(() => {
-	initialize();
+function onNavigate(messageId: string) {
+	if (message.value == null) return;
+	if (message.value.toRoomId != null) {
+		router.push('/chat/room/:roomId', {
+			params: { roomId: message.value.toRoomId },
+			query: { messageId },
+		});
+		return;
+	}
+	const peerId = message.value.fromUserId === $i.id ? message.value.toUserId : message.value.fromUserId;
+	if (peerId != null) {
+		router.push('/chat/user/:userId', {
+			params: { userId: peerId },
+			query: { messageId },
+		});
+	}
+}
+
+watch(() => props.messageId, () => {
+	void initialize();
 });
 
-definePage({
-	title: i18n.ts.directMessage,
+onMounted(() => {
+	void initialize();
 });
+
+definePage(computed(() => ({
+	title: message.value?.toRoom?.name ?? i18n.ts.directMessage,
+})));
 </script>

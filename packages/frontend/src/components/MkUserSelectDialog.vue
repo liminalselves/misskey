@@ -7,9 +7,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 <MkModalWindow
 	ref="dialogEl"
 	:withOkButton="true"
-	:okButtonDisabled="selected == null"
+	:okButtonDisabled="selected == null || submitting"
 	@click="cancel()"
 	@close="cancel()"
+	@esc="cancel()"
 	@ok="ok()"
 	@closed="emit('closed')"
 >
@@ -61,17 +62,20 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { onMounted, ref, computed, useTemplateRef } from 'vue';
+import { onBeforeUnmount, onMounted, ref, computed, useTemplateRef } from 'vue';
 import * as Misskey from 'misskey-js';
 import { host as currentHost, hostname } from '@@/js/config.js';
 import MkInput from '@/components/MkInput.vue';
 import FormSplit from '@/components/form/split.vue';
 import MkModalWindow from '@/components/MkModalWindow.vue';
-import { misskeyApi } from '@/utility/misskey-api.js';
+import * as os from '@/os.js';
+import { formatApiError, misskeyApi } from '@/utility/misskey-api.js';
 import { store } from '@/store.js';
 import { i18n } from '@/i18n.js';
 import { $i } from '@/i.js';
 import { instance } from '@/instance.js';
+
+const SEARCH_DEBOUNCE_MS = 300;
 
 const emit = defineEmits<{
 	(ev: 'ok', selected: Misskey.entities.UserDetailed): void;
@@ -94,19 +98,26 @@ const host = ref('');
 const users = ref<Misskey.entities.UserLite[]>([]);
 const recentUsers = ref<Misskey.entities.UserDetailed[]>([]);
 const selected = ref<Misskey.entities.UserLite | null>(null);
+const submitting = ref(false);
 const dialogEl = useTemplateRef('dialogEl');
+let searchTimer: number | null = null;
+let searchSeq = 0;
 
-function search() {
-	if (username.value === '' && host.value === '') {
-		users.value = [];
-		return;
+function clearSearchTimer() {
+	if (searchTimer != null) {
+		window.clearTimeout(searchTimer);
+		searchTimer = null;
 	}
+}
+
+function runSearch(seq: number) {
 	misskeyApi('users/search-by-username-and-host', {
 		username: username.value,
 		host: computedLocalOnly.value ? '.' : host.value,
 		limit: 10,
 		detail: false,
 	}).then(_users => {
+		if (seq !== searchSeq) return;
 		users.value = _users.filter((u) => {
 			if (props.includeSelf) {
 				return true;
@@ -114,24 +125,48 @@ function search() {
 				return u.id !== $i?.id;
 			}
 		});
+	}).catch(() => {
+		if (seq !== searchSeq) return;
+		users.value = [];
 	});
 }
 
+function search() {
+	clearSearchTimer();
+	const seq = ++searchSeq;
+	if (username.value === '' && host.value === '') {
+		users.value = [];
+		return;
+	}
+	searchTimer = window.setTimeout(() => {
+		searchTimer = null;
+		runSearch(seq);
+	}, SEARCH_DEBOUNCE_MS);
+}
+
 async function ok() {
-	if (selected.value == null) return;
+	if (selected.value == null || submitting.value) return;
 
-	const user = await misskeyApi('users/show', {
-		userId: selected.value.id,
-	});
-	emit('ok', user);
+	const targetUserId = selected.value.id;
+	submitting.value = true;
+	try {
+		const user = await misskeyApi('users/show', {
+			userId: targetUserId,
+		});
+		emit('ok', user);
 
-	dialogEl.value?.close();
+		dialogEl.value?.close();
 
-	// 最近使ったユーザー更新
-	let recents = store.s.recentlyUsedUsers;
-	recents = recents.filter(x => x !== selected.value?.id);
-	recents.unshift(selected.value.id);
-	store.set('recentlyUsedUsers', recents.splice(0, 16));
+		// 最近使ったユーザー更新
+		let recents = store.s.recentlyUsedUsers;
+		recents = recents.filter(x => x !== targetUserId);
+		recents.unshift(targetUserId);
+		store.set('recentlyUsedUsers', recents.splice(0, 16));
+	} catch (err) {
+		os.alert({ type: 'error', text: formatApiError(err) });
+	} finally {
+		submitting.value = false;
+	}
 }
 
 function cancel() {
@@ -159,7 +194,12 @@ onMounted(() => {
 			}
 		});
 		recentUsers.value = _users;
-	});
+	}).catch(() => {});
+});
+
+onBeforeUnmount(() => {
+	clearSearchTimer();
+	searchSeq++;
 });
 </script>
 

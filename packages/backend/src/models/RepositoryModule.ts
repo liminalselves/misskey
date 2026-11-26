@@ -27,6 +27,7 @@ import {
 	MiClipNote,
 	MiDriveFile,
 	MiDriveFileTombstone,
+	MiDriveMissingObjectReport,
 	MiDriveFolder,
 	MiEmoji,
 	MiFlash,
@@ -83,6 +84,7 @@ import {
 	MiWebhook,
 	MiChatMessage,
 	MiChatRoom,
+	MiChatRoomBan,
 	MiChatRoomMembership,
 	MiChatRoomInvitation,
 	MiChatApproval,
@@ -279,6 +281,12 @@ const $driveFilesRepository: Provider = {
 const $driveFileTombstonesRepository: Provider = {
 	provide: DI.driveFileTombstonesRepository,
 	useFactory: (db: DataSource) => db.getRepository(MiDriveFileTombstone).extend(miRepository as MiRepository<MiDriveFileTombstone>),
+	inject: [DI.db],
+};
+
+const $driveMissingObjectReportsRepository: Provider = {
+	provide: DI.driveMissingObjectReportsRepository,
+	useFactory: (db: DataSource) => db.getRepository(MiDriveMissingObjectReport).extend(miRepository as MiRepository<MiDriveMissingObjectReport>),
 	inject: [DI.db],
 };
 
@@ -546,6 +554,12 @@ const $chatRoomsRepository: Provider = {
 	inject: [DI.db],
 };
 
+const $chatRoomBansRepository: Provider = {
+	provide: DI.chatRoomBansRepository,
+	useFactory: (db: DataSource) => db.getRepository(MiChatRoomBan).extend(miRepository as MiRepository<MiChatRoomBan>),
+	inject: [DI.db],
+};
+
 const $chatRoomMembershipsRepository: Provider = {
 	provide: DI.chatRoomMembershipsRepository,
 	useFactory: (db: DataSource) => db.getRepository(MiChatRoomMembership).extend(miRepository as MiRepository<MiChatRoomMembership>),
@@ -716,6 +730,7 @@ const $reversiGamesRepository: Provider = {
 		$emojisRepository,
 		$driveFilesRepository,
 		$driveFileTombstonesRepository,
+		$driveMissingObjectReportsRepository,
 		$driveFoldersRepository,
 		$metasRepository,
 		$mutingsRepository,
@@ -760,6 +775,7 @@ const $reversiGamesRepository: Provider = {
 		$userMemosRepository,
 		$chatMessagesRepository,
 		$chatRoomsRepository,
+		$chatRoomBansRepository,
 		$chatRoomMembershipsRepository,
 		$chatRoomInvitationsRepository,
 		$chatApprovalsRepository,
@@ -814,6 +830,7 @@ const $reversiGamesRepository: Provider = {
 		$emojisRepository,
 		$driveFilesRepository,
 		$driveFileTombstonesRepository,
+		$driveMissingObjectReportsRepository,
 		$driveFoldersRepository,
 		$metasRepository,
 		$mutingsRepository,
@@ -858,6 +875,7 @@ const $reversiGamesRepository: Provider = {
 		$userMemosRepository,
 		$chatMessagesRepository,
 		$chatRoomsRepository,
+		$chatRoomBansRepository,
 		$chatRoomMembershipsRepository,
 		$chatRoomInvitationsRepository,
 		$chatApprovalsRepository,

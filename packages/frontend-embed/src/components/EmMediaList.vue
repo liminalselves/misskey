@@ -5,18 +5,19 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 <template>
 <div>
-	<div v-for="media in mediaList.filter(media => !previewable(media))" :key="media.id" :class="$style.banner">
+	<div v-for="media in medias.nonPreviewable" :key="media.id" :class="$style.banner">
 		<XBanner :media="media" :href="originalEntityUrl"/>
 	</div>
-	<div v-if="mediaList.filter(media => previewable(media)).length > 0" :class="$style.container">
+	<div v-if="count > 0" :class="$style.container">
 		<div
 			:class="[
 				$style.medias,
 				count === 1 ? [$style.n1] : count === 2 ? $style.n2 : count === 3 ? $style.n3 : count === 4 ? $style.n4 : $style.nMany,
 			]"
 		>
-			<div v-for="media in mediaList.filter(media => previewable(media))" :class="$style.media">
-				<XVideo v-if="media.type.startsWith('video')" :key="`video:${media.id}`" :class="$style.mediaInner" :video="media" :href="originalEntityUrl"/>
+			<div v-for="media in medias.previewable" :key="media.id" :class="$style.media">
+				<XDeletedFile v-if="media.isDeleted" :key="`deleted:${media.id}`" :class="$style.mediaInner" :file="media"/>
+				<XVideo v-else-if="media.type.startsWith('video')" :key="`video:${media.id}`" :class="$style.mediaInner" :video="media" :href="originalEntityUrl"/>
 				<XImage v-else-if="media.type.startsWith('image')" :key="`image:${media.id}`" :class="$style.mediaInner" class="image" :image="media" :raw="raw" :href="originalEntityUrl"/>
 			</div>
 		</div>
@@ -28,6 +29,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 import { computed } from 'vue';
 import * as Misskey from 'misskey-js';
 import XBanner from './EmMediaBanner.vue';
+import XDeletedFile from './EmDeletedFileMedia.vue';
 import XImage from './EmMediaImage.vue';
 import XVideo from './EmMediaVideo.vue';
 import { FILE_TYPE_BROWSERSAFE } from '@@/js/const.js';
@@ -40,13 +42,31 @@ const props = defineProps<{
 	originalEntityUrl: string;
 }>();
 
-const count = computed(() => props.mediaList.filter(media => previewable(media)).length);
-
 const previewable = (file: Misskey.entities.DriveFile): boolean => {
 	if (file.type === 'image/svg+xml') return true; // svgのwebpublic/thumbnailはpngなのでtrue
 	// FILE_TYPE_BROWSERSAFEに適合しないものはブラウザで表示するのに不適切
 	return (file.type.startsWith('video') || file.type.startsWith('image')) && FILE_TYPE_BROWSERSAFE.includes(file.type);
 };
+
+const medias = computed(() => {
+	const previewableList: Misskey.entities.DriveFile[] = [];
+	const nonPreviewableList: Misskey.entities.DriveFile[] = [];
+	for (const file of props.mediaList) {
+		// 已清理文件（墓碑）无论原始 MIME 类型如何，均在网格内渲染不可交互占位，避免显示失效预览或下载链接
+		if (file.isDeleted || previewable(file)) {
+			previewableList.push(file);
+		} else {
+			nonPreviewableList.push(file);
+		}
+	}
+
+	return {
+		previewable: previewableList,
+		nonPreviewable: nonPreviewableList,
+	};
+});
+
+const count = computed(() => medias.value.previewable.length);
 </script>
 
 <style lang="scss" module>

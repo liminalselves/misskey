@@ -14,6 +14,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 	</div>
 	<XAgentSession
 		v-else
+		:key="sessionId"
 		:sessionId="sessionId"
 		:embeddedPanel="panel"
 	/>
@@ -21,7 +22,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, useTemplateRef } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from 'vue';
 import baseLightTheme from '@@/themes/_light.json5';
 import baseDarkTheme from '@@/themes/_dark.json5';
 import defaultLightTheme from '@@/themes/l-light.json5';
@@ -287,6 +288,25 @@ onMounted(() => {
 	});
 	void nextTick(reportHeight);
 });
+
+watch(() => [props.sessionId, props.panel], () => {
+	if (invalidPanel.value) {
+		postToParent({
+			type: 'misskey:agent-control:error',
+			code: 'INVALID_PANEL',
+			message: `Unknown agent control panel: ${props.panel}`,
+		});
+		return;
+	}
+	postToParent({
+		type: 'misskey:agent-control:ready',
+		version: 1,
+		sessionId: props.sessionId,
+		panel: panel.value,
+	});
+	lastHeight = 0;
+	void nextTick(reportHeight);
+}, { flush: 'post' });
 
 onBeforeUnmount(() => {
 	window.removeEventListener('message', onParentMessage);

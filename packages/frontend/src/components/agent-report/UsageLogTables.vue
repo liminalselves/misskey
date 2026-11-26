@@ -19,6 +19,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<MkButton rounded small @click="billing.load"><i class="ti ti-refresh"></i> 重试</MkButton>
 		</div>
 		<template v-else-if="billing.data.value != null">
+			<div v-if="billing.error.value" :class="$style.staleBar">
+				<i class="ti ti-alert-triangle"></i> 刷新失败，当前显示的是上次的数据。
+				<button type="button" class="_textButton" :disabled="billing.loading.value" @click="billing.load">重试</button>
+			</div>
 			<MkResult v-if="billing.data.value.items.length === 0" type="empty" text="暂无消费记录"/>
 			<div v-else :class="[$style.table, $style.billingCols, billing.loading.value ? $style.dim : null]">
 				<div :class="$style.head"><span>时间</span><span>类型</span><span>明细</span><span>金额</span></div>
@@ -33,12 +37,12 @@ SPDX-License-Identifier: AGPL-3.0-only
 			</div>
 			<MkPagerBar
 				v-if="billing.data.value.total > 0"
-				:page="billingPage"
+				:page="billing.data.value.page"
 				:total="billing.data.value.total"
-				:pageSize="billingPageSize"
+				:pageSize="billing.data.value.pageSize"
 				:loading="billing.loading.value"
-				@update:page="p => { billingPage = p; billing.load(); }"
-				@update:pageSize="s => { billingPageSize = s; billingPage = 1; billing.load(); }"
+				@update:page="setBillingPage"
+				@update:pageSize="setBillingPageSize"
 			/>
 		</template>
 	</template>
@@ -51,6 +55,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 			<MkButton rounded small @click="logs.load"><i class="ti ti-refresh"></i> 重试</MkButton>
 		</div>
 		<template v-else-if="logs.data.value != null">
+			<div v-if="logs.error.value" :class="$style.staleBar">
+				<i class="ti ti-alert-triangle"></i> 刷新失败，当前显示的是上次的数据。
+				<button type="button" class="_textButton" :disabled="logs.loading.value" @click="logs.load">重试</button>
+			</div>
 			<MkResult v-if="logs.data.value.items.length === 0" type="empty" text="暂无请求记录"/>
 			<div v-else :class="[$style.table, $style.logCols, logs.loading.value ? $style.dim : null]">
 				<div :class="$style.head"><span>时间</span><span>用途</span><span>模型</span><span>状态</span><span>耗时</span><span>Token</span><span>扣费</span></div>
@@ -74,12 +82,12 @@ SPDX-License-Identifier: AGPL-3.0-only
 			</div>
 			<MkPagerBar
 				v-if="logs.data.value.total > 0"
-				:page="logsPage"
+				:page="logs.data.value.page"
 				:total="logs.data.value.total"
-				:pageSize="logsPageSize"
+				:pageSize="logs.data.value.pageSize"
 				:loading="logs.loading.value"
-				@update:page="p => { logsPage = p; logs.load(); }"
-				@update:pageSize="s => { logsPageSize = s; logsPage = 1; logs.load(); }"
+				@update:page="setLogsPage"
+				@update:pageSize="setLogsPageSize"
 			/>
 		</template>
 	</template>
@@ -122,6 +130,7 @@ type LogItem = {
 	freeQuotaUsedAtCall: number | null;
 	freeQuotaTotalAtCall: number | null;
 };
+type BillingRes = { items: BillingItem[]; total: number };
 type Page<T> = { items: T[]; total: number; page: number; pageSize: number };
 
 const props = defineProps<{
@@ -132,17 +141,45 @@ const props = defineProps<{
 }>();
 
 const tab = ref<'billing' | 'requests'>('billing');
-const billingPage = ref(1);
-const billingPageSize = ref(20);
-const logsPage = ref(1);
-const logsPageSize = ref(20);
+const DEFAULT_PAGE_SIZE = 20;
+let nextBillingQuery = { page: 1, pageSize: DEFAULT_PAGE_SIZE };
+let nextLogsQuery = { page: 1, pageSize: DEFAULT_PAGE_SIZE };
 
-const billing = useReportSection(() => reportApi<Page<BillingItem>>(props.billingEndpoint, {
-	...props.params, page: billingPage.value, pageSize: billingPageSize.value, limit: billingPageSize.value,
-}));
-const logs = useReportSection(() => reportApi<Page<LogItem>>(props.logsEndpoint, {
-	...props.params, page: logsPage.value, pageSize: logsPageSize.value,
-}));
+// Attach the queried page/pageSize to the resolved data so pager and rows update together and never desync on reload error.
+const billing = useReportSection(async (): Promise<Page<BillingItem>> => {
+	const { page, pageSize } = nextBillingQuery;
+	const res = await reportApi<BillingRes>(props.billingEndpoint, {
+		...props.params, page, pageSize, limit: pageSize,
+	});
+	return { ...res, page, pageSize };
+});
+const logs = useReportSection(async (): Promise<Page<LogItem>> => {
+	const { page, pageSize } = nextLogsQuery;
+	const res = await reportApi<Page<LogItem>>(props.logsEndpoint, {
+		...props.params, page, pageSize,
+	});
+	return { ...res, page, pageSize };
+});
+
+function setBillingPage(page: number) {
+	nextBillingQuery = { page, pageSize: billing.data.value?.pageSize ?? nextBillingQuery.pageSize };
+	void billing.load();
+}
+
+function setBillingPageSize(pageSize: number) {
+	nextBillingQuery = { page: 1, pageSize };
+	void billing.load();
+}
+
+function setLogsPage(page: number) {
+	nextLogsQuery = { page, pageSize: logs.data.value?.pageSize ?? nextLogsQuery.pageSize };
+	void logs.load();
+}
+
+function setLogsPageSize(pageSize: number) {
+	nextLogsQuery = { page: 1, pageSize };
+	void logs.load();
+}
 
 // Each tab loads on first open.
 let logsLoaded = false;
@@ -191,8 +228,18 @@ function billingTone(it: BillingItem): 'ok' | 'err' | 'warn' | 'gift' | 'redeem'
 
 defineExpose({
 	reload() {
+		nextBillingQuery = {
+			page: billing.data.value?.page ?? 1,
+			pageSize: billing.data.value?.pageSize ?? nextBillingQuery.pageSize,
+		};
 		void billing.load();
-		if (logsLoaded) void logs.load();
+		if (logsLoaded) {
+			nextLogsQuery = {
+				page: logs.data.value?.page ?? 1,
+				pageSize: logs.data.value?.pageSize ?? nextLogsQuery.pageSize,
+			};
+			void logs.load();
+		}
 	},
 });
 </script>
@@ -246,6 +293,17 @@ defineExpose({
 	align-items: center;
 	gap: 8px;
 	padding: 24px 0;
+}
+
+.staleBar {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 6px 10px;
+	border-radius: 6px;
+	font-size: 0.82em;
+	color: var(--MI_THEME-warn);
+	background: color-mix(in srgb, var(--MI_THEME-warn) 10%, transparent);
 }
 
 .dim {

@@ -36,6 +36,7 @@ export const notificationTypes = [
 	'chatRoomKicked',
 	'chatRoomSuspended',
 	'chatRoomUnsuspended',
+	'chatRoomMention',
 	'achievementEarned',
 	'exportCompleted',
 	'test',

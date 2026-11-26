@@ -139,6 +139,7 @@ function compressionHarness(rows: CompressionScanRow[], currentRows: Compression
 	const invoke = vi.fn(async (_params: { userText: string }) => ({ text: 'summary' }));
 	const format = vi.fn((m: { content: string }) => `[time]${m.content}`);
 	const service = new AgentCompressionMemoryService({ find: async () => rows } as never, repository as never, {} as never, {
+		resolveEffectiveModelId: () => null,
 		resolveModelApiNameForUser: async () => 'model', invokeChatCompletions: invoke,
 		formatMessageForLlmHistory: format, newId: () => 'sticky1',
 	} as never, {

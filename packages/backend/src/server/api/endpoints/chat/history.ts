@@ -35,6 +35,7 @@ export const paramDef = {
 	type: 'object',
 	properties: {
 		limit: { type: 'integer', minimum: 1, maximum: 100, default: 10 },
+		untilId: { type: 'string', format: 'misskey:id' },
 		room: { type: 'boolean', default: false },
 	},
 } as const;
@@ -48,7 +49,9 @@ export default class extends Endpoint<typeof meta, typeof paramDef> { // eslint-
 		super(meta, paramDef, async (ps, me) => {
 			await this.chatService.checkChatAvailability(me.id, 'read');
 
-			const history = ps.room ? await this.chatService.roomHistory(me.id, ps.limit) : await this.chatService.userHistory(me.id, ps.limit);
+			const history = ps.room
+				? await this.chatService.roomHistory(me.id, ps.limit, ps.untilId)
+				: await this.chatService.userHistory(me.id, ps.limit, ps.untilId);
 
 			const packedMessages = await this.chatEntityService.packMessagesDetailed(history, me);
 

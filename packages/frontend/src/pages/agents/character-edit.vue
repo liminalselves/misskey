@@ -1248,6 +1248,8 @@ async function rollbackToPublished() {
 		await misskeyApi('agents/characters/rollback', { characterId: props.characterId });
 		os.toast('已恢复为发布版本的草稿，重新上线需提交审核。');
 		await load();
+	} catch (err) {
+		os.alert({ type: 'error', text: formatApiError(err) });
 	} finally {
 		rollbackPending.value = false;
 	}
@@ -1266,6 +1268,8 @@ async function rollbackToVersion(version: number, isCurrentPublished: boolean) {
 		await misskeyApi('agents/characters/rollback', { characterId: props.characterId, version });
 		os.toast(`已恢复为版本 v${version} 的草稿，重新上线需提交审核。`);
 		await load();
+	} catch (err) {
+		os.alert({ type: 'error', text: formatApiError(err) });
 	} finally {
 		rollbackPending.value = false;
 	}
@@ -1341,22 +1345,23 @@ function toggleDiffField(key: string) {
 }
 
 const diffFieldLabels: Record<string, string> = {
-	name: '',
-	summary: '',
-	personality: '',
-	background: '',
-	speakingStyle: '',
-	greeting: '',
+	name: '名称',
+	summary: '简介',
+	personality: '性格与行为',
+	background: '背景设定',
+	speakingStyle: '说话方式',
+	greeting: '开场白',
 	exampleDialogue: '示例对话',
-	forbiddenBehavior: '',
+	forbiddenBehavior: '禁止行为',
 	avatarFileId: '头像',
 	worldbook: '世界书',
 	regexRules: '正则',
 	rules: '规则',
+	stickers: '表情包',
 };
 
 function diffFieldLabel(key: string): string {
-	return diffFieldLabels[key] ?? key;
+	return diffFieldLabels[key] || key;
 }
 
 function prettyForDiff(key: string, text: string): string {

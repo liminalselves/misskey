@@ -4,7 +4,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 -->
 
 <template>
-<div class="_gaps">
+<div ref="rootEl" class="_gaps">
 	<MkInput v-model="searchQuery" type="search" :placeholder="i18n.ts._agents.plazaSearchPlaceholder" @enter="onSearchEnter">
 		<template #prefix><i class="ti ti-search"></i></template>
 	</MkInput>
@@ -190,7 +190,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<MkButton primary rounded @click="startPlay(a)"><i class="ti ti-message"></i> {{ i18n.ts._agents.play }}</MkButton>
 				</div>
 			</div>
-			<div :class="$style.loadMoreStatus">
+			<div v-appear="isActivated && !searchActive && sub === 'characters' && !loadingCh && !loadingMoreCharacters && canLoadMoreCharacters ? maybeLoadMoreByScroll : null" :class="$style.loadMoreStatus">
 				<MkLoading v-show="loadingMoreCharacters" mini/>
 			</div>
 		</div>
@@ -271,7 +271,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 					<MkButton v-if="plazaRowState(s) === 'mine'" rounded @click="router.push(('/agents/style/' + s.id) as '/agents/style/:styleId')"><i class="ti ti-pencil"></i> {{ i18n.ts._agents.edit }}</MkButton>
 				</div>
 			</div>
-			<div :class="$style.loadMoreStatus">
+			<div v-appear="isActivated && !searchActive && sub === 'stylesPlaza' && !loadingPlaza && !loadingMoreStyles && canLoadMoreStyles ? maybeLoadMoreByScroll : null" :class="$style.loadMoreStatus">
 				<MkLoading v-show="loadingMoreStyles" mini/>
 			</div>
 		</div>
@@ -280,7 +280,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 </template>
 
 <script lang="ts" setup>
-import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
+import { computed, onActivated, onBeforeUnmount, onDeactivated, onMounted, reactive, ref, useTemplateRef, watch } from 'vue';
+import { getScrollContainer } from '@@/js/scroll.js';
 import type { AgentsCharactersPublicListResponse, AgentsStylesPublicListResponse } from 'misskey-js/entities.js';
 import MkButton from '@/components/MkButton.vue';
 import MkInput from '@/components/MkInput.vue';
@@ -405,7 +406,12 @@ const canLoadMoreCharacters = ref(true);
 const canLoadMoreStyles = ref(true);
 const loadingMoreCharacters = ref(false);
 const loadingMoreStyles = ref(false);
+const rootEl = useTemplateRef('rootEl');
+const isActivated = ref(true);
 let scrollTicking = false;
+let scrollContainer: HTMLElement | null = null;
+let scrollEventTarget: HTMLElement | Window | null = null;
+let scrollRafId: number | null = null;
 const SCROLL_NEAR_BOTTOM_PX = 420;
 
 // 分页竞态控制：排序切换（reset）会使旧请求失效，避免旧排序数据混入新列表
@@ -589,12 +595,16 @@ async function maybeLoadMoreByScroll() {
 	}
 }
 
-function onWindowScroll() {
-	if (scrollTicking) return;
+function onContainerScroll() {
+	if (!isActivated.value || scrollTicking) return;
 	scrollTicking = true;
-	window.requestAnimationFrame(() => {
+	scrollRafId = window.requestAnimationFrame(() => {
+		scrollRafId = null;
 		scrollTicking = false;
-		const remain = window.document.documentElement.scrollHeight - (window.scrollY + window.innerHeight);
+		if (!isActivated.value) return;
+		const remain = scrollContainer != null
+			? scrollContainer.scrollHeight - (scrollContainer.scrollTop + scrollContainer.clientHeight)
+			: window.document.documentElement.scrollHeight - (window.scrollY + window.innerHeight);
 		if (remain <= SCROLL_NEAR_BOTTOM_PX) {
 			void maybeLoadMoreByScroll();
 		}
@@ -604,11 +614,27 @@ function onWindowScroll() {
 onMounted(() => {
 	loadCharacters(true);
 	loadPlaza(true);
-	window.addEventListener('scroll', onWindowScroll, { passive: true });
+	scrollContainer = getScrollContainer(rootEl.value);
+	scrollEventTarget = scrollContainer ?? window;
+	scrollEventTarget.addEventListener('scroll', onContainerScroll, { passive: true });
+});
+
+onActivated(() => {
+	isActivated.value = true;
+});
+
+onDeactivated(() => {
+	isActivated.value = false;
 });
 
 onBeforeUnmount(() => {
-	window.removeEventListener('scroll', onWindowScroll);
+	scrollEventTarget?.removeEventListener('scroll', onContainerScroll);
+	scrollEventTarget = null;
+	scrollContainer = null;
+	if (scrollRafId != null) {
+		window.cancelAnimationFrame(scrollRafId);
+		scrollRafId = null;
+	}
 });
 
 watch(sub, (t) => {

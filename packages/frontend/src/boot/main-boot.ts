@@ -376,19 +376,22 @@ export async function mainBoot() {
 				// 检查页面是否可见且正在查看该消息来源
 				const isPageVisible = !window.document.hidden;
 				const currentPath = window.location.pathname;
+				const isRoomMessage = 'toRoomId' in message && message.toRoomId != null;
 				let isViewingSource = false;
+				let isViewingTargetRoom = false;
 
-				// 检查是否在查看发送者的私信页面
-				if ('fromUserId' in message && message.fromUserId) {
+				// 仅在非群组（1v1 私信）时检查是否在查看发送者的私信页面
+				if (!isRoomMessage && 'fromUserId' in message && message.fromUserId) {
 					if (currentPath === `/chat/user/${message.fromUserId}`) {
 						isViewingSource = true;
 					}
 				}
 
-				// 检查是否在查看群聊页面
-				if ('toRoomId' in message && message.toRoomId) {
+				// 检查是否在查看群组页面
+				if (isRoomMessage) {
 					if (currentPath === `/chat/room/${message.toRoomId}`) {
 						isViewingSource = true;
+						isViewingTargetRoom = true;
 					}
 				}
 
@@ -398,13 +401,15 @@ export async function mainBoot() {
 					updateCurrentAccountPartial({ hasUnreadChatMessages: true });
 				}
 
-				// 始终播放声音提示
-				sound.playMisskeySfx('chatMessage');
+				// 目标群组页面已由 room.vue 的 chatRoom 频道播放音效，避免重复播放
+				if (!isViewingTargetRoom) {
+					sound.playMisskeySfx('chatMessage');
+				}
 			});
 
 			// 监听聊天已读事件（全局处理）
 			// 这确保无论 MkChatHistories 组件是否被渲染，全局未读状态都能正确更新
-			(main as any).on('chatRead', (data: { hasUnreadChatMessages: boolean }) => {
+			main.on('chatRead', data => {
 				updateCurrentAccountPartial({ hasUnreadChatMessages: data.hasUnreadChatMessages });
 			});
 

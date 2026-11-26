@@ -30,6 +30,7 @@ import { MiClipNote } from '@/models/ClipNote.js';
 import { MiClipFavorite } from '@/models/ClipFavorite.js';
 import { MiDriveFile } from '@/models/DriveFile.js';
 import { MiDriveFileTombstone } from '@/models/DriveFileTombstone.js';
+import { MiDriveMissingObjectReport } from '@/models/DriveMissingObjectReport.js';
 import { MiDriveFolder } from '@/models/DriveFolder.js';
 import { MiEmoji } from '@/models/Emoji.js';
 import { MiFollowing } from '@/models/Following.js';
@@ -83,6 +84,7 @@ import { MiFlashLike } from '@/models/FlashLike.js';
 import { MiUserMemo } from '@/models/UserMemo.js';
 import { MiChatMessage } from '@/models/ChatMessage.js';
 import { MiChatRoom } from '@/models/ChatRoom.js';
+import { MiChatRoomBan } from '@/models/ChatRoomBan.js';
 import { MiChatRoomMembership } from '@/models/ChatRoomMembership.js';
 import { MiChatRoomInvitation } from '@/models/ChatRoomInvitation.js';
 import { MiBubbleGameRecord } from '@/models/BubbleGameRecord.js';
@@ -232,6 +234,7 @@ export const entities = [
 	MiGalleryLike,
 	MiDriveFile,
 	MiDriveFileTombstone,
+	MiDriveMissingObjectReport,
 	MiDriveFolder,
 	MiPoll,
 	MiPollVote,
@@ -271,6 +274,7 @@ export const entities = [
 	MiUserMemo,
 	MiChatMessage,
 	MiChatRoom,
+	MiChatRoomBan,
 	MiChatRoomMembership,
 	MiChatRoomInvitation,
 	MiChatApproval,

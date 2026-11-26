@@ -719,6 +719,7 @@ function clear() {
 	poll.value = null;
 	quoteId.value = null;
 	scheduledAt.value = null;
+	serverDraftId.value = null;
 	uploader.reset();
 }
 
@@ -952,7 +953,42 @@ async function uploadFiles() {
 	}
 }
 
+async function ensureAllFilesUploaded(): Promise<boolean> {
+	if (!uploader.items.value.some(x => x.uploaded == null)) {
+		return true;
+	}
+
+	await uploadFiles();
+
+	// アップロード失敗したものがあったら中止
+	if (uploader.items.value.some(x => x.uploaded == null)) {
+		const failedItems = uploader.items.value.filter(x => x.uploaded == null && x.uploadFailed);
+		const abortedItems = uploader.items.value.filter(x => x.uploaded == null && !x.uploadFailed && x.aborted);
+		if (failedItems.length > 0) {
+			os.alert({
+				type: 'error',
+				text: i18n.tsx.uploadFailedAndCannotPost({ count: failedItems.length }),
+			});
+		} else if (abortedItems.length > 0) {
+			os.alert({
+				type: 'error',
+				text: i18n.tsx.uploadCancelledAndCannotPost({ count: abortedItems.length }),
+			});
+		} else {
+			os.alert({
+				type: 'error',
+				text: i18n.ts.uploading,
+			});
+		}
+		return false;
+	}
+
+	return true;
+}
+
 async function post(ev?: PointerEvent) {
+	if (props.mock || posting.value || posted.value) return;
+
 	if (ev != null) {
 		const el = (ev.currentTarget ?? ev.target) as HTMLElement | null;
 
@@ -967,21 +1003,29 @@ async function post(ev?: PointerEvent) {
 	}
 
 	if (scheduledAt.value != null) {
-		if (uploader.items.value.some(x => x.uploaded == null)) {
-			await uploadFiles();
-
-			// アップロード失敗したものがあったら中止
-			if (uploader.items.value.some(x => x.uploaded == null)) {
+		posting.value = true;
+		try {
+			if (!(await ensureAllFilesUploaded())) {
 				return;
 			}
-		}
 
-		await postAsScheduled();
-		clear();
+			await postAsScheduled();
+			if (props.freezeAfterPosted) {
+				posted.value = true;
+			} else {
+				clear();
+			}
+
+			await nextTick();
+			deleteDraft();
+			emit('posted');
+		} catch {
+			// os.apiWithDialog 已弹窗提示接口错误，这里吸收 rejection 避免未捕获异常
+		} finally {
+			posting.value = false;
+		}
 		return;
 	}
-
-	if (props.mock) return;
 
 	if (visibility.value === 'public' && (
 		(useCw.value && cw.value != null && cw.value.trim() !== '' && isAnnoying(cw.value)) || // CWが迷惑になる場合
@@ -1010,31 +1054,8 @@ async function post(ev?: PointerEvent) {
 		}
 	}
 
-	if (uploader.items.value.some(x => x.uploaded == null)) {
-		await uploadFiles();
-
-		// アップロード失敗したものがあったら中止
-		if (uploader.items.value.some(x => x.uploaded == null)) {
-			const failedItems = uploader.items.value.filter(x => x.uploaded == null && x.uploadFailed);
-			const abortedItems = uploader.items.value.filter(x => x.uploaded == null && !x.uploadFailed && x.aborted);
-			if (failedItems.length > 0) {
-				os.alert({
-					type: 'error',
-					text: i18n.tsx.uploadFailedAndCannotPost({ count: failedItems.length }),
-				});
-			} else if (abortedItems.length > 0) {
-				os.alert({
-					type: 'error',
-					text: i18n.tsx.uploadCancelledAndCannotPost({ count: abortedItems.length }),
-				});
-			} else {
-				os.alert({
-					type: 'error',
-					text: i18n.ts.uploading,
-				});
-			}
-			return;
-		}
+	if (!(await ensureAllFilesUploaded())) {
+		return;
 	}
 
 	let postData = {

@@ -20,6 +20,7 @@ import { AccountMoveService } from './AccountMoveService.js';
 import { AccountUpdateService } from './AccountUpdateService.js';
 import { SensitiveMediaDetectionService } from './SensitiveMediaDetectionService.js';
 import { AnnouncementService } from './AnnouncementService.js';
+import { AppReleaseService } from './AppReleaseService.js';
 import { AntennaService } from './AntennaService.js';
 import { AchievementService } from './AchievementService.js';
 import { AvatarDecorationService } from './AvatarDecorationService.js';
@@ -91,6 +92,7 @@ import { AgentPlazaReviewService } from './AgentPlazaReviewService.js';
 import { AgentModelUsageService } from './AgentModelUsageService.js';
 import { AgentModelReportService } from './AgentModelReportService.js';
 import { AgentModelAnnouncementService } from './AgentModelAnnouncementService.js';
+import { DriveMissingObjectService } from './DriveMissingObjectService.js';
 import { AgentUserModelService } from './AgentUserModelService.js';
 import { AgentCheckinService } from './AgentCheckinService.js';
 import { ChatService } from './ChatService.js';
@@ -184,6 +186,7 @@ const $AccountMoveService: Provider = { provide: 'AccountMoveService', useExisti
 const $AccountUpdateService: Provider = { provide: 'AccountUpdateService', useExisting: AccountUpdateService };
 const $SensitiveMediaDetectionService: Provider = { provide: 'SensitiveMediaDetectionService', useExisting: SensitiveMediaDetectionService };
 const $AnnouncementService: Provider = { provide: 'AnnouncementService', useExisting: AnnouncementService };
+const $AppReleaseService: Provider = { provide: 'AppReleaseService', useExisting: AppReleaseService };
 const $AntennaService: Provider = { provide: 'AntennaService', useExisting: AntennaService };
 const $AchievementService: Provider = { provide: 'AchievementService', useExisting: AchievementService };
 const $AvatarDecorationService: Provider = { provide: 'AvatarDecorationService', useExisting: AvatarDecorationService };
@@ -256,6 +259,7 @@ const $AgentPlazaReviewService: Provider = { provide: 'AgentPlazaReviewService',
 const $AgentModelUsageService: Provider = { provide: 'AgentModelUsageService', useExisting: AgentModelUsageService };
 const $AgentModelReportService: Provider = { provide: 'AgentModelReportService', useExisting: AgentModelReportService };
 const $AgentModelAnnouncementService: Provider = { provide: 'AgentModelAnnouncementService', useExisting: AgentModelAnnouncementService };
+const $DriveMissingObjectService: Provider = { provide: 'DriveMissingObjectService', useExisting: DriveMissingObjectService };
 const $AgentUserModelService: Provider = { provide: 'AgentUserModelService', useExisting: AgentUserModelService };
 const $AgentCheckinService: Provider = { provide: 'AgentCheckinService', useExisting: AgentCheckinService };
 const $AgentMessageNotifyService: Provider = { provide: 'AgentMessageNotifyService', useExisting: AgentMessageNotifyService };
@@ -351,6 +355,7 @@ const $ApQuestionService: Provider = { provide: 'ApQuestionService', useExisting
 		AccountUpdateService,
 		SensitiveMediaDetectionService,
 		AnnouncementService,
+		AppReleaseService,
 		AntennaService,
 		AchievementService,
 		AvatarDecorationService,
@@ -428,6 +433,7 @@ const $ApQuestionService: Provider = { provide: 'ApQuestionService', useExisting
 		AgentModelUsageService,
 		AgentModelReportService,
 		AgentModelAnnouncementService,
+		DriveMissingObjectService,
 		AgentUserModelService,
 		AgentCheckinService,
 		ChatService,
@@ -520,6 +526,7 @@ const $ApQuestionService: Provider = { provide: 'ApQuestionService', useExisting
 		$AccountUpdateService,
 		$SensitiveMediaDetectionService,
 		$AnnouncementService,
+		$AppReleaseService,
 		$AntennaService,
 		$AchievementService,
 		$AvatarDecorationService,
@@ -592,6 +599,7 @@ const $ApQuestionService: Provider = { provide: 'ApQuestionService', useExisting
 		$AgentModelUsageService,
 		$AgentModelReportService,
 		$AgentModelAnnouncementService,
+		$DriveMissingObjectService,
 		$AgentUserModelService,
 		$AgentCheckinService,
 		$AgentMessageNotifyService,
@@ -685,6 +693,7 @@ const $ApQuestionService: Provider = { provide: 'ApQuestionService', useExisting
 		AccountUpdateService,
 		SensitiveMediaDetectionService,
 		AnnouncementService,
+		AppReleaseService,
 		AntennaService,
 		AchievementService,
 		AvatarDecorationService,
@@ -762,6 +771,7 @@ const $ApQuestionService: Provider = { provide: 'ApQuestionService', useExisting
 		AgentModelUsageService,
 		AgentModelReportService,
 		AgentModelAnnouncementService,
+		DriveMissingObjectService,
 		AgentUserModelService,
 		AgentCheckinService,
 		ChatService,
@@ -853,6 +863,7 @@ const $ApQuestionService: Provider = { provide: 'ApQuestionService', useExisting
 		$AccountUpdateService,
 		$SensitiveMediaDetectionService,
 		$AnnouncementService,
+		$AppReleaseService,
 		$AntennaService,
 		$AchievementService,
 		$AvatarDecorationService,
@@ -922,6 +933,7 @@ const $ApQuestionService: Provider = { provide: 'ApQuestionService', useExisting
 		$AgentModelUsageService,
 		$AgentModelReportService,
 		$AgentModelAnnouncementService,
+		$DriveMissingObjectService,
 		$AgentUserModelService,
 		$AgentCheckinService,
 		$AgentMessageNotifyService,

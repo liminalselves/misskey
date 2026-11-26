@@ -8,6 +8,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 	ref="dialog"
 	:width="560"
 	@close="cancel"
+	@esc="cancel"
 	@closed="emit('closed')"
 >
 	<template #header>{{ i18n.tsx._agents.quickActionTitle({ name: userName }) }}</template>
