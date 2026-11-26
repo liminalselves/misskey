@@ -1,6 +1,6 @@
 # Misskey fork — Claude Code
 
-这是 liminalselves/misskey，不是官方发布仓库。若本地存在 `AGENTS.md`，先读取该文件；它是本地规范，不提交到 Git。
+这是 liminalselves/misskey，不是官方发布仓库。所有开发、验证与发布规范以仓库根目录的 `AGENTS.md` 为准。
 
 全部项目文档见 [文档索引](docs/README.md)。工程与验收规则见 [CI 检查清单](docs/ci-checklist.md)，分支发布边界见 [发布文档](docs/releasing.md)，上游同步取舍见 [2026.10.0 同步记录](docs/upstream-sync-2026.10.0.md)。
 

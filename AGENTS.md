@@ -27,7 +27,7 @@ origin=liminalselves/misskey，upstream=misskey-dev/misskey，默认分支 maste
 
 ## 版本号（<上游基线>-liminalselves.<N>）
 
-- 主版本 = 当前实际合并进 develop 的最新上游**正式 release** 号。当前基线 **2026.10.0**（正式 Release 提交 `de89118a22`，同步合入提交 `343107b2bb`）。核对命令：`git log -1 --no-merges --format='%h %s' develop --grep='^Release:'`。两处 package.json 当前为 `2026.10.0-liminalselves.4`。
+- 主版本 = 当前实际合并进 develop 的最新上游**正式 release** 号。当前基线 **2026.10.0**（正式 Release 提交 `de89118a22`，同步合入提交 `343107b2bb`）。核对命令：`git log -1 --no-merges --format='%h %s' develop --grep='^Release:'`。两处 package.json 当前为 `2026.10.0-liminalselves.5`。
 - N = 该基线上第 N 次生产发布，每次发布 +1；同步新的上游正式 release 后基线换代、N 重置为 1。例：`2025.12.2-liminalselves.3` = 基于上游 2025.12.2 的第 3 次生产发布。
 - 版本号存在于两处，必须一起改（CI `check-misskey-js-version` 强制一致）：根 `package.json`、`packages/misskey-js/package.json`。
 - 不用 semver 语义理解该号，它不表达兼容性；与上游的亲缘只记 CHANGELOG（「合并上游至 X.Y.Z」），不进版本号。
@@ -55,7 +55,7 @@ origin=liminalselves/misskey，upstream=misskey-dev/misskey，默认分支 maste
 ### 阶段二：发布（用户明确命令时执行）
 
 1. 合并阶段一创建的 PR（合入 master）。
-2. 打附注 tag `release-v<version>` 指向 master 的 merge commit 并单独推送该 tag（禁 `--tags`）。GitHub Release 显示最新版本 = 用该 tag 触发的构建产物创建/更新 GitHub Release（tag 去前缀即版本号，与镜像 tag 一致，不另做 latest 覆盖）；注意建 Release 可能误触发 npm 工作流，须取消。
+2. 打附注 tag `release-v<version>` 指向 master 的 merge commit 并单独推送该 tag（禁 `--tags`）。GitHub Release 显示最新版本 = 用该 tag 触发的构建产物创建/更新 GitHub Release（tag 去前缀即版本号，与镜像 tag 一致，不另做 latest 覆盖）；本 fork 已删除上游 `on-release-created.yml`（仅上游同步后须确认未被带回，防止建 Release 误触发 npm 工作流）。
 3. back-merge：把 master 合回 develop 并推送，develop 不得落后于已发布的 master 提交。
 
 ### Hotfix
@@ -119,7 +119,7 @@ git merge upstream/master
 
 ## misskey-js 类型
 
-- 前端调用新端点一律强转（页面内 `misskeyApi as unknown as <T>(ep, data)` 或 `'ep' as Parameters<typeof misskeyApi>[0]`），不跑 `build-misskey-js-with-types` 再生成：全量构建成本高，且会浮出 api.json 过期的 schema 漂移旧账。
+- 日常功能开发阶段前端调用新端点一律强转（页面内 `misskeyApi as unknown as <T>(ep, data)` 或 `'ep' as Parameters<typeof misskeyApi>[0]`），不跑 `build-misskey-js-with-types` 再生成（全量构建成本高，且会浮出 api.json 过期的 schema 漂移旧账）；发布前准备打开 `develop → master` PR 时，若本轮改过 backend API/schema，须按 CI `Check Misskey JS autogen` 与 `API report (misskey.js)` 要求同步 `packages/misskey-js/src/autogen/*` 与 `etc/misskey-js.api.md`。
 - 新增通知类型不属于端点类型再生成：须同步 `backend/src/models/Notification.ts`、`backend/src/types.ts` 的 `notificationTypes`、`NotificationEntityService` pack、`misskey-js/src/consts.ts`、前端 `MkNotification.vue`、三语言 `_notification` 与 `_types`，再跑 i18n generate/build。
 
 ## 智能体治理页（pages/admin/agents-review.vue）
