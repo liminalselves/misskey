@@ -143,6 +143,7 @@ COPY --chown=misskey:misskey --from=native-builder /tmp/vertexai_tokenizer_model
 # 预置的 GLM/DeepSeek 真分词器词表（让 AgentTokenService 离线精确计数；缺失时运行期回退 cl100k 近似）
 COPY --chown=misskey:misskey --from=native-builder /tmp/agent_tokenizers /tmp/agent_tokenizers
 COPY --chown=misskey:misskey . ./
+RUN mkdir -p /misskey/files
 
 ENV LD_PRELOAD=/usr/local/lib/libjemalloc.so
 ENV NODE_ENV=production

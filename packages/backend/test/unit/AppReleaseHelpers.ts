@@ -256,10 +256,11 @@ function createHarness(initialMeta: Record<string, unknown> = {}, configOverride
 	};
 	const send = vi.fn();
 	const httpRequestService = { send };
+	const warn = vi.fn();
 	const loggerService = {
 		getLogger: () => ({
 			info: vi.fn(),
-			warn: vi.fn(),
+			warn,
 			error: vi.fn(),
 			debug: vi.fn(),
 		}),
@@ -274,7 +275,7 @@ function createHarness(initialMeta: Record<string, unknown> = {}, configOverride
 		loggerService as never,
 	);
 
-	return { service, redisStore, redisClient, metaObj, send };
+	return { service, redisStore, redisClient, metaObj, send, warn };
 }
 
 function mockBinaryResponse(status: number, data: Buffer) {
@@ -483,6 +484,64 @@ describe('AppReleaseService', () => {
 			expect(send).toHaveBeenCalledTimes(3);
 		} finally {
 			rmSync(tempRoot, { recursive: true, force: true });
+		}
+	});
+
+	test('falls back to os.tmpdir when primary files directory is not writable and resolves HTTPS fallback redirect URLs', async () => {
+		const tempRoot = mkdtempSync(join(tmpdir(), 'misskey-app-unwritable-'));
+		const testVersion = '99.98.97';
+		const fallbackVersionDir = join(tmpdir(), 'misskey-app-releases', testVersion);
+		try {
+			// 阻塞 primary `<rootDir>/files` 路径，在跨平台测试里稳定复现 mkdir 无法落盘的场景
+			fs.writeFileSync(join(tempRoot, 'files'), 'not-a-directory', 'utf8');
+
+			const payload = Buffer.from('fallback-apk-payload', 'utf8');
+			const digest = createHash('sha256').update(payload).digest('hex');
+			const { service, send, warn } = createHarness(
+				{ githubDownloadProxy: 'https://ghproxy.test/' },
+				{ rootDir: tempRoot },
+			);
+
+			send.mockResolvedValueOnce(mockJsonResponse(200, [
+				{
+					tag_name: `v${testVersion}`,
+					name: testVersion,
+					body: '### 测试\n- 临时目录回退',
+					published_at: '2026-11-27T00:00:00Z',
+					assets: [
+						{
+							name: 'LiminalSelves_test.apk',
+							state: 'uploaded',
+							size: payload.length,
+							digest: `sha256:${digest}`,
+							browser_download_url: 'https://github.com/liminalselves/liminalselves_app/releases/download/v99.98.97/LiminalSelves_test.apk',
+							download_count: 1,
+						},
+					],
+				},
+			]));
+
+			await service.syncNow({ force: true });
+
+			send.mockResolvedValueOnce(mockBinaryResponse(200, payload));
+			const mirrored1 = await service.resolveRelayedAssetForDownload(testVersion, 'LiminalSelves_test.apk');
+			expect(mirrored1).not.toBeNull();
+			expect(mirrored1?.filePath.startsWith(join(tmpdir(), 'misskey-app-releases'))).toBe(true);
+			expect(fs.readFileSync(mirrored1!.filePath)).toEqual(payload);
+			expect(warn).toHaveBeenCalledTimes(1);
+
+			// 第二次访问直接命中临时目录缓存，不再回源
+			const mirrored2 = await service.resolveRelayedAssetForDownload(testVersion, 'LiminalSelves_test.apk');
+			expect(mirrored2?.filePath).toBe(mirrored1?.filePath);
+			expect(send).toHaveBeenCalledTimes(2);
+
+			// 验证上游回退跳转地址解析
+			expect(await service.resolveFallbackDownloadUrl(testVersion, 'LiminalSelves_test.apk'))
+				.toBe('https://ghproxy.test/https://github.com/liminalselves/liminalselves_app/releases/download/v99.98.97/LiminalSelves_test.apk');
+			expect(await service.resolveFallbackDownloadUrl(testVersion, 'missing.apk')).toBeNull();
+		} finally {
+			rmSync(tempRoot, { recursive: true, force: true });
+			rmSync(fallbackVersionDir, { recursive: true, force: true });
 		}
 	});
 });

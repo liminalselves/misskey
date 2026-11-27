@@ -167,6 +167,14 @@ export class FileServerService {
 			return handleRangeRequest(reply, request.headers.range as string | undefined, asset.size, asset.filePath);
 		} catch (err) {
 			this.logger.error(`Failed to relay app release ${request.params.version}/${request.params.filename}: ${err instanceof Error ? err.message : String(err)}`);
+			const fallbackUrl = await this.appReleaseService.resolveFallbackDownloadUrl(
+				request.params.version,
+				request.params.filename,
+			).catch(() => null);
+			if (fallbackUrl) {
+				reply.header('Cache-Control', 'no-store');
+				return await reply.redirect(fallbackUrl, 302);
+			}
 			reply.code(502);
 			return { error: 'Upstream download failed' };
 		}

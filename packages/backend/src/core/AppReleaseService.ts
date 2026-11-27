@@ -5,6 +5,7 @@
 
 import { createHash, randomUUID } from 'node:crypto';
 import * as fs from 'node:fs';
+import * as os from 'node:os';
 import * as Path from 'node:path';
 import { Readable } from 'node:stream';
 import { Inject, Injectable, OnApplicationShutdown, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
@@ -165,6 +166,7 @@ export class AppReleaseService implements OnModuleInit, OnModuleDestroy, OnAppli
 	private inFlightSync: { force: boolean; promise: Promise<AppReleaseSyncResult> } | null = null;
 	private inFlightMirrors = new Map<string, Promise<MirroredAppAsset>>();
 	private syncTimer: NodeJS.Timeout | null = null;
+	private warnedUnwritablePrimaryDir = false;
 
 	constructor(
 		@Inject(DI.config)
@@ -598,7 +600,7 @@ export class AppReleaseService implements OnModuleInit, OnModuleDestroy, OnAppli
 			};
 			await this.saveSnapshot(updatedSnapshot);
 
-			if (process.env.NODE_ENV !== 'test' && this.mirrorRootDir()) {
+			if (process.env.NODE_ENV !== 'test' && this.primaryMirrorRootDir()) {
 				const currentMeta = await this.metaService.fetch(false).catch(() => this.meta);
 				const proxyPrefix = currentMeta?.nativeClientAppInfo?.githubDownloadProxy ?? null;
 				void this.preMirrorLatest(parsed.latestAndroid, parsed.latestIos, proxyPrefix);
@@ -642,10 +644,68 @@ export class AppReleaseService implements OnModuleInit, OnModuleDestroy, OnAppli
 		}
 	}
 
-	private mirrorRootDir(): string | null {
+	private primaryMirrorRootDir(): string | null {
 		const rootDir = this.config?.rootDir;
 		if (typeof rootDir !== 'string' || rootDir.trim() === '') return null;
 		return Path.resolve(rootDir, 'files', 'app-releases');
+	}
+
+	private fallbackMirrorRootDir(): string {
+		return Path.join(os.tmpdir(), 'misskey-app-releases');
+	}
+
+	private async isDirectoryWritable(dir: string): Promise<boolean> {
+		try {
+			await fs.promises.mkdir(dir, { recursive: true });
+			await fs.promises.access(dir, fs.constants.W_OK);
+			return true;
+		} catch {
+			return false;
+		}
+	}
+
+	/** 优先使用 `<rootDir>/files/app-releases`；当容器挂载目录不可写时回退到系统临时目录。 */
+	private async resolveWritableMirrorRootDir(): Promise<string | null> {
+		const primaryDir = this.primaryMirrorRootDir();
+		if (!primaryDir) return null;
+
+		if (await this.isDirectoryWritable(primaryDir)) {
+			this.warnedUnwritablePrimaryDir = false;
+			return primaryDir;
+		}
+
+		const fallbackDir = this.fallbackMirrorRootDir();
+		if (await this.isDirectoryWritable(fallbackDir)) {
+			if (!this.warnedUnwritablePrimaryDir) {
+				this.warnedUnwritablePrimaryDir = true;
+				this.logger.warn(`App release cache directory "${primaryDir}" is not writable; falling back to "${fallbackDir}".`);
+			}
+			return fallbackDir;
+		}
+
+		return primaryDir;
+	}
+
+	private async findCachedAssetInDir(
+		rootDir: string,
+		version: string,
+		asset: AppReleaseAsset,
+	): Promise<MirroredAppAsset | null> {
+		const targetPath = Path.join(rootDir, version, asset.name);
+		try {
+			const stat = await fs.promises.stat(targetPath);
+			if (stat.isFile() && stat.size > 0 && (asset.size <= 0 || stat.size === asset.size)) {
+				return {
+					filePath: targetPath,
+					filename: asset.name,
+					size: stat.size,
+					mimeType: resolveAssetMimeType(asset.name),
+				};
+			}
+		} catch {
+			// Cache miss
+		}
+		return null;
 	}
 
 	private async preMirrorLatest(
@@ -663,8 +723,10 @@ export class AppReleaseService implements OnModuleInit, OnModuleDestroy, OnAppli
 		}
 	}
 
-	@bindThis
-	public async resolveRelayedAssetForDownload(versionRaw: string, filenameRaw: string): Promise<MirroredAppAsset | null> {
+	private async lookupReleaseAsset(
+		versionRaw: string,
+		filenameRaw: string,
+	): Promise<{ version: string; asset: AppReleaseAsset; proxyPrefix: string | null } | null> {
 		const cleanVersion = normalizeSemver(versionRaw);
 		if (!cleanVersion || !isSafeAssetFilename(filenameRaw)) return null;
 
@@ -687,7 +749,32 @@ export class AppReleaseService implements OnModuleInit, OnModuleDestroy, OnAppli
 			.find((a): a is AppReleaseAsset => a != null && a.name === filenameRaw);
 		if (!asset) return null;
 
-		return await this.ensureMirroredAsset(cleanVersion, asset, stored.githubDownloadProxy);
+		return {
+			version: cleanVersion,
+			asset,
+			proxyPrefix: stored.githubDownloadProxy ?? null,
+		};
+	}
+
+	@bindThis
+	public async resolveRelayedAssetForDownload(versionRaw: string, filenameRaw: string): Promise<MirroredAppAsset | null> {
+		const matched = await this.lookupReleaseAsset(versionRaw, filenameRaw);
+		if (!matched) return null;
+
+		return await this.ensureMirroredAsset(matched.version, matched.asset, matched.proxyPrefix);
+	}
+
+	@bindThis
+	public async resolveFallbackDownloadUrl(versionRaw: string, filenameRaw: string): Promise<string | null> {
+		const matched = await this.lookupReleaseAsset(versionRaw, filenameRaw);
+		if (!matched) return null;
+
+		const candidate = applyDownloadProxy(matched.asset.rawDownloadUrl, matched.proxyPrefix);
+		try {
+			return new URL(candidate).protocol === 'https:' ? candidate : null;
+		} catch {
+			return null;
+		}
 	}
 
 	private async ensureMirroredAsset(
@@ -695,30 +782,25 @@ export class AppReleaseService implements OnModuleInit, OnModuleDestroy, OnAppli
 		asset: AppReleaseAsset,
 		proxyPrefix: string | null | undefined,
 	): Promise<MirroredAppAsset> {
-		const rootDir = this.mirrorRootDir();
-		if (!rootDir) {
+		const primaryDir = this.primaryMirrorRootDir();
+		if (!primaryDir) {
 			throw new Error('Server file storage directory is not configured');
 		}
 		if (!isSafeAssetFilename(asset.name)) {
 			throw new Error(`Unsafe asset filename: ${asset.name}`);
 		}
 
+		for (const candidateRoot of [primaryDir, this.fallbackMirrorRootDir()]) {
+			const cached = await this.findCachedAssetInDir(candidateRoot, version, asset);
+			if (cached) return cached;
+		}
+
+		const rootDir = await this.resolveWritableMirrorRootDir();
+		if (!rootDir) {
+			throw new Error('Server file storage directory is not configured');
+		}
 		const versionDir = Path.join(rootDir, version);
 		const targetPath = Path.join(versionDir, asset.name);
-
-		try {
-			const stat = await fs.promises.stat(targetPath);
-			if (stat.isFile() && stat.size > 0 && (asset.size <= 0 || stat.size === asset.size)) {
-				return {
-					filePath: targetPath,
-					filename: asset.name,
-					size: stat.size,
-					mimeType: resolveAssetMimeType(asset.name),
-				};
-			}
-		} catch {
-			// Cache miss; download below
-		}
 
 		const key = `${version}/${asset.name}`;
 		const existingTask = this.inFlightMirrors.get(key);
