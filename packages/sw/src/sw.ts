@@ -11,6 +11,7 @@ import type { I18n } from '@@/js/i18n.js';
 import type { Locale } from 'i18n';
 import { createEmptyNotification, createNotification } from '@/scripts/create-notification.js';
 import { swLang } from '@/scripts/lang.js';
+import { shouldRespondWithOfflineFallback } from '@/scripts/navigation-request.js';
 import { OFFLINE_LOGO_PATH, offlineLogoResponse, offlineLogoSrc, offlinePageHTML, syncOfflineLogo } from '@/scripts/offline-page.js';
 import * as swos from '@/scripts/operations.js';
 
@@ -90,16 +91,7 @@ globalThis.addEventListener('fetch', ev => {
 		return;
 	}
 
-	let isHTMLRequest = false;
-	if (ev.request.headers.get('sec-fetch-dest') === 'document') {
-		isHTMLRequest = true;
-	} else if (ev.request.headers.get('accept')?.includes('/html')) {
-		isHTMLRequest = true;
-	} else if (ev.request.url.endsWith('/')) {
-		isHTMLRequest = true;
-	}
-
-	if (!isHTMLRequest) return;
+	if (!shouldRespondWithOfflineFallback(ev.request, globalThis.location.origin)) return;
 	ev.respondWith(respondToNavigation(ev.request));
 });
 
